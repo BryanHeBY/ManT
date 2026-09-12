@@ -6,6 +6,7 @@ pub(super) struct LiteralFlow {
     nodes: Vec<Inline>,
     source: Option<SourceSpan>,
     tight_boundary: bool,
+    ordinary_continuation: bool,
     row_occupied: bool,
 }
 
@@ -15,6 +16,7 @@ impl LiteralFlow {
             nodes: Vec::new(),
             source: None,
             tight_boundary: false,
+            ordinary_continuation: false,
             row_occupied: false,
         }
     }
@@ -29,6 +31,7 @@ impl LiteralFlow {
             self.row_occupied = false;
         }
         self.tight_boundary = false;
+        self.ordinary_continuation = false;
     }
 
     pub(super) fn append(
@@ -45,14 +48,38 @@ impl LiteralFlow {
             });
         }
         if self.starts_new_row(starts_line) {
-            self.nodes.push(Inline::LineBreak);
+            // A word-end `\p` at the physical line tail has already emitted
+            // this row boundary. The following source row must consume that
+            // boundary rather than add an empty line of its own.
+            if !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
+                self.nodes.push(Inline::LineBreak);
+            }
             self.row_occupied = false;
+        }
+        if self.ordinary_continuation && occupies_row {
+            self.nodes.push(Inline::Text {
+                value: " ".to_owned(),
+            });
+            self.ordinary_continuation = false;
         }
         self.nodes.extend(nodes);
         self.row_occupied |= occupies_row;
         self.tight_boundary = continues_line;
         if self.source.is_none() {
             self.source = source;
+        }
+    }
+
+    /// Model `TERMP_NOBREAK + term_flushln()` without exposing device margin
+    /// geometry in the IR. Pending cells are committed, while the following
+    /// formatter word remains on this visual row at an ordinary boundary.
+    pub(super) fn no_break_flush(&mut self, nodes: Vec<Inline>) {
+        let committed_a_cell = mant_ir::has_printable_character(&nodes);
+        self.nodes.extend(nodes);
+        self.row_occupied |= committed_a_cell;
+        if self.row_occupied {
+            self.tight_boundary = true;
+            self.ordinary_continuation = true;
         }
     }
 

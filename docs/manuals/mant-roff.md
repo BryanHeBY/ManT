@@ -405,7 +405,7 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\ `, `\~`, `\0` | Visible space |
 | `\c` at the end of an input line | Suppress the implicit space or line break before the next input line |
 | `\h'N'` with a positive literal relative distance | Preserve at least one visible word boundary; exact horizontal geometry is not reproduced |
-| `\p` | Inline line break |
+| `\p` | Break at the next ordinary word boundary; a no-fill physical row settles any still-pending break |
 | `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned libmandoc catalog; bracketed `uXXXX` Unicode names and `_`-joined scalar sequences are decoded, while an unknown name remains visible in escaped source form |
 | `\E` | Copy-mode-safe nested escape |
 | `\N'number'` | Numbered glyph in the pinned mandoc terminal range 0–255, with control filtering; unsupported or malformed indices remain visibly escaped, not interpreted as arbitrary Unicode |
@@ -436,7 +436,7 @@ output. For example, `\fB\-\fP\fB\-emulate\fP` becomes
 escaping is minimal but lossless: intraword underscores such as the one in
 `PATH_SCRIPT` remain literal, while delimiter-active underscores are escaped.
 
-Color, point size, vertical or non-literal motion, drawing, overstrike, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
+Color, point size, vertical or non-literal motion, drawing, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Overstrike `\o` is the exception: ManT retains the surviving glyph from mandoc's bounded one-cell terminal projection, including its trailing blank/tab trim, without reproducing device geometry or decoration. Link identity continues to follow the separate HTML-compatible source projection. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its two formatter stages—waiting for a glyph and waiting for a later glyph to overstrike the completed glyph—are retained independently across adjacent source text, style operands, inline macro arguments, and formatter-generated syntax such as `OP` brackets. An ordinary filled-word boundary consumes the latter backtracking position without adding a visible blank; real line and cell boundaries settle any remaining glyph. A following `\c` cancels only a still-unconsumed `\z`; after a zero-advance glyph has already been produced, a trailing `\c` remains a valid source-line continuation and the next glyph may overstrike it. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
 
@@ -467,6 +467,9 @@ Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `
 ManT preserves these expressions for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
 
 Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix. A separate native construction guard stops input dispatch after a syntax node exceeds 512 parent levels, before finalization and validation; that larger violation returns a whole-document parse error. Native reference renderers reject syntax or equation nesting beyond 256 levels independently of output size. Native tree cleanup is iterative.
+Nested native escape arguments are likewise limited to 256 levels; a deeper
+suffix is consumed as one rejected escape argument so parsing remains finite
+without exposing its control spelling as prose.
 The retained document carries `manual.syntax-depth-truncated` or
 `manual.equation-depth-truncated`, respectively, so structured consumers can
 detect either omission without matching diagnostic prose.

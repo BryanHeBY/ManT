@@ -55,6 +55,13 @@ impl SourceCursor {
         matches!(self.row, Row::Occupied)
     }
 
+    /// Whether the next formatter word will first close an occupied physical
+    /// row. An unrealized `\p` marker at that boundary is consumed by the
+    /// same no-fill line ending; emitting both would invent an empty row.
+    pub(super) const fn has_physical_line_boundary(&self) -> bool {
+        self.pending && matches!(self.row, Row::Occupied) && !self.continued
+    }
+
     pub(super) fn continue_line(&mut self, continued: bool) {
         self.continued = continued;
     }

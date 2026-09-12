@@ -11,9 +11,10 @@ use mant_ir::{Block, Inline, Section};
 use super::{
     LoweringContext, first_part_children,
     inline::{
-        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
-        lower_inline_nodes, lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing,
-        lower_man_link, plain_text, updated_spacing,
+        FilledBoundary, FontState, InlineBuilder, NoFillInlineState, append_inline_node_with_next,
+        is_enclosure_macro, lower_inline_nodes, lower_inline_nodes_with_font_state,
+        lower_inline_nodes_with_spacing, lower_man_link, lower_no_fill_line_with_font_state,
+        plain_text, updated_spacing,
     },
     layout::{
         add_leading_spacing, layout, layout_with_spacing, section_spacing, set_block_spacing,
@@ -44,6 +45,7 @@ use synopsis::lower_synopsis_head;
 mod flow;
 mod man_nofill;
 use flow::BlockState;
+use man_nofill::{NoFillBoundary, no_fill_boundary};
 mod lists;
 mod preformatted;
 mod tables;
@@ -127,6 +129,7 @@ struct BlockLowerer<'a, 'source> {
     paragraph_distance: &'a mut u16,
     state: BlockState,
     formatter: crate::mandoc::formatter::FormatterState,
+    no_fill_inline: NoFillInlineState,
     // man(7) starts each section or relative-indent scope with a seven-column
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
@@ -156,6 +159,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             paragraph_distance,
             state: BlockState::with_output(indent_columns, spacing_enabled, output),
             formatter,
+            no_fill_inline: NoFillInlineState::new(),
             definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
             split_authors: false,
             synopsis_return_type_open: false,
@@ -184,12 +188,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn push(&mut self, node: &Node, next: Option<&Node>, table_embedding: Option<&TableEmbedding>) {
-        if matches!(
-            node.macro_name.as_deref(),
-            Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
-        ) {
-            self.formatter.font = FontState::new();
-        }
+        self.prepare_node_execution(node);
         if node.macro_name.as_deref() == Some("ft") {
             lower_inline_nodes_with_font_state(
                 std::slice::from_ref(node),
@@ -288,7 +287,33 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
-    fn finish(self) -> Vec<Block> {
+    fn prepare_node_execution(&mut self, node: &Node) {
+        match no_fill_boundary(node) {
+            NoFillBoundary::None => {}
+            NoFillBoundary::Line => self.settle_no_fill_inline(),
+            NoFillBoundary::NoBreak => {
+                let nodes = self.no_fill_inline.take_settled_row();
+                self.state.no_break_formatter_flush(nodes);
+            }
+        }
+        if matches!(
+            node.macro_name.as_deref(),
+            Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
+        ) {
+            self.formatter.font = FontState::new();
+        }
+    }
+
+    fn settle_no_fill_inline(&mut self) {
+        let nodes = self.no_fill_inline.take_settled_row();
+        if !nodes.is_empty() {
+            self.state
+                .push_preformatted(nodes, None, false, false, true);
+        }
+    }
+
+    fn finish(mut self) -> Vec<Block> {
+        self.settle_no_fill_inline();
         let blocks = self.state.finish();
         self.context.check_gap_bounds(&blocks);
         blocks

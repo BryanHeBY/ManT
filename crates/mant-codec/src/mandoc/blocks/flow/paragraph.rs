@@ -32,6 +32,9 @@ impl ParagraphFlow {
     pub(super) fn tighten_next_boundary(&mut self) {
         self.builder.tighten_next_boundary();
     }
+    pub(super) fn no_break_flush(&mut self) {
+        self.builder.no_break_flush();
+    }
 
     pub(super) fn append(
         &mut self,
@@ -64,8 +67,9 @@ impl ParagraphFlow {
             self.builder.preserve_continued_boundary();
         }
         let previous_count = self.builder.node_count();
-        self.builder.begin_source_fragment();
+        let fragment = self.builder.begin_source_fragment();
         append(&mut self.builder);
+        self.builder.finish_source_fragment(fragment);
         if self.builder.final_word_join_or(continues_line) {
             self.builder.tighten_next_boundary();
         }
@@ -85,7 +89,9 @@ impl ParagraphFlow {
         indent: crate::mandoc::layout::SourceIndent,
         spacing: bool,
     ) -> Option<Block> {
-        let previous = std::mem::replace(self, Self::new(spacing));
+        let mut next = Self::new(spacing);
+        self.builder.transfer_container_execution(&mut next.builder);
+        let previous = std::mem::replace(self, next);
         let children = previous.builder.finish();
         (!children.is_empty()).then(|| Block::Paragraph {
             children,

@@ -389,6 +389,90 @@ fn bsd_reference_executes_suppressed_font_operands_before_generated_text() {
 }
 
 #[test]
+fn bsd_reference_replacements_execute_complete_hidden_word_state() {
+    for (label, operand, expected) in [
+        (
+            "lifecycle-word-end-break",
+            r"-alpha\p",
+            "BSD (currently in alpha test)\nAFTER",
+        ),
+        ("control-only-word-end-break", r"\p", "BSD\nAFTER"),
+        (
+            "lifecycle-source-continuation",
+            r"-beta\c",
+            "BSD (currently in beta test)AFTER",
+        ),
+        (
+            "noncanonical-lifecycle-zero-advance",
+            r"-devel\zX",
+            "-develBSD AFTER",
+        ),
+        ("control-only-zero-advance", r"\z", "SD AFTER"),
+        ("completed-zero-advance", r"\zX", "BSD AFTER"),
+        ("canceled-zero-advance", r"\z\c", "BSD AFTER"),
+    ] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt BSD-STATE 1\n.Os\n.Sh DESCRIPTION\n.Bx {operand}\n.No AFTER\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("bsd-reference-{label}.1")),
+            source.as_bytes(),
+        )
+        .expect("parse Bx hidden execution fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}");
+    }
+
+    let document = parse_manual_bytes(
+        std::path::Path::new("bsd-reference-hidden-font-break.1"),
+        b".Dd September 12, 2026\n.Dt BSD-STATE 1\n.Os\n.Sh DESCRIPTION\n.Bx \\fB-devel\\p\n.Li \\fPZ\n",
+    )
+    .expect("parse styled Bx hidden execution fixture");
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one paragraph: {:#?}", document.sections);
+    };
+    assert_eq!(
+        inline_text(children),
+        "BSD (currently under development)\nZ"
+    );
+    assert!(
+        children
+            .iter()
+            .filter(|inline| matches!(inline, Inline::Strong { .. }))
+            .count()
+            >= 2,
+        "hidden font execution must style replacement and follower: {children:?}"
+    );
+}
+
+#[test]
+fn bsd_reference_replacement_preserves_boundaries_and_exact_arity() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("bsd-reference-replacement-boundaries.1"),
+        b".Dd September 12, 2026\n.Dt BSD-STATE 1\n.Os\n.Sh DESCRIPTION\n.No A\n.Bx \\fB\n.Li \\fPZ\n.No A\n.Bx \\p\n.No Z\n.Bx -alpha \"\"\n.Bx 4.3 Tahoe\n",
+    )
+    .expect("parse Bx replacement boundary fixture");
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one paragraph: {:#?}", document.sections);
+    };
+
+    assert_eq!(
+        inline_text(children),
+        "A BSD Z A BSD\nZ -alphaBSD 4.3BSD Tahoe"
+    );
+    assert!(
+        children
+            .iter()
+            .filter(|inline| matches!(inline, Inline::Strong { .. }))
+            .count()
+            >= 2,
+        "control-only Bx operands must retain font execution: {children:?}"
+    );
+}
+
+#[test]
 fn mail_and_link_labels_share_the_zero_advance_stream() {
     let cases = [
         (
@@ -1086,6 +1170,26 @@ fn private_and_keep_scopes_preserve_incoming_word_end_execution_state() {
             "A<stdio.h>\nAFTER",
         ),
         (
+            "include-realizes-incoming-break-at-its-interior-word",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p Ns In \"B C\"\n.No AFTER\n".as_slice(),
+            "A<B\nC> AFTER",
+        ),
+        (
+            "keep-prephase-does-not-swallow-an-incoming-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\p\n.Bk -words\n.No A No B\n.Ek\n.No C\n".as_slice(),
+            "BEFORE\nA B C",
+        ),
+        (
+            "macro-expanded-keep-observes-each-executed-line",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.de XX\n.No A\\p\n.No B\n..\n.Sh DESCRIPTION\n.Bk -words\n.XX\n.Ek\n.No C\n".as_slice(),
+            "A\nB C",
+        ),
+        (
+            "alternating-man-scope-receives-an-incoming-word-end-break",
+            b".TH PROBE 1\n.SH DESCRIPTION\nA\\p\n.BR \"B C\" D\nAFTER\n".as_slice(),
+            "A\nB CD AFTER",
+        ),
+        (
             "kept-include",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p In stdio.h\n.Ek\n.No AFTER\n".as_slice(),
             "A <stdio.h>\nAFTER",
@@ -1120,6 +1224,24 @@ fn private_and_keep_scopes_preserve_incoming_word_end_execution_state() {
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\\p\n.No B\n.Ek\n.No C\n".as_slice(),
             "AXB\nC",
         ),
+        (
+            "inner-keep-close-clears-the-global-outer-state",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\n.Bk -words\n.No B\n.Ek\n.No E\\p No \"F G\"\n.Ek\n".as_slice(),
+            "A B E\nF G",
+        ),
+        (
+            "target-does-not-realize-a-pending-word-end-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p\n.Tg word-break-mark\n.No B C\n".as_slice(),
+            // `.Tg` emits no formatter word, so the pending break survives
+            // until the next `.No` begins its first word.  This is the fixed
+            // CVS `term_word()` order, not an internal-space heuristic.
+            "A\nB C",
+        ),
+        (
+            "target-does-not-cover-a-pending-zero-advance-glyph",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX\n.Tg zero-mark\n.No B\n".as_slice(),
+            "AXB",
+        ),
     ] {
         let document = parse_manual_bytes(
             std::path::Path::new(&format!("inline-private-state-{label}.1")),
@@ -1134,12 +1256,105 @@ fn private_and_keep_scopes_preserve_incoming_word_end_execution_state() {
 }
 
 #[test]
+fn keep_words_survives_a_paragraph_output_flush() {
+    let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\n.Pp\n.No B\n.Ek\n.No C\n";
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-private-state-keep-paragraph.1"),
+        source,
+    )
+    .expect("parse keep paragraph fixture");
+
+    let [
+        Block::Paragraph {
+            children: first, ..
+        },
+        Block::VerticalSpace { lines: 1, .. },
+        Block::Paragraph {
+            children: second, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!(
+            "expected two paragraphs separated by one row: {:#?}",
+            document.sections
+        );
+    };
+    assert_eq!(inline_text(first), "A");
+    assert_eq!(inline_text(second), "B C");
+}
+
+#[test]
+fn keep_words_tracks_repeated_macro_execution_and_transparent_targets() {
+    for (label, macro_body, expected) in [
+        ("repeated-lines", ".No A\\p\n.No B", "A\nB A\nB C"),
+        (
+            "target-between-lines",
+            ".No A\\p\n.Tg inside-macro\n.No B",
+            "A\nB A\nB C",
+        ),
+    ] {
+        let manual = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.de XX\n{macro_body}\n..\n.Sh DESCRIPTION\n.Bk -words\n.XX\n.XX\n.Ek\n.No C\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-keep-macro-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse repeated keep macro fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        if label == "target-between-lines" {
+            assert!(
+                children
+                    .iter()
+                    .filter(
+                        |inline| matches!(inline, Inline::Anchor { id, .. } if id == "inside-macro")
+                    )
+                    .count()
+                    >= 1,
+                "{children:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn transparent_target_preserves_continuation_and_its_exact_anchor() {
+    let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Eo [\n.No BEFORE\\c\n.Ec\n.Tg mark\n AFTER\n";
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-state-transparent-target.1"),
+        source,
+    )
+    .expect("parse transparent target fixture");
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one paragraph: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(children), "[BEFORE  AFTER");
+    assert!(
+        children
+            .iter()
+            .any(|inline| matches!(inline, Inline::Anchor { id, .. } if id == "mark")),
+        "{children:?}"
+    );
+}
+
+#[test]
 fn overstrike_projects_one_terminal_cell_through_the_shared_zero_advance_state() {
     for (label, source, expected) in [
         ("ordinary", r"A\o'BC'D", "ACD"),
+        ("trailing-blank", r"A\o'BC 'D", "ACD"),
+        ("repeated-trailing-blanks", r"A\o'BC  'D", "ACD"),
+        ("trailing-tab", "A\\o'BC\t'D", "ACD"),
+        ("all-blanks", r"A\o'   'D", "AD"),
         ("zero-advance", r"A\z\o'BC'D", "AD"),
+        ("zero-advance-trailing-blank-at-end", r"A\z\o'BC '", "AC"),
         ("empty", r"A\o''D", "AD"),
-        ("nested-escape", r"A\o'BC\fI'D", "ACD"),
+        ("nested-escape-spelling", r"A\o'BC\fI'D", "AID"),
+        ("same-delimiter-numbered-escape", r"A\o'BC\N'8''D", "A'D"),
+        ("same-delimiter-motion-escape", r"A\o'BC\h'1n''D", "A'D"),
+        ("same-delimiter-character-escape", r"A\o'BC\C'x''D", "A'D"),
     ] {
         let manual =
             format!(".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No {source}\n");
@@ -1153,6 +1368,314 @@ fn overstrike_projects_one_terminal_cell_through_the_shared_zero_advance_state()
         };
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
     }
+}
+
+#[test]
+fn styled_overstrike_uses_the_complete_nested_escape_extent() {
+    for (label, source, expected) in [
+        ("quoted-number", r"A\o'BC\N'8''D", "A'D"),
+        ("standard-nested-argument", r"A\o'1\f\N'39'2'B", "A2B"),
+    ] {
+        let manual =
+            format!(".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Sy {source}\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-overstrike-nested-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse styled nested overstrike fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert!(
+            children.iter().any(
+                |inline| matches!(inline, Inline::Strong { children } if inline_text(children) == expected)
+            ),
+            "{label}: styled projection escaped its semantic scope: {children:?}"
+        );
+    }
+}
+
+#[test]
+fn deeply_nested_escape_arguments_remain_bounded_at_the_native_boundary() {
+    let mut source =
+        String::from(".Dd September 12, 2026\n.Dt ESCAPE-DEPTH 1\n.Os\n.Sh DESCRIPTION\n.No ");
+    source.push_str(&"\\o'".repeat(512));
+    source.push('X');
+    source.push_str(&"'".repeat(512));
+    source.push_str("\n.No AFTER\n");
+
+    let document = parse_manual_bytes(
+        std::path::Path::new("deep-native-escape.1"),
+        source.as_bytes(),
+    )
+    .expect("native escape depth exhaustion must remain a finite lowering");
+    let text = visible_document_text(&document);
+    assert!(text.contains("AFTER"), "document tail was lost: {text:?}");
+    assert!(
+        text.len() < source.len(),
+        "rejected nesting must not be expanded into unbounded output"
+    );
+}
+
+#[test]
+fn numbered_and_named_nonbreaking_glyphs_defer_word_end_breaks() {
+    for (label, spelling, expected_glyph) in [
+        ("numbered-tab", r"\N'9'", "\t"),
+        ("numbered-nbsp", r"\N'160'", "\u{a0}"),
+        ("unicode-nbsp", "\u{a0}", "\u{a0}"),
+        ("named-unicode-nbsp", r"\[u00A0]", "\u{a0}"),
+        ("roff-nbsp", r"\~", " "),
+        ("roff-digit-width-space", r"\0", " "),
+    ] {
+        let manual = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\pB{spelling}C\n.No D\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-numbered-glyph-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse numbered glyph break fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(
+            inline_text(children),
+            format!("AB{expected_glyph}C\nD"),
+            "{label}: {children:?}"
+        );
+    }
+
+    for (number, expected) in [("0", "�"), ("10", "�"), ("27", "�"), ("255", "ÿ")] {
+        let manual = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\pB\\N'{number}'C\n.No D\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-numbered-control-{number}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse numbered terminal glyph fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{number}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), format!("AB{expected}C\nD"));
+    }
+}
+
+#[test]
+fn literal_flow_uses_the_same_numbered_and_overstrike_glyph_projection() {
+    for (label, source, expected) in [
+        ("numbered-nbsp", r"A\pB\N'160'C", "AB\u{a0}C"),
+        ("overstrike-trailing-blank", r"A\o'BC 'D", "ACD"),
+        ("zero-advance-before-word-break", r"A\zX\p", "AX"),
+    ] {
+        let manual = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No {source}\n.No D\n.Ed\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-literal-glyph-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse literal formatter glyph fixture");
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "{label}: expected one preformatted block: {:#?}",
+                document.sections
+            );
+        };
+        let expected = format!("{expected}\nD");
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn man_no_fill_settles_an_unrealized_word_end_break_at_the_physical_line() {
+    for (source, expected_first_row) in [
+        (r"PLAIN:A\pB", "PLAIN:AB"),
+        (r"PLAIN:A\pB\N'160'C", "PLAIN:AB\u{a0}C"),
+        (r"PLAIN:A\pB\N'9'C", "PLAIN:AB\tC"),
+        (r"PLAIN:A\zX\p", "PLAIN:AX"),
+    ] {
+        let manual = format!(".TH PROBE 1\n.SH DESCRIPTION\n.nf\n{source}\nNEXT\n.fi\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new("inline-man-no-fill-word-end-break.1"),
+            manual.as_bytes(),
+        )
+        .expect("parse man no-fill word-end break fixture");
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one preformatted block: {:#?}", document.sections);
+        };
+        assert_eq!(
+            inline_text(children).matches('\n').count(),
+            1,
+            "{source}: {children:?}"
+        );
+        assert_eq!(
+            inline_text(children),
+            format!("{expected_first_row}\nNEXT"),
+            "{source}: {children:?}"
+        );
+    }
+}
+
+#[test]
+fn zero_advance_state_crosses_only_continued_no_fill_rows() {
+    for (label, manual, expected) in [
+        (
+            "man",
+            ".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c\nB\n.fi\n",
+            "AB",
+        ),
+        (
+            "mdoc",
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No A\\zX\\c\n.No B\n.Ed\n",
+            "AB",
+        ),
+    ] {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-{label}-continued-zero-advance.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse continued no-fill zero-advance fixture");
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one preformatted block: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-man-continued-word-end-break.1"),
+        b".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\p\\c\nB\n.fi\n",
+    )
+    .expect("parse continued no-fill word-end-break fixture");
+    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one preformatted block: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(children), "AB", "{children:?}");
+}
+
+#[test]
+fn no_fill_execution_state_crosses_transparent_requests_only() {
+    for (label, request) in [("font", ".ft B"), ("paragraph-distance", ".PD 1")] {
+        let manual = format!(".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c\n{request}\nB\n.fi\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-man-no-fill-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse transparent no-fill request fixture");
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one preformatted block: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), "AB", "{label}: {children:?}");
+        if label == "font" {
+            assert!(children.iter().any(|inline| matches!(
+                inline,
+                Inline::Strong { children } if inline_text(children) == "B"
+            )));
+        }
+    }
+
+    for (label, request) in [
+        ("indent", ".in 4"),
+        ("temporary-indent", ".ti 4"),
+        ("break", ".br"),
+        ("space", ".sp"),
+        ("fill", ".fi\n.nf"),
+        ("repeated-no-fill", ".nf"),
+    ] {
+        let manual = format!(".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c\n{request}\nB\n.fi\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-man-no-fill-{label}-boundary.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse no-fill boundary fixture");
+        let text = document.sections[0]
+            .blocks
+            .iter()
+            .map(|block| match block {
+                Block::Preformatted { children, .. } | Block::Paragraph { children, .. } => {
+                    inline_text(children)
+                }
+                Block::VerticalSpace { .. } => "\n".to_owned(),
+                _ => String::new(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("AX"), "{label}: {:#?}", document.sections);
+        assert!(text.contains('B'), "{label}: {:#?}", document.sections);
+        assert!(!text.contains("AB"), "{label}: {:#?}", document.sections);
+    }
+
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-man-no-fill-margin-character.1"),
+        b".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c\n.mc |\nB\n.fi\n",
+    )
+    .expect("parse no-break margin-character fixture");
+    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one preformatted block: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(children), "AX B", "{children:?}");
+
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-man-no-fill-margin-pending-cell.1"),
+        b".TH PROBE 1\n.SH DESCRIPTION\n.nf\n\\zX\\c\n.mc |\nB\n.fi\n",
+    )
+    .expect("parse no-break margin pending-cell fixture");
+    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one preformatted block: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(children), "X B", "{children:?}");
+
+    for (label, first, expected) in [
+        ("plain", "A", "A B"),
+        ("continued-zero-advance", r"A\zX\c", "AX B"),
+    ] {
+        let manual = format!(".TH PROBE 1\n.SH DESCRIPTION\n{first}\n.mc |\nB\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-man-filled-margin-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse filled no-break margin-character fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn no_fill_exit_and_document_end_settle_continued_zero_advance_state() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-man-zero-advance-before-fi.1"),
+        b".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c\n.fi\nB\n",
+    )
+    .expect("parse no-fill exit fixture");
+    let [
+        Block::Preformatted {
+            children: literal, ..
+        },
+        Block::Paragraph {
+            children: filled, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!(
+            "expected literal and filled blocks: {:#?}",
+            document.sections
+        );
+    };
+    assert_eq!(inline_text(literal), "AX", "{literal:?}");
+    assert_eq!(inline_text(filled), "B", "{filled:?}");
+
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-man-zero-advance-at-eof.1"),
+        b".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c",
+    )
+    .expect("parse no-fill EOF fixture");
+    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one preformatted block: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(children), "AX", "{children:?}");
 }
 
 #[test]
@@ -1217,6 +1740,12 @@ fn semantic_link_identity_executes_zero_advance_controls_without_guessing_displa
             "Lk",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/\\o'ab' label\n".as_slice(),
             "https://example.org/b",
+        ),
+        (
+            "link-overstrike-standard-nested-argument",
+            "Lk",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/A\\o'1\\f\\N'39'2'B label\n".as_slice(),
+            "https://example.org/A2B",
         ),
     ] {
         let document = parse_manual_bytes(

@@ -28,6 +28,7 @@ pub(in crate::mandoc) struct InlineBuilder {
     // post-execution result.
     final_word_join: Option<bool>,
     final_source_continuation: Option<bool>,
+    execution_epoch: u64,
 }
 
 /// A checkpoint for output that may be semantically annotated or discarded
@@ -55,10 +56,15 @@ pub(in crate::mandoc) struct OutputCheckpoint {
 /// source-line decision.
 pub(in crate::mandoc) struct PreservedInlineState {
     pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
-    pub(in crate::mandoc) zero_advance_joined: bool,
     pub(in crate::mandoc) word_end_break: bool,
-    pub(in crate::mandoc) final_word_join: Option<bool>,
-    pub(in crate::mandoc) final_source_continuation: Option<bool>,
+    pub(in crate::mandoc) source_continuation: Option<bool>,
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) struct SourceFragmentState {
+    final_word_join: Option<bool>,
+    final_source_continuation: Option<bool>,
+    execution_epoch: u64,
 }
 
 /// Roff remembers the previous selection independently of the current font.
@@ -132,23 +138,26 @@ enum WordEndBreak {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct KeepState {
-    depth: usize,
-    source_line: Option<u32>,
-    crossed_source_line: bool,
+    phase: KeepPhase,
 }
 
 impl KeepState {
     const fn new() -> Self {
         Self {
-            depth: 0,
-            source_line: None,
-            crossed_source_line: false,
+            phase: KeepPhase::Inactive,
         }
     }
 
-    const fn active(self) -> bool {
-        self.depth > 0
+    const fn keeping(self) -> bool {
+        matches!(self.phase, KeepPhase::Keep)
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KeepPhase {
+    Inactive,
+    PreKeep,
+    Keep,
 }
 
 impl SpacingMode {
@@ -204,6 +213,7 @@ impl InlineBuilder {
             source_cursor: None,
             final_word_join: None,
             final_source_continuation: None,
+            execution_epoch: 0,
         }
     }
 
@@ -224,6 +234,7 @@ impl InlineBuilder {
             source_cursor: None,
             final_word_join: None,
             final_source_continuation: None,
+            execution_epoch: 0,
         }
     }
 
@@ -248,29 +259,56 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
-        if self.keep.active() && node.flags.line_start {
-            let crossed_keep_line = self.keep.source_line.is_some_and(|line| line != node.line);
-            self.keep.crossed_source_line |= crossed_keep_line;
-            self.keep.source_line = Some(node.line);
+        // mdoc_term.c keys KEEP lifetime from each executed NODE_LINE event,
+        // not from the numeric source coordinate. User-macro expansion can
+        // execute several input rows that all retain the call site's line.
+        if self.keep.keeping() && node.flags.line_start {
+            self.keep.phase = KeepPhase::PreKeep;
         }
-        if node.flags.line_start
-            && let Some(cursor) = &mut self.source_cursor
-        {
-            cursor.begin();
+        if node.flags.line_start {
+            let has_physical_line_boundary = self.source_cursor.as_mut().is_some_and(|cursor| {
+                cursor.begin();
+                cursor.has_physical_line_boundary()
+            });
+            if has_physical_line_boundary {
+                // CVS stores `\p` as a deferred word-end marker. At a real
+                // no-fill input-line boundary, the ordinary row flush
+                // settles it; retaining both would create a blank line.
+                // A pending BACKBEFORE glyph still belongs to the row being
+                // closed. CVS `term_flushln()` commits that cell before the
+                // next input line starts; flushing after `SourceCursor`
+                // emits its boundary would move the glyph to the new row.
+                self.flush_zero_advance();
+                self.word_end_break = WordEndBreak::Clear;
+            }
         }
-    }
-
-    /// Start a top-level source subtree. Its final formatter word, rather
-    /// than the AST's source order, determines whether the next physical line
-    /// is joined. This matters for mdoc `.Lk`, whose renderer executes the
-    /// descriptive label before the URI stored as its first child.
-    pub(in crate::mandoc) fn begin_source_fragment(&mut self) {
-        self.final_word_join = None;
-        self.final_source_continuation = None;
     }
 
     pub(in crate::mandoc) fn final_word_join_or(&self, fallback: bool) -> bool {
         self.final_word_join.unwrap_or(fallback)
+    }
+
+    /// Start one source fragment with an empty result slot while retaining the
+    /// prior formatter decision for transparent fragments such as `.Tg`.
+    /// A real word, break, or release writes its own final state; an anchor or
+    /// font-only request leaves the slot empty and therefore cannot consume a
+    /// still-live physical continuation.
+    pub(in crate::mandoc) fn begin_source_fragment(&mut self) -> SourceFragmentState {
+        SourceFragmentState {
+            final_word_join: self.final_word_join.take(),
+            final_source_continuation: self.final_source_continuation.take(),
+            execution_epoch: self.execution_epoch,
+        }
+    }
+
+    pub(in crate::mandoc) fn finish_source_fragment(&mut self, state: SourceFragmentState) {
+        if self.execution_epoch == state.execution_epoch && self.final_word_join.is_none() {
+            self.final_word_join = state.final_word_join;
+        }
+        if self.execution_epoch == state.execution_epoch && self.final_source_continuation.is_none()
+        {
+            self.final_source_continuation = state.final_source_continuation;
+        }
     }
 
     pub(in crate::mandoc) fn continue_source_line(&mut self, continued: bool) {
@@ -295,22 +333,6 @@ impl InlineBuilder {
     /// order.
     pub(in crate::mandoc) fn inherit_final_word_join(&mut self, result: Option<bool>) {
         self.final_word_join = result;
-    }
-
-    pub(in crate::mandoc) fn inherit_execution_state(&mut self, state: PreservedInlineState) {
-        self.zero_advance = state.zero_advance;
-        self.word_end_break =
-            if state.word_end_break || self.word_end_break == WordEndBreak::Pending {
-                WordEndBreak::Pending
-            } else {
-                WordEndBreak::Clear
-            };
-        self.final_word_join = state.final_word_join;
-        self.final_source_continuation = state.final_source_continuation;
-        if state.zero_advance_joined {
-            self.tighten_next_boundary();
-            self.note_zero_advance_join();
-        }
     }
 
     pub(in crate::mandoc) fn transfer_source_cursor(&mut self, next: &mut Self) {
@@ -346,15 +368,21 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn enter_keep_words(&mut self) {
-        self.keep.depth = self.keep.depth.saturating_add(1);
+        self.keep.phase = KeepPhase::PreKeep;
     }
 
     pub(in crate::mandoc) fn exit_keep_words(&mut self) {
-        self.keep.depth = self.keep.depth.saturating_sub(1);
-        if !self.keep.active() {
-            self.keep.source_line = None;
-            self.keep.crossed_source_line = false;
-        }
+        // CVS stores PREKEEP/KEEP as formatter-global flags rather than a
+        // nesting depth. Consequently an inner Ek clears an outer Bk too.
+        self.keep.phase = KeepPhase::Inactive;
+    }
+
+    /// Paragraph/display output buffers may flush inside Bk, but the
+    /// formatter's PREKEEP/KEEP lifecycle belongs to the surrounding
+    /// container and survives that presentation boundary.
+    pub(in crate::mandoc) fn transfer_container_execution(&mut self, next: &mut Self) {
+        next.keep = self.keep;
+        self.keep = KeepState::new();
     }
 
     /// Source wrapping is a word boundary even while macro auto-spacing is
@@ -533,6 +561,67 @@ impl InlineBuilder {
         self.nodes.extend(wrap(output));
     }
 
+    /// Replace the visible glyphs emitted since `checkpoint` without
+    /// replaying formatter execution.
+    ///
+    /// Semantic macros such as `.Bx` execute authored operands and then use
+    /// a generated spelling for presentation.  The replacement occupies the
+    /// already-executed formatter word: leading inter-word padding and real
+    /// line boundaries survive, while pending `\p`, `\c`, font, KEEP, and
+    /// zero-advance state remain exactly where source execution left them.
+    pub(in crate::mandoc) fn replace_output_since(
+        &mut self,
+        checkpoint: &OutputCheckpoint,
+        replacement: &str,
+    ) {
+        let output = self.nodes.split_off(checkpoint.node_count);
+        let retained = retained_replacement_layout(output);
+        let boundary_materialized =
+            has_printable_character(&retained) || line_break_count(&retained) > 0;
+
+        // These fields summarize projected output rather than formatter
+        // execution.  Rewind only them before installing the replacement;
+        // boundary, cursor, word-end break, KEEP, and zero-advance state must
+        // remain the post-execution values.
+        self.last_visible_character = checkpoint.last_visible_character;
+        self.has_printable_content = checkpoint.has_printable_content;
+        self.append_projected(retained);
+        if !boundary_materialized && self.pending_word_spaces > 0 {
+            self.append_projected(vec![Inline::Text {
+                value: " ".repeat(self.pending_word_spaces),
+            }]);
+        } else if !boundary_materialized
+            && self.empty_word
+            && checkpoint.has_printable_content
+            && self.spacing.enabled()
+            && !self.boundary.is_tight()
+        {
+            self.append_projected(vec![Inline::Text {
+                value: " ".to_owned(),
+            }]);
+        }
+        // The replacement occupies the already executed word. Any deferred
+        // empty-word padding has now been materialized exactly once and must
+        // not leak into the following source word.
+        self.empty_word = false;
+        self.pending_word_spaces = 0;
+        // The validator-generated replacement is a formatter word, not an
+        // inert IR splice.  In particular, it must consume an authored `\z`
+        // before any later source word can observe that state.
+        let mut projected = Vec::new();
+        self.zero_advance
+            .append_generated_text(replacement, &mut projected, self.font.current);
+        self.append_projected(projected);
+    }
+
+    /// A compact semantic spelling can omit an authored empty trailing word
+    /// after its generated punctuation.  The omitted word still establishes
+    /// one ordinary boundary, but padding already queued on its left must not
+    /// be replayed in addition to the following word's own boundary.
+    pub(in crate::mandoc) fn consume_compacted_pending_padding(&mut self) {
+        self.pending_word_spaces = 0;
+    }
+
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
@@ -548,6 +637,22 @@ impl InlineBuilder {
         if let Some(cursor) = &mut self.source_cursor {
             cursor.explicit_line_break(false);
         }
+        self.final_word_join = Some(false);
+        self.final_source_continuation = Some(false);
+    }
+
+    /// Commit the current formatter cell without ending its visual row.
+    ///
+    /// The pinned CVS renderer uses this for `.mc`: pending `\z` content is
+    /// materialized, while `TERMP_NOBREAK` keeps the next source word on the
+    /// same line and clears `TERMP_NOSPACE`. Device margin geometry is outside
+    /// the IR, so the next word observes one ordinary boundary.
+    pub(in crate::mandoc) fn no_break_flush(&mut self) {
+        self.flush_zero_advance();
+        self.boundary = PendingBoundary::Ordinary;
+        self.empty_word = false;
+        self.pending_word_spaces = 0;
+        self.word_end_break = WordEndBreak::Clear;
         self.final_word_join = Some(false);
         self.final_source_continuation = Some(false);
     }
@@ -583,7 +688,10 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
         self.begin_word_projection(!value.is_empty());
         let kept_zero_boundary = self.boundary == PendingBoundary::Kept
-            && value.chars().next().is_some_and(char::is_whitespace)
+            && value
+                .chars()
+                .next()
+                .is_some_and(super::is_formatter_word_blank)
             && self.zero_advance.has_pending_glyph();
         let mut projected = Vec::new();
         self.zero_advance
@@ -609,6 +717,9 @@ impl InlineBuilder {
     /// own inter-word space. Tight joins (for example alternating `.BR`
     /// operands) deliberately bypass this transition and overstrike instead.
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
+        if next_is_visible {
+            self.execution_epoch = self.execution_epoch.wrapping_add(1);
+        }
         let continued_word = next_is_visible
             && self.final_source_continuation_or(false)
             && !self.boundary.is_tight();
@@ -616,18 +727,7 @@ impl InlineBuilder {
             self.final_word_join = Some(false);
             self.final_source_continuation = Some(false);
         }
-        if next_is_visible && self.keep.crossed_source_line {
-            self.keep.crossed_source_line = false;
-            if self.word_end_break == WordEndBreak::Pending
-                && !self.zero_advance.has_pending_glyph()
-            {
-                // A physical input-line boundary inside Bk completes a
-                // pending `\p`, unless TERMP_BACKBEFORE must first be settled
-                // by this formatter word's implicit KEEP blank.
-                self.hard_break();
-            }
-        }
-        if next_is_visible && self.keep.active() && !self.boundary.is_tight() {
+        if next_is_visible && self.keep.keeping() && !self.boundary.is_tight() {
             self.boundary = PendingBoundary::Kept;
             if let Some(glyph) = self.zero_advance.resolve_at_word_boundary() {
                 // CVS writes TERMP_KEEP's implicit NBRSP before the next
@@ -663,6 +763,12 @@ impl InlineBuilder {
             // word, producing the two spaces emitted by CVS in both filled
             // and literal flows.
             self.boundary = PendingBoundary::Continued;
+        }
+        if next_is_visible && self.keep.phase == KeepPhase::PreKeep {
+            // term_word() inserts the leading boundary using the previous
+            // KEEP value, then promotes PREKEEP for the remainder of this
+            // word and subsequent words on the same executed input line.
+            self.keep.phase = KeepPhase::Keep;
         }
         if !next_is_visible
             || self.boundary.is_nonbreaking()
@@ -734,6 +840,9 @@ impl InlineBuilder {
         let incoming_first = first_visible_character(incoming);
         let incoming_last = last_visible_character(incoming);
         let incoming_has_printable = has_printable_character(incoming);
+        if incoming_has_printable || word {
+            self.execution_epoch = self.execution_epoch.wrapping_add(1);
+        }
         if incoming_first.is_none() && !incoming_has_printable && !word {
             self.nodes.append(incoming);
             return;
@@ -832,10 +941,8 @@ impl InlineBuilder {
     ) -> (Vec<Inline>, PreservedInlineState) {
         let state = PreservedInlineState {
             zero_advance: std::mem::take(&mut self.zero_advance),
-            zero_advance_joined: self.zero_advance_joined,
             word_end_break: self.word_end_break == WordEndBreak::Pending,
-            final_word_join: self.final_word_join,
-            final_source_continuation: self.final_source_continuation,
+            source_continuation: self.final_source_continuation,
         };
         (self.finish_nodes(), state)
     }
@@ -909,4 +1016,57 @@ fn line_break_count(nodes: &[Inline]) -> usize {
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
         })
         .sum()
+}
+
+/// Retain layout surrounding a compact semantic replacement.
+///
+/// Padding before the first authored glyph belongs to the caller.  Explicit
+/// line boundaries are execution output and likewise cannot be discarded.
+/// Glyphs and styling inside the replaced source spelling are omitted.
+fn retained_replacement_layout(nodes: Vec<Inline>) -> Vec<Inline> {
+    fn leading_whitespace(value: &str) -> Option<Inline> {
+        let end = value
+            .char_indices()
+            .take_while(|(_, character)| character.is_whitespace())
+            .last()
+            .map_or(0, |(index, character)| index + character.len_utf8());
+        (end > 0).then(|| Inline::Text {
+            value: value[..end].to_owned(),
+        })
+    }
+
+    let mut retained = Vec::new();
+    let mut before_first_glyph = true;
+    for node in nodes {
+        match node {
+            Inline::LineBreak => {
+                retained.push(Inline::LineBreak);
+                before_first_glyph = true;
+            }
+            Inline::Anchor { .. } => retained.push(node),
+            Inline::Text { value } | Inline::Code { value } if before_first_glyph => {
+                if let Some(prefix) = leading_whitespace(&value) {
+                    retained.push(prefix);
+                }
+                if value.chars().any(|character| !character.is_whitespace()) {
+                    before_first_glyph = false;
+                }
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. }
+                if before_first_glyph =>
+            {
+                if has_printable_character(&children) {
+                    before_first_glyph = false;
+                }
+            }
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Strong { .. }
+            | Inline::Emphasis { .. }
+            | Inline::Link { .. } => {}
+        }
+    }
+    retained
 }

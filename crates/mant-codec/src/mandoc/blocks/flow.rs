@@ -196,6 +196,11 @@ impl BlockState {
             .append(nodes, source, continues_line, starts_line, occupies_row);
     }
 
+    pub(super) fn no_break_formatter_flush(&mut self, nodes: Vec<Inline>) {
+        self.paragraph.no_break_flush();
+        self.literal.no_break_flush(nodes);
+    }
+
     pub(super) fn flush_paragraph(&mut self) {
         let output_start = self.output.len();
         if let Some(block) = self

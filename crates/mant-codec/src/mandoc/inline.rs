@@ -19,8 +19,11 @@ mod source;
 use font::lower_man_font_scope;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
+pub(super) use font::{
+    NoFillInlineState, lower_inline_nodes_with_font_state, lower_no_fill_line_with_font_state,
+    parse_roff_text,
+};
 pub(super) use font::{ZeroAdvanceState, parse_roff_text_with_state};
-pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 
 pub(super) use source::roff_macro_arguments;
@@ -28,7 +31,8 @@ pub(super) use source::roff_macro_arguments;
 use super::{
     first_part_children,
     roff_escape::{
-        RoffFont as Font, RoffInlineEvent, decode, source_has_visible_glyph, visible_text,
+        RoffFont as Font, RoffInlineEvent, decode, is_formatter_word_blank,
+        source_has_visible_glyph, visible_text,
     },
 };
 
@@ -97,15 +101,7 @@ pub(super) fn append_inline_node_with_next(
     }
     match node.macro_name.as_deref() {
         Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
-            let (inlines, execution) = lower_man_font_scope(
-                node,
-                default_name,
-                builder.spacing_enabled(),
-                &mut builder.font,
-                &mut builder.zero_advance,
-            );
-            builder.inherit_execution_state(execution);
-            builder.append(inlines);
+            lower_man_font_scope(builder, node, default_name);
         }
         Some("Ns") => {
             if !node.flags.line_start {
@@ -320,39 +316,40 @@ fn lower_equation_node(node: &Node) -> Vec<Inline> {
 /// zero-advance glyph just like CVS `term_word()` does.
 pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_name: Option<&str>) {
     let children = inline_children(node);
-    let mut include = InlineBuilder::with_spacing(builder.spacing_enabled());
-    include.font = builder.font;
-    include.zero_advance = std::mem::take(&mut builder.zero_advance);
     if let Some(anchor) = navigation_anchor(node) {
-        include.append(vec![anchor]);
+        builder.append(vec![anchor]);
     }
-    let saved = include
+    let saved = builder
         .font
         .push_scope(if node.flags.synopsis_pretty && node.flags.line_start {
             Font::Strong
         } else {
             Font::Emphasis
         });
-    if node.flags.synopsis_pretty && node.flags.line_start {
-        include.append_text("#include ");
-    }
-    include.append_text("<");
-    include.tighten_next_boundary();
-    append_inline_nodes(&mut include, children, default_name);
-    if node.flags.synopsis_pretty {
-        include.font.select(Font::Strong);
-    }
-    include.font.pop_scope(saved);
-    include.tighten_next_boundary();
-    include.append_text(">");
-    let font = include.font;
-    let (nodes, execution) = include.finish_preserving_execution();
-    builder.font = font;
-    builder.inherit_execution_state(execution);
-    let value = plain_text(&nodes);
-    if !value.is_empty() {
-        builder.append(vec![Inline::Code { value }]);
-    }
+    builder.append_scope(
+        |builder| {
+            if node.flags.synopsis_pretty && node.flags.line_start {
+                builder.append_text("#include ");
+            }
+            builder.append_text("<");
+            builder.tighten_next_boundary();
+            append_inline_nodes(builder, children, default_name);
+            if node.flags.synopsis_pretty {
+                builder.font.select(Font::Strong);
+            }
+            builder.font.pop_scope(saved);
+            builder.tighten_next_boundary();
+            builder.append_text(">");
+        },
+        |nodes| {
+            let value = plain_text(&nodes);
+            if value.is_empty() {
+                Vec::new()
+            } else {
+                vec![Inline::Code { value }]
+            }
+        },
+    );
 }
 
 /// Whether a semantic macro owns an inline enclosure body.

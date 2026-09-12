@@ -125,6 +125,7 @@ impl DisplayFlow<'_, '_> {
         let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
         next.font = self.line.font;
         self.line.transfer_source_cursor(&mut next);
+        self.line.transfer_container_execution(&mut next);
         let children = std::mem::replace(&mut self.line, next).finish();
         if !children.is_empty() {
             self.output.push(if self.literal {
@@ -149,6 +150,7 @@ impl DisplayFlow<'_, '_> {
         self.literal = literal;
         let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
         next.font = self.line.font;
+        self.line.transfer_container_execution(&mut next);
         if literal {
             next.track_executed_lines();
         }

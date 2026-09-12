@@ -216,8 +216,9 @@ fn numbered_glyphs_follow_the_terminal_range_not_unicode_indices() {
         (r"\N'65'", "A"),
         (r"\N|65|", "A"),
         (r"\N'255'", "ÿ"),
-        (r"\N'0'", " "),
-        (r"\N'27'", " "),
+        (r"\N'0'", "�"),
+        (r"\N'10'", "�"),
+        (r"\N'27'", "�"),
     ] {
         assert_eq!(visible_text(source), expected, "{source}");
     }
@@ -232,6 +233,69 @@ fn numbered_glyphs_follow_the_terminal_range_not_unicode_indices() {
     ] {
         assert_eq!(visible_text(source), source);
     }
+}
+
+#[test]
+fn word_end_break_uses_formatter_spaces_not_unicode_whitespace() {
+    for source in [
+        r"A\p\N'9'B C",
+        r"A\p\N'160'B C",
+        "A\\p\u{a0}B C",
+        r"A\p\[u00A0]B C",
+        r"A\p\~B C",
+        r"A\p\0B C",
+    ] {
+        assert!(
+            visible_text(source).ends_with("B\nC"),
+            "{source}: {:?}",
+            visible_text(source)
+        );
+    }
+    assert_eq!(visible_text(r"A\p\N'32'B C"), "A\nB C");
+    for source in [
+        r"A\p\N'0'B C",
+        r"A\p\N'8'B C",
+        r"A\p\N'10'B C",
+        r"A\p\N'27'B C",
+        r"A\p\N'31'B C",
+        r"A\p\N'127'B C",
+        r"A\p\N'128'B C",
+        r"A\p\N'159'B C",
+    ] {
+        assert_eq!(visible_text(source), "A�B\nC", "{source}");
+    }
+}
+
+#[test]
+fn overstrike_projects_the_cvs_terminal_cell_and_trims_trailing_blanks() {
+    for (source, expected) in [
+        (r"A\o'BC'D", "ACD"),
+        (r"A\o'BC 'D", "ACD"),
+        ("A\\o'BC\t'D", "ACD"),
+        (r"A\o'BC  'D", "ACD"),
+        (r"A\o' B C'D", "ACD"),
+        (r"A\o'BC\N'8''D", "A'D"),
+        (r"A\o'BC\h'1n''D", "A'D"),
+        (r"A\o'BC\C'x''D", "A'D"),
+        (r"A\o'1\f\N'39'2'B", "A2B"),
+        (r"A\o'   'D", "AD"),
+        (r"A\o''D", "AD"),
+        (r"A\z\o'BC '", "AC"),
+        (r"A\z\o'BC 'D", "AD"),
+    ] {
+        assert_eq!(visible_text(source), expected, "{source}");
+    }
+}
+
+#[test]
+fn nested_escape_extent_scanning_is_iterative_and_bounded() {
+    let closed = format!("{}X{}", r"\o'".repeat(50_000), "'".repeat(50_000));
+    assert_eq!(visible_text(&closed), "'");
+
+    // An unterminated adversarial nest must still make monotonic progress and
+    // retain its final cell without growing the native or Rust call stack.
+    let unterminated = format!("{}X", r"\o'".repeat(100_000));
+    assert_eq!(visible_text(&unterminated), "X");
 }
 
 #[test]

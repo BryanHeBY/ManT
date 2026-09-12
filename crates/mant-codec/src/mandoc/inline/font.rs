@@ -2,6 +2,7 @@
 use super::super::reference::trailing_sphinx_manual_reference;
 use super::{
     Font, FontState, Inline, InlineBuilder, Node, RoffInlineEvent, append_inline_nodes, decode,
+    is_formatter_word_blank,
 };
 use crate::mandoc::roff_escape::ZeroAdvanceMachine;
 
@@ -106,7 +107,7 @@ impl ZeroAdvanceState {
                 continue;
             }
             if self.machine.has_pending() {
-                if character.is_whitespace() {
+                if is_formatter_word_blank(character) {
                     flush_segment(output, &mut buffer, font, None);
                     if let Some(glyph) = self.machine.take_pending() {
                         output.push(glyph);
@@ -149,7 +150,7 @@ impl ZeroAdvanceState {
                 continue;
             }
             if self.machine.has_pending() {
-                if character.is_whitespace() {
+                if is_formatter_word_blank(character) {
                     // The first intervening formatter blank consumes the
                     // backtracking position but does not become document
                     // content.  This is why `TOKEN\\zX END` renders as
@@ -264,18 +265,16 @@ pub(super) fn parse_roff_text_with_font(
 }
 
 pub(super) fn lower_man_font_scope(
+    output: &mut InlineBuilder,
     node: &Node,
     default_name: Option<&str>,
-    spacing: bool,
-    state: &mut FontState,
-    zero_advance: &mut ZeroAdvanceState,
-) -> (Vec<Inline>, super::flow::PreservedInlineState) {
-    state.select(Font::Regular);
+) {
+    output.font.select(Font::Regular);
     if let Some((first, second)) = super::alternating_font_pair(node.macro_name.as_deref()) {
-        let mut output = builder_with_zero_advance(spacing, *state, zero_advance);
         for (index, child) in node.children.iter().enumerate() {
-            state.select(if index % 2 == 0 { first } else { second });
-            output.font = *state;
+            output
+                .font
+                .select(if index % 2 == 0 { first } else { second });
             // Alternating man macro operands are emitted as one formatter
             // word.  This is also the scope in which CVS preserves the
             // TERMP_BACK* state from one argument to the next.
@@ -283,64 +282,51 @@ pub(super) fn lower_man_font_scope(
                 output.tighten_next_boundary();
             }
             super::append_inline_node_with_next(
-                &mut output,
+                output,
                 child,
                 node.children.get(index + 1),
                 default_name,
             );
-            *state = output.font;
         }
-        state.select(Font::Regular);
-        return finish_with_zero_advance(output, zero_advance);
+        output.font.select(Font::Regular);
+        return;
     }
     if node.macro_name.as_deref() == Some("OP") {
-        let mut output = builder_with_zero_advance(spacing, *state, zero_advance);
         // CVS man_term.c::pre_OP() emits both brackets with term_word().
-        // Keep them inside this builder so a pending `\z` glyph can be
-        // overwritten by the closing bracket instead of being appended after
-        // a post-hoc `surround()` wrapper.
+        // Keep them in the caller's formatter stream so pending `\z`/`\p`
+        // state crosses authored operands and generated punctuation in order.
         output.append_text("[");
         output.tighten_next_boundary();
         output.enter_keep_words();
         for (index, child) in node.children.iter().enumerate() {
-            state.select(if index == 0 {
+            output.font.select(if index == 0 {
                 Font::Strong
             } else {
                 Font::Emphasis
             });
-            output.font = *state;
             super::append_inline_node_with_next(
-                &mut output,
+                output,
                 child,
                 node.children.get(index + 1),
                 default_name,
             );
-            *state = output.font;
         }
         // OP resets for its closing bracket, then the man macro scope resets
         // again. Consequently a following fP selects regular, not its operand.
-        state.select(Font::Regular);
-        output.font = *state;
+        output.font.select(Font::Regular);
         output.exit_keep_words();
         output.tighten_next_boundary();
         output.append_text("]");
-        state.select(Font::Regular);
-        return finish_with_zero_advance(output, zero_advance);
+        output.font.select(Font::Regular);
+        return;
     }
     match node.macro_name.as_deref() {
-        Some("B" | "SB") => state.select(Font::Strong),
-        Some("I") => state.select(Font::Emphasis),
+        Some("B" | "SB") => output.font.select(Font::Strong),
+        Some("I") => output.font.select(Font::Emphasis),
         _ => {}
     }
-    let (result, joined) = lower_inline_nodes_with_font_state_and_zero_advance(
-        &node.children,
-        default_name,
-        spacing,
-        state,
-        zero_advance,
-    );
-    state.select(Font::Regular);
-    (result, joined)
+    super::append_inline_nodes(output, &node.children, default_name);
+    output.font.select(Font::Regular);
 }
 
 fn builder_with_zero_advance(
@@ -381,6 +367,71 @@ pub(in crate::mandoc) fn lower_inline_nodes_with_font_state(
     zero_advance = execution.zero_advance;
     zero_advance.finish_into(&mut output);
     output
+}
+
+/// Lower one executed no-fill input row.
+///
+/// A deferred `\p` at the end of the formatter word is settled by the
+/// physical input-row boundary, not emitted as a second inline break.  Any
+/// completed `\z` glyph still belongs to the row and must be committed before
+/// the outer literal flow appends that boundary.
+pub(in crate::mandoc) struct NoFillInlineState {
+    zero_advance: ZeroAdvanceState,
+    pending_word_end_break: bool,
+    continued: bool,
+}
+
+impl NoFillInlineState {
+    pub(in crate::mandoc) fn new() -> Self {
+        Self {
+            zero_advance: ZeroAdvanceState::new(),
+            pending_word_end_break: false,
+            continued: false,
+        }
+    }
+
+    pub(in crate::mandoc) fn finish_row(&mut self, output: &mut Vec<Inline>) {
+        self.zero_advance.finish_into(output);
+        self.pending_word_end_break = false;
+        self.continued = false;
+    }
+
+    pub(in crate::mandoc) fn take_settled_row(&mut self) -> Vec<Inline> {
+        let mut output = Vec::new();
+        self.finish_row(&mut output);
+        output
+    }
+}
+
+pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
+    nodes: &[Node],
+    default_name: Option<&str>,
+    spacing: bool,
+    state: &mut FontState,
+    inline_state: &mut NoFillInlineState,
+    source_continuation_fallback: bool,
+) -> (Vec<Inline>, bool) {
+    let mut builder = builder_with_zero_advance(spacing, *state, &mut inline_state.zero_advance);
+    if inline_state.continued {
+        builder.continue_source_line(true);
+        builder.tighten_next_boundary();
+    }
+    if inline_state.pending_word_end_break {
+        builder.request_word_end_break();
+    }
+    append_inline_nodes(&mut builder, nodes, default_name);
+    *state = builder.font;
+    let (mut output, execution) = builder.finish_preserving_execution();
+    let continues_line = execution
+        .source_continuation
+        .unwrap_or(source_continuation_fallback);
+    inline_state.zero_advance = execution.zero_advance;
+    inline_state.pending_word_end_break = execution.word_end_break;
+    inline_state.continued = continues_line;
+    if !continues_line {
+        inline_state.finish_row(&mut output);
+    }
+    (output, continues_line)
 }
 
 fn lower_inline_nodes_with_font_state_and_zero_advance(
@@ -440,7 +491,7 @@ fn append_text_event(
 ) {
     let mut chunk = String::new();
     for character in value.chars() {
-        if state.pending_word_end_break && character.is_whitespace() {
+        if state.pending_word_end_break && is_formatter_word_blank(character) {
             zero_advance.append_text(&chunk, output, buffer, font, link);
             chunk.clear();
             if zero_advance.has_pending_glyph() {
@@ -458,7 +509,7 @@ fn append_text_event(
             state.suppress_break_whitespace = true;
             continue;
         }
-        if state.suppress_break_whitespace && character.is_whitespace() {
+        if state.suppress_break_whitespace && is_formatter_word_blank(character) {
             continue;
         }
         state.suppress_break_whitespace = false;
@@ -525,6 +576,12 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
                 let canceled_armed = zero_advance.cancel_armed_for_no_space();
                 if index + 1 == events.len() {
                     explicit_line_continuation = Some(!canceled_armed);
+                    if !canceled_armed {
+                        // A trailing `\c` keeps the current formatter word
+                        // open on the next input row. Consequently a pending
+                        // word-end `\p` has no boundary to realize here.
+                        text_state.pending_word_end_break = false;
+                    }
                 }
             }
             RoffInlineEvent::Font(next_font) => {
@@ -568,41 +625,6 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation: explicit_line_continuation,
         pending_word_end_break: text_state.pending_word_end_break,
-    }
-}
-
-/// Execute only source controls from text whose visible operand is replaced by
-/// a semantic macro expansion. The mdoc validator can synthesize `BSD` for
-/// `.Bx` while retaining authored font changes in an otherwise empty text
-/// node; dropping that node must not also drop its formatter state.
-pub(super) fn execute_suppressed_text_controls(
-    source: &str,
-    state: &mut FontState,
-    zero_advance: &mut ZeroAdvanceState,
-) {
-    for event in decode(source) {
-        match event {
-            RoffInlineEvent::Font(font) => state.select(font),
-            RoffInlineEvent::PreviousFont => state.restore(),
-            RoffInlineEvent::ZeroAdvance => zero_advance.arm(),
-            RoffInlineEvent::NoSpace => {
-                // Suppressed source still follows the formatter ordering. A
-                // no-space request may cancel a bare pending `\\z`, but no
-                // projected glyph exists in this deliberately output-free
-                // path.
-                zero_advance.cancel_armed_for_no_space();
-            }
-            RoffInlineEvent::Text(_)
-            | RoffInlineEvent::Glyph(_)
-            | RoffInlineEvent::FallbackGlyph(_)
-            | RoffInlineEvent::DeviceName
-            | RoffInlineEvent::Overstrike { .. }
-            | RoffInlineEvent::ZeroWidthGlyph
-            | RoffInlineEvent::Link(_)
-            | RoffInlineEvent::EmptyDestination
-            | RoffInlineEvent::LineBreak
-            | RoffInlineEvent::Presentation { .. } => {}
-        }
     }
 }
 

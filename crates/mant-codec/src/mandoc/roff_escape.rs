@@ -16,6 +16,7 @@ use libmandoc_rs::SpecialCharacter;
 const ASCII_BREAK: char = '\u{1d}';
 const ASCII_HYPH: char = '\u{1e}';
 const ASCII_NBRSP: char = '\u{1f}';
+const MAX_NESTED_ESCAPE_SCAN_DEPTH: usize = 256;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RoffFont {
@@ -222,41 +223,44 @@ pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
     Decoder::new(source).decode()
 }
 
-/// CVS terminal overstrike execution skips complete roff escapes inside the
-/// argument and repeatedly writes only literal source glyphs at one cell.
-/// Decode escape boundaries with the shared tokenizer, but retain the final
-/// literal glyph as the renderer-neutral visible cell.
+/// Project the one terminal cell written by CVS `ESCAPE_OVERSTRIKE`.
+///
+/// The terminal encoder repeatedly backs up over the same cell.  A graphic
+/// glyph replaces the cell, while a trailing blank or tab does not erase a
+/// graphic already stored there; CVS subsequently trims its generated
+/// backspace/blank pair.  This particular `term.c` loop advances past the
+/// reverse-solidus introducer but then treats the remaining escape spelling
+/// as cell input (`\fI` therefore leaves `I`).  Preserve that fixed-CVS
+/// behavior rather than applying the ordinary roff decoder in this context.
 fn overstrike_terminal_glyph(source: &str) -> Option<String> {
-    let mut decoder = Decoder::new(source);
-    let mut last = None;
-    while decoder.index < decoder.characters.len() {
-        let character = decoder.characters[decoder.index];
-        if character != '\\' {
-            decoder.index += 1;
-            let character = match character {
-                ASCII_BREAK => continue,
-                ASCII_HYPH => '-',
-                ASCII_NBRSP => ' ',
-                other => other,
-            };
-            let mut glyph = String::new();
-            push_terminal_safe(&mut glyph, character);
-            last = Some(glyph);
+    let mut cell = None;
+    for character in source.chars() {
+        if character == '\\' {
             continue;
         }
-        decoder.index += 1;
-        let Some(mut trigger) = decoder.take_character() else {
-            break;
+        let character = match character {
+            ASCII_BREAK => continue,
+            ASCII_HYPH => '-',
+            ASCII_NBRSP => ' ',
+            other => other,
         };
-        while trigger == 'E' {
-            let Some(next) = decoder.take_character() else {
-                return last;
-            };
-            trigger = next;
+        if matches!(character, ' ' | '\t') {
+            continue;
         }
-        decoder.decode_escape(trigger);
+        let mut glyph = String::new();
+        push_terminal_safe(&mut glyph, character);
+        if !glyph.trim_matches([' ', '\t']).is_empty() {
+            cell = Some(glyph);
+        }
     }
-    last
+    cell
+}
+
+/// CVS terminal filling recognizes only its ordinary ASCII word blank as a
+/// break opportunity. Tabs, NBSP (including Unicode and numbered spellings),
+/// and other Unicode whitespace are formatter glyphs, not prose separators.
+pub(in crate::mandoc) const fn is_formatter_word_blank(character: char) -> bool {
+    character == ' '
 }
 
 struct PlainTextProjection {
@@ -278,7 +282,7 @@ impl PlainTextProjection {
 
     fn append_text(&mut self, value: &str) {
         for character in value.chars() {
-            if self.pending_word_end_break && character.is_whitespace() {
+            if self.pending_word_end_break && is_formatter_word_blank(character) {
                 if let Some(glyph) = self.zero_advance.resolve_word_boundary() {
                     self.output.push_str(&glyph);
                     self.suppress_break_whitespace = true;
@@ -289,7 +293,7 @@ impl PlainTextProjection {
                 self.suppress_break_whitespace = true;
                 continue;
             }
-            if self.suppress_break_whitespace && character.is_whitespace() {
+            if self.suppress_break_whitespace && is_formatter_word_blank(character) {
                 continue;
             }
             self.suppress_break_whitespace = false;
@@ -301,7 +305,7 @@ impl PlainTextProjection {
             } else if self.zero_advance.is_armed() {
                 let _ = self.zero_advance.project_glyph(character.to_string());
             } else if self.zero_advance.has_pending() {
-                if character.is_whitespace() {
+                if is_formatter_word_blank(character) {
                     if let Some(glyph) = self.zero_advance.take_pending() {
                         self.output.push_str(&glyph);
                     }
@@ -599,7 +603,24 @@ impl Decoder {
             .filter(|_| closed)
             .and_then(|value| value.parse::<u8>().ok())
         {
-            push_terminal_safe(&mut self.text, char::from(number));
+            let character = char::from(number);
+            if character == ' ' {
+                // Only an actual ASCII formatter blank can realize `\p`.
+                self.text.push(character);
+            } else {
+                // term.c treats every other numbered character as one graph
+                // for filling purposes. Its UTF-8 terminal replaces unsafe
+                // C0/C1 controls rather than silently turning them into
+                // breakable spaces.
+                let character = if (character < ' ' && character != '\t')
+                    || ('\u{7f}'..='\u{9f}').contains(&character)
+                {
+                    '\u{fffd}'
+                } else {
+                    character
+                };
+                self.emit(RoffInlineEvent::Glyph(character.to_string()));
+            }
         } else {
             let mut value = String::from(r"\N");
             for character in &self.characters[start..self.index] {
@@ -669,7 +690,7 @@ impl Decoder {
         match character {
             ASCII_BREAK => {}
             ASCII_HYPH => self.text.push('-'),
-            ASCII_NBRSP => self.text.push(' '),
+            ASCII_NBRSP => self.emit(RoffInlineEvent::Glyph(" ".to_owned())),
             other => push_terminal_safe(&mut self.text, other),
         }
     }
@@ -752,8 +773,8 @@ impl Decoder {
     fn take_until(&mut self, delimiter: char) -> String {
         let start = self.index;
         while self.index < self.characters.len() && self.characters[self.index] != delimiter {
-            if self.characters[self.index] == '\\' && self.index + 1 < self.characters.len() {
-                self.index += 2;
+            if self.characters[self.index] == '\\' {
+                self.index = scan_nested_escape_end(&self.characters, self.index);
             } else {
                 self.index += 1;
             }
@@ -768,6 +789,169 @@ impl Decoder {
         let value = self.characters[self.index..end].iter().collect();
         self.index = end;
         value
+    }
+}
+
+#[derive(Clone, Copy)]
+enum EscapeScanTask {
+    Escape,
+    Until(char),
+    Counted(usize),
+    Opaque,
+    Size,
+    Delimited,
+}
+
+/// Return the end of one complete nested escape without recursive descent.
+///
+/// CVS `roff_escape()` recursively parses nested escapes before testing an
+/// outer delimiter. We preserve that grammar but use a bounded heap stack:
+/// one valid input text node must never be able to overflow the Rust call
+/// stack. If the shared native nesting budget is exceeded, consuming the
+/// remainder is conservative because no later delimiter can be proven to
+/// belong to the outer request.
+fn scan_nested_escape_end(characters: &[char], start: usize) -> usize {
+    let mut index = start;
+    let mut tasks = vec![EscapeScanTask::Escape];
+    while let Some(task) = tasks.pop() {
+        if !advance_escape_scan_task(characters, &mut index, task, &mut tasks)
+            || tasks.len() > MAX_NESTED_ESCAPE_SCAN_DEPTH
+        {
+            return characters.len();
+        }
+    }
+    index
+}
+
+/// Execute one iterative equivalent of a recursive `roff_escape()` frame.
+/// Returning false means the shared nesting budget was exhausted.
+fn advance_escape_scan_task(
+    characters: &[char],
+    index: &mut usize,
+    task: EscapeScanTask,
+    tasks: &mut Vec<EscapeScanTask>,
+) -> bool {
+    match task {
+        EscapeScanTask::Escape => {
+            if characters.get(*index) != Some(&'\\') {
+                return true;
+            }
+            *index += 1;
+            while characters.get(*index) == Some(&'E') {
+                *index += 1;
+            }
+            let Some(trigger) = characters.get(*index).copied() else {
+                return true;
+            };
+            *index += 1;
+            schedule_escape_argument(characters, index, trigger, tasks);
+        }
+        EscapeScanTask::Until(delimiter) => loop {
+            match characters.get(*index).copied() {
+                None => break,
+                Some(character) if character == delimiter => {
+                    *index += 1;
+                    break;
+                }
+                Some('\\') => {
+                    if tasks.len() + 2 > MAX_NESTED_ESCAPE_SCAN_DEPTH {
+                        return false;
+                    }
+                    tasks.push(EscapeScanTask::Until(delimiter));
+                    tasks.push(EscapeScanTask::Escape);
+                    break;
+                }
+                Some(_) => *index += 1,
+            }
+        },
+        EscapeScanTask::Counted(mut remaining) => {
+            while remaining > 0 {
+                match characters.get(*index).copied() {
+                    None => break,
+                    Some('\\') => {
+                        if tasks.len() + 2 > MAX_NESTED_ESCAPE_SCAN_DEPTH {
+                            return false;
+                        }
+                        tasks.push(EscapeScanTask::Counted(remaining));
+                        tasks.push(EscapeScanTask::Escape);
+                        break;
+                    }
+                    Some(_) => {
+                        *index += 1;
+                        remaining -= 1;
+                    }
+                }
+            }
+        }
+        EscapeScanTask::Opaque => match characters.get(*index).copied() {
+            Some('\\') => tasks.push(EscapeScanTask::Escape),
+            Some('[') => {
+                *index += 1;
+                tasks.push(EscapeScanTask::Until(']'));
+            }
+            Some('(') => {
+                *index += 1;
+                tasks.push(EscapeScanTask::Counted(2));
+            }
+            Some(_) => *index += 1,
+            None => {}
+        },
+        EscapeScanTask::Size => {
+            let has_sign = matches!(characters.get(*index), Some('+' | '-' | &ASCII_HYPH));
+            if has_sign {
+                *index += 1;
+            }
+            match characters.get(*index).copied() {
+                Some('\\') => tasks.push(EscapeScanTask::Escape),
+                Some('[') => {
+                    *index += 1;
+                    tasks.push(EscapeScanTask::Until(']'));
+                }
+                Some('(') => {
+                    *index += 1;
+                    tasks.push(EscapeScanTask::Counted(2));
+                }
+                Some('\'') => tasks.push(EscapeScanTask::Delimited),
+                Some('1' | '2' | '3')
+                    if !has_sign
+                        && characters.get(*index + 1).is_some_and(char::is_ascii_digit) =>
+                {
+                    *index = (*index + 2).min(characters.len());
+                }
+                Some(_) => *index += 1,
+                None => {}
+            }
+        }
+        EscapeScanTask::Delimited => {
+            let Some(delimiter) = characters.get(*index).copied() else {
+                return true;
+            };
+            *index += 1;
+            tasks.push(EscapeScanTask::Until(delimiter));
+        }
+    }
+    true
+}
+
+fn schedule_escape_argument(
+    characters: &[char],
+    index: &mut usize,
+    trigger: char,
+    tasks: &mut Vec<EscapeScanTask>,
+) {
+    match trigger {
+        '(' => tasks.push(EscapeScanTask::Counted(2)),
+        '[' => tasks.push(EscapeScanTask::Until(']')),
+        '$' | '*' | 'F' | 'M' | 'O' | 'V' | 'Y' | 'f' | 'g' | 'k' | 'm' | 'n' => {
+            tasks.push(EscapeScanTask::Opaque);
+        }
+        's' => tasks.push(EscapeScanTask::Size),
+        'N' if characters.get(*index).is_some_and(char::is_ascii_digit) => {
+            *index = (*index + 1).min(characters.len());
+        }
+        'A' | 'B' | 'C' | 'D' | 'H' | 'L' | 'N' | 'R' | 'S' | 'X' | 'Z' | 'b' | 'h' | 'l' | 'o'
+        | 'v' | 'w' | 'x' => tasks.push(EscapeScanTask::Delimited),
+        _ => {}
     }
 }
 

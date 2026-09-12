@@ -1,5 +1,4 @@
 //! Dialect-specific link execution, separate from pure target construction.
-use super::font::execute_suppressed_text_controls;
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
     append_inline_nodes, decode, first_part_children, inline_children,
@@ -288,31 +287,23 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
             child.kind == NodeKind::Text && !child.flags.generated && !child.flags.no_print
         })
         .collect::<Vec<_>>();
-    let visible = authored
-        .iter()
-        .enumerate()
-        .filter_map(|(index, child)| {
-            child
-                .text
-                .as_deref()
-                .is_some_and(|text| !visible_text(text).is_empty())
-                .then_some(index)
-        })
-        .collect::<Vec<_>>();
-    let Some(&first_index) = visible.first() else {
-        // `.Bx \\fB` has no authored glyph, but CVS still executes the font
-        // escape before the validator-generated BSD text.
-        execute_bsd_suppressed_controls(builder, &authored);
+    let Some(first) = authored.first().copied() else {
         builder.append_text("BSD");
         return;
     };
-    if visible.len() > 2 {
-        append_inline_nodes(builder, inline_children(node), name);
+    if authored.len() == 1
+        && first
+            .text
+            .as_deref()
+            .is_none_or(|text| visible_text(text).is_empty())
+    {
+        // `.Bx \\fB` has no authored glyph, but CVS still executes the font
+        // escape before the validator-generated BSD text.
+        execute_bsd_replacement(builder, &authored, "BSD", name);
         return;
     }
-    let first = authored[first_index];
     let first_text = visible_text(first.text.as_deref().unwrap_or_default());
-    if visible.len() == 1 {
+    if authored.len() == 1 {
         let lifecycle = match first_text.as_str() {
             "-alpha" => Some("BSD (currently in alpha test)"),
             "-beta" => Some("BSD (currently in beta test)"),
@@ -323,42 +314,37 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
             // The lifecycle spelling is intentionally replaced, but all its
             // controls remain executed source state for generated text and
             // following siblings.
-            execute_bsd_suppressed_controls(builder, &authored);
-            builder.append_text(lifecycle);
+            execute_bsd_replacement(builder, &authored, lifecycle, name);
             return;
         }
     }
-    // Execute authored operands and generated spelling in the caller's one
-    // formatter stream. Native `Bx` inserts `BSD` with an `Ns` join, but its
-    // generated sibling cannot see a caller-owned zero-advance state after an
-    // atomic reconstruction. Keeping the suffix here preserves release-word
-    // spacing and lets it overstrike a pending glyph.
-    for child in &authored[..first_index] {
-        execute_bsd_suppressed_controls(builder, std::slice::from_ref(child));
-    }
+    // Execute positional operands and generated spelling in the caller's one
+    // formatter stream. The first authored child is the version even when it
+    // contains only controls; every later child is a release/variant word.
+    // Visibility must not rewrite that native arity or reorder execution.
     append_inline_node(builder, first, name);
     builder.tighten_next_boundary();
     builder.append_text("BSD");
-    if let Some(&second_index) = visible.get(1) {
-        for child in &authored[first_index + 1..second_index] {
-            execute_bsd_suppressed_controls(builder, std::slice::from_ref(child));
+    for child in &authored[1..] {
+        let checkpoint = builder.output_checkpoint();
+        append_inline_node(builder, child, name);
+        if !builder.output_since_has_non_whitespace_glyph(&checkpoint) {
+            builder.consume_compacted_pending_padding();
         }
-        let second = authored[second_index];
-        builder.append_text(" ");
-        append_inline_node(builder, second, name);
-    }
-    let final_index = visible.last().copied().unwrap_or(first_index);
-    for child in &authored[final_index + 1..] {
-        execute_bsd_suppressed_controls(builder, std::slice::from_ref(child));
     }
 }
 
-fn execute_bsd_suppressed_controls(builder: &mut InlineBuilder, nodes: &[&Node]) {
+fn execute_bsd_replacement(
+    builder: &mut InlineBuilder,
+    nodes: &[&Node],
+    replacement: &str,
+    default_name: Option<&str>,
+) {
+    let checkpoint = builder.output_checkpoint();
     for node in nodes {
-        if let Some(source) = node.text.as_deref() {
-            execute_suppressed_text_controls(source, &mut builder.font, &mut builder.zero_advance);
-        }
+        append_inline_node(builder, node, default_name);
     }
+    builder.replace_output_since(&checkpoint, replacement);
 }
 
 fn external_link_target(address: String, email: bool) -> mant_ir::LinkTarget {
@@ -425,4 +411,42 @@ pub(in crate::mandoc) fn lower_man_link(
         spacing_enabled,
     ));
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::link_identity_text;
+    use crate::mandoc::roff_escape::visible_text;
+
+    #[test]
+    fn overstrike_terminal_projection_and_html_identity_remain_independent() {
+        // CVS term.c trims the trailing backspace/blank pair and leaves C in
+        // its one-cell projection. html.c deliberately uses the final source
+        // byte for the href instead; neither representation can substitute
+        // for the other.
+        assert_eq!(visible_text(r"\o'BC '"), "C");
+        assert_eq!(link_identity_text(r"\o'BC '"), " ");
+
+        // The fixed-CVS overstrike loop exposes the spelling after a nested
+        // reverse-solidus while HTML chooses the same final source byte.
+        assert_eq!(visible_text(r"\o'BC\fI'"), "I");
+        assert_eq!(link_identity_text(r"\o'BC\fI'"), "I");
+
+        // The delimiter belonging to a nested escape is part of the outer
+        // source argument.  Only the final quote closes `\o`, so both the
+        // terminal and identity projections see the complete operand.
+        for source in [r"\o'BC\N'8''", r"\o'BC\h'1n''", r"\o'BC\C'x''"] {
+            assert_eq!(visible_text(source), "'", "{source}");
+            assert_eq!(link_identity_text(source), "'", "{source}");
+        }
+    }
+
+    #[test]
+    fn numbered_link_identity_uses_the_same_terminal_codepoint_contract() {
+        assert_eq!(link_identity_text(r"prefix\N'0'suffix"), "prefix�suffix");
+        assert_eq!(
+            link_identity_text(r"prefix\N'160'suffix"),
+            "prefix\u{a0}suffix"
+        );
+    }
 }
