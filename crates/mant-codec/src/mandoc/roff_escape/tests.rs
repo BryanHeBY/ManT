@@ -99,6 +99,21 @@ fn decodes_bracketed_unicode_and_composite_character_names() {
 }
 
 #[test]
+fn decodes_documented_groff_default_composite_glyphs() {
+    // groff_char(7) documents `\\[base accent ...]`; the installed
+    // composite.tmac maps `ad` to a combining diaeresis and permits multiple
+    // accents.  Preserve NFD rather than relying on a presentation-only
+    // precomposed substitute.
+    assert_eq!(
+        visible_text(r"re\[e ad]nabled caf\[e aa] a\[a aa ac]"),
+        "re\u{0065}\u{0308}nabled caf\u{0065}\u{0301} a\u{0061}\u{0301}\u{0327}"
+    );
+    // A user-defined or malformed composite mapping is not part of groff's
+    // default table; retain the authored spelling rather than guessing.
+    assert_eq!(visible_text(r"\[e unknown]"), r"\[e unknown]");
+}
+
+#[test]
 fn retains_invalid_unicode_names_as_visible_fallbacks() {
     assert_eq!(
         visible_text(r"\[uD800] \[u110000] \[u12]"),

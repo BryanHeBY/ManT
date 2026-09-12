@@ -15,6 +15,45 @@ pub(super) fn unicode_special_characters(name: &str) -> Option<String> {
     (!output.is_empty()).then_some(output)
 }
 
+/// Decode the documented default mappings from groff's `composite.tmac`.
+///
+/// groff_char(7) defines `\\[base accent ...]` as a composite glyph and its
+/// shipped `composite.tmac` maps the accent names below to Unicode combining
+/// scalars.  mandoc deliberately has no equivalent dynamic character table,
+/// so those escapes remain in native text nodes.  Keep this decoder limited to
+/// groff's built-in mappings: user-defined `composite` requests must remain
+/// visible source rather than being guessed at this boundary.
+pub(super) fn documented_groff_composite_character(name: &str) -> Option<String> {
+    let mut components = name.split_ascii_whitespace();
+    let base = components.next()?;
+    let base = (base.chars().count() == 1).then_some(base)?;
+    let mut output = base.to_owned();
+    let mut has_accent = false;
+
+    for accent in components {
+        let combining = match accent {
+            "ga" | "`" => '\u{0300}',
+            "aa" | "'" => '\u{0301}',
+            "a^" | "^" => '\u{0302}',
+            "a~" | "~" => '\u{0303}',
+            "a-" | "-" => '\u{0304}',
+            "ab" => '\u{0306}',
+            "a." | "." => '\u{0307}',
+            "ad" | ":" => '\u{0308}',
+            "ao" => '\u{030A}',
+            "a\"" | "\"" => '\u{030B}',
+            "ah" => '\u{030C}',
+            "ac" | "," => '\u{0327}',
+            "ho" => '\u{0328}',
+            _ => return None,
+        };
+        output.push(combining);
+        has_accent = true;
+    }
+
+    has_accent.then_some(output)
+}
+
 /// Narrow compatibility fallback for a documented groff spelling absent from
 /// the pinned mandoc character table. All characters that the pinned table
 /// knows, including typographic quotation marks, must retain that table's

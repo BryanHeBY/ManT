@@ -6,7 +6,9 @@
 //! visible document text.
 
 mod glyphs;
-use glyphs::{dedicated_special_character, unicode_special_characters};
+use glyphs::{
+    dedicated_special_character, documented_groff_composite_character, unicode_special_characters,
+};
 
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
@@ -372,6 +374,10 @@ impl Decoder {
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
         if let Some(value) = dedicated_special_character(name) {
             self.text.push_str(value);
+            return;
+        }
+        if let Some(value) = documented_groff_composite_character(name) {
+            self.text.push_str(&value);
             return;
         }
         if let Some(value) = unicode_special_characters(name) {
