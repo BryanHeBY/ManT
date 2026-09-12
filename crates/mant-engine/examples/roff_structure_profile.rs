@@ -104,7 +104,7 @@ struct IrTopology {
     equations: Vec<IrEquationTopology>,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum EquationContext {
     Display,
@@ -138,7 +138,7 @@ struct IrEquationTopology {
     value: String,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ListTopologyKind {
     Generic,
@@ -755,13 +755,23 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
         && let Some(kind) = mdoc_list_topology_kind(node)
         && node.line > 0
     {
-        topology.lists.push(AstListTopology {
-            source_line: node.line,
-            kind: match kind {
+        let kind = if kind == MdocContainerKind::Definition
+            && mdoc_definition_is_recoverable_ordinal_list(node)
+        {
+            // Lowering deliberately recovers explicit `1.`, `2.` tag heads
+            // as an ordered generic list. The audit must compare semantic
+            // topology, not the implementation-private native list subtype.
+            ListTopologyKind::Generic
+        } else {
+            match kind {
                 MdocContainerKind::Generic => ListTopologyKind::Generic,
                 MdocContainerKind::Definition => ListTopologyKind::Definition,
                 MdocContainerKind::Table => unreachable!("column lists are tables"),
-            },
+            }
+        };
+        topology.lists.push(AstListTopology {
+            source_line: node.line,
+            kind,
             items: direct_list_item_count(node),
         });
     }
@@ -787,6 +797,42 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
             topology,
         );
     }
+}
+
+fn mdoc_definition_is_recoverable_ordinal_list(node: &Node) -> bool {
+    let mut heads = node
+        .children
+        .iter()
+        .filter(|part| part.kind == NodeKind::Body)
+        .flat_map(|body| &body.children)
+        .filter(|item| item.macro_name.as_deref() == Some("It"))
+        .filter_map(|item| {
+            item.children
+                .iter()
+                .find(|part| part.kind == NodeKind::Head)
+        });
+    let mut previous = None;
+    let mut count = 0usize;
+    for head in &mut heads {
+        let text = head
+            .children
+            .iter()
+            .filter_map(|child| child.text.as_deref())
+            .collect::<String>();
+        let Some(number) = text
+            .trim()
+            .strip_suffix('.')
+            .and_then(|value| value.parse::<u32>().ok())
+        else {
+            return false;
+        };
+        if previous.is_some_and(|prior| number != prior + 1) {
+            return false;
+        }
+        previous = Some(number);
+        count += 1;
+    }
+    count > 0
 }
 
 fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
@@ -1606,6 +1652,20 @@ mod tests {
             ));
             assert_eq!(expected.positive_relative_indent_scopes, 1, "{argument}");
         }
+    }
+
+    #[test]
+    fn punctuated_mdoc_definition_ordinals_compare_as_recovered_ordered_lists() {
+        let (expected, topology, document) = parsed_structure(concat!(
+            ".Dd September 12, 2026\n.Dt AUDIT 1\n.Os\n.Sh BODY\n",
+            ".Bl -tag -width Ds\n.It 1.\nFirst.\n.It 2.\nSecond.\n.El\n"
+        ));
+        let (observed, observed_topology) = super::ir_profile(&document);
+        assert_eq!(topology.lists[0].kind, super::ListTopologyKind::Generic);
+        assert!(
+            super::compare_structure(&expected, &observed, &topology, &observed_topology)
+                .is_empty()
+        );
     }
 
     #[test]
