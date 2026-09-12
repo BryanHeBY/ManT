@@ -53,6 +53,9 @@ pub(super) fn normalize_generated_anchors(
                 ..
             } = inline
             {
+                if crate::definitions::is_internal_definition_owner_marker(id.as_str()) {
+                    return;
+                }
                 let original = id.to_string();
                 let base = crate::definitions::document_id_slug(&original);
                 let mut candidate = base.clone();
@@ -110,7 +113,9 @@ pub(super) fn native_anchor_ids(root_blocks: &[Block], sections: &[Section]) -> 
     impl<'ir> Visit<'ir> for Collector {
         fn visit_inline(&mut self, inline: &'ir Inline) {
             if let Inline::Anchor { id, .. } = inline {
-                self.ids.insert(id.to_string());
+                if !crate::definitions::is_internal_definition_owner_marker(id.as_str()) {
+                    self.ids.insert(id.to_string());
+                }
             } else {
                 visit::walk_inline(self, inline);
             }

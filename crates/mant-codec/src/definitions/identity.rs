@@ -20,7 +20,9 @@ pub(super) fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> Has
 
     impl<'ir> Visit<'ir> for Collector {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor { id, .. } = inline {
+            if let Inline::Anchor { id, .. } = inline
+                && !super::is_internal_definition_owner_marker(id.as_str())
+            {
                 self.0.insert(id.to_string());
             }
             visit::walk_inline(self, inline);

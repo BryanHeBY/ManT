@@ -19,6 +19,12 @@ use context::DefinitionContext;
 #[cfg(feature = "roff")]
 pub(crate) use diagnostics::manual_discovery_diagnostics;
 pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
+#[cfg(feature = "roff")]
+pub(crate) use groups::mark_native_definition_owner;
+pub(crate) use groups::{
+    is_internal_definition_owner_marker, remove_native_definition_owner_markers,
+    remove_native_definition_owner_markers_from_items,
+};
 pub(crate) use identity::document_id_slug;
 use identity::{document_anchor_ids, identify_item, identify_list_item};
 use mant_ir::{Block, Section};
@@ -79,6 +85,9 @@ pub(crate) fn identify_definitions_with_evidence(
         discovery.plans.next().is_none(),
         "all prepared owners were allocated"
     );
+    // Native owner identities are parse-local lowering evidence. They must
+    // never become addressable anchors, serialized fields, or rendered text.
+    remove_native_definition_owner_markers(blocks, sections);
     discovery.retained
 }
 

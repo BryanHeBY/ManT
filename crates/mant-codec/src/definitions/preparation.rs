@@ -100,10 +100,21 @@ impl PreparedDefinitions {
                     ..
                 } => {
                     let item_context = definition_group_context(items, context);
-                    let mut heads = Vec::with_capacity(items.len());
+                    // Resolve native declaration witnesses while their
+                    // parse-local owner markers still exist. Remove those
+                    // markers before calculating public content-slice paths:
+                    // anchors at the front of a term would otherwise shift
+                    // every retained name-binding index.
+                    let heads = items
+                        .iter()
+                        .map(|item| {
+                            identity_plan(item, item_context, evidence.role(item)).group_head
+                        })
+                        .collect::<Vec<_>>();
+                    *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
+                    crate::definitions::remove_native_definition_owner_markers_from_items(items);
                     for item in items.iter_mut() {
                         let identity = identity_plan(item, item_context, evidence.role(item));
-                        heads.push(identity.group_head);
                         if has_semantic_spelling(item, &identity) {
                             *self
                                 .preferred_counts
@@ -123,7 +134,6 @@ impl PreparedDefinitions {
                             group_matches,
                         );
                     }
-                    *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
                 }
                 Block::Table { rows, .. } => {
                     for row in rows {

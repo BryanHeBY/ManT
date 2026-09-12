@@ -4,6 +4,114 @@ use super::evidence::head_content;
 use mant_ir::{Block, DeclarationGroup, DefinitionItem, Inline, Section, SourceSpan};
 use std::collections::{HashMap, HashSet};
 
+// This marker is deliberately impossible in sanitized roff input.  It is an
+// in-memory hand-off between native lowering and semantic preparation, never
+// a document anchor: navigation skips it and preparation removes it before
+// the public IR is returned.
+const OWNER_MARKER_PREFIX: &str = "\0mant-native-definition-owner:";
+
+#[cfg(feature = "roff")]
+pub(crate) fn mark_native_definition_owner(item: &mut DefinitionItem, key: usize) {
+    let Some(term) = item.terms.first_mut() else {
+        return;
+    };
+    term.insert(0, Inline::anchor(format!("{OWNER_MARKER_PREFIX}{key:x}")));
+}
+
+pub(crate) fn is_internal_definition_owner_marker(id: &str) -> bool {
+    id.strip_prefix(OWNER_MARKER_PREFIX).is_some_and(|value| {
+        !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
+}
+
+fn owner_marker(item: &DefinitionItem) -> Option<usize> {
+    item.terms
+        .iter()
+        .flat_map(|term| term.iter())
+        .find_map(|inline| {
+            let Inline::Anchor { id, .. } = inline else {
+                return None;
+            };
+            id.as_str()
+                .strip_prefix(OWNER_MARKER_PREFIX)
+                .filter(|value| {
+                    !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+                .and_then(|value| usize::from_str_radix(value, 16).ok())
+        })
+}
+
+fn remove_inlines(inlines: &mut Vec<Inline>) {
+    let mut retained = Vec::with_capacity(inlines.len());
+    for mut inline in std::mem::take(inlines) {
+        match &mut inline {
+            Inline::Anchor { id, .. } if is_internal_definition_owner_marker(id.as_str()) => {
+                continue;
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => remove_inlines(children),
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Anchor { .. }
+            | Inline::LineBreak => {}
+        }
+        retained.push(inline);
+    }
+    *inlines = retained;
+}
+
+pub(crate) fn remove_native_definition_owner_markers_from_items(items: &mut [DefinitionItem]) {
+    for item in items {
+        for term in &mut item.terms {
+            remove_inlines(term);
+        }
+    }
+}
+
+pub(crate) fn remove_native_definition_owner_markers(
+    blocks: &mut [Block],
+    sections: &mut [Section],
+) {
+    fn remove_blocks(blocks: &mut [Block]) {
+        for block in blocks {
+            match block {
+                Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                    remove_inlines(children);
+                }
+                Block::DefinitionList { items, .. } => {
+                    remove_native_definition_owner_markers_from_items(items);
+                    for item in items {
+                        remove_blocks(&mut item.description);
+                    }
+                }
+                Block::List { items, .. } => {
+                    for item in items {
+                        remove_blocks(&mut item.blocks);
+                    }
+                }
+                Block::Table { rows, .. } => {
+                    for row in rows {
+                        for cell in &mut row.cells {
+                            remove_blocks(&mut cell.blocks);
+                        }
+                    }
+                }
+                Block::Equation { .. }
+                | Block::VerticalSpace { .. }
+                | Block::ThematicBreak { .. }
+                | Block::Unsupported { .. } => {}
+            }
+        }
+    }
+    remove_blocks(blocks);
+    for section in sections {
+        remove_inlines(&mut section.heading.content);
+        remove_blocks(&mut section.blocks);
+        remove_native_definition_owner_markers(&mut [], &mut section.children);
+    }
+}
+
 struct Witness {
     source: SourceSpan,
     head: Vec<Vec<Inline>>,
@@ -12,21 +120,21 @@ struct Witness {
 }
 
 /// A native owner allocation plan built after normalization and consumed in
-/// that same structural traversal.  Source coordinates are not identities:
-/// macro expansion may legitimately duplicate them.  The plan first proves
-/// that every duplicate survived, then assigns the recorded native pointers
-/// in order without rescanning each final definition list.
+/// that same structural traversal. Source coordinates are not identities:
+/// macro expansion may legitimately duplicate them. Each definition instead
+/// carries its parse-local native owner marker until semantic preparation has
+/// consumed it, so nested normalization cannot reassign an identical head to
+/// a different expanded macro invocation.
 #[derive(Default)]
 pub(crate) struct GroupMatchingPlan {
-    classes: HashMap<(u32, u32), Vec<MatchClass>>,
+    owners: HashMap<usize, Vec<OwnerBinding>>,
+    occurrences: HashMap<usize, usize>,
 }
 
-struct MatchClass {
+struct OwnerBinding {
     source: SourceSpan,
     head: Vec<Vec<Inline>>,
-    owners: Vec<(usize, usize)>,
-    observed: usize,
-    next: usize,
+    last_key: usize,
 }
 
 #[derive(Default)]
@@ -117,21 +225,18 @@ impl GroupEvidence {
         sections: &[Section],
     ) -> GroupMatchingPlan {
         let mut plan = GroupMatchingPlan::default();
-        for (coordinate, witnesses) in &self.items {
-            let classes = plan.classes.entry(*coordinate).or_default();
+        for witnesses in self.items.values() {
             for witness in witnesses {
-                if let Some(class) = classes
-                    .iter_mut()
-                    .find(|class| class.source == witness.source && class.head == witness.head)
-                {
-                    class.owners.push((witness.key, witness.last_key));
-                } else {
-                    classes.push(MatchClass {
+                let bindings = plan.owners.entry(witness.key).or_default();
+                if !bindings.iter().any(|binding| {
+                    binding.source == witness.source
+                        && binding.head == witness.head
+                        && binding.last_key == witness.last_key
+                }) {
+                    bindings.push(OwnerBinding {
                         source: witness.source,
                         head: witness.head.clone(),
-                        owners: vec![(witness.key, witness.last_key)],
-                        observed: 0,
-                        next: 0,
+                        last_key: witness.last_key,
                     });
                 }
             }
@@ -147,21 +252,18 @@ impl GroupEvidence {
     fn key(item: &DefinitionItem, plan: &mut GroupMatchingPlan) -> Option<(usize, usize)> {
         let source = item.source?;
         let head = head_content(&item.terms);
-        let coordinate = (source.line, source.column);
-        let class = plan
-            .classes
-            .get_mut(&coordinate)?
-            .iter_mut()
-            .find(|class| class.source == source && class.head == head)?;
-        // Do not let a survivor of an incomplete duplicate stream borrow the
-        // identity of a removed sibling.  The count was calculated over the
-        // complete normalized document, not merely this definition list.
-        if class.observed != class.owners.len() {
+        let owner = owner_marker(item)?;
+        // A normalized rewrite must retain exactly one native owner marker.
+        // Duplicate/collapsed owners are unsafe just like a missing owner;
+        // neither may borrow another macro expansion's witness.
+        if plan.occurrences.get(&owner) != Some(&1) {
             return None;
         }
-        let owner = *class.owners.get(class.next)?;
-        class.next += 1;
-        Some(owner)
+        plan.owners
+            .get(&owner)?
+            .iter()
+            .find(|binding| binding.source == source && binding.head == head)
+            .map(|binding| (owner, binding.last_key))
     }
     /// One linear pass over final owners; recognizability comes from the same
     /// preparation plan that will allocate their names, never another parser.
@@ -272,18 +374,8 @@ impl GroupMatchingPlan {
     }
 
     fn count(&mut self, item: &DefinitionItem) {
-        let Some(source) = item.source else { return };
-        let head = head_content(&item.terms);
-        if let Some(class) = self
-            .classes
-            .get_mut(&(source.line, source.column))
-            .and_then(|classes| {
-                classes
-                    .iter_mut()
-                    .find(|class| class.source == source && class.head == head)
-            })
-        {
-            class.observed = class.observed.saturating_add(1);
+        if let Some(owner) = owner_marker(item) {
+            *self.occurrences.entry(owner).or_default() += 1;
         }
     }
 }
@@ -293,7 +385,7 @@ impl GroupMatchingPlan {
 // omits the roff-only recording API.
 #[cfg(all(test, feature = "roff"))]
 mod tests {
-    use super::GroupEvidence;
+    use super::{GroupEvidence, mark_native_definition_owner};
     use mant_ir::{Block, DefinitionItem, DefinitionLayout, Inline, LayoutHint, SourceSpan};
 
     fn item(line: u32, column: u32, name: &str, description: bool) -> DefinitionItem {
@@ -335,17 +427,22 @@ mod tests {
         evidence.matching_plan(&blocks, &[])
     }
 
+    fn record(evidence: &mut GroupEvidence, items: &mut [DefinitionItem], keys: &[usize]) {
+        for (item, key) in items.iter_mut().zip(keys) {
+            mark_native_definition_owner(item, *key);
+            evidence.record(item, *key);
+        }
+    }
+
     #[test]
     fn presentation_heads_split_but_do_not_poison_a_named_suffix_group() {
         let mut evidence = GroupEvidence::default();
-        let items = vec![
+        let mut items = vec![
             item(1, 1, "/RE", false),
             item(2, 1, "?RE", false),
             item(3, 1, "n", true),
         ];
-        evidence.record(&items[0], 10);
-        evidence.record(&items[1], 20);
-        evidence.record(&items[2], 30);
+        record(&mut evidence, &mut items, &[10, 20, 30]);
         evidence.presentation_head(10);
         evidence.adjacent(10, 20, false);
         evidence.adjacent(20, 30, false);
@@ -363,15 +460,13 @@ mod tests {
     #[test]
     fn macro_expansion_keeps_same_coordinate_runs_distinct() {
         let mut evidence = GroupEvidence::default();
-        let items = vec![
+        let mut items = vec![
             item(12, 2, "-a", false),
             item(12, 2, "-b", true),
             item(12, 2, "-a", false),
             item(12, 2, "-b", true),
         ];
-        for (item, key) in items.iter().zip([10, 20, 30, 40]) {
-            evidence.record(item, key);
-        }
+        record(&mut evidence, &mut items, &[10, 20, 30, 40]);
         evidence.adjacent(10, 20, false);
         evidence.adjacent(30, 40, false);
 
@@ -392,44 +487,78 @@ mod tests {
     }
 
     #[test]
-    fn a_lost_same_coordinate_owner_does_not_rebind_a_later_macro_expansion() {
+    fn a_retained_same_coordinate_owner_keeps_its_own_macro_expansion() {
         let mut evidence = GroupEvidence::default();
-        let native_items = [
+        let mut native_items = [
             item(12, 2, "-a", false),
             item(12, 2, "-b", true),
             item(12, 2, "-a", false),
             item(12, 2, "-b", true),
         ];
-        for (item, key) in native_items.iter().zip([10, 20, 30, 40]) {
-            evidence.record(item, key);
-        }
+        record(&mut evidence, &mut native_items, &[10, 20, 30, 40]);
         evidence.adjacent(10, 20, false);
         evidence.adjacent(30, 40, false);
 
         // A final rewrite retained only the latter source occurrence. The
-        // remaining coordinate/head pair is indistinguishable, so it must
-        // not be silently attached to the first native run.
-        let final_items = vec![item(12, 2, "-a", false), item(12, 2, "-b", true)];
+        // coordinate/head pair is indistinguishable, but its carried owner
+        // marker still selects the latter native run rather than borrowing
+        // the first one.
+        // Keep only the latter invocation's own markers. Same source
+        // coordinates and heads must never make it borrow the first run.
+        let mut final_items = vec![item(12, 2, "-a", false), item(12, 2, "-b", true)];
+        mark_native_definition_owner(&mut final_items[0], 30);
+        mark_native_definition_owner(&mut final_items[1], 40);
         let mut plan = plan(&evidence, &final_items);
-        assert!(
-            evidence
-                .resolve(&final_items, &[true; 2], &mut plan)
-                .is_empty()
+        assert_eq!(
+            evidence.resolve(&final_items, &[true; 2], &mut plan),
+            vec![mant_ir::DeclarationGroup {
+                start_item: 0,
+                end_item: 2,
+            }]
         );
+    }
+
+    #[test]
+    fn duplicated_owner_marker_refuses_to_allocate_a_group() {
+        let mut evidence = GroupEvidence::default();
+        let mut items = vec![item(12, 2, "--alpha", false), item(12, 2, "--beta", true)];
+        record(&mut evidence, &mut items, &[10, 20]);
+        evidence.adjacent(10, 20, false);
+
+        let mut duplicate = items.clone();
+        // A normalization bug that cloned the same owner must remain safe:
+        // no duplicated marker may claim one native declaration witness.
+        let mut blocks = vec![Block::DefinitionList {
+            items: duplicate.clone(),
+            declaration_groups: Vec::new(),
+            compact: false,
+            source: None,
+            layout: LayoutHint::default(),
+        }];
+        blocks.push(Block::DefinitionList {
+            items: std::mem::take(&mut duplicate),
+            declaration_groups: Vec::new(),
+            compact: false,
+            source: None,
+            layout: LayoutHint::default(),
+        });
+        let mut plan = evidence.matching_plan(&blocks, &[]);
+        let Block::DefinitionList { items, .. } = &blocks[0] else {
+            unreachable!();
+        };
+        assert!(evidence.resolve(items, &[true; 2], &mut plan).is_empty());
     }
 
     #[test]
     fn a_body_closed_native_owner_allows_the_next_physical_run() {
         let mut evidence = GroupEvidence::default();
-        let items = vec![
+        let mut items = vec![
             item(1, 1, "--first", false),
             item(2, 1, "--second", true),
             item(4, 1, "--third", false),
             item(5, 1, "--fourth", true),
         ];
-        for (item, key) in items.iter().zip([10, 20, 40, 50]) {
-            evidence.record(item, key);
-        }
+        record(&mut evidence, &mut items, &[10, 20, 40, 50]);
         evidence.adjacent(10, 20, false);
         // Key 30 is a native ordinal/bullet owner converted to Block::List.
         // Its readable body closes that run before --third starts.
@@ -455,14 +584,12 @@ mod tests {
     #[test]
     fn an_unclassified_head_with_its_own_body_closes_the_previous_run() {
         let mut evidence = GroupEvidence::default();
-        let items = vec![
+        let mut items = vec![
             item(1, 1, "This is explanatory prose.", true),
             item(2, 1, "--alpha", false),
             item(3, 1, "--beta", true),
         ];
-        for (item, key) in items.iter().zip([10, 20, 30]) {
-            evidence.record(item, key);
-        }
+        record(&mut evidence, &mut items, &[10, 20, 30]);
         evidence.adjacent(10, 20, true);
         evidence.adjacent(20, 30, false);
 
@@ -479,14 +606,12 @@ mod tests {
     #[test]
     fn an_empty_unclassified_head_still_blocks_a_following_suffix() {
         let mut evidence = GroupEvidence::default();
-        let items = vec![
+        let mut items = vec![
             item(1, 1, "unclassified", false),
             item(2, 1, "--alpha", false),
             item(3, 1, "--beta", true),
         ];
-        for (item, key) in items.iter().zip([10, 20, 30]) {
-            evidence.record(item, key);
-        }
+        record(&mut evidence, &mut items, &[10, 20, 30]);
         evidence.adjacent(10, 20, false);
         evidence.adjacent(20, 30, false);
 
@@ -501,11 +626,10 @@ mod tests {
     #[test]
     fn macro_expansion_can_span_definition_lists_without_losing_owner_identity() {
         let mut evidence = GroupEvidence::default();
-        let first = vec![item(12, 2, "--alpha", false), item(12, 2, "--beta", true)];
-        let second = first.clone();
-        for (item, key) in first.iter().chain(&second).zip([10, 20, 30, 40]) {
-            evidence.record(item, key);
-        }
+        let mut first = vec![item(12, 2, "--alpha", false), item(12, 2, "--beta", true)];
+        let mut second = first.clone();
+        record(&mut evidence, &mut first, &[10, 20]);
+        record(&mut evidence, &mut second, &[30, 40]);
         evidence.adjacent(10, 20, false);
         evidence.adjacent(30, 40, false);
         let blocks = vec![
@@ -543,6 +667,51 @@ mod tests {
                 start_item: 0,
                 end_item: 2,
             }]
+        );
+    }
+
+    #[test]
+    fn nested_preparation_cannot_swap_same_source_macro_owners() {
+        let mut evidence = GroupEvidence::default();
+        let mut outer = vec![item(12, 2, "--alpha", false), item(13, 2, "--beta", false)];
+        let mut inner = vec![item(12, 2, "--alpha", false), item(13, 2, "--beta", true)];
+        record(&mut evidence, &mut outer, &[10, 20]);
+        record(&mut evidence, &mut inner, &[30, 40]);
+        // The outer expansion has an executed paragraph boundary between its
+        // heads. Only the nested expansion owns the shared description.
+        evidence.adjacent(30, 40, false);
+
+        outer[1].description.push(Block::DefinitionList {
+            items: inner.clone(),
+            declaration_groups: Vec::new(),
+            compact: false,
+            source: None,
+            layout: LayoutHint::default(),
+        });
+        let blocks = vec![Block::DefinitionList {
+            items: outer.clone(),
+            declaration_groups: Vec::new(),
+            compact: false,
+            source: None,
+            layout: LayoutHint::default(),
+        }];
+        let mut plan = evidence.matching_plan(&blocks, &[]);
+
+        // Preparation descends into a definition body before resolving its
+        // containing list. A FIFO allocation would give this inner pair the
+        // outer witnesses because both expansions have identical coordinates
+        // and heads. Parse-local markers make traversal order irrelevant.
+        assert_eq!(
+            evidence.resolve(&inner, &[true, true], &mut plan),
+            vec![mant_ir::DeclarationGroup {
+                start_item: 0,
+                end_item: 2,
+            }]
+        );
+        assert!(
+            evidence
+                .resolve(&outer, &[true, true], &mut plan)
+                .is_empty()
         );
     }
 }

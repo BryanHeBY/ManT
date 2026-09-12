@@ -41,7 +41,7 @@ pub(super) fn definition_item(
     }
     let terms = split_definition_terms(term);
     let (layout, body_origin) = geometry.resolve(context, node, indent_columns, &terms);
-    let item = DefinitionItem {
+    let mut item = DefinitionItem {
         source: source_span(node),
         entry: None,
         layout,
@@ -56,6 +56,11 @@ pub(super) fn definition_item(
             formatter,
         ),
     };
+    // A source coordinate identifies authored text, not one executed macro
+    // invocation: expansion can produce the same coordinate and head several
+    // times. Carry the native node identity through IR-only normalization and
+    // strip it once semantic declaration grouping has consumed the witness.
+    crate::definitions::mark_native_definition_owner(&mut item, std::ptr::from_ref(node) as usize);
     context
         .native_heads
         .borrow_mut()
