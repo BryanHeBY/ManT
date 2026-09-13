@@ -16,6 +16,22 @@ use crate::NodeKind;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionNodeKey(pub u32);
 
+/// Stable native syntax-node flags retained by the execution report.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ExecutionNodeFlags(pub u32);
+
+impl ExecutionNodeFlags {
+    /// The parser generated this node while executing source syntax; it was
+    /// not directly authored as a source node at the reported location.
+    pub const GENERATED: u32 = 1 << 0;
+
+    /// Return whether a stable flag is present.
+    #[must_use]
+    pub const fn contains(self, flag: u32) -> bool {
+        self.0 & flag != 0
+    }
+}
+
 /// Report-local identity of one executed formatter word.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionWordKey(pub u32);
@@ -363,8 +379,8 @@ pub struct ExecutionNode {
     pub column: u32,
     /// Structural kind shared with the owned AST snapshot.
     pub kind: NodeKind,
-    /// Stable node flags.
-    pub flags: u32,
+    /// Stable typed node flags, including generated execution origins.
+    pub flags: ExecutionNodeFlags,
     /// Source macro name, when applicable.
     pub macro_name: Option<String>,
 }
@@ -587,6 +603,10 @@ pub struct ExecutionBoundary {
     pub flags_before: u32,
     /// Stable terminal flags after the request.
     pub flags_after: u32,
+    /// Innermost control request that directly owns this boundary.
+    pub control: Option<u32>,
+    /// Innermost native node wrapper active for this boundary.
+    pub wrapper: Option<u32>,
     /// Device line before/after.
     pub line_before: i64,
     /// Device line after.
@@ -595,8 +615,135 @@ pub struct ExecutionBoundary {
     pub visual_before: i64,
     /// Visual position after.
     pub visual_after: i64,
-    /// Total execution order.
-    pub sequence: u64,
+    /// Device-line commits directly owned by this boundary.
+    pub direct_device_lines: u32,
+    /// Total execution order on entry.
+    pub enter_sequence: u64,
+    /// Total execution order on leave.
+    pub leave_sequence: u64,
+}
+
+/// One native roff control request executed by the fixed-CVS terminal path.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionControlRequest {
+    /// `.br`.
+    Break,
+    /// `.ce`.
+    Center,
+    /// `.fi`.
+    Fill,
+    /// `.ft`.
+    Font,
+    /// `.ll`.
+    LineLength,
+    /// `.mc`.
+    MarginCharacter,
+    /// `.nf`.
+    NoFill,
+    /// `.po`.
+    PageOffset,
+    /// `.rj`.
+    RightJustify,
+    /// `.sp`.
+    VerticalSpace,
+    /// `.ta`.
+    TabStops,
+    /// `.ti`.
+    TemporaryIndent,
+}
+
+/// Terminal state and records produced by one native control request.
+///
+/// This intentionally mirrors the complete private execution checkpoint;
+/// callers should normally consume the typed request and record ranges rather
+/// than interpreting individual terminal coordinates.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionControl {
+    /// Stable control-record index.
+    pub key: u32,
+    /// Syntax-node execution origin. It can be parser-generated; inspect the
+    /// corresponding [`ExecutionNodeFlags`] before treating it as authored.
+    pub node: ExecutionNodeKey,
+    /// Enclosing control record, when requests are nested.
+    pub parent: Option<u32>,
+    /// Native execution wrapper active for the request.
+    pub wrapper: u32,
+    /// Typed request executed by the terminal backend.
+    pub request: ExecutionControlRequest,
+    /// Native terminal buffer observed by the request.
+    pub buffer: u32,
+    /// Buffer generation active on entry, when one existed.
+    pub generation_before: Option<u32>,
+    /// Buffer generation active on return, when one existed.
+    pub generation_after: Option<u32>,
+    /// Native terminal flags on entry.
+    pub flags_before: u32,
+    /// Native terminal flags on return.
+    pub flags_after: u32,
+    /// Atom records emitted while executing the request.
+    pub atoms: Range<u32>,
+    /// Fragment records emitted while executing the request.
+    pub fragments: Range<u32>,
+    /// Flush records emitted while executing the request.
+    pub flushes: Range<u32>,
+    /// Boundary records emitted while executing the request.
+    pub boundaries: Range<u32>,
+    /// Geometry records emitted while executing the request.
+    pub geometry: Range<u32>,
+    /// Wrapper records opened while executing the request.
+    pub wrappers: Range<u32>,
+    /// Device line on entry.
+    pub line_before: i64,
+    /// Device line on return.
+    pub line_after: i64,
+    /// Visual position on entry.
+    pub visual_before: i64,
+    /// Visual position on return.
+    pub visual_after: i64,
+    /// Device column on entry.
+    pub column_before: i64,
+    /// Device column on return.
+    pub column_after: i64,
+    /// Buffered line extent on entry.
+    pub extent_before: i64,
+    /// Buffered line extent on return.
+    pub extent_after: i64,
+    /// Page offset on entry.
+    pub offset_before: i64,
+    /// Page offset on return.
+    pub offset_after: i64,
+    /// Right margin on entry.
+    pub rmargin_before: i64,
+    /// Right margin on return.
+    pub rmargin_after: i64,
+    /// Maximum right margin on entry.
+    pub maxrmargin_before: i64,
+    /// Maximum right margin on return.
+    pub maxrmargin_after: i64,
+    /// Tab origin on entry.
+    pub taboff_before: i64,
+    /// Tab origin on return.
+    pub taboff_after: i64,
+    /// Pending temporary indent on entry.
+    pub temporary_indent_before: i64,
+    /// Pending temporary indent on return.
+    pub temporary_indent_after: i64,
+    /// Pending suppressed vertical distance on entry.
+    pub skip_vertical_before: i64,
+    /// Pending suppressed vertical distance on return.
+    pub skip_vertical_after: i64,
+    /// Minimum blank-line debt on entry.
+    pub minimum_blank_before: i64,
+    /// Minimum blank-line debt on return.
+    pub minimum_blank_after: i64,
+    /// Trailing blank-cell count on entry.
+    pub trailing_blank_before: i64,
+    /// Trailing blank-cell count on return.
+    pub trailing_blank_after: i64,
+    /// Total execution sequence at request entry.
+    pub enter_sequence: u64,
+    /// Total execution sequence at request return.
+    pub leave_sequence: u64,
 }
 
 /// One objective native geometry observation.
@@ -842,6 +989,7 @@ pub struct NativeExecutionReport {
     pub(crate) work_units: u64,
     /// Total records stored across all typed tables.
     pub(crate) record_count: u64,
+    pub(crate) record_bytes: u64,
     /// Peak native terminal buffer capacity charged to this execution.
     pub(crate) buffer_cells: u64,
     /// Participating sources.
@@ -860,6 +1008,8 @@ pub struct NativeExecutionReport {
     pub(crate) flushes: Vec<ExecutionFlush>,
     /// Ordered boundary requests and effects.
     pub(crate) boundaries: Vec<ExecutionBoundary>,
+    /// Native roff control requests and their exact state intervals.
+    pub(crate) controls: Vec<ExecutionControl>,
     /// Objective native geometry.
     pub(crate) geometry: Vec<ExecutionGeometry>,
     /// Execution scopes and instantaneous state transitions.
@@ -889,6 +1039,12 @@ impl NativeExecutionReport {
     #[must_use]
     pub const fn record_count(&self) -> u64 {
         self.record_count
+    }
+
+    /// Bytes allocated by native typed record tables at the sealed checkpoint.
+    #[must_use]
+    pub const fn record_bytes(&self) -> u64 {
+        self.record_bytes
     }
 
     /// Peak native terminal buffer capacity charged to this execution.
@@ -943,6 +1099,12 @@ impl NativeExecutionReport {
     #[must_use]
     pub fn boundaries(&self) -> &[ExecutionBoundary] {
         &self.boundaries
+    }
+
+    /// Native roff control requests.
+    #[must_use]
+    pub fn controls(&self) -> &[ExecutionControl] {
+        &self.controls
     }
 
     /// Native geometry facts.
@@ -1027,6 +1189,8 @@ pub struct ExecutionLimits {
     pub max_pool_bytes: u64,
     /// Maximum tracked native buffer cells.
     pub max_buffer_cells: u64,
+    /// Maximum allocated bytes across native typed record tables.
+    pub max_report_bytes: u64,
 }
 
 impl Default for ExecutionLimits {
@@ -1038,6 +1202,7 @@ impl Default for ExecutionLimits {
             max_records: 4_000_000,
             max_pool_bytes: 16 * 1024 * 1024,
             max_buffer_cells: 1_000_000,
+            max_report_bytes: 512 * 1024 * 1024,
         }
     }
 }

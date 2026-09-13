@@ -14,6 +14,30 @@ from unittest.mock import patch
 import sync_vendor as vendor
 
 
+class PinnedVendorExecutionContracts(unittest.TestCase):
+    """Source-level guards for native paths not exposed by the Rust API."""
+
+    crate = Path(__file__).resolve().parents[1]
+
+    def test_postscript_span_clamps_before_any_integer_conversion(self):
+        # The exact `.ll 1e300i` and `.po -1e300i` inputs were run through
+        # pinned CVS `mandoc -Tps/-Tpdf` before this contract was added.  The
+        # Rust renderer intentionally does not expose either binary format, so
+        # guard the currently uncallable ps_hspan() path at its source boundary.
+        source = (self.crate / "vendor/mandoc-cvs-20260911/term_ps.c").read_text()
+        body = source.split("\nps_hspan(const struct termp *p, const struct roffsu *su)\n", 1)[1]
+        body = body.split("\nstatic void\nps_growbuf", 1)[0]
+        self.assertNotIn("PNT2AFM", body)
+        self.assertIn("term_span_round(r, 0.0)", body)
+
+    def test_generation_checkpoint_sort_is_charged_before_allocation(self):
+        source = (self.crate / "shim/mant_mandoc_execution.c").read_text()
+        start = source.index("generation_checkpoint_count =\n")
+        end = source.index("generation_checkpoints = generation_checkpoint_count", start)
+        setup = source[start:end]
+        self.assertIn("charge_sort_work(report, generation_checkpoint_count)", setup)
+
+
 class VendorReplayTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="mant-vendor-test-")

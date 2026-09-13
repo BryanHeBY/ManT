@@ -65,6 +65,10 @@ enum term_exec_affinity {
 };
 
 struct term_exec_ops {
+	int (*work)(void *, const struct termp *,
+	    const struct roff_node *, size_t);
+	void (*abort)(void *, const struct termp *,
+	    const struct roff_node *);
 	int (*node_enter)(void *, const struct termp *,
 	    const struct roff_node *);
 	int (*node_leave)(void *, const struct termp *,
@@ -103,6 +107,10 @@ struct term_exec_ops {
 	    const struct roff_node *, int);
 	int (*boundary_leave)(void *, const struct termp *,
 	    const struct roff_node *, int);
+	int (*control_enter)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*control_leave)(void *, const struct termp *,
+	    const struct roff_node *);
 	int (*device_advance)(void *, const struct termp *,
 	    const struct roff_node *, size_t, size_t, size_t);
 	int (*device_letter)(void *, const struct termp *,
@@ -252,12 +260,13 @@ void		  term_end(struct termp *);
 void		  term_setwidth(struct termp *, const char *);
 int		  term_hspan(const struct termp *, const struct roffsu *);
 int		  term_vspan(const struct termp *, const struct roffsu *);
+int		  term_span_round(double, double);
 size_t		  term_strlen(const struct termp *, const char *);
 size_t		  term_len(const struct termp *, size_t);
 
 void		  term_tab_set(const struct termp *, const char *);
 void		  term_tab_ref(struct termp *);
-size_t		  term_tab_next(size_t);
+size_t		  term_tab_next(struct termp *, size_t);
 void		  term_tab_free(void);
 
 void		  term_fontpush(struct termp *, enum termfont);
@@ -268,6 +277,8 @@ void		  term_fontlast(struct termp *);
 void		  term_exec_attach(struct termp *,
 			const struct term_exec_ops *, void *);
 int		  term_exec_failed(const struct termp *);
+void		  term_exec_abort(struct termp *);
+int		  term_exec_work(struct termp *, size_t);
 int		  term_exec_node(struct termp *, const struct roff_node *, int);
 int		  term_exec_word(struct termp *, const char *, size_t, int);
 int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
@@ -283,6 +294,7 @@ int		  term_exec_fill_outcome(struct termp *, int);
 int		  term_exec_field(struct termp *, int, size_t, size_t, size_t);
 int		  term_exec_field_atom(struct termp *, size_t, int);
 int		  term_exec_boundary(struct termp *, int, int);
+int		  term_exec_control(struct termp *, const struct roff_node *, int);
 int		  term_exec_device_advance(struct termp *, size_t, size_t,
 			size_t);
 int		  term_exec_device_letter(struct termp *, size_t, int, size_t,

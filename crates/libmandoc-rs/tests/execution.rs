@@ -1,8 +1,9 @@
 #![cfg(feature = "execute")]
 
 use libmandoc_rs::{
-    AtomDisposition, AtomKind, AtomRole, ExecutionCancellation, ExecutionErrorKind, ExecutionFont,
-    ExecutionLimits, ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
+    AtomDisposition, AtomKind, AtomRole, BoundaryRequest, ExecutionCancellation,
+    ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionLimits,
+    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
     ExecutionTableLayoutKind, ExecutionTableRowKind, FlushOutcome, FragmentRole, InputFormat,
     NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
 };
@@ -12,6 +13,19 @@ const MDOC: &[u8] = include_bytes!("fixtures/execution/plain-mdoc.1");
 const BUFFER_MUTATIONS: &[u8] = include_bytes!("fixtures/execution/buffer-mutations.1");
 const EMPTY_WORD_MAN: &[u8] = include_bytes!("fixtures/execution/empty-word-man.1");
 const FIELD_CONSUMPTION_MAN: &[u8] = include_bytes!("fixtures/execution/field-consumption-man.1");
+const CONTROL_EFFECTS_MAN: &[u8] = include_bytes!("fixtures/execution/control-effects-man.1");
+const CONTROL_EFFECTS_MDOC: &[u8] = include_bytes!("fixtures/execution/control-effects-mdoc.1");
+const CONTROL_NESTED_MAN: &[u8] = include_bytes!("fixtures/execution/control-nested-man.1");
+const CONTROL_GENERATED_MAN: &[u8] = include_bytes!("fixtures/execution/control-generated-man.1");
+const CONTROL_WORK_MAN: &[u8] = include_bytes!("fixtures/execution/control-work-man.1");
+const CONTROL_NUMERIC_OVERFLOW_MAN: &[u8] =
+    include_bytes!("fixtures/execution/control-numeric-overflow-man.1");
+const CONTROL_NUMERIC_UNITS_MAN: &[u8] =
+    include_bytes!("fixtures/execution/control-numeric-units-man.1");
+const CONTROL_NUMERIC_UNDERFLOW_MAN: &[u8] =
+    include_bytes!("fixtures/execution/control-numeric-underflow-man.1");
+const CONTROL_LARGE_NEGATIVE_VS_MAN: &[u8] =
+    include_bytes!("fixtures/execution/control-large-negative-vs-man.1");
 const TABLE: &[u8] = include_bytes!("fixtures/execution/unsupported-table.1");
 const TABLE_VERTICAL_CONTINUATION: &[u8] =
     include_bytes!("fixtures/execution/table-vertical-continuation.1");
@@ -556,6 +570,406 @@ fn reports_exact_native_field_consumption() {
 }
 
 #[test]
+fn reports_native_control_boundaries_and_zero_output_effects() {
+    for (name, format, source, expected) in [
+        (
+            "control-effects-man.1",
+            InputFormat::Man,
+            CONTROL_EFFECTS_MAN,
+            [5, 6, 7, 8, 9, 10, 13, 15, 16, 18, 20, 22, 24],
+        ),
+        (
+            "control-effects-mdoc.1",
+            InputFormat::Mdoc,
+            CONTROL_EFFECTS_MDOC,
+            [8, 9, 10, 11, 12, 13, 16, 18, 19, 21, 23, 25, 27],
+        ),
+    ] {
+        // The complete fixtures are lint-clean against the pinned CVS binary
+        // (SHA-256 f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59).
+        // `roff_term.c` dispatches every request exactly once and `term.c`
+        // supplies the nested newline/vspace/endline primitives asserted here.
+        let report = execute(name, format, source);
+        assert_native_control_fixture(&report.execution, expected, name);
+    }
+}
+
+fn assert_native_control_fixture(
+    execution: &NativeExecutionReport,
+    expected: [u32; 13],
+    name: &str,
+) {
+    let record_lengths = (
+        u32::try_from(execution.atoms().len()).expect("bounded atom count"),
+        u32::try_from(execution.fragments().len()).expect("bounded fragment count"),
+        u32::try_from(execution.flushes().len()).expect("bounded flush count"),
+        u32::try_from(execution.boundaries().len()).expect("bounded boundary count"),
+        u32::try_from(execution.geometry().len()).expect("bounded geometry count"),
+        u32::try_from(execution.wrappers().len()).expect("bounded wrapper count"),
+    );
+    assert!(!execution.controls().is_empty());
+    assert_eq!(execution.controls().len(), expected.len());
+    assert_eq!(
+        execution
+            .controls()
+            .iter()
+            .map(|control| execution.nodes()[control.node.0 as usize].line)
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert!(execution.controls().iter().all(|control| {
+        let node = &execution.nodes()[control.node.0 as usize];
+        let wrapper = &execution.wrappers()[control.wrapper as usize];
+        control.enter_sequence < control.leave_sequence
+            && wrapper
+                .node
+                .is_some_and(|owner| node_is_within(execution, control.node, owner))
+            && wrapper.enter_sequence < control.enter_sequence
+            && wrapper.leave_sequence > control.leave_sequence
+            && control.atoms.end <= record_lengths.0
+            && control.fragments.end <= record_lengths.1
+            && control.flushes.end <= record_lengths.2
+            && control.boundaries.end <= record_lengths.3
+            && control.geometry.end <= record_lengths.4
+            && control.wrappers.end <= record_lengths.5
+            && matches!(
+                (control.request, node.macro_name.as_deref()),
+                (ExecutionControlRequest::Break, Some("br"))
+                    | (ExecutionControlRequest::MarginCharacter, Some("mc"))
+                    | (ExecutionControlRequest::VerticalSpace, Some("sp"))
+                    | (ExecutionControlRequest::TemporaryIndent, Some("ti"))
+                    | (ExecutionControlRequest::NoFill, Some("nf"))
+                    | (ExecutionControlRequest::Fill, Some("fi"))
+            )
+    }));
+
+    assert_control_requests(execution, name);
+
+    assert!(execution.boundaries().iter().all(|boundary| {
+        boundary.enter_sequence < boundary.leave_sequence
+            && (boundary.request != BoundaryRequest::DeviceEndline
+                || boundary.direct_device_lines == 0)
+    }));
+    let first_sp = execution
+        .controls()
+        .iter()
+        .find(|control| {
+            control.request == ExecutionControlRequest::VerticalSpace
+                && execution.nodes()[control.node.0 as usize].line == expected[2]
+        })
+        .expect("first .sp control");
+    assert_eq!(
+        execution
+            .boundaries()
+            .iter()
+            .filter(|boundary| {
+                boundary.control == Some(first_sp.key)
+                    && boundary.request == BoundaryRequest::VerticalSpace
+                    && boundary.direct_device_lines == 1
+            })
+            .count(),
+        2,
+        ".sp 2 must execute two direct native vertical-space boundaries"
+    );
+
+    let empty_margin = execution
+        .controls()
+        .iter()
+        .find(|control| control.request == ExecutionControlRequest::MarginCharacter)
+        .expect("empty margin request");
+    assert!(empty_margin.atoms.is_empty());
+    assert!(empty_margin.fragments.is_empty());
+
+    let delayed_margin_word = execution
+        .words()
+        .iter()
+        .find(|word| pool(execution, word.operand) == b"|")
+        .expect("delayed authored margin character word");
+    let wrapper = &execution.wrappers()[delayed_margin_word.wrapper.unwrap() as usize];
+    assert!(
+        delayed_margin_word.node.is_some_and(|origin| {
+            wrapper
+                .node
+                .is_some_and(|owner| origin != owner && !node_is_within(execution, origin, owner))
+        }),
+        "the report must keep delayed .mc source ownership separate from its later execution wrapper"
+    );
+}
+
+fn assert_control_requests(execution: &NativeExecutionReport, name: &str) {
+    let requests = execution
+        .controls()
+        .iter()
+        .map(|control| control.request)
+        .collect::<Vec<_>>();
+    for request in [
+        ExecutionControlRequest::Break,
+        ExecutionControlRequest::MarginCharacter,
+        ExecutionControlRequest::VerticalSpace,
+        ExecutionControlRequest::TemporaryIndent,
+        ExecutionControlRequest::NoFill,
+        ExecutionControlRequest::Fill,
+    ] {
+        assert!(requests.contains(&request), "missing {request:?} in {name}");
+    }
+}
+
+#[test]
+fn nested_controls_keep_child_origins_and_direct_boundary_ownership() {
+    // The complete fixture is lint-clean under the pinned CVS binary. Its
+    // tree makes `sp` and `ti` children of `ce`, and `br` a child of `rj`;
+    // `roff_term_pre_ce()` dispatches those children without opening another
+    // terminal node wrapper.
+    let report = execute("control-nested-man.1", InputFormat::Man, CONTROL_NESTED_MAN);
+    let execution = &report.execution;
+    let controls = execution.controls();
+    assert_eq!(controls.len(), 5);
+    for (parent_request, child_request) in [
+        (
+            ExecutionControlRequest::Center,
+            ExecutionControlRequest::VerticalSpace,
+        ),
+        (
+            ExecutionControlRequest::Center,
+            ExecutionControlRequest::TemporaryIndent,
+        ),
+        (
+            ExecutionControlRequest::RightJustify,
+            ExecutionControlRequest::Break,
+        ),
+    ] {
+        let parent = controls
+            .iter()
+            .find(|control| control.request == parent_request)
+            .expect("parent control");
+        let child = controls
+            .iter()
+            .find(|control| control.request == child_request)
+            .expect("nested child control");
+        assert_eq!(child.parent, Some(parent.key));
+        assert_eq!(child.wrapper, parent.wrapper);
+        assert_ne!(child.node, parent.node);
+        assert!(node_is_within(execution, child.node, parent.node));
+        assert!(execution.boundaries().iter().all(|boundary| {
+            boundary.control != Some(child.key)
+                || (boundary.enter_sequence > child.enter_sequence
+                    && boundary.leave_sequence < child.leave_sequence)
+        }));
+    }
+    let mut direct_keys = execution
+        .boundaries()
+        .iter()
+        .filter_map(|boundary| boundary.control.map(|control| (boundary.key, control)))
+        .collect::<Vec<_>>();
+    direct_keys.sort_unstable();
+    direct_keys.dedup();
+    assert_eq!(
+        direct_keys.len(),
+        execution
+            .boundaries()
+            .iter()
+            .filter(|b| b.control.is_some())
+            .count()
+    );
+}
+
+#[test]
+fn generated_controls_retain_typed_source_provenance() {
+    // Fixed CVS diagnoses a filled-mode blank line and inserts a source-less
+    // `.sp`; the execution report must not present it as an authored request.
+    let report = execute(
+        "control-generated-man.1",
+        InputFormat::Man,
+        CONTROL_GENERATED_MAN,
+    );
+    let generated = report
+        .execution
+        .controls()
+        .iter()
+        .find(|control| {
+            control.request == ExecutionControlRequest::VerticalSpace
+                && report.execution.nodes()[control.node.0 as usize]
+                    .flags
+                    .contains(libmandoc_rs::ExecutionNodeFlags::GENERATED)
+        })
+        .expect("generated blank-line spacing control");
+    assert!(generated.enter_sequence < generated.leave_sequence);
+}
+
+fn node_is_within(
+    report: &NativeExecutionReport,
+    mut node: libmandoc_rs::ExecutionNodeKey,
+    owner: libmandoc_rs::ExecutionNodeKey,
+) -> bool {
+    loop {
+        if node == owner {
+            return true;
+        }
+        let Some(parent) = report.nodes()[node.0 as usize].parent else {
+            return false;
+        };
+        node = parent;
+    }
+}
+
+#[test]
+fn zero_output_control_work_is_bounded_and_reentrant() {
+    // The complete fixture is lint-clean under the pinned CVS binary and its
+    // only visible DESCRIPTION content is `VISIBLE`.  The two long `.ta`
+    // requests still execute native parsing and tab-list replacement work.
+    let baseline = execute("control-work-man.1", InputFormat::Man, CONTROL_WORK_MAN);
+    let tab_controls = baseline
+        .execution
+        .controls()
+        .iter()
+        .filter(|control| control.request == ExecutionControlRequest::TabStops)
+        .collect::<Vec<_>>();
+    assert_eq!(tab_controls.len(), 2);
+    assert!(tab_controls.iter().all(|control| {
+        control.atoms.is_empty()
+            && control.fragments.is_empty()
+            && control.enter_sequence < control.leave_sequence
+    }));
+
+    let error = Parser::new(ParseOptions::default())
+        .with_input_format(InputFormat::Man)
+        .with_mdoc_operating_system("ManT")
+        .unwrap()
+        .execute_bytes(
+            "control-work-man.1",
+            CONTROL_WORK_MAN,
+            ExecutionLimits {
+                max_work: baseline.execution.work_units() - 1,
+                ..ExecutionLimits::default()
+            },
+        )
+        .unwrap_err();
+    assert_eq!(error.kind, ExecutionErrorKind::Budget);
+    assert_eq!(
+        execute("control-work-man.1", InputFormat::Man, CONTROL_WORK_MAN)
+            .execution
+            .controls()
+            .iter()
+            .filter(|control| control.request == ExecutionControlRequest::TabStops)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn oversized_control_distances_do_not_overflow_native_state() {
+    // The complete input was run through the pinned CVS binary before this
+    // assertion was written; it renders both BEFORE and AFTER and reports no
+    // lint diagnostic.  ManT additionally rejects the non-finite native
+    // distance conversion instead of relying on an undefined float-to-int cast.
+    let report = execute(
+        "control-numeric-overflow-man.1",
+        InputFormat::Man,
+        CONTROL_NUMERIC_OVERFLOW_MAN,
+    );
+    let control = report
+        .execution
+        .controls()
+        .iter()
+        .find(|control| control.request == ExecutionControlRequest::VerticalSpace)
+        .expect("oversized .sp still has an authored control fact");
+    assert!(control.enter_sequence < control.leave_sequence);
+    assert!(report.execution.fragments().iter().any(|fragment| {
+        fragment.atoms.iter().any(|key| {
+            char::from_u32(report.execution.atoms()[key.0 as usize].display_scalar) == Some('B')
+        })
+    }));
+}
+
+#[test]
+fn finite_control_distances_are_checked_after_parsing_their_units() {
+    // The exact fixture was linted and rendered by pinned CVS before this
+    // assertion was written. `40000u` is a representable basic-unit indent,
+    // and `-40000v` is a representable vertical debt; neither may be rejected
+    // merely because font-size units use a larger conversion factor.
+    let report = execute(
+        "control-numeric-units-man.1",
+        InputFormat::Man,
+        CONTROL_NUMERIC_UNITS_MAN,
+    );
+    let execution = &report.execution;
+    let controls = execution.controls();
+    assert_eq!(
+        controls
+            .iter()
+            .filter(|control| control.request == ExecutionControlRequest::TemporaryIndent)
+            .count(),
+        1
+    );
+    assert_eq!(
+        controls
+            .iter()
+            .filter(|control| control.request == ExecutionControlRequest::VerticalSpace)
+            .count(),
+        2
+    );
+    let indent = controls
+        .iter()
+        .find(|control| control.request == ExecutionControlRequest::TemporaryIndent)
+        .expect("representable basic-unit indent");
+    assert!(indent.temporary_indent_after > indent.temporary_indent_before);
+    let negative_space = controls
+        .iter()
+        .find(|control| {
+            control.request == ExecutionControlRequest::VerticalSpace
+                && execution.nodes()[control.node.0 as usize].line == 5
+        })
+        .expect("representable negative vertical-space request");
+    assert!(negative_space.skip_vertical_after > negative_space.skip_vertical_before);
+}
+
+#[test]
+fn finite_vertical_underflow_remains_zero_instead_of_using_the_default_distance() {
+    // Pinned CVS renders BEFORE and AFTER on adjacent device lines: strtod(3)
+    // underflow is a valid finite zero, not a parse failure that selects the
+    // default one-line `.sp` distance.
+    let report = execute(
+        "control-numeric-underflow-man.1",
+        InputFormat::Man,
+        CONTROL_NUMERIC_UNDERFLOW_MAN,
+    );
+    let control = report
+        .execution
+        .controls()
+        .iter()
+        .find(|control| control.request == ExecutionControlRequest::VerticalSpace)
+        .expect("underflowed vertical-space request");
+    assert_eq!(control.line_after - control.line_before, 1);
+    assert_eq!(control.skip_vertical_before, control.skip_vertical_after);
+}
+
+#[test]
+fn large_negative_vertical_distance_accumulates_as_debt_without_overflow() {
+    // Pinned CVS applies the large negative `v` distance as vertical debt;
+    // the following positive request does not emit a device line.  The
+    // conversion must therefore use the vertical factor at `term_vspan()`,
+    // not a conservative horizontal factor at parse time.
+    let report = execute(
+        "control-large-negative-vs-man.1",
+        InputFormat::Man,
+        CONTROL_LARGE_NEGATIVE_VS_MAN,
+    );
+    let controls = report
+        .execution
+        .controls()
+        .iter()
+        .filter(|control| control.request == ExecutionControlRequest::VerticalSpace)
+        .collect::<Vec<_>>();
+    assert_eq!(controls.len(), 2);
+    assert!(controls[0].skip_vertical_after > controls[0].skip_vertical_before);
+    assert_eq!(controls[1].line_before, controls[1].line_after);
+    assert_eq!(
+        controls[1].skip_vertical_after,
+        controls[0].skip_vertical_after - 2
+    );
+}
+
+#[test]
 fn reports_native_definition_fonts_references_and_actual_targets() {
     for (name, format, source, owner_macro) in [
         ("annotated-man.1", InputFormat::Man, ANNOTATED_MAN, "UR"),
@@ -871,6 +1285,10 @@ fn exhausted_budget_never_exposes_a_partial_report() {
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
+            max_report_bytes: baseline.execution.record_bytes(),
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
             max_pool_bytes: baseline.execution.pool_len() as u64,
             ..ExecutionLimits::default()
         },
@@ -900,6 +1318,10 @@ fn exhausted_budget_never_exposes_a_partial_report() {
         },
         ExecutionLimits {
             max_records: baseline.execution.record_count() - 1,
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
+            max_report_bytes: baseline.execution.record_bytes() - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
@@ -936,6 +1358,10 @@ fn invalid_execution_limits_are_rejected_as_budgets() {
         },
         ExecutionLimits {
             max_depth: 0,
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
+            max_report_bytes: 0,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {

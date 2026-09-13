@@ -20,6 +20,8 @@
 #include <sys/types.h>
 
 #include <assert.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -62,7 +64,10 @@ void
 roff_term_pre(struct termp *p, const struct roff_node *n)
 {
 	assert(n->tok < ROFF_MAX);
+	if (!term_exec_control(p, n, 1))
+		return;
 	(*roff_term_pre_acts[n->tok])(p, n);
+	term_exec_control(p, n, 0);
 }
 
 static void
@@ -87,18 +92,30 @@ roff_term_pre_ce(ROFF_TERM_ARGS)
 	p->flags |= n->tok == ROFF_ce ? TERMP_CENTER : TERMP_RIGHT;
 	nc1 = n->child->next;
 	while (nc1 != NULL) {
+		if (!term_exec_work(p, 1))
+			break;
 		nc2 = nc1;
 		do {
+			if (!term_exec_work(p, 1))
+				break;
 			nc2 = nc2->next;
 		} while (nc2 != NULL && (nc2->type != ROFFT_TEXT ||
 		    (nc2->flags & NODE_LINE) == 0));
+		if (term_exec_failed(p))
+			break;
 		while (nc1 != nc2) {
+			if (!term_exec_work(p, 1))
+				break;
 			if (nc1->type == ROFFT_TEXT)
 				term_word(p, nc1->string);
 			else
 				roff_term_pre(p, nc1);
+			if (term_exec_failed(p))
+				break;
 			nc1 = nc1->next;
 		}
+		if (term_exec_failed(p))
+			break;
 		p->flags |= TERMP_NOSPACE;
 		term_flushln(p);
 	}
@@ -204,10 +221,18 @@ roff_term_pre_sp(ROFF_TERM_ARGS)
 	} else
 		len = 1;
 
-	if (len < 0)
+	if (len < 0) {
+		if (p->skipvsp > INT_MAX + len) {
+			if (p->exec_ops != NULL)
+				term_exec_abort(p);
+			else
+				p->skipvsp = INT_MAX;
+			return;
+		}
 		p->skipvsp -= len;
+	}
 	else
-		while (len--)
+		while (len-- && !term_exec_failed(p))
 			term_vspace(p);
 
 	roff_term_pre_br(p, n);
@@ -217,8 +242,11 @@ static void
 roff_term_pre_ta(ROFF_TERM_ARGS)
 {
 	term_tab_set(p, NULL);
-	for (n = n->child; n != NULL; n = n->next)
+	for (n = n->child; n != NULL; n = n->next) {
+		if (!term_exec_work(p, 1))
+			return;
 		term_tab_set(p, n->string);
+	}
 }
 
 static void

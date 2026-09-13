@@ -93,6 +93,21 @@ enum mant_mandoc_execution_boundary_effect {
 	MANT_MANDOC_BOUNDARY_ADDED_VERTICAL_SPACE = 3
 };
 
+enum mant_mandoc_execution_control_request {
+	MANT_MANDOC_CONTROL_BREAK = 1,
+	MANT_MANDOC_CONTROL_CENTER,
+	MANT_MANDOC_CONTROL_FILL,
+	MANT_MANDOC_CONTROL_FONT,
+	MANT_MANDOC_CONTROL_LINE_LENGTH,
+	MANT_MANDOC_CONTROL_MARGIN_CHARACTER,
+	MANT_MANDOC_CONTROL_NO_FILL,
+	MANT_MANDOC_CONTROL_PAGE_OFFSET,
+	MANT_MANDOC_CONTROL_RIGHT_JUSTIFY,
+	MANT_MANDOC_CONTROL_VERTICAL_SPACE,
+	MANT_MANDOC_CONTROL_TAB_STOPS,
+	MANT_MANDOC_CONTROL_TEMPORARY_INDENT
+};
+
 enum mant_mandoc_execution_geometry_kind {
 	MANT_MANDOC_GEOMETRY_ADVANCE = 1,
 	MANT_MANDOC_GEOMETRY_GLYPH,
@@ -186,9 +201,10 @@ struct mant_mandoc_execution_limits {
 	uint64_t max_records;
 	uint64_t max_pool_bytes;
 	uint64_t max_buffer_cells;
+	uint64_t max_report_bytes;
 };
 
-#define MANT_MANDOC_EXECUTION_LIMITS_VERSION 1U
+#define MANT_MANDOC_EXECUTION_LIMITS_VERSION 2U
 size_t mant_mandoc_execution_limits_size(void);
 size_t mant_mandoc_execution_limits_align(void);
 uint32_t mant_mandoc_execution_limits_field_count(void);
@@ -328,12 +344,67 @@ struct mant_mandoc_boundary_record {
 	uint32_t effect;
 	uint32_t flags_before;
 	uint32_t flags_after;
+	uint32_t control;
+	int64_t line_before;
+	int64_t line_after;
+	int64_t visual_before;
+	int64_t visual_after;
+	uint32_t direct_device_lines;
+	uint32_t wrapper;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
+struct mant_mandoc_control_record {
+	uint32_t key;
+	uint32_t node;
+	uint32_t parent;
+	uint32_t wrapper;
+	uint32_t request;
+	uint32_t buffer;
+	uint32_t generation_before;
+	uint32_t generation_after;
+	uint32_t flags_before;
+	uint32_t flags_after;
+	uint32_t atom_start;
+	uint32_t atom_length;
+	uint32_t fragment_start;
+	uint32_t fragment_length;
+	uint32_t flush_start;
+	uint32_t flush_length;
+	uint32_t boundary_start;
+	uint32_t boundary_length;
+	uint32_t geometry_start;
+	uint32_t geometry_length;
+	uint32_t wrapper_start;
+	uint32_t wrapper_length;
 	uint32_t reserved;
 	int64_t line_before;
 	int64_t line_after;
 	int64_t visual_before;
 	int64_t visual_after;
-	uint64_t sequence;
+	int64_t column_before;
+	int64_t column_after;
+	int64_t extent_before;
+	int64_t extent_after;
+	int64_t offset_before;
+	int64_t offset_after;
+	int64_t rmargin_before;
+	int64_t rmargin_after;
+	int64_t maxrmargin_before;
+	int64_t maxrmargin_after;
+	int64_t taboff_before;
+	int64_t taboff_after;
+	int64_t temporary_indent_before;
+	int64_t temporary_indent_after;
+	int64_t skip_vertical_before;
+	int64_t skip_vertical_after;
+	int64_t minimum_blank_before;
+	int64_t minimum_blank_after;
+	int64_t trailing_blank_before;
+	int64_t trailing_blank_after;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
 };
 
 struct mant_mandoc_geometry_record {
@@ -496,6 +567,8 @@ uint64_t mant_mandoc_execution_work_count(
     const struct mant_mandoc_execution_report *);
 uint64_t mant_mandoc_execution_record_count(
     const struct mant_mandoc_execution_report *);
+uint64_t mant_mandoc_execution_allocated_record_bytes(
+    const struct mant_mandoc_execution_report *);
 uint64_t mant_mandoc_execution_buffer_cell_count(
     const struct mant_mandoc_execution_report *);
 int mant_mandoc_execution_node_key(
@@ -522,6 +595,7 @@ MANT_DECLARE_RECORD_API(fragment, fragments);
 MANT_DECLARE_RECORD_API(fragment_atom, fragment_atoms);
 MANT_DECLARE_RECORD_API(flush, flushes);
 MANT_DECLARE_RECORD_API(boundary, boundaries);
+MANT_DECLARE_RECORD_API(control, controls);
 MANT_DECLARE_RECORD_API(geometry, geometries);
 MANT_DECLARE_RECORD_API(wrapper, wrappers);
 MANT_DECLARE_RECORD_API(reference, references);

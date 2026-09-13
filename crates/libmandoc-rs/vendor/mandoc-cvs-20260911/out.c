@@ -22,6 +22,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ a2roffsu(const char *src, struct roffsu *dst, enum roffscale def)
 
 	dst->unit = def == SCALE_MAX ? SCALE_BU : def;
 	dst->scale = strtod(src, &endptr);
-	if (endptr == src)
+	if (endptr == src || !isfinite(dst->scale))
 		return NULL;
 
 	switch (*endptr++) {

@@ -6,13 +6,14 @@
 
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryEffect, Document as NativeDocument,
-    ExecutionAffinity, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionNodeKey,
-    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags,
-    ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind,
-    ExecutionTableRow, ExecutionTableRowKey, FragmentRole, GeometryKind, GeometryOriginKind,
-    NativeExecutionReport, Node as NativeNode, NodeKind, NormalizedListKind,
-    TableAlignment as NativeTableAlignment, TableCellKind as NativeTableCellKind,
-    TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
+    ExecutionAffinity, ExecutionBoundary, ExecutionControl, ExecutionFlush, ExecutionFont,
+    ExecutionFragment, ExecutionNodeKey, ExecutionReferenceKind, ExecutionTableAlignment,
+    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
+    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
+    FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport, Node as NativeNode,
+    NodeKind, NormalizedListKind, TableAlignment as NativeTableAlignment,
+    TableCellKind as NativeTableCellKind, TableRowKind as NativeTableRowKind,
+    TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
@@ -108,6 +109,28 @@ pub(super) struct NativeFieldFact {
     pub(super) trailing_discarded_atoms: Vec<u32>,
 }
 
+/// One control request paired with its source provenance, exact native state
+/// transition, and directly owned primitive boundary effects. This remains private until the staged
+/// projection can replace the legacy Rust execution model atomically.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum NativeControlProvenance {
+    Authored,
+    Generated,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeControlFact {
+    pub(super) control: ExecutionControl,
+    pub(super) source: PathBuf,
+    pub(super) line: u32,
+    pub(super) column: u32,
+    pub(super) macro_name: String,
+    pub(super) provenance: NativeControlProvenance,
+    pub(super) boundaries: Vec<ExecutionBoundary>,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeTableCell {
@@ -170,7 +193,54 @@ pub(super) struct NativeProjection {
     pub(super) anchors: Vec<NativeAnchor>,
     pub(super) definitions: Vec<NativeDefinitionFact>,
     pub(super) fields: Vec<NativeFieldFact>,
+    pub(super) controls: Vec<NativeControlFact>,
     pub(super) tables: Vec<NativeTable>,
+}
+
+fn partition_control_boundaries<'a>(
+    control_count: usize,
+    boundaries: impl IntoIterator<Item = &'a ExecutionBoundary>,
+) -> Vec<Vec<ExecutionBoundary>> {
+    let mut direct_boundaries = vec![Vec::new(); control_count];
+    for boundary in boundaries {
+        if let Some(control) = boundary.control {
+            direct_boundaries[control as usize].push(boundary.clone());
+        }
+    }
+    direct_boundaries
+}
+
+fn control_facts(report: &NativeExecutionReport) -> Vec<NativeControlFact> {
+    let direct_boundaries =
+        partition_control_boundaries(report.controls().len(), report.boundaries());
+
+    report
+        .controls()
+        .iter()
+        .zip(direct_boundaries)
+        .map(|(control, boundaries)| {
+            let origin = &report.nodes()[control.node.0 as usize];
+            NativeControlFact {
+                control: control.clone(),
+                source: report.sources()[origin.source as usize].path.clone(),
+                line: origin.line,
+                column: origin.column,
+                macro_name: origin
+                    .macro_name
+                    .clone()
+                    .expect("validated native control macro"),
+                provenance: if origin
+                    .flags
+                    .contains(libmandoc_rs::ExecutionNodeFlags::GENERATED)
+                {
+                    NativeControlProvenance::Generated
+                } else {
+                    NativeControlProvenance::Authored
+                },
+                boundaries,
+            }
+        })
+        .collect()
 }
 
 fn field_facts(report: &NativeExecutionReport) -> Vec<NativeFieldFact> {
@@ -959,6 +1029,7 @@ pub(super) fn project(
             .collect(),
         definitions: definition_facts(document, report),
         fields: field_facts(report),
+        controls: control_facts(report),
         tables: table_projection(document, report),
     }
 }
@@ -1140,6 +1211,296 @@ mod tests {
                 assert_eq!(report.execution.nodes()[emphasized.node.0 as usize].line, 9);
             }
         }
+    }
+
+    fn assert_control_origin_matrix(
+        path: &str,
+        format: InputFormat,
+        projection: &NativeProjection,
+    ) {
+        let lines = if format == InputFormat::Man {
+            [5, 6, 7, 8, 9, 10, 13, 15, 16, 18, 20, 22, 24]
+        } else {
+            [8, 9, 10, 11, 12, 13, 16, 18, 19, 21, 23, 25, 27]
+        };
+        let requests = [
+            libmandoc_rs::ExecutionControlRequest::MarginCharacter,
+            libmandoc_rs::ExecutionControlRequest::MarginCharacter,
+            libmandoc_rs::ExecutionControlRequest::VerticalSpace,
+            libmandoc_rs::ExecutionControlRequest::TemporaryIndent,
+            libmandoc_rs::ExecutionControlRequest::NoFill,
+            libmandoc_rs::ExecutionControlRequest::Fill,
+            libmandoc_rs::ExecutionControlRequest::MarginCharacter,
+            libmandoc_rs::ExecutionControlRequest::Break,
+            libmandoc_rs::ExecutionControlRequest::MarginCharacter,
+            libmandoc_rs::ExecutionControlRequest::VerticalSpace,
+            libmandoc_rs::ExecutionControlRequest::TemporaryIndent,
+            libmandoc_rs::ExecutionControlRequest::NoFill,
+            libmandoc_rs::ExecutionControlRequest::Fill,
+        ];
+        assert_eq!(
+            projection
+                .controls
+                .iter()
+                .map(|fact| (fact.line, fact.control.request, fact.provenance))
+                .collect::<Vec<_>>(),
+            lines
+                .into_iter()
+                .zip(requests)
+                .map(|(line, request)| (line, request, NativeControlProvenance::Authored))
+                .collect::<Vec<_>>()
+        );
+        assert!(projection.controls.iter().all(|fact| {
+            fact.source == std::path::Path::new(path)
+                && fact.control.boundaries.end - fact.control.boundaries.start
+                    == u32::try_from(fact.boundaries.len()).expect("bounded boundary count")
+        }));
+    }
+
+    fn assert_control_effect_matrix(projection: &NativeProjection) {
+        assert_eq!(
+            projection
+                .controls
+                .iter()
+                .map(|fact| fact.control.line_after - fact.control.line_before)
+                .collect::<Vec<_>>(),
+            [0, 0, 2, 0, 0, 0, 0, 1, 0, 2, 1, 1, 0]
+        );
+        assert_eq!(
+            projection
+                .controls
+                .iter()
+                .map(|fact| fact.control.temporary_indent_after)
+                .collect::<Vec<_>>(),
+            [0, 0, 0, 72, 72, 72, 0, 0, 0, 0, 72, 0, 0]
+        );
+        assert_eq!(
+            projection
+                .controls
+                .iter()
+                .map(|fact| {
+                    let ended = fact
+                        .boundaries
+                        .iter()
+                        .filter(|boundary| boundary.effect == BoundaryEffect::EndedLine)
+                        .count();
+                    let spaced = fact
+                        .boundaries
+                        .iter()
+                        .filter(|boundary| boundary.effect == BoundaryEffect::AddedVerticalSpace)
+                        .count();
+                    (fact.boundaries.len(), ended, spaced)
+                })
+                .collect::<Vec<_>>(),
+            [
+                (0, 0, 0),
+                (0, 0, 0),
+                (7, 2, 2),
+                (1, 0, 0),
+                (1, 0, 0),
+                (1, 0, 0),
+                (0, 0, 0),
+                (3, 3, 0),
+                (0, 0, 0),
+                (6, 4, 1),
+                (3, 3, 0),
+                (3, 3, 0),
+                (1, 0, 0),
+            ]
+        );
+    }
+
+    fn assert_control_visible_lines(format: InputFormat, projection: &NativeProjection) {
+        let description = if format == InputFormat::Man {
+            "k11-controls - native control execution probe"
+        } else {
+            "k11-controls – native control execution probe"
+        };
+        assert_eq!(
+            projection.visible_lines,
+            [
+                "NAME",
+                description,
+                "EMPTY REQUESTS",
+                "SUCCESSORS",
+                "ALPHA BETA",
+                "GAMMA",
+                "DELTA",
+                "EPSILON",
+                "ZETA",
+                "ETA",
+            ],
+            "the staged projection must preserve the explicit fixed-CVS visible-line oracle"
+        );
+    }
+
+    fn assert_nested_control_projection() {
+        let nested = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "control-nested-man.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/control-nested-man.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let nested_projection = project(&nested.document, &nested.execution);
+        let direct_boundary_keys = nested_projection
+            .controls
+            .iter()
+            .flat_map(|fact| fact.boundaries.iter().map(|boundary| boundary.key))
+            .collect::<Vec<_>>();
+        let mut projected_boundary_keys = direct_boundary_keys;
+        projected_boundary_keys.sort_unstable();
+        let mut report_boundary_keys = nested
+            .execution
+            .boundaries()
+            .iter()
+            .filter(|boundary| boundary.control.is_some())
+            .map(|boundary| boundary.key)
+            .collect::<Vec<_>>();
+        report_boundary_keys.sort_unstable();
+        assert_eq!(projected_boundary_keys, report_boundary_keys);
+        assert!(nested_projection.controls.iter().any(|fact| {
+            fact.control.request == libmandoc_rs::ExecutionControlRequest::Break
+                && fact.control.parent.is_some()
+                && fact
+                    .boundaries
+                    .iter()
+                    .all(|boundary| boundary.control == Some(fact.control.key))
+        }));
+        assert!(
+            nested_projection
+                .controls
+                .iter()
+                .filter(|fact| fact.control.parent.is_some())
+                .all(|fact| !fact.boundaries.is_empty())
+        );
+    }
+
+    #[test]
+    fn direct_control_boundaries_are_partitioned_once_across_many_controls() {
+        // This exact generated input was rendered by the pinned CVS binary
+        // before the assertion was written.  While a live `.ce` causes the
+        // next `.ce` to be reattached as a sibling in fixed CVS `roff_onearg`,
+        // all 32 centering and 32 vertical-space controls remain observable.
+        // The counting iterator pins the projection contract: every report
+        // boundary is visited exactly once, independent of control ancestry.
+        let mut source = String::from(".TH PROBE 1\n.SH DESCRIPTION\n");
+        source.push_str(&".ce 2\n".repeat(32));
+        source.push_str(&".sp 1\n".repeat(32));
+        source.push_str("VISIBLE\n");
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "control-deep-boundaries-man.1",
+                source.as_bytes(),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+
+        let visits = std::cell::Cell::new(0usize);
+        let partitioned = partition_control_boundaries(
+            report.execution.controls().len(),
+            report.execution.boundaries().iter().inspect(|_| {
+                visits.set(visits.get() + 1);
+            }),
+        );
+        assert_eq!(visits.get(), report.execution.boundaries().len());
+        assert_eq!(
+            partitioned.iter().map(Vec::len).sum::<usize>(),
+            report
+                .execution
+                .boundaries()
+                .iter()
+                .filter(|boundary| boundary.control.is_some())
+                .count()
+        );
+
+        assert!(projection.controls.len() >= 64);
+        let mut projected = projection
+            .controls
+            .iter()
+            .flat_map(|fact| fact.boundaries.iter())
+            .map(|boundary| (boundary.key, boundary.control))
+            .collect::<Vec<_>>();
+        let mut expected = report
+            .execution
+            .boundaries()
+            .iter()
+            .filter(|boundary| boundary.control.is_some())
+            .map(|boundary| (boundary.key, boundary.control))
+            .collect::<Vec<_>>();
+        projected.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(projected, expected);
+        assert_eq!(
+            projection
+                .controls
+                .iter()
+                .map(|fact| fact.boundaries.len())
+                .sum::<usize>(),
+            expected.len()
+        );
+    }
+
+    #[test]
+    fn projects_authored_controls_with_native_boundary_effects() {
+        for (path, format, source) in [
+            (
+                "control-effects-man.1",
+                InputFormat::Man,
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/control-effects-man.1"
+                )
+                .as_slice(),
+            ),
+            (
+                "control-effects-mdoc.1",
+                InputFormat::Mdoc,
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/control-effects-mdoc.1"
+                )
+                .as_slice(),
+            ),
+        ] {
+            let report = Parser::new(ParseOptions::default())
+                .with_input_format(format)
+                .with_mdoc_operating_system("ManT")
+                .unwrap()
+                .execute_bytes(path, source, ExecutionLimits::default())
+                .unwrap();
+            let projection = project(&report.document, &report.execution);
+            assert_eq!(projection.controls.len(), report.execution.controls().len());
+            assert_control_origin_matrix(path, format, &projection);
+            assert_control_effect_matrix(&projection);
+            assert_control_visible_lines(format, &projection);
+        }
+
+        assert_nested_control_projection();
+
+        assert_generated_control_provenance();
+    }
+
+    fn assert_generated_control_provenance() {
+        let generated = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "control-generated-man.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/control-generated-man.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        assert!(
+            project(&generated.document, &generated.execution)
+                .controls
+                .iter()
+                .any(|fact| fact.provenance == NativeControlProvenance::Generated)
+        );
     }
 
     #[test]

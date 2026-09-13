@@ -21,6 +21,8 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,6 +65,14 @@ term_exec_failed(const struct termp *p)
 	return p->exec_failed;
 }
 
+void
+term_exec_abort(struct termp *p)
+{
+	if (!p->exec_failed && p->exec_ops != NULL && p->exec_ops->abort != NULL)
+		p->exec_ops->abort(p->exec_arg, p, p->exec_node);
+	p->exec_failed = 1;
+}
+
 #define TERM_EXEC_CALL(p, member, ...) \
 	do { \
 		if ((p)->exec_failed) \
@@ -88,6 +98,12 @@ term_exec_failed(const struct termp *p)
 		} \
 		return 1; \
 	} while (0)
+
+int
+term_exec_work(struct termp *p, size_t amount)
+{
+	TERM_EXEC_CALL(p, work, amount);
+}
 
 int
 term_exec_node(struct termp *p, const struct roff_node *node, int entering)
@@ -343,6 +359,22 @@ term_exec_boundary(struct termp *p, int request, int entering)
 }
 
 int
+term_exec_control(struct termp *p, const struct roff_node *node, int entering)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (entering && p->exec_ops->control_enter != NULL &&
+	    !p->exec_ops->control_enter(p->exec_arg, p, node))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->control_leave != NULL &&
+	    !p->exec_ops->control_leave(p->exec_arg, p, node))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
 term_exec_device_advance(struct termp *p, size_t requested, size_t before,
     size_t after)
 {
@@ -520,10 +552,14 @@ term_flushln(struct termp *p)
 		 */
 
 		for (ic = p->tcol->col; ic < p->tcol->lastcol; ic++) {
+			if (!term_exec_work(p, 1))
+				return;
 			switch (p->tcol->buf[ic]) {
 			case '\t':
 				if (p->flags & TERMP_BRTRSP)
-					vbr = term_tab_next(vbr);
+					vbr = term_tab_next(p, vbr);
+				if (term_exec_failed(p))
+					return;
 				continue;
 			case ' ':
 				if (p->flags & TERMP_BRTRSP)
@@ -699,7 +735,9 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 					vis = 0;
 				else
 					vis += taboff;
-				vis = term_tab_next(vis);
+				vis = term_tab_next(p, vis);
+				if (term_exec_failed(p))
+					return;
 				vis -= taboff;
 				break;
 			case ASCII_NBRZW:  /* Non-breakable zero-width. */
@@ -783,7 +821,9 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 					vt = 0;
 				else
 					vt = vis + taboff;
-				dv = term_tab_next(vt) - vt;
+				dv = term_tab_next(p, vt) - vt;
+				if (term_exec_failed(p))
+					return;
 			} else
 				dv = (*p->getwidth)(p, ' ');
 			vbl += dv;
@@ -1679,8 +1719,25 @@ term_vspan(const struct termp *p, const struct roffsu *su)
 	default:
 		abort();
 	}
-	ri = r > 0.0 ? r + 0.4995 : r - 0.4995;
+	ri = term_span_round(r, 0.4995);
 	return ri < 66 ? ri : 1;
+}
+
+/*
+ * Device converters return int, while roff scaling is parsed as double.
+ * Keep parsing source-compatible with upstream (including finite underflow),
+ * and make the actual consumer conversion defined for every finite input.
+ */
+int
+term_span_round(double value, double bias)
+{
+	if (!isfinite(value))
+		return value < 0.0 ? INT_MIN : INT_MAX;
+	if (value > (double)INT_MAX - bias)
+		return INT_MAX;
+	if (value < (double)INT_MIN + bias)
+		return INT_MIN;
+	return value > 0.0 ? value + bias : value - bias;
 }
 
 /*

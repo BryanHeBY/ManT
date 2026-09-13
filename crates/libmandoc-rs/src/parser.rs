@@ -310,6 +310,7 @@ impl Parser {
             || limits.max_records == 0
             || limits.max_pool_bytes == 0
             || limits.max_buffer_cells == 0
+            || limits.max_report_bytes == 0
             || limits.max_nodes > u64::from(u32::MAX)
             || limits.max_depth > u64::from(u32::MAX)
             || limits.max_records > u64::from(u32::MAX)

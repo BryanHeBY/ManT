@@ -145,6 +145,7 @@ man_ptext(struct roff_man *man, int line, char *buf, int offs)
 		}
 		mandoc_msg(MANDOCERR_FI_BLANK, line, i, NULL);
 		roff_elem_alloc(man, line, offs, ROFF_sp);
+		man->last->flags |= NODE_NOSRC;
 		man->next = ROFF_NEXT_SIBLING;
 		return 1;
 	}

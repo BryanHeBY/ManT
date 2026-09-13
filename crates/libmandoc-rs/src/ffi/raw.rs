@@ -25,6 +25,7 @@ pub(super) struct CExecutionLimits {
     pub(super) max_records: u64,
     pub(super) max_pool_bytes: u64,
     pub(super) max_buffer_cells: u64,
+    pub(super) max_report_bytes: u64,
 }
 
 #[repr(C)]

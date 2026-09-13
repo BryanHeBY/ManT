@@ -1,0 +1,463 @@
+diff --git a/man.c b/man.c
+index 6b8a4908e8c7da8ed3f6dc498477917ea3aee212..693ce93b355477e016029395c494c1bd75ec5eb6 100644
+--- a/man.c
++++ b/man.c
+@@ -145,6 +145,7 @@ man_ptext(struct roff_man *man, int line, char *buf, int offs)
+ 		}
+ 		mandoc_msg(MANDOCERR_FI_BLANK, line, i, NULL);
+ 		roff_elem_alloc(man, line, offs, ROFF_sp);
++		man->last->flags |= NODE_NOSRC;
+ 		man->next = ROFF_NEXT_SIBLING;
+ 		return 1;
+ 	}
+diff --git a/man_macro.c b/man_macro.c
+index 40120cacbe39543e7596ca5de0b888b7611163be..367403d6c556ad7b00868b60600a028ff72994e4 100644
+--- a/man_macro.c
++++ b/man_macro.c
+@@ -258,7 +258,7 @@ blk_close(MACRO_PROT_ARGS)
+ 		rew_scope(man, MAN_PP);
+ 		if (tok == MAN_RE) {
+ 			roff_elem_alloc(man, line, ppos, ROFF_br);
+-			man->last->flags |= NODE_LINE |
++			man->last->flags |= NODE_LINE | NODE_NOSRC |
+ 			    NODE_VALID | NODE_ENDED;
+ 			man->next = ROFF_NEXT_SIBLING;
+ 		}
+diff --git a/mdoc.c b/mdoc.c
+index f5201d8bb8d34d0f9eee5e704064d97e38105097..789257f9b1381b4b7ae4a628edcf94ed82d783a4 100644
+--- a/mdoc.c
++++ b/mdoc.c
+@@ -253,7 +253,7 @@ mdoc_ptext(struct roff_man *mdoc, int line, char *buf, int offs)
+ 		}
+ 		mandoc_msg(MANDOCERR_FI_BLANK, line, (int)(c - buf), NULL);
+ 		roff_elem_alloc(mdoc, line, offs, ROFF_sp);
+-		mdoc->last->flags |= NODE_VALID | NODE_ENDED;
++		mdoc->last->flags |= NODE_NOSRC | NODE_VALID | NODE_ENDED;
+ 		mdoc->next = ROFF_NEXT_SIBLING;
+ 		return 1;
+ 	}
+diff --git a/mdoc_macro.c b/mdoc_macro.c
+index a6da3994aef5c3a41753cb2de15c6116e5320b15..6cd6293d48c4b49f4b23d1be15141169526d9899 100644
+--- a/mdoc_macro.c
++++ b/mdoc_macro.c
+@@ -725,6 +725,7 @@ blk_exp_close(MACRO_PROT_ARGS)
+ 			 * Break the output line, keep the arguments.
+ 			 */
+ 			roff_elem_alloc(mdoc, line, ppos, ROFF_br);
++			mdoc->last->flags |= NODE_NOSRC;
+ 			rew_elem(mdoc, ROFF_br);
+ 		}
+ 	} else if (endbody == NULL) {
+@@ -1081,6 +1082,7 @@ blk_full(MACRO_PROT_ARGS)
+ 			mandoc_msg(MANDOCERR_IT_STRAY,
+ 			    line, ppos, "It %s", buf + *pos);
+ 			roff_elem_alloc(mdoc, line, ppos, ROFF_br);
++			mdoc->last->flags |= NODE_NOSRC;
+ 			rew_elem(mdoc, ROFF_br);
+ 			return;
+ 		}
+diff --git a/out.c b/out.c
+index 21c282b2141b1f6dea69eeed6026238a14aa7043..6143dea45176befc424f3f3fb351e077d2b68246 100644
+--- a/out.c
++++ b/out.c
+@@ -22,6 +22,7 @@
+ 
+ #include <assert.h>
+ #include <ctype.h>
++#include <math.h>
+ #include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -63,7 +64,7 @@ a2roffsu(const char *src, struct roffsu *dst, enum roffscale def)
+ 
+ 	dst->unit = def == SCALE_MAX ? SCALE_BU : def;
+ 	dst->scale = strtod(src, &endptr);
+-	if (endptr == src)
++	if (endptr == src || !isfinite(dst->scale))
+ 		return NULL;
+ 
+ 	switch (*endptr++) {
+diff --git a/roff_term.c b/roff_term.c
+index 15f54a732f2f372f821c0af42e45b81a9132deb6..1b9334d4084a400e8432db4b5d3a67c6afc2b019 100644
+--- a/roff_term.c
++++ b/roff_term.c
+@@ -20,6 +20,8 @@
+ #include <sys/types.h>
+ 
+ #include <assert.h>
++#include <limits.h>
++#include <stdint.h>
+ #include <stdio.h>
+ #include <string.h>
+ 
+@@ -62,7 +64,10 @@ void
+ roff_term_pre(struct termp *p, const struct roff_node *n)
+ {
+ 	assert(n->tok < ROFF_MAX);
++	if (!term_exec_control(p, n, 1))
++		return;
+ 	(*roff_term_pre_acts[n->tok])(p, n);
++	term_exec_control(p, n, 0);
+ }
+ 
+ static void
+@@ -87,18 +92,30 @@ roff_term_pre_ce(ROFF_TERM_ARGS)
+ 	p->flags |= n->tok == ROFF_ce ? TERMP_CENTER : TERMP_RIGHT;
+ 	nc1 = n->child->next;
+ 	while (nc1 != NULL) {
++		if (!term_exec_work(p, 1))
++			break;
+ 		nc2 = nc1;
+ 		do {
++			if (!term_exec_work(p, 1))
++				break;
+ 			nc2 = nc2->next;
+ 		} while (nc2 != NULL && (nc2->type != ROFFT_TEXT ||
+ 		    (nc2->flags & NODE_LINE) == 0));
++		if (term_exec_failed(p))
++			break;
+ 		while (nc1 != nc2) {
++			if (!term_exec_work(p, 1))
++				break;
+ 			if (nc1->type == ROFFT_TEXT)
+ 				term_word(p, nc1->string);
+ 			else
+ 				roff_term_pre(p, nc1);
++			if (term_exec_failed(p))
++				break;
+ 			nc1 = nc1->next;
+ 		}
++		if (term_exec_failed(p))
++			break;
+ 		p->flags |= TERMP_NOSPACE;
+ 		term_flushln(p);
+ 	}
+@@ -204,10 +221,18 @@ roff_term_pre_sp(ROFF_TERM_ARGS)
+ 	} else
+ 		len = 1;
+ 
+-	if (len < 0)
++	if (len < 0) {
++		if (p->skipvsp > INT_MAX + len) {
++			if (p->exec_ops != NULL)
++				term_exec_abort(p);
++			else
++				p->skipvsp = INT_MAX;
++			return;
++		}
+ 		p->skipvsp -= len;
++	}
+ 	else
+-		while (len--)
++		while (len-- && !term_exec_failed(p))
+ 			term_vspace(p);
+ 
+ 	roff_term_pre_br(p, n);
+@@ -217,8 +242,11 @@ static void
+ roff_term_pre_ta(ROFF_TERM_ARGS)
+ {
+ 	term_tab_set(p, NULL);
+-	for (n = n->child; n != NULL; n = n->next)
++	for (n = n->child; n != NULL; n = n->next) {
++		if (!term_exec_work(p, 1))
++			return;
+ 		term_tab_set(p, n->string);
++	}
+ }
+ 
+ static void
+diff --git a/term.c b/term.c
+index 2f5215191bb1e85790201af00afdc19febc22fc2..8426a47748500a75e5199f12c6912bbc670a4468 100644
+--- a/term.c
++++ b/term.c
+@@ -21,6 +21,8 @@
+ 
+ #include <assert.h>
+ #include <ctype.h>
++#include <limits.h>
++#include <math.h>
+ #include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -63,6 +65,14 @@ term_exec_failed(const struct termp *p)
+ 	return p->exec_failed;
+ }
+ 
++void
++term_exec_abort(struct termp *p)
++{
++	if (!p->exec_failed && p->exec_ops != NULL && p->exec_ops->abort != NULL)
++		p->exec_ops->abort(p->exec_arg, p, p->exec_node);
++	p->exec_failed = 1;
++}
++
+ #define TERM_EXEC_CALL(p, member, ...) \
+ 	do { \
+ 		if ((p)->exec_failed) \
+@@ -89,6 +99,12 @@ term_exec_failed(const struct termp *p)
+ 		return 1; \
+ 	} while (0)
+ 
++int
++term_exec_work(struct termp *p, size_t amount)
++{
++	TERM_EXEC_CALL(p, work, amount);
++}
++
+ int
+ term_exec_node(struct termp *p, const struct roff_node *node, int entering)
+ {
+@@ -342,6 +358,22 @@ term_exec_boundary(struct termp *p, int request, int entering)
+ 	return !p->exec_failed;
+ }
+ 
++int
++term_exec_control(struct termp *p, const struct roff_node *node, int entering)
++{
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops == NULL)
++		return 1;
++	if (entering && p->exec_ops->control_enter != NULL &&
++	    !p->exec_ops->control_enter(p->exec_arg, p, node))
++		p->exec_failed = 1;
++	else if (!entering && p->exec_ops->control_leave != NULL &&
++	    !p->exec_ops->control_leave(p->exec_arg, p, node))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
+ int
+ term_exec_device_advance(struct termp *p, size_t requested, size_t before,
+     size_t after)
+@@ -520,10 +552,14 @@ term_flushln(struct termp *p)
+ 		 */
+ 
+ 		for (ic = p->tcol->col; ic < p->tcol->lastcol; ic++) {
++			if (!term_exec_work(p, 1))
++				return;
+ 			switch (p->tcol->buf[ic]) {
+ 			case '\t':
+ 				if (p->flags & TERMP_BRTRSP)
+-					vbr = term_tab_next(vbr);
++					vbr = term_tab_next(p, vbr);
++				if (term_exec_failed(p))
++					return;
+ 				continue;
+ 			case ' ':
+ 				if (p->flags & TERMP_BRTRSP)
+@@ -699,7 +735,9 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
+ 					vis = 0;
+ 				else
+ 					vis += taboff;
+-				vis = term_tab_next(vis);
++				vis = term_tab_next(p, vis);
++				if (term_exec_failed(p))
++					return;
+ 				vis -= taboff;
+ 				break;
+ 			case ASCII_NBRZW:  /* Non-breakable zero-width. */
+@@ -783,7 +821,9 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+ 					vt = 0;
+ 				else
+ 					vt = vis + taboff;
+-				dv = term_tab_next(vt) - vt;
++				dv = term_tab_next(p, vt) - vt;
++				if (term_exec_failed(p))
++					return;
+ 			} else
+ 				dv = (*p->getwidth)(p, ' ');
+ 			vbl += dv;
+@@ -1679,10 +1719,27 @@ term_vspan(const struct termp *p, const struct roffsu *su)
+ 	default:
+ 		abort();
+ 	}
+-	ri = r > 0.0 ? r + 0.4995 : r - 0.4995;
++	ri = term_span_round(r, 0.4995);
+ 	return ri < 66 ? ri : 1;
+ }
+ 
++/*
++ * Device converters return int, while roff scaling is parsed as double.
++ * Keep parsing source-compatible with upstream (including finite underflow),
++ * and make the actual consumer conversion defined for every finite input.
++ */
++int
++term_span_round(double value, double bias)
++{
++	if (!isfinite(value))
++		return value < 0.0 ? INT_MIN : INT_MAX;
++	if (value > (double)INT_MAX - bias)
++		return INT_MAX;
++	if (value < (double)INT_MIN + bias)
++		return INT_MIN;
++	return value > 0.0 ? value + bias : value - bias;
++}
++
+ /*
+  * Convert a scaling width to basic units.
+  */
+diff --git a/term.h b/term.h
+index e879200a20a48c0cba3ad180905b42cd105cb431..ebe61a790cbe0cfc6f1712ad5d1e10590d9867d3 100644
+--- a/term.h
++++ b/term.h
+@@ -65,6 +65,10 @@ enum term_exec_affinity {
+ };
+ 
+ struct term_exec_ops {
++	int (*work)(void *, const struct termp *,
++	    const struct roff_node *, size_t);
++	void (*abort)(void *, const struct termp *,
++	    const struct roff_node *);
+ 	int (*node_enter)(void *, const struct termp *,
+ 	    const struct roff_node *);
+ 	int (*node_leave)(void *, const struct termp *,
+@@ -103,6 +107,10 @@ struct term_exec_ops {
+ 	    const struct roff_node *, int);
+ 	int (*boundary_leave)(void *, const struct termp *,
+ 	    const struct roff_node *, int);
++	int (*control_enter)(void *, const struct termp *,
++	    const struct roff_node *);
++	int (*control_leave)(void *, const struct termp *,
++	    const struct roff_node *);
+ 	int (*device_advance)(void *, const struct termp *,
+ 	    const struct roff_node *, size_t, size_t, size_t);
+ 	int (*device_letter)(void *, const struct termp *,
+@@ -252,12 +260,13 @@ void		  term_end(struct termp *);
+ void		  term_setwidth(struct termp *, const char *);
+ int		  term_hspan(const struct termp *, const struct roffsu *);
+ int		  term_vspan(const struct termp *, const struct roffsu *);
++int		  term_span_round(double, double);
+ size_t		  term_strlen(const struct termp *, const char *);
+ size_t		  term_len(const struct termp *, size_t);
+ 
+ void		  term_tab_set(const struct termp *, const char *);
+ void		  term_tab_ref(struct termp *);
+-size_t		  term_tab_next(size_t);
++size_t		  term_tab_next(struct termp *, size_t);
+ void		  term_tab_free(void);
+ 
+ void		  term_fontpush(struct termp *, enum termfont);
+@@ -268,6 +277,8 @@ void		  term_fontlast(struct termp *);
+ void		  term_exec_attach(struct termp *,
+ 			const struct term_exec_ops *, void *);
+ int		  term_exec_failed(const struct termp *);
++void		  term_exec_abort(struct termp *);
++int		  term_exec_work(struct termp *, size_t);
+ int		  term_exec_node(struct termp *, const struct roff_node *, int);
+ int		  term_exec_word(struct termp *, const char *, size_t, int);
+ int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
+@@ -283,6 +294,7 @@ int		  term_exec_fill_outcome(struct termp *, int);
+ int		  term_exec_field(struct termp *, int, size_t, size_t, size_t);
+ int		  term_exec_field_atom(struct termp *, size_t, int);
+ int		  term_exec_boundary(struct termp *, int, int);
++int		  term_exec_control(struct termp *, const struct roff_node *, int);
+ int		  term_exec_device_advance(struct termp *, size_t, size_t,
+ 			size_t);
+ int		  term_exec_device_letter(struct termp *, size_t, int, size_t,
+diff --git a/term_ascii.c b/term_ascii.c
+index 0edd14092e5937cd533dda03a0f36d85ee9d45b7..03366290669f2ceb585af7f6a0c3c95564a1b657 100644
+--- a/term_ascii.c
++++ b/term_ascii.c
+@@ -360,7 +360,7 @@ ascii_hspan(const struct termp *p, const struct roffsu *su)
+ 	default:
+ 		abort();
+ 	}
+-	return r > 0.0 ? r + 0.01 : r - 0.01;
++	return term_span_round(r, 0.01);
+ }
+ 
+ const char *
+diff --git a/term_ps.c b/term_ps.c
+index ee32e30bc9ba377258a774659ec4ce427ad6b3ce..96ed661ba5922908258886dde5029a3acc87101b 100644
+--- a/term_ps.c
++++ b/term_ps.c
+@@ -1300,7 +1300,11 @@ ps_getwidth(const struct termp *p, int c)
+ static int
+ ps_hspan(const struct termp *p, const struct roffsu *su)
+ {
+-	double		 r;
++	double		 point_to_afm, r;
++
++	/* Keep the conversion in floating point until term_span_round()
++	 * performs the one checked conversion to the terminal int domain. */
++	point_to_afm = 1000.0 / (double)p->ps->scale;
+ 
+ 	/*
+ 	 * All of these measurements are derived by converting from the
+@@ -1315,10 +1319,10 @@ ps_hspan(const struct termp *p, const struct roffsu *su)
+ 		 * scaling unit so that output is the same regardless
+ 		 * the media.
+ 		 */
+-		r = PNT2AFM(p, su->scale * 72.0 / 10.0);
++		r = su->scale * 72.0 / 10.0 * point_to_afm;
+ 		break;
+ 	case SCALE_CM:
+-		r = PNT2AFM(p, su->scale * 72.0 / 2.54);
++		r = su->scale * 72.0 / 2.54 * point_to_afm;
+ 		break;
+ 	case SCALE_EM:
+ 		r = su->scale *
+@@ -1329,17 +1333,17 @@ ps_hspan(const struct termp *p, const struct roffsu *su)
+ 		    fonts[(int)TERMFONT_NONE].gly[110 - 32].wx;
+ 		break;
+ 	case SCALE_IN:
+-		r = PNT2AFM(p, su->scale * 72.0);
++		r = su->scale * 72.0 * point_to_afm;
+ 		break;
+ 	case SCALE_MM:
+ 		r = su->scale *
+ 		    fonts[(int)TERMFONT_NONE].gly[109 - 32].wx / 100.0;
+ 		break;
+ 	case SCALE_PC:
+-		r = PNT2AFM(p, su->scale * 12.0);
++		r = su->scale * 12.0 * point_to_afm;
+ 		break;
+ 	case SCALE_PT:
+-		r = PNT2AFM(p, su->scale * 1.0);
++		r = su->scale * point_to_afm;
+ 		break;
+ 	case SCALE_VS:
+ 		r = su->scale * p->ps->lineheight;
+@@ -1348,7 +1352,7 @@ ps_hspan(const struct termp *p, const struct roffsu *su)
+ 		r = su->scale;
+ 		break;
+ 	}
+-	return r;
++	return term_span_round(r, 0.0);
+ }
+ 
+ static void
+diff --git a/term_tab.c b/term_tab.c
+index e606472d6957427a7c739317af9c36cc1d2d8716..d34e615cd4b3e0f4d655cb966639fd323cf0267a 100644
+--- a/term_tab.c
++++ b/term_tab.c
+@@ -93,11 +93,13 @@ term_tab_set(const struct termp *p, const char *arg)
+ }
+ 
+ size_t
+-term_tab_next(size_t prev)
++term_tab_next(struct termp *p, size_t prev)
+ {
+ 	size_t	 i, j;
+ 
+ 	for (i = 0;; i++) {
++		if (!term_exec_work(p, 1))
++			return prev;
+ 		if (i == tabs.a.n) {
+ 			if (tabs.p.n == 0)
+ 				return prev;
+@@ -107,9 +109,12 @@ term_tab_next(size_t prev)
+ 				tabs.a.t = mandoc_reallocarray(tabs.a.t,
+ 				    tabs.a.s, sizeof(*tabs.a.t));
+ 			}
+-			for (j = 0; j < tabs.p.n; j++)
++			for (j = 0; j < tabs.p.n; j++) {
++				if (!term_exec_work(p, 1))
++					return prev;
+ 				tabs.a.t[i + j] = tabs.p.t[j] +
+ 				    (i ? tabs.a.t[i - 1] : 0);
++			}
+ 		}
+ 		if (prev < tabs.a.t[i])
+ 			return tabs.a.t[i];

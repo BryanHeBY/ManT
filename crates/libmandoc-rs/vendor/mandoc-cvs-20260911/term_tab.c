@@ -93,11 +93,13 @@ term_tab_set(const struct termp *p, const char *arg)
 }
 
 size_t
-term_tab_next(size_t prev)
+term_tab_next(struct termp *p, size_t prev)
 {
 	size_t	 i, j;
 
 	for (i = 0;; i++) {
+		if (!term_exec_work(p, 1))
+			return prev;
 		if (i == tabs.a.n) {
 			if (tabs.p.n == 0)
 				return prev;
@@ -107,9 +109,12 @@ term_tab_next(size_t prev)
 				tabs.a.t = mandoc_reallocarray(tabs.a.t,
 				    tabs.a.s, sizeof(*tabs.a.t));
 			}
-			for (j = 0; j < tabs.p.n; j++)
+			for (j = 0; j < tabs.p.n; j++) {
+				if (!term_exec_work(p, 1))
+					return prev;
 				tabs.a.t[i + j] = tabs.p.t[j] +
 				    (i ? tabs.a.t[i - 1] : 0);
+			}
 		}
 		if (prev < tabs.a.t[i])
 			return tabs.a.t[i];

@@ -110,10 +110,11 @@ switching production lowering.
 
 `ExecutionLimits::default()` starts with independent ceilings of 1,000,000
 syntax nodes, depth 256, 16,000,000 charged work units, 4,000,000 typed
-records, a 16 MiB immutable byte pool, and 1,000,000 native buffer cells. A
-zero, unrepresentable, or exhausted limit fails the whole execution; it never
-returns a successful partial report. These are safety ceilings rather than a
-promise that ordinary inputs approach those allocations.
+records, a 16 MiB immutable byte pool, 1,000,000 native buffer cells, and
+512 MiB allocated across the native typed-record tables. A zero,
+unrepresentable, or exhausted limit fails the whole execution; it never returns
+a successful partial report. These are safety ceilings rather than a promise
+that ordinary inputs approach those allocations.
 
 Every parse, execute, and render entry uses the same thread-local session
 guard. Recursive entry on one OS thread is rejected before changing the outer

@@ -258,7 +258,7 @@ blk_close(MACRO_PROT_ARGS)
 		rew_scope(man, MAN_PP);
 		if (tok == MAN_RE) {
 			roff_elem_alloc(man, line, ppos, ROFF_br);
-			man->last->flags |= NODE_LINE |
+			man->last->flags |= NODE_LINE | NODE_NOSRC |
 			    NODE_VALID | NODE_ENDED;
 			man->next = ROFF_NEXT_SIBLING;
 		}

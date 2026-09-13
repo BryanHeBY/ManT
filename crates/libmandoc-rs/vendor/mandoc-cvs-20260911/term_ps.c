@@ -1300,7 +1300,11 @@ ps_getwidth(const struct termp *p, int c)
 static int
 ps_hspan(const struct termp *p, const struct roffsu *su)
 {
-	double		 r;
+	double		 point_to_afm, r;
+
+	/* Keep the conversion in floating point until term_span_round()
+	 * performs the one checked conversion to the terminal int domain. */
+	point_to_afm = 1000.0 / (double)p->ps->scale;
 
 	/*
 	 * All of these measurements are derived by converting from the
@@ -1315,10 +1319,10 @@ ps_hspan(const struct termp *p, const struct roffsu *su)
 		 * scaling unit so that output is the same regardless
 		 * the media.
 		 */
-		r = PNT2AFM(p, su->scale * 72.0 / 10.0);
+		r = su->scale * 72.0 / 10.0 * point_to_afm;
 		break;
 	case SCALE_CM:
-		r = PNT2AFM(p, su->scale * 72.0 / 2.54);
+		r = su->scale * 72.0 / 2.54 * point_to_afm;
 		break;
 	case SCALE_EM:
 		r = su->scale *
@@ -1329,17 +1333,17 @@ ps_hspan(const struct termp *p, const struct roffsu *su)
 		    fonts[(int)TERMFONT_NONE].gly[110 - 32].wx;
 		break;
 	case SCALE_IN:
-		r = PNT2AFM(p, su->scale * 72.0);
+		r = su->scale * 72.0 * point_to_afm;
 		break;
 	case SCALE_MM:
 		r = su->scale *
 		    fonts[(int)TERMFONT_NONE].gly[109 - 32].wx / 100.0;
 		break;
 	case SCALE_PC:
-		r = PNT2AFM(p, su->scale * 12.0);
+		r = su->scale * 12.0 * point_to_afm;
 		break;
 	case SCALE_PT:
-		r = PNT2AFM(p, su->scale * 1.0);
+		r = su->scale * point_to_afm;
 		break;
 	case SCALE_VS:
 		r = su->scale * p->ps->lineheight;
@@ -1348,7 +1352,7 @@ ps_hspan(const struct termp *p, const struct roffsu *su)
 		r = su->scale;
 		break;
 	}
-	return r;
+	return term_span_round(r, 0.0);
 }
 
 static void

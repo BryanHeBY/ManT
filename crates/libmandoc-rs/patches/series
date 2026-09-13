@@ -27,3 +27,4 @@
 0027-bound-escape-parser-depth.patch
 0028-observe-native-terminal-execution.patch
 0029-observe-native-table-execution.patch
+0030-observe-native-control-execution.patch

@@ -8,14 +8,15 @@ use super::{
 use crate::{
     AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
     BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
-    ExecutionBufferGeneration, ExecutionDiagnostic, ExecutionErrorKind, ExecutionFlush,
-    ExecutionFont, ExecutionFragment, ExecutionGeometry, ExecutionLimits, ExecutionNode,
-    ExecutionNodeKey, ExecutionReference, ExecutionReferenceKind, ExecutionSource, ExecutionTable,
-    ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
-    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
-    ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper,
-    ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
-    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
+    ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest, ExecutionDiagnostic,
+    ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
+    ExecutionLimits, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
+    ExecutionReferenceKind, ExecutionSource, ExecutionTable, ExecutionTableAlignment,
+    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
+    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
+    ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind,
+    FlushOutcome, FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
+    NativeExecutionReport, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -176,12 +177,68 @@ struct CBoundaryRecord {
     effect: u32,
     flags_before: u32,
     flags_after: u32,
+    control: u32,
+    line_before: i64,
+    line_after: i64,
+    visual_before: i64,
+    visual_after: i64,
+    direct_device_lines: u32,
+    wrapper: u32,
+    enter_sequence: u64,
+    leave_sequence: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CControlRecord {
+    key: u32,
+    node: u32,
+    parent: u32,
+    wrapper: u32,
+    request: u32,
+    buffer: u32,
+    generation_before: u32,
+    generation_after: u32,
+    flags_before: u32,
+    flags_after: u32,
+    atom_start: u32,
+    atom_length: u32,
+    fragment_start: u32,
+    fragment_length: u32,
+    flush_start: u32,
+    flush_length: u32,
+    boundary_start: u32,
+    boundary_length: u32,
+    geometry_start: u32,
+    geometry_length: u32,
+    wrapper_start: u32,
+    wrapper_length: u32,
     reserved: u32,
     line_before: i64,
     line_after: i64,
     visual_before: i64,
     visual_after: i64,
-    sequence: u64,
+    column_before: i64,
+    column_after: i64,
+    extent_before: i64,
+    extent_after: i64,
+    offset_before: i64,
+    offset_after: i64,
+    rmargin_before: i64,
+    rmargin_after: i64,
+    maxrmargin_before: i64,
+    maxrmargin_after: i64,
+    taboff_before: i64,
+    taboff_after: i64,
+    temporary_indent_before: i64,
+    temporary_indent_after: i64,
+    skip_vertical_before: i64,
+    skip_vertical_after: i64,
+    minimum_blank_before: i64,
+    minimum_blank_after: i64,
+    trailing_blank_before: i64,
+    trailing_blank_after: i64,
+    enter_sequence: u64,
+    leave_sequence: u64,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -450,6 +507,14 @@ declare_record_api!(
     mant_mandoc_execution_copy_boundaries
 );
 declare_record_api!(
+    mant_mandoc_execution_control_count,
+    mant_mandoc_execution_control_size,
+    mant_mandoc_execution_control_align,
+    mant_mandoc_execution_control_field_count,
+    mant_mandoc_execution_control_offset,
+    mant_mandoc_execution_copy_controls
+);
+declare_record_api!(
     mant_mandoc_execution_geometry_count,
     mant_mandoc_execution_geometry_size,
     mant_mandoc_execution_geometry_align,
@@ -520,6 +585,7 @@ unsafe extern "C" {
     fn mant_mandoc_execution_pool_length(report: *const CExecutionReport) -> usize;
     fn mant_mandoc_execution_work_count(report: *const CExecutionReport) -> u64;
     fn mant_mandoc_execution_record_count(report: *const CExecutionReport) -> u64;
+    fn mant_mandoc_execution_allocated_record_bytes(report: *const CExecutionReport) -> u64;
     fn mant_mandoc_execution_copy_pool(
         report: *const CExecutionReport,
         start: usize,
@@ -657,7 +723,7 @@ fn collect_execution_ast_nodes<'a>(
             || origin.parent.map(|key| key.0) != parent
             || origin.source != 0
             || origin.kind != node.kind
-            || origin.flags != stable_ast_node_flags(node.flags)
+            || origin.flags != ExecutionNodeFlags(stable_ast_node_flags(node.flags))
             || origin.macro_name != node.macro_name
             || origin.line != node.line
             || origin.column != node.column
@@ -773,7 +839,7 @@ fn validate_execution_table_ast_bindings(
 
 pub(super) fn native_limits(limits: ExecutionLimits) -> CExecutionLimits {
     CExecutionLimits {
-        abi_version: 1,
+        abi_version: 2,
         abi_size: u32::try_from(size_of::<CExecutionLimits>())
             .expect("execution limits ABI size fits in u32"),
         max_nodes: limits.max_nodes,
@@ -782,6 +848,7 @@ pub(super) fn native_limits(limits: ExecutionLimits) -> CExecutionLimits {
         max_records: limits.max_records,
         max_pool_bytes: limits.max_pool_bytes,
         max_buffer_cells: limits.max_buffer_cells,
+        max_report_bytes: limits.max_report_bytes,
     }
 }
 
@@ -795,6 +862,7 @@ pub(super) fn validate_limits_layout() -> Result<(), String> {
         offset_of!(CExecutionLimits, max_records),
         offset_of!(CExecutionLimits, max_pool_bytes),
         offset_of!(CExecutionLimits, max_buffer_cells),
+        offset_of!(CExecutionLimits, max_report_bytes),
     ];
     validate_record_layout(
         "execution-limits",
@@ -814,10 +882,12 @@ unsafe fn copy_report(
 ) -> Result<NativeExecutionReport, String> {
     let work_units = unsafe { mant_mandoc_execution_work_count(report) };
     let record_count = unsafe { mant_mandoc_execution_record_count(report) };
+    let record_bytes = unsafe { mant_mandoc_execution_allocated_record_bytes(report) };
     let buffer_cells = unsafe { raw::mant_mandoc_execution_buffer_cell_count(report) };
     let pool_length = unsafe { mant_mandoc_execution_pool_length(report) };
     if work_units > limits.max_work
         || record_count > limits.max_records
+        || record_bytes > limits.max_report_bytes
         || buffer_cells > limits.max_buffer_cells
         || u64::try_from(pool_length).map_or(true, |length| length > limits.max_pool_bytes)
         || pool_length > isize::MAX as usize
@@ -830,7 +900,9 @@ unsafe fn copy_report(
     validate_execution_node_transfer_count(node_count, limits)?;
     let records = unsafe { copy_raw_records(report, expected_records) }?;
     let pool = unsafe { copy_pool(report, pool_length) }?;
-    convert_report(pool, work_units, record_count, buffer_cells, records)
+    let mut owned = convert_report(pool, work_units, record_count, buffer_cells, records)?;
+    owned.record_bytes = record_bytes;
+    Ok(owned)
 }
 
 struct RawRecords {
@@ -843,6 +915,7 @@ struct RawRecords {
     fragment_atoms: Vec<CFragmentAtomRecord>,
     flushes: Vec<CFlushRecord>,
     boundaries: Vec<CBoundaryRecord>,
+    controls: Vec<CControlRecord>,
     geometry: Vec<CGeometryRecord>,
     wrappers: Vec<CWrapperRecord>,
     references: Vec<CReferenceRecord>,
@@ -980,6 +1053,18 @@ copy_record_table!(
     mant_mandoc_execution_copy_boundaries
 );
 copy_record_table!(
+    copy_controls,
+    CControlRecord,
+    control_offsets,
+    "control",
+    mant_mandoc_execution_control_count,
+    mant_mandoc_execution_control_size,
+    mant_mandoc_execution_control_align,
+    mant_mandoc_execution_control_field_count,
+    mant_mandoc_execution_control_offset,
+    mant_mandoc_execution_copy_controls
+);
+copy_record_table!(
     copy_geometry,
     CGeometryRecord,
     geometry_offsets,
@@ -1091,6 +1176,7 @@ unsafe fn copy_raw_records(
         fragment_atoms: unsafe { copy_fragment_atoms(report, &mut remaining) }?,
         flushes: unsafe { copy_flushes(report, &mut remaining) }?,
         boundaries: unsafe { copy_boundaries(report, &mut remaining) }?,
+        controls: unsafe { copy_controls(report, &mut remaining) }?,
         geometry: unsafe { copy_geometry(report, &mut remaining) }?,
         wrappers: unsafe { copy_wrappers(report, &mut remaining) }?,
         references: unsafe { copy_references(report, &mut remaining) }?,
@@ -1337,6 +1423,143 @@ fn exact_sequence_range<T>(
     }
     true
 }
+
+#[derive(Clone, Copy)]
+enum GenerationEventKind {
+    Open(u32),
+    Close(u32),
+    Check(Option<u32>),
+}
+
+#[derive(Clone, Copy)]
+struct GenerationEvent {
+    sequence: u64,
+    buffer: u32,
+    kind: GenerationEventKind,
+}
+
+fn validate_control_generations(
+    generations: &[ExecutionBufferGeneration],
+    controls: &[ExecutionControl],
+) -> Result<(), String> {
+    let event_count = generations
+        .len()
+        .checked_add(controls.len())
+        .and_then(|count| count.checked_mul(2))
+        .ok_or_else(|| "execution generation checkpoint count overflow".to_owned())?;
+    let mut events = reserved_vec(event_count, "generation checkpoints")?;
+    for generation in generations {
+        events.push(GenerationEvent {
+            sequence: generation.open_sequence,
+            buffer: generation.buffer,
+            kind: GenerationEventKind::Open(generation.key),
+        });
+        events.push(GenerationEvent {
+            sequence: generation.close_sequence,
+            buffer: generation.buffer,
+            kind: GenerationEventKind::Close(generation.key),
+        });
+    }
+    for control in controls {
+        events.push(GenerationEvent {
+            sequence: control.enter_sequence,
+            buffer: control.buffer,
+            kind: GenerationEventKind::Check(control.generation_before),
+        });
+        events.push(GenerationEvent {
+            sequence: control.leave_sequence,
+            buffer: control.buffer,
+            kind: GenerationEventKind::Check(control.generation_after),
+        });
+    }
+    events.sort_unstable_by_key(|event| event.sequence);
+    if events
+        .windows(2)
+        .any(|pair| pair[0].sequence == pair[1].sequence)
+    {
+        return Err("execution generation checkpoints share a sequence".to_owned());
+    }
+    let mut active = BTreeMap::<u32, u32>::new();
+    for event in events {
+        match event.kind {
+            GenerationEventKind::Open(generation) => {
+                if active.insert(event.buffer, generation).is_some() {
+                    return Err("execution buffer generations overlap".to_owned());
+                }
+            }
+            GenerationEventKind::Close(generation) => {
+                if active.remove(&event.buffer) != Some(generation) {
+                    return Err("execution buffer generation close is inconsistent".to_owned());
+                }
+            }
+            GenerationEventKind::Check(generation) => {
+                if active.get(&event.buffer).copied() != generation {
+                    return Err("execution control buffer generation is inconsistent".to_owned());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_active_wrapper_owners(
+    wrappers: &[ExecutionWrapper],
+    boundaries: &[ExecutionBoundary],
+    controls: &[ExecutionControl],
+) -> Result<(), String> {
+    let event_count = boundaries
+        .len()
+        .checked_add(controls.len())
+        .ok_or_else(|| "execution wrapper checkpoint count overflow".to_owned())?;
+    let mut events = reserved_vec(event_count, "wrapper checkpoints")?;
+    events.extend(
+        boundaries
+            .iter()
+            .map(|boundary| (boundary.enter_sequence, boundary.wrapper, false)),
+    );
+    events.extend(
+        controls
+            .iter()
+            .map(|control| (control.enter_sequence, Some(control.wrapper), true)),
+    );
+    events.sort_unstable_by_key(|event| event.0);
+    let mut active = reserved_vec(wrappers.len(), "active node wrappers")?;
+    let mut cursor = 0_usize;
+    for (sequence, owner, is_control) in events {
+        while wrappers
+            .get(cursor)
+            .is_some_and(|wrapper| wrapper.enter_sequence < sequence)
+        {
+            let wrapper = &wrappers[cursor];
+            while active.last().is_some_and(|parent| {
+                wrappers[*parent as usize].leave_sequence <= wrapper.enter_sequence
+            }) {
+                active.pop();
+            }
+            if wrapper.parent != active.last().copied() {
+                return Err("execution wrapper parent is not its active node owner".to_owned());
+            }
+            if wrapper.kind == ExecutionWrapperKind::Node {
+                active.push(wrapper.key);
+            }
+            cursor += 1;
+        }
+        while active
+            .last()
+            .is_some_and(|wrapper| wrappers[*wrapper as usize].leave_sequence <= sequence)
+        {
+            active.pop();
+        }
+        if owner != active.last().copied() {
+            return Err(if is_control {
+                "execution control does not match its active wrapper".to_owned()
+            } else {
+                "execution boundary does not match its active wrapper".to_owned()
+            });
+        }
+    }
+    Ok(())
+}
 fn dense(key: u32, index: usize, field: &str) -> Result<(), String> {
     (usize::try_from(key).ok() == Some(index))
         .then_some(())
@@ -1392,6 +1615,7 @@ fn convert_report(
         fragment_atoms: fragment_atom_records,
         flushes: flush_records,
         boundaries: boundary_records,
+        controls: control_records,
         geometry: geometry_records,
         wrappers: wrapper_records,
         references: reference_records,
@@ -1422,6 +1646,7 @@ fn convert_report(
         fragment_atom_records.len(),
         flush_records.len(),
         boundary_records.len(),
+        control_records.len(),
         geometry_records.len(),
         wrapper_count,
         reference_count,
@@ -1523,7 +1748,7 @@ fn convert_report(
             line: value.line,
             column: value.column,
             kind,
-            flags: value.flags,
+            flags: ExecutionNodeFlags(value.flags),
             macro_name,
         });
     }
@@ -2288,9 +2513,6 @@ fn convert_report(
     let mut boundaries = reserved_vec(boundary_records.len(), "boundary")?;
     for (index, value) in boundary_records.into_iter().enumerate() {
         dense(value.key, index, "boundary")?;
-        if value.reserved != 0 {
-            return Err("non-zero reserved execution boundary field".to_owned());
-        }
         let request = match value.request {
             1 => BoundaryRequest::Newline,
             2 => BoundaryRequest::VerticalSpace,
@@ -2312,20 +2534,436 @@ fn convert_report(
         if value.flags_before & !0x7f_ffff != 0 || value.flags_after & !0x7f_ffff != 0 {
             return Err("unknown execution boundary terminal flags".to_owned());
         }
+        let control = option(value.control);
+        if control.is_some_and(|key| {
+            usize::try_from(key)
+                .ok()
+                .is_none_or(|key| key >= control_records.len())
+        }) {
+            return Err("invalid execution boundary control owner".to_owned());
+        }
+        let wrapper = option(value.wrapper);
+        if wrapper.is_some_and(|key| {
+            usize::try_from(key)
+                .ok()
+                .is_none_or(|key| key >= wrapper_records.len())
+        }) {
+            return Err("invalid execution boundary wrapper".to_owned());
+        }
+        let node = optional_node_key(value.node, node_count, "boundary")?;
+        if wrapper.is_none() != node.is_none() {
+            return Err("execution boundary node and wrapper presence differ".to_owned());
+        }
+        if let Some(wrapper) = wrapper {
+            let wrapper = &wrapper_records[wrapper as usize];
+            if wrapper.kind != 1
+                || wrapper.node != value.node
+                || wrapper.enter_sequence >= value.enter_sequence
+                || wrapper.leave_sequence <= value.leave_sequence
+            {
+                return Err("execution boundary does not match its active wrapper".to_owned());
+            }
+        }
+        if let Some(control) = control {
+            let control = &control_records[control as usize];
+            if control.enter_sequence >= value.enter_sequence
+                || control.leave_sequence <= value.leave_sequence
+            {
+                return Err("execution boundary escapes its control owner".to_owned());
+            }
+        }
         boundaries.push(ExecutionBoundary {
             key: value.key,
-            node: optional_node_key(value.node, node_count, "boundary")?,
+            node,
             parent,
             request,
             effect,
             flags_before: value.flags_before,
             flags_after: value.flags_after,
+            control,
+            wrapper,
             line_before: value.line_before,
             line_after: value.line_after,
             visual_before: value.visual_before,
             visual_after: value.visual_after,
-            sequence: value.sequence,
+            direct_device_lines: value.direct_device_lines,
+            enter_sequence: value.enter_sequence,
+            leave_sequence: value.leave_sequence,
         });
+    }
+    let mut boundary_child_leave = reserved_filled_vec(0_u64, boundaries.len(), "boundary child")?;
+    let mut direct_boundary_lines =
+        reserved_filled_vec(0_u32, boundaries.len(), "boundary direct line")?;
+    let mut subtree_boundary_lines =
+        reserved_filled_vec(0_u32, boundaries.len(), "boundary subtree line")?;
+    let mut root_boundary_leave = 0_u64;
+    for boundary in &boundaries {
+        if boundary.enter_sequence >= boundary.leave_sequence
+            || boundary.line_before < 0
+            || boundary.line_after < 0
+            || boundary.line_after < boundary.line_before
+            || boundary.visual_before < 0
+            || boundary.visual_after < 0
+        {
+            return Err("invalid execution boundary interval or effect".to_owned());
+        }
+        let last_leave = if let Some(parent) = boundary.parent {
+            let parent = boundaries
+                .get(parent as usize)
+                .ok_or_else(|| "invalid execution boundary parent".to_owned())?;
+            if parent.enter_sequence >= boundary.enter_sequence
+                || parent.leave_sequence <= boundary.leave_sequence
+            {
+                return Err("execution boundary escapes its parent interval".to_owned());
+            }
+            &mut boundary_child_leave[parent.key as usize]
+        } else {
+            &mut root_boundary_leave
+        };
+        if *last_leave != 0 && boundary.enter_sequence <= *last_leave {
+            return Err("execution boundary siblings overlap".to_owned());
+        }
+        *last_leave = boundary.leave_sequence;
+        if boundary.request == BoundaryRequest::DeviceEndline
+            && let Some(parent) = boundary.parent
+        {
+            direct_boundary_lines[parent as usize] = direct_boundary_lines[parent as usize]
+                .checked_add(1)
+                .ok_or_else(|| "execution boundary direct line count overflow".to_owned())?;
+        }
+    }
+    for boundary in boundaries.iter().rev() {
+        let key = boundary.key as usize;
+        let lines = if boundary.request == BoundaryRequest::DeviceEndline {
+            1
+        } else {
+            subtree_boundary_lines[key]
+        };
+        if let Some(parent) = boundary.parent {
+            subtree_boundary_lines[parent as usize] = subtree_boundary_lines[parent as usize]
+                .checked_add(lines)
+                .ok_or_else(|| "execution boundary subtree line count overflow".to_owned())?;
+        }
+    }
+    for boundary in &boundaries {
+        if boundary.direct_device_lines != direct_boundary_lines[boundary.key as usize] {
+            return Err("execution boundary direct line count is inconsistent".to_owned());
+        }
+        let line_delta = boundary
+            .line_after
+            .checked_sub(boundary.line_before)
+            .ok_or_else(|| "execution boundary line delta overflow".to_owned())?;
+        let expected_effect = if boundary.request == BoundaryRequest::DeviceEndline {
+            if boundary.line_before == i64::MAX || boundary.line_after != boundary.line_before + 1 {
+                return Err("invalid device endline boundary".to_owned());
+            }
+            BoundaryEffect::EndedLine
+        } else if u32::try_from(line_delta).ok()
+            != Some(subtree_boundary_lines[boundary.key as usize])
+        {
+            return Err("execution boundary line delta is inconsistent".to_owned());
+        } else if boundary.request == BoundaryRequest::VerticalSpace
+            && boundary.direct_device_lines != 0
+        {
+            BoundaryEffect::AddedVerticalSpace
+        } else if boundary.line_after > boundary.line_before {
+            BoundaryEffect::EndedLine
+        } else if boundary.visual_after != boundary.visual_before {
+            BoundaryEffect::Flushed
+        } else {
+            BoundaryEffect::NoOutput
+        };
+        if boundary.effect != expected_effect {
+            return Err("execution boundary effect is inconsistent".to_owned());
+        }
+    }
+    let mut controls = reserved_vec(control_records.len(), "control")?;
+    for (index, value) in control_records.into_iter().enumerate() {
+        dense(value.key, index, "control")?;
+        if value.reserved != 0
+            || value.flags_before & !0x7f_ffff != 0
+            || value.flags_after & !0x7f_ffff != 0
+        {
+            return Err("invalid execution control flags or reserved field".to_owned());
+        }
+        let request = match value.request {
+            1 => ExecutionControlRequest::Break,
+            2 => ExecutionControlRequest::Center,
+            3 => ExecutionControlRequest::Fill,
+            4 => ExecutionControlRequest::Font,
+            5 => ExecutionControlRequest::LineLength,
+            6 => ExecutionControlRequest::MarginCharacter,
+            7 => ExecutionControlRequest::NoFill,
+            8 => ExecutionControlRequest::PageOffset,
+            9 => ExecutionControlRequest::RightJustify,
+            10 => ExecutionControlRequest::VerticalSpace,
+            11 => ExecutionControlRequest::TabStops,
+            12 => ExecutionControlRequest::TemporaryIndent,
+            _ => return Err("unknown execution control request".to_owned()),
+        };
+        let node = node_key(value.node, node_count, "control")?;
+        let expected_macro = match request {
+            ExecutionControlRequest::Break => "br",
+            ExecutionControlRequest::Center => "ce",
+            ExecutionControlRequest::Fill => "fi",
+            ExecutionControlRequest::Font => "ft",
+            ExecutionControlRequest::LineLength => "ll",
+            ExecutionControlRequest::MarginCharacter => "mc",
+            ExecutionControlRequest::NoFill => "nf",
+            ExecutionControlRequest::PageOffset => "po",
+            ExecutionControlRequest::RightJustify => "rj",
+            ExecutionControlRequest::VerticalSpace => "sp",
+            ExecutionControlRequest::TabStops => "ta",
+            ExecutionControlRequest::TemporaryIndent => "ti",
+        };
+        if nodes[node.0 as usize].macro_name.as_deref() != Some(expected_macro) {
+            return Err("execution control request does not match its node macro".to_owned());
+        }
+        let parent = option(value.parent);
+        if parent.is_some_and(|key| usize::try_from(key).ok().is_none_or(|key| key >= index)) {
+            return Err("execution control parent is not an earlier control".to_owned());
+        }
+        let wrapper = usize::try_from(value.wrapper)
+            .ok()
+            .filter(|&key| key < wrapper_count)
+            .ok_or_else(|| "invalid execution control wrapper".to_owned())?;
+        let wrapper_record = &wrapper_records[wrapper];
+        let atom_end = value
+            .atom_start
+            .checked_add(value.atom_length)
+            .ok_or_else(|| "invalid execution control atom range".to_owned())?;
+        if wrapper_record.kind != 1
+            || !node_is_within(
+                &nodes,
+                node,
+                node_key(wrapper_record.node, node_count, "control wrapper")?,
+            )
+            || wrapper_record.enter_sequence >= value.enter_sequence
+            || wrapper_record.leave_sequence <= value.leave_sequence
+            || wrapper_record.enter_atom > value.atom_start
+            || wrapper_record.leave_atom < atom_end
+        {
+            return Err("execution control does not match its node wrapper".to_owned());
+        }
+        let generation_before = option(value.generation_before);
+        let generation_after = option(value.generation_after);
+        for (generation, checkpoint) in [
+            (generation_before, value.enter_sequence),
+            (generation_after, value.leave_sequence),
+        ] {
+            if generation.is_some_and(|generation| {
+                buffer_generations
+                    .get(generation as usize)
+                    .is_none_or(|entry| {
+                        entry.buffer != value.buffer
+                            || entry.open_sequence >= checkpoint
+                            || entry.close_sequence <= checkpoint
+                    })
+            }) {
+                return Err("execution control buffer generation is inconsistent".to_owned());
+            }
+        }
+        let atoms = counted_range(value.atom_start, value.atom_length, "control atoms")?;
+        let fragments = counted_range(
+            value.fragment_start,
+            value.fragment_length,
+            "control fragments",
+        )?;
+        let flush_range = counted_range(value.flush_start, value.flush_length, "control flushes")?;
+        let boundary_range = counted_range(
+            value.boundary_start,
+            value.boundary_length,
+            "control boundaries",
+        )?;
+        let geometry_range = counted_range(
+            value.geometry_start,
+            value.geometry_length,
+            "control geometry",
+        )?;
+        let wrapper_range = counted_range(
+            value.wrapper_start,
+            value.wrapper_length,
+            "control wrappers",
+        )?;
+        if atoms.end as usize > atom_count
+            || fragments.end as usize > fragment_count
+            || flush_range.end as usize > flushes.len()
+            || boundary_range.end as usize > boundaries.len()
+            || geometry_range.end as usize > geometry_records.len()
+            || wrapper_range.end as usize > wrapper_count
+            || value.enter_sequence >= value.leave_sequence
+            || [
+                value.line_before,
+                value.line_after,
+                value.visual_before,
+                value.visual_after,
+                value.column_before,
+                value.column_after,
+                value.extent_before,
+                value.extent_after,
+                value.offset_before,
+                value.offset_after,
+                value.rmargin_before,
+                value.rmargin_after,
+                value.maxrmargin_before,
+                value.maxrmargin_after,
+                value.taboff_before,
+                value.taboff_after,
+                value.minimum_blank_before,
+                value.minimum_blank_after,
+                value.trailing_blank_before,
+                value.trailing_blank_after,
+            ]
+            .into_iter()
+            .any(|value| value < 0)
+        {
+            return Err("invalid execution control range or state".to_owned());
+        }
+        controls.push(ExecutionControl {
+            key: value.key,
+            node,
+            parent,
+            wrapper: value.wrapper,
+            request,
+            buffer: value.buffer,
+            generation_before,
+            generation_after,
+            flags_before: value.flags_before,
+            flags_after: value.flags_after,
+            atoms,
+            fragments,
+            flushes: flush_range,
+            boundaries: boundary_range,
+            geometry: geometry_range,
+            wrappers: wrapper_range,
+            line_before: value.line_before,
+            line_after: value.line_after,
+            visual_before: value.visual_before,
+            visual_after: value.visual_after,
+            column_before: value.column_before,
+            column_after: value.column_after,
+            extent_before: value.extent_before,
+            extent_after: value.extent_after,
+            offset_before: value.offset_before,
+            offset_after: value.offset_after,
+            rmargin_before: value.rmargin_before,
+            rmargin_after: value.rmargin_after,
+            maxrmargin_before: value.maxrmargin_before,
+            maxrmargin_after: value.maxrmargin_after,
+            taboff_before: value.taboff_before,
+            taboff_after: value.taboff_after,
+            temporary_indent_before: value.temporary_indent_before,
+            temporary_indent_after: value.temporary_indent_after,
+            skip_vertical_before: value.skip_vertical_before,
+            skip_vertical_after: value.skip_vertical_after,
+            minimum_blank_before: value.minimum_blank_before,
+            minimum_blank_after: value.minimum_blank_after,
+            trailing_blank_before: value.trailing_blank_before,
+            trailing_blank_after: value.trailing_blank_after,
+            enter_sequence: value.enter_sequence,
+            leave_sequence: value.leave_sequence,
+        });
+    }
+    let mut control_child_leave = reserved_filled_vec(0_u64, controls.len(), "control child")?;
+    let mut root_control_leave = 0_u64;
+    let mut active_controls = reserved_vec(controls.len(), "control nesting")?;
+    for control in &controls {
+        while active_controls.last().is_some_and(|parent| {
+            controls[*parent as usize].leave_sequence <= control.enter_sequence
+        }) {
+            active_controls.pop();
+        }
+        if control.parent != active_controls.last().copied() {
+            return Err("execution control parent is not its active owner".to_owned());
+        }
+        let last_leave = if let Some(parent) = control.parent {
+            let parent = controls
+                .get(parent as usize)
+                .ok_or_else(|| "invalid execution control parent".to_owned())?;
+            if parent.enter_sequence >= control.enter_sequence
+                || parent.leave_sequence <= control.leave_sequence
+            {
+                return Err("execution control escapes its parent interval".to_owned());
+            }
+            &mut control_child_leave[parent.key as usize]
+        } else {
+            &mut root_control_leave
+        };
+        if *last_leave != 0 && control.enter_sequence <= *last_leave {
+            return Err("execution control siblings overlap".to_owned());
+        }
+        *last_leave = control.leave_sequence;
+        if !exact_sequence_range(
+            &atoms,
+            &control.atoms,
+            control.enter_sequence,
+            control.leave_sequence,
+            |v| v.sequence,
+        ) || !exact_sequence_range(
+            &fragments,
+            &control.fragments,
+            control.enter_sequence,
+            control.leave_sequence,
+            |v| v.sequence,
+        ) || !exact_sequence_range(
+            &flushes,
+            &control.flushes,
+            control.enter_sequence,
+            control.leave_sequence,
+            |v| v.sequence,
+        ) || !exact_sequence_range(
+            &boundaries,
+            &control.boundaries,
+            control.enter_sequence,
+            control.leave_sequence,
+            |v| v.enter_sequence,
+        ) || !exact_sequence_range(
+            &geometry_records,
+            &control.geometry,
+            control.enter_sequence,
+            control.leave_sequence,
+            |v| v.sequence,
+        ) || !exact_sequence_range(
+            &wrapper_records,
+            &control.wrappers,
+            control.enter_sequence,
+            control.leave_sequence,
+            |v| v.enter_sequence,
+        ) {
+            return Err("execution control record ranges do not match its interval".to_owned());
+        }
+        active_controls.push(control.key);
+    }
+    validate_control_generations(&buffer_generations, &controls)?;
+    active_controls.clear();
+    let mut control_cursor = 0_usize;
+    let mut last_boundary_enter = None;
+    for boundary in &boundaries {
+        if last_boundary_enter.is_some_and(|enter| enter >= boundary.enter_sequence) {
+            return Err("execution boundaries are not in entry order".to_owned());
+        }
+        while controls
+            .get(control_cursor)
+            .is_some_and(|control| control.enter_sequence < boundary.enter_sequence)
+        {
+            let control = &controls[control_cursor];
+            while active_controls.last().is_some_and(|parent| {
+                controls[*parent as usize].leave_sequence <= control.enter_sequence
+            }) {
+                active_controls.pop();
+            }
+            active_controls.push(control.key);
+            control_cursor += 1;
+        }
+        while active_controls.last().is_some_and(|owner| {
+            controls[*owner as usize].leave_sequence <= boundary.enter_sequence
+        }) {
+            active_controls.pop();
+        }
+        if boundary.control != active_controls.last().copied() {
+            return Err("execution boundary does not match its active control".to_owned());
+        }
+        last_boundary_enter = Some(boundary.enter_sequence);
     }
     let mut geometry = reserved_vec(geometry_records.len(), "geometry")?;
     let mut glyph_geometry_coverage =
@@ -2439,7 +3077,8 @@ fn convert_report(
                             || node != boundary.node
                             || value.before != boundary.line_before
                             || value.after != boundary.line_after
-                            || value.sequence <= boundary.sequence
+                            || value.sequence <= boundary.enter_sequence
+                            || value.sequence >= boundary.leave_sequence
                     })
                 {
                     return Err("invalid execution endline geometry relationship".to_owned());
@@ -2579,18 +3218,46 @@ fn convert_report(
             leave_sequence: value.leave_sequence,
         });
     }
+    validate_active_wrapper_owners(&wrappers, &boundaries, &controls)?;
+    // Upstream roff_term_pre_mc() stores an authored margin character and a
+    // later term_newln() emits it inside another node wrapper.  Preserve that
+    // one evidenced delayed-source edge without allowing arbitrary events to
+    // escape their source-node subtree.
+    let mut margin_control_nodes = reserved_filled_vec(false, node_count, "margin controls")?;
+    for control in &controls {
+        if control.request == ExecutionControlRequest::MarginCharacter {
+            margin_control_nodes[control.node.0 as usize] = true;
+        }
+    }
+    for index in 0..node_count {
+        if let Some(parent) = nodes[index].parent {
+            margin_control_nodes[index] |= margin_control_nodes[parent.0 as usize];
+        }
+    }
+    let mut margin_atoms = reserved_filled_vec(false, atom_count, "margin atoms")?;
+    for fragment in &fragments {
+        if fragment.role == FragmentRole::MarginDecoration {
+            for atom in &fragment.atoms {
+                margin_atoms[atom.0 as usize] = true;
+            }
+        }
+    }
     for word in &words {
         if let Some(wrapper_key) = word.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
+            let delayed_margin = word.node.is_some_and(|node| {
+                margin_control_nodes[node.0 as usize]
+                    && !word.atoms.is_empty()
+                    && word.atoms.clone().all(|atom| margin_atoms[atom as usize])
+            });
             if wrapper.kind != ExecutionWrapperKind::Node
                 || word.enter_sequence <= wrapper.enter_sequence
                 || word.leave_sequence >= wrapper.leave_sequence
                 || word.atoms.start < wrapper.enter_atom
                 || word.atoms.end > wrapper.leave_atom
                 || word.node.is_none_or(|node| {
-                    wrapper
-                        .node
-                        .is_none_or(|owner| !node_is_within(&nodes, node, owner))
+                    !node_is_within(&nodes, node, wrapper.node.expect("validated node wrapper"))
+                        && !delayed_margin
                 })
             {
                 return Err("execution word is outside its node wrapper".to_owned());
@@ -2600,15 +3267,17 @@ fn convert_report(
     for atom in &atoms {
         if let Some(wrapper_key) = atom.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
+            let delayed_margin = atom.node.is_some_and(|node| {
+                margin_control_nodes[node.0 as usize] && margin_atoms[atom.key.0 as usize]
+            });
             if wrapper.kind != ExecutionWrapperKind::Node
                 || atom.sequence <= wrapper.enter_sequence
                 || atom.sequence >= wrapper.leave_sequence
                 || atom.key.0 < wrapper.enter_atom
                 || atom.key.0 >= wrapper.leave_atom
                 || atom.node.is_none_or(|node| {
-                    wrapper
-                        .node
-                        .is_none_or(|owner| !node_is_within(&nodes, node, owner))
+                    !node_is_within(&nodes, node, wrapper.node.expect("validated node wrapper"))
+                        && !delayed_margin
                 })
             {
                 return Err("execution atom is outside its node wrapper".to_owned());
@@ -3238,6 +3907,7 @@ fn convert_report(
         &fragments,
         &flushes,
         &boundaries,
+        &controls,
         &geometry,
         &wrappers,
         &references,
@@ -3251,6 +3921,7 @@ fn convert_report(
         pool,
         work_units,
         record_count,
+        record_bytes: 0,
         buffer_cells,
         sources,
         nodes,
@@ -3260,6 +3931,7 @@ fn convert_report(
         fragments,
         flushes,
         boundaries,
+        controls,
         geometry,
         wrappers,
         references,
@@ -3279,6 +3951,7 @@ fn validate_event_sequences(
     fragments: &[ExecutionFragment],
     flushes: &[ExecutionFlush],
     boundaries: &[ExecutionBoundary],
+    controls: &[ExecutionControl],
     geometry: &[ExecutionGeometry],
     wrappers: &[ExecutionWrapper],
     references: &[ExecutionReference],
@@ -3293,6 +3966,10 @@ fn validate_event_sequences(
         .checked_mul(2)
         .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
     let flush_sequences = flushes
+        .len()
+        .checked_mul(2)
+        .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
+    let control_sequences = controls
         .len()
         .checked_mul(2)
         .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
@@ -3325,7 +4002,11 @@ fn validate_event_sequences(
         generation_sequences,
         fragments.len(),
         flush_sequences,
-        boundaries.len(),
+        boundaries
+            .len()
+            .checked_mul(2)
+            .ok_or_else(|| "native execution sequence count overflow".to_owned())?,
+        control_sequences,
         geometry.len(),
         wrapper_sequences,
         reference_sequences,
@@ -3372,7 +4053,12 @@ fn validate_event_sequences(
         seen.push(flush.outcome_sequence);
     }
     for boundary in boundaries {
-        seen.push(boundary.sequence);
+        seen.push(boundary.enter_sequence);
+        seen.push(boundary.leave_sequence);
+    }
+    for control in controls {
+        seen.push(control.enter_sequence);
+        seen.push(control.leave_sequence);
     }
     for fact in geometry {
         seen.push(fact.sequence);
@@ -3546,7 +4232,7 @@ fn flush_offsets() -> [usize; 31] {
         offset_of!(CFlushRecord, outcome_sequence),
     ]
 }
-fn boundary_offsets() -> [usize; 13] {
+fn boundary_offsets() -> [usize; 16] {
     [
         offset_of!(CBoundaryRecord, key),
         offset_of!(CBoundaryRecord, node),
@@ -3555,12 +4241,68 @@ fn boundary_offsets() -> [usize; 13] {
         offset_of!(CBoundaryRecord, effect),
         offset_of!(CBoundaryRecord, flags_before),
         offset_of!(CBoundaryRecord, flags_after),
-        offset_of!(CBoundaryRecord, reserved),
+        offset_of!(CBoundaryRecord, control),
         offset_of!(CBoundaryRecord, line_before),
         offset_of!(CBoundaryRecord, line_after),
         offset_of!(CBoundaryRecord, visual_before),
         offset_of!(CBoundaryRecord, visual_after),
-        offset_of!(CBoundaryRecord, sequence),
+        offset_of!(CBoundaryRecord, direct_device_lines),
+        offset_of!(CBoundaryRecord, wrapper),
+        offset_of!(CBoundaryRecord, enter_sequence),
+        offset_of!(CBoundaryRecord, leave_sequence),
+    ]
+}
+fn control_offsets() -> [usize; 49] {
+    [
+        offset_of!(CControlRecord, key),
+        offset_of!(CControlRecord, node),
+        offset_of!(CControlRecord, parent),
+        offset_of!(CControlRecord, wrapper),
+        offset_of!(CControlRecord, request),
+        offset_of!(CControlRecord, buffer),
+        offset_of!(CControlRecord, generation_before),
+        offset_of!(CControlRecord, generation_after),
+        offset_of!(CControlRecord, flags_before),
+        offset_of!(CControlRecord, flags_after),
+        offset_of!(CControlRecord, atom_start),
+        offset_of!(CControlRecord, atom_length),
+        offset_of!(CControlRecord, fragment_start),
+        offset_of!(CControlRecord, fragment_length),
+        offset_of!(CControlRecord, flush_start),
+        offset_of!(CControlRecord, flush_length),
+        offset_of!(CControlRecord, boundary_start),
+        offset_of!(CControlRecord, boundary_length),
+        offset_of!(CControlRecord, geometry_start),
+        offset_of!(CControlRecord, geometry_length),
+        offset_of!(CControlRecord, wrapper_start),
+        offset_of!(CControlRecord, wrapper_length),
+        offset_of!(CControlRecord, reserved),
+        offset_of!(CControlRecord, line_before),
+        offset_of!(CControlRecord, line_after),
+        offset_of!(CControlRecord, visual_before),
+        offset_of!(CControlRecord, visual_after),
+        offset_of!(CControlRecord, column_before),
+        offset_of!(CControlRecord, column_after),
+        offset_of!(CControlRecord, extent_before),
+        offset_of!(CControlRecord, extent_after),
+        offset_of!(CControlRecord, offset_before),
+        offset_of!(CControlRecord, offset_after),
+        offset_of!(CControlRecord, rmargin_before),
+        offset_of!(CControlRecord, rmargin_after),
+        offset_of!(CControlRecord, maxrmargin_before),
+        offset_of!(CControlRecord, maxrmargin_after),
+        offset_of!(CControlRecord, taboff_before),
+        offset_of!(CControlRecord, taboff_after),
+        offset_of!(CControlRecord, temporary_indent_before),
+        offset_of!(CControlRecord, temporary_indent_after),
+        offset_of!(CControlRecord, skip_vertical_before),
+        offset_of!(CControlRecord, skip_vertical_after),
+        offset_of!(CControlRecord, minimum_blank_before),
+        offset_of!(CControlRecord, minimum_blank_after),
+        offset_of!(CControlRecord, trailing_blank_before),
+        offset_of!(CControlRecord, trailing_blank_after),
+        offset_of!(CControlRecord, enter_sequence),
+        offset_of!(CControlRecord, leave_sequence),
     ]
 }
 fn geometry_offsets() -> [usize; 13] {
@@ -3826,6 +4568,7 @@ body
             fragment_atoms: Vec::new(),
             flushes: Vec::new(),
             boundaries: Vec::new(),
+            controls: Vec::new(),
             geometry: Vec::new(),
             wrappers: Vec::new(),
             references: Vec::new(),
@@ -3950,6 +4693,97 @@ body
             macro_start: NONE,
             macro_length: 0,
         }
+    }
+
+    fn control() -> CControlRecord {
+        CControlRecord {
+            key: 0,
+            node: 0,
+            parent: NONE,
+            wrapper: 0,
+            request: 1,
+            buffer: 0,
+            generation_before: 0,
+            generation_after: 0,
+            flags_before: 0,
+            flags_after: 0,
+            atom_start: 0,
+            atom_length: 0,
+            fragment_start: 0,
+            fragment_length: 0,
+            flush_start: 0,
+            flush_length: 0,
+            boundary_start: 0,
+            boundary_length: 0,
+            geometry_start: 0,
+            geometry_length: 0,
+            wrapper_start: 1,
+            wrapper_length: 0,
+            reserved: 0,
+            line_before: 0,
+            line_after: 0,
+            visual_before: 0,
+            visual_after: 0,
+            column_before: 0,
+            column_after: 0,
+            extent_before: 0,
+            extent_after: 0,
+            offset_before: 0,
+            offset_after: 0,
+            rmargin_before: 24,
+            rmargin_after: 24,
+            maxrmargin_before: 24,
+            maxrmargin_after: 24,
+            taboff_before: 0,
+            taboff_after: 0,
+            temporary_indent_before: 0,
+            temporary_indent_after: 0,
+            skip_vertical_before: 0,
+            skip_vertical_after: 0,
+            minimum_blank_before: 0,
+            minimum_blank_after: 0,
+            trailing_blank_before: 0,
+            trailing_blank_after: 0,
+            enter_sequence: 2,
+            leave_sequence: 3,
+        }
+    }
+
+    fn boundary() -> CBoundaryRecord {
+        CBoundaryRecord {
+            key: 0,
+            node: NONE,
+            parent: NONE,
+            request: 1,
+            effect: 0,
+            flags_before: 0,
+            flags_after: 0,
+            control: NONE,
+            line_before: 0,
+            line_after: 0,
+            visual_before: 0,
+            visual_after: 0,
+            direct_device_lines: 0,
+            wrapper: NONE,
+            enter_sequence: 1,
+            leave_sequence: 2,
+        }
+    }
+
+    fn control_records() -> RawRecords {
+        let mut records = raw_records();
+        let mut owner = node();
+        owner.macro_start = 1;
+        owner.macro_length = 2;
+        records.nodes.push(owner);
+        let mut scope = wrapper();
+        scope.kind = 1;
+        scope.node = 0;
+        scope.enter_sequence = 1;
+        scope.leave_sequence = 4;
+        records.wrappers.push(scope);
+        records.controls.push(control());
+        records
     }
 
     fn reference() -> CReferenceRecord {
@@ -4191,6 +5025,7 @@ body
             records.fragment_atoms.len(),
             records.flushes.len(),
             records.boundaries.len(),
+            records.controls.len(),
             records.geometry.len(),
             records.wrappers.len(),
             records.references.len(),
@@ -4206,6 +5041,10 @@ body
     }
 
     fn rejection(records: RawRecords) -> String {
+        rejection_with_pool(b"x".to_vec(), records)
+    }
+
+    fn rejection_with_pool(pool: Vec<u8>, records: RawRecords) -> String {
         let count = record_count(&records);
         let buffer_cells = records
             .buffer_generations
@@ -4213,7 +5052,7 @@ body
             .map(|generation| u64::from(generation.capacity))
             .max()
             .unwrap_or(0);
-        convert_report(b"x".to_vec(), 0, count, buffer_cells, records).unwrap_err()
+        convert_report(pool, 0, count, buffer_cells, records).unwrap_err()
     }
 
     #[test]
@@ -4691,6 +5530,198 @@ body
         assert_eq!(
             convert_report(b"x".to_vec(), 0, actual + 1, 0, records).unwrap_err(),
             "native execution record accounting mismatch"
+        );
+    }
+
+    #[test]
+    fn convert_report_validates_control_origin_wrapper_and_shape() {
+        let records = control_records();
+        let count = record_count(&records);
+        let report = convert_report(b"xbr".to_vec(), 0, count, 2, records).unwrap();
+        assert_eq!(report.controls.len(), 1);
+        assert_eq!(report.controls[0].request, ExecutionControlRequest::Break);
+        assert_eq!(report.controls[0].wrapper, 0);
+
+        let mut records = control_records();
+        records.controls[0].request = u32::MAX;
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "unknown execution control request"
+        );
+
+        let records = control_records();
+        assert_eq!(
+            rejection_with_pool(b"xmc".to_vec(), records),
+            "execution control request does not match its node macro"
+        );
+
+        let mut records = control_records();
+        records.controls[0].wrapper = 1;
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "invalid execution control wrapper"
+        );
+
+        let mut records = control_records();
+        records.wrappers[0].kind = 2;
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "execution control does not match its node wrapper"
+        );
+
+        let mut records = control_records();
+        records.controls[0].parent = 0;
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "execution control parent is not an earlier control"
+        );
+
+        let mut records = control_records();
+        records.controls[0].reserved = 1;
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "invalid execution control flags or reserved field"
+        );
+
+        let mut records = control_records();
+        records.buffer_generations[0].close_sequence = 2;
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "execution control buffer generation is inconsistent"
+        );
+
+        let mut records = control_records();
+        records.controls[0].generation_after = NONE;
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "execution control buffer generation is inconsistent"
+        );
+
+        let mut records = control_records();
+        records.buffer_generations[0].close_sequence = 10;
+        records.wrappers[0].leave_sequence = 8;
+        records.controls[0].enter_sequence = 3;
+        records.controls[0].leave_sequence = 6;
+        records.controls[0].wrapper_start = 2;
+        records.wrappers.push(CWrapperRecord {
+            key: 1,
+            parent: 0,
+            node: 0,
+            kind: 1,
+            enter_sequence: 2,
+            leave_sequence: 7,
+            ..wrapper()
+        });
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "execution control does not match its active wrapper"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_impossible_boundary_effects_and_ownership() {
+        let mut records = raw_records();
+        records.boundaries.push(boundary());
+        let count = record_count(&records);
+        assert!(convert_report(b"x".to_vec(), 0, count, 2, records).is_ok());
+
+        let mut records = raw_records();
+        records.boundaries.push(CBoundaryRecord {
+            effect: 3,
+            ..boundary()
+        });
+        assert_eq!(
+            rejection(records),
+            "execution boundary effect is inconsistent"
+        );
+
+        let mut records = raw_records();
+        records.boundaries.push(CBoundaryRecord {
+            line_before: 10,
+            line_after: 0,
+            ..boundary()
+        });
+        assert_eq!(
+            rejection(records),
+            "invalid execution boundary interval or effect"
+        );
+
+        let mut records = raw_records();
+        records.boundaries.push(CBoundaryRecord {
+            direct_device_lines: 1,
+            ..boundary()
+        });
+        assert_eq!(
+            rejection(records),
+            "execution boundary direct line count is inconsistent"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        records.boundaries.push(CBoundaryRecord {
+            node: 0,
+            ..boundary()
+        });
+        assert_eq!(
+            rejection(records),
+            "execution boundary node and wrapper presence differ"
+        );
+
+        let mut records = control_records();
+        records.wrappers[0].leave_sequence = 6;
+        records.controls[0].leave_sequence = 5;
+        records.controls[0].boundary_length = 1;
+        records.boundaries.push(CBoundaryRecord {
+            node: 0,
+            wrapper: 0,
+            enter_sequence: 3,
+            leave_sequence: 4,
+            ..boundary()
+        });
+        assert_eq!(
+            rejection_with_pool(b"xbr".to_vec(), records),
+            "execution boundary does not match its active control"
+        );
+
+        let mut records = raw_records();
+        records.boundaries.extend([
+            CBoundaryRecord {
+                key: 0,
+                request: 1,
+                effect: 0,
+                line_before: 0,
+                line_after: 0,
+                enter_sequence: 1,
+                leave_sequence: 8,
+                ..boundary()
+            },
+            CBoundaryRecord {
+                key: 1,
+                parent: 0,
+                request: 2,
+                effect: 3,
+                line_before: 0,
+                line_after: 1,
+                direct_device_lines: 1,
+                enter_sequence: 2,
+                leave_sequence: 7,
+                ..boundary()
+            },
+            CBoundaryRecord {
+                key: 2,
+                parent: 1,
+                request: 4,
+                effect: 2,
+                line_before: 0,
+                line_after: 1,
+                enter_sequence: 3,
+                leave_sequence: 6,
+                ..boundary()
+            },
+        ]);
+        assert_eq!(
+            rejection(records),
+            "execution boundary line delta is inconsistent"
         );
     }
 
@@ -5314,22 +6345,25 @@ body
         records.nodes.push(node());
         records.boundaries.push(CBoundaryRecord {
             key: 0,
-            node: 0,
+            node: NONE,
             parent: NONE,
             request: 4,
             effect: 2,
             flags_before: 0,
             flags_after: 0,
+            control: NONE,
             line_before: 0,
             line_after: 1,
             visual_before: 24,
             visual_after: 0,
-            sequence: 1,
-            reserved: 0,
+            direct_device_lines: 0,
+            wrapper: NONE,
+            enter_sequence: 1,
+            leave_sequence: 3,
         });
         records.geometry.push(CGeometryRecord {
             key: 0,
-            node: NONE,
+            node: 0,
             related: 0,
             kind: 3,
             unit: 3,

@@ -725,6 +725,7 @@ blk_exp_close(MACRO_PROT_ARGS)
 			 * Break the output line, keep the arguments.
 			 */
 			roff_elem_alloc(mdoc, line, ppos, ROFF_br);
+			mdoc->last->flags |= NODE_NOSRC;
 			rew_elem(mdoc, ROFF_br);
 		}
 	} else if (endbody == NULL) {
@@ -1081,6 +1082,7 @@ blk_full(MACRO_PROT_ARGS)
 			mandoc_msg(MANDOCERR_IT_STRAY,
 			    line, ppos, "It %s", buf + *pos);
 			roff_elem_alloc(mdoc, line, ppos, ROFF_br);
+			mdoc->last->flags |= NODE_NOSRC;
 			rew_elem(mdoc, ROFF_br);
 			return;
 		}

@@ -253,7 +253,7 @@ mdoc_ptext(struct roff_man *mdoc, int line, char *buf, int offs)
 		}
 		mandoc_msg(MANDOCERR_FI_BLANK, line, (int)(c - buf), NULL);
 		roff_elem_alloc(mdoc, line, offs, ROFF_sp);
-		mdoc->last->flags |= NODE_VALID | NODE_ENDED;
+		mdoc->last->flags |= NODE_NOSRC | NODE_VALID | NODE_ENDED;
 		mdoc->next = ROFF_NEXT_SIBLING;
 		return 1;
 	}

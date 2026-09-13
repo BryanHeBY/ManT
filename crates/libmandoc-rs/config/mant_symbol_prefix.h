@@ -188,6 +188,7 @@
 #define term_newln mant_vendored_term_newln
 #define term_setcol mant_vendored_term_setcol
 #define term_setwidth mant_vendored_term_setwidth
+#define term_span_round mant_vendored_term_span_round
 #define term_strlen mant_vendored_term_strlen
 #define term_tab_free mant_vendored_term_tab_free
 #define term_tab_ref mant_vendored_term_tab_ref
@@ -199,12 +200,14 @@
 #define term_vspan mant_vendored_term_vspan
 #define term_word mant_vendored_term_word
 #define term_exec_attach mant_vendored_term_exec_attach
+#define term_exec_abort mant_vendored_term_exec_abort
 #define term_exec_boundary mant_vendored_term_exec_boundary
 #define term_exec_buffer_discard mant_vendored_term_exec_buffer_discard
 #define term_exec_buffer_reserve mant_vendored_term_exec_buffer_reserve
 #define term_exec_buffer_reset mant_vendored_term_exec_buffer_reset
 #define term_exec_buffer_rewrite mant_vendored_term_exec_buffer_rewrite
 #define term_exec_buffer_write mant_vendored_term_exec_buffer_write
+#define term_exec_control mant_vendored_term_exec_control
 #define term_exec_device_advance mant_vendored_term_exec_device_advance
 #define term_exec_device_endline mant_vendored_term_exec_device_endline
 #define term_exec_device_letter mant_vendored_term_exec_device_letter
@@ -225,6 +228,7 @@
 #define term_exec_table_cell mant_vendored_term_exec_table_cell
 #define term_exec_node mant_vendored_term_exec_node
 #define term_exec_word mant_vendored_term_exec_word
+#define term_exec_work mant_vendored_term_exec_work
 #define terminal_man mant_vendored_terminal_man
 #define terminal_mdoc mant_vendored_terminal_mdoc
 #define terminal_sepline mant_vendored_terminal_sepline

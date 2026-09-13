@@ -360,7 +360,7 @@ ascii_hspan(const struct termp *p, const struct roffsu *su)
 	default:
 		abort();
 	}
-	return r > 0.0 ? r + 0.01 : r - 0.01;
+	return term_span_round(r, 0.01);
 }
 
 const char *
