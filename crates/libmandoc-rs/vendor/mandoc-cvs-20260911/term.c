@@ -44,7 +44,7 @@ static	void		 encode1(struct termp *, int);
 static	void		 endline(struct termp *);
 static	void		 term_field(struct termp *, size_t, size_t);
 static	void		 term_fill(struct termp *, size_t *, size_t *,
-			    size_t);
+			    size_t *, size_t);
 
 void
 term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
@@ -436,6 +436,7 @@ term_flushln(struct termp *p)
 	/* Bytes. */
 	size_t	 ic;       /* Byte index in the input buffer. */
 	size_t	 nbr;      /* Number of bytes to print in this field. */
+	size_t	 scan_end; /* One past the last inspected buffer slot. */
 
 	/*
 	 * Normally, start writing at the left margin, but with the
@@ -474,12 +475,12 @@ term_flushln(struct termp *p)
 		 * If there is whitespace only, print nothing.
 		 */
 
-		term_fill(p, &nbr, &vbr,
+		term_fill(p, &nbr, &vbr, &scan_end,
 		    p->flags & TERMP_BRNEVER ? SIZE_MAX / 2 : vtarget);
 		if (term_exec_failed(p))
 			return;
-		term_exec_fill_decision(p, p->tcol->lastcol, nbr, vbr,
-		    vtarget);
+		term_exec_fill_decision(p, scan_end,
+		    nbr == 0 ? p->tcol->col : nbr, vbr, vtarget);
 		if (nbr == 0) {
 			term_exec_fill_outcome(p, 1);
 			break;
@@ -618,7 +619,8 @@ term_flushln(struct termp *p)
  * If the first word is longer, the field will be overrun.
  */
 static void
-term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
+    size_t vtarget)
 {
 	/* Widths in basic units. */
 	size_t	 vis;       /* Visual position of the current character. */
@@ -631,6 +633,7 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
 	int	 graph;     /* Last character was non-blank. */
 
 	*nbr = *vbr = vis = 0;
+	*scan_end = p->tcol->col;
 	breakline = graph = 0;
 	taboff = p->tcol->taboff;
 	enw = (*p->getwidth)(p, ' ');
@@ -638,6 +641,7 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
 	for (ic = p->tcol->col; ic < p->tcol->lastcol; ic++) {
 		if (!term_exec_fill_scan(p, ic))
 			return;
+		*scan_end = ic + 1;
 		switch (p->tcol->buf[ic]) {
 		case '\b':  /* Escape \o (overstrike) or backspace markup. */
 			assert(ic > 0);

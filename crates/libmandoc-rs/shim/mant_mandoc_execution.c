@@ -216,6 +216,12 @@ static const struct term_exec_ops execution_ops = {
 	execution_table_cell_end
 };
 
+struct live_atom_location {
+	uint32_t buffer_generation;
+	uint32_t slot;
+	uint32_t atom;
+};
+
 static void fail_report(struct mant_mandoc_execution_report *, int,
     const char *);
 static int charge_work(struct mant_mandoc_execution_report *, uint64_t);
@@ -232,6 +238,7 @@ static int validate_table_records(struct mant_mandoc_execution_report *);
 static int valid_pool_range(const struct mant_mandoc_execution_report *,
     uint32_t, uint32_t, int);
 static int valid_scalar(uint32_t);
+static int terminal_tail_scalar(uint32_t);
 static int size_to_report_i64(struct mant_mandoc_execution_report *, size_t,
     int64_t *);
 static int size_delta_to_report_i64(struct mant_mandoc_execution_report *,
@@ -240,6 +247,9 @@ static int collect_nodes(struct mant_mandoc_execution_report *,
     const struct roff_node *, uint32_t, uint64_t);
 static int compare_node_index(const void *, const void *);
 static int compare_word_index(const void *, const void *);
+static int compare_live_atom_location(const void *, const void *);
+static size_t lower_bound_live_atom(const struct live_atom_location *,
+    size_t, uint32_t, uint32_t);
 static uint32_t lookup_node(const struct mant_mandoc_execution_report *,
     const struct roff_node *);
 static uint32_t lookup_word_node(const struct mant_mandoc_execution_report *,
@@ -942,10 +952,11 @@ execution_fill_decision(void *arg, const struct termp *p,
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
 	size_t buffer_key;
-	int64_t content_bu, target_bu, visual_bu;
+	int64_t content_bu, target_bu, taboff_bu, visual_bu;
 
 	if (!size_to_report_i64(report, content_width, &content_bu) ||
 	    !size_to_report_i64(report, target_width, &target_bu) ||
+	    !size_to_report_i64(report, p->tcol->taboff, &taboff_bu) ||
 	    !size_to_report_i64(report, p->viscol, &visual_bu) ||
 	    !charge_record(report) ||
 	    !reserve_flushes(report, report->flushes_count + 1))
@@ -969,6 +980,8 @@ execution_fill_decision(void *arg, const struct termp *p,
 	record->accepted_end = (uint32_t)accepted;
 	record->consumed_start = (uint32_t)p->tcol->col;
 	record->consumed_end = (uint32_t)p->tcol->col;
+	record->tail_discarded_start = (uint32_t)accepted;
+	record->tail_discarded_end = (uint32_t)accepted;
 	record->remaining_start = (uint32_t)accepted;
 	record->remaining_end = (uint32_t)p->tcol->lastcol;
 	record->fragment_start = (uint32_t)report->fragments_count;
@@ -978,8 +991,8 @@ execution_fill_decision(void *arg, const struct termp *p,
 	record->boundary = report->current_boundary;
 	record->content_bu = content_bu;
 	record->target_bu = target_bu;
-	record->taboff_before = p->tcol->taboff;
-	record->taboff_after = p->tcol->taboff;
+	record->taboff_before = taboff_bu;
+	record->taboff_after = taboff_bu;
 	record->visual_before = visual_bu;
 	record->visual_after = visual_bu;
 	record->sequence = report->sequence++;
@@ -994,10 +1007,13 @@ execution_fill_outcome(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
+	int64_t taboff_bu, visual_bu;
 
 	(void)p;
 	(void)node;
-	if (!charge_work(report, 1) ||
+	if (!size_to_report_i64(report, p->tcol->taboff, &taboff_bu) ||
+	    !size_to_report_i64(report, p->viscol, &visual_bu) ||
+	    !charge_work(report, 1) ||
 	    report->current_flush == MANT_MANDOC_EXEC_NONE ||
 	    report->current_flush >= report->flushes_count ||
 	    outcome < MANT_MANDOC_FLUSH_NO_CONTENT ||
@@ -1010,6 +1026,18 @@ execution_fill_outcome(void *arg, const struct termp *p,
 		return 0;
 	}
 	record->outcome = (uint32_t)outcome;
+	record->tail_discarded_start = record->accepted_end;
+	if (outcome == MANT_MANDOC_FLUSH_NO_CONTENT ||
+	    outcome == MANT_MANDOC_FLUSH_EXHAUSTED) {
+		record->tail_discarded_end = record->remaining_end;
+		record->remaining_start = record->remaining_end;
+	} else {
+		record->tail_discarded_end = (uint32_t)p->tcol->col;
+		record->remaining_start = (uint32_t)p->tcol->col;
+	}
+	record->taboff_after = taboff_bu;
+	record->visual_after = visual_bu;
+	record->flags_after = stable_term_flags(p->flags);
 	record->outcome_sequence = report->sequence++;
 	return 1;
 }
@@ -1021,13 +1049,15 @@ execution_field_begin(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
+	size_t available;
 	int64_t field_bu, leading_bu, visual_bu;
 
 	(void)node;
+	available = p->tcol->rmargin > visual ?
+	    p->tcol->rmargin - visual : 0;
+	available = available > leading ? available - leading : 0;
 	if (!size_to_report_i64(report, leading, &leading_bu) ||
-	    !size_to_report_i64(report,
-	    p->tcol->rmargin > visual ? p->tcol->rmargin - visual : 0,
-	    &field_bu) ||
+	    !size_to_report_i64(report, available, &field_bu) ||
 	    !size_to_report_i64(report, visual, &visual_bu) ||
 	    !charge_work(report, 1) ||
 	    report->current_flush == MANT_MANDOC_EXEC_NONE ||
@@ -1060,11 +1090,12 @@ execution_field_end(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
-	int64_t visual_bu;
+	int64_t taboff_bu, visual_bu;
 
 	(void)node;
 	(void)leading;
-	if (!size_to_report_i64(report, visual, &visual_bu) ||
+	if (!size_to_report_i64(report, p->tcol->taboff, &taboff_bu) ||
+	    !size_to_report_i64(report, visual, &visual_bu) ||
 	    !charge_work(report, 1) ||
 	    report->current_flush == MANT_MANDOC_EXEC_NONE ||
 	    report->current_flush >= report->flushes_count)
@@ -1075,7 +1106,7 @@ execution_field_end(void *arg, const struct termp *p,
 	record->fragment_length = (uint32_t)(report->fragments_count -
 	    record->fragment_start);
 	record->visual_after = visual_bu;
-	record->taboff_after = p->tcol->taboff;
+	record->taboff_after = taboff_bu;
 	record->flags_after = stable_term_flags(p->flags);
 	return 1;
 }
@@ -1085,21 +1116,19 @@ execution_flush_end(void *arg, const struct termp *p,
     const struct roff_node *node)
 {
 	struct mant_mandoc_execution_report *report = arg;
-	struct mant_mandoc_flush_record *record;
 	size_t buffer_key;
-	int64_t visual_bu;
 
 	(void)node;
-	if (!size_to_report_i64(report, p->viscol, &visual_bu) ||
-	    !charge_work(report, 1))
+	if (!charge_work(report, 1))
 		return 0;
-	if (report->current_flush != MANT_MANDOC_EXEC_NONE &&
-	    report->current_flush < report->flushes_count) {
-		record = &report->flushes[report->current_flush];
-		record->flags_after = stable_term_flags(p->flags);
-		record->visual_after = visual_bu;
-		record->taboff_after = p->tcol->taboff;
-	}
+	/*
+	 * A flush record describes one term_fill()/term_field() segment.
+	 * execution_fill_outcome() is its only after-state checkpoint.  In the
+	 * single-column terminal path, term_flushln() calls endline() after that
+	 * outcome and before reaching this hook; overwriting the record here
+	 * would therefore give terminal segments a different time point from
+	 * wrapped and deferred segments.
+	 */
 	buffer_key = (size_t)(p->tcol - p->tcols);
 	(void)buffer_key;
 	report->current_flush = MANT_MANDOC_EXEC_NONE;
@@ -2446,6 +2475,14 @@ valid_scalar(uint32_t scalar)
 }
 
 static int
+terminal_tail_scalar(uint32_t scalar)
+{
+	return scalar == '\t' || scalar == ' ' || scalar == '\n' ||
+	    scalar == ASCII_NBRZW || scalar == ASCII_BREAK ||
+	    scalar == ASCII_TABREF;
+}
+
+static int
 size_to_report_i64(struct mant_mandoc_execution_report *report,
     size_t value, int64_t *converted)
 {
@@ -2491,7 +2528,9 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	struct mant_mandoc_reference_record *semantic_reference;
 	struct mant_mandoc_anchor_record *anchor;
 	struct mant_mandoc_execution_diagnostic_record *diagnostic;
+	struct live_atom_location *live_atoms;
 	uint32_t *next_generation, *last_capacity, *last_close_reason, origin;
+	uint32_t *pending_flush;
 	uint64_t *last_close_sequence, *last_reference_child_leave;
 	uint64_t *last_wrapper_child_leave;
 	uint64_t last_root_reference_leave, last_root_wrapper_leave;
@@ -2499,9 +2538,11 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	unsigned char *word_atoms;
 	unsigned char *covered_fragments;
 	unsigned char *covered_glyph_geometry;
+	unsigned char *terminal_flush;
 	uint64_t *fragment_flush_outcome;
 	uint64_t capacity_total;
-	size_t index, inner, end;
+	size_t index, inner, end, live_atom_count, live_index;
+	int first_flush;
 
 	if (!validate_report_storage(report))
 		return 0;
@@ -2534,25 +2575,36 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	last_wrapper_child_leave = report->wrappers_count == 0 ? NULL :
 	    calloc(report->wrappers_count,
 	    sizeof(*last_wrapper_child_leave));
+	pending_flush = report->buffer_generations_count == 0 ? NULL :
+	    calloc(report->buffer_generations_count, sizeof(*pending_flush));
+	terminal_flush = report->buffer_generations_count == 0 ? NULL :
+	    calloc(report->buffer_generations_count, 1);
+	live_atoms = report->atoms_count == 0 ? NULL :
+	    calloc(report->atoms_count, sizeof(*live_atoms));
 	if ((report->buffer_count != 0 &&
 	    (next_generation == NULL || last_capacity == NULL ||
 	    last_close_reason == NULL || last_close_sequence == NULL)) ||
 	    (report->fragment_atoms_count != 0 && covered_refs == NULL) ||
 	    (report->atoms_count != 0 &&
 	    (referenced_atoms == NULL || replaced_atoms == NULL ||
-	    word_atoms == NULL)) ||
+	    word_atoms == NULL || live_atoms == NULL)) ||
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
 	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
 	    (report->references_count != 0 &&
 	    last_reference_child_leave == NULL) ||
 	    (report->wrappers_count != 0 &&
-	    last_wrapper_child_leave == NULL)) {
+	    last_wrapper_child_leave == NULL) ||
+	    (report->buffer_generations_count != 0 &&
+	    (pending_flush == NULL || terminal_flush == NULL))) {
 		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
 		    "could not validate native execution relationships");
 		goto fail;
 	}
 	last_root_reference_leave = 0;
 	last_root_wrapper_leave = 0;
+	live_atom_count = 0;
+	for (index = 0; index < report->buffer_generations_count; index++)
+		pending_flush[index] = MANT_MANDOC_EXEC_NONE;
 	if (report->sources_count != 1 || report->nodes_count == 0 ||
 	    report->node_count != report->nodes_count)
 		goto invalid_origin;
@@ -2735,12 +2787,55 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    atom->sequence <= generation->open_sequence ||
 		    atom->sequence >= generation->close_sequence)
 			goto invalid_atom;
+		live_atoms[live_atom_count].buffer_generation =
+		    atom->buffer_generation;
+		live_atoms[live_atom_count].slot = atom->slot;
+		live_atoms[live_atom_count].atom = atom->key;
+		live_atom_count++;
 		continue;
 invalid_atom:
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 		    "native execution atom buffer relationship is inconsistent");
 		goto fail;
 	}
+	if (live_atom_count > 1)
+		qsort(live_atoms, live_atom_count, sizeof(*live_atoms),
+		    compare_live_atom_location);
+	/*
+	 * Validate the complete write history of each slot.  A replacement must
+	 * point to the immediately following write.  Consumed or discarded atoms
+	 * instead end one occupancy epoch, allowing a later write to reuse the
+	 * cleared slot without a replacement edge.  The final write is the current
+	 * occupant used by field validation below.
+	 */
+	inner = 0;
+	for (index = 0; index < live_atom_count;) {
+		size_t group_end, previous;
+
+		group_end = index + 1;
+		while (group_end < live_atom_count &&
+		    live_atoms[group_end].buffer_generation ==
+		    live_atoms[index].buffer_generation &&
+		    live_atoms[group_end].slot == live_atoms[index].slot)
+			group_end++;
+		for (previous = index; previous + 1 < group_end; previous++) {
+			atom = &report->atoms[live_atoms[previous].atom];
+			if (atom->disposition == MANT_MANDOC_ATOM_REPLACED) {
+				if (atom->replaced_by !=
+				    live_atoms[previous + 1].atom)
+					goto invalid_atom;
+			} else if (atom->disposition !=
+			    MANT_MANDOC_ATOM_CONSUMED && atom->disposition !=
+			    MANT_MANDOC_ATOM_TRAILING_DISCARD)
+				goto invalid_atom;
+		}
+		if (report->atoms[live_atoms[group_end - 1].atom].disposition ==
+		    MANT_MANDOC_ATOM_REPLACED)
+			goto invalid_atom;
+		live_atoms[inner++] = live_atoms[group_end - 1];
+		index = group_end;
+	}
+	live_atom_count = inner;
 	for (index = 0; index < report->fragments_count; index++) {
 		fragment = &report->fragments[index];
 		if (fragment->key != index ||
@@ -2814,6 +2909,8 @@ invalid_fragment:
 	for (index = 0; index < report->flushes_count; index++) {
 		flush = &report->flushes[index];
 		if (flush->key != index ||
+		    (index != 0 && report->flushes[index - 1].outcome_sequence >=
+		    flush->sequence) ||
 		    (flush->node != MANT_MANDOC_EXEC_NONE &&
 		    flush->node >= report->nodes_count) ||
 		    flush->buffer_generation >= report->buffer_generations_count ||
@@ -2826,18 +2923,44 @@ invalid_fragment:
 		    flush->sequence >= flush->outcome_sequence)
 			goto invalid_flush;
 		generation = &report->buffer_generations[flush->buffer_generation];
+		if (terminal_flush[flush->buffer_generation])
+			goto invalid_flush;
+		first_flush = pending_flush[flush->buffer_generation] ==
+		    MANT_MANDOC_EXEC_NONE;
+		if (pending_flush[flush->buffer_generation] !=
+		    MANT_MANDOC_EXEC_NONE) {
+			next_flush = &report->flushes[
+			    pending_flush[flush->buffer_generation]];
+			if (flush->scan_start != next_flush->remaining_start ||
+			    flush->remaining_end != next_flush->remaining_end ||
+			    next_flush->outcome_sequence >= flush->sequence ||
+			    flush->taboff_before != next_flush->taboff_after)
+				goto invalid_flush;
+			pending_flush[flush->buffer_generation] =
+			    MANT_MANDOC_EXEC_NONE;
+		} else if (!terminal_flush[flush->buffer_generation] &&
+		    flush->scan_start != 0)
+			goto invalid_flush;
 		if (generation->buffer != flush->buffer ||
 		    generation->generation != flush->generation ||
 		    flush->sequence <= generation->open_sequence ||
 		    flush->outcome_sequence >= generation->close_sequence ||
+		    flush->leading_bu < 0 || flush->content_bu < 0 ||
+		    flush->field_bu < 0 || flush->target_bu < 0 ||
+		    flush->taboff_before < 0 || flush->taboff_after < 0 ||
+		    flush->visual_before < 0 || flush->visual_after < 0 ||
 		    flush->scan_start != flush->accepted_start ||
 		    flush->scan_start != flush->consumed_start ||
 		    flush->accepted_end != flush->consumed_end ||
-		    flush->accepted_end != flush->remaining_start ||
+		    flush->accepted_end != flush->tail_discarded_start ||
 		    flush->accepted_start > flush->accepted_end ||
+		    flush->accepted_end > flush->scan_end ||
+		    flush->scan_end > flush->remaining_end ||
+		    flush->tail_discarded_start >
+		    flush->tail_discarded_end ||
+		    flush->tail_discarded_end != flush->remaining_start ||
 		    flush->remaining_start > flush->remaining_end ||
-		    flush->scan_end != flush->remaining_end ||
-		    flush->scan_end != generation->extent ||
+		    flush->remaining_end > generation->extent ||
 		    flush->fragment_start > report->fragments_count ||
 		    flush->fragment_length > report->fragments_count -
 		    flush->fragment_start)
@@ -2866,19 +2989,98 @@ invalid_fragment:
 		if (flush->outcome == MANT_MANDOC_FLUSH_NO_CONTENT) {
 			if (flush->accepted_start != flush->accepted_end ||
 			    flush->consumed_start != flush->consumed_end ||
+			    flush->remaining_start != flush->remaining_end ||
 			    flush->fragment_length != 0)
 				goto invalid_flush;
 		} else if (flush->accepted_start == flush->accepted_end)
 			goto invalid_flush;
+		if ((flush->outcome == MANT_MANDOC_FLUSH_WRAPPED ||
+		    flush->outcome == MANT_MANDOC_FLUSH_DEFERRED_COLUMN) &&
+		    flush->remaining_start == flush->remaining_end)
+			goto invalid_flush;
+		if ((flush->outcome == MANT_MANDOC_FLUSH_NO_CONTENT ||
+		    flush->outcome == MANT_MANDOC_FLUSH_EXHAUSTED) &&
+		    (flush->remaining_start != flush->remaining_end ||
+		    generation->close_reason != MANT_MANDOC_BUFFER_RESET))
+			goto invalid_flush;
+		end = flush->accepted_start;
+		live_index = lower_bound_live_atom(live_atoms, live_atom_count,
+		    flush->buffer_generation, flush->accepted_start);
+		for (; live_index < live_atom_count; live_index++) {
+			struct live_atom_location *location =
+			    &live_atoms[live_index];
+
+			if (location->buffer_generation !=
+			    flush->buffer_generation ||
+			    location->slot >= flush->tail_discarded_end)
+				break;
+			atom = &report->atoms[location->atom];
+			if (atom->sequence >= flush->sequence)
+				goto invalid_flush;
+			if (location->slot < flush->accepted_end) {
+				if (location->slot != end ||
+				    (atom->disposition != MANT_MANDOC_ATOM_EMITTED &&
+				    atom->disposition != MANT_MANDOC_ATOM_CONSUMED &&
+				    atom->disposition !=
+				    MANT_MANDOC_ATOM_TRAILING_DISCARD))
+					goto invalid_flush;
+				end++;
+			} else if (flush->outcome ==
+			    MANT_MANDOC_FLUSH_NO_CONTENT || flush->outcome ==
+			    MANT_MANDOC_FLUSH_EXHAUSTED) {
+				if (location->slot != end ||
+				    !terminal_tail_scalar(atom->display_scalar))
+					goto invalid_flush;
+				if (atom->disposition !=
+				    MANT_MANDOC_ATOM_TRAILING_DISCARD)
+					goto invalid_flush;
+				end++;
+			} else {
+				if (location->slot != end || atom->display_scalar != ' ' ||
+				    atom->disposition != MANT_MANDOC_ATOM_CONSUMED)
+					goto invalid_flush;
+				end++;
+			}
+		}
+		if (end != flush->tail_discarded_end)
+			goto invalid_flush;
+		if (first_flush) {
+			end = 0;
+			live_index = lower_bound_live_atom(live_atoms,
+			    live_atom_count, flush->buffer_generation, 0);
+			for (; live_index < live_atom_count; live_index++) {
+				struct live_atom_location *location =
+				    &live_atoms[live_index];
+
+				if (location->buffer_generation !=
+				    flush->buffer_generation ||
+				    location->slot >= flush->remaining_end)
+					break;
+				atom = &report->atoms[location->atom];
+				if (location->slot != end ||
+				    atom->sequence >= flush->sequence)
+					goto invalid_flush;
+				end++;
+			}
+			if (end != flush->remaining_end)
+				goto invalid_flush;
+		}
 		if (flush->outcome == MANT_MANDOC_FLUSH_WRAPPED) {
 			if (index + 1 >= report->flushes_count)
 				goto invalid_flush;
 			next_flush = &report->flushes[index + 1];
 			if (next_flush->buffer_generation != flush->buffer_generation ||
-			    next_flush->scan_start < flush->remaining_start ||
-			    next_flush->scan_start > flush->remaining_end)
+			    next_flush->scan_start != flush->remaining_start ||
+			    next_flush->remaining_end != flush->remaining_end ||
+			    flush->outcome_sequence >= next_flush->sequence ||
+			    next_flush->taboff_before != flush->taboff_after)
 				goto invalid_flush;
 		}
+		if (flush->outcome == MANT_MANDOC_FLUSH_WRAPPED ||
+		    flush->outcome == MANT_MANDOC_FLUSH_DEFERRED_COLUMN)
+			pending_flush[flush->buffer_generation] = flush->key;
+		else
+			terminal_flush[flush->buffer_generation] = 1;
 		if (flush->boundary != MANT_MANDOC_EXEC_NONE &&
 		    report->boundaries[flush->boundary].sequence >= flush->sequence)
 			goto invalid_flush;
@@ -2888,6 +3090,9 @@ invalid_flush:
 		    "native execution flush relationship is inconsistent");
 		goto fail;
 	}
+	for (index = 0; index < report->buffer_generations_count; index++)
+		if (pending_flush[index] != MANT_MANDOC_EXEC_NONE)
+			goto invalid_flush_after_loop;
 	for (index = 0; index < report->fragments_count; index++) {
 		fragment = &report->fragments[index];
 		if ((fragment->buffer_generation != MANT_MANDOC_EXEC_NONE) !=
@@ -3277,7 +3482,15 @@ invalid_wrapper:
 	free(fragment_flush_outcome);
 	free(last_reference_child_leave);
 	free(last_wrapper_child_leave);
+	free(pending_flush);
+	free(terminal_flush);
+	free(live_atoms);
 	return 1;
+
+invalid_flush_after_loop:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution flush relationship is inconsistent");
+	goto fail;
 
 invalid_origin:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
@@ -3321,6 +3534,9 @@ fail:
 	free(fragment_flush_outcome);
 	free(last_reference_child_leave);
 	free(last_wrapper_child_leave);
+	free(pending_flush);
+	free(terminal_flush);
+	free(live_atoms);
 	return 0;
 }
 
@@ -3424,6 +3640,41 @@ compare_word_index(const void *left, const void *right)
 	uintptr_t bp = (uintptr_t)b->word;
 
 	return ap < bp ? -1 : ap > bp;
+}
+
+static int
+compare_live_atom_location(const void *left, const void *right)
+{
+	const struct live_atom_location *a = left;
+	const struct live_atom_location *b = right;
+
+	if (a->buffer_generation != b->buffer_generation)
+		return a->buffer_generation < b->buffer_generation ? -1 : 1;
+	if (a->slot != b->slot)
+		return a->slot < b->slot ? -1 : 1;
+	return a->atom < b->atom ? -1 : a->atom > b->atom;
+}
+
+static size_t
+lower_bound_live_atom(const struct live_atom_location *locations, size_t count,
+    uint32_t generation, uint32_t slot)
+{
+	size_t first, length, half, middle;
+
+	first = 0;
+	length = count;
+	while (length != 0) {
+		half = length / 2;
+		middle = first + half;
+		if (locations[middle].buffer_generation < generation ||
+		    (locations[middle].buffer_generation == generation &&
+		    locations[middle].slot < slot)) {
+			first = middle + 1;
+			length -= half + 1;
+		} else
+			length = half;
+	}
+	return first;
 }
 
 static uint32_t
@@ -4058,7 +4309,10 @@ static const size_t flush_offsets[] = {
 	OFF(mant_mandoc_flush_record, scan_start),
 	OFF(mant_mandoc_flush_record, scan_end), OFF(mant_mandoc_flush_record, accepted_start),
 	OFF(mant_mandoc_flush_record, accepted_end), OFF(mant_mandoc_flush_record, consumed_start),
-	OFF(mant_mandoc_flush_record, consumed_end), OFF(mant_mandoc_flush_record, remaining_start),
+	OFF(mant_mandoc_flush_record, consumed_end),
+	OFF(mant_mandoc_flush_record, tail_discarded_start),
+	OFF(mant_mandoc_flush_record, tail_discarded_end),
+	OFF(mant_mandoc_flush_record, remaining_start),
 	OFF(mant_mandoc_flush_record, remaining_end), OFF(mant_mandoc_flush_record, fragment_start),
 	OFF(mant_mandoc_flush_record, fragment_length), OFF(mant_mandoc_flush_record, flags_before),
 	OFF(mant_mandoc_flush_record, flags_after), OFF(mant_mandoc_flush_record, boundary),

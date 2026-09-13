@@ -555,6 +555,22 @@ prove ownership, source ranges, table interleaving, or cleanup. Freeze the final
 candidate diff before the native, FFI/safety, and projection reviewers inspect
 the same fingerprint. A prior PASS does not cover later edits.
 
+Field-consumption fixtures run the same complete input at 32, 78, and 120
+columns against the fixed CVS binary, but the owned execution report remains a
+single deterministic 78-column observation. Tests distinguish first-word
+overrun from later lookahead, literal tabs from native tab references,
+whitespace-only fields from emitted fields, and globally adjacent wrapping from
+interleaved table-column continuation. Validation also treats the native branch
+outcome as the sole segment-after checkpoint and proves cursor, execution-order,
+tab-offset, and dense final tail-atom provenance for every buffer generation;
+continuing tails are ordinary spaces and terminal tails use the fixed-CVS
+whitespace/control set. Fixed CVS can reuse a slot after a trailing overstrike
+contraction: transfer validation chooses the newest non-replaced occupant while
+retaining the older cleared atom, and the private field projection attributes
+only the current replacement chain to the later flush. Per-slot history rejects
+replacement edges that cross a clear/reuse epoch, and the first flush proves
+that its complete logical field was already buffered before execution began.
+
 When changing a versioned IR projection or protocol type, update the Rust contract,
 generated-schema, process, and projection tests in the same change. External
 stdio remains a closed boundary: unknown request fields and incompatible

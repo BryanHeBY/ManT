@@ -1,5 +1,5 @@
 diff --git a/tbl_term.c b/tbl_term.c
-index aa348325..11995fd5 100644
+index aa34832..11995fd 100644
 --- a/tbl_term.c
 +++ b/tbl_term.c
 @@ -22,6 +22,7 @@
@@ -612,7 +612,7 @@ index aa348325..11995fd5 100644
 +	return !term_exec_failed(tp);
  }
 diff --git a/term.c b/term.c
-index 3efb8e86..00f9b17b 100644
+index e7f1c29..2f52151 100644
 --- a/term.c
 +++ b/term.c
 @@ -54,6 +54,7 @@ term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
@@ -701,7 +701,7 @@ index 3efb8e86..00f9b17b 100644
  	for (p->tcol = p->tcols; p->tcol < p->tcols + p->maxtcol; p->tcol++)
  		free(p->tcol->buf);
  	free(p->tcols);
-@@ -929,10 +994,12 @@ term_word(struct termp *p, const char *word)
+@@ -933,10 +998,12 @@ term_word(struct termp *p, const char *word)
  	int		 sz;		/* Argument length in bytes. */
  	int		 uc;		/* Unicode codepoint number. */
  	int		 bu;		/* Width in basic units. */
@@ -714,7 +714,7 @@ index 3efb8e86..00f9b17b 100644
  	if ((p->flags & TERMP_NOBUF) == 0) {
  		if ((p->flags & TERMP_NOSPACE) == 0) {
  			p->exec_write_role = 2;
-@@ -942,7 +1009,7 @@ term_word(struct termp *p, const char *word)
+@@ -946,7 +1013,7 @@ term_word(struct termp *p, const char *word)
  					bufferc(p, ' ');
  			} else
  				bufferc(p, ASCII_NBRSP);
@@ -724,7 +724,7 @@ index 3efb8e86..00f9b17b 100644
  		if (p->flags & TERMP_PREKEEP)
  			p->flags |= TERMP_KEEP;
 diff --git a/term.h b/term.h
-index 8532464c..e879200a 100644
+index 8532464..e879200 100644
 --- a/term.h
 +++ b/term.h
 @@ -47,6 +47,8 @@ enum term_exec_fragment_role {

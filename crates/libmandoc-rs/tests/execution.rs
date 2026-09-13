@@ -11,6 +11,7 @@ const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
 const MDOC: &[u8] = include_bytes!("fixtures/execution/plain-mdoc.1");
 const BUFFER_MUTATIONS: &[u8] = include_bytes!("fixtures/execution/buffer-mutations.1");
 const EMPTY_WORD_MAN: &[u8] = include_bytes!("fixtures/execution/empty-word-man.1");
+const FIELD_CONSUMPTION_MAN: &[u8] = include_bytes!("fixtures/execution/field-consumption-man.1");
 const TABLE: &[u8] = include_bytes!("fixtures/execution/unsupported-table.1");
 const TABLE_VERTICAL_CONTINUATION: &[u8] =
     include_bytes!("fixtures/execution/table-vertical-continuation.1");
@@ -163,10 +164,15 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
                 })
         );
         assert!(report.execution.flushes().iter().all(|flush| {
+            let extent =
+                report.execution.buffer_generations()[flush.buffer_generation as usize].extent;
             flush.scanned.start == flush.accepted.start
                 && flush.accepted == flush.consumed
-                && flush.accepted.end == flush.remaining.start
-                && flush.remaining.end == flush.scanned.end
+                && flush.accepted.end == flush.tail_discarded.start
+                && flush.tail_discarded.end == flush.remaining.start
+                && flush.accepted.end <= flush.scanned.end
+                && flush.scanned.end <= extent
+                && flush.remaining.end == extent
                 && flush.sequence < flush.outcome_sequence
         }));
     }
@@ -353,6 +359,200 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
         margin_node.line, 4,
         "margin must not inherit VISIBLE's owner"
     );
+}
+
+fn assert_consumed_tail(
+    execution: &NativeExecutionReport,
+    buffer_generation: u32,
+    tail: &std::ops::Range<u32>,
+) {
+    assert!(execution.atoms().iter().any(|atom| {
+        atom.buffer_generation == Some(buffer_generation)
+            && atom.slot.is_some_and(|slot| tail.contains(&slot))
+            && atom.disposition == AtomDisposition::Consumed
+    }));
+}
+
+fn assert_tab_fates(execution: &NativeExecutionReport) {
+    let literal_tabs = execution
+        .atoms()
+        .iter()
+        .filter(|atom| atom.kind == AtomKind::Tab)
+        .collect::<Vec<_>>();
+    assert_eq!(literal_tabs.len(), 3);
+    assert!(
+        literal_tabs
+            .iter()
+            .all(|atom| atom.role == AtomRole::Authored)
+    );
+    for disposition in [AtomDisposition::Consumed, AtomDisposition::TrailingDiscard] {
+        assert!(execution.atoms().iter().any(|atom| {
+            atom.kind == AtomKind::TabReference
+                && atom.role == AtomRole::MacroGenerated
+                && atom.disposition == disposition
+        }));
+    }
+}
+
+fn assert_overstrike_slot_reuse(execution: &NativeExecutionReport) {
+    let shrunk_buffer_flushes = execution
+        .flushes()
+        .iter()
+        .filter(|flush| {
+            flush.node.is_some_and(|node| {
+                let owner = &execution.nodes()[node.0 as usize];
+                owner.source == 0
+                    && owner.line == 33
+                    && owner.kind == NodeKind::Body
+                    && owner.macro_name.as_deref() == Some("SH")
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        shrunk_buffer_flushes.len(),
+        1,
+        "the SHRUNK BUFFER section body must own exactly one native flush"
+    );
+    let shrunk = shrunk_buffer_flushes[0];
+    let generation = &execution.buffer_generations()[shrunk.buffer_generation as usize];
+    // Fixed CVS `term.c::term_word()` handles `ESCAPE_OVERSTRIKE` by deleting
+    // trailing backspace/blank pairs and reducing `lastcol` before a later
+    // `buffer_store()` can reuse the cleared slot. Consequently, the current
+    // logical end can be below this generation's historical high-water extent,
+    // while `term_fill()` still scans only the live range.
+    assert!(generation.extent > shrunk.remaining.end);
+    assert!(shrunk.scanned.end <= shrunk.remaining.end);
+
+    let mut reused_slots = std::collections::BTreeMap::<u32, Vec<_>>::new();
+    for atom in execution
+        .atoms()
+        .iter()
+        .filter(|atom| atom.buffer_generation == Some(shrunk.buffer_generation))
+    {
+        reused_slots
+            .entry(atom.slot.unwrap())
+            .or_default()
+            .push(atom);
+    }
+    let reused = reused_slots
+        .values()
+        .find(|atoms| {
+            atoms.len() > 1
+                && atoms[..atoms.len() - 1]
+                    .iter()
+                    .any(|atom| atom.disposition == AtomDisposition::TrailingDiscard)
+        })
+        .expect("overstrike contraction must reuse one cleared native slot");
+    assert_eq!(
+        reused.last().unwrap().disposition,
+        AtomDisposition::Emitted,
+        "the newest atom is the live occupant attributed to the flush"
+    );
+}
+
+#[test]
+fn reports_exact_native_field_consumption() {
+    let report = execute(
+        "field-consumption-man.1",
+        InputFormat::Man,
+        FIELD_CONSUMPTION_MAN,
+    );
+    let execution = &report.execution;
+
+    // Pinned CVS `man_term.c::pre_TP()` converts each tag width into terminal
+    // basic units before `term_flushln()` calls `term_field()`.  The fixed
+    // UTF-8 device uses 24 BU per `n`, so the report must retain 4n/8n/12n
+    // exactly.  The long first word is accepted even when it overruns its
+    // field; it is not mistaken for an unconsumed successor.
+    let tp_heads = execution
+        .flushes()
+        .iter()
+        .filter_map(|flush| {
+            let node = flush.node.map(|key| &execution.nodes()[key.0 as usize])?;
+            (node.macro_name.as_deref() == Some("TP") && node.kind == NodeKind::Head)
+                .then_some((node.line, flush))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        tp_heads
+            .iter()
+            .map(|(line, flush)| (*line, flush.field_bu))
+            .collect::<Vec<_>>(),
+        [(5, 96), (8, 192), (11, 288)]
+    );
+    assert!(tp_heads.iter().all(|(_, flush)| {
+        flush.content_bu > flush.field_bu
+            && flush.outcome == FlushOutcome::Exhausted
+            && !flush.accepted.is_empty()
+            && flush.remaining.is_empty()
+    }));
+
+    // `term_fill()` scans through the first word that no longer fits, but
+    // `term_field()` consumes only the accepted prefix.  A later wrap skips
+    // precisely the separating field atom and resumes at the first surviving
+    // slot on the globally next flush.
+    let wrapped = execution
+        .flushes()
+        .iter()
+        .enumerate()
+        .filter(|(_, flush)| flush.outcome == FlushOutcome::Wrapped)
+        .collect::<Vec<_>>();
+    assert_eq!(wrapped.len(), 2);
+    for (index, flush) in wrapped {
+        assert!(flush.scanned.end > flush.accepted.end);
+        assert_eq!(flush.tail_discarded.end - flush.tail_discarded.start, 1);
+        assert!(!flush.remaining.is_empty());
+        let successor = &execution.flushes()[index + 1];
+        assert_eq!(successor.buffer_generation, flush.buffer_generation);
+        assert_eq!(successor.scanned.start, flush.remaining.start);
+        assert!(flush.outcome_sequence < successor.sequence);
+        assert_eq!(successor.taboff_before, flush.taboff_after);
+        assert_consumed_tail(execution, flush.buffer_generation, &flush.tail_discarded);
+    }
+
+    // Table columns are flushed in alternating device order.  Deferred
+    // continuation therefore resumes at the next flush for the same native
+    // buffer generation, not necessarily at the globally adjacent record.
+    let deferred = execution
+        .flushes()
+        .iter()
+        .enumerate()
+        .filter(|(_, flush)| flush.outcome == FlushOutcome::DeferredColumn)
+        .collect::<Vec<_>>();
+    assert_eq!(deferred.len(), 2);
+    for (index, flush) in deferred {
+        let (successor_index, successor) = execution.flushes()[index + 1..]
+            .iter()
+            .enumerate()
+            .find(|(_, candidate)| candidate.buffer_generation == flush.buffer_generation)
+            .map(|(offset, successor)| (index + 1 + offset, successor))
+            .expect("deferred native field successor");
+        assert!(successor_index > index + 1, "columns must be interleaved");
+        assert_eq!(successor.scanned.start, flush.remaining.start);
+        assert!(flush.outcome_sequence < successor.sequence);
+        assert_eq!(successor.taboff_before, flush.taboff_after);
+        assert!(flush.taboff_after > flush.taboff_before);
+        assert_consumed_tail(execution, flush.buffer_generation, &flush.tail_discarded);
+    }
+
+    let empty = execution
+        .flushes()
+        .iter()
+        .find(|flush| flush.outcome == FlushOutcome::NoContent)
+        .expect("whitespace-only native field");
+    assert!(empty.accepted.is_empty());
+    assert!(empty.consumed.is_empty());
+    assert!(empty.remaining.is_empty());
+    assert_eq!(empty.tail_discarded, 0..4);
+    assert!(empty.fragments.is_empty());
+
+    assert_tab_fates(execution);
+    assert!(execution.flushes().iter().any(|flush| {
+        flush.outcome == FlushOutcome::Exhausted
+            && !flush.accepted.is_empty()
+            && flush.visual_after > 0
+    }));
+    assert_overstrike_slot_reuse(execution);
 }
 
 #[test]

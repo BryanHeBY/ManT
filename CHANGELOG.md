@@ -53,6 +53,17 @@ that crate was not published for that change.
   record budget. The codec consumes them only through its private native
   projection; this change does not switch production roff lowering or add IR
   content for empty operands.
+- Make each native `ExecutionFlush` report the cells actually scanned by
+  `term_fill()`, the field accepted and consumed by `term_field()`, the
+  contiguous trailing suffix discarded while selecting the branch, and the
+  exact range retained for a later wrap or table-column pass. Checked native
+  geometry, buffer-generation cursor/time/tab-offset continuity, terminal and
+  continuing tail-atom fates, and the private codec field projection reject
+  incomplete or reassigned execution evidence without switching production
+  lowering. Overstrike contraction keeps discarded atom history while dense
+  field validation and projection follow the newest occupant of a reused slot.
+  Slot histories also reject replacement edges across clear epochs and atoms
+  created only after the first flush began.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 

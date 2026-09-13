@@ -1,0 +1,34 @@
+.TH K10-FIELD 1 "September 14, 2026" "ManT" "Manual"
+.SH NAME
+k10-field \- native field consumption probe
+.SH WIDTHS
+.TP 4n
+.B FOUR-COLUMN-TERM
+four body
+.TP 8n
+.B EIGHT-COLUMN-TERM
+eight body
+.TP 12n
+.B TWELVE-COLUMN-TERM
+twelve body
+.SH SUBSEQUENT OVERRUN
+short prefix followed by
+SUPERCALIFRAGILISTICEXPIALIDOCIOUSSUPERCALIFRAGILISTICEXPIALIDOCIOUS and tail.
+.SH TABS
+.nf
+.ta 4n 8n 12n
+A	B	C	D
+.fi
+.SH EMPTY FIELD
+.B "   "
+.br
+AFTER EMPTY.
+.SH DEFERRED TABLE FIELDS
+.TS
+tab(	);
+lw(12n) lw(12n).
+left alpha\p left beta	right one\p right two
+left tail	right tail
+.TE
+.SH SHRUNK BUFFER
+\o'a 'b

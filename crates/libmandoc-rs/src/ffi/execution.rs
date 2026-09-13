@@ -145,6 +145,8 @@ struct CFlushRecord {
     accepted_end: u32,
     consumed_start: u32,
     consumed_end: u32,
+    tail_discarded_start: u32,
+    tail_discarded_end: u32,
     remaining_start: u32,
     remaining_end: u32,
     fragment_start: u32,
@@ -1295,6 +1297,10 @@ fn range(start: u32, end: u32, field: &str) -> Result<std::ops::Range<u32>, Stri
         .then_some(start..end)
         .ok_or_else(|| format!("invalid execution range in {field}"))
 }
+
+const fn terminal_tail_scalar(scalar: u32) -> bool {
+    matches!(scalar, 9 | 32 | 10 | 30 | 29 | 26)
+}
 fn counted_range(start: u32, length: u32, field: &str) -> Result<Range<u32>, String> {
     start
         .checked_add(length)
@@ -1840,6 +1846,48 @@ fn convert_report(
             return Err("invalid execution fragment-atom reference".to_owned());
         }
     }
+    let mut live_atoms = reserved_vec(atom_count, "live execution atom locations")?;
+    live_atoms.extend(
+        atoms
+            .iter()
+            .enumerate()
+            .filter_map(|(key, atom)| Some((atom.buffer_generation?, atom.slot?, key))),
+    );
+    live_atoms.sort_unstable_by_key(|&(generation, slot, key)| (generation, slot, key));
+
+    // Validate the complete write history of each fixed-CVS buffer slot.
+    // Replacement edges join immediately adjacent writes. Consumed or
+    // discarded atoms end an occupancy epoch, allowing a later write to reuse
+    // the cleared slot without a replacement edge. The final write is the
+    // current occupant used for dense field validation below.
+    let mut current_occupants = reserved_vec(live_atoms.len(), "current execution atom locations")?;
+    let mut group_start = 0;
+    while group_start < live_atoms.len() {
+        let (generation, slot, _) = live_atoms[group_start];
+        let mut group_end = group_start + 1;
+        while group_end < live_atoms.len()
+            && live_atoms[group_end].0 == generation
+            && live_atoms[group_end].1 == slot
+        {
+            group_end += 1;
+        }
+        for pair in live_atoms[group_start..group_end].windows(2) {
+            let current = &atoms[pair[0].2];
+            match current.disposition {
+                AtomDisposition::Replaced if current.replaced_by == Some(atoms[pair[1].2].key) => {}
+                AtomDisposition::Consumed | AtomDisposition::TrailingDiscard => {}
+                _ => {
+                    return Err("execution atom slot history is inconsistent".to_owned());
+                }
+            }
+        }
+        if atoms[live_atoms[group_end - 1].2].disposition == AtomDisposition::Replaced {
+            return Err("execution atom slot history is inconsistent".to_owned());
+        }
+        current_occupants.push(live_atoms[group_end - 1]);
+        group_start = group_end;
+    }
+    let live_atoms = current_occupants;
     let mut fragment_ref_coverage = reserved_filled_vec(
         false,
         fragment_atom_records.len(),
@@ -1960,8 +2008,18 @@ fn convert_report(
     let mut fragment_flush_outcomes =
         reserved_filled_vec(None::<u64>, fragment_count, "flush fragment coverage")?;
     let mut flushes = reserved_vec(flush_records.len(), "flush")?;
+    let mut pending_flushes = reserved_filled_vec(
+        None::<usize>,
+        buffer_generations.len(),
+        "pending flush continuation",
+    )?;
+    let mut terminal_flushes =
+        reserved_filled_vec(false, buffer_generations.len(), "terminal flush state")?;
     for (index, value) in flush_records.iter().copied().enumerate() {
         dense(value.key, index, "flush")?;
+        if index != 0 && flush_records[index - 1].outcome_sequence >= value.sequence {
+            return Err("execution flush order is inconsistent".to_owned());
+        }
         if value.flags_before & !0x7f_ffff != 0 || value.flags_after & !0x7f_ffff != 0 {
             return Err("unknown execution terminal flags".to_owned());
         }
@@ -2002,11 +2060,10 @@ fn convert_report(
         }) {
             return Err("flush contains a fragment outside its accepted field".to_owned());
         }
+        let generation_key = usize::try_from(value.buffer_generation)
+            .map_err(|_| "execution flush buffer-generation key overflow".to_owned())?;
         let generation_fact = buffer_generations
-            .get(
-                usize::try_from(value.buffer_generation)
-                    .map_err(|_| "execution flush buffer-generation key overflow".to_owned())?,
-            )
+            .get(generation_key)
             .ok_or_else(|| "invalid execution flush buffer-generation".to_owned())?;
         if generation_fact.buffer != value.buffer
             || generation_fact.generation != value.generation
@@ -2016,15 +2073,45 @@ fn convert_report(
         {
             return Err("execution flush is outside its buffer generation".to_owned());
         }
+        if terminal_flushes[generation_key] {
+            return Err("execution flush follows a terminal field".to_owned());
+        }
+        let first_flush = pending_flushes[generation_key].is_none();
+        if let Some(previous) = pending_flushes[generation_key].take() {
+            let previous = &flush_records[previous];
+            if value.scan_start != previous.remaining_start
+                || value.remaining_end != previous.remaining_end
+                || previous.outcome_sequence >= value.sequence
+                || value.taboff_before != previous.taboff_after
+            {
+                return Err("execution flush does not resume its remaining field".to_owned());
+            }
+        } else if value.scan_start != 0 {
+            return Err("execution buffer generation does not start at slot zero".to_owned());
+        }
+        if value.leading_bu < 0
+            || value.content_bu < 0
+            || value.field_bu < 0
+            || value.target_bu < 0
+            || value.taboff_before < 0
+            || value.taboff_after < 0
+            || value.visual_before < 0
+            || value.visual_after < 0
+        {
+            return Err("negative execution flush geometry".to_owned());
+        }
         if value.scan_start != value.accepted_start
             || value.scan_start != value.consumed_start
             || value.accepted_start > value.accepted_end
             || value.accepted_start != value.consumed_start
             || value.accepted_end != value.consumed_end
-            || value.accepted_end != value.remaining_start
+            || value.accepted_end != value.tail_discarded_start
+            || value.accepted_end > value.scan_end
+            || value.scan_end > value.remaining_end
+            || value.tail_discarded_start > value.tail_discarded_end
+            || value.tail_discarded_end != value.remaining_start
             || value.remaining_start > value.remaining_end
-            || value.scan_end != value.remaining_end
-            || value.scan_end != generation_fact.extent
+            || value.remaining_end > generation_fact.extent
         {
             return Err("inconsistent execution flush ranges".to_owned());
         }
@@ -2035,15 +2122,109 @@ fn convert_report(
             4 => FlushOutcome::DeferredColumn,
             _ => return Err("unknown execution flush outcome".to_owned()),
         };
+        let first_live = live_atoms.partition_point(|&(generation, slot, _)| {
+            (generation, slot) < (value.buffer_generation, value.accepted_start)
+        });
+        let mut next_slot = value.accepted_start;
+        for &(generation, slot, atom_key) in &live_atoms[first_live..] {
+            if generation != value.buffer_generation || slot >= value.tail_discarded_end {
+                break;
+            }
+            if atoms[atom_key].sequence >= value.sequence {
+                return Err("execution field atom was created after its flush began".to_owned());
+            }
+            let disposition = atoms[atom_key].disposition;
+            if slot < value.accepted_end {
+                if slot != next_slot
+                    || !matches!(
+                        disposition,
+                        AtomDisposition::Emitted
+                            | AtomDisposition::Consumed
+                            | AtomDisposition::TrailingDiscard
+                    )
+                {
+                    return Err("accepted execution field has an invalid atom fate".to_owned());
+                }
+                next_slot += 1;
+            } else if matches!(outcome, FlushOutcome::NoContent | FlushOutcome::Exhausted) {
+                if slot != next_slot
+                    || !terminal_tail_scalar(atoms[atom_key].display_scalar)
+                    || disposition != AtomDisposition::TrailingDiscard
+                {
+                    return Err("terminal execution field tail was not discarded".to_owned());
+                }
+                next_slot += 1;
+            } else {
+                if slot != next_slot
+                    || atoms[atom_key].display_scalar != u32::from(b' ')
+                    || disposition != AtomDisposition::Consumed
+                {
+                    return Err("continuing execution field tail was not consumed".to_owned());
+                }
+                next_slot += 1;
+            }
+        }
+        if next_slot != value.tail_discarded_end {
+            return Err("execution field lacks complete atom provenance".to_owned());
+        }
         if outcome == FlushOutcome::NoContent {
             if value.accepted_start != value.accepted_end
                 || value.consumed_start != value.consumed_end
+                || value.remaining_start != value.remaining_end
                 || value.fragment_length != 0
             {
                 return Err("no-content flush emitted or consumed a field".to_owned());
             }
         } else if value.accepted_start == value.accepted_end {
             return Err("content flush accepted an empty field".to_owned());
+        }
+        if matches!(
+            outcome,
+            FlushOutcome::Wrapped | FlushOutcome::DeferredColumn
+        ) && value.remaining_start == value.remaining_end
+        {
+            return Err("continuing execution flush has no remaining field".to_owned());
+        }
+        if matches!(outcome, FlushOutcome::NoContent | FlushOutcome::Exhausted) {
+            if value.remaining_start != value.remaining_end
+                || generation_fact.close_reason != BufferCloseReason::Reset
+            {
+                return Err("terminal execution flush retains a field".to_owned());
+            }
+            terminal_flushes[generation_key] = true;
+        } else {
+            pending_flushes[generation_key] = Some(index);
+        }
+        if first_flush {
+            let first_live = live_atoms.partition_point(|&(generation, slot, _)| {
+                (generation, slot) < (value.buffer_generation, 0)
+            });
+            let mut next_slot = 0;
+            for &(generation, slot, atom_key) in &live_atoms[first_live..] {
+                if generation != value.buffer_generation || slot >= value.remaining_end {
+                    break;
+                }
+                if slot != next_slot || atoms[atom_key].sequence >= value.sequence {
+                    return Err("execution field atom was created after its flush began".to_owned());
+                }
+                next_slot += 1;
+            }
+            if next_slot != value.remaining_end {
+                return Err("execution field lacks complete atom provenance".to_owned());
+            }
+        }
+        if outcome == FlushOutcome::Wrapped {
+            let next = flush_records
+                .get(index + 1)
+                .ok_or_else(|| "wrapped execution flush has no successor".to_owned())?;
+            if next.buffer_generation != value.buffer_generation
+                || next.scan_start != value.remaining_start
+                || next.remaining_end != value.remaining_end
+                || value.outcome_sequence >= next.sequence
+                || next.taboff_before != value.taboff_after
+            {
+                return Err("wrapped execution flush successor is inconsistent".to_owned());
+            }
         }
         let boundary = option(value.boundary);
         if boundary.is_some_and(|key| {
@@ -2062,6 +2243,11 @@ fn convert_report(
             scanned: range(value.scan_start, value.scan_end, "flush scan")?,
             accepted: range(value.accepted_start, value.accepted_end, "flush accepted")?,
             consumed: range(value.consumed_start, value.consumed_end, "flush consumed")?,
+            tail_discarded: range(
+                value.tail_discarded_start,
+                value.tail_discarded_end,
+                "flush tail discard",
+            )?,
             remaining: range(
                 value.remaining_start,
                 value.remaining_end,
@@ -2091,18 +2277,8 @@ fn convert_report(
             outcome_sequence: value.outcome_sequence,
         });
     }
-    for (index, flush) in flushes.iter().enumerate() {
-        if flush.outcome == FlushOutcome::Wrapped {
-            let Some(next) = flushes.get(index + 1) else {
-                return Err("wrapped execution flush has no successor".to_owned());
-            };
-            if next.buffer_generation != flush.buffer_generation
-                || next.scanned.start < flush.remaining.start
-                || next.scanned.start > flush.remaining.end
-            {
-                return Err("wrapped execution flush successor is inconsistent".to_owned());
-            }
-        }
+    if pending_flushes.iter().any(Option::is_some) {
+        return Err("execution flush continuation is incomplete".to_owned());
     }
     if fragments.iter().enumerate().any(|(index, fragment)| {
         fragment.buffer_generation.is_some() != fragment_flush_outcomes[index].is_some()
@@ -3335,7 +3511,7 @@ fn fragment_atom_offsets() -> [usize; 2] {
         offset_of!(CFragmentAtomRecord, atom),
     ]
 }
-fn flush_offsets() -> [usize; 29] {
+fn flush_offsets() -> [usize; 31] {
     [
         offset_of!(CFlushRecord, key),
         offset_of!(CFlushRecord, node),
@@ -3348,6 +3524,8 @@ fn flush_offsets() -> [usize; 29] {
         offset_of!(CFlushRecord, accepted_end),
         offset_of!(CFlushRecord, consumed_start),
         offset_of!(CFlushRecord, consumed_end),
+        offset_of!(CFlushRecord, tail_discarded_start),
+        offset_of!(CFlushRecord, tail_discarded_end),
         offset_of!(CFlushRecord, remaining_start),
         offset_of!(CFlushRecord, remaining_end),
         offset_of!(CFlushRecord, fragment_start),
@@ -3683,6 +3861,16 @@ body
         }
     }
 
+    fn consumed_atom(key: u32, slot: u32, sequence: u64) -> CAtomRecord {
+        CAtomRecord {
+            key,
+            slot,
+            disposition: 3,
+            sequence,
+            ..atom()
+        }
+    }
+
     fn empty_word() -> CWordRecord {
         CWordRecord {
             key: 0,
@@ -3813,6 +4001,8 @@ body
             accepted_end: 2,
             consumed_start: 0,
             consumed_end: 2,
+            tail_discarded_start: 2,
+            tail_discarded_end: 2,
             remaining_start: 2,
             remaining_end: 2,
             fragment_start: 0,
@@ -3854,6 +4044,12 @@ body
 
     fn records_with_emitted_fragment() -> RawRecords {
         let mut records = raw_records();
+        // A completed `term_flushln()` resets its buffer generation.  Keep
+        // this common emitted-fragment fixture faithful to that native
+        // lifetime so tests aimed at later relationships are not rejected by
+        // the field-continuation validator first.
+        records.buffer_generations[0].close_reason = 1;
+        records.buffer_generations[0].extent = 1;
         records.atoms.push(atom());
         let mut fragment = fragment();
         fragment.sequence = 3;
@@ -3863,6 +4059,13 @@ body
             atom: 0,
         });
         let mut flush = flush();
+        flush.scan_end = 1;
+        flush.accepted_end = 1;
+        flush.consumed_end = 1;
+        flush.tail_discarded_start = 1;
+        flush.tail_discarded_end = 1;
+        flush.remaining_start = 1;
+        flush.remaining_end = 1;
         flush.fragment_length = 1;
         flush.sequence = 2;
         flush.outcome_sequence = 5;
@@ -4604,17 +4807,349 @@ body
         let mut value = flush();
         value.accepted_end = 0;
         value.consumed_end = 0;
+        value.tail_discarded_start = 0;
+        value.tail_discarded_end = 0;
         value.remaining_start = 0;
         records.flushes.push(value);
         assert_eq!(rejection(records), "content flush accepted an empty field");
 
         let mut records = records_with_emitted_fragment();
-        records.flushes[0].scan_start = 1;
-        records.flushes[0].accepted_start = 1;
-        records.flushes[0].consumed_start = 1;
+        records.buffer_generations[0].extent = 2;
+        records.atoms[0].slot = 1;
+        records.flushes[0].accepted_end = 1;
+        records.flushes[0].consumed_end = 1;
+        records.flushes[0].tail_discarded_start = 1;
+        records.flushes[0].tail_discarded_end = 2;
+        records.flushes[0].remaining_start = 2;
+        records.flushes[0].remaining_end = 2;
         assert_eq!(
             rejection(records),
             "flush contains a fragment outside its accepted field"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_field_ranges_and_geometry() {
+        let mut records = raw_records();
+        let mut value = flush();
+        value.field_bu = -1;
+        records.flushes.push(value);
+        assert_eq!(rejection(records), "negative execution flush geometry");
+
+        let mut records = raw_records();
+        let mut value = flush();
+        value.scan_end = 1;
+        records.flushes.push(value);
+        assert_eq!(rejection(records), "inconsistent execution flush ranges");
+
+        let mut records = raw_records();
+        let mut value = flush();
+        value.tail_discarded_start = 1;
+        records.flushes.push(value);
+        assert_eq!(rejection(records), "inconsistent execution flush ranges");
+
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        records.atoms.push(consumed_atom(0, 0, 1));
+        let mut value = flush();
+        value.accepted_end = 1;
+        value.consumed_end = 1;
+        value.tail_discarded_start = 1;
+        value.tail_discarded_end = 1;
+        value.remaining_start = 1;
+        value.sequence = 2;
+        value.outcome_sequence = 3;
+        records.flushes.push(value);
+        assert_eq!(
+            rejection(records),
+            "terminal execution flush retains a field"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_field_atoms_created_after_the_flush() {
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 3), consumed_atom(1, 1, 4)]);
+        records.flushes.push(flush());
+
+        assert_eq!(
+            rejection(records),
+            "execution field atom was created after its flush began"
+        );
+
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 4)]);
+        let mut first = flush();
+        first.scan_end = 1;
+        first.accepted_end = 1;
+        first.consumed_end = 1;
+        first.tail_discarded_start = 1;
+        first.tail_discarded_end = 1;
+        first.remaining_start = 1;
+        first.outcome = 4;
+        first.sequence = 2;
+        first.outcome_sequence = 3;
+        records.flushes.push(first);
+        let mut second = flush();
+        second.key = 1;
+        second.scan_start = 1;
+        second.accepted_start = 1;
+        second.consumed_start = 1;
+        second.sequence = 5;
+        second.outcome_sequence = 6;
+        records.flushes.push(second);
+        assert_eq!(
+            rejection(records),
+            "execution field atom was created after its flush began"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_replacements_across_a_cleared_slot_epoch() {
+        let mut records = raw_records();
+        records.buffer_generations[0].capacity = 1;
+        records.buffer_generations[0].extent = 1;
+        records.buffer_generations[0].close_reason = 1;
+        let mut replaced = atom();
+        replaced.disposition = 4;
+        replaced.replaced_by = 2;
+        records.atoms.push(replaced);
+        records.atoms.push(consumed_atom(1, 0, 2));
+        records.atoms.push(consumed_atom(2, 0, 3));
+        let mut value = flush();
+        value.scan_end = 1;
+        value.accepted_end = 1;
+        value.consumed_end = 1;
+        value.tail_discarded_start = 1;
+        value.tail_discarded_end = 1;
+        value.remaining_start = 1;
+        value.remaining_end = 1;
+        value.sequence = 4;
+        value.outcome_sequence = 5;
+        records.flushes.push(value);
+
+        assert_eq!(
+            rejection(records),
+            "execution atom slot history is inconsistent"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_incomplete_field_continuations() {
+        let mut records = raw_records();
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 2)]);
+        let mut value = flush();
+        value.accepted_end = 1;
+        value.consumed_end = 1;
+        value.tail_discarded_start = 1;
+        value.tail_discarded_end = 1;
+        value.remaining_start = 1;
+        value.outcome = 3;
+        value.sequence = 3;
+        value.outcome_sequence = 4;
+        records.flushes.push(value);
+        assert_eq!(
+            rejection(records),
+            "wrapped execution flush has no successor"
+        );
+
+        let mut records = raw_records();
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 2)]);
+        let mut value = flush();
+        value.accepted_end = 1;
+        value.consumed_end = 1;
+        value.tail_discarded_start = 1;
+        value.tail_discarded_end = 1;
+        value.remaining_start = 1;
+        value.outcome = 4;
+        value.sequence = 3;
+        value.outcome_sequence = 4;
+        records.flushes.push(value);
+        assert_eq!(
+            rejection(records),
+            "execution flush continuation is incomplete"
+        );
+
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 2)]);
+        let mut first = flush();
+        first.sequence = 3;
+        first.outcome_sequence = 4;
+        records.flushes.push(first);
+        let mut second = flush();
+        second.key = 1;
+        second.sequence = 5;
+        second.outcome_sequence = 6;
+        records.flushes.push(second);
+        assert_eq!(
+            rejection(records),
+            "execution flush follows a terminal field"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_inconsistent_field_chain_order() {
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        let mut value = flush();
+        value.scan_start = 1;
+        value.accepted_start = 1;
+        value.consumed_start = 1;
+        records.flushes.push(value);
+        assert_eq!(
+            rejection(records),
+            "execution buffer generation does not start at slot zero"
+        );
+
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 2)]);
+        let mut first = flush();
+        first.accepted_end = 1;
+        first.consumed_end = 1;
+        first.tail_discarded_start = 1;
+        first.tail_discarded_end = 1;
+        first.remaining_start = 1;
+        first.outcome = 4;
+        first.sequence = 5;
+        first.outcome_sequence = 6;
+        records.flushes.push(first);
+        let mut second = flush();
+        second.key = 1;
+        second.scan_start = 1;
+        second.accepted_start = 1;
+        second.consumed_start = 1;
+        second.sequence = 3;
+        second.outcome_sequence = 4;
+        records.flushes.push(second);
+        assert_eq!(rejection(records), "execution flush order is inconsistent");
+
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 2)]);
+        let mut first = flush();
+        first.accepted_end = 1;
+        first.consumed_end = 1;
+        first.tail_discarded_start = 1;
+        first.tail_discarded_end = 1;
+        first.remaining_start = 1;
+        first.outcome = 4;
+        first.sequence = 3;
+        first.outcome_sequence = 4;
+        records.flushes.push(first);
+        let mut second = flush();
+        second.key = 1;
+        second.scan_start = 1;
+        second.accepted_start = 1;
+        second.consumed_start = 1;
+        second.sequence = 5;
+        second.outcome_sequence = 6;
+        second.taboff_before = 24;
+        records.flushes.push(second);
+        assert_eq!(
+            rejection(records),
+            "execution flush does not resume its remaining field"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_field_tail_atom_fates() {
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        records.flushes.push(flush());
+        assert_eq!(
+            rejection(records),
+            "execution field lacks complete atom provenance"
+        );
+
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        let mut accepted = atom();
+        accepted.disposition = 3;
+        records.atoms.push(accepted);
+        let mut tail = atom();
+        tail.key = 1;
+        tail.slot = 1;
+        tail.input_scalar = u32::from(b' ');
+        tail.display_scalar = u32::from(b' ');
+        tail.disposition = 3;
+        tail.sequence = 2;
+        records.atoms.push(tail);
+        let mut value = flush();
+        value.accepted_end = 1;
+        value.consumed_end = 1;
+        value.tail_discarded_start = 1;
+        value.tail_discarded_end = 2;
+        value.sequence = 3;
+        value.outcome_sequence = 4;
+        records.flushes.push(value);
+        assert_eq!(
+            rejection(records),
+            "terminal execution field tail was not discarded"
+        );
+
+        let mut records = raw_records();
+        records.buffer_generations[0].capacity = 3;
+        records.buffer_generations[0].extent = 3;
+        let mut accepted = atom();
+        accepted.disposition = 3;
+        records.atoms.push(accepted);
+        let mut tail = atom();
+        tail.key = 1;
+        tail.slot = 1;
+        tail.disposition = 3;
+        tail.sequence = 2;
+        records.atoms.push(tail);
+        let mut value = flush();
+        value.scan_end = 2;
+        value.accepted_end = 1;
+        value.consumed_end = 1;
+        value.tail_discarded_start = 1;
+        value.tail_discarded_end = 2;
+        value.remaining_start = 2;
+        value.remaining_end = 3;
+        value.outcome = 3;
+        value.sequence = 3;
+        value.outcome_sequence = 4;
+        records.flushes.push(value);
+        assert_eq!(
+            rejection(records),
+            "continuing execution field tail was not consumed"
+        );
+
+        let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
+        let mut accepted = atom();
+        accepted.disposition = 3;
+        records.atoms.push(accepted);
+        let mut value = flush();
+        value.accepted_end = 1;
+        value.consumed_end = 1;
+        value.tail_discarded_start = 1;
+        value.tail_discarded_end = 2;
+        value.sequence = 2;
+        value.outcome_sequence = 3;
+        records.flushes.push(value);
+        assert_eq!(
+            rejection(records),
+            "execution field lacks complete atom provenance"
         );
     }
 
@@ -4745,11 +5280,15 @@ body
     #[test]
     fn convert_report_rejects_geometry_reassigned_to_another_node() {
         let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
         records.nodes.push(node());
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 2)]);
         let mut flush_record = flush();
         flush_record.node = 0;
-        flush_record.sequence = 1;
-        flush_record.outcome_sequence = 5;
+        flush_record.sequence = 3;
+        flush_record.outcome_sequence = 6;
         records.flushes.push(flush_record);
         records.geometry.push(CGeometryRecord {
             key: 0,
@@ -4764,7 +5303,7 @@ body
             effective: 24,
             before: 0,
             after: 24,
-            sequence: 2,
+            sequence: 4,
         });
         assert_eq!(
             rejection(records),
@@ -4809,11 +5348,15 @@ body
         );
 
         let mut records = raw_records();
+        records.buffer_generations[0].close_reason = 1;
         records.nodes.push(node());
+        records
+            .atoms
+            .extend([consumed_atom(0, 0, 1), consumed_atom(1, 1, 2)]);
         let mut flush_record = flush();
         flush_record.node = 0;
-        flush_record.sequence = 1;
-        flush_record.outcome_sequence = 5;
+        flush_record.sequence = 3;
+        flush_record.outcome_sequence = 6;
         records.flushes.push(flush_record);
         records.geometry.push(CGeometryRecord {
             key: 0,
@@ -4828,7 +5371,7 @@ body
             effective: 0,
             before: 0,
             after: 0,
-            sequence: 2,
+            sequence: 4,
         });
         assert_eq!(
             rejection(records),

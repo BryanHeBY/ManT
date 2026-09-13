@@ -1,5 +1,5 @@
 diff --git a/man_term.c b/man_term.c
-index 8d82bb87..0b3389dc 100644
+index 8d82bb8..0b3389d 100644
 --- a/man_term.c
 +++ b/man_term.c
 @@ -63,6 +63,7 @@ struct	man_term_act {
@@ -161,7 +161,7 @@ index 8d82bb87..0b3389dc 100644
  		n = n->next;
  	}
 diff --git a/mdoc_term.c b/mdoc_term.c
-index f76f0190..48cca7c2 100644
+index f76f019..48cca7c 100644
 --- a/mdoc_term.c
 +++ b/mdoc_term.c
 @@ -60,6 +60,7 @@ static	int	  a2width(const struct termp *, const char *);
@@ -363,7 +363,7 @@ index f76f0190..48cca7c2 100644
  	/* Trailing punctuation. */
  	while (punct != NULL) {
 diff --git a/roff.c b/roff.c
-index 98a36f2f..2670ec61 100644
+index 98a36f2..2670ec6 100644
 --- a/roff.c
 +++ b/roff.c
 @@ -4043,6 +4043,7 @@ roff_so(ROFF_ARGS)
@@ -375,7 +375,7 @@ index 98a36f2f..2670ec61 100644
  	mandoc_msg(MANDOCERR_SO, ln, ppos, "so %s", name);
  
 diff --git a/roff.h b/roff.h
-index 471b1404..da748e59 100644
+index 471b140..da748e5 100644
 --- a/roff.h
 +++ b/roff.h
 @@ -561,6 +561,7 @@ struct	roff_meta {
@@ -387,7 +387,7 @@ index 471b1404..da748e59 100644
  	enum roff_macroset macroset; /* Kind of high-level macros used. */
  };
 diff --git a/term.c b/term.c
-index e3f0f270..3efb8e86 100644
+index e3f0f27..e7f1c29 100644
 --- a/term.c
 +++ b/term.c
 @@ -29,19 +29,286 @@
@@ -411,7 +411,7 @@ index e3f0f270..3efb8e86 100644
  static	void		 term_field(struct termp *, size_t, size_t);
  static	void		 term_fill(struct termp *, size_t *, size_t *,
 -				size_t);
-+			    size_t);
++			    size_t *, size_t);
 +
 +void
 +term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
@@ -679,7 +679,14 @@ index e3f0f270..3efb8e86 100644
  
  
  void
-@@ -110,6 +377,8 @@ term_flushln(struct termp *p)
+@@ -104,12 +371,15 @@ term_flushln(struct termp *p)
+ 	/* Bytes. */
+ 	size_t	 ic;       /* Byte index in the input buffer. */
+ 	size_t	 nbr;      /* Number of bytes to print in this field. */
++	size_t	 scan_end; /* One past the last inspected buffer slot. */
+ 
+ 	/*
+ 	 * Normally, start writing at the left margin, but with the
  	 * NOPAD flag, start writing at the current position instead.
  	 */
  
@@ -688,15 +695,18 @@ index e3f0f270..3efb8e86 100644
  	vbl = (p->flags & TERMP_NOPAD) || p->tcol->offset < p->viscol ?
  	    0 : p->tcol->offset - p->viscol;
  	if (p->minbl > 0 && vbl < term_len(p, p->minbl))
-@@ -142,8 +411,14 @@ term_flushln(struct termp *p)
+@@ -140,10 +410,16 @@ term_flushln(struct termp *p)
+ 		 * If there is whitespace only, print nothing.
+ 		 */
  
- 		term_fill(p, &nbr, &vbr,
+-		term_fill(p, &nbr, &vbr,
++		term_fill(p, &nbr, &vbr, &scan_end,
  		    p->flags & TERMP_BRNEVER ? SIZE_MAX / 2 : vtarget);
 -		if (nbr == 0)
 +		if (term_exec_failed(p))
 +			return;
-+		term_exec_fill_decision(p, p->tcol->lastcol, nbr, vbr,
-+		    vtarget);
++		term_exec_fill_decision(p, scan_end,
++		    nbr == 0 ? p->tcol->col : nbr, vbr, vtarget);
 +		if (nbr == 0) {
 +			term_exec_fill_outcome(p, 1);
  			break;
@@ -704,7 +714,7 @@ index e3f0f270..3efb8e86 100644
  
  		/*
  		 * With the CENTER or RIGHT flag, increase the indentation
-@@ -160,7 +435,11 @@ term_flushln(struct termp *p)
+@@ -160,7 +436,11 @@ term_flushln(struct termp *p)
  
  		/* Finally, print the field content. */
  
@@ -716,7 +726,7 @@ index e3f0f270..3efb8e86 100644
  		if (vbr < vtarget)
  			p->tcol->taboff += vbr;
  		else
-@@ -194,17 +473,23 @@ term_flushln(struct termp *p)
+@@ -194,17 +474,23 @@ term_flushln(struct termp *p)
  			}
  			break;
  		}
@@ -741,7 +751,7 @@ index e3f0f270..3efb8e86 100644
  
  		/*
  		 * In multi-column mode, leave the rest of the text
-@@ -214,9 +499,13 @@ term_flushln(struct termp *p)
+@@ -214,9 +500,13 @@ term_flushln(struct termp *p)
  		 * In single-column mode, simply break the line.
  		 */
  
@@ -756,7 +766,7 @@ index e3f0f270..3efb8e86 100644
  		endline(p);
  
  		/*
-@@ -232,6 +521,8 @@ term_flushln(struct termp *p)
+@@ -232,6 +522,8 @@ term_flushln(struct termp *p)
  
  	/* Reset output state in preparation for the next field. */
  
@@ -765,7 +775,7 @@ index e3f0f270..3efb8e86 100644
  	p->col = p->tcol->col = p->tcol->lastcol = 0;
  	p->minbl = p->trailspace;
  	p->flags &= ~(TERMP_BACKAFTER | TERMP_BACKBEFORE | TERMP_NOPAD);
-@@ -251,6 +542,7 @@ term_flushln(struct termp *p)
+@@ -251,6 +543,7 @@ term_flushln(struct termp *p)
  	    ((p->flags & TERMP_NOBREAK) == 0 ||
  	     vbr + term_len(p, p->trailspace) > vfield + term_len(p, 1) / 2))
  		endline(p);
@@ -773,16 +783,33 @@ index e3f0f270..3efb8e86 100644
  }
  
  /*
-@@ -279,6 +571,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+@@ -261,7 +554,8 @@ term_flushln(struct termp *p)
+  * If the first word is longer, the field will be overrun.
+  */
+ static void
+-term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
++term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
++    size_t vtarget)
+ {
+ 	/* Widths in basic units. */
+ 	size_t	 vis;       /* Visual position of the current character. */
+@@ -274,11 +568,15 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+ 	int	 graph;     /* Last character was non-blank. */
+ 
+ 	*nbr = *vbr = vis = 0;
++	*scan_end = p->tcol->col;
+ 	breakline = graph = 0;
+ 	taboff = p->tcol->taboff;
  	enw = (*p->getwidth)(p, ' ');
  	vtarget += enw / 2;
  	for (ic = p->tcol->col; ic < p->tcol->lastcol; ic++) {
 +		if (!term_exec_fill_scan(p, ic))
 +			return;
++		*scan_end = ic + 1;
  		switch (p->tcol->buf[ic]) {
  		case '\b':  /* Escape \o (overstrike) or backspace markup. */
  			assert(ic > 0);
-@@ -314,6 +608,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+@@ -314,6 +612,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
  			 * hyphen such that we get the correct width.
  			 */
  			p->tcol->buf[ic] = '-';
@@ -791,7 +818,7 @@ index e3f0f270..3efb8e86 100644
  			vis += (*p->getwidth)(p, '-');
  			if (vis > vtarget) {
  				ic++;
-@@ -341,6 +637,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+@@ -341,6 +641,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
  				break;
  			case ASCII_NBRSP:  /* Non-breakable space. */
  				p->tcol->buf[ic] = ' ';
@@ -800,7 +827,7 @@ index e3f0f270..3efb8e86 100644
  				/* FALLTHROUGH */
  			default:  /* Printable character. */
  				vis += (*p->getwidth)(p, p->tcol->buf[ic]);
-@@ -381,10 +679,15 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -381,10 +683,15 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  	int	 taboff; /* Temporary offset for literal tabs. */
  
  	size_t	 ic;	/* Byte position in the input buffer. */
@@ -816,7 +843,7 @@ index e3f0f270..3efb8e86 100644
  
  		/*
  		 * To avoid the printing of trailing whitespace,
-@@ -395,8 +698,12 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -395,8 +702,12 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  		case '\n':
  		case ASCII_BREAK:
  		case ASCII_NBRZW:
@@ -829,7 +856,7 @@ index e3f0f270..3efb8e86 100644
  			taboff = -vis - (*p->getwidth)(p, ' ');
  			continue;
  		case '\t':
-@@ -412,6 +719,8 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -412,6 +723,8 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  				dv = (*p->getwidth)(p, ' ');
  			vbl += dv;
  			vis += dv;
@@ -838,7 +865,7 @@ index e3f0f270..3efb8e86 100644
  			continue;
  		default:
  			break;
-@@ -424,11 +733,18 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -424,11 +737,18 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  
  		if (vbl > 0) {
  			(*p->advance)(p, vbl);
@@ -857,7 +884,7 @@ index e3f0f270..3efb8e86 100644
  		(*p->letter)(p, p->tcol->buf[ic]);
  		if (p->tcol->buf[ic] == '\b') {
  			dv = (*p->getwidth)(p, p->tcol->buf[ic - 1]);
-@@ -439,7 +755,13 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -439,7 +759,13 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  			p->viscol += dv;
  			vis += dv;
  		}
@@ -871,7 +898,7 @@ index e3f0f270..3efb8e86 100644
  	p->tcol->col = nbr;
  }
  
-@@ -450,6 +772,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -450,6 +776,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  static void
  endline(struct termp *p)
  {
@@ -882,7 +909,7 @@ index e3f0f270..3efb8e86 100644
  	if ((p->flags & (TERMP_NEWMC | TERMP_ENDMC)) == TERMP_ENDMC) {
  		p->mc = NULL;
  		p->flags &= ~TERMP_ENDMC;
-@@ -459,10 +785,14 @@ endline(struct termp *p)
+@@ -459,10 +789,14 @@ endline(struct termp *p)
  			(*p->advance)(p,
  			    p->maxrmargin - p->viscol + term_len(p, 1));
  		p->flags |= TERMP_NOBUF | TERMP_NOSPACE;
@@ -897,7 +924,7 @@ index e3f0f270..3efb8e86 100644
  }
  
  /*
-@@ -473,10 +803,13 @@ endline(struct termp *p)
+@@ -473,10 +807,13 @@ endline(struct termp *p)
  void
  term_newln(struct termp *p)
  {
@@ -911,7 +938,7 @@ index e3f0f270..3efb8e86 100644
  }
  
  /*
-@@ -488,12 +821,16 @@ term_newln(struct termp *p)
+@@ -488,12 +825,16 @@ term_newln(struct termp *p)
  void
  term_vspace(struct termp *p)
  {
@@ -929,7 +956,7 @@ index e3f0f270..3efb8e86 100644
  }
  
  /* Swap current and previous font; for \fP and .ft P */
-@@ -501,20 +838,27 @@ void
+@@ -501,20 +842,27 @@ void
  term_fontlast(struct termp *p)
  {
  	enum termfont	 f;
@@ -957,7 +984,7 @@ index e3f0f270..3efb8e86 100644
  }
  
  /* Set font, save previous; for mdoc(7), eqn(7), and tbl(7). */
-@@ -522,32 +866,49 @@ void
+@@ -522,32 +870,49 @@ void
  term_fontpush(struct termp *p, enum termfont f)
  {
  	enum termfont	 fl;
@@ -1009,7 +1036,7 @@ index e3f0f270..3efb8e86 100644
  }
  
  /*
-@@ -570,14 +931,18 @@ term_word(struct termp *p, const char *word)
+@@ -570,14 +935,18 @@ term_word(struct termp *p, const char *word)
  	int		 bu;		/* Width in basic units. */
  	enum mandoc_esc	 esc;
  
@@ -1028,7 +1055,7 @@ index e3f0f270..3efb8e86 100644
  		}
  		if (p->flags & TERMP_PREKEEP)
  			p->flags |= TERMP_KEEP;
-@@ -590,6 +955,8 @@ term_word(struct termp *p, const char *word)
+@@ -590,6 +959,8 @@ term_word(struct termp *p, const char *word)
  	}
  
  	while ('\0' != *word) {
@@ -1037,7 +1064,7 @@ index e3f0f270..3efb8e86 100644
  		if ('\\' != *word) {
  			if (TERMP_NBRWORD & p->flags) {
  				if (' ' == *word) {
-@@ -789,8 +1156,12 @@ term_word(struct termp *p, const char *word)
+@@ -789,8 +1160,12 @@ term_word(struct termp *p, const char *word)
  			/* Trim trailing backspace/blank pair. */
  			if (p->tcol->lastcol > 2 &&
  			    (p->tcol->buf[p->tcol->lastcol - 1] == ' ' ||
@@ -1051,7 +1078,7 @@ index e3f0f270..3efb8e86 100644
  			if (p->col > p->tcol->lastcol)
  				p->col = p->tcol->lastcol;
  			continue;
-@@ -817,16 +1188,29 @@ term_word(struct termp *p, const char *word)
+@@ -817,16 +1192,29 @@ term_word(struct termp *p, const char *word)
  		}
  	}
  	p->flags &= ~TERMP_NBRWORD;
@@ -1084,7 +1111,7 @@ index e3f0f270..3efb8e86 100644
  }
  
  /*
-@@ -838,6 +1222,8 @@ adjbuf(struct termp_col *c, size_t sz)
+@@ -838,6 +1226,8 @@ adjbuf(struct termp_col *c, size_t sz)
  static void
  directc(struct termp *p, int c)
  {
@@ -1093,7 +1120,7 @@ index e3f0f270..3efb8e86 100644
  	switch (c) {
  	case ASCII_BREAK:
  	case ASCII_NBRZW:
-@@ -851,7 +1237,9 @@ directc(struct termp *p, int c)
+@@ -851,7 +1241,9 @@ directc(struct termp *p, int c)
  	default:
  		break;
  	}
@@ -1103,7 +1130,7 @@ index e3f0f270..3efb8e86 100644
  }
  
  static void
-@@ -861,14 +1249,39 @@ bufferc(struct termp *p, char c)
+@@ -861,14 +1253,39 @@ bufferc(struct termp *p, char c)
  		directc(p, c);
  		return;
  	}
@@ -1147,7 +1174,7 @@ index e3f0f270..3efb8e86 100644
  void
  term_tab_ref(struct termp *p)
  {
-@@ -892,8 +1305,9 @@ encode1(struct termp *p, int c)
+@@ -892,8 +1309,9 @@ encode1(struct termp *p, int c)
  		return;
  	}
  
@@ -1159,7 +1186,7 @@ index e3f0f270..3efb8e86 100644
  
  	f = (c == ASCII_HYPH || c > 127 || isgraph(c)) ?
  	    p->fontq[p->fonti] : TERMFONT_NONE;
-@@ -903,22 +1317,21 @@ encode1(struct termp *p, int c)
+@@ -903,22 +1321,21 @@ encode1(struct termp *p, int c)
  		    p->tcol->buf[p->col - 1] == '\t')
  			p->col--;
  		else
@@ -1189,7 +1216,7 @@ index e3f0f270..3efb8e86 100644
  	if (p->tcol->lastcol < ++p->col)
  		p->tcol->lastcol = p->col;
  	if (p->flags & TERMP_BACKAFTER) {
-@@ -938,17 +1351,18 @@ encode(struct termp *p, const char *word, size_t sz)
+@@ -938,17 +1355,18 @@ encode(struct termp *p, const char *word, size_t sz)
  		return;
  	}
  
@@ -1214,7 +1241,7 @@ index e3f0f270..3efb8e86 100644
  
  			/*
 diff --git a/term.h b/term.h
-index 35c83ceb..8532464c 100644
+index 35c83ce..8532464 100644
 --- a/term.h
 +++ b/term.h
 @@ -37,12 +37,88 @@ enum	termfont {
@@ -1356,7 +1383,7 @@ index 35c83ceb..8532464c 100644
 +int		  term_exec_reference_end(struct termp *);
 +int		  term_exec_anchor(struct termp *, const struct roff_node *);
 diff --git a/term_ascii.c b/term_ascii.c
-index c60bdbfb..0edd1409 100644
+index c60bdbf..0edd140 100644
 --- a/term_ascii.c
 +++ b/term_ascii.c
 @@ -220,7 +220,8 @@ ascii_letter(struct termp *p, int c)

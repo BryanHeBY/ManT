@@ -298,6 +298,8 @@ struct mant_mandoc_flush_record {
 	uint32_t accepted_end;
 	uint32_t consumed_start;
 	uint32_t consumed_end;
+	uint32_t tail_discarded_start;
+	uint32_t tail_discarded_end;
 	uint32_t remaining_start;
 	uint32_t remaining_end;
 	uint32_t fragment_start;

@@ -95,6 +95,19 @@ pub(super) struct NativeDefinitionFact {
     pub(super) body_flushes: Vec<ExecutionFlush>,
 }
 
+/// One native `term_fill()`/`term_field()` decision together with the atom
+/// fates that make its accepted and discarded ranges observable to a
+/// projection consumer.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeFieldFact {
+    pub(super) flush: ExecutionFlush,
+    pub(super) emitted_atoms: Vec<u32>,
+    pub(super) consumed_atoms: Vec<u32>,
+    pub(super) replaced_atoms: Vec<u32>,
+    pub(super) trailing_discarded_atoms: Vec<u32>,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeTableCell {
@@ -156,7 +169,72 @@ pub(super) struct NativeProjection {
     pub(super) references: Vec<NativeReference>,
     pub(super) anchors: Vec<NativeAnchor>,
     pub(super) definitions: Vec<NativeDefinitionFact>,
+    pub(super) fields: Vec<NativeFieldFact>,
     pub(super) tables: Vec<NativeTable>,
+}
+
+fn field_facts(report: &NativeExecutionReport) -> Vec<NativeFieldFact> {
+    let mut atoms_by_generation =
+        vec![BTreeMap::<u32, Vec<u32>>::new(); report.buffer_generations().len()];
+    for atom in report.atoms() {
+        let (Some(generation), Some(slot)) = (atom.buffer_generation, atom.slot) else {
+            continue;
+        };
+        atoms_by_generation[generation as usize]
+            .entry(slot)
+            .or_default()
+            .push(atom.key.0);
+    }
+
+    report
+        .flushes()
+        .iter()
+        .map(|flush| {
+            let atoms = &atoms_by_generation[flush.buffer_generation as usize];
+            let mut emitted_atoms = Vec::new();
+            let mut consumed_atoms = Vec::new();
+            let mut replaced_atoms = Vec::new();
+            let mut trailing_discarded_atoms = Vec::new();
+            for range in [flush.accepted.clone(), flush.tail_discarded.clone()] {
+                for keys in atoms.range(range).map(|(_, keys)| keys) {
+                    let occupant = keys
+                        .iter()
+                        .rposition(|key| {
+                            report.atoms()[*key as usize].disposition != AtomDisposition::Replaced
+                        })
+                        .expect("validated native field slot has a current occupant");
+                    let mut first = occupant;
+                    while first > 0
+                        && report.atoms()[keys[first - 1] as usize].replaced_by
+                            == Some(libmandoc_rs::AtomKey(keys[first]))
+                    {
+                        first -= 1;
+                    }
+                    for &key in &keys[first..=occupant] {
+                        match report.atoms()[key as usize].disposition {
+                            AtomDisposition::Emitted => emitted_atoms.push(key),
+                            AtomDisposition::Consumed => consumed_atoms.push(key),
+                            AtomDisposition::Replaced => replaced_atoms.push(key),
+                            AtomDisposition::TrailingDiscard => trailing_discarded_atoms.push(key),
+                            AtomDisposition::Buffered => {
+                                debug_assert!(
+                                    false,
+                                    "sealed native field retained a buffered atom"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            NativeFieldFact {
+                flush: flush.clone(),
+                emitted_atoms,
+                consumed_atoms,
+                replaced_atoms,
+                trailing_discarded_atoms,
+            }
+        })
+        .collect()
 }
 
 fn mark_definition_items(
@@ -880,6 +958,7 @@ pub(super) fn project(
             })
             .collect(),
         definitions: definition_facts(document, report),
+        fields: field_facts(report),
         tables: table_projection(document, report),
     }
 }
@@ -1333,10 +1412,176 @@ mod tests {
                 .all(|flush| {
                     flush.accepted.start == flush.scanned.start
                         && flush.accepted.end == flush.consumed.end
-                        && flush.remaining.end == flush.scanned.end
+                        && flush.accepted.end == flush.tail_discarded.start
+                        && flush.tail_discarded.end == flush.remaining.start
+                        && flush.accepted.end <= flush.scanned.end
                         && flush.fragments.end >= flush.fragments.start
                 })
         );
+    }
+
+    fn assert_contracted_slot_is_not_reassigned(
+        report: &libmandoc_rs::ExecutionReport,
+        projection: &NativeProjection,
+    ) {
+        let shrunk = projection
+            .fields
+            .iter()
+            .find(|field| {
+                field.flush.node.is_some_and(|node| {
+                    let owner = &report.execution.nodes()[node.0 as usize];
+                    owner.source == 0
+                        && owner.line == 33
+                        && owner.kind == NodeKind::Body
+                        && owner.macro_name.as_deref() == Some("SH")
+                })
+            })
+            .expect("SHRUNK BUFFER field");
+        let projected = shrunk
+            .emitted_atoms
+            .iter()
+            .chain(&shrunk.consumed_atoms)
+            .chain(&shrunk.replaced_atoms)
+            .chain(&shrunk.trailing_discarded_atoms)
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let cleared_then_reused = report
+            .execution
+            .atoms()
+            .iter()
+            .filter(|atom| {
+                atom.buffer_generation == Some(shrunk.flush.buffer_generation)
+                    && atom.disposition == AtomDisposition::TrailingDiscard
+                    && atom
+                        .slot
+                        .is_some_and(|slot| shrunk.flush.accepted.contains(&slot))
+            })
+            .find(|cleared| {
+                report.execution.atoms().iter().any(|later| {
+                    later.buffer_generation == cleared.buffer_generation
+                        && later.slot == cleared.slot
+                        && later.sequence > cleared.sequence
+                        && later.disposition != AtomDisposition::Replaced
+                })
+            })
+            .expect("cleared overstrike slot reused before the field flush");
+        assert!(
+            !projected.contains(&cleared_then_reused.key.0),
+            "a contraction-era discarded atom is not part of the later field"
+        );
+    }
+
+    fn expected_field_atom_keys(
+        report: &libmandoc_rs::ExecutionReport,
+        field: &NativeFieldFact,
+    ) -> std::collections::BTreeSet<u32> {
+        let mut expected = std::collections::BTreeSet::new();
+        for range in [
+            field.flush.accepted.clone(),
+            field.flush.tail_discarded.clone(),
+        ] {
+            for slot in range {
+                let current = report
+                    .execution
+                    .atoms()
+                    .iter()
+                    .rev()
+                    .find(|atom| {
+                        atom.buffer_generation == Some(field.flush.buffer_generation)
+                            && atom.slot == Some(slot)
+                            && atom.disposition != AtomDisposition::Replaced
+                    })
+                    .expect("validated field slot has a current occupant");
+                let mut current_key = current.key.0;
+                expected.insert(current_key);
+                while let Some(predecessor) = report.execution.atoms().iter().find(|atom| {
+                    atom.buffer_generation == Some(field.flush.buffer_generation)
+                        && atom.slot == Some(slot)
+                        && atom.replaced_by == Some(libmandoc_rs::AtomKey(current_key))
+                }) {
+                    current_key = predecessor.key.0;
+                    assert!(
+                        expected.insert(current_key),
+                        "replacement ancestry is acyclic"
+                    );
+                }
+            }
+        }
+        expected
+    }
+
+    #[test]
+    fn field_projection_consumes_native_ranges_without_reconstructing_layout() {
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "field-consumption-man.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/field-consumption-man.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        assert_eq!(projection.fields.len(), report.execution.flushes().len());
+        assert!(projection.fields.iter().all(|field| {
+            let projected = field
+                .emitted_atoms
+                .iter()
+                .chain(&field.consumed_atoms)
+                .chain(&field.replaced_atoms)
+                .chain(&field.trailing_discarded_atoms)
+                .copied()
+                .collect::<Vec<_>>();
+            let projected_set = projected
+                .iter()
+                .copied()
+                .collect::<std::collections::BTreeSet<_>>();
+            field.emitted_atoms.iter().all(|key| {
+                report.execution.atoms()[*key as usize].disposition == AtomDisposition::Emitted
+            }) && field.consumed_atoms.iter().all(|key| {
+                report.execution.atoms()[*key as usize].disposition == AtomDisposition::Consumed
+            }) && field.replaced_atoms.iter().all(|key| {
+                report.execution.atoms()[*key as usize].disposition == AtomDisposition::Replaced
+            }) && field.trailing_discarded_atoms.iter().all(|key| {
+                report.execution.atoms()[*key as usize].disposition
+                    == AtomDisposition::TrailingDiscard
+            }) && projected.len() == projected_set.len()
+                && projected_set == expected_field_atom_keys(&report, field)
+        }));
+
+        assert_contracted_slot_is_not_reassigned(&report, &projection);
+
+        let no_content = projection
+            .fields
+            .iter()
+            .find(|field| field.flush.outcome == libmandoc_rs::FlushOutcome::NoContent)
+            .expect("whitespace-only native field");
+        assert!(no_content.emitted_atoms.is_empty());
+        assert!(no_content.consumed_atoms.is_empty());
+        assert_eq!(no_content.trailing_discarded_atoms.len(), 4);
+        assert!(
+            no_content.trailing_discarded_atoms.iter().any(|key| {
+                report.execution.atoms()[*key as usize].kind == AtomKind::TabReference
+            })
+        );
+
+        let deferred = projection
+            .fields
+            .iter()
+            .filter(|field| field.flush.outcome == libmandoc_rs::FlushOutcome::DeferredColumn)
+            .collect::<Vec<_>>();
+        assert_eq!(deferred.len(), 2);
+        assert!(deferred.iter().all(|field| {
+            !field.emitted_atoms.is_empty()
+                && !field.flush.remaining.is_empty()
+                && field.flush.tail_discarded.end == field.flush.remaining.start
+                && field.consumed_atoms.iter().any(|key| {
+                    report.execution.atoms()[*key as usize]
+                        .slot
+                        .is_some_and(|slot| field.flush.tail_discarded.contains(&slot))
+                })
+        }));
     }
 
     #[test]

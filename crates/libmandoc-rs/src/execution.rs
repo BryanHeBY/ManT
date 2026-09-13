@@ -509,19 +509,26 @@ pub struct ExecutionFlush {
     pub generation: u32,
     /// Owning buffer-generation fact.
     pub buffer_generation: u32,
-    /// Buffer range scanned by the native fill algorithm.
+    /// Buffer range actually inspected by the native fill algorithm.
     pub scanned: Range<u32>,
     /// Buffer range accepted for this field segment.
     pub accepted: Range<u32>,
-    /// Buffer range consumed by the device.
+    /// Buffer range consumed by `term_field()`.
     pub consumed: Range<u32>,
-    /// Buffer range remaining for subsequent segments.
+    /// Contiguous suffix discarded after field execution while selecting the
+    /// outcome. Non-contiguous controls and whitespace discarded inside the
+    /// accepted field remain represented by atom dispositions.
+    pub tail_discarded: Range<u32>,
+    /// Buffer range actually retained for a subsequent flush segment. Its end
+    /// is the current logical buffer end and can be below the generation's
+    /// historical high-water `extent` after a native buffer contraction.
     pub remaining: Range<u32>,
     /// Emitted fragment range.
     pub fragments: Range<u32>,
     /// Stable terminal flags before the flush.
     pub flags_before: u32,
-    /// Stable terminal flags after the flush.
+    /// Stable terminal flags when this segment's branch outcome became known,
+    /// before any enclosing `term_flushln()` end-of-line action.
     pub flags_after: u32,
     /// Boundary causally containing this flush.
     pub boundary: Option<u32>,
@@ -537,11 +544,12 @@ pub struct ExecutionFlush {
     pub target_bu: i64,
     /// Tab offset before the segment.
     pub taboff_before: i64,
-    /// Tab offset after the segment.
+    /// Tab offset at the segment outcome checkpoint.
     pub taboff_after: i64,
     /// Visual position before/after the segment.
     pub visual_before: i64,
-    /// Visual position after the segment.
+    /// Visual position at the segment outcome checkpoint, before any enclosing
+    /// end-of-line action resets the device position.
     pub visual_after: i64,
     /// Total execution order.
     pub sequence: u64,

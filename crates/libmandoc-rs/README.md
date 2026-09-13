@@ -477,7 +477,23 @@ The remaining patches implement the synchronous embedding boundary:
 - `0028-observe-native-terminal-execution.patch` adds typed, fail-fast observer
   hooks at the existing terminal traversal, buffer, fill, field, boundary, and
   device output points. It reports native execution facts without adding a
-  second formatter or changing behavior when no observer is installed.
+  second formatter or changing behavior when no observer is installed. Fill
+  records distinguish the cells actually scanned, the accepted/consumed field,
+  a contiguous branch-discarded suffix, and the exact surviving continuation;
+  non-contiguous control and whitespace fates remain attached to their atoms.
+  Each buffer-generation chain starts at slot zero and preserves cursor,
+  execution-order, and tab-offset continuity across wrapped and deferred
+  segments. Tail ranges have dense final provenance: continuing tails contain
+  only the spaces consumed by an automatic line break, while terminal tails
+  contain only the whitespace and control cells skipped by fixed CVS. A
+  flush's current logical end may be below the generation's historical extent
+  after fixed CVS contracts an overstrike buffer. When that contraction lets a
+  later glyph reuse a cleared slot in the same generation, the newest atom is
+  the current occupant used for dense field validation; the earlier discarded
+  atom remains in the bounded report as execution history, not as part of the
+  later field. Replacement edges must join adjacent writes inside one slot
+  epoch, and every current occupant through the initial logical field end must
+  predate that generation's first flush.
 - `0029-observe-native-table-execution.patch` extends the same observer through
   the existing `tbl_term.c` traversal with bounded table, row, cell, and
   authored-payload records. It preserves column interleaving as execution
