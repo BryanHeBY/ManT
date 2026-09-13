@@ -263,7 +263,7 @@ pub(super) fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
             OutlineNodeReference::DocumentSection {
                 path: path.to_string().into(),
                 id: section.id.clone(),
-                title: section.heading.plain_text(),
+                title: section.heading.single_line_text(),
             },
         ),
         LocatedNode::Entry {

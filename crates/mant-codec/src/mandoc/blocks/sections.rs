@@ -1,9 +1,9 @@
 //! Section/root ownership and source-ordered heading reconstruction.
 use super::{
     Block, LoweringContext, Node, NodeKind, Section, first_part_children,
-    lower_blocks_with_spacing, lower_inline_nodes, plain_text, section_spacing, source_span,
-    update_paragraph_distance,
+    lower_blocks_with_spacing, section_spacing, source_span, update_paragraph_distance,
 };
+use crate::mandoc::inline::authored_section_phrase;
 
 pub(in crate::mandoc) fn lower_document_structure(
     root: &Node,
@@ -75,9 +75,7 @@ fn lower_section(
     } else {
         context.active_mdoc_section()
     };
-    let authored_title = plain_text(&lower_inline_nodes(head, context.default_name))
-        .trim()
-        .to_owned();
+    let authored_title = authored_section_phrase(head, context.default_name);
     let heading = context.lower_section_heading(
         head,
         formatter,

@@ -86,6 +86,19 @@ that crate was not published for that change.
   a line-boundary request. `TP`/`IP`/`TQ` fitting no longer loses that boundary
   while lowering a detached body; later requests do not retroactively affect
   the label, and ordinary run-in definitions retain their layout.
+- Resolve mdoc `Sx` links from their authored section phrase rather than their
+  formatter-mutated label. Persistent `Sm` or zero-advance state can still
+  change the displayed spelling without silently redirecting the typed link.
+- Preserve native sibling adjacency while executing `An` state in section
+  headings, so `Fl` and `Pf` retain their source-defined joins. Heading and
+  diagnostic-list font scopes now also retain the terminal previous-font
+  register effects consumed by later `\fP`. Structural heading breaks remain
+  visible in document content, while outlines, breadcrumbs, and tabs derive a
+  normalized single-line label instead of exposing a replacement character.
+- Keep mdoc inset and diagnostic heads, their generated one- or two-cell gap,
+  and the first body word in one formatter execution stream. Zero-advance
+  glyphs can therefore be overwritten at the native head/body boundary
+  without turning an IR ownership split into a spurious line flush.
 
 ### mant-ui 0.12.0
 

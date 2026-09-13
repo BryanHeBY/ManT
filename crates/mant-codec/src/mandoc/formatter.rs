@@ -4,7 +4,7 @@ use libmandoc_rs::AuthorMode;
 use super::inline::FontState;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum AuthorFlow {
+pub(in crate::mandoc) enum AuthorFlow {
     #[default]
     Automatic,
     Split,
@@ -73,19 +73,37 @@ impl FormatterState {
         mode: Option<AuthorMode>,
         authors_section: bool,
     ) -> bool {
+        self.author_flow.execute(mode, authors_section)
+    }
+
+    pub(super) const fn author_flow(self) -> AuthorFlow {
+        self.author_flow
+    }
+
+    pub(super) fn set_author_flow(&mut self, flow: AuthorFlow) {
+        self.author_flow = flow;
+    }
+}
+
+impl AuthorFlow {
+    pub(in crate::mandoc) fn execute(
+        &mut self,
+        mode: Option<AuthorMode>,
+        authors_section: bool,
+    ) -> bool {
         match mode {
             Some(AuthorMode::Split) => {
-                self.author_flow = AuthorFlow::Split;
+                *self = Self::Split;
                 false
             }
             Some(AuthorMode::NoSplit) => {
-                self.author_flow = AuthorFlow::NoSplit;
+                *self = Self::NoSplit;
                 false
             }
             None => {
-                let breaks = self.author_flow == AuthorFlow::Split;
-                if authors_section && self.author_flow != AuthorFlow::NoSplit {
-                    self.author_flow = AuthorFlow::Split;
+                let breaks = *self == Self::Split;
+                if authors_section && *self != Self::NoSplit {
+                    *self = Self::Split;
                 }
                 breaks
             }

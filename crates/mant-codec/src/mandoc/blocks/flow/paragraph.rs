@@ -55,6 +55,18 @@ impl ParagraphFlow {
         self.builder.inherit_zero_advance_armed(armed);
     }
 
+    pub(super) fn inherit_preserved_execution(
+        &mut self,
+        state: crate::mandoc::inline::PreservedInlineState,
+    ) {
+        self.last_line = state.last_executed_source_line;
+        self.builder.inherit_preserved_execution(state);
+    }
+
+    pub(super) fn append_run_in_cells(&mut self, count: usize) {
+        self.builder.append_run_in_cells(count);
+    }
+
     pub(super) fn take_zero_advance_armed(&mut self) -> bool {
         self.builder.take_zero_advance_armed()
     }
@@ -72,15 +84,23 @@ impl ParagraphFlow {
             .last_line
             .zip(source_line)
             .is_some_and(|(previous, current)| current > previous);
+        let has_executed_predecessor =
+            self.last_line.is_some() || self.builder.has_formatter_cell();
         let source_continues = self.builder.final_source_continuation_or(false);
-        let boundary =
-            if self.builder.has_tight_boundary() || source_continues || !crossed_source_line {
-                FilledBoundary::SameLine
-            } else if starts_indented_line {
-                FilledBoundary::LineBreak
-            } else {
-                FilledBoundary::Word
-            };
+        let boundary = if source_continues {
+            FilledBoundary::SameLine
+        } else if starts_indented_line && has_executed_predecessor {
+            // In CVS print_mdoc_node(), a source line beginning with blank
+            // text calls term_newln() before TERMP_NOSPACE is applied to the
+            // next word. NODE_LINE is execution evidence even when macro
+            // expansion gives both rows the same authored source coordinate;
+            // generated inset/diagnostic cells and `.Ns` cannot erase it.
+            FilledBoundary::LineBreak
+        } else if self.builder.has_tight_boundary() || !crossed_source_line {
+            FilledBoundary::SameLine
+        } else {
+            FilledBoundary::Word
+        };
         if boundary == FilledBoundary::LineBreak {
             self.builder.hard_break();
         } else if boundary == FilledBoundary::Word && ordinary_text {

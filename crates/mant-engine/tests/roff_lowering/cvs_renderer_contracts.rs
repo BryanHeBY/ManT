@@ -8,7 +8,7 @@
 
 use libmandoc_rs::{RenderFormat, Renderer};
 use mant_ir::{
-    Inline, LinkTarget,
+    Block, DefinitionItem, Document, Inline, LinkTarget,
     visit::{self, Visit},
 };
 
@@ -63,12 +63,15 @@ impl<'ir> Visit<'ir> for AuthoredSectionLink {
 }
 
 fn native_terminal(source: &str) -> String {
-    let output = Renderer::new(RenderFormat::Utf8)
+    apply_terminal_backspaces(&native_terminal_raw(source))
+}
+
+fn native_terminal_raw(source: &str) -> String {
+    Renderer::new(RenderFormat::Utf8)
         .with_width(80)
         .render_bytes("contract.1", source.as_bytes())
         .expect("render the pinned native CVS contract")
-        .output;
-    apply_terminal_backspaces(&output)
+        .output
 }
 
 fn apply_terminal_backspaces(output: &str) -> String {
@@ -89,6 +92,18 @@ fn lowered_terminal(source: &str) -> String {
     mant_render::render_query_text(&query)
 }
 
+fn first_definition_item(document: &Document) -> &DefinitionItem {
+    document
+        .sections
+        .iter()
+        .flat_map(|section| section.blocks.iter())
+        .find_map(|block| match block {
+            Block::DefinitionList { items, .. } => items.first(),
+            _ => None,
+        })
+        .expect("definition item")
+}
+
 #[test]
 #[allow(clippy::too_many_lines)] // The table is intentionally one visible contract ledger.
 fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
@@ -105,6 +120,147 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
             ),
             native_contains: &["     BEFOREAFTER\n     LAST"],
             lowered_contains: &["BEFOREAFTER\nLAST"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "Sx display spacing does not change its authored destination",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+                ".Sh NEXT SECTION\n.No FIRST\n.Sh NEXTSECTION\n.No SECOND\n",
+                ".Sh SEE ALSO\n.Sm off\n.Sx NEXT SECTION\n",
+            ),
+            native_contains: &["     NEXTSECTION"],
+            lowered_contains: &["NEXTSECTION"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "Fl sees an adjacent An while heading state executes in order",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+                ".Sh DESCRIPTION\n.Sh Fl An Alice\n.No BODY\n",
+            ),
+            native_contains: &["-Alice"],
+            lowered_contains: &["-Alice"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "Pf sees an adjacent An while heading state executes in order",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+                ".Sh DESCRIPTION\n.Sh Pf $ An Alice\n.No BODY\n",
+            ),
+            native_contains: &["$Alice"],
+            lowered_contains: &["$Alice"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "control-only An preserves Fl adjacency in a heading",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+                ".Sh DESCRIPTION\n.Sh Fl An -split Cm name\n.No BODY\n",
+            ),
+            native_contains: &["-name"],
+            lowered_contains: &["-name"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "nested An executes at its recursive formatter position",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+                ".Sh DESCRIPTION\n.Sh Dq An -split An Alice\n.No BODY\n",
+            ),
+            native_contains: &["“\nAlice”"],
+            lowered_contains: &["“\nAlice”"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "inset head and generated body gap share zero-advance state",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".Bl -inset\n.It A\\zX\n.No BC\n.El\n",
+            ),
+            native_contains: &["     A\u{a0}BC"],
+            lowered_contains: &["A BC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "bare zero-advance consumes an inset body gap",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".Bl -inset\n.It A\\z\n.No BC\n.El\n",
+            ),
+            native_contains: &["     ABC"],
+            lowered_contains: &["ABC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "diagnostic head and two generated cells share zero-advance state",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".Bl -diag\n.It A\\zX\n.No BC\n.El\n",
+            ),
+            native_contains: &["     A\u{a0}\u{a0}BC"],
+            lowered_contains: &["A  BC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "indented inset body starts a new native formatter row",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".Bl -inset\n.It A\n BC\n.El\n",
+            ),
+            native_contains: &["     A\u{a0}\n      BC"],
+            lowered_contains: &["A \n BC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "transparent target preserves an indented diagnostic body row",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".Bl -diag\n.It A\n.Tg mark\n BC\n.El\n",
+            ),
+            native_contains: &["     A\u{a0}\u{a0}\n      BC"],
+            lowered_contains: &["A  \n BC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "macro-expanded inset uses NODE_LINE rather than source coordinates",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".de XX\n.Bl -inset\n.It A\\zX\n BC\n.El\n..\n.XX\n",
+            ),
+            native_contains: &["\n      BC"],
+            lowered_contains: &["A \n BC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "macro-expanded diagnostic uses NODE_LINE rather than source coordinates",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".de XX\n.Bl -diag\n.It A\\zX\n BC\n.El\n..\n.XX\n",
+            ),
+            native_contains: &["\n      BC"],
+            lowered_contains: &["A  \n BC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "empty diagnostic head still executes its generated body cells",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".Bl -diag\n.It\n BC\n.El\n",
+            ),
+            native_contains: &["     \u{a0}\u{a0}\n      BC"],
+            lowered_contains: &["  \n BC"],
+            selected: SelectedContract::Cvs,
+        },
+        TerminalCase {
+            label: "macro-expanded empty diagnostic head retains its generated row",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+                ".de XX\n.Bl -diag\n.It\n BC\n.El\n..\n.XX\n",
+            ),
+            native_contains: &["     \u{a0}\u{a0}\n      BC"],
+            lowered_contains: &["  \n BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
@@ -326,6 +482,253 @@ fn executed_heading_display_cannot_shadow_an_authored_navigation_title() {
             diagnostic.code.as_deref() != Some("unresolved-section-reference")
         })
     );
+}
+
+#[test]
+fn sx_display_state_cannot_change_its_authored_destination() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+        ".Sh NEXT SECTION\n.No FIRST\n.Sh NEXTSECTION\n.No SECOND\n",
+        ".Sh SEE ALSO\n.Sm off\n.Sx NEXT SECTION\n",
+    );
+    let native = Renderer::new(RenderFormat::Html)
+        .with_html_fragment(true)
+        .render_bytes("sx-authored.1", source.as_bytes())
+        .expect("render native Sx identity")
+        .output;
+    assert!(
+        native.contains("href=\"#NEXT_SECTION\">NEXTSECTION</a>"),
+        "native HTML: {native}"
+    );
+
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower Sx identity");
+    let document = query.document.as_ref().expect("lowered document");
+    let mut correct = AuthoredSectionLink {
+        id: "next-section",
+        found: false,
+    };
+    correct.visit_document(document);
+    assert!(correct.found, "Sx target was inferred from display text");
+}
+
+#[test]
+fn sx_authored_escape_cannot_collapse_into_a_display_equivalent_heading() {
+    // html.c::html_make_id() derives both Sh and Sx fragments from the
+    // authored text before terminal `\z` projection.  The two visually equal
+    // headings therefore remain distinct navigation identities.
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+        ".Sh AC\n.No PLAIN\n.Sh A\\zBC\n.No ESCAPED\n",
+        ".Sh SEE ALSO\n.Sx A\\zBC\n",
+    );
+    let native = Renderer::new(RenderFormat::Html)
+        .with_html_fragment(true)
+        .render_bytes("sx-authored-escape.1", source.as_bytes())
+        .expect("render native escape-bearing Sx identity")
+        .output;
+    assert!(native.contains("id=\"A_zBC\""), "native HTML: {native}");
+    assert!(
+        native.contains("href=\"#A_zBC\">AC</a>"),
+        "native HTML: {native}"
+    );
+
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower authored Sx escape");
+    let document = query.document.as_ref().expect("lowered document");
+    assert!(document.sections.iter().any(|section| section.id == "ac"));
+    assert!(
+        document
+            .sections
+            .iter()
+            .any(|section| section.id == "a-zbc")
+    );
+    let mut correct = AuthoredSectionLink {
+        id: "a-zbc",
+        found: false,
+    };
+    correct.visit_document(document);
+    assert!(correct.found, "Sx target was inferred from projected AC");
+}
+
+#[test]
+fn nested_heading_author_modes_execute_without_losing_inline_adjacency() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+        ".Sh Dq An -split An Alice\n.No BODY\n",
+    );
+    let native = native_terminal(source);
+    assert!(native.contains("“\nAlice”"), "native terminal: {native:?}");
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower nested An heading");
+    let heading = &query.document.as_ref().unwrap().sections[1].heading.content;
+    assert!(
+        heading
+            .iter()
+            .any(|inline| matches!(inline, Inline::LineBreak)),
+        "nested An split was not executed: {heading:?}"
+    );
+    assert_eq!(super::inline_text(heading), "“\nAlice”");
+}
+
+#[test]
+fn heading_wrappers_remove_only_the_structural_bold_layer() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+        ".Sh TARGET\n.No BODY\n.Sh Sx TARGET\n.No SX\n",
+        ".Sh Lk https://example.org Label\n.No LK\n",
+    );
+    let native = native_terminal_raw(source);
+    assert!(
+        native.contains("_\u{8}T\u{8}T"),
+        "CVS heading did not combine bold and underline: {native:?}"
+    );
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower linked headings");
+    let markdown = mant_codec::encode::render_markdown(&query);
+    assert!(markdown.contains("## *TARGET*"), "{markdown}");
+    assert!(
+        markdown.contains("## [*Label*](https://example.org)"),
+        "{markdown}"
+    );
+    assert!(!markdown.contains("***TARGET***"), "{markdown}");
+    assert!(!markdown.contains("***Label***"), "{markdown}");
+}
+
+#[test]
+fn run_in_definition_handoff_preserves_native_gap_and_source_row_contracts() {
+    let cases = [
+        ("inset", "", "BC", ""),
+        ("inset", "\\&", "BC", ""),
+        ("inset", "A", " BC", "A"),
+        ("diag", "A", " BC", "A"),
+        ("diag", "", " BC", ""),
+    ];
+    for (style, head, body, term) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{style}\n.It {head}\n{body}\n.El\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower run-in item");
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let term_text = item
+            .terms
+            .iter()
+            .map(|term| super::inline_text(term))
+            .collect::<String>();
+        assert_eq!(term_text, term, "{style} {head:?}: {item:?}");
+        let description = item
+            .description
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                _ => None,
+            })
+            .unwrap();
+        let expected = match (style, head, body.starts_with(' ')) {
+            ("inset", "", _) => "BC",
+            ("inset", "\\&", _) => " BC",
+            ("inset", _, true) => " \n BC",
+            ("diag", _, true) => "  \n BC",
+            _ => unreachable!(),
+        };
+        assert_eq!(description, expected, "{style} {head:?}: {item:?}");
+        assert!(item.layout.inline_term, "{style} {head:?}: {item:?}");
+        assert_eq!(item.layout.min_term_gap_columns, 0);
+    }
+}
+
+#[test]
+fn transparent_target_does_not_reset_a_run_in_formatter_boundary() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+        ".Bl -diag\n.It A\n.Tg mark\n BC\n.El\n",
+    );
+    let native = native_terminal(source);
+    assert!(native.contains("A\u{a0}\u{a0}\n      BC"), "{native:?}");
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower target run-in");
+    let item = first_definition_item(query.document.as_ref().unwrap());
+    let description = item
+        .description
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(description, "  \n BC");
+    assert!(
+        serde_json::to_string(item).unwrap().contains("mark"),
+        "target was not attached to its run-in owner: {item:?}"
+    );
+}
+
+#[test]
+fn inherited_zero_advance_cannot_change_an_sx_destination() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+        ".Sh ABC\n.No FIRST\n.Sh BC\n.No SECOND\n",
+        ".Sh SEE ALSO\n.No \\z\n.Sx ABC\n",
+    );
+    let native = Renderer::new(RenderFormat::Html)
+        .with_html_fragment(true)
+        .render_bytes("sx-zero.1", source.as_bytes())
+        .expect("render native Sx zero-advance identity")
+        .output;
+    assert!(
+        native.contains("href=\"#ABC\""),
+        "native HTML lost authored target: {native}"
+    );
+
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower Sx zero identity");
+    let document = query.document.as_ref().expect("lowered document");
+    let mut correct = AuthoredSectionLink {
+        id: "abc",
+        found: false,
+    };
+    correct.visit_document(document);
+    assert!(correct.found, "display BC incorrectly selected section BC");
+}
+
+#[test]
+fn heading_and_diagnostic_scopes_preserve_previous_font_execution() {
+    let cases = [
+        concat!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+            ".Sh NEXT\\fI\n\\fPTAIL\n",
+        ),
+        concat!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+            ".Ss NEXT\\fI\n\\fPTAIL\n",
+        ),
+        concat!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+            ".Bl -diag\n.It A\\fI\n\\fPTAIL\n.El\n",
+        ),
+    ];
+    for source in cases {
+        let native = native_terminal_raw(source);
+        assert!(
+            native.contains("T\u{8}TA\u{8}AI\u{8}IL\u{8}L"),
+            "native terminal did not retain bold TAIL: {native:?}"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower font scope");
+        let mut strong_tail = StrongText(false);
+        strong_tail.visit_document(query.document.as_ref().expect("lowered document"));
+        assert!(strong_tail.0, "lowered IR did not retain bold TAIL");
+    }
+
+    // mdoc_term.c applies the diagnostic bold scope in termp_it_pre(), but
+    // inset has no such scope.  term_fontpopq() restores the current stack
+    // while leaving the previous-font register updated for a later `\fP`.
+    let inset = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+        ".Bl -inset\n.It A\\fI\n\\fPTAIL\n.El\n",
+    );
+    let native = native_terminal_raw(inset);
+    assert!(
+        !native.contains("T\u{8}TA\u{8}AI\u{8}IL\u{8}L"),
+        "inset made TAIL bold: {native:?}"
+    );
+    let query = mant_loader::load_roff_bytes(inset.as_bytes()).expect("lower inset font scope");
+    let mut strong_tail = StrongText(false);
+    strong_tail.visit_document(query.document.as_ref().expect("lowered document"));
+    assert!(!strong_tail.0, "inset inherited diagnostic bold scope");
 }
 
 #[test]

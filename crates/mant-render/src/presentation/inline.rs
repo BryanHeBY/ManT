@@ -16,6 +16,8 @@ pub struct InlinePresentation {
     pub code: bool,
     /// A source link encloses this text; the target is supplied separately.
     pub link: bool,
+    /// This span is an IR-authored structural line break, not untrusted text.
+    pub structural_break: bool,
     /// This exact source range belongs to a validated semantic name.
     pub entry_kind: Option<EntryKind>,
 }
@@ -117,7 +119,17 @@ fn walk<'a>(
                 cursor,
                 emit,
             ),
-            Inline::LineBreak => text("\n", style, target, names, cursor, emit),
+            Inline::LineBreak => text(
+                "\n",
+                InlinePresentation {
+                    structural_break: true,
+                    ..style
+                },
+                target,
+                names,
+                cursor,
+                emit,
+            ),
             Inline::Anchor { .. } => {}
         }
     }

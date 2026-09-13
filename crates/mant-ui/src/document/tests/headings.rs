@@ -111,11 +111,15 @@ fn section_labels_do_not_replace_linked_body_heading_content() {
         source: None,
     };
     let view = DocumentView::new(&query);
-    assert_eq!(view.navigation()[0].title, "Heading and mail\ntail");
+    assert_eq!(view.navigation()[0].title, "Heading and mail tail");
     for width in [12, 40, 80] {
         let rendered = view.render(width);
         assert_eq!(rendered.search("Heading").len(), 1);
         assert_eq!(rendered.search("mail").len(), 1);
+        assert!(
+            rendered.search("tail")[0].row > rendered.search("mail")[0].row,
+            "the body heading must retain its authoritative structural break"
+        );
         assert_eq!(rendered.anchor_row("description"), Some(0));
         assert_eq!(
             rendered.anchor_row("heading-tail"),

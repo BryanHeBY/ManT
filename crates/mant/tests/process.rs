@@ -217,6 +217,56 @@ fn source_rows_survive_plain_and_ansi_process_facades() {
     }
 }
 
+#[cfg(feature = "roff")]
+#[test]
+fn structural_heading_breaks_survive_the_cli_sanitization_boundary() {
+    // The pinned CVS formatter recursively executes termp_an_pre(), placing
+    // Alice on the next formatter row inside the Dq heading. Only the typed IR
+    // LineBreak is trusted here; a newline embedded in source text remains
+    // subject to terminal sanitization.
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+        ".Sh Dq An -split An Alice\n.No BODY\n",
+    );
+    let output = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "text",
+            "--color",
+            "never",
+        ],
+        source,
+    );
+    assert!(output.status.success(), "{:?}", output.stderr);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("“\nAlice”"), "{stdout:?}");
+    assert!(!stdout.contains('�'), "{stdout:?}");
+
+    let outline = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--outline",
+            "--format",
+            "text",
+            "--color",
+            "never",
+        ],
+        source,
+    );
+    assert!(outline.status.success(), "{:?}", outline.stderr);
+    let outline = String::from_utf8(outline.stdout).unwrap();
+    assert!(outline.contains("“ Alice”"), "{outline:?}");
+    assert!(!outline.contains("“\nAlice”"), "{outline:?}");
+    assert!(!outline.contains('�'), "{outline:?}");
+}
+
 #[test]
 fn default_file_stdin_and_request_outputs_are_text() {
     let path = std::env::temp_dir().join(format!("mant-text-default-{}.md", std::process::id()));

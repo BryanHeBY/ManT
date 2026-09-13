@@ -5,18 +5,22 @@ use mant_render::{TextPresentation, TextRole, sanitize_terminal_text};
 use std::fmt::Write as _;
 
 pub(super) fn decorate(presentation: TextPresentation, value: &str, color: bool) -> String {
-    let value = match presentation.role {
-        TextRole::Body | TextRole::DefinitionTerm => value
-            .chars()
-            .map(|c| {
-                if c.is_control() && !matches!(c, '\n' | '\t') {
-                    '\u{fffd}'
-                } else {
-                    c
-                }
-            })
-            .collect(),
-        _ => sanitize_terminal_text(value).into_owned(),
+    let value = if presentation.inline.structural_break {
+        value.to_owned()
+    } else {
+        match presentation.role {
+            TextRole::Body | TextRole::DefinitionTerm => value
+                .chars()
+                .map(|c| {
+                    if c.is_control() && !matches!(c, '\n' | '\t') {
+                        '\u{fffd}'
+                    } else {
+                        c
+                    }
+                })
+                .collect(),
+            _ => sanitize_terminal_text(value).into_owned(),
+        }
     };
     if !color {
         return value;
@@ -95,6 +99,7 @@ mod tests {
                 emphasis: true,
                 code: true,
                 link: true,
+                structural_break: false,
                 entry_kind: Some(mant_ir::EntryKind::Command),
             },
             matched: true,

@@ -158,6 +158,46 @@ impl<'a> LoweringContext<'a> {
         output
     }
 
+    /// Lower a definition head without executing a formatter line boundary.
+    ///
+    /// mdoc inset and diagnostic bodies remain in the same native formatter
+    /// stream as their heads.  The returned state owns pending `\z`, `\p`,
+    /// and source-continuation effects until the generated run-in cells and
+    /// first body word execute.
+    pub(super) fn lower_run_in_definition_head<'n>(
+        &self,
+        groups: impl IntoIterator<Item = &'n [Node]>,
+        spacing: bool,
+        formatter: &mut formatter::FormatterState,
+        strong_scope: bool,
+    ) -> (Vec<mant_ir::Inline>, inline::PreservedInlineState) {
+        let mut builder = inline::InlineBuilder::with_spacing(spacing);
+        builder.font = formatter.font;
+        builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
+        builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        let saved_font = strong_scope.then(|| {
+            builder
+                .font
+                .push_scope(super::roff_escape::RoffFont::Strong)
+        });
+        for nodes in groups {
+            execute_inline_author_modes(
+                nodes,
+                formatter,
+                self.active_mdoc_section() == MdocSectionContext::Authors,
+            );
+            inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+        }
+        if let Some(saved_font) = saved_font {
+            builder.font.pop_scope(saved_font);
+        }
+        formatter.font = builder.font;
+        formatter.spacing = builder.spacing_enabled();
+        formatter.vertical_space_debt = builder.vertical_space_debt();
+        formatter.zero_advance_armed = false;
+        builder.finish_preserving_execution()
+    }
+
     /// Execute a section heading in the surrounding formatter stream.
     ///
     /// CVS renders `Sh`/`Ss` heads as a scoped bold font, then calls
@@ -171,20 +211,22 @@ impl<'a> LoweringContext<'a> {
         authors_section: bool,
     ) -> Vec<mant_ir::Inline> {
         let mut builder = inline::InlineBuilder::with_spacing(formatter.spacing);
+        builder.font = formatter.font;
         builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
         builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
-        append_heading_nodes(
-            &mut builder,
-            nodes,
-            self.default_name,
-            formatter,
-            authors_section,
-        );
+        builder.inherit_author_execution(formatter.author_flow(), authors_section);
+        let heading_font = builder.font.push_heading_scope();
+        inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+        builder.font.pop_heading_scope(heading_font);
+        if let Some(author_flow) = builder.author_flow() {
+            formatter.set_author_flow(author_flow);
+        }
+        formatter.font = builder.font;
         formatter.spacing = builder.spacing_enabled();
         formatter.vertical_space_debt = builder.vertical_space_debt();
         let (output, surviving_armed) = builder.finish_formatter_line();
         formatter.zero_advance_armed = surviving_armed;
-        output
+        remove_structural_heading_bold(output)
     }
 
     pub(super) fn lower_text(
@@ -348,33 +390,32 @@ impl<'a> LoweringContext<'a> {
     }
 }
 
-/// Execute direct heading children in native source order.
-///
-/// Callable mdoc macros in a `Sh`/`Ss` head are direct siblings in the native
-/// tree.  Splitting the stream only at `.An` keeps the ordinary inline sibling
-/// rules intact while applying CVS `termp_an_pre()` exactly where each author
-/// request executes; a returned newline therefore precedes that author name,
-/// and the resulting mode remains available to the section body.
-fn append_heading_nodes(
-    builder: &mut inline::InlineBuilder,
-    nodes: &[Node],
-    default_name: Option<&str>,
-    formatter: &mut formatter::FormatterState,
-    authors_section: bool,
-) {
-    let mut chunk_start = 0;
-    for (index, node) in nodes.iter().enumerate() {
-        if node.macro_name.as_deref() != Some("An") {
-            continue;
+/// Heading strength is carried by `Heading`, not by its inline children.
+/// Remove exactly the implicit terminal bold layer while retaining explicit
+/// emphasis/code information produced inside that scope.
+fn remove_structural_heading_bold(nodes: Vec<mant_ir::Inline>) -> Vec<mant_ir::Inline> {
+    let mut output = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        match node {
+            mant_ir::Inline::Strong { children } => {
+                output.extend(remove_structural_heading_bold(children));
+            }
+            mant_ir::Inline::Emphasis { children } => output.push(mant_ir::Inline::Emphasis {
+                children: remove_structural_heading_bold(children),
+            }),
+            mant_ir::Inline::Link {
+                target,
+                title,
+                children,
+            } => output.push(mant_ir::Inline::Link {
+                target,
+                title,
+                children: remove_structural_heading_bold(children),
+            }),
+            node => output.push(node),
         }
-        inline::append_inline_nodes(builder, &nodes[chunk_start..index], default_name);
-        if formatter.execute_author(node.author_mode, authors_section) {
-            builder.hard_break();
-        }
-        inline::append_inline_nodes(builder, std::slice::from_ref(node), default_name);
-        chunk_start = index + 1;
     }
-    inline::append_inline_nodes(builder, &nodes[chunk_start..], default_name);
+    output
 }
 
 fn execute_inline_author_modes(

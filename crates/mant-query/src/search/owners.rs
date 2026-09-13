@@ -164,7 +164,7 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
                 node: OutlineNodeReference::DocumentSection {
                     path: section.path().to_string().into(),
                     id: section.section().id.clone(),
-                    title: section.section().heading.plain_text(),
+                    title: section.section().heading.single_line_text(),
                 },
             }
         }
@@ -224,7 +224,7 @@ fn section_reference(section: &MarkdownSection<'_>) -> mant_protocol::OutlineRef
     mant_protocol::OutlineReference {
         path: section.path().to_string().into(),
         id: section.section().id.clone(),
-        title: section.section().heading.plain_text(),
+        title: section.section().heading.single_line_text(),
     }
 }
 

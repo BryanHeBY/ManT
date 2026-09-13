@@ -91,6 +91,29 @@ fn lower_blocks_with_predecessor(
     paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
+    lower_blocks_with_predecessor_and_run_in(
+        nodes,
+        context,
+        indent_columns,
+        paragraph_distance,
+        spacing_enabled,
+        paragraph_predecessor,
+        formatter,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lower_blocks_with_predecessor_and_run_in(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    paragraph_distance: &mut u16,
+    spacing_enabled: bool,
+    paragraph_predecessor: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    run_in: Option<(crate::mandoc::inline::PreservedInlineState, usize)>,
+) -> Vec<Block> {
     let mut lowerer = BlockLowerer::new(
         context,
         indent_columns,
@@ -99,6 +122,11 @@ fn lower_blocks_with_predecessor(
         Vec::new(),
         *formatter,
     );
+    if let Some((execution, generated_cells)) = run_in {
+        lowerer
+            .state
+            .inherit_run_in_execution(execution, generated_cells);
+    }
     lowerer.paragraph_predecessor = paragraph_predecessor;
     lowerer.push_nodes(nodes);
     lowerer.finish_into(formatter)

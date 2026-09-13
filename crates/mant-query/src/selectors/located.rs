@@ -121,7 +121,7 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
             child_breadcrumbs.push(LocatedBreadcrumb {
                 path: path.clone(),
                 id: section.id.clone(),
-                title: section.heading.plain_text(),
+                title: section.heading.single_line_text(),
             });
         }
         for located in if DETAILS {

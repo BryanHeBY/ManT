@@ -3,7 +3,8 @@ use super::font::coalesce_font_runs;
 use super::links::{append_bsd_reference, append_link, append_mail_addresses};
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_include, append_inline_nodes,
-    first_part_children, inline_children, lower_equation_node, navigation_anchor, plain_text,
+    authored_section_phrase, first_part_children, inline_children, lower_equation_node,
+    navigation_anchor,
 };
 
 pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
@@ -91,14 +92,17 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         Some("Li") => builder.with_font_scope(Font::Code, |builder| {
             append_inline_nodes(builder, children, name);
         }),
-        Some("Sx") => builder.append_scope(
-            |builder| {
-                builder.with_font_scope(Font::Emphasis, |builder| {
-                    append_inline_nodes(builder, children, name);
-                });
-            },
-            section_reference,
-        ),
+        Some("Sx") => {
+            let authored_target = authored_section_phrase(children, name);
+            builder.append_scope(
+                |builder| {
+                    builder.with_font_scope(Font::Emphasis, |builder| {
+                        append_inline_nodes(builder, children, name);
+                    });
+                },
+                |children| section_reference(authored_target, children),
+            );
+        }
         Some("Nd") => {
             builder.append_text("— ");
             append_inline_nodes(builder, children, name);
@@ -135,13 +139,13 @@ fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -
     true
 }
 
-fn section_reference(children: Vec<Inline>) -> Vec<Inline> {
+fn section_reference(authored_target: String, children: Vec<Inline>) -> Vec<Inline> {
     if children.is_empty() {
         return children;
     }
     vec![Inline::Link {
         target: mant_ir::LinkTarget::Section {
-            id: plain_text(&children).trim().into(),
+            id: authored_target.into(),
         },
         title: None,
         children,

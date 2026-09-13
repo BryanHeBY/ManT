@@ -33,6 +33,14 @@ pub(in crate::mandoc) struct InlineBuilder {
     final_word_join: Option<bool>,
     final_source_continuation: Option<bool>,
     execution_epoch: u64,
+    author_execution: Option<AuthorExecution>,
+    last_executed_source_line: Option<u32>,
+}
+
+#[derive(Clone, Copy)]
+struct AuthorExecution {
+    flow: crate::mandoc::formatter::AuthorFlow,
+    authors_section: bool,
 }
 
 /// A checkpoint for output that may be semantically annotated or discarded
@@ -64,6 +72,7 @@ pub(in crate::mandoc) struct PreservedInlineState {
     pub(in crate::mandoc) word_end_break: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) formatter_cell_occupied: bool,
+    pub(in crate::mandoc) last_executed_source_line: Option<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -78,6 +87,7 @@ pub(in crate::mandoc) struct SourceFragmentState {
 pub(in crate::mandoc) struct FontState {
     pub(super) current: Font,
     pub(super) previous: Font,
+    heading_bold_italic: bool,
 }
 
 impl FontState {
@@ -85,12 +95,17 @@ impl FontState {
         Self {
             current: Font::Regular,
             previous: Font::Regular,
+            heading_bold_italic: false,
         }
     }
 
     pub(super) fn select(&mut self, font: Font) {
         self.previous = self.current;
-        self.current = font;
+        self.current = if self.heading_bold_italic && font == Font::Emphasis {
+            Font::StrongEmphasis
+        } else {
+            font
+        };
     }
 
     pub(super) fn restore(&mut self) {
@@ -107,6 +122,25 @@ impl FontState {
 
     pub(in crate::mandoc) fn pop_scope(&mut self, saved: Font) {
         self.current = saved;
+    }
+
+    /// Enter CVS `termp_sh_pre()`/`termp_ss_pre()` font execution.
+    ///
+    /// Heading presentation is structural in the IR, but the terminal
+    /// formatter still pushes bold and enables `fontibi`: an inner `\fI`
+    /// selects bold-emphasis and updates the independent previous-font
+    /// register.  The returned pair restores only the current stack and the
+    /// mode flag; `previous` deliberately survives the scope.
+    pub(in crate::mandoc) fn push_heading_scope(&mut self) -> (Font, bool) {
+        let saved_mode = self.heading_bold_italic;
+        let saved_font = self.push_scope(Font::Strong);
+        self.heading_bold_italic = true;
+        (saved_font, saved_mode)
+    }
+
+    pub(in crate::mandoc) fn pop_heading_scope(&mut self, saved: (Font, bool)) {
+        self.pop_scope(saved.0);
+        self.heading_bold_italic = saved.1;
     }
 }
 
@@ -228,6 +262,8 @@ impl InlineBuilder {
             final_word_join: None,
             final_source_continuation: None,
             execution_epoch: 0,
+            author_execution: None,
+            last_executed_source_line: None,
         }
     }
 
@@ -251,11 +287,37 @@ impl InlineBuilder {
             final_word_join: None,
             final_source_continuation: None,
             execution_epoch: 0,
+            author_execution: None,
+            last_executed_source_line: None,
         }
     }
 
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Tight;
+    }
+
+    pub(in crate::mandoc) fn inherit_author_execution(
+        &mut self,
+        flow: crate::mandoc::formatter::AuthorFlow,
+        authors_section: bool,
+    ) {
+        self.author_execution = Some(AuthorExecution {
+            flow,
+            authors_section,
+        });
+    }
+
+    pub(in crate::mandoc) fn execute_author(&mut self, mode: Option<libmandoc_rs::AuthorMode>) {
+        let Some(execution) = self.author_execution.as_mut() else {
+            return;
+        };
+        if execution.flow.execute(mode, execution.authors_section) {
+            self.hard_break();
+        }
+    }
+
+    pub(in crate::mandoc) fn author_flow(&self) -> Option<crate::mandoc::formatter::AuthorFlow> {
+        self.author_execution.map(|execution| execution.flow)
     }
 
     pub(in crate::mandoc) fn request_word_end_break(&mut self) {
@@ -275,6 +337,9 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        if node.line != 0 {
+            self.last_executed_source_line = Some(node.line);
+        }
         // mdoc_term.c keys KEEP lifetime from each executed NODE_LINE event,
         // not from the numeric source coordinate. User-macro expansion can
         // execute several input rows that all retain the call site's line.
@@ -463,6 +528,40 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn inherit_zero_advance_armed(&mut self, armed: bool) {
         self.zero_advance.inherit_armed(armed);
+    }
+
+    /// Continue a formatter stream across an IR-only ownership split.
+    pub(in crate::mandoc) fn inherit_preserved_execution(&mut self, state: PreservedInlineState) {
+        self.last_executed_source_line = state.last_executed_source_line;
+        self.zero_advance = state.zero_advance;
+        self.word_end_break = if state.word_end_break {
+            WordEndBreak::Pending
+        } else {
+            WordEndBreak::Clear
+        };
+        self.final_source_continuation = state.source_continuation;
+        if state.formatter_cell_occupied {
+            self.formatter_column = FormatterColumn::Advanced;
+        }
+    }
+
+    /// Execute the generated no-break cells between an mdoc inset/diagnostic
+    /// head and body.  The caller represents surviving cells as body-leading
+    /// inline space, so no independent layout gap is added later.
+    pub(in crate::mandoc) fn append_run_in_cells(&mut self, count: usize) {
+        if count == 0 {
+            return;
+        }
+        self.tighten_next_boundary();
+        self.begin_word_projection(true);
+        let mut projected = Vec::new();
+        self.zero_advance
+            .append_generated_cells(count, &mut projected, self.font.current);
+        self.append_word(projected);
+        // CVS sets TERMP_NOSPACE again before executing BODY children.
+        self.tighten_next_boundary();
+        self.final_word_join = Some(false);
+        self.final_source_continuation = Some(false);
     }
 
     pub(in crate::mandoc) fn take_zero_advance_armed(&mut self) -> bool {
@@ -1213,6 +1312,7 @@ impl InlineBuilder {
             word_end_break: self.word_end_break == WordEndBreak::Pending,
             source_continuation: self.final_source_continuation,
             formatter_cell_occupied,
+            last_executed_source_line: self.last_executed_source_line,
         };
         (self.finish_nodes(), state)
     }

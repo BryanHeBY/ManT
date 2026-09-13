@@ -24,6 +24,19 @@ impl Heading {
     pub fn plain_text(&self) -> String {
         crate::inline_plain_text(&self.content)
     }
+
+    /// Derive a safe one-line label for outlines, breadcrumbs, and tabs.
+    ///
+    /// Structural inline breaks remain authoritative in the heading content,
+    /// but a tree label cannot embed rows. Whitespace is normalized at that
+    /// presentation boundary instead of being mistaken for tree layout.
+    #[must_use]
+    pub fn single_line_text(&self) -> String {
+        self.plain_text()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 }
 
 impl From<String> for Heading {

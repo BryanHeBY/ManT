@@ -268,7 +268,7 @@ fn outline_nodes(
             let node = OutlineNode::DocumentSection {
                 path: path.to_string().into(),
                 id: section.id.clone(),
-                title: section.heading.plain_text(),
+                title: section.heading.single_line_text(),
                 entry_summary: if index.is_some() {
                     projected_summary(semantic_entries, entries)
                 } else {

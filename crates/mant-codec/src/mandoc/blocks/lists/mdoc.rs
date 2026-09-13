@@ -1,10 +1,10 @@
 //! Lowers mdoc(7) `.Bl` and `.It` list structures.
 
 use super::{
-    AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionItem, DefinitionListStyle,
-    Inline, ListItem, ListKind, LoweringContext, Node, NodeKind, NormalizedListKind, TableRow,
-    definition_item, first_part_children, layout, lower_blocks_with_predecessor, ordinal_sequence,
-    part_child_groups, source_span, targets,
+    AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem,
+    DefinitionListStyle, Inline, ListItem, ListKind, LoweringContext, Node, NodeKind,
+    NormalizedListKind, RunInHeadStyle, TableRow, definition_item, first_part_children, layout,
+    lower_blocks_with_predecessor, ordinal_sequence, part_child_groups, source_span, targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -281,6 +281,7 @@ fn lower_mdoc_definition_item(
 ) -> DefinitionItem {
     context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
     let shares_pending_term_row = style != Some(DefinitionListStyle::Overhang);
+    let head = first_part_children(item.node, NodeKind::Head);
     let mut lowered = definition_item(
         item.node,
         context,
@@ -291,6 +292,17 @@ fn lower_mdoc_definition_item(
             spacing_enabled: formatter.spacing,
             paragraph_predecessor: true,
             shares_pending_term_row,
+            head: match style {
+                Some(DefinitionListStyle::Inset) => DefinitionHeadFlow::RunIn {
+                    cells: u8::from(!head.is_empty()),
+                    style: RunInHeadStyle::Plain,
+                },
+                Some(DefinitionListStyle::Diagnostic) => DefinitionHeadFlow::RunIn {
+                    cells: 2,
+                    style: RunInHeadStyle::Strong,
+                },
+                _ => DefinitionHeadFlow::Detached,
+            },
         },
         formatter,
     );

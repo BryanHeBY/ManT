@@ -13,6 +13,7 @@ pub(super) use links::lower_man_link;
 mod scopes;
 mod source_cursor;
 mod source_fragment;
+pub(in crate::mandoc) use flow::PreservedInlineState;
 pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
 
@@ -53,6 +54,27 @@ pub(super) fn lower_inline_nodes_with_spacing(
     builder.finish()
 }
 
+/// Derive an authored section phrase without inheriting terminal execution
+/// state from the surrounding formatter.
+///
+/// CVS uses the same source-derived phrase for `Sh`/`Ss` identities and for
+/// `Sx` destinations.  The terminal label is executed separately and may be
+/// changed by persistent state such as `Sm off` or a preceding bare `\z`.
+pub(super) fn authored_section_phrase(nodes: &[Node], default_name: Option<&str>) -> String {
+    if nodes.iter().all(|node| node.kind == NodeKind::Text) {
+        return nodes
+            .iter()
+            .filter_map(|node| node.text.as_deref())
+            .collect::<Vec<_>>()
+            .join(" ")
+            .trim()
+            .to_owned();
+    }
+    plain_text(&lower_inline_nodes(nodes, default_name))
+        .trim()
+        .to_owned()
+}
+
 /// Apply one validated mdoc `Sm` state transition.
 ///
 /// The same state machine is used for top-level filled flow and for nested
@@ -81,6 +103,9 @@ pub(super) fn append_inline_node_with_next(
     next: Option<&Node>,
     default_name: Option<&str>,
 ) {
+    if node.macro_name.as_deref() == Some("An") {
+        builder.execute_author(node.author_mode);
+    }
     if node.flags.no_print || node.kind == NodeKind::Comment {
         // Tg can recover an authored target even when native output is hidden.
         if node.macro_name.as_deref() == Some("Tg") {

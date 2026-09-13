@@ -61,3 +61,23 @@ fn obsolete_plain_section_titles_and_unknown_heading_fields_are_rejected() {
             .is_err()
     );
 }
+
+#[test]
+fn single_line_heading_labels_normalize_structural_and_dynamic_breaks() {
+    let heading = Heading {
+        content: vec![
+            Inline::Text {
+                value: "before\t".into(),
+            },
+            Inline::LineBreak,
+            Inline::Emphasis {
+                children: vec![Inline::Text {
+                    value: "after\nlast".into(),
+                }],
+            },
+        ],
+        source: None,
+    };
+    assert_eq!(heading.plain_text(), "before\t\nafter\nlast");
+    assert_eq!(heading.single_line_text(), "before after last");
+}

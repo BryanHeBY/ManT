@@ -224,6 +224,15 @@ impl BlockState {
         self.paragraph.inherit_zero_advance_armed(armed);
     }
 
+    pub(super) fn inherit_run_in_execution(
+        &mut self,
+        state: crate::mandoc::inline::PreservedInlineState,
+        generated_cells: usize,
+    ) {
+        self.paragraph.inherit_preserved_execution(state);
+        self.paragraph.append_run_in_cells(generated_cells);
+    }
+
     pub(super) fn take_zero_advance_armed(&mut self) -> bool {
         self.paragraph.take_zero_advance_armed()
     }

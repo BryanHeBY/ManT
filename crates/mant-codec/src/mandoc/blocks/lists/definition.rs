@@ -1,4 +1,5 @@
 //! Shared definition content, source ownership, and head construction.
+use super::super::lower_blocks_with_predecessor_and_run_in;
 use super::super::synopsis::{
     SynopsisBoundary, SynopsisToken, synopsis_boundary, transparent_synopsis_predecessor,
 };
@@ -16,6 +17,43 @@ pub(super) struct DefinitionFlow {
     pub(super) spacing_enabled: bool,
     pub(super) paragraph_predecessor: bool,
     pub(super) shares_pending_term_row: bool,
+    pub(super) head: DefinitionHeadFlow,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(super) enum DefinitionHeadFlow {
+    #[default]
+    Detached,
+    /// CVS inset and diagnostic lists execute HEAD, their generated separator
+    /// cells, and BODY in one formatter stream instead of flushing the head.
+    RunIn { cells: u8, style: RunInHeadStyle },
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum RunInHeadStyle {
+    Plain,
+    /// Diagnostic heads execute in a scoped bold font whose previous-font
+    /// side effects survive into the body.
+    Strong,
+}
+
+impl DefinitionHeadFlow {
+    fn generated_cells(self) -> Option<u8> {
+        match self {
+            Self::Detached => None,
+            Self::RunIn { cells, .. } => Some(cells),
+        }
+    }
+
+    fn strong_scope(self) -> bool {
+        matches!(
+            self,
+            Self::RunIn {
+                style: RunInHeadStyle::Strong,
+                ..
+            }
+        )
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -44,9 +82,10 @@ pub(super) fn pending_head_execution(
     nodes: &[Node],
     context: &LoweringContext<'_>,
     formatter: crate::mandoc::formatter::FormatterState,
+    initial_formatter_cell: bool,
 ) -> PendingHeadExecution {
     let mut execution = PendingHeadExecution::default();
-    let mut has_body_cell_artifact = false;
+    let mut has_body_cell_artifact = initial_formatter_cell;
     let mut formatter = formatter;
     inspect_pending_prefix(
         nodes,
@@ -309,37 +348,56 @@ pub(super) fn definition_item(
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
-    let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
-    term_builder.append(context.lower_inline_with_spacing(head, flow.spacing_enabled, formatter));
-    for equation in displaced_equations {
-        term_builder.append(context.lower_inline_with_spacing(
-            std::slice::from_ref(equation),
-            flow.spacing_enabled,
-            formatter,
-        ));
-    }
+    let (mut term, run_in_execution) =
+        lower_definition_head(head, &displaced_equations, context, flow, formatter);
     // CVS executes the `.It`/`.TP` head before its detached body.  Derive the
     // pending-row plan from the resulting formatter state so head-side `.An`,
     // font, spacing, and zero-width controls are visible to the body prefix.
-    let pending_head = pending_head_execution(body, context, *formatter);
+    let pending_head = pending_head_execution(
+        body,
+        context,
+        *formatter,
+        flow.head.generated_cells().is_some_and(|cells| cells > 0),
+    );
     if flow.shares_pending_term_row && pending_head.placement_breaks {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
-    let mut term = term_builder.finish();
     if let Some(id) = definition_head_anchor(node) {
         term.insert(0, Inline::anchor_at(id, source_span(node)));
     }
     let terms = split_definition_terms(term);
+    if flow.head.generated_cells().is_some() {
+        // The native generated cells execute inside the shared stream below.
+        // Their surviving projection is carried by the description itself;
+        // adding the static geometry gap as well would count it twice.
+        geometry.gap = 0;
+    }
     let (layout, body_origin) = geometry.resolve(context, node, indent_columns, &terms);
-    let mut description = lower_blocks_with_predecessor(
-        body,
-        context,
-        body_origin,
-        paragraph_distance,
-        formatter.spacing,
-        flow.paragraph_predecessor,
-        formatter,
-    );
+    let mut description = if let Some(execution) = run_in_execution {
+        lower_blocks_with_predecessor_and_run_in(
+            body,
+            context,
+            body_origin,
+            paragraph_distance,
+            formatter.spacing,
+            flow.paragraph_predecessor,
+            formatter,
+            Some((
+                execution,
+                usize::from(flow.head.generated_cells().unwrap_or_default()),
+            )),
+        )
+    } else {
+        lower_blocks_with_predecessor(
+            body,
+            context,
+            body_origin,
+            paragraph_distance,
+            formatter.spacing,
+            flow.paragraph_predecessor,
+            formatter,
+        )
+    };
     if flow.shares_pending_term_row
         && let Some(consumption) = pending_head.consumption
     {
@@ -375,6 +433,54 @@ pub(super) fn definition_item(
     item
 }
 
+fn lower_definition_head(
+    head: &[Node],
+    displaced_equations: &[&Node],
+    context: &LoweringContext<'_>,
+    flow: DefinitionFlow,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> (
+    Vec<Inline>,
+    Option<crate::mandoc::inline::PreservedInlineState>,
+) {
+    let groups = std::iter::once(head).chain(
+        displaced_equations
+            .iter()
+            .map(|equation| std::slice::from_ref(*equation)),
+    );
+    if flow.head.generated_cells().is_some() {
+        let (term, mut execution) = context.lower_run_in_definition_head(
+            groups,
+            flow.spacing_enabled,
+            formatter,
+            flow.head.strong_scope(),
+        );
+        execution.last_executed_source_line = head
+            .iter()
+            .chain(displaced_equations.iter().copied())
+            .filter_map(latest_source_line)
+            .max();
+        return (term, Some(execution));
+    }
+
+    let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
+    for group in groups {
+        term_builder.append(context.lower_inline_with_spacing(
+            group,
+            flow.spacing_enabled,
+            formatter,
+        ));
+    }
+    (term_builder.finish(), None)
+}
+
+fn latest_source_line(node: &Node) -> Option<u32> {
+    std::iter::once(node.line)
+        .chain(node.children.iter().filter_map(latest_source_line))
+        .filter(|line| *line != 0)
+        .max()
+}
+
 /// Consume the one physical row already represented by a pending man tag.
 /// Anchor-only paragraphs are position metadata and do not end the search;
 /// ordinary content does.  Explicit vertical requests remain after the
@@ -392,7 +498,19 @@ fn consume_initial_formatter_row(blocks: &mut Vec<Block>, consumption: PendingHe
                     index += 1;
                     continue;
                 };
-                if matches!(&children[first_content], Inline::LineBreak) {
+                let generated_gap_break = children[first_content..]
+                    .iter()
+                    .position(|child| matches!(child, Inline::LineBreak))
+                    .filter(|break_offset| {
+                        children[first_content..first_content + break_offset]
+                            .iter()
+                            .all(|child| {
+                                matches!(child, Inline::Text { value } if value.chars().all(char::is_whitespace))
+                            })
+                    });
+                if let Some(break_offset) = generated_gap_break {
+                    children.drain(first_content..=first_content + break_offset);
+                } else if matches!(&children[first_content], Inline::LineBreak) {
                     children.remove(first_content);
                 } else if matches!(&children[first_content], Inline::Text { value } if value.is_empty())
                     && matches!(children.get(first_content + 1), Some(Inline::LineBreak))

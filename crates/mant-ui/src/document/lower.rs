@@ -193,7 +193,7 @@ impl DocumentBuilder<'_> {
         self.anchor(NavNode {
             id: section.id.to_string(),
             target_id: section.id.to_string(),
-            title: section.heading.plain_text(),
+            title: section.heading.single_line_text(),
             full_title: None,
             depth,
             kind: NavKind::Section,

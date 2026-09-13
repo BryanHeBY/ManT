@@ -54,6 +54,12 @@ can expand a multi-document scope; link-looking text is not a graph edge. This
 keeps native and Markdown queries aligned even though their producer syntax is
 different. The complete shared model is defined by [mant-ir(7)](mant-ir.md).
 
+An `Sx` destination is resolved from its authored section phrase, while its
+label is rendered through the active formatter state. Consequently `Sm off`
+may display `NEXTSECTION` for `Sx NEXT SECTION`, and a preceding bare `\z` may
+remove the first displayed glyph, without changing the typed destination.
+Display text is never reverse-mapped into navigation identity.
+
 ## man Language
 
 The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:
@@ -111,7 +117,7 @@ required for generated references and hierarchically indented lists.
 
 `RS` uses its authored finite literal distance, or the prevailing tag width when omitted; a new relative-indent scope starts with a seven-cell tag width and `RE` restores the outer scope. Distances accumulate in source basic units before conversion to terminal cells, preserving fractional offsets. `TP`/`IP` widths determine both label fitting and the actual description origin. Ordinary man paragraphs (`PP`, `P`, `LP`) restore the default seven-cell tag width; `HP` is not that reset boundary. Unsupported measurements and excessive cumulative offsets produce `manual.indentation-limit` rather than wrapping arithmetic. This layout policy does not change semantic parentage: visual indentation alone never turns a top-level command into its parameter.
 
-mdoc definition styles retain distinct layout: `-tag` fits against its width, `-hang` permits run-in heads, `-inset` and `-diag` use one and two separating cells respectively without a fixed body indent, and `-ohang` places the body below the head. List `-offset` moves the complete list, not each descendant. Explicit widths use mdoc's two-cell buffer; native normalization supplies default bullet and enum widths. A width or offset without a recognized numeric unit is measured as printable text. `Bd` without an offset and `-offset left` do not add indentation; `indent` and `indent-two` resolve to six and twelve cells, and `D1`/`Dl` use six. Recovered numbered lists preserve their original body column rather than replacing it with a generic list indent.
+mdoc definition styles retain distinct layout: `-tag` fits against its width, `-hang` permits run-in heads, `-inset` and `-diag` use one and two separating cells respectively without a fixed body indent, and `-ohang` places the body below the head. The inset and diagnostic cells execute in the same formatter stream as the head and body rather than forcing a head flush; a pending `\z` glyph can therefore consume or be consumed by those generated cells. Tag, hang, and overhang heads retain their native formatter boundary even when tag/hang presentation remains on one visual row. List `-offset` moves the complete list, not each descendant. Explicit widths use mdoc's two-cell buffer; native normalization supplies default bullet and enum widths. A width or offset without a recognized numeric unit is measured as printable text. `Bd` without an offset and `-offset left` do not add indentation; `indent` and `indent-two` resolve to six and twelve cells, and `D1`/`Dl` use six. Recovered numbered lists preserve their original body column rather than replacing it with a generic list indent.
 
 When indented continuation blocks are reattached to a preceding definition, explicit vertical spacing does not by itself end ownership. A consecutive run of spacing belongs to that continuation only if the next content block remains more deeply indented. Same-level or outer content, other layout-less boundaries, and the end of a container stop collection; trailing spacing is left outside. This retains successive `RS` regions, nested definitions, and trailing examples in node excerpts without deleting blank lines or absorbing the next option or section. Hanging-definition recovery uses the same continuation boundary. Restoring content ownership does not declare those children to be an exhaustive value domain.
 
