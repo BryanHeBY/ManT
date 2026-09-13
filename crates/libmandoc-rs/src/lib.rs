@@ -36,8 +36,9 @@ pub use execution::{
     ExecutionReport, ExecutionSource, ExecutionTable, ExecutionTableAlignment, ExecutionTableCell,
     ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey,
     ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey, ExecutionTableRowKind,
-    ExecutionWrapper, ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
-    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange,
+    ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind, FlushOutcome,
+    FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
+    NativeExecutionReport, PoolRange,
 };
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,

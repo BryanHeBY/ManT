@@ -416,7 +416,7 @@ The implemented source-to-interface chain is:
 | Fixed upstream source | Observed fact | Owned/private interface |
 | --- | --- | --- |
 | `roff.h` and the finalized syntax tree | node identity, parentage, source coordinates and normalized roles | `ExecutionNode` keys paired with the owned `Document` |
-| `term.c` | buffer generations, atoms, partial flush ranges, boundaries, fixed-device geometry and state wrappers | typed vectors and checked `PoolRange` values in `NativeExecutionReport` |
+| `term.c` | formatter words (including zero-output operands), buffer generations, atoms, partial flush ranges, boundaries, fixed-device geometry and state wrappers | typed vectors, exact atom intervals and checked `PoolRange` values in `NativeExecutionReport` |
 | `man_term.c` and `mdoc_term.c` | definition head/body ownership, fonts, references and target attachment | codec-owned visible runs, definitions, references and anchors |
 | `tbl_term.c` | table/row/cell topology, data ownership and interleaved cell flushes | bounded execution table records and private `mant-ir::Block::Table` projection |
 | private shim and `ffi::execution` | C discriminants, slice counts, ranges and report status | validated Rust enums/vectors; no borrowed pointer escapes the call |

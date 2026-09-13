@@ -58,6 +58,7 @@ struct mant_mandoc_execution_report {
 	RECORD_STORAGE(sources, mant_mandoc_source_record);
 	RECORD_STORAGE(nodes, mant_mandoc_node_record);
 	RECORD_STORAGE(buffer_generations, mant_mandoc_buffer_generation_record);
+	RECORD_STORAGE(words, mant_mandoc_word_record);
 	RECORD_STORAGE(atoms, mant_mandoc_atom_record);
 	RECORD_STORAGE(fragments, mant_mandoc_fragment_record);
 	RECORD_STORAGE(fragment_atoms, mant_mandoc_fragment_atom_record);
@@ -84,6 +85,7 @@ struct mant_mandoc_execution_report {
 	uint32_t current_word_start;
 	uint32_t current_word_length;
 	uint32_t current_word_node;
+	uint32_t current_word;
 	uint32_t current_flush;
 	uint32_t current_boundary;
 	uint32_t current_table;
@@ -298,6 +300,7 @@ reserve_##name(struct mant_mandoc_execution_report *report, size_t needed) \
 DEFINE_RESERVE(sources, mant_mandoc_source_record)
 DEFINE_RESERVE(nodes, mant_mandoc_node_record)
 DEFINE_RESERVE(buffer_generations, mant_mandoc_buffer_generation_record)
+DEFINE_RESERVE(words, mant_mandoc_word_record)
 DEFINE_RESERVE(atoms, mant_mandoc_atom_record)
 DEFINE_RESERVE(fragments, mant_mandoc_fragment_record)
 DEFINE_RESERVE(fragment_atoms, mant_mandoc_fragment_atom_record)
@@ -347,6 +350,7 @@ mant_mandoc_execution_alloc(const char *source_path,
 	report->current_table_row = MANT_MANDOC_EXEC_NONE;
 	report->current_table_cell = MANT_MANDOC_EXEC_NONE;
 	report->current_word_node = MANT_MANDOC_EXEC_NONE;
+	report->current_word = MANT_MANDOC_EXEC_NONE;
 	if (!append_pool(report, source_path, strlen(source_path), &path_start) ||
 	    !charge_record(report) || !reserve_sources(report, 1)) {
 		return report;
@@ -498,6 +502,7 @@ mant_mandoc_execution_free(struct mant_mandoc_execution_report *report)
 	free(report->sources);
 	free(report->nodes);
 	free(report->buffer_generations);
+	free(report->words);
 	free(report->atoms);
 	free(report->fragments);
 	free(report->fragment_atoms);
@@ -638,9 +643,9 @@ execution_word_begin(void *arg, const struct termp *p,
     const struct roff_node *node, const char *word, size_t length, int *role)
 {
 	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_word_record *record;
 	uint32_t source_node, start;
 
-	(void)p;
 	if (role == NULL)
 		return 0;
 	source_node = lookup_word_node(report, word);
@@ -649,13 +654,32 @@ execution_word_begin(void *arg, const struct termp *p,
 	    source_node != MANT_MANDOC_EXEC_NONE ?
 	    MANT_MANDOC_ATOM_AUTHORED : node == NULL ?
 	    MANT_MANDOC_ATOM_DEVICE_GENERATED : MANT_MANDOC_ATOM_MACRO_GENERATED;
-	if (report->word_active || !charge_work(report, length + 1) ||
-	    !append_pool(report, word, length, &start))
+	if (report->word_active || report->words_count > UINT32_MAX ||
+	    report->atoms_count > UINT32_MAX ||
+	    !charge_work(report, length + 1) ||
+	    !append_pool(report, word, length, &start) ||
+	    !charge_record(report) ||
+	    !reserve_words(report, report->words_count + 1))
 		return 0;
 	report->current_word_start = start;
 	report->current_word_length = (uint32_t)length;
 	report->current_word_node = source_node != MANT_MANDOC_EXEC_NONE ?
 	    source_node : lookup_node(report, node);
+	record = &report->words[report->words_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->words_count++;
+	record->node = report->current_word_node;
+	record->source = record->node == MANT_MANDOC_EXEC_NONE ? 0 :
+	    report->nodes[record->node].source;
+	record->operand_start = start;
+	record->operand_length = (uint32_t)length;
+	record->role = (uint32_t)*role;
+	record->wrapper = report->current_wrapper;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = record->enter_sequence;
+	report->current_word = record->key;
 	report->word_active = 1;
 	return 1;
 }
@@ -665,15 +689,23 @@ execution_word_end(void *arg, const struct termp *p,
     const struct roff_node *node)
 {
 	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_word_record *record;
 
 	(void)p;
 	(void)node;
-	if (!report->word_active || !charge_work(report, 1))
+	if (!report->word_active ||
+	    report->current_word == MANT_MANDOC_EXEC_NONE ||
+	    report->current_word >= report->words_count ||
+	    report->atoms_count > UINT32_MAX || !charge_work(report, 1))
 		return 0;
+	record = &report->words[report->current_word];
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->leave_sequence = report->sequence++;
 	report->word_active = 0;
 	report->current_word_start = 0;
 	report->current_word_length = 0;
 	report->current_word_node = MANT_MANDOC_EXEC_NONE;
+	report->current_word = MANT_MANDOC_EXEC_NONE;
 	return 1;
 }
 
@@ -2308,6 +2340,7 @@ seal_report(struct mant_mandoc_execution_report *report)
 	ADD_RECORD_COUNT(sources);
 	ADD_RECORD_COUNT(nodes);
 	ADD_RECORD_COUNT(buffer_generations);
+	ADD_RECORD_COUNT(words);
 	ADD_RECORD_COUNT(atoms);
 	ADD_RECORD_COUNT(fragments);
 	ADD_RECORD_COUNT(fragment_atoms);
@@ -2377,6 +2410,7 @@ validate_report_storage(struct mant_mandoc_execution_report *report)
 	VALIDATE_RECORD_STORAGE(sources);
 	VALIDATE_RECORD_STORAGE(nodes);
 	VALIDATE_RECORD_STORAGE(buffer_generations);
+	VALIDATE_RECORD_STORAGE(words);
 	VALIDATE_RECORD_STORAGE(atoms);
 	VALIDATE_RECORD_STORAGE(fragments);
 	VALIDATE_RECORD_STORAGE(fragment_atoms);
@@ -2446,6 +2480,7 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	struct mant_mandoc_source_record *source;
 	struct mant_mandoc_node_record *node;
 	struct mant_mandoc_buffer_generation_record *generation;
+	struct mant_mandoc_word_record *word;
 	struct mant_mandoc_atom_record *atom;
 	struct mant_mandoc_fragment_record *fragment;
 	struct mant_mandoc_fragment_atom_record *reference;
@@ -2461,6 +2496,7 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	uint64_t *last_wrapper_child_leave;
 	uint64_t last_root_reference_leave, last_root_wrapper_leave;
 	unsigned char *covered_refs, *referenced_atoms, *replaced_atoms;
+	unsigned char *word_atoms;
 	unsigned char *covered_fragments;
 	unsigned char *covered_glyph_geometry;
 	uint64_t *fragment_flush_outcome;
@@ -2484,6 +2520,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    calloc(report->atoms_count, 1);
 	replaced_atoms = report->atoms_count == 0 ? NULL :
 	    calloc(report->atoms_count, 1);
+	word_atoms = report->atoms_count == 0 ? NULL :
+	    calloc(report->atoms_count, 1);
 	covered_fragments = report->fragments_count == 0 ? NULL :
 	    calloc(report->fragments_count, 1);
 	covered_glyph_geometry = report->fragments_count == 0 ? NULL :
@@ -2501,7 +2539,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    last_close_reason == NULL || last_close_sequence == NULL)) ||
 	    (report->fragment_atoms_count != 0 && covered_refs == NULL) ||
 	    (report->atoms_count != 0 &&
-	    (referenced_atoms == NULL || replaced_atoms == NULL)) ||
+	    (referenced_atoms == NULL || replaced_atoms == NULL ||
+	    word_atoms == NULL)) ||
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
 	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
 	    (report->references_count != 0 &&
@@ -2587,6 +2626,53 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 			    "native execution buffer lifetime is not sealed");
 			goto fail;
 		}
+	for (index = 0; index < report->words_count; index++) {
+		word = &report->words[index];
+		if (word->key != index ||
+		    (index != 0 &&
+		    (report->words[index - 1].leave_sequence >=
+		    word->enter_sequence ||
+		    report->words[index - 1].leave_atom > word->enter_atom)) ||
+		    (word->node == MANT_MANDOC_EXEC_NONE ? word->source != 0 :
+		    word->node >= report->nodes_count ||
+		    word->source != report->nodes[word->node].source) ||
+		    !valid_pool_range(report, word->operand_start,
+		    word->operand_length, 0) ||
+		    (word->role != MANT_MANDOC_ATOM_AUTHORED &&
+		    word->role != MANT_MANDOC_ATOM_MACRO_GENERATED &&
+		    word->role != MANT_MANDOC_ATOM_DEVICE_GENERATED &&
+		    word->role != MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD) ||
+		    word->enter_atom > word->leave_atom ||
+		    word->leave_atom > report->atoms_count ||
+		    word->reserved != 0 ||
+		    word->enter_sequence >= word->leave_sequence ||
+		    (word->enter_atom != 0 &&
+		    report->atoms[word->enter_atom - 1].sequence >=
+		    word->enter_sequence) ||
+		    (word->enter_atom < report->atoms_count &&
+		    report->atoms[word->enter_atom].sequence <=
+		    word->enter_sequence) ||
+		    (word->leave_atom != 0 &&
+		    report->atoms[word->leave_atom - 1].sequence >=
+		    word->leave_sequence) ||
+		    (word->leave_atom < report->atoms_count &&
+		    report->atoms[word->leave_atom].sequence <=
+		    word->leave_sequence))
+			goto invalid_word;
+		for (inner = word->enter_atom; inner < word->leave_atom; inner++) {
+			atom = &report->atoms[inner];
+			if (word_atoms[inner] || atom->node != word->node ||
+			    atom->source != word->source ||
+			    atom->operand_start != word->operand_start ||
+			    atom->operand_length != word->operand_length ||
+			    atom->wrapper != word->wrapper ||
+			    (atom->role != word->role &&
+			    atom->role != MANT_MANDOC_ATOM_IMPLICIT_SPACE &&
+			    atom->role != MANT_MANDOC_ATOM_FONT_DECORATION))
+				goto invalid_word;
+			word_atoms[inner] = 1;
+		}
+	}
 	for (index = 0; index < report->atoms_count; index++) {
 		atom = &report->atoms[index];
 		if (atom->key != index ||
@@ -2606,6 +2692,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    (atom->node == MANT_MANDOC_EXEC_NONE ? atom->source != 0 :
 		    atom->node >= report->nodes_count ||
 		    atom->source != report->nodes[atom->node].source) ||
+		    ((atom->operand_start != MANT_MANDOC_EXEC_NONE) !=
+		    (word_atoms[index] != 0)) ||
 		    ((atom->disposition == MANT_MANDOC_ATOM_REPLACED) !=
 		    (atom->replaced_by != MANT_MANDOC_EXEC_NONE)))
 			goto invalid_atom;
@@ -3124,6 +3212,26 @@ invalid_wrapper:
 		    diagnostic->message_length, 0))
 			goto invalid_diagnostic;
 	}
+	for (index = 0; index < report->words_count; index++) {
+		word = &report->words[index];
+		if (word->wrapper == MANT_MANDOC_EXEC_NONE)
+			continue;
+		if (word->wrapper >= report->wrappers_count)
+			goto invalid_event_wrapper;
+		wrapper = &report->wrappers[word->wrapper];
+		if (wrapper->kind != MANT_MANDOC_WRAPPER_NODE ||
+		    word->enter_sequence <= wrapper->enter_sequence ||
+		    word->leave_sequence >= wrapper->leave_sequence ||
+		    word->enter_atom < wrapper->enter_atom ||
+		    word->leave_atom > wrapper->leave_atom)
+			goto invalid_event_wrapper;
+		origin = word->node;
+		while (origin != MANT_MANDOC_EXEC_NONE &&
+		    origin != wrapper->node)
+			origin = report->nodes[origin].parent;
+		if (origin != wrapper->node)
+			goto invalid_event_wrapper;
+	}
 	for (index = 0; index < report->atoms_count; index++) {
 		atom = &report->atoms[index];
 		if (atom->wrapper == MANT_MANDOC_EXEC_NONE)
@@ -3163,6 +3271,7 @@ invalid_wrapper:
 	free(covered_refs);
 	free(referenced_atoms);
 	free(replaced_atoms);
+	free(word_atoms);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
@@ -3173,6 +3282,10 @@ invalid_wrapper:
 invalid_origin:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution source or node origin is inconsistent");
+	goto fail;
+invalid_word:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution formatter word relationship is inconsistent");
 	goto fail;
 invalid_boundary:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
@@ -3202,6 +3315,7 @@ fail:
 	free(covered_refs);
 	free(referenced_atoms);
 	free(replaced_atoms);
+	free(word_atoms);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
@@ -3894,6 +4008,20 @@ static const size_t buffer_generation_offsets[] = {
 	OFF(mant_mandoc_buffer_generation_record, open_sequence),
 	OFF(mant_mandoc_buffer_generation_record, close_sequence)
 };
+static const size_t word_offsets[] = {
+	OFF(mant_mandoc_word_record, key),
+	OFF(mant_mandoc_word_record, node),
+	OFF(mant_mandoc_word_record, source),
+	OFF(mant_mandoc_word_record, operand_start),
+	OFF(mant_mandoc_word_record, operand_length),
+	OFF(mant_mandoc_word_record, role),
+	OFF(mant_mandoc_word_record, wrapper),
+	OFF(mant_mandoc_word_record, enter_atom),
+	OFF(mant_mandoc_word_record, leave_atom),
+	OFF(mant_mandoc_word_record, reserved),
+	OFF(mant_mandoc_word_record, enter_sequence),
+	OFF(mant_mandoc_word_record, leave_sequence)
+};
 static const size_t atom_offsets[] = {
 	OFF(mant_mandoc_atom_record, key), OFF(mant_mandoc_atom_record, buffer),
 	OFF(mant_mandoc_atom_record, generation),
@@ -4073,6 +4201,7 @@ DEFINE_RECORD_API(source, sources, mant_mandoc_source_record, source_offsets)
 DEFINE_RECORD_API(node, nodes, mant_mandoc_node_record, node_offsets)
 DEFINE_RECORD_API(buffer_generation, buffer_generations,
     mant_mandoc_buffer_generation_record, buffer_generation_offsets)
+DEFINE_RECORD_API(word, words, mant_mandoc_word_record, word_offsets)
 DEFINE_RECORD_API(atom, atoms, mant_mandoc_atom_record, atom_offsets)
 DEFINE_RECORD_API(fragment, fragments, mant_mandoc_fragment_record, fragment_offsets)
 DEFINE_RECORD_API(fragment_atom, fragment_atoms, mant_mandoc_fragment_atom_record, fragment_atom_offsets)

@@ -16,6 +16,10 @@ use crate::NodeKind;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionNodeKey(pub u32);
 
+/// Report-local identity of one executed formatter word.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ExecutionWordKey(pub u32);
+
 /// Report-local identity of a buffered atom.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AtomKey(pub u32);
@@ -393,6 +397,33 @@ pub enum BufferCloseReason {
     Reset,
     /// The report was sealed while the reusable buffer remained allocated.
     ReportEnd,
+}
+
+/// One call to the native formatter's `term_word()` operation.
+///
+/// Words remain observable even when they are empty or only change formatter
+/// state and therefore produce no atom. The atom range contains exactly the
+/// buffer mutations performed while executing this word.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionWord {
+    /// Word identity.
+    pub key: ExecutionWordKey,
+    /// Owning syntax node, absent for output-device generated words.
+    pub node: Option<ExecutionNodeKey>,
+    /// Source key.
+    pub source: u32,
+    /// Exact formatter operand bytes, including an explicit empty operand.
+    pub operand: PoolRange,
+    /// Default origin role assigned to glyphs from this word.
+    pub role: AtomRole,
+    /// Innermost syntax-node wrapper.
+    pub wrapper: Option<u32>,
+    /// Atoms created while this word executed.
+    pub atoms: Range<u32>,
+    /// Total execution point immediately before word execution.
+    pub enter_sequence: u64,
+    /// Total execution point immediately after word execution.
+    pub leave_sequence: u64,
 }
 
 /// One native terminal-buffer atom and its provenance.
@@ -811,6 +842,8 @@ pub struct NativeExecutionReport {
     pub(crate) nodes: Vec<ExecutionNode>,
     /// Native buffer lifetimes referenced by atoms, fragments, and flushes.
     pub(crate) buffer_generations: Vec<ExecutionBufferGeneration>,
+    /// Executed formatter words, including zero-output words.
+    pub(crate) words: Vec<ExecutionWord>,
     /// Buffer atoms.
     pub(crate) atoms: Vec<ExecutionAtom>,
     /// Device fragments.
@@ -872,6 +905,12 @@ impl NativeExecutionReport {
     #[must_use]
     pub fn buffer_generations(&self) -> &[ExecutionBufferGeneration] {
         &self.buffer_generations
+    }
+
+    /// Native formatter words.
+    #[must_use]
+    pub fn words(&self) -> &[ExecutionWord] {
+        &self.words
     }
 
     /// Native buffer atoms.

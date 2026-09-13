@@ -72,6 +72,20 @@ pub(super) struct NativeOrigin {
 
 #[allow(dead_code)]
 #[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeWordFact {
+    pub(super) key: u32,
+    pub(super) node: Option<ExecutionNodeKey>,
+    pub(super) source: PathBuf,
+    pub(super) operand: Vec<u8>,
+    pub(super) role: AtomRole,
+    pub(super) wrapper: Option<u32>,
+    pub(super) atoms: Range<u32>,
+    pub(super) enter_sequence: u64,
+    pub(super) leave_sequence: u64,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeDefinitionFact {
     pub(super) owner: ExecutionNodeKey,
     pub(super) macro_name: String,
@@ -133,6 +147,7 @@ pub(super) struct NativeTable {
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeProjection {
     pub(super) origins: Vec<NativeOrigin>,
+    pub(super) words: Vec<NativeWordFact>,
     pub(super) runs: Vec<NativeTextRun>,
     pub(super) visible_lines: Vec<String>,
     pub(super) implicit_spaces: usize,
@@ -787,6 +802,24 @@ pub(super) fn project(
                 macro_name: node.macro_name.clone(),
             })
             .collect(),
+        words: report
+            .words()
+            .iter()
+            .map(|word| NativeWordFact {
+                key: word.key.0,
+                node: word.node,
+                source: report.sources()[word.source as usize].path.clone(),
+                operand: report
+                    .pool_bytes(word.operand)
+                    .expect("validated native formatter operand")
+                    .to_vec(),
+                role: word.role,
+                wrapper: word.wrapper,
+                atoms: word.atoms.clone(),
+                enter_sequence: word.enter_sequence,
+                leave_sequence: word.leave_sequence,
+            })
+            .collect(),
         runs,
         visible_lines,
         implicit_spaces: report
@@ -1028,6 +1061,34 @@ mod tests {
                 assert_eq!(report.execution.nodes()[emphasized.node.0 as usize].line, 9);
             }
         }
+    }
+
+    #[test]
+    fn projects_zero_output_formatter_words_without_inventing_ir_content() {
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "empty-word-man.1",
+                include_bytes!("../../../libmandoc-rs/tests/fixtures/execution/empty-word-man.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let empty = projection
+            .words
+            .iter()
+            .find(|word| word.operand.is_empty())
+            .expect("private projection retains the explicit empty formatter word");
+        assert_eq!(empty.source, std::path::Path::new("empty-word-man.1"));
+        assert!(empty.atoms.is_empty());
+        assert_eq!(empty.role, AtomRole::Authored);
+        assert!(
+            projection
+                .visible_lines
+                .iter()
+                .any(|line| line.trim() == "AB"),
+            "the zero-output word must not invent visible IR content"
+        );
     }
 
     #[test]

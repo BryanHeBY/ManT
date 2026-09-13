@@ -227,6 +227,21 @@ struct mant_mandoc_buffer_generation_record {
 	uint64_t close_sequence;
 };
 
+struct mant_mandoc_word_record {
+	uint32_t key;
+	uint32_t node;
+	uint32_t source;
+	uint32_t operand_start;
+	uint32_t operand_length;
+	uint32_t role;
+	uint32_t wrapper;
+	uint32_t enter_atom;
+	uint32_t leave_atom;
+	uint32_t reserved;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
 struct mant_mandoc_atom_record {
 	uint32_t key;
 	uint32_t buffer;
@@ -499,6 +514,7 @@ int mant_mandoc_execution_node_key(
 MANT_DECLARE_RECORD_API(source, sources);
 MANT_DECLARE_RECORD_API(node, nodes);
 MANT_DECLARE_RECORD_API(buffer_generation, buffer_generations);
+MANT_DECLARE_RECORD_API(word, words);
 MANT_DECLARE_RECORD_API(atom, atoms);
 MANT_DECLARE_RECORD_API(fragment, fragments);
 MANT_DECLARE_RECORD_API(fragment_atom, fragment_atoms);

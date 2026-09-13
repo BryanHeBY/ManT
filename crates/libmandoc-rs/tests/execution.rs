@@ -1,14 +1,16 @@
 #![cfg(feature = "execute")]
 
 use libmandoc_rs::{
-    AtomRole, ExecutionCancellation, ExecutionErrorKind, ExecutionFont, ExecutionLimits,
-    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
+    AtomDisposition, AtomKind, AtomRole, ExecutionCancellation, ExecutionErrorKind, ExecutionFont,
+    ExecutionLimits, ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
     ExecutionTableLayoutKind, ExecutionTableRowKind, FlushOutcome, FragmentRole, InputFormat,
     NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
 const MDOC: &[u8] = include_bytes!("fixtures/execution/plain-mdoc.1");
+const BUFFER_MUTATIONS: &[u8] = include_bytes!("fixtures/execution/buffer-mutations.1");
+const EMPTY_WORD_MAN: &[u8] = include_bytes!("fixtures/execution/empty-word-man.1");
 const TABLE: &[u8] = include_bytes!("fixtures/execution/unsupported-table.1");
 const TABLE_VERTICAL_CONTINUATION: &[u8] =
     include_bytes!("fixtures/execution/table-vertical-continuation.1");
@@ -183,6 +185,109 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
         .expect("authored Plain operand");
     let origin = &report.execution.nodes()[plain.node.expect("authored word node").0 as usize];
     assert_eq!(origin.macro_name, None);
+}
+
+#[test]
+fn native_buffer_mutations_retain_origins_replacements_and_annotations() {
+    // Fixed-CVS oracle: `term.c::term_word`, `encode1`, and `buffer_store`
+    // execute these words as one ordered stream.  The UTF-8 reference output
+    // retains the visible overlay/overstrike results while the native report
+    // exposes the consumed zero-width, decoration, and replacement mutations.
+    let report = execute("buffer-mutations.1", InputFormat::Mdoc, BUFFER_MUTATIONS);
+    let word = |operand: &[u8]| {
+        report
+            .execution
+            .words()
+            .iter()
+            .find(|word| report.execution.pool_bytes(word.operand) == Some(operand))
+            .unwrap_or_else(|| panic!("missing formatter word {operand:?}"))
+    };
+    let atoms = |operand: &[u8]| {
+        let word = word(operand);
+        &report.execution.atoms()[word.atoms.start as usize..word.atoms.end as usize]
+    };
+
+    let overlay = atoms(br"OVERLAY-A\zX");
+    assert!(overlay.iter().any(|atom| {
+        atom.kind == AtomKind::Glyph
+            && atom.role == AtomRole::Authored
+            && atom.display_scalar == u32::from('X')
+    }));
+    let overlay_tail = atoms(b"B");
+    assert!(
+        overlay_tail.iter().any(|atom| {
+            atom.kind == AtomKind::Backspace && atom.role == AtomRole::FontDecoration
+        })
+    );
+
+    let zero_width = atoms(br"ZERO-A\&B");
+    assert!(zero_width.iter().any(|atom| {
+        atom.kind == AtomKind::ZeroWidth && atom.disposition == AtomDisposition::Consumed
+    }));
+
+    let styled = atoms(br"\fBB\fP");
+    assert!(styled.iter().any(|atom| {
+        atom.kind == AtomKind::Glyph
+            && atom.role == AtomRole::Authored
+            && atom.font == ExecutionFont::Bold
+    }));
+    assert!(
+        styled
+            .iter()
+            .any(|atom| { atom.kind == AtomKind::Glyph && atom.role == AtomRole::FontDecoration })
+    );
+
+    let overstrike = atoms(br"OVERSTRIKE-\o'AB'");
+    assert!(
+        overstrike.iter().any(|atom| {
+            atom.kind == AtomKind::Backspace && atom.role == AtomRole::FontDecoration
+        })
+    );
+
+    let replacement = atoms(br"REPLACE-A\h'-1n'B");
+    let replaced = replacement
+        .iter()
+        .find(|atom| atom.disposition == AtomDisposition::Replaced)
+        .expect("negative motion must overwrite the preceding native buffer slot");
+    let replacing = &report.execution.atoms()[replaced.replaced_by.unwrap().0 as usize];
+    assert_eq!(replacing.slot, replaced.slot);
+    assert_eq!(replacing.display_scalar, u32::from('B'));
+
+    let reference = report
+        .execution
+        .references()
+        .iter()
+        .find(|reference| reference.kind == ExecutionReferenceKind::ExternalUri)
+        .expect("native Lk reference");
+    let linked = word(br"LINK-A\zX");
+    assert!(linked.atoms.start >= reference.atoms.start);
+    assert!(linked.atoms.end <= reference.atoms.end);
+    assert!(linked.wrapper.is_some());
+
+    let generations = report.execution.buffer_generations();
+    assert!(generations.windows(2).any(|pair| {
+        pair[0].buffer == pair[1].buffer
+            && pair[0].generation + 1 == pair[1].generation
+            && pair[0].close_sequence < pair[1].open_sequence
+    }));
+}
+
+#[test]
+fn empty_formatter_words_remain_addressable_without_buffer_atoms() {
+    // Fixed-CVS oracle: `man_term.c::pre_alternate` calls `term_word()` for
+    // every .BR operand, including the explicit empty operand; its reference
+    // output is `AB`, so the word is observable without inventing an atom.
+    let report = execute("empty-word-man.1", InputFormat::Man, EMPTY_WORD_MAN);
+    let empty = report
+        .execution
+        .words()
+        .iter()
+        .find(|word| report.execution.pool_bytes(word.operand) == Some(b""))
+        .expect("the native .BR handler executes the explicit empty operand");
+    assert_eq!(empty.role, AtomRole::Authored);
+    assert!(empty.atoms.is_empty());
+    let node = empty.node.expect("empty authored operand node");
+    assert_eq!(report.execution.nodes()[node.0 as usize].line, 3);
 }
 
 #[test]

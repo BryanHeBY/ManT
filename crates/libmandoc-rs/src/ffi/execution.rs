@@ -13,9 +13,9 @@ use crate::{
     ExecutionNodeKey, ExecutionReference, ExecutionReferenceKind, ExecutionSource, ExecutionTable,
     ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
     ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
-    ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWrapper, ExecutionWrapperKind,
-    FlushOutcome, FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
-    NativeExecutionReport, PoolRange, RawDocument,
+    ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper,
+    ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
+    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -67,6 +67,22 @@ struct CBufferGenerationRecord {
     reserved: u32,
     open_sequence: u64,
     close_sequence: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CWordRecord {
+    key: u32,
+    node: u32,
+    source: u32,
+    operand_start: u32,
+    operand_length: u32,
+    role: u32,
+    wrapper: u32,
+    enter_atom: u32,
+    leave_atom: u32,
+    reserved: u32,
+    enter_sequence: u64,
+    leave_sequence: u64,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -382,6 +398,14 @@ declare_record_api!(
     mant_mandoc_execution_buffer_generation_field_count,
     mant_mandoc_execution_buffer_generation_offset,
     mant_mandoc_execution_copy_buffer_generations
+);
+declare_record_api!(
+    mant_mandoc_execution_word_count,
+    mant_mandoc_execution_word_size,
+    mant_mandoc_execution_word_align,
+    mant_mandoc_execution_word_field_count,
+    mant_mandoc_execution_word_offset,
+    mant_mandoc_execution_copy_words
 );
 declare_record_api!(
     mant_mandoc_execution_atom_count,
@@ -811,6 +835,7 @@ struct RawRecords {
     sources: Vec<CSourceRecord>,
     nodes: Vec<CNodeRecord>,
     buffer_generations: Vec<CBufferGenerationRecord>,
+    words: Vec<CWordRecord>,
     atoms: Vec<CAtomRecord>,
     fragments: Vec<CFragmentRecord>,
     fragment_atoms: Vec<CFragmentAtomRecord>,
@@ -879,6 +904,18 @@ copy_record_table!(
     mant_mandoc_execution_buffer_generation_field_count,
     mant_mandoc_execution_buffer_generation_offset,
     mant_mandoc_execution_copy_buffer_generations
+);
+copy_record_table!(
+    copy_words,
+    CWordRecord,
+    word_offsets,
+    "word",
+    mant_mandoc_execution_word_count,
+    mant_mandoc_execution_word_size,
+    mant_mandoc_execution_word_align,
+    mant_mandoc_execution_word_field_count,
+    mant_mandoc_execution_word_offset,
+    mant_mandoc_execution_copy_words
 );
 copy_record_table!(
     copy_atoms,
@@ -1046,6 +1083,7 @@ unsafe fn copy_raw_records(
         sources: unsafe { copy_sources(report, &mut remaining) }?,
         nodes: unsafe { copy_nodes(report, &mut remaining) }?,
         buffer_generations: unsafe { copy_buffer_generations(report, &mut remaining) }?,
+        words: unsafe { copy_words(report, &mut remaining) }?,
         atoms: unsafe { copy_atoms(report, &mut remaining) }?,
         fragments: unsafe { copy_fragments(report, &mut remaining) }?,
         fragment_atoms: unsafe { copy_fragment_atoms(report, &mut remaining) }?,
@@ -1342,6 +1380,7 @@ fn convert_report(
         sources: source_records,
         nodes: node_records,
         buffer_generations: buffer_generation_records,
+        words: word_records,
         atoms: atom_records,
         fragments: fragment_records,
         fragment_atoms: fragment_atom_records,
@@ -1358,6 +1397,7 @@ fn convert_report(
     } = records;
     let node_count = node_records.len();
     let source_count = source_records.len();
+    let word_count = word_records.len();
     let atom_count = atom_records.len();
     let buffer_generation_count = buffer_generation_records.len();
     let fragment_count = fragment_records.len();
@@ -1370,6 +1410,7 @@ fn convert_report(
         source_count,
         node_count,
         buffer_generation_count,
+        word_count,
         atom_count,
         fragment_count,
         fragment_atom_records.len(),
@@ -1540,6 +1581,80 @@ fn convert_report(
     if accounted_buffer_cells != Some(buffer_cells) {
         return Err("native execution buffer capacity accounting mismatch".to_owned());
     }
+    let mut words = reserved_vec(word_count, "word")?;
+    let mut atom_words = reserved_filled_vec(None, atom_count, "word atom coverage")?;
+    for (index, value) in word_records.iter().copied().enumerate() {
+        dense(value.key, index, "word")?;
+        if index != 0 {
+            let previous = word_records[index - 1];
+            if previous.leave_sequence >= value.enter_sequence
+                || previous.leave_atom > value.enter_atom
+            {
+                return Err("execution formatter words are not serial".to_owned());
+            }
+        }
+        if value.reserved != 0 {
+            return Err("non-zero reserved execution word field".to_owned());
+        }
+        let node = optional_node_key(value.node, node_count, "word")?;
+        if usize::try_from(value.source)
+            .ok()
+            .is_none_or(|key| key >= source_count)
+            || node.map_or(0, |key| nodes[key.0 as usize].source) != value.source
+        {
+            return Err("execution word source does not match its node".to_owned());
+        }
+        let operand = pool_range(
+            value.operand_start,
+            value.operand_length,
+            &pool,
+            "word operand",
+        )?;
+        let role = match value.role {
+            1 => AtomRole::Authored,
+            4 => AtomRole::MacroGenerated,
+            5 => AtomRole::DeviceGenerated,
+            6 => AtomRole::TableCellPayload,
+            _ => return Err("unknown execution word role".to_owned()),
+        };
+        let wrapper = option(value.wrapper);
+        if wrapper.is_some_and(|key| {
+            usize::try_from(key)
+                .ok()
+                .is_none_or(|key| key >= wrapper_count)
+        }) {
+            return Err("invalid execution word wrapper".to_owned());
+        }
+        let atoms = range(value.enter_atom, value.leave_atom, "word atoms")?;
+        if !exact_sequence_range(
+            &atom_records,
+            &atoms,
+            value.enter_sequence,
+            value.leave_sequence,
+            |atom| atom.sequence,
+        ) {
+            return Err("execution word atom interval is inconsistent".to_owned());
+        }
+        for owner in atom_words
+            .get_mut(atoms.start as usize..atoms.end as usize)
+            .ok_or_else(|| "execution word atom interval is out of bounds".to_owned())?
+        {
+            if owner.replace(ExecutionWordKey(value.key)).is_some() {
+                return Err("overlapping execution word atom intervals".to_owned());
+            }
+        }
+        words.push(ExecutionWord {
+            key: ExecutionWordKey(value.key),
+            node,
+            source: value.source,
+            operand,
+            role,
+            wrapper,
+            atoms,
+            enter_sequence: value.enter_sequence,
+            leave_sequence: value.leave_sequence,
+        });
+    }
     let mut atoms = reserved_vec(atom_count, "atom")?;
     let mut replacement_predecessors =
         reserved_filled_vec(false, atom_count, "atom replacement coverage")?;
@@ -1599,6 +1714,30 @@ fn convert_report(
                 .is_none_or(|key| key >= wrapper_count)
         }) {
             return Err("invalid execution atom wrapper".to_owned());
+        }
+        match atom_words[index] {
+            Some(word_key) => {
+                let word = &words[word_key.0 as usize];
+                let operand = optional_pool(
+                    value.operand_start,
+                    value.operand_length,
+                    &pool,
+                    "atom operand",
+                )?;
+                if operand != Some(word.operand)
+                    || node != word.node
+                    || value.source != word.source
+                    || wrapper != word.wrapper
+                    || (role != word.role
+                        && !matches!(role, AtomRole::ImplicitSpace | AtomRole::FontDecoration))
+                {
+                    return Err("execution atom does not match its formatter word".to_owned());
+                }
+            }
+            None if value.operand_start != NONE || value.operand_length != 0 => {
+                return Err("execution atom operand has no formatter word".to_owned());
+            }
+            None => {}
         }
         let replaced_by = option(value.replaced_by);
         if replaced_by.is_some_and(|key| {
@@ -2264,6 +2403,24 @@ fn convert_report(
             leave_sequence: value.leave_sequence,
         });
     }
+    for word in &words {
+        if let Some(wrapper_key) = word.wrapper {
+            let wrapper = &wrappers[wrapper_key as usize];
+            if wrapper.kind != ExecutionWrapperKind::Node
+                || word.enter_sequence <= wrapper.enter_sequence
+                || word.leave_sequence >= wrapper.leave_sequence
+                || word.atoms.start < wrapper.enter_atom
+                || word.atoms.end > wrapper.leave_atom
+                || word.node.is_none_or(|node| {
+                    wrapper
+                        .node
+                        .is_none_or(|owner| !node_is_within(&nodes, node, owner))
+                })
+            {
+                return Err("execution word is outside its node wrapper".to_owned());
+            }
+        }
+    }
     for atom in &atoms {
         if let Some(wrapper_key) = atom.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
@@ -2899,6 +3056,7 @@ fn convert_report(
         });
     }
     validate_event_sequences(
+        &words,
         &atoms,
         &buffer_generations,
         &fragments,
@@ -2921,6 +3079,7 @@ fn convert_report(
         sources,
         nodes,
         buffer_generations,
+        words,
         atoms,
         fragments,
         flushes,
@@ -2938,6 +3097,7 @@ fn convert_report(
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn validate_event_sequences(
+    words: &[ExecutionWord],
     atoms: &[ExecutionAtom],
     buffer_generations: &[ExecutionBufferGeneration],
     fragments: &[ExecutionFragment],
@@ -2981,6 +3141,10 @@ fn validate_event_sequences(
         .checked_mul(2)
         .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
     let sequence_count = [
+        words
+            .len()
+            .checked_mul(2)
+            .ok_or_else(|| "native execution sequence count overflow".to_owned())?,
         atoms.len(),
         generation_sequences,
         fragments.len(),
@@ -2999,6 +3163,10 @@ fn validate_event_sequences(
     .try_fold(0_usize, usize::checked_add)
     .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
     let mut seen = reserved_vec(sequence_count, "event sequences")?;
+    for word in words {
+        seen.push(word.enter_sequence);
+        seen.push(word.leave_sequence);
+    }
     for generation in buffer_generations {
         seen.push(generation.open_sequence);
         seen.push(generation.close_sequence);
@@ -3102,6 +3270,22 @@ fn buffer_generation_offsets() -> [usize; 9] {
         offset_of!(CBufferGenerationRecord, reserved),
         offset_of!(CBufferGenerationRecord, open_sequence),
         offset_of!(CBufferGenerationRecord, close_sequence),
+    ]
+}
+fn word_offsets() -> [usize; 12] {
+    [
+        offset_of!(CWordRecord, key),
+        offset_of!(CWordRecord, node),
+        offset_of!(CWordRecord, source),
+        offset_of!(CWordRecord, operand_start),
+        offset_of!(CWordRecord, operand_length),
+        offset_of!(CWordRecord, role),
+        offset_of!(CWordRecord, wrapper),
+        offset_of!(CWordRecord, enter_atom),
+        offset_of!(CWordRecord, leave_atom),
+        offset_of!(CWordRecord, reserved),
+        offset_of!(CWordRecord, enter_sequence),
+        offset_of!(CWordRecord, leave_sequence),
     ]
 }
 fn atom_offsets() -> [usize; 19] {
@@ -3458,6 +3642,7 @@ body
                 open_sequence: 0,
                 close_sequence: 10,
             }],
+            words: Vec::new(),
             atoms: Vec::new(),
             fragments: Vec::new(),
             fragment_atoms: Vec::new(),
@@ -3495,6 +3680,23 @@ body
             replaced_by: NONE,
             disposition: 2,
             sequence: 1,
+        }
+    }
+
+    fn empty_word() -> CWordRecord {
+        CWordRecord {
+            key: 0,
+            node: NONE,
+            source: 0,
+            operand_start: 0,
+            operand_length: 0,
+            role: 5,
+            wrapper: NONE,
+            enter_atom: 0,
+            leave_atom: 0,
+            reserved: 0,
+            enter_sequence: 1,
+            leave_sequence: 2,
         }
     }
 
@@ -3686,6 +3888,27 @@ body
         records
     }
 
+    fn records_with_word_atom() -> RawRecords {
+        let mut records = records_with_emitted_fragment();
+        records.atoms[0].operand_start = 0;
+        records.atoms[0].operand_length = 1;
+        records.atoms[0].sequence = 2;
+        records.flushes[0].sequence = 4;
+        records.flushes[0].outcome_sequence = 8;
+        records.fragments[0].sequence = 5;
+        records.geometry[0].sequence = 6;
+        records.words.push(CWordRecord {
+            operand_length: 1,
+            role: 1,
+            enter_atom: 0,
+            leave_atom: 1,
+            enter_sequence: 1,
+            leave_sequence: 3,
+            ..empty_word()
+        });
+        records
+    }
+
     fn records_with_empty_table_cell() -> RawRecords {
         let mut records = raw_records();
         records.nodes.push(CNodeRecord { kind: 8, ..node() });
@@ -3759,6 +3982,7 @@ body
             records.sources.len(),
             records.nodes.len(),
             records.buffer_generations.len(),
+            records.words.len(),
             records.atoms.len(),
             records.fragments.len(),
             records.fragment_atoms.len(),
@@ -3787,6 +4011,75 @@ body
             .max()
             .unwrap_or(0);
         convert_report(b"x".to_vec(), 0, count, buffer_cells, records).unwrap_err()
+    }
+
+    #[test]
+    fn convert_report_preserves_and_validates_zero_output_words() {
+        let mut records = raw_records();
+        records.words.push(empty_word());
+        let count = record_count(&records);
+        let report = convert_report(b"x".to_vec(), 0, count, 2, records).unwrap();
+        assert_eq!(report.words.len(), 1);
+        assert!(report.words[0].atoms.is_empty());
+        assert_eq!(
+            report.pool_bytes(report.words[0].operand),
+            Some(b"".as_slice())
+        );
+
+        let mut records = raw_records();
+        let mut invalid = empty_word();
+        invalid.role = 2;
+        records.words.push(invalid);
+        assert_eq!(rejection(records), "unknown execution word role");
+
+        let mut records = raw_records();
+        let mut first = empty_word();
+        first.enter_sequence = 1;
+        first.leave_sequence = 4;
+        let mut nested = empty_word();
+        nested.key = 1;
+        nested.enter_sequence = 2;
+        nested.leave_sequence = 3;
+        records.words.extend([first, nested]);
+        assert_eq!(
+            rejection(records),
+            "execution formatter words are not serial"
+        );
+
+        let mut records = raw_records();
+        let mut later = empty_word();
+        later.enter_sequence = 4;
+        later.leave_sequence = 5;
+        let mut earlier = empty_word();
+        earlier.key = 1;
+        earlier.enter_sequence = 1;
+        earlier.leave_sequence = 2;
+        records.words.extend([later, earlier]);
+        assert_eq!(
+            rejection(records),
+            "execution formatter words are not serial"
+        );
+
+        let mut records = raw_records();
+        let mut invalid = empty_word();
+        invalid.leave_atom = 1;
+        records.words.push(invalid);
+        assert_eq!(
+            rejection(records),
+            "execution word atom interval is inconsistent"
+        );
+
+        let records = records_with_word_atom();
+        let count = record_count(&records);
+        let report = convert_report(b"x".to_vec(), 0, count, 2, records).unwrap();
+        assert_eq!(report.words[0].atoms, 0..1);
+
+        let mut records = records_with_word_atom();
+        records.atoms[0].operand_length = 0;
+        assert_eq!(
+            rejection(records),
+            "execution atom does not match its formatter word"
+        );
     }
 
     #[test]

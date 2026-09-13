@@ -19,8 +19,9 @@ to depend on libmandoc's private C structures or parser lifetime.
 - Top-level uncompressed, gzip, and zstd manual sources.
 - Concurrent parser calls with thread-local upstream and shim state.
 - An optional `execute` feature exposing one bounded, pointer-free report of
-  the pinned terminal executor's sources, nodes, buffer generations, atoms,
-  fragments, flushes, boundaries, geometry, wrappers, anchors, and findings.
+  the pinned terminal executor's sources, nodes, formatter words (including
+  zero-output operands), buffer generations, atoms, fragments, flushes,
+  boundaries, geometry, wrappers, anchors, and findings.
   Typed table, row, and cell records retain authored payload ownership apart
   from device-generated padding and rules.
 - An optional `render` feature exposing bounded upstream ASCII, deterministic

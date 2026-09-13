@@ -47,6 +47,12 @@ that crate was not published for that change.
   single non-reentrant session runner and clear caller-owned TLS state before
   returning on success, budget failure, cancellation, render overflow, or
   owned-transfer rejection.
+- Add owned `ExecutionWord` facts to native execution reports. They preserve
+  each formatter operand, including explicit zero-output words, and bind its
+  exact atom interval and execution scope. Words count against the existing
+  record budget. The codec consumes them only through its private native
+  projection; this change does not switch production roff lowering or add IR
+  content for empty operands.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
