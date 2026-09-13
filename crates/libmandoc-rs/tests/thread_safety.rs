@@ -8,6 +8,8 @@ use std::{
 #[cfg(unix)]
 use std::{fs, process};
 
+#[cfg(feature = "execute")]
+use libmandoc_rs::{ExecutionLimits, InputFormat};
 #[cfg(unix)]
 use libmandoc_rs::{IncludePolicy, ParseOptions};
 use libmandoc_rs::{Parser, SourceBundle};
@@ -86,6 +88,42 @@ fn concurrent_memory_sessions_isolate_parser_and_diagnostic_state() {
 
     for worker in workers {
         worker.join().expect("memory parser worker must not panic");
+    }
+}
+
+#[cfg(feature = "execute")]
+#[test]
+#[ignore = "run crates/libmandoc-rs/scripts/check-thread-safety"]
+fn concurrent_native_executions_isolate_reports_and_terminal_state() {
+    let start = Arc::new(Barrier::new(WORKERS));
+    let workers = (0..WORKERS)
+        .map(|worker| {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                let source = format!(
+                    ".TH TSAN-EXEC-{worker} 1\n.SH NAME\ntsan-exec-{worker} \\- isolated\n"
+                );
+                start.wait();
+                for round in 0..rounds() {
+                    let path = format!("tsan-exec-{worker}-{round}.1");
+                    let report = Parser::default()
+                        .with_input_format(InputFormat::Man)
+                        .execute_bytes(&path, source.as_bytes(), ExecutionLimits::default())
+                        .expect("concurrent native execution must succeed");
+                    assert_eq!(
+                        report.document.metadata.title.as_deref(),
+                        Some(format!("TSAN-EXEC-{worker}").as_str())
+                    );
+                    assert_eq!(
+                        report.execution.sources()[0].path,
+                        std::path::PathBuf::from(path)
+                    );
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    for worker in workers {
+        worker.join().expect("execution worker must not panic");
     }
 }
 

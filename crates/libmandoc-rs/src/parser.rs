@@ -17,7 +17,9 @@ use crate::{
     Diagnostic, DiagnosticLevel, Document, RawDocument, SourceBundle, compression, diagnostics, ffi,
 };
 #[cfg(feature = "execute")]
-use crate::{ExecutionError, ExecutionErrorKind, ExecutionLimits, ExecutionReport};
+use crate::{
+    ExecutionCancellation, ExecutionError, ExecutionErrorKind, ExecutionLimits, ExecutionReport,
+};
 
 /// Selects the macro language before parsing begins.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -266,6 +268,34 @@ impl Parser {
         source: &[u8],
         limits: ExecutionLimits,
     ) -> Result<ExecutionReport, ExecutionError> {
+        self.execute_bytes_with_cancellation(
+            source_path,
+            source,
+            limits,
+            &ExecutionCancellation::new(),
+        )
+    }
+
+    /// Parse and execute one source buffer with cooperative cancellation.
+    ///
+    /// Cancellation is checked inside native work-accounting paths.  It is
+    /// sticky for the current call, never crosses the FFI boundary as an
+    /// unwind, and never exposes a partially transferred report.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionError`] for the same failures as
+    /// [`Self::execute_bytes`], including
+    /// [`ExecutionErrorKind::Cancelled`] when `cancellation` is set before or
+    /// during native execution.
+    #[cfg(feature = "execute")]
+    pub fn execute_bytes_with_cancellation(
+        &self,
+        source_path: impl AsRef<Path>,
+        source: &[u8],
+        limits: ExecutionLimits,
+        cancellation: &ExecutionCancellation,
+    ) -> Result<ExecutionReport, ExecutionError> {
         let path = source_path.as_ref();
         if self.options.includes != IncludePolicy::Deny {
             return Err(ExecutionError {
@@ -316,6 +346,7 @@ impl Parser {
             self.input_format,
             self.mdoc_operating_system(),
             limits,
+            cancellation,
         )
         .map_err(|(kind, message)| ExecutionError {
             path: path.to_path_buf(),

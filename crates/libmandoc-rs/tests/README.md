@@ -15,10 +15,10 @@ repository-only `scripts/check-thread-safety` runner builds Rust, the standard
 library, and vendored C with ThreadSanitizer. The runner also checks the C
 archive for instrumentation so a green result cannot accidentally cover only
 the Rust half of the FFI boundary. It covers independent memory sessions,
-native source-tree includes, virtual `SourceBundle` trees, and all optional
-renderer formats. The published crate includes the ignored test source, but
-not that maintenance runner; use a matching ManT repository tag to reproduce
-the mixed-language sanitizer build.
+native source-tree includes, virtual `SourceBundle` trees, native execution,
+and all optional renderer formats. The published crate includes the ignored
+test source, but not that maintenance runner; use a matching ManT repository
+tag to reproduce the mixed-language sanitizer build.
 
 `renderer.rs` is gated by the default-off `render` feature. It owns exact
 ASCII and HTML goldens, deterministic UTF-8 and locale-state checks, output

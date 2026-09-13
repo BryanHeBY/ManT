@@ -74,6 +74,8 @@ struct mant_mandoc_input_action {
 	size_t output_limit;
 #ifdef MANT_MANDOC_EXECUTE
 	const struct mant_mandoc_execution_limits *execution_limits;
+	int (*cancelled)(void *);
+	void *cancellation_context;
 #endif
 };
 
@@ -175,6 +177,13 @@ static int32_t snapshot_node_kind(enum roff_type);
 static struct mant_mandoc_document *error_document(const char *);
 static int native_session_enter(void);
 static void native_session_leave(void);
+static struct mant_mandoc_document *run_input_session(const char *,
+    const unsigned char *, size_t, const char *, int, int, const char *,
+    mant_mandoc_source_resolver, void *,
+    const struct mant_mandoc_input_action *);
+static struct mant_mandoc_document *run_bundle_session(const char *,
+    const struct mant_mandoc_source *, size_t, int, const char *,
+    const struct mant_mandoc_input_action *);
 static struct mant_mandoc_document *parse_input(const char *,
     const unsigned char *, size_t, const char *, int, int, const char *,
     mant_mandoc_source_resolver, void *,
@@ -208,18 +217,12 @@ struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, const char *include_root,
     int allow_include, int input_format, const char *operating_system)
 {
-	struct mant_mandoc_document *document;
 	const struct mant_mandoc_input_action action = {
 		.operation = MANT_INPUT_PARSE
 	};
 
-	if (!native_session_enter())
-		return error_document(
-		    "recursive libmandoc session entry is unsupported");
-	document = parse_input(path, NULL, 0, include_root, allow_include,
+	return run_input_session(path, NULL, 0, include_root, allow_include,
 	    input_format, operating_system, NULL, NULL, &action);
-	native_session_leave();
-	return document;
 }
 
 struct mant_mandoc_document *
@@ -228,18 +231,12 @@ mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
     int input_format, const char *operating_system,
     mant_mandoc_source_resolver resolver, void *resolver_context)
 {
-	struct mant_mandoc_document *document;
 	const struct mant_mandoc_input_action action = {
 		.operation = MANT_INPUT_PARSE
 	};
 
-	if (!native_session_enter())
-		return error_document(
-		    "recursive libmandoc session entry is unsupported");
-	document = parse_input(path, buffer, length, include_root, allow_include,
+	return run_input_session(path, buffer, length, include_root, allow_include,
 	    input_format, operating_system, resolver, resolver_context, &action);
-	native_session_leave();
-	return document;
 }
 
 struct mant_mandoc_document *
@@ -247,39 +244,30 @@ mant_mandoc_parse_bundle(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
     int input_format, const char *operating_system)
 {
-	struct mant_mandoc_document *document;
 	const struct mant_mandoc_input_action action = {
 		.operation = MANT_INPUT_PARSE
 	};
 
-	if (!native_session_enter())
-		return error_document(
-		    "recursive libmandoc session entry is unsupported");
-	document = parse_bundle_mode(root, sources, source_count, input_format,
+	return run_bundle_session(root, sources, source_count, input_format,
 	    operating_system, &action);
-	native_session_leave();
-	return document;
 }
 
 #ifdef MANT_MANDOC_EXECUTE
 struct mant_mandoc_document *
 mant_mandoc_execute_buffer(const char *path, const unsigned char *buffer,
     size_t length, int input_format, const char *operating_system,
-    const struct mant_mandoc_execution_limits *limits)
+    const struct mant_mandoc_execution_limits *limits,
+    int (*cancelled)(void *), void *cancellation_context)
 {
-	struct mant_mandoc_document *document;
 	const struct mant_mandoc_input_action action = {
 		.operation = MANT_INPUT_EXECUTE,
-		.execution_limits = limits
+		.execution_limits = limits,
+		.cancelled = cancelled,
+		.cancellation_context = cancellation_context
 	};
 
-	if (!native_session_enter())
-		return error_document(
-		    "recursive libmandoc session entry is unsupported");
-	document = parse_input(path, buffer, length, NULL, 0, input_format,
+	return run_input_session(path, buffer, length, NULL, 0, input_format,
 	    operating_system, NULL, NULL, &action);
-	native_session_leave();
-	return document;
 }
 
 const struct mant_mandoc_execution_report *
@@ -288,6 +276,45 @@ mant_mandoc_document_execution(const struct mant_mandoc_document *document)
 	return document == NULL ? NULL : document->execution;
 }
 #endif
+
+/*
+ * Every public parser, renderer, and executor enters through one of these two
+ * runners.  Recursive rejection happens before caller-owned TLS is changed;
+ * every successful entry reaches native_session_leave() exactly once even
+ * when parsing, rendering, execution, or report construction fails.
+ */
+static struct mant_mandoc_document *
+run_input_session(const char *path, const unsigned char *buffer, size_t length,
+    const char *include_root, int allow_include, int input_format,
+    const char *operating_system, mant_mandoc_source_resolver resolver,
+    void *resolver_context, const struct mant_mandoc_input_action *action)
+{
+	struct mant_mandoc_document *document;
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_input(path, buffer, length, include_root, allow_include,
+	    input_format, operating_system, resolver, resolver_context, action);
+	native_session_leave();
+	return document;
+}
+
+static struct mant_mandoc_document *
+run_bundle_session(const char *root, const struct mant_mandoc_source *sources,
+    size_t source_count, int input_format, const char *operating_system,
+    const struct mant_mandoc_input_action *action)
+{
+	struct mant_mandoc_document *document;
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_bundle_mode(root, sources, source_count, input_format,
+	    operating_system, action);
+	native_session_leave();
+	return document;
+}
 
 static struct mant_mandoc_document *
 parse_bundle_mode(const char *root,
@@ -463,7 +490,8 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 			break;
 		}
 		document->execution = mant_mandoc_execution_alloc(path,
-		    action->execution_limits);
+		    action->execution_limits, action->cancelled,
+		    action->cancellation_context);
 		if (document->execution == NULL) {
 			document->error = copy_string(
 			    "could not allocate native execution report");
@@ -518,7 +546,6 @@ mant_mandoc_render_file(const char *path, const char *include_root,
     int render_format, size_t render_width, int html_fragment,
     size_t output_limit)
 {
-	struct mant_mandoc_document *document;
 	const struct mant_mandoc_input_action action = {
 		.operation = MANT_INPUT_RENDER,
 		.render_format = render_format,
@@ -527,13 +554,8 @@ mant_mandoc_render_file(const char *path, const char *include_root,
 		.output_limit = output_limit
 	};
 
-	if (!native_session_enter())
-		return error_document(
-		    "recursive libmandoc session entry is unsupported");
-	document = parse_input(path, NULL, 0, include_root, allow_include,
+	return run_input_session(path, NULL, 0, include_root, allow_include,
 	    input_format, operating_system, NULL, NULL, &action);
-	native_session_leave();
-	return document;
 }
 
 struct mant_mandoc_document *
@@ -543,7 +565,6 @@ mant_mandoc_render_buffer(const char *path, const unsigned char *buffer,
     size_t render_width, int html_fragment, size_t output_limit,
     mant_mandoc_source_resolver resolver, void *resolver_context)
 {
-	struct mant_mandoc_document *document;
 	const struct mant_mandoc_input_action action = {
 		.operation = MANT_INPUT_RENDER,
 		.render_format = render_format,
@@ -552,13 +573,8 @@ mant_mandoc_render_buffer(const char *path, const unsigned char *buffer,
 		.output_limit = output_limit
 	};
 
-	if (!native_session_enter())
-		return error_document(
-		    "recursive libmandoc session entry is unsupported");
-	document = parse_input(path, buffer, length, include_root, allow_include,
+	return run_input_session(path, buffer, length, include_root, allow_include,
 	    input_format, operating_system, resolver, resolver_context, &action);
-	native_session_leave();
-	return document;
 }
 
 struct mant_mandoc_document *
@@ -567,8 +583,6 @@ mant_mandoc_render_bundle(const char *root,
     int input_format, const char *operating_system, int render_format,
     size_t render_width, int html_fragment, size_t output_limit)
 {
-	const struct mant_mandoc_source	*source;
-	struct mant_mandoc_document	*document;
 	const struct mant_mandoc_input_action action = {
 		.operation = MANT_INPUT_RENDER,
 		.render_format = render_format,
@@ -577,34 +591,8 @@ mant_mandoc_render_bundle(const char *root,
 		.output_limit = output_limit
 	};
 
-	if (!native_session_enter())
-		return error_document(
-		    "recursive libmandoc session entry is unsupported");
-	if (sources == NULL || source_count == 0) {
-		document = error_document("source bundle is empty");
-		goto done;
-	}
-	if (bundle_sources != NULL) {
-		document = error_document(
-		    "recursive libmandoc bundle entry is unsupported");
-		goto done;
-	}
-	bundle_sources = sources;
-	bundle_source_count = source_count;
-	source = find_bundle_source(root);
-	if (source == NULL) {
-		document = calloc(1, sizeof(*document));
-		if (document != NULL)
-			document->error = copy_string(
-			    "source bundle does not contain the requested root");
-	} else
-		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format, operating_system, NULL, NULL, &action);
-	bundle_sources = NULL;
-	bundle_source_count = 0;
-done:
-	native_session_leave();
-	return document;
+	return run_bundle_session(root, sources, source_count, input_format,
+	    operating_system, &action);
 }
 
 static int
@@ -1192,6 +1180,30 @@ native_session_enter(void)
 static void
 native_session_leave(void)
 {
+	/*
+	 * parse_input() and parse_bundle_mode() release these resources at the
+	 * narrowest ownership boundary.  Reset them again here as the session
+	 * invariant: adding a new failure exit cannot leave caller-owned pointers
+	 * reachable by the next call on this thread.
+	 */
+	bundle_sources = NULL;
+	bundle_source_count = 0;
+	source_resolver = NULL;
+	source_resolver_context = NULL;
+#ifdef MANT_MANDOC_TERMINAL
+	mant_mandoc_output_end();
+#endif
+#ifndef MANDOC_MEMORY_ONLY
+	free(source_root);
+	source_root = NULL;
+	free(source_dir);
+	source_dir = NULL;
+	free(source_path);
+	source_path = NULL;
+	source_path_pending = 0;
+	source_root_strict = 0;
+	source_includes_allowed = 0;
+#endif
 	native_session_active = 0;
 }
 

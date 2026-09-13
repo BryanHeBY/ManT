@@ -1,10 +1,10 @@
 #![cfg(feature = "execute")]
 
 use libmandoc_rs::{
-    AtomRole, ExecutionErrorKind, ExecutionFont, ExecutionLimits, ExecutionReferenceKind,
-    ExecutionTableAlignment, ExecutionTableDataKind, ExecutionTableLayoutKind,
-    ExecutionTableRowKind, FlushOutcome, FragmentRole, InputFormat, NativeExecutionReport, Node,
-    NodeKind, ParseOptions, Parser,
+    AtomRole, ExecutionCancellation, ExecutionErrorKind, ExecutionFont, ExecutionLimits,
+    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
+    ExecutionTableLayoutKind, ExecutionTableRowKind, FlushOutcome, FragmentRole, InputFormat,
+    NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -643,6 +643,69 @@ fn invalid_execution_limits_are_rejected_as_budgets() {
             .execute_bytes("plain-man.1", MAN, limits)
             .unwrap_err();
         assert_eq!(error.kind, ExecutionErrorKind::Budget);
+    }
+}
+
+#[test]
+fn cancelled_execution_is_atomic_and_does_not_poison_the_next_session() {
+    let cancellation = ExecutionCancellation::new();
+    assert!(!cancellation.is_cancelled());
+    cancellation.cancel();
+    assert!(cancellation.is_cancelled());
+
+    let error = Parser::default()
+        .with_input_format(InputFormat::Man)
+        .execute_bytes_with_cancellation(
+            "cancelled.1",
+            MAN,
+            ExecutionLimits::default(),
+            &cancellation,
+        )
+        .unwrap_err();
+    assert_eq!(error.kind, ExecutionErrorKind::Cancelled);
+    assert!(error.message.contains("cancelled"));
+
+    let next = execute("after-cancellation.1", InputFormat::Man, MAN);
+    assert!(!next.execution.fragments().is_empty());
+}
+
+#[test]
+fn concurrent_execution_sessions_keep_reports_and_cancellation_isolated() {
+    use std::sync::{Arc, Barrier};
+
+    const WORKERS: usize = 4;
+    let start = Arc::new(Barrier::new(WORKERS));
+    let workers = (0..WORKERS)
+        .map(|worker| {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                let source =
+                    format!(".TH WORKER-{worker} 1\n.SH NAME\nworker-{worker} \\- isolated\n");
+                start.wait();
+                for round in 0..8 {
+                    let report = Parser::default()
+                        .with_input_format(InputFormat::Man)
+                        .execute_bytes(
+                            format!("worker-{worker}-{round}.1"),
+                            source.as_bytes(),
+                            ExecutionLimits::default(),
+                        )
+                        .expect("concurrent execution must succeed");
+                    assert_eq!(
+                        report.document.metadata.title.as_deref(),
+                        Some(format!("WORKER-{worker}").as_str())
+                    );
+                    assert_eq!(report.execution.sources().len(), 1);
+                    assert_eq!(
+                        report.execution.sources()[0].path.to_string_lossy(),
+                        format!("worker-{worker}-{round}.1")
+                    );
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    for worker in workers {
+        worker.join().expect("execution worker must not panic");
     }
 }
 

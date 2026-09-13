@@ -170,7 +170,7 @@ struct mant_mandoc_document *mant_mandoc_parse_bundle(
 #ifdef MANT_MANDOC_EXECUTE
 struct mant_mandoc_document *mant_mandoc_execute_buffer(
     const char *, const unsigned char *, size_t, int, const char *,
-    const struct mant_mandoc_execution_limits *);
+    const struct mant_mandoc_execution_limits *, int (*)(void *), void *);
 const struct mant_mandoc_execution_report *mant_mandoc_document_execution(
     const struct mant_mandoc_document *);
 #endif

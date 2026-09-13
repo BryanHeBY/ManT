@@ -19,7 +19,8 @@ enum mant_mandoc_execution_status {
 	MANT_MANDOC_EXECUTION_UNSUPPORTED = 2,
 	MANT_MANDOC_EXECUTION_BUDGET = 3,
 	MANT_MANDOC_EXECUTION_ALLOCATION = 4,
-	MANT_MANDOC_EXECUTION_INTERNAL = 5
+	MANT_MANDOC_EXECUTION_INTERNAL = 5,
+	MANT_MANDOC_EXECUTION_CANCELLED = 6
 };
 
 enum mant_mandoc_execution_atom_kind {
@@ -461,7 +462,8 @@ struct mant_mandoc_execution_diagnostic_record {
 struct mant_mandoc_execution_report;
 
 struct mant_mandoc_execution_report *mant_mandoc_execution_alloc(
-    const char *, const struct mant_mandoc_execution_limits *);
+    const char *, const struct mant_mandoc_execution_limits *,
+    int (*)(void *), void *);
 int mant_mandoc_execution_run(struct mant_mandoc_execution_report *,
     const struct roff_meta *);
 void mant_mandoc_execution_free(struct mant_mandoc_execution_report *);

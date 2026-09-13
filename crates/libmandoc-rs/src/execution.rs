@@ -1,6 +1,14 @@
 //! Owned facts captured from one authoritative native terminal execution.
 
-use std::{fmt, ops::Range, path::PathBuf};
+use std::{
+    fmt,
+    ops::Range,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use crate::NodeKind;
 
@@ -987,6 +995,38 @@ impl Default for ExecutionLimits {
     }
 }
 
+/// Cloneable cooperative cancellation handle for one or more executions.
+///
+/// Native execution checks this flag at bounded work-accounting points.  A
+/// cancellation never unwinds through C and never returns a partial report.
+#[derive(Clone, Debug, Default)]
+pub struct ExecutionCancellation {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl ExecutionCancellation {
+    /// Create a cancellation handle in the runnable state.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Request cancellation of executions using this handle.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    /// Return whether cancellation has been requested.
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn atomic(&self) -> &AtomicBool {
+        &self.cancelled
+    }
+}
+
 /// A document and the facts produced by its single native execution.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionReport {
@@ -1005,6 +1045,8 @@ pub enum ExecutionErrorKind {
     Unsupported,
     /// A configured execution budget was exhausted.
     Budget,
+    /// Cooperative cancellation was requested.
+    Cancelled,
     /// Native storage could not be allocated.
     Allocation,
     /// Parsing or native execution failed.

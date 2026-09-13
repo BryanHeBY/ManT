@@ -73,7 +73,13 @@ run "test roff audit profilers" \
   cargo test --locked --package mant-engine --examples
 run "test real terminal-cell geometry probe" \
   cargo test --locked --package mant-ui --example geometry_audit
-run "test optional libmandoc features" \
+run "test parser-only libmandoc boundary" \
+  cargo test --locked --package libmandoc-rs --no-default-features
+run "test execute-only libmandoc boundary" \
+  cargo test --locked --package libmandoc-rs --no-default-features --features execute
+run "test render-only libmandoc boundary" \
+  cargo test --locked --package libmandoc-rs --no-default-features --features render
+run "test combined libmandoc features" \
   cargo test --locked --package libmandoc-rs --all-features
 run "check libmandoc native symbol namespace" \
   bash scripts/check-libmandoc-symbols.sh

@@ -109,6 +109,9 @@ pub(super) struct CResolvedSource {
 pub(super) type CSourceResolver =
     extern "C" fn(*mut c_void, *const c_char, *const c_char, *mut CResolvedSource) -> i32;
 
+#[cfg(feature = "execute")]
+pub(super) type CExecutionCancellation = extern "C" fn(*mut c_void) -> i32;
+
 #[cfg(any(feature = "execute", feature = "render"))]
 #[unsafe(no_mangle)]
 extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
@@ -162,6 +165,8 @@ unsafe extern "C" {
         input_format: i32,
         operating_system: *const c_char,
         limits: *const CExecutionLimits,
+        cancelled: Option<CExecutionCancellation>,
+        cancellation_context: *mut c_void,
     ) -> *mut CDocument;
     #[cfg(feature = "execute")]
     pub(super) fn mant_mandoc_document_execution(

@@ -33,7 +33,9 @@ buffer in the same native session at a fixed 78-column terminal profile, then
 returns matching owned AST and sealed execution facts. This first execution
 boundary rejects includes and equations before terminal traversal rather than
 returning a partial report. It accepts bounded native tables and reports their
-typed topology and cell-local execution. The optional reference renderers
+typed topology and cell-local execution. `ExecutionCancellation` provides a
+cloneable cooperative cancellation flag: native work checkpoints turn it into
+a typed all-or-error cancellation without unwinding across C. The optional reference renderers
 likewise format the native tree in the same call that parses it. Neither
 feature turns the owned Rust AST into a second document model, and `ManT`'s
 production lowering remains unchanged until the native-execution migration is
@@ -111,6 +113,14 @@ records, a 16 MiB immutable byte pool, and 1,000,000 native buffer cells. A
 zero, unrepresentable, or exhausted limit fails the whole execution; it never
 returns a successful partial report. These are safety ceilings rather than a
 promise that ordinary inputs approach those allocations.
+
+Every parse, execute, and render entry uses the same thread-local session
+guard. Recursive entry on one OS thread is rejected before changing the outer
+call's state; independent threads remain supported. Native execution failures,
+cooperative cancellation, table aborts, renderer output overflow, and Rust
+transfer rejection all drop the same document owner. Caller-owned source and
+cancellation pointers are cleared before the synchronous native call returns,
+and a failed call does not poison the next session.
 
 Within that private boundary, `ffi::session` owns the native document drop
 guard and keeps bundle paths and source bytes alive for the call;
@@ -358,7 +368,8 @@ continues to pass against an obsolete expectation.
 The sanitizer stress suite is also repository-only and intentionally stays out
 of routine CI. It rebuilds the Rust standard library, this crate, and the
 vendored C objects with `ThreadSanitizer` instrumentation, then drives
-concurrent memory, source-tree, virtual-bundle, and renderer sessions:
+concurrent memory, source-tree, virtual-bundle, native-execution, and renderer
+sessions:
 
 ```sh
 rustup toolchain install nightly --profile minimal

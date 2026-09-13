@@ -138,6 +138,11 @@ fn output_limit_rejects_partial_results() {
         .render_bytes("limited.1", MAN_SOURCE)
         .expect_err("reject output larger than the configured cap");
     assert_eq!(error.kind, RenderErrorKind::OutputLimit);
+
+    let next = Renderer::new(RenderFormat::Utf8)
+        .render_bytes("after-limit.1", MAN_SOURCE)
+        .expect("a failed renderer must release its TLS sink before the next call");
+    assert!(next.output.contains("render fixture"));
 }
 
 #[test]

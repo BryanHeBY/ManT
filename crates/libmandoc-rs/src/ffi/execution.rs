@@ -543,6 +543,7 @@ pub(super) fn copy_executed_document(
             2 => ExecutionErrorKind::Unsupported,
             3 => ExecutionErrorKind::Budget,
             4 => ExecutionErrorKind::Allocation,
+            6 => ExecutionErrorKind::Cancelled,
             _ => ExecutionErrorKind::Native,
         };
         let message = unsafe { super::owned::optional_string(mant_mandoc_execution_error(report)) }

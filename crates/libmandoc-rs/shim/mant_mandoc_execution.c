@@ -98,6 +98,8 @@ struct mant_mandoc_execution_report {
 	size_t current_table_cell_column;
 	size_t current_table_cell_coloff;
 	uint64_t sequence;
+	int (*cancelled)(void *);
+	void *cancellation_context;
 	int word_active;
 	int status;
 };
@@ -220,6 +222,7 @@ static int append_pool(struct mant_mandoc_execution_report *, const void *,
     size_t, uint32_t *);
 static int tree_supported(struct mant_mandoc_execution_report *,
     const struct roff_node *, uint64_t, uint64_t *);
+static int finish_execution_run(struct mant_mandoc_execution_report *);
 static int seal_report(struct mant_mandoc_execution_report *);
 static int validate_report_storage(struct mant_mandoc_execution_report *);
 static int validate_sealed_report(struct mant_mandoc_execution_report *);
@@ -312,7 +315,8 @@ DEFINE_RESERVE(diagnostics, mant_mandoc_execution_diagnostic_record)
 
 struct mant_mandoc_execution_report *
 mant_mandoc_execution_alloc(const char *source_path,
-    const struct mant_mandoc_execution_limits *limits)
+    const struct mant_mandoc_execution_limits *limits,
+    int (*cancelled)(void *), void *cancellation_context)
 {
 	struct mant_mandoc_execution_report *report;
 	struct mant_mandoc_source_record *source;
@@ -333,6 +337,8 @@ mant_mandoc_execution_alloc(const char *source_path,
 	if (report == NULL)
 		return NULL;
 	report->limits = *limits;
+	report->cancelled = cancelled;
+	report->cancellation_context = cancellation_context;
 	report->current_wrapper = MANT_MANDOC_EXEC_NONE;
 	report->current_reference = MANT_MANDOC_EXEC_NONE;
 	report->current_flush = MANT_MANDOC_EXEC_NONE;
@@ -405,20 +411,25 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 	uint64_t node_count;
 
 	if (report == NULL || meta == NULL || meta->first == NULL ||
-	    report->status != MANT_MANDOC_EXECUTION_BUILDING)
+	    report->status != MANT_MANDOC_EXECUTION_BUILDING) {
+		if (report != NULL) {
+			report->cancelled = NULL;
+			report->cancellation_context = NULL;
+		}
 		return 0;
+	}
 	if (meta->source_request_seen) {
 		fail_report(report, MANT_MANDOC_EXECUTION_UNSUPPORTED,
 		    "native execution rejects executed .so and .soquiet requests");
-		return 0;
+		return finish_execution_run(report);
 	}
 	node_count = 0;
 	if (!tree_supported(report, meta->first, 0, &node_count))
-		return 0;
+		return finish_execution_run(report);
 	if (node_count > report->limits.max_nodes) {
 		fail_report(report, MANT_MANDOC_EXECUTION_BUDGET,
 		    "native execution node limit exceeded");
-		return 0;
+		return finish_execution_run(report);
 	}
 	report->node_count = (size_t)node_count;
 	report->node_index = calloc(report->node_count,
@@ -430,7 +441,7 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 		if (report->status == MANT_MANDOC_EXECUTION_BUILDING)
 			fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
 			    "could not build native execution node registry");
-		return 0;
+		return finish_execution_run(report);
 	}
 	qsort(report->node_index, report->node_count,
 	    sizeof(*report->node_index), compare_node_index);
@@ -444,7 +455,7 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 	if (termp == NULL) {
 		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
 		    "could not allocate native execution device");
-		return 0;
+		return finish_execution_run(report);
 	}
 	term_exec_attach(termp, &execution_ops, report);
 	if (meta->macroset == MACROSET_MDOC)
@@ -462,6 +473,15 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 	ascii_free(termp);
 	if (report->status == MANT_MANDOC_EXECUTION_BUILDING)
 		seal_report(report);
+	return finish_execution_run(report);
+}
+
+static int
+finish_execution_run(struct mant_mandoc_execution_report *report)
+{
+	/* The cancellation context is caller-owned for this synchronous run. */
+	report->cancelled = NULL;
+	report->cancellation_context = NULL;
 	return report->status == MANT_MANDOC_EXECUTION_COMPLETE;
 }
 
@@ -2174,6 +2194,12 @@ charge_work(struct mant_mandoc_execution_report *report, uint64_t amount)
 	if (report == NULL ||
 	    report->status != MANT_MANDOC_EXECUTION_BUILDING)
 		return 0;
+	if (report->cancelled != NULL &&
+	    report->cancelled(report->cancellation_context)) {
+		fail_report(report, MANT_MANDOC_EXECUTION_CANCELLED,
+		    "native execution was cancelled");
+		return 0;
+	}
 	if (amount > report->limits.max_work - report->work_count) {
 		fail_report(report, MANT_MANDOC_EXECUTION_BUDGET,
 		    "native execution work limit exceeded");
@@ -3568,7 +3594,8 @@ mant_mandoc_execution_validation_selftest(void)
 	limits.max_work = limits.max_records = 1024;
 	limits.max_pool_bytes = 4096;
 	limits.max_buffer_cells = 1024;
-	report = mant_mandoc_execution_alloc("native-selftest.1", &limits);
+	report = mant_mandoc_execution_alloc("native-selftest.1", &limits,
+	    NULL, NULL);
 	if (report == NULL)
 		return UINT32_MAX;
 	if (!reserve_nodes(report, 1)) {

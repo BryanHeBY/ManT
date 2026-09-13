@@ -40,6 +40,13 @@ that crate was not published for that change.
   downstream exhaustive `Node` destructuring and struct-literal consumers, so
   the crate advances with the rest of the unpublished contract family rather
   than silently mixing the new snapshot with older lowering.
+- Add `ExecutionCancellation` and
+  `Parser::execute_bytes_with_cancellation`. Cancellation is cooperative at
+  bounded native work checkpoints, returns a distinct `Cancelled` error, and
+  never exposes a partial report. Parse, execute, and render calls now share a
+  single non-reentrant session runner and clear caller-owned TLS state before
+  returning on success, budget failure, cancellation, render overflow, or
+  owned-transfer rejection.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
