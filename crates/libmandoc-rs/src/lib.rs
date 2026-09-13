@@ -33,8 +33,11 @@ pub use execution::{
     ExecutionBufferGeneration, ExecutionDiagnostic, ExecutionError, ExecutionErrorKind,
     ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry, ExecutionLimits,
     ExecutionNode, ExecutionNodeKey, ExecutionReference, ExecutionReferenceKind, ExecutionReport,
-    ExecutionSource, ExecutionWrapper, ExecutionWrapperKind, FlushOutcome, FragmentKey,
-    FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange,
+    ExecutionSource, ExecutionTable, ExecutionTableAlignment, ExecutionTableCell,
+    ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey,
+    ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey, ExecutionTableRowKind,
+    ExecutionWrapper, ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
+    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange,
 };
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,

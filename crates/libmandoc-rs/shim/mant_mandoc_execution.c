@@ -18,11 +18,13 @@
 #include "mandoc.h"
 #include "roff.h"
 #include "out.h"
+#include "tbl.h"
 #include "term.h"
 #include "manconf.h"
 #include "main.h"
 
 #include "mant_mandoc_execution.h"
+#include "mant_mandoc_table_private.h"
 
 struct node_index {
 	const struct roff_node *node;
@@ -65,6 +67,9 @@ struct mant_mandoc_execution_report {
 	RECORD_STORAGE(wrappers, mant_mandoc_wrapper_record);
 	RECORD_STORAGE(references, mant_mandoc_reference_record);
 	RECORD_STORAGE(anchors, mant_mandoc_anchor_record);
+	RECORD_STORAGE(tables, mant_mandoc_table_record);
+	RECORD_STORAGE(table_rows, mant_mandoc_table_row_record);
+	RECORD_STORAGE(table_cells, mant_mandoc_table_cell_record);
 	RECORD_STORAGE(diagnostics, mant_mandoc_execution_diagnostic_record);
 	size_t pool_length;
 	size_t pool_capacity;
@@ -81,6 +86,9 @@ struct mant_mandoc_execution_report {
 	uint32_t current_word_node;
 	uint32_t current_flush;
 	uint32_t current_boundary;
+	uint32_t current_table;
+	uint32_t current_table_row;
+	uint32_t current_table_cell;
 	uint64_t sequence;
 	int word_active;
 	int status;
@@ -142,6 +150,23 @@ static int execution_reference_end(void *, const struct termp *,
     const struct roff_node *);
 static int execution_anchor(void *, const struct termp *,
     const struct roff_node *, const char *, size_t, size_t, int);
+static int execution_table_preflight(void *, const struct termp *,
+    const struct roff_node *, size_t);
+static int execution_table_begin(void *, const struct termp *,
+    const struct roff_node *, const struct tbl_span *, size_t, size_t,
+    size_t);
+static int execution_table_end(void *, const struct termp *,
+    const struct roff_node *, const struct tbl_span *);
+static int execution_table_row_begin(void *, const struct termp *,
+    const struct roff_node *, const struct tbl_span *);
+static int execution_table_row_end(void *, const struct termp *,
+    const struct roff_node *, const struct tbl_span *);
+static int execution_table_cell_begin(void *, const struct termp *,
+    const struct roff_node *, const struct tbl_span *, const struct tbl_cell *,
+    const struct tbl_dat *, size_t, size_t, size_t, size_t);
+static int execution_table_cell_end(void *, const struct termp *,
+    const struct roff_node *, const struct tbl_span *, const struct tbl_cell *,
+    const struct tbl_dat *, size_t, size_t, size_t, size_t);
 
 static const struct term_exec_ops execution_ops = {
 	execution_node_enter,
@@ -169,7 +194,14 @@ static const struct term_exec_ops execution_ops = {
 	execution_font,
 	execution_reference_begin,
 	execution_reference_end,
-	execution_anchor
+	execution_anchor,
+	execution_table_preflight,
+	execution_table_begin,
+	execution_table_end,
+	execution_table_row_begin,
+	execution_table_row_end,
+	execution_table_cell_begin,
+	execution_table_cell_end
 };
 
 static void fail_report(struct mant_mandoc_execution_report *, int,
@@ -182,6 +214,7 @@ static int tree_supported(struct mant_mandoc_execution_report *,
     const struct roff_node *, uint64_t, uint64_t *);
 static int seal_report(struct mant_mandoc_execution_report *);
 static int validate_sealed_report(struct mant_mandoc_execution_report *);
+static int validate_table_records(struct mant_mandoc_execution_report *);
 static int collect_nodes(struct mant_mandoc_execution_report *,
     const struct roff_node *, uint32_t, uint64_t);
 static int compare_node_index(const void *, const void *);
@@ -253,6 +286,9 @@ DEFINE_RESERVE(geometries, mant_mandoc_geometry_record)
 DEFINE_RESERVE(wrappers, mant_mandoc_wrapper_record)
 DEFINE_RESERVE(references, mant_mandoc_reference_record)
 DEFINE_RESERVE(anchors, mant_mandoc_anchor_record)
+DEFINE_RESERVE(tables, mant_mandoc_table_record)
+DEFINE_RESERVE(table_rows, mant_mandoc_table_row_record)
+DEFINE_RESERVE(table_cells, mant_mandoc_table_cell_record)
 #undef DEFINE_RESERVE
 
 struct mant_mandoc_execution_report *
@@ -282,6 +318,9 @@ mant_mandoc_execution_alloc(const char *source_path,
 	report->current_reference = MANT_MANDOC_EXEC_NONE;
 	report->current_flush = MANT_MANDOC_EXEC_NONE;
 	report->current_boundary = MANT_MANDOC_EXEC_NONE;
+	report->current_table = MANT_MANDOC_EXEC_NONE;
+	report->current_table_row = MANT_MANDOC_EXEC_NONE;
+	report->current_table_cell = MANT_MANDOC_EXEC_NONE;
 	report->current_word_node = MANT_MANDOC_EXEC_NONE;
 	if (!append_pool(report, source_path, strlen(source_path), &path_start) ||
 	    !charge_record(report) || !reserve_sources(report, 1)) {
@@ -429,6 +468,9 @@ mant_mandoc_execution_free(struct mant_mandoc_execution_report *report)
 	free(report->wrappers);
 	free(report->references);
 	free(report->anchors);
+	free(report->tables);
+	free(report->table_rows);
+	free(report->table_cells);
 	free(report->diagnostics);
 	free(report->pool);
 	free(report->error);
@@ -563,7 +605,9 @@ execution_word_begin(void *arg, const struct termp *p,
 	if (role == NULL)
 		return 0;
 	source_node = lookup_word_node(report, word);
-	*role = source_node != MANT_MANDOC_EXEC_NONE ?
+	*role = p->exec_table_cell_payload ?
+	    MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD :
+	    source_node != MANT_MANDOC_EXEC_NONE ?
 	    MANT_MANDOC_ATOM_AUTHORED : node == NULL ?
 	    MANT_MANDOC_ATOM_DEVICE_GENERATED : MANT_MANDOC_ATOM_MACRO_GENERATED;
 	if (report->word_active || !charge_work(report, length + 1) ||
@@ -608,7 +652,7 @@ execution_buffer_write(void *arg, const struct termp *p,
 	if (!charge_work(report, 1))
 		return 0;
 	if (role < MANT_MANDOC_ATOM_AUTHORED ||
-	    role > MANT_MANDOC_ATOM_DEVICE_GENERATED) {
+	    role > MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD) {
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 		    "native execution reported an unknown atom role");
 		return 0;
@@ -1296,6 +1340,460 @@ execution_anchor(void *arg, const struct termp *p,
 }
 
 static int
+execution_table_preflight(void *arg, const struct termp *p,
+    const struct roff_node *node, size_t amount)
+{
+	(void)p;
+	(void)node;
+	return charge_work(arg, amount);
+}
+
+static int
+execution_table_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct tbl_span *span, size_t rows,
+    size_t layout_cells, size_t data_cells)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_table_record *record;
+
+	(void)p;
+	if (span == NULL || span->opts == NULL || rows == 0 ||
+	    rows > UINT32_MAX || layout_cells > UINT32_MAX ||
+	    data_cells > UINT32_MAX || report->current_table !=
+	    MANT_MANDOC_EXEC_NONE || report->atoms_count > UINT32_MAX ||
+	    report->fragments_count > UINT32_MAX ||
+	    report->flushes_count > UINT32_MAX ||
+	    !charge_record(report) ||
+	    !reserve_tables(report, report->tables_count + 1))
+		return 0;
+	record = &report->tables[report->tables_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->tables_count++;
+	record->first_row_node = lookup_node(report, node);
+	record->row_start = (uint32_t)report->table_rows_count;
+	record->row_length = (uint32_t)rows;
+	record->cell_start = (uint32_t)report->table_cells_count;
+	record->cell_length = (uint32_t)data_cells;
+	record->logical_columns = (uint32_t)span->opts->cols;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->enter_fragment = (uint32_t)report->fragments_count;
+	record->leave_fragment = MANT_MANDOC_EXEC_NONE;
+	record->enter_flush = (uint32_t)report->flushes_count;
+	record->leave_flush = MANT_MANDOC_EXEC_NONE;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_table = record->key;
+	return 1;
+}
+
+static int
+execution_table_end(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct tbl_span *span)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_table_record *record;
+
+	(void)p;
+	(void)node;
+	if (span == NULL || span->next != NULL || report->current_table ==
+	    MANT_MANDOC_EXEC_NONE || report->current_table >=
+	    report->tables_count || report->current_table_row !=
+	    MANT_MANDOC_EXEC_NONE || report->current_table_cell !=
+	    MANT_MANDOC_EXEC_NONE || !charge_work(report, 1) ||
+	    report->atoms_count > UINT32_MAX ||
+	    report->fragments_count > UINT32_MAX ||
+	    report->flushes_count > UINT32_MAX)
+		return 0;
+	record = &report->tables[report->current_table];
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->leave_fragment = (uint32_t)report->fragments_count;
+	record->leave_flush = (uint32_t)report->flushes_count;
+	record->leave_sequence = report->sequence++;
+	report->current_table = MANT_MANDOC_EXEC_NONE;
+	return 1;
+}
+
+static int
+execution_table_row_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct tbl_span *span)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_table_record *table;
+	struct mant_mandoc_table_row_record *record;
+	uint32_t kind;
+
+	(void)p;
+	if (span == NULL || report->current_table == MANT_MANDOC_EXEC_NONE ||
+	    report->current_table >= report->tables_count ||
+	    report->current_table_row != MANT_MANDOC_EXEC_NONE ||
+	    report->table_rows_count > UINT32_MAX ||
+	    report->table_cells_count > UINT32_MAX ||
+	    report->atoms_count > UINT32_MAX ||
+	    report->fragments_count > UINT32_MAX ||
+	    report->flushes_count > UINT32_MAX)
+		return 0;
+	switch (span->pos) {
+	case TBL_SPAN_DATA: kind = MANT_MANDOC_EXEC_TABLE_ROW_DATA; break;
+	case TBL_SPAN_HORIZ: kind = MANT_MANDOC_EXEC_TABLE_ROW_SINGLE_RULE; break;
+	case TBL_SPAN_DHORIZ: kind = MANT_MANDOC_EXEC_TABLE_ROW_DOUBLE_RULE; break;
+	default: return 0;
+	}
+	if (!charge_record(report) ||
+	    !reserve_table_rows(report, report->table_rows_count + 1))
+		return 0;
+	table = &report->tables[report->current_table];
+	record = &report->table_rows[report->table_rows_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->table_rows_count++;
+	record->table = table->key;
+	record->node = lookup_node(report, node);
+	record->ordinal = record->key - table->row_start;
+	record->kind = kind;
+	record->logical_columns = (uint32_t)span->opts->cols;
+	record->cell_start = (uint32_t)report->table_cells_count;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->enter_fragment = (uint32_t)report->fragments_count;
+	record->leave_fragment = MANT_MANDOC_EXEC_NONE;
+	record->enter_flush = (uint32_t)report->flushes_count;
+	record->leave_flush = MANT_MANDOC_EXEC_NONE;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_table_row = record->key;
+	return 1;
+}
+
+static int
+execution_table_row_end(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct tbl_span *span)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_table_row_record *record;
+
+	(void)p;
+	(void)node;
+	(void)span;
+	if (report->current_table_row == MANT_MANDOC_EXEC_NONE ||
+	    report->current_table_row >= report->table_rows_count ||
+	    report->current_table_cell != MANT_MANDOC_EXEC_NONE ||
+	    !charge_work(report, 1) || report->atoms_count > UINT32_MAX ||
+	    report->fragments_count > UINT32_MAX ||
+	    report->flushes_count > UINT32_MAX)
+		return 0;
+	record = &report->table_rows[report->current_table_row];
+	record->cell_length = (uint32_t)report->table_cells_count -
+	    record->cell_start;
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->leave_fragment = (uint32_t)report->fragments_count;
+	record->leave_flush = (uint32_t)report->flushes_count;
+	record->leave_sequence = report->sequence++;
+	report->current_table_row = MANT_MANDOC_EXEC_NONE;
+	return 1;
+}
+
+static uint32_t
+table_layout_kind(enum tbl_cellt kind)
+{
+	return (uint32_t)kind + 1;
+}
+
+static uint32_t
+table_data_kind(enum tbl_datt kind)
+{
+	return (uint32_t)kind + 1;
+}
+
+static uint32_t
+table_alignment(enum tbl_cellt kind)
+{
+	switch (kind) {
+	case TBL_CELL_LEFT: return MANT_MANDOC_EXEC_TABLE_ALIGN_LEFT;
+	case TBL_CELL_CENTRE: return MANT_MANDOC_EXEC_TABLE_ALIGN_CENTER;
+	case TBL_CELL_RIGHT: return MANT_MANDOC_EXEC_TABLE_ALIGN_RIGHT;
+	case TBL_CELL_NUMBER: return MANT_MANDOC_EXEC_TABLE_ALIGN_NUMERIC;
+	case TBL_CELL_LONG: return MANT_MANDOC_EXEC_TABLE_ALIGN_LONG;
+	default: return MANT_MANDOC_EXEC_TABLE_ALIGN_NONE;
+	}
+}
+
+static uint32_t
+table_cell_flags(const struct tbl_cell *cell, const struct tbl_dat *data)
+{
+	uint32_t flags = 0;
+
+	if (cell->flags & TBL_CELL_TALIGN) flags |= MANT_MANDOC_EXEC_TABLE_CELL_TOP_ALIGN;
+	if (cell->flags & TBL_CELL_UP) flags |= MANT_MANDOC_EXEC_TABLE_CELL_UP;
+	if (cell->flags & TBL_CELL_BALIGN) flags |= MANT_MANDOC_EXEC_TABLE_CELL_BOTTOM_ALIGN;
+	if (cell->flags & TBL_CELL_WIGN) flags |= MANT_MANDOC_EXEC_TABLE_CELL_ZERO_WIDTH;
+	if (cell->flags & TBL_CELL_EQUAL) flags |= MANT_MANDOC_EXEC_TABLE_CELL_EQUAL_WIDTH;
+	if (cell->flags & TBL_CELL_WMAX) flags |= MANT_MANDOC_EXEC_TABLE_CELL_MAX_WIDTH;
+	if (data->block) flags |= MANT_MANDOC_EXEC_TABLE_CELL_TEXT_BLOCK;
+	if (data->source_safe) flags |= MANT_MANDOC_EXEC_TABLE_CELL_SOURCE_SAFE;
+	if (mant_mandoc_tbl_cell_is_vertical_continuation(data))
+		flags |= MANT_MANDOC_EXEC_TABLE_CELL_VERTICAL_CONTINUATION;
+	return flags;
+}
+
+static int
+execution_table_cell_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct tbl_span *span,
+    const struct tbl_cell *cell, const struct tbl_dat *data, size_t ordinal,
+    size_t data_ordinal, size_t coloff_before, size_t coloff_after)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_table_cell_record *record;
+
+	(void)span;
+	(void)coloff_after;
+	if (cell == NULL || data == NULL || data->layout != cell ||
+	    ordinal > UINT32_MAX || data_ordinal > UINT32_MAX ||
+	    cell->col < 0 || report->current_table_row ==
+	    MANT_MANDOC_EXEC_NONE || report->current_table_cell !=
+	    MANT_MANDOC_EXEC_NONE || report->atoms_count > UINT32_MAX ||
+	    !charge_record(report) ||
+	    !reserve_table_cells(report, report->table_cells_count + 1))
+		return 0;
+	record = &report->table_cells[report->table_cells_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->table_cells_count++;
+	record->row = report->current_table_row;
+	record->node = lookup_node(report, node);
+	record->ordinal = (uint32_t)ordinal;
+	record->data_ordinal = (uint32_t)data_ordinal;
+	record->logical_column = (uint32_t)cell->col;
+	record->column_span = (uint32_t)data->hspans + 1;
+	record->row_span = (uint32_t)data->vspans + 1;
+	record->layout_kind = table_layout_kind(cell->pos);
+	record->data_kind = table_data_kind(data->pos);
+	record->alignment = table_alignment(cell->pos);
+	record->font = stable_font(cell->font == ESCAPE_FONTBI ? TERMFONT_BI :
+	    cell->font == ESCAPE_FONTBOLD || cell->font == ESCAPE_FONTCB ?
+	    TERMFONT_BOLD : cell->font == ESCAPE_FONTITALIC ||
+	    cell->font == ESCAPE_FONTCI ? TERMFONT_UNDER : TERMFONT_NONE);
+	record->flags = table_cell_flags(cell, data);
+	record->buffer = MANT_MANDOC_EXEC_NONE;
+	record->buffer_generation = MANT_MANDOC_EXEC_NONE;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->offset_bu = (int64_t)p->tcol->offset;
+	record->rmargin_bu = (int64_t)p->tcol->rmargin;
+	record->coloff_before_bu = (int64_t)coloff_before;
+	record->coloff_after_bu = (int64_t)coloff_before;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_table_cell = record->key;
+	return 1;
+}
+
+static int
+execution_table_cell_end(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct tbl_span *span,
+    const struct tbl_cell *cell, const struct tbl_dat *data, size_t ordinal,
+    size_t data_ordinal, size_t coloff_before, size_t coloff_after)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_table_cell_record *record;
+	size_t buffer;
+
+	(void)node;
+	(void)span;
+	(void)cell;
+	(void)data;
+	(void)ordinal;
+	(void)data_ordinal;
+	(void)coloff_before;
+	if (report->current_table_cell == MANT_MANDOC_EXEC_NONE ||
+	    report->current_table_cell >= report->table_cells_count ||
+	    report->atoms_count > UINT32_MAX || !charge_work(report, 1))
+		return 0;
+	record = &report->table_cells[report->current_table_cell];
+	buffer = (size_t)(p->tcol - p->tcols);
+	if (buffer < report->buffer_count &&
+	    report->buffers[buffer].generation_record != MANT_MANDOC_EXEC_NONE) {
+		record->buffer = (uint32_t)buffer;
+		record->buffer_generation = report->buffers[buffer].generation_record;
+	}
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->coloff_after_bu = (int64_t)coloff_after;
+	record->leave_sequence = report->sequence++;
+	report->current_table_cell = MANT_MANDOC_EXEC_NONE;
+	return 1;
+}
+
+static int
+validate_table_records(struct mant_mandoc_execution_report *report)
+{
+	struct mant_mandoc_buffer_generation_record *generation;
+	struct mant_mandoc_atom_record *atom;
+	struct mant_mandoc_table_record *table;
+	struct mant_mandoc_table_row_record *row;
+	struct mant_mandoc_table_cell_record *cell;
+	struct mant_mandoc_table_row_record *previous_row;
+	struct mant_mandoc_table_cell_record *previous_cell;
+	size_t index, inner, row_cursor, cell_cursor, payload_cell;
+	uint32_t previous_data_ordinal;
+
+	row_cursor = cell_cursor = 0;
+
+	for (index = 0; index < report->tables_count; index++) {
+		table = &report->tables[index];
+		if (table->key != index ||
+		    table->first_row_node >= report->nodes_count ||
+		    table->row_start != row_cursor || table->row_length == 0 ||
+		    table->row_start > report->table_rows_count ||
+		    table->row_length > report->table_rows_count - table->row_start ||
+		    table->cell_start != cell_cursor ||
+		    table->cell_start > report->table_cells_count ||
+		    table->cell_length > report->table_cells_count - table->cell_start ||
+		    table->logical_columns == 0 || table->flags != 0 ||
+		    table->enter_atom > table->leave_atom ||
+		    table->leave_atom > report->atoms_count ||
+		    table->enter_fragment > table->leave_fragment ||
+		    table->leave_fragment > report->fragments_count ||
+		    table->enter_flush > table->leave_flush ||
+		    table->leave_flush > report->flushes_count ||
+		    table->enter_sequence >= table->leave_sequence)
+			goto invalid;
+		previous_row = NULL;
+		for (inner = 0; inner < table->row_length; inner++) {
+			row = &report->table_rows[table->row_start + inner];
+			if (row->key != table->row_start + inner ||
+			    row->table != table->key || row->ordinal != inner ||
+			    row->node >= report->nodes_count ||
+			    row->kind < MANT_MANDOC_EXEC_TABLE_ROW_DATA ||
+			    row->kind > MANT_MANDOC_EXEC_TABLE_ROW_DOUBLE_RULE ||
+			    row->logical_columns != table->logical_columns ||
+			    row->cell_start != cell_cursor ||
+			    row->cell_start > report->table_cells_count ||
+			    row->cell_length > report->table_cells_count -
+			    row->cell_start || row->enter_atom > row->leave_atom ||
+			    row->enter_atom < table->enter_atom ||
+			    row->leave_atom > table->leave_atom ||
+			    row->enter_fragment > row->leave_fragment ||
+			    row->enter_fragment < table->enter_fragment ||
+			    row->leave_fragment > table->leave_fragment ||
+			    row->enter_flush > row->leave_flush ||
+			    row->enter_flush < table->enter_flush ||
+			    row->leave_flush > table->leave_flush ||
+			    row->enter_sequence <= table->enter_sequence ||
+			    row->leave_sequence >= table->leave_sequence ||
+			    row->enter_sequence >= row->leave_sequence ||
+			    (row->kind != MANT_MANDOC_EXEC_TABLE_ROW_DATA &&
+			    row->cell_length != 0))
+				goto invalid;
+			if (previous_row == NULL) {
+				if (row->node != table->first_row_node ||
+				    row->enter_atom != table->enter_atom ||
+				    row->enter_fragment != table->enter_fragment ||
+				    row->enter_flush != table->enter_flush)
+					goto invalid;
+			} else if (row->enter_atom != previous_row->leave_atom ||
+			    row->enter_fragment != previous_row->leave_fragment ||
+			    row->enter_flush != previous_row->leave_flush ||
+			    row->enter_sequence <= previous_row->leave_sequence)
+				goto invalid;
+
+			previous_cell = NULL;
+			previous_data_ordinal = 0;
+			for (cell_cursor = row->cell_start;
+			    cell_cursor < row->cell_start + row->cell_length;
+			    cell_cursor++) {
+				cell = &report->table_cells[cell_cursor];
+				if (cell->key != cell_cursor || cell->row != row->key ||
+				    cell->node != row->node ||
+				    cell->ordinal != cell_cursor - row->cell_start ||
+				    (previous_cell != NULL &&
+				    cell->data_ordinal <= previous_data_ordinal) ||
+				    cell->logical_column >= row->logical_columns ||
+				    cell->column_span == 0 ||
+				    cell->column_span > row->logical_columns -
+				    cell->logical_column || cell->row_span == 0 ||
+				    cell->layout_kind <
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER ||
+				    cell->layout_kind >
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE ||
+				    cell->data_kind < MANT_MANDOC_EXEC_TABLE_DATA_NONE ||
+				    cell->data_kind >
+				    MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE ||
+				    cell->alignment > MANT_MANDOC_EXEC_TABLE_ALIGN_LONG ||
+				    cell->font > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
+				    cell->reserved != 0 ||
+				    cell->enter_atom > cell->leave_atom ||
+				    cell->enter_atom < row->enter_atom ||
+				    cell->leave_atom > row->leave_atom ||
+				    cell->enter_sequence <= row->enter_sequence ||
+				    cell->leave_sequence >= row->leave_sequence ||
+				    cell->enter_sequence >= cell->leave_sequence ||
+				    cell->offset_bu < 0 ||
+				    cell->rmargin_bu < cell->offset_bu ||
+				    cell->coloff_before_bu < 0 ||
+				    cell->coloff_after_bu < cell->coloff_before_bu ||
+				    ((cell->buffer == MANT_MANDOC_EXEC_NONE) !=
+				    (cell->buffer_generation == MANT_MANDOC_EXEC_NONE)))
+					goto invalid;
+				if (previous_cell != NULL &&
+				    (cell->enter_atom < previous_cell->leave_atom ||
+				    cell->enter_sequence <= previous_cell->leave_sequence))
+					goto invalid;
+				if (cell->buffer_generation != MANT_MANDOC_EXEC_NONE) {
+					if (cell->buffer_generation >=
+					    report->buffer_generations_count)
+						goto invalid;
+					generation = &report->buffer_generations[
+					    cell->buffer_generation];
+					if (generation->buffer != cell->buffer ||
+					    generation->open_sequence <=
+					    cell->enter_sequence ||
+					    generation->open_sequence >=
+					    cell->leave_sequence)
+						goto invalid;
+				}
+				previous_data_ordinal = cell->data_ordinal;
+				previous_cell = cell;
+			}
+			cell_cursor = row->cell_start + row->cell_length;
+			previous_row = row;
+		}
+		if (previous_row == NULL ||
+		    previous_row->leave_atom != table->leave_atom ||
+		    previous_row->leave_fragment != table->leave_fragment ||
+		    previous_row->leave_flush != table->leave_flush ||
+		    previous_row->leave_sequence >= table->leave_sequence ||
+		    cell_cursor != table->cell_start + table->cell_length)
+			goto invalid;
+		row_cursor = table->row_start + table->row_length;
+	}
+	if (row_cursor != report->table_rows_count ||
+	    cell_cursor != report->table_cells_count)
+		goto invalid;
+
+	payload_cell = 0;
+	for (index = 0; index < report->atoms_count; index++) {
+		atom = &report->atoms[index];
+		if (atom->role != MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD)
+			continue;
+		while (payload_cell < report->table_cells_count &&
+		    report->table_cells[payload_cell].leave_atom <= index)
+			payload_cell++;
+		if (payload_cell == report->table_cells_count)
+			goto invalid;
+		cell = &report->table_cells[payload_cell];
+		if (index < cell->enter_atom || index >= cell->leave_atom ||
+		    cell->buffer_generation == MANT_MANDOC_EXEC_NONE ||
+		    atom->buffer != cell->buffer || atom->buffer_generation !=
+		    cell->buffer_generation)
+			goto invalid;
+	}
+	return 1;
+
+invalid:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution table relationship is inconsistent");
+	return 0;
+}
+
+static int
 append_fragment(struct mant_mandoc_execution_report *report,
     const struct termp *p, const struct roff_node *node, int scalar,
     size_t slot, size_t before, size_t after)
@@ -1539,6 +2037,9 @@ seal_report(struct mant_mandoc_execution_report *report)
 	if (report->current_wrapper != MANT_MANDOC_EXEC_NONE ||
 	    report->current_boundary != MANT_MANDOC_EXEC_NONE ||
 	    report->current_flush != MANT_MANDOC_EXEC_NONE ||
+	    report->current_table != MANT_MANDOC_EXEC_NONE ||
+	    report->current_table_row != MANT_MANDOC_EXEC_NONE ||
+	    report->current_table_cell != MANT_MANDOC_EXEC_NONE ||
 	    report->word_active) {
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 		    "native execution ended with an active scope");
@@ -1572,6 +2073,9 @@ seal_report(struct mant_mandoc_execution_report *report)
 	ADD_RECORD_COUNT(wrappers);
 	ADD_RECORD_COUNT(references);
 	ADD_RECORD_COUNT(anchors);
+	ADD_RECORD_COUNT(tables);
+	ADD_RECORD_COUNT(table_rows);
+	ADD_RECORD_COUNT(table_cells);
 	ADD_RECORD_COUNT(diagnostics);
 #undef ADD_RECORD_COUNT
 	if (expected != report->record_count) {
@@ -1600,7 +2104,7 @@ seal_report(struct mant_mandoc_execution_report *report)
 		    "native execution left a semantic reference open");
 		return 0;
 	}
-	if (!validate_sealed_report(report))
+	if (!validate_table_records(report) || !validate_sealed_report(report))
 		return 0;
 	report->status = MANT_MANDOC_EXECUTION_COMPLETE;
 	return 1;
@@ -1709,7 +2213,10 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    generation->close_sequence;
 	}
 	for (index = 0; index < report->buffer_count; index++)
-		if (next_generation[index] == 0) {
+		if (next_generation[index] == 0 &&
+		    (report->buffers[index].capacity != 0 ||
+		    report->buffers[index].generation_record !=
+		    MANT_MANDOC_EXEC_NONE)) {
 			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 			    "native execution buffer lifetime is not sealed");
 			goto fail;
@@ -2131,6 +2638,7 @@ invalid_reference:
 invalid_anchor:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution anchor is inconsistent");
+	goto fail;
 fail:
 	free(next_generation);
 	free(last_capacity);
@@ -2161,9 +2669,9 @@ tree_supported(struct mant_mandoc_execution_report *report,
 			    "native execution node identity limit exceeded");
 			return 0;
 		}
-		if (node->type == ROFFT_TBL || node->type == ROFFT_EQN) {
+		if (node->type == ROFFT_EQN) {
 			fail_report(report, MANT_MANDOC_EXECUTION_UNSUPPORTED,
-			    "native execution does not yet support tbl or eqn");
+			    "native execution does not yet support eqn");
 			return 0;
 		}
 		(*count)++;
@@ -2689,6 +3197,68 @@ static const size_t anchor_offsets[] = {
 	OFF(mant_mandoc_anchor_record, reserved),
 	OFF(mant_mandoc_anchor_record, sequence)
 };
+static const size_t table_offsets[] = {
+	OFF(mant_mandoc_table_record, key),
+	OFF(mant_mandoc_table_record, first_row_node),
+	OFF(mant_mandoc_table_record, row_start),
+	OFF(mant_mandoc_table_record, row_length),
+	OFF(mant_mandoc_table_record, cell_start),
+	OFF(mant_mandoc_table_record, cell_length),
+	OFF(mant_mandoc_table_record, logical_columns),
+	OFF(mant_mandoc_table_record, flags),
+	OFF(mant_mandoc_table_record, enter_atom),
+	OFF(mant_mandoc_table_record, leave_atom),
+	OFF(mant_mandoc_table_record, enter_fragment),
+	OFF(mant_mandoc_table_record, leave_fragment),
+	OFF(mant_mandoc_table_record, enter_flush),
+	OFF(mant_mandoc_table_record, leave_flush),
+	OFF(mant_mandoc_table_record, enter_sequence),
+	OFF(mant_mandoc_table_record, leave_sequence)
+};
+static const size_t table_row_offsets[] = {
+	OFF(mant_mandoc_table_row_record, key),
+	OFF(mant_mandoc_table_row_record, table),
+	OFF(mant_mandoc_table_row_record, node),
+	OFF(mant_mandoc_table_row_record, ordinal),
+	OFF(mant_mandoc_table_row_record, kind),
+	OFF(mant_mandoc_table_row_record, logical_columns),
+	OFF(mant_mandoc_table_row_record, cell_start),
+	OFF(mant_mandoc_table_row_record, cell_length),
+	OFF(mant_mandoc_table_row_record, enter_atom),
+	OFF(mant_mandoc_table_row_record, leave_atom),
+	OFF(mant_mandoc_table_row_record, enter_fragment),
+	OFF(mant_mandoc_table_row_record, leave_fragment),
+	OFF(mant_mandoc_table_row_record, enter_flush),
+	OFF(mant_mandoc_table_row_record, leave_flush),
+	OFF(mant_mandoc_table_row_record, enter_sequence),
+	OFF(mant_mandoc_table_row_record, leave_sequence)
+};
+static const size_t table_cell_offsets[] = {
+	OFF(mant_mandoc_table_cell_record, key),
+	OFF(mant_mandoc_table_cell_record, row),
+	OFF(mant_mandoc_table_cell_record, node),
+	OFF(mant_mandoc_table_cell_record, ordinal),
+	OFF(mant_mandoc_table_cell_record, data_ordinal),
+	OFF(mant_mandoc_table_cell_record, logical_column),
+	OFF(mant_mandoc_table_cell_record, column_span),
+	OFF(mant_mandoc_table_cell_record, row_span),
+	OFF(mant_mandoc_table_cell_record, layout_kind),
+	OFF(mant_mandoc_table_cell_record, data_kind),
+	OFF(mant_mandoc_table_cell_record, alignment),
+	OFF(mant_mandoc_table_cell_record, font),
+	OFF(mant_mandoc_table_cell_record, flags),
+	OFF(mant_mandoc_table_cell_record, buffer),
+	OFF(mant_mandoc_table_cell_record, buffer_generation),
+	OFF(mant_mandoc_table_cell_record, reserved),
+	OFF(mant_mandoc_table_cell_record, enter_atom),
+	OFF(mant_mandoc_table_cell_record, leave_atom),
+	OFF(mant_mandoc_table_cell_record, offset_bu),
+	OFF(mant_mandoc_table_cell_record, rmargin_bu),
+	OFF(mant_mandoc_table_cell_record, coloff_before_bu),
+	OFF(mant_mandoc_table_cell_record, coloff_after_bu),
+	OFF(mant_mandoc_table_cell_record, enter_sequence),
+	OFF(mant_mandoc_table_cell_record, leave_sequence)
+};
 static const size_t diagnostic_offsets[] = {
 	OFF(mant_mandoc_execution_diagnostic_record, code),
 	OFF(mant_mandoc_execution_diagnostic_record, node),
@@ -2710,6 +3280,9 @@ DEFINE_RECORD_API(geometry, geometries, mant_mandoc_geometry_record, geometry_of
 DEFINE_RECORD_API(wrapper, wrappers, mant_mandoc_wrapper_record, wrapper_offsets)
 DEFINE_RECORD_API(reference, references, mant_mandoc_reference_record, reference_offsets)
 DEFINE_RECORD_API(anchor, anchors, mant_mandoc_anchor_record, anchor_offsets)
+DEFINE_RECORD_API(table, tables, mant_mandoc_table_record, table_offsets)
+DEFINE_RECORD_API(table_row, table_rows, mant_mandoc_table_row_record, table_row_offsets)
+DEFINE_RECORD_API(table_cell, table_cells, mant_mandoc_table_cell_record, table_cell_offsets)
 DEFINE_RECORD_API(diagnostic, diagnostics, mant_mandoc_execution_diagnostic_record, diagnostic_offsets)
 
 #undef OFF

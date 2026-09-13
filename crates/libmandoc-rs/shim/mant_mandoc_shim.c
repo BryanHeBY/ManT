@@ -32,6 +32,7 @@
 #include "mandoc_parse.h"
 
 #include "mant_mandoc_shim.h"
+#include "mant_mandoc_table_private.h"
 #ifdef MANT_MANDOC_TERMINAL
 #include "main.h"
 #include "manconf.h"
@@ -1930,8 +1931,7 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 	view->text_block = source->block != 0;
 	view->source_recovery_safe = source->source_safe != 0;
 	view->vertical_continuation =
-	    (source->layout != NULL && source->layout->pos == TBL_CELL_DOWN) ||
-	    (source->string != NULL && !strcmp(source->string, "\\^"));
+	    mant_mandoc_tbl_cell_is_vertical_continuation(source);
 	view->column_span = source->hspans < 0 ? 1U :
 	    (unsigned int)source->hspans + 1U;
 	view->row_span = source->vspans < 0 ? 1U :

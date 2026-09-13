@@ -54,6 +54,7 @@ term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
 	p->exec_failed = 0;
 	p->exec_write_role = 4;
 	p->exec_fragment_role = TERM_EXEC_FRAGMENT_CONTENT;
+	p->exec_table_cell_payload = 0;
 }
 
 int
@@ -148,6 +149,69 @@ term_exec_anchor(struct termp *p, const struct roff_node *node)
 	if (p->line == SIZE_MAX || !p->exec_ops->anchor(p->exec_arg, p,
 	    node, target, strlen(target), p->line + 1,
 	    TERM_EXEC_AFFINITY_BEFORE_OUTPUT))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_table_preflight(struct termp *p, size_t amount)
+{
+	TERM_EXEC_CALL(p, table_preflight, amount);
+}
+
+int
+term_exec_table(struct termp *p, const struct tbl_span *span, int entering,
+    size_t rows, size_t layout_cells, size_t data_cells)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (entering && p->exec_ops->table_begin != NULL &&
+	    !p->exec_ops->table_begin(p->exec_arg, p, p->exec_node, span,
+	    rows, layout_cells, data_cells))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->table_end != NULL &&
+	    !p->exec_ops->table_end(p->exec_arg, p, p->exec_node, span))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_table_row(struct termp *p, const struct tbl_span *span, int entering)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (entering && p->exec_ops->table_row_begin != NULL &&
+	    !p->exec_ops->table_row_begin(p->exec_arg, p, p->exec_node, span))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->table_row_end != NULL &&
+	    !p->exec_ops->table_row_end(p->exec_arg, p, p->exec_node, span))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_table_cell(struct termp *p, const struct tbl_span *span,
+    const struct tbl_cell *cell, const struct tbl_dat *data, int entering,
+    size_t ordinal, size_t data_ordinal, size_t coloff_before,
+    size_t coloff_after)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (entering && p->exec_ops->table_cell_begin != NULL &&
+	    !p->exec_ops->table_cell_begin(p->exec_arg, p, p->exec_node,
+	    span, cell, data, ordinal, data_ordinal, coloff_before,
+	    coloff_after))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->table_cell_end != NULL &&
+	    !p->exec_ops->table_cell_end(p->exec_arg, p, p->exec_node,
+	    span, cell, data, ordinal, data_ordinal, coloff_before,
+	    coloff_after))
 		p->exec_failed = 1;
 	return !p->exec_failed;
 }
@@ -327,6 +391,7 @@ void
 term_free(struct termp *p)
 {
 	term_tab_free();
+	free(p->tbl.cols);
 	for (p->tcol = p->tcols; p->tcol < p->tcols + p->maxtcol; p->tcol++)
 		free(p->tcol->buf);
 	free(p->tcols);
@@ -929,10 +994,12 @@ term_word(struct termp *p, const char *word)
 	int		 sz;		/* Argument length in bytes. */
 	int		 uc;		/* Unicode codepoint number. */
 	int		 bu;		/* Width in basic units. */
+	int		 word_role;	/* Provenance after the word-begin hook. */
 	enum mandoc_esc	 esc;
 
 	if (!term_exec_word(p, word, strlen(word), 1))
 		return;
+	word_role = p->exec_write_role;
 	if ((p->flags & TERMP_NOBUF) == 0) {
 		if ((p->flags & TERMP_NOSPACE) == 0) {
 			p->exec_write_role = 2;
@@ -942,7 +1009,7 @@ term_word(struct termp *p, const char *word)
 					bufferc(p, ' ');
 			} else
 				bufferc(p, ASCII_NBRSP);
-			p->exec_write_role = 1;
+			p->exec_write_role = word_role;
 		}
 		if (p->flags & TERMP_PREKEEP)
 			p->flags |= TERMP_KEEP;

@@ -47,6 +47,8 @@ enum term_exec_fragment_role {
 struct	eqn_box;
 struct	roff_meta;
 struct	roff_node;
+struct	tbl_cell;
+struct	tbl_dat;
 struct	tbl_span;
 struct	termp;
 
@@ -117,6 +119,25 @@ struct term_exec_ops {
 	    const struct roff_node *);
 	int (*anchor)(void *, const struct termp *, const struct roff_node *,
 	    const char *, size_t, size_t, int);
+	int (*table_preflight)(void *, const struct termp *,
+	    const struct roff_node *, size_t);
+	int (*table_begin)(void *, const struct termp *,
+	    const struct roff_node *, const struct tbl_span *, size_t,
+	    size_t, size_t);
+	int (*table_end)(void *, const struct termp *,
+	    const struct roff_node *, const struct tbl_span *);
+	int (*table_row_begin)(void *, const struct termp *,
+	    const struct roff_node *, const struct tbl_span *);
+	int (*table_row_end)(void *, const struct termp *,
+	    const struct roff_node *, const struct tbl_span *);
+	int (*table_cell_begin)(void *, const struct termp *,
+	    const struct roff_node *, const struct tbl_span *,
+	    const struct tbl_cell *, const struct tbl_dat *, size_t, size_t,
+	    size_t, size_t);
+	int (*table_cell_end)(void *, const struct termp *,
+	    const struct roff_node *, const struct tbl_span *,
+	    const struct tbl_cell *, const struct tbl_dat *, size_t, size_t,
+	    size_t, size_t);
 };
 
 typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
@@ -208,6 +229,7 @@ struct	termp {
 	int		  exec_field_active;
 	int		  exec_write_role;
 	int		  exec_fragment_role;
+	int		  exec_table_cell_payload;
 };
 
 
@@ -273,3 +295,10 @@ int		  term_exec_reference_begin(struct termp *, int,
 			const char *, const char *, int);
 int		  term_exec_reference_end(struct termp *);
 int		  term_exec_anchor(struct termp *, const struct roff_node *);
+int		  term_exec_table_preflight(struct termp *, size_t);
+int		  term_exec_table(struct termp *, const struct tbl_span *, int,
+			size_t, size_t, size_t);
+int		  term_exec_table_row(struct termp *, const struct tbl_span *, int);
+int		  term_exec_table_cell(struct termp *, const struct tbl_span *,
+			const struct tbl_cell *, const struct tbl_dat *, int,
+			size_t, size_t, size_t, size_t);

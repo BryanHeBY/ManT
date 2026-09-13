@@ -40,7 +40,8 @@ enum mant_mandoc_execution_atom_role {
 	MANT_MANDOC_ATOM_IMPLICIT_SPACE,
 	MANT_MANDOC_ATOM_FONT_DECORATION,
 	MANT_MANDOC_ATOM_MACRO_GENERATED,
-	MANT_MANDOC_ATOM_DEVICE_GENERATED
+	MANT_MANDOC_ATOM_DEVICE_GENERATED,
+	MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD
 };
 
 enum mant_mandoc_execution_atom_disposition {
@@ -128,6 +129,52 @@ enum mant_mandoc_execution_affinity {
 	MANT_MANDOC_AFFINITY_INLINE = 1,
 	MANT_MANDOC_AFFINITY_BEFORE_OUTPUT
 };
+
+enum mant_mandoc_execution_table_row_kind {
+	MANT_MANDOC_EXEC_TABLE_ROW_DATA = 1,
+	MANT_MANDOC_EXEC_TABLE_ROW_SINGLE_RULE,
+	MANT_MANDOC_EXEC_TABLE_ROW_DOUBLE_RULE
+};
+
+enum mant_mandoc_execution_table_layout_kind {
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER = 1,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_RIGHT,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_LEFT,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_NUMERIC,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_SPAN,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_LONG,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_DOWN,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE,
+	MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE
+};
+
+enum mant_mandoc_execution_table_data_kind {
+	MANT_MANDOC_EXEC_TABLE_DATA_NONE = 1,
+	MANT_MANDOC_EXEC_TABLE_DATA_TEXT,
+	MANT_MANDOC_EXEC_TABLE_DATA_SINGLE_RULE,
+	MANT_MANDOC_EXEC_TABLE_DATA_DOUBLE_RULE,
+	MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_SINGLE_RULE,
+	MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE
+};
+
+enum mant_mandoc_execution_table_alignment {
+	MANT_MANDOC_EXEC_TABLE_ALIGN_NONE = 0,
+	MANT_MANDOC_EXEC_TABLE_ALIGN_LEFT,
+	MANT_MANDOC_EXEC_TABLE_ALIGN_CENTER,
+	MANT_MANDOC_EXEC_TABLE_ALIGN_RIGHT,
+	MANT_MANDOC_EXEC_TABLE_ALIGN_NUMERIC,
+	MANT_MANDOC_EXEC_TABLE_ALIGN_LONG
+};
+
+#define MANT_MANDOC_EXEC_TABLE_CELL_TOP_ALIGN (1U << 0)
+#define MANT_MANDOC_EXEC_TABLE_CELL_UP (1U << 1)
+#define MANT_MANDOC_EXEC_TABLE_CELL_BOTTOM_ALIGN (1U << 2)
+#define MANT_MANDOC_EXEC_TABLE_CELL_ZERO_WIDTH (1U << 3)
+#define MANT_MANDOC_EXEC_TABLE_CELL_EQUAL_WIDTH (1U << 4)
+#define MANT_MANDOC_EXEC_TABLE_CELL_MAX_WIDTH (1U << 5)
+#define MANT_MANDOC_EXEC_TABLE_CELL_TEXT_BLOCK (1U << 6)
+#define MANT_MANDOC_EXEC_TABLE_CELL_SOURCE_SAFE (1U << 7)
+#define MANT_MANDOC_EXEC_TABLE_CELL_VERTICAL_CONTINUATION (1U << 8)
 
 struct mant_mandoc_execution_limits {
 	uint32_t abi_version;
@@ -338,6 +385,71 @@ struct mant_mandoc_anchor_record {
 	uint64_t sequence;
 };
 
+struct mant_mandoc_table_record {
+	uint32_t key;
+	uint32_t first_row_node;
+	uint32_t row_start;
+	uint32_t row_length;
+	uint32_t cell_start;
+	uint32_t cell_length;
+	uint32_t logical_columns;
+	uint32_t flags;
+	uint32_t enter_atom;
+	uint32_t leave_atom;
+	uint32_t enter_fragment;
+	uint32_t leave_fragment;
+	uint32_t enter_flush;
+	uint32_t leave_flush;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
+struct mant_mandoc_table_row_record {
+	uint32_t key;
+	uint32_t table;
+	uint32_t node;
+	uint32_t ordinal;
+	uint32_t kind;
+	uint32_t logical_columns;
+	uint32_t cell_start;
+	uint32_t cell_length;
+	uint32_t enter_atom;
+	uint32_t leave_atom;
+	uint32_t enter_fragment;
+	uint32_t leave_fragment;
+	uint32_t enter_flush;
+	uint32_t leave_flush;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
+struct mant_mandoc_table_cell_record {
+	uint32_t key;
+	uint32_t row;
+	uint32_t node;
+	uint32_t ordinal;
+	uint32_t data_ordinal;
+	uint32_t logical_column;
+	uint32_t column_span;
+	uint32_t row_span;
+	uint32_t layout_kind;
+	uint32_t data_kind;
+	uint32_t alignment;
+	uint32_t font;
+	uint32_t flags;
+	uint32_t buffer;
+	uint32_t buffer_generation;
+	uint32_t reserved;
+	uint32_t enter_atom;
+	uint32_t leave_atom;
+	int64_t offset_bu;
+	int64_t rmargin_bu;
+	int64_t coloff_before_bu;
+	int64_t coloff_after_bu;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
 struct mant_mandoc_execution_diagnostic_record {
 	uint32_t code;
 	uint32_t node;
@@ -391,6 +503,9 @@ MANT_DECLARE_RECORD_API(geometry, geometries);
 MANT_DECLARE_RECORD_API(wrapper, wrappers);
 MANT_DECLARE_RECORD_API(reference, references);
 MANT_DECLARE_RECORD_API(anchor, anchors);
+MANT_DECLARE_RECORD_API(table, tables);
+MANT_DECLARE_RECORD_API(table_row, table_rows);
+MANT_DECLARE_RECORD_API(table_cell, table_cells);
 MANT_DECLARE_RECORD_API(diagnostic, diagnostics);
 
 #undef MANT_DECLARE_RECORD_API

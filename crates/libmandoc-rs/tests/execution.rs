@@ -2,12 +2,32 @@
 
 use libmandoc_rs::{
     AtomRole, ExecutionErrorKind, ExecutionFont, ExecutionLimits, ExecutionReferenceKind,
-    FlushOutcome, FragmentRole, InputFormat, NativeExecutionReport, Node, ParseOptions, Parser,
+    ExecutionTableAlignment, ExecutionTableDataKind, ExecutionTableLayoutKind,
+    ExecutionTableRowKind, FlushOutcome, FragmentRole, InputFormat, NativeExecutionReport, Node,
+    ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
 const MDOC: &[u8] = include_bytes!("fixtures/execution/plain-mdoc.1");
 const TABLE: &[u8] = include_bytes!("fixtures/execution/unsupported-table.1");
+const TABLE_VERTICAL_CONTINUATION: &[u8] =
+    include_bytes!("fixtures/execution/table-vertical-continuation.1");
+const TABLE_WITH_EMPTY_CELL: &[u8] = br#".TH PROBE 1 "September 14, 2026" "ManT" "Manual"
+.SH DESCRIPTION
+.TS
+l l l.
+left		third
+.TE
+"#;
+const TABLE_WITH_WORD_SPACING: &[u8] = br#".TH PROBE 1 "September 14, 2026" "ManT" "Manual"
+.SH DESCRIPTION
+.TS
+l.
+left alpha
+.TE
+.B outside
+.I words
+"#;
 const EQUATION: &[u8] = include_bytes!("fixtures/execution/unsupported-equation.1");
 const EXECUTED_SO: &[u8] = include_bytes!("fixtures/execution/executed-so.1");
 const INACTIVE_SO: &[u8] = include_bytes!("fixtures/execution/inactive-so.1");
@@ -623,14 +643,169 @@ fn invalid_execution_limits_are_rejected_as_budgets() {
 }
 
 #[test]
-fn unsupported_execution_shapes_fail_before_returning_a_partial_report() {
-    for (name, source) in [("table.1", TABLE), ("equation.1", EQUATION)] {
+fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
+    // The pinned CVS renderer was run at widths 32, 78, and 120 before this
+    // assertion was written.  In each case tbl_term.c executes one data row
+    // with two left-aligned data cells and renders `left   right`.
+    let report = execute("table.1", InputFormat::Man, TABLE);
+    let execution = &report.execution;
+    assert_eq!(execution.tables.len(), 1);
+    assert_eq!(execution.table_rows.len(), 1);
+    assert_eq!(execution.table_cells.len(), 2);
+
+    let table = &execution.tables[0];
+    let row = &execution.table_rows[0];
+    assert_eq!(table.rows, 0..1);
+    assert_eq!(table.cells, 0..2);
+    assert_eq!(table.logical_columns, 2);
+    assert_eq!(row.table, table.key);
+    assert_eq!(row.kind, ExecutionTableRowKind::Data);
+    assert_eq!(row.logical_columns, 2);
+    assert_eq!(row.cells, 0..2);
+    assert_eq!(row.node, table.first_row_node);
+
+    for (index, cell) in execution.table_cells.iter().enumerate() {
+        let index = u32::try_from(index).unwrap();
+        assert_eq!(cell.row, row.key);
+        assert_eq!(cell.ordinal, index);
+        assert_eq!(cell.data_ordinal, index);
+        assert_eq!(cell.logical_column, index);
+        assert_eq!(cell.column_span, 1);
+        assert_eq!(cell.row_span, 1);
+        assert_eq!(cell.layout_kind, ExecutionTableLayoutKind::Left);
+        assert_eq!(cell.data_kind, ExecutionTableDataKind::Text);
+        assert_eq!(cell.alignment, ExecutionTableAlignment::Left);
+        let buffer = cell.buffer.expect("non-empty table cell buffer");
+        let generation_key = cell
+            .buffer_generation
+            .expect("non-empty table cell generation");
+        let generation = &execution.buffer_generations[generation_key as usize];
+        assert_eq!(generation.buffer, buffer);
+        let payload_atoms = execution.atoms[cell.atoms.start as usize..cell.atoms.end as usize]
+            .iter()
+            .filter(|atom| atom.role == AtomRole::TableCellPayload)
+            .collect::<Vec<_>>();
+        assert!(!payload_atoms.is_empty());
+        assert!(payload_atoms.iter().all(|atom| {
+            atom.buffer == Some(buffer) && atom.buffer_generation == Some(generation_key)
+        }));
+        assert!(
+            execution.flushes[row.flushes.start as usize..row.flushes.end as usize]
+                .iter()
+                .any(|flush| flush.buffer_generation == generation_key)
+        );
+    }
+
+    let owned_table = table.clone();
+    let owned_cells = execution.table_cells.clone();
+    drop(report);
+    assert_eq!(owned_table.logical_columns, 2);
+    assert_eq!(owned_cells[0].data_ordinal, 0);
+    assert_eq!(owned_cells[1].data_ordinal, 1);
+}
+
+#[test]
+fn table_execution_budget_failure_is_atomic_and_reentrant() {
+    let baseline = execute("table.1", InputFormat::Man, TABLE);
+    for limits in [
+        ExecutionLimits {
+            max_work: baseline.execution.work_units - 1,
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
+            max_records: baseline.execution.record_count - 1,
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
+            max_buffer_cells: baseline.execution.buffer_cells - 1,
+            ..ExecutionLimits::default()
+        },
+    ] {
         let error = Parser::default()
             .with_input_format(InputFormat::Man)
-            .execute_bytes(name, source, ExecutionLimits::default())
+            .execute_bytes("table.1", TABLE, limits)
             .unwrap_err();
-        assert_eq!(error.kind, ExecutionErrorKind::Unsupported);
+        assert_eq!(error.kind, ExecutionErrorKind::Budget);
+
+        let next = execute("table.1", InputFormat::Man, TABLE);
+        assert_eq!(next.execution.tables.len(), 1);
+        assert_eq!(next.execution.table_cells.len(), 2);
     }
+}
+
+#[test]
+fn empty_native_table_cell_has_no_buffer_identity() {
+    // The pinned CVS renderer was run before this assertion was written and
+    // emits `left` and `third`; tbl_term.c still executes the empty middle
+    // logical data cell.
+    let report = execute("empty-table.1", InputFormat::Man, TABLE_WITH_EMPTY_CELL);
+    assert_eq!(report.execution.table_cells.len(), 3);
+    assert!(report.execution.table_cells[0].buffer.is_some());
+    assert!(report.execution.table_cells[0].buffer_generation.is_some());
+    assert_eq!(report.execution.table_cells[1].buffer, None);
+    assert_eq!(report.execution.table_cells[1].buffer_generation, None);
+    assert!(report.execution.table_cells[1].atoms.is_empty());
+    assert!(report.execution.table_cells[2].buffer.is_some());
+    assert!(report.execution.table_cells[2].buffer_generation.is_some());
+}
+
+#[test]
+fn explicit_table_vertical_continuation_matches_the_owned_ast() {
+    // The complete fixture was accepted by the pinned CVS linter and rendered
+    // as one visible `first` row before this assertion was written.  tbl_data.c
+    // recognizes the data spelling `\^` as the same continuation fact as a
+    // layout `^` cell.
+    let report = execute(
+        "table-vertical-continuation.1",
+        InputFormat::Man,
+        TABLE_VERTICAL_CONTINUATION,
+    );
+    assert_eq!(report.execution.table_rows.len(), 2);
+    assert_eq!(report.execution.table_cells.len(), 2);
+    let continuation = &report.execution.table_cells[1];
+    assert!(
+        continuation
+            .flags
+            .contains(libmandoc_rs::ExecutionTableCellFlags::VERTICAL_CONTINUATION)
+    );
+    let ast_row = ast_node_by_execution_key(&report.document.root, continuation.node.0)
+        .expect("continuation row remains in the owned AST");
+    assert!(ast_row.table_cells[0].vertical_continuation);
+}
+
+#[test]
+fn table_payload_role_does_not_overwrite_implicit_spacing_provenance() {
+    // The pinned CVS renderer was run before this assertion was written and
+    // emits `left alpha` followed by the two native words `outside words`.
+    let report = execute("spaced-table.1", InputFormat::Man, TABLE_WITH_WORD_SPACING);
+    let cell = &report.execution.table_cells[0];
+    let atoms = &report.execution.atoms[cell.atoms.start as usize..cell.atoms.end as usize];
+    assert!(
+        atoms
+            .iter()
+            .any(|atom| atom.role == AtomRole::TableCellPayload)
+    );
+    assert!(
+        report
+            .execution
+            .atoms
+            .iter()
+            .any(|atom| atom.role == AtomRole::ImplicitSpace)
+    );
+    assert!(
+        atoms
+            .iter()
+            .all(|atom| atom.role != AtomRole::ImplicitSpace)
+    );
+}
+
+#[test]
+fn unsupported_execution_shapes_fail_before_returning_a_partial_report() {
+    let error = Parser::default()
+        .with_input_format(InputFormat::Man)
+        .execute_bytes("equation.1", EQUATION, ExecutionLimits::default())
+        .unwrap_err();
+    assert_eq!(error.kind, ExecutionErrorKind::Unsupported);
 
     let parser = Parser::new(ParseOptions {
         includes: libmandoc_rs::IncludePolicy::SourceTree,

@@ -5,9 +5,14 @@
 //! reconstructing formatter state in Rust.
 
 use libmandoc_rs::{
-    AtomRole, BoundaryEffect, Document as NativeDocument, ExecutionAffinity, ExecutionFlush,
-    ExecutionFont, ExecutionNodeKey, ExecutionReferenceKind, FragmentRole, GeometryKind,
-    GeometryOriginKind, NativeExecutionReport, Node as NativeNode, NodeKind, NormalizedListKind,
+    AtomDisposition, AtomKind, AtomRole, BoundaryEffect, Document as NativeDocument,
+    ExecutionAffinity, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionNodeKey,
+    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags,
+    ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind,
+    ExecutionTableRow, ExecutionTableRowKey, FragmentRole, GeometryKind, GeometryOriginKind,
+    NativeExecutionReport, Node as NativeNode, NodeKind, NormalizedListKind,
+    TableAlignment as NativeTableAlignment, TableCellKind as NativeTableCellKind,
+    TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
@@ -78,6 +83,54 @@ pub(super) struct NativeDefinitionFact {
 
 #[allow(dead_code)]
 #[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeTableCell {
+    pub(super) key: ExecutionTableCellKey,
+    pub(super) node: ExecutionNodeKey,
+    pub(super) source: PathBuf,
+    pub(super) line: u32,
+    pub(super) column: u32,
+    pub(super) ordinal: u32,
+    pub(super) data_ordinal: u32,
+    pub(super) logical_column: u32,
+    pub(super) column_span: u32,
+    pub(super) row_span: u32,
+    pub(super) layout_kind: ExecutionTableLayoutKind,
+    pub(super) data_kind: ExecutionTableDataKind,
+    pub(super) alignment: ExecutionTableAlignment,
+    pub(super) font: ExecutionFont,
+    pub(super) flags: ExecutionTableCellFlags,
+    pub(super) buffer_generation: Option<u32>,
+    pub(super) atoms: Range<u32>,
+    pub(super) fragments: Vec<ExecutionFragment>,
+    pub(super) flushes: Vec<ExecutionFlush>,
+    pub(super) content: Vec<mant_ir::Inline>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeTableRow {
+    pub(super) key: ExecutionTableRowKey,
+    pub(super) node: ExecutionNodeKey,
+    pub(super) source: PathBuf,
+    pub(super) line: u32,
+    pub(super) column: u32,
+    pub(super) kind: mant_ir::TableRowKind,
+    pub(super) logical_columns: u32,
+    pub(super) cells: Vec<NativeTableCell>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeTable {
+    pub(super) key: ExecutionTableKey,
+    pub(super) source: PathBuf,
+    pub(super) logical_columns: u32,
+    pub(super) rows: Vec<NativeTableRow>,
+    pub(super) block: mant_ir::Block,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeProjection {
     pub(super) origins: Vec<NativeOrigin>,
     pub(super) runs: Vec<NativeTextRun>,
@@ -88,6 +141,7 @@ pub(super) struct NativeProjection {
     pub(super) references: Vec<NativeReference>,
     pub(super) anchors: Vec<NativeAnchor>,
     pub(super) definitions: Vec<NativeDefinitionFact>,
+    pub(super) tables: Vec<NativeTable>,
 }
 
 fn mark_definition_items(
@@ -319,6 +373,400 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
     (runs, visible_lines)
 }
 
+fn native_nodes_by_execution_key(document: &NativeDocument, node_count: usize) -> Vec<&NativeNode> {
+    fn visit<'a>(node: &'a NativeNode, indexed: &mut [Option<&'a NativeNode>]) {
+        if let Some(key) = node.execution_node_key {
+            let slot = indexed
+                .get_mut(key as usize)
+                .expect("validated native AST execution-node key");
+            assert!(
+                slot.replace(node).is_none(),
+                "unique native AST execution-node key"
+            );
+        }
+        for child in &node.children {
+            visit(child, indexed);
+        }
+    }
+
+    let mut indexed = vec![None; node_count];
+    visit(&document.root, &mut indexed);
+    indexed
+        .into_iter()
+        .map(|node| node.expect("every execution node remains in the owned AST"))
+        .collect()
+}
+
+fn table_row_kind(kind: &NativeTableRowKind) -> mant_ir::TableRowKind {
+    match kind {
+        NativeTableRowKind::Data => mant_ir::TableRowKind::Data,
+        NativeTableRowKind::HorizontalRule => mant_ir::TableRowKind::HorizontalRule,
+        NativeTableRowKind::DoubleHorizontalRule => mant_ir::TableRowKind::DoubleHorizontalRule,
+        NativeTableRowKind::LayoutRule { cells } => mant_ir::TableRowKind::LayoutRule {
+            cells: cells
+                .iter()
+                .map(|cell| match cell {
+                    NativeTableRuleCellKind::Horizontal => mant_ir::TableRuleCellKind::Horizontal,
+                    NativeTableRuleCellKind::DoubleHorizontal => {
+                        mant_ir::TableRuleCellKind::DoubleHorizontal
+                    }
+                })
+                .collect(),
+        },
+    }
+}
+
+const fn table_cell_kind(kind: NativeTableCellKind) -> mant_ir::TableCellKind {
+    match kind {
+        NativeTableCellKind::Text | NativeTableCellKind::Empty => mant_ir::TableCellKind::Text,
+        NativeTableCellKind::HorizontalRule => mant_ir::TableCellKind::HorizontalRule,
+        NativeTableCellKind::DoubleHorizontalRule => mant_ir::TableCellKind::DoubleHorizontalRule,
+        NativeTableCellKind::IsolatedHorizontalRule => {
+            mant_ir::TableCellKind::IsolatedHorizontalRule
+        }
+        NativeTableCellKind::IsolatedDoubleHorizontalRule => {
+            mant_ir::TableCellKind::IsolatedDoubleHorizontalRule
+        }
+    }
+}
+
+const fn execution_table_cell_kind(kind: ExecutionTableDataKind) -> mant_ir::TableCellKind {
+    match kind {
+        ExecutionTableDataKind::None | ExecutionTableDataKind::Text => mant_ir::TableCellKind::Text,
+        ExecutionTableDataKind::HorizontalRule => mant_ir::TableCellKind::HorizontalRule,
+        ExecutionTableDataKind::DoubleHorizontalRule => {
+            mant_ir::TableCellKind::DoubleHorizontalRule
+        }
+        ExecutionTableDataKind::IsolatedHorizontalRule => {
+            mant_ir::TableCellKind::IsolatedHorizontalRule
+        }
+        ExecutionTableDataKind::IsolatedDoubleHorizontalRule => {
+            mant_ir::TableCellKind::IsolatedDoubleHorizontalRule
+        }
+    }
+}
+
+const fn table_alignment(alignment: NativeTableAlignment) -> mant_ir::TableAlignment {
+    match alignment {
+        NativeTableAlignment::Left => mant_ir::TableAlignment::Left,
+        NativeTableAlignment::Center => mant_ir::TableAlignment::Center,
+        NativeTableAlignment::Right => mant_ir::TableAlignment::Right,
+    }
+}
+
+fn styled_table_text(value: String, font: ExecutionFont) -> mant_ir::Inline {
+    let text = mant_ir::Inline::Text { value };
+    match font {
+        ExecutionFont::Roman => text,
+        ExecutionFont::Bold => mant_ir::Inline::Strong {
+            children: vec![text],
+        },
+        ExecutionFont::Underline => mant_ir::Inline::Emphasis {
+            children: vec![text],
+        },
+        ExecutionFont::BoldUnderline => mant_ir::Inline::Strong {
+            children: vec![mant_ir::Inline::Emphasis {
+                children: vec![text],
+            }],
+        },
+    }
+}
+
+fn table_cell_content(report: &NativeExecutionReport, atoms: Range<u32>) -> Vec<mant_ir::Inline> {
+    fn flush_run(
+        output: &mut Vec<mant_ir::Inline>,
+        buffer: &mut String,
+        font: &mut Option<ExecutionFont>,
+    ) {
+        if let Some(font) = font.take()
+            && !buffer.is_empty()
+        {
+            output.push(styled_table_text(std::mem::take(buffer), font));
+        }
+    }
+
+    let start = usize::try_from(atoms.start).expect("validated table atom start");
+    let end = usize::try_from(atoms.end).expect("validated table atom end");
+    let mut output = Vec::new();
+    let mut buffer = String::new();
+    let mut font = None;
+    let mut consume_break_space = false;
+    for atom in &report.atoms[start..end] {
+        if atom.role != AtomRole::TableCellPayload {
+            continue;
+        }
+        if atom.kind == AtomKind::WordEndBreak {
+            flush_run(&mut output, &mut buffer, &mut font);
+            output.push(mant_ir::Inline::LineBreak);
+            consume_break_space = true;
+            continue;
+        }
+        if consume_break_space
+            && atom.kind == AtomKind::BreakableSpace
+            && atom.disposition == AtomDisposition::Consumed
+        {
+            consume_break_space = false;
+            continue;
+        }
+        consume_break_space = false;
+        let character = match atom.kind {
+            AtomKind::Glyph if atom.disposition == AtomDisposition::Emitted => {
+                char::from_u32(atom.display_scalar)
+            }
+            AtomKind::BreakableSpace
+                if matches!(
+                    atom.disposition,
+                    AtomDisposition::Emitted | AtomDisposition::Consumed
+                ) =>
+            {
+                Some(' ')
+            }
+            AtomKind::NonBreakingSpace
+                if matches!(
+                    atom.disposition,
+                    AtomDisposition::Emitted | AtomDisposition::Consumed
+                ) =>
+            {
+                Some('\u{a0}')
+            }
+            AtomKind::Tab
+                if matches!(
+                    atom.disposition,
+                    AtomDisposition::Emitted | AtomDisposition::Consumed
+                ) =>
+            {
+                Some('\t')
+            }
+            AtomKind::Glyph
+            | AtomKind::BreakableSpace
+            | AtomKind::NonBreakingSpace
+            | AtomKind::BreakableHyphen
+            | AtomKind::ZeroWidth
+            | AtomKind::Tab
+            | AtomKind::TabReference
+            | AtomKind::Backspace
+            | AtomKind::BreakPoint => None,
+            AtomKind::WordEndBreak => unreachable!("handled above"),
+        };
+        let Some(character) = character else {
+            continue;
+        };
+        if font != Some(atom.font) {
+            flush_run(&mut output, &mut buffer, &mut font);
+            font = Some(atom.font);
+        }
+        buffer.push(character);
+    }
+    flush_run(&mut output, &mut buffer, &mut font);
+    output
+}
+
+fn project_execution_table_cell(
+    report: &NativeExecutionReport,
+    cell: &ExecutionTableCell,
+    origin: &libmandoc_rs::ExecutionNode,
+    source: &std::path::Path,
+    fragments_by_generation: &[Vec<ExecutionFragment>],
+    flushes_by_generation: &[Vec<ExecutionFlush>],
+) -> NativeTableCell {
+    let fragments = cell.buffer_generation.map_or_else(Vec::new, |generation| {
+        fragments_by_generation[generation as usize].clone()
+    });
+    let flushes = cell.buffer_generation.map_or_else(Vec::new, |generation| {
+        flushes_by_generation[generation as usize].clone()
+    });
+    NativeTableCell {
+        key: cell.key,
+        node: cell.node,
+        source: source.to_path_buf(),
+        line: origin.line,
+        column: origin.column,
+        ordinal: cell.ordinal,
+        data_ordinal: cell.data_ordinal,
+        logical_column: cell.logical_column,
+        column_span: cell.column_span,
+        row_span: cell.row_span,
+        layout_kind: cell.layout_kind,
+        data_kind: cell.data_kind,
+        alignment: cell.alignment,
+        font: cell.font,
+        flags: cell.flags,
+        buffer_generation: cell.buffer_generation,
+        atoms: cell.atoms.clone(),
+        fragments,
+        flushes,
+        content: table_cell_content(report, cell.atoms.clone()),
+    }
+}
+
+fn project_ir_table_cells(
+    ast_row: &NativeNode,
+    row: &ExecutionTableRow,
+    projected_cells: &[NativeTableCell],
+    data_cells: Vec<Option<usize>>,
+) -> Vec<mant_ir::TableCell> {
+    let source = super::source_span(ast_row);
+    ast_row
+        .table_cells
+        .iter()
+        .zip(data_cells)
+        .scan(0u32, |logical_column, (ast_cell, projected)| {
+            let projected =
+                &projected_cells[projected.expect("every AST table data cell was executed")];
+            let kind = table_cell_kind(ast_cell.kind);
+            assert_eq!(projected.node, row.node, "table cell row owner");
+            assert_eq!(projected.logical_column, *logical_column);
+            assert_eq!(projected.column_span, u32::from(ast_cell.column_span));
+            assert_eq!(projected.row_span, u32::from(ast_cell.row_span));
+            assert_eq!(execution_table_cell_kind(projected.data_kind), kind);
+            assert_eq!(
+                projected
+                    .flags
+                    .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION,),
+                ast_cell.vertical_continuation,
+            );
+            *logical_column = logical_column
+                .checked_add(u32::from(ast_cell.column_span))
+                .expect("validated table logical width");
+            let blocks = if ast_cell.vertical_continuation
+                || kind != mant_ir::TableCellKind::Text
+                || projected.content.is_empty()
+            {
+                Vec::new()
+            } else {
+                vec![mant_ir::Block::Paragraph {
+                    children: projected.content.clone(),
+                    layout: mant_ir::LayoutHint::default(),
+                    source,
+                }]
+            };
+            Some(mant_ir::TableCell {
+                kind,
+                blocks,
+                column_span: ast_cell.column_span,
+                row_span: ast_cell.row_span,
+                alignment: Some(table_alignment(ast_cell.alignment)),
+            })
+        })
+        .collect()
+}
+
+fn project_table_row(
+    ast_nodes: &[&NativeNode],
+    report: &NativeExecutionReport,
+    row: &ExecutionTableRow,
+    fragments_by_generation: &[Vec<ExecutionFragment>],
+    flushes_by_generation: &[Vec<ExecutionFlush>],
+) -> (NativeTableRow, mant_ir::TableRow) {
+    let ast_row = ast_nodes[row.node.0 as usize];
+    assert_eq!(ast_row.kind, NodeKind::Table, "table row AST kind");
+    let kind = table_row_kind(
+        ast_row
+            .table_row_kind
+            .as_ref()
+            .expect("owned AST table row kind"),
+    );
+    let origin = &report.nodes[row.node.0 as usize];
+    assert_eq!(ast_row.line, origin.line, "table row source line");
+    assert_eq!(ast_row.column, origin.column, "table row source column");
+    let source = report.sources[origin.source as usize].path.clone();
+    let execution_cells = &report.table_cells[row.cells.start as usize..row.cells.end as usize];
+    let mut data_cells = vec![None; ast_row.table_cells.len()];
+    let projected_cells = execution_cells
+        .iter()
+        .map(|cell| {
+            if matches!(&kind, mant_ir::TableRowKind::Data) {
+                let slot = data_cells
+                    .get_mut(cell.data_ordinal as usize)
+                    .expect("validated table data ordinal");
+                assert!(slot.replace(cell.ordinal as usize).is_none());
+            }
+            project_execution_table_cell(
+                report,
+                cell,
+                origin,
+                &source,
+                fragments_by_generation,
+                flushes_by_generation,
+            )
+        })
+        .collect::<Vec<_>>();
+    let ir_cells = if matches!(&kind, mant_ir::TableRowKind::Data) {
+        project_ir_table_cells(ast_row, row, &projected_cells, data_cells)
+    } else {
+        Vec::new()
+    };
+    let ir_row = mant_ir::TableRow {
+        kind: kind.clone(),
+        cells: ir_cells,
+    };
+    (
+        NativeTableRow {
+            key: row.key,
+            node: row.node,
+            source,
+            line: origin.line,
+            column: origin.column,
+            kind,
+            logical_columns: row.logical_columns,
+            cells: projected_cells,
+        },
+        ir_row,
+    )
+}
+
+fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -> Vec<NativeTable> {
+    if report.tables.is_empty() {
+        return Vec::new();
+    }
+    let ast_nodes = native_nodes_by_execution_key(document, report.nodes.len());
+    let mut fragments_by_generation = vec![Vec::new(); report.buffer_generations.len()];
+    for fragment in &report.fragments {
+        if let Some(generation) = fragment.buffer_generation {
+            fragments_by_generation[generation as usize].push(fragment.clone());
+        }
+    }
+    let mut flushes_by_generation = vec![Vec::new(); report.buffer_generations.len()];
+    for flush in &report.flushes {
+        flushes_by_generation[flush.buffer_generation as usize].push(flush.clone());
+    }
+
+    report
+        .tables
+        .iter()
+        .map(|table| {
+            let first_origin = &report.nodes[table.first_row_node.0 as usize];
+            let source = report.sources[first_origin.source as usize].path.clone();
+            let row_start = table.rows.start as usize;
+            let row_end = table.rows.end as usize;
+            let mut rows = Vec::with_capacity(row_end - row_start);
+            let mut ir_rows = Vec::with_capacity(row_end - row_start);
+            for row in &report.table_rows[row_start..row_end] {
+                let (projected, ir_row) = project_table_row(
+                    &ast_nodes,
+                    report,
+                    row,
+                    &fragments_by_generation,
+                    &flushes_by_generation,
+                );
+                rows.push(projected);
+                ir_rows.push(ir_row);
+            }
+            NativeTable {
+                key: table.key,
+                source,
+                logical_columns: table.logical_columns,
+                rows,
+                block: mant_ir::Block::Table {
+                    rows: ir_rows,
+                    layout: mant_ir::LayoutHint::default(),
+                    source: super::source_span(ast_nodes[table.first_row_node.0 as usize]),
+                },
+            }
+        })
+        .collect()
+}
+
 #[allow(dead_code)]
 pub(super) fn project(
     document: &NativeDocument,
@@ -399,6 +847,7 @@ pub(super) fn project(
             })
             .collect(),
         definitions: definition_facts(document, report),
+        tables: table_projection(document, report),
     }
 }
 
@@ -406,6 +855,108 @@ pub(super) fn project(
 mod tests {
     use super::*;
     use libmandoc_rs::{ExecutionLimits, InputFormat, ParseOptions, Parser};
+
+    fn table_rows(table: &NativeTable) -> &[mant_ir::TableRow] {
+        let mant_ir::Block::Table { rows, .. } = &table.block else {
+            unreachable!("native table projection always constructs a table block");
+        };
+        rows
+    }
+
+    fn cell_inlines(cell: &mant_ir::TableCell) -> &[mant_ir::Inline] {
+        let [mant_ir::Block::Paragraph { children, .. }] = cell.blocks.as_slice() else {
+            panic!("printable staged table cell must contain one paragraph");
+        };
+        children
+    }
+
+    fn assert_matrix_execution(table: &NativeTable) {
+        assert_eq!(
+            table.source,
+            std::path::Path::new("native-execution-table-matrix.1")
+        );
+        assert_eq!(table.logical_columns, 3);
+        assert_eq!(table.rows.len(), 5);
+        assert!(table.rows.iter().all(|row| {
+            row.source == std::path::Path::new("native-execution-table-matrix.1")
+                && row.line >= 8
+                && row.column == 1
+        }));
+        assert!(matches!(
+            table.rows[3].kind,
+            mant_ir::TableRowKind::HorizontalRule
+        ));
+        let first = &table.rows[0];
+        assert_eq!(first.cells.len(), 3);
+        assert_eq!(first.cells[0].font, ExecutionFont::Bold);
+        assert_eq!(first.cells[0].logical_column, 0);
+        assert_eq!(first.cells[1].logical_column, 1);
+        assert_eq!(first.cells[1].alignment, ExecutionTableAlignment::Numeric);
+        assert_eq!(first.cells[2].logical_column, 2);
+        assert!(first.cells.iter().all(|cell| {
+            cell.fragments
+                .iter()
+                .all(|fragment| fragment.buffer_generation == cell.buffer_generation)
+                && cell
+                    .flushes
+                    .iter()
+                    .all(|flush| Some(flush.buffer_generation) == cell.buffer_generation)
+        }));
+        assert_eq!(
+            first.cells[0].content,
+            [mant_ir::Inline::Strong {
+                children: vec![mant_ir::Inline::Text {
+                    value: "alpha".to_owned(),
+                }],
+            }]
+        );
+        assert_eq!(
+            first.cells[1].content,
+            [mant_ir::Inline::Text {
+                value: "12.34".to_owned(),
+            }]
+        );
+        assert_eq!(table.rows[1].cells[0].column_span, 2);
+        assert_eq!(table.rows[1].cells[1].logical_column, 2);
+        assert!(table.rows[2].cells[1].content.is_empty());
+        assert!(table.rows[2].cells[1].buffer_generation.is_none());
+    }
+
+    fn assert_matrix_ir(table: &NativeTable) {
+        let rows = table_rows(table);
+        assert!(rows[3].cells.is_empty());
+        assert_eq!(rows[1].cells[0].column_span, 2);
+        assert!(rows[2].cells[1].blocks.is_empty());
+        assert_eq!(
+            cell_inlines(&rows[0].cells[0]),
+            table.rows[0].cells[0].content
+        );
+        assert_eq!(
+            cell_inlines(&rows[0].cells[1]),
+            [mant_ir::Inline::Text {
+                value: "12.34".to_owned(),
+            }],
+            "numeric alignment padding must not enter semantic content"
+        );
+        assert_eq!(
+            cell_inlines(&rows[4].cells[0]),
+            [
+                mant_ir::Inline::Text {
+                    value: "block one".to_owned(),
+                },
+                mant_ir::Inline::LineBreak,
+                mant_ir::Inline::Text {
+                    value: "block two with additional words that wrap softly inside the table cell"
+                        .to_owned(),
+                },
+            ],
+            "authored word-end break is the only semantic line break"
+        );
+        let grid = mant_ir::TableGrid::new(rows);
+        assert_eq!(grid.column_count, 3);
+        assert_eq!(grid.rows[1][0].column, 0);
+        assert_eq!(grid.rows[1][1].column, 2);
+    }
 
     #[test]
     fn consumes_owned_man_and_mdoc_execution_facts() {
@@ -725,5 +1276,163 @@ mod tests {
                         && flush.fragments.end >= flush.fragments.start
                 })
         );
+    }
+
+    #[test]
+    fn table_projection_keeps_owned_topology_and_filters_device_layout() {
+        // Pinned CVS `tbl_term.c` separates authored cell words from the
+        // padding and rule glyphs that `term_tbl()` generates for the device.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "native-execution-table-matrix.1",
+                include_bytes!("fixtures/native-execution-table-matrix.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        drop(report);
+
+        let [table] = projection.tables.as_slice() else {
+            panic!("one native table");
+        };
+        assert_matrix_execution(table);
+        assert_matrix_ir(table);
+        let document = mant_ir::Document {
+            parser: None,
+            source: mant_ir::DocumentSource {
+                format: mant_ir::SourceFormat::Man,
+                path: Some("native-execution-table-matrix.1".to_owned()),
+            },
+            meta: mant_ir::DocumentMeta::default(),
+            heading: None,
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+            blocks: vec![table.block.clone()],
+            sections: Vec::new(),
+        };
+        assert!(mant_ir::validate_document(&document).is_empty());
+    }
+
+    #[test]
+    fn table_projection_preserves_hard_breaks_without_device_row_breaks() {
+        // Pinned CVS `tbl_term.c` repeatedly calls `term_flushln()` over the
+        // column buffers. Those alternating device rows are distinct from the
+        // authored `\p` word-end break recorded in each cell payload.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "native-execution-table-interleaving.1",
+                include_bytes!("fixtures/native-execution-table-interleaving.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        drop(report);
+
+        let [table] = projection.tables.as_slice() else {
+            panic!("one native table");
+        };
+        let first = &table.rows[0];
+        assert_eq!(first.cells.len(), 2);
+        assert!(first.cells.iter().all(|cell| {
+            cell.fragments
+                .iter()
+                .map(|fragment| fragment.device_line)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                == 2
+        }));
+        assert_eq!(
+            first.cells[0].content,
+            [
+                mant_ir::Inline::Text {
+                    value: "left alpha".to_owned(),
+                },
+                mant_ir::Inline::LineBreak,
+                mant_ir::Inline::Text {
+                    value: "left beta".to_owned(),
+                },
+            ]
+        );
+        assert_eq!(
+            first.cells[1].content,
+            [
+                mant_ir::Inline::Text {
+                    value: "right one".to_owned(),
+                },
+                mant_ir::Inline::LineBreak,
+                mant_ir::Inline::Text {
+                    value: "right two".to_owned(),
+                },
+            ]
+        );
+
+        let mut flush_order = first
+            .cells
+            .iter()
+            .flat_map(|cell| {
+                cell.flushes
+                    .iter()
+                    .map(move |flush| (flush.sequence, cell.data_ordinal))
+            })
+            .collect::<Vec<_>>();
+        flush_order.sort_unstable();
+        assert_eq!(
+            flush_order
+                .iter()
+                .map(|(_, data_ordinal)| *data_ordinal)
+                .collect::<Vec<_>>(),
+            [0, 1, 0, 1],
+            "native device output alternates column slices"
+        );
+
+        let rows = table_rows(table);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(cell_inlines(&rows[0].cells[0]), first.cells[0].content,);
+        assert_eq!(cell_inlines(&rows[0].cells[1]), first.cells[1].content,);
+        assert_eq!(
+            cell_inlines(&rows[1].cells[0]),
+            [mant_ir::Inline::Text {
+                value: "left tail".to_owned(),
+            }]
+        );
+        assert_eq!(
+            cell_inlines(&rows[1].cells[1]),
+            [mant_ir::Inline::Text {
+                value: "right tail".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn table_projection_agrees_with_ast_vertical_continuation_spelling() {
+        // Fixed CVS `tbl_data()` recognizes a literal `\^` data cell as a
+        // vertical continuation, and the complete fixture renders only the
+        // preceding `first` row. The execution report and owned AST must use
+        // that same parser fact rather than independent layout-only tests.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "native-execution-table-vertical-continuation.1",
+                include_bytes!("fixtures/native-execution-table-vertical-continuation.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        drop(report);
+
+        let [table] = projection.tables.as_slice() else {
+            panic!("one native table");
+        };
+        assert_eq!(table.rows.len(), 2);
+        let continuation = &table.rows[1].cells[0];
+        assert!(
+            continuation
+                .flags
+                .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION)
+        );
+        assert!(continuation.content.is_empty());
+        assert!(table_rows(table)[1].cells[0].blocks.is_empty());
     }
 }

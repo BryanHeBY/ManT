@@ -1,0 +1,783 @@
+diff --git a/tbl_term.c b/tbl_term.c
+index aa348325..11995fd5 100644
+--- a/tbl_term.c
++++ b/tbl_term.c
+@@ -22,6 +22,7 @@
+ #include <assert.h>
+ #include <ctype.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include <stdlib.h>
+ #include <string.h>
+ 
+@@ -39,24 +40,26 @@
+ 
+ static	size_t	term_tbl_len(size_t, void *);
+ static	size_t	term_tbl_strlen(const char *, void *);
+-static	void	tbl_data(struct termp *, const struct tbl_opts *,
++static	int	tbl_data(struct termp *, const struct tbl_opts *,
+ 			const struct tbl_cell *,
+ 			const struct tbl_dat *,
+ 			const struct roffcol *, size_t *);
+-static	void	tbl_direct_border(struct termp *, int, size_t);
+-static	void	tbl_fill_border(struct termp *, int, size_t *, size_t);
+-static	void	tbl_fill_char(struct termp *, char, size_t *, size_t);
+-static	void	tbl_fill_string(struct termp *, const char *,
++static	int	tbl_direct_border(struct termp *, int, size_t);
++static	int	tbl_fill_border(struct termp *, int, size_t *, size_t);
++static	int	tbl_fill_char(struct termp *, char, size_t *, size_t);
++static	int	tbl_fill_string(struct termp *, const char *,
+ 			size_t *, size_t);
+-static	void	tbl_hrule(struct termp *, const struct tbl_span *,
++static	int	tbl_hrule(struct termp *, const struct tbl_span *,
+ 			const struct tbl_span *, const struct tbl_span *,
+ 			int);
+-static	void	tbl_literal(struct termp *, const struct tbl_dat *,
++static	int	tbl_literal(struct termp *, const struct tbl_dat *,
+ 			const struct roffcol *, size_t *);
+-static	void	tbl_number(struct termp *, const struct tbl_opts *,
++static	int	tbl_number(struct termp *, const struct tbl_opts *,
+ 			const struct tbl_dat *,
+ 			const struct roffcol *, size_t *);
+-static	void	tbl_word(struct termp *, const struct tbl_dat *);
++static	int	tbl_word(struct termp *, const struct tbl_dat *);
++static	int	tbl_exec_preflight(struct termp *, const struct tbl_span *,
++			size_t *, size_t *, size_t *);
+ 
+ 
+ /*
+@@ -147,6 +150,48 @@ term_tbl_len(size_t sz, void *arg)
+ 	return term_len((const struct termp *)arg, sz);
+ }
+ 
++static int
++tbl_exec_preflight(struct termp *tp, const struct tbl_span *first,
++    size_t *rows, size_t *layout_cells, size_t *data_cells)
++{
++	const struct tbl_span *sp;
++	const struct tbl_cell *cp;
++	const struct tbl_dat *dp;
++	size_t columns, length;
++
++	*rows = *layout_cells = *data_cells = 0;
++	if (first == NULL || first->opts == NULL || first->opts->cols <= 0)
++		return 0;
++	columns = (size_t)first->opts->cols;
++	if (columns > SIZE_MAX / columns ||
++	    !term_exec_table_preflight(tp, columns * columns))
++		return 0;
++	for (sp = first; sp != NULL; sp = sp->next) {
++		if (*rows == SIZE_MAX || !term_exec_table_preflight(tp, 1))
++			return 0;
++		(*rows)++;
++		for (cp = sp->layout->first; cp != NULL; cp = cp->next) {
++			if (*layout_cells == SIZE_MAX ||
++			    !term_exec_table_preflight(tp, 1))
++				return 0;
++			(*layout_cells)++;
++		}
++		for (dp = sp->first; dp != NULL; dp = dp->next) {
++			if (*data_cells == SIZE_MAX ||
++			    !term_exec_table_preflight(tp, columns + 1))
++				return 0;
++			(*data_cells)++;
++			if (dp->string != NULL) {
++				length = strlen(dp->string);
++				if (length == SIZE_MAX ||
++				    !term_exec_table_preflight(tp, length + 1))
++					return 0;
++			}
++		}
++	}
++	return 1;
++}
++
+ 
+ void
+ term_tbl(struct termp *tp, const struct tbl_span *sp)
+@@ -169,12 +214,24 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 	int	 uvert;	 /* Number of vertical lines pointing up. */
+ 	int	 fc;	 /* Frame character index in tbl_borders[]. */
+ 	int	 more;	 /* Boolean: there are more columns to print. */
++	int	 first_row;
++	int	 cell_owner;
++	size_t	 rows, layout_cells, data_cells;
++	size_t	 cell_ordinal, data_ordinal, coloff_before;
+ 
+ 	/* Inhibit printing of spaces: we do padding ourselves. */
+ 
+ 	tp->flags |= TERMP_NOSPACE | TERMP_NONOSPACE;
+ 	save_offset = tp->tcol->offset;
+ 	enw = term_len(tp, 1);
++	first_row = tp->tbl.cols == NULL;
++	rows = layout_cells = data_cells = 0;
++	if (first_row &&
++	    (!tbl_exec_preflight(tp, sp, &rows, &layout_cells, &data_cells) ||
++	    !term_exec_table(tp, sp, 1, rows, layout_cells, data_cells)))
++		goto fail;
++	if (!term_exec_table_row(tp, sp, 1))
++		goto fail;
+ 
+ 	/*
+ 	 * The first time we're invoked for a given table block,
+@@ -190,6 +247,8 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 		tp->tbl.arg = tp;
+ 
+ 		tblcalc(&tp->tbl, sp, tp->tcol->offset, tp->tcol->rmargin);
++		if (term_exec_failed(tp))
++			goto fail;
+ 
+ 		/* Center the table as a whole. */
+ 
+@@ -237,14 +296,18 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 
+ 		if (sp->opts->opts & TBL_OPT_VSPACE)
+ 			term_vspace(tp);
++		if (term_exec_failed(tp))
++			goto fail;
+ 
+ 		/* Horizontal frame at the start of boxed tables. */
+ 
+ 		if (tp->enc == TERMENC_ASCII &&
+ 		    sp->opts->opts & TBL_OPT_DBOX)
+-			tbl_hrule(tp, NULL, sp, sp, TBL_OPT_DBOX);
++			if (!tbl_hrule(tp, NULL, sp, sp, TBL_OPT_DBOX))
++				goto fail;
+ 		if (sp->opts->opts & (TBL_OPT_DBOX | TBL_OPT_BOX))
+-			tbl_hrule(tp, NULL, sp, sp, TBL_OPT_BOX);
++			if (!tbl_hrule(tp, NULL, sp, sp, TBL_OPT_BOX))
++				goto fail;
+ 	}
+ 
+ 	/* Set up the columns. */
+@@ -273,6 +336,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 
+ 		dp = sp->first;
+ 		hspans = 0;
++		cell_ordinal = data_ordinal = 0;
+ 		for (ic = 0; ic < sp->opts->cols; ic++) {
+ 			if (hspans == 0) {
+ 				tp->tcol++;
+@@ -323,13 +387,29 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 			tp->tcol++;
+ 			tp->col = 0;
+ 			tp->flags &= ~(TERMP_BACKAFTER | TERMP_BACKBEFORE);
+-			tbl_data(tp, sp->opts, cp, dp, tp->tbl.cols + ic,
+-			    &coloff);
++			cell_owner = dp != NULL && dp->layout == cp;
++			coloff_before = coloff;
++			if (cell_owner) {
++				if (!term_exec_table_cell(tp, sp, cp, dp, 1,
++				    cell_ordinal, data_ordinal, coloff_before,
++				    coloff_before))
++					goto fail;
++			}
++			if (!tbl_data(tp, sp->opts, cp, dp, tp->tbl.cols + ic,
++			    &coloff))
++				goto fail;
++			if (cell_owner) {
++				if (!term_exec_table_cell(tp, sp, cp, dp, 0,
++				    cell_ordinal, data_ordinal, coloff_before, coloff))
++					goto fail;
++				cell_ordinal++;
++			}
+ 			coloff += term_len(tp, tp->tbl.cols[ic].spacing);
+ 			if (dp != NULL &&
+ 			    (ic || sp->layout->first->pos != TBL_CELL_SPAN)) {
+ 				hspans = dp->hspans;
+ 				dp = dp->next;
++				data_ordinal++;
+ 			}
+ 		}
+ 		break;
+@@ -359,16 +439,18 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 		fc = BUP * uvert + BDOWN * dvert + BRIGHT * rhori;
+ 		if (uvert > 0 || dvert > 0 || (horiz && sp->opts->lvert)) {
+ 			(*tp->advance)(tp, tp->tcols->offset);
+-			tbl_direct_border(tp, fc, enw);
+-			tbl_direct_border(tp, BHORIZ * rhori, enw);
++			if (term_exec_failed(tp) || !tbl_direct_border(tp, fc, enw) ||
++			    !tbl_direct_border(tp, BHORIZ * rhori, enw))
++				goto fail;
+ 		}
+ 
+ 		/* Print the data cells. */
+ 
+ 		more = 0;
+-		if (horiz)
+-			tbl_hrule(tp, sp->prev, sp, sp->next, 0);
+-		else {
++		if (horiz) {
++			if (!tbl_hrule(tp, sp->prev, sp, sp->next, 0))
++				goto fail;
++		} else {
+ 			cp = sp->layout->first;
+ 			cpn = sp->next == NULL ? NULL :
+ 			    sp->next->layout->first;
+@@ -474,6 +556,8 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 				tp->tcol++;
+ 				if (tp->tcol->col < tp->tcol->lastcol)
+ 					term_flushln(tp);
++				if (term_exec_failed(tp))
++					goto fail;
+ 				tp->flags &= ~(TERMP_CENTER | TERMP_RIGHT);
+ 				if (cp != NULL && cp->pos == TBL_CELL_LONG)
+ 					tp->tcol->offset -= enw;
+@@ -499,10 +583,13 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 				if (tp->viscol < tp->tcol->rmargin)
+ 					(*tp->advance)(tp,
+ 					   tp->tcol->rmargin - tp->viscol);
++				if (term_exec_failed(tp))
++					goto fail;
+ 				while (tp->viscol < tp->tcol->rmargin +
+ 				    term_len(tp, tp->tbl.cols[ic].spacing / 2))
+-					tbl_direct_border(tp,
+-					    BHORIZ * lhori, enw);
++					if (!tbl_direct_border(tp,
++					    BHORIZ * lhori, enw))
++						goto fail;
+ 
+ 				if (tp->tcol + 1 == tp->tcols + tp->lasttcol)
+ 					continue;
+@@ -520,19 +607,21 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 				     dp->pos == TBL_DATA_HORIZ) ? 1 : 0;
+ 
+ 				if (tp->tbl.cols[ic].spacing)
+-					tbl_direct_border(tp,
++					if (!tbl_direct_border(tp,
+ 					    BLEFT * lhori + BRIGHT * rhori +
+-					    BUP * uvert + BDOWN * dvert, enw);
++					    BUP * uvert + BDOWN * dvert, enw))
++						goto fail;
+ 
+ 				if (tp->enc == TERMENC_UTF8)
+ 					uvert = dvert = 0;
+ 
+ 				if (tp->tbl.cols[ic].spacing > 2 &&
+ 				    (uvert > 1 || dvert > 1 || rhori))
+-					tbl_direct_border(tp,
++					if (!tbl_direct_border(tp,
+ 					    BHORIZ * rhori +
+ 					    BUP * (uvert > 1) +
+-					    BDOWN * (dvert > 1), enw);
++					    BDOWN * (dvert > 1), enw))
++						goto fail;
+ 			}
+ 		}
+ 
+@@ -572,13 +661,17 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 			    sp->layout->last->col + 1 < sp->opts->cols)) {
+ 				tp->tcol++;
+ 				if (tp->tcol->offset > tp->viscol)
+-					tbl_direct_border(tp,
++					if (!tbl_direct_border(tp,
+ 					    BHORIZ * lhori,
+-					    tp->tcol->offset - tp->viscol);
++					    tp->tcol->offset - tp->viscol))
++						goto fail;
+ 			}
+-			tbl_direct_border(tp, fc, enw);
++			if (!tbl_direct_border(tp, fc, enw))
++				goto fail;
+ 		}
+ 		(*tp->endline)(tp);
++		if (term_exec_failed(tp))
++			goto fail;
+ 	} while (more);
+ 
+ 	/*
+@@ -592,23 +685,40 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 	tp->tcol->rmargin = tp->maxrmargin;
+ 	if (sp->next == NULL) {
+ 		if (sp->opts->opts & (TBL_OPT_DBOX | TBL_OPT_BOX))
+-			tbl_hrule(tp, sp, sp, NULL, TBL_OPT_BOX);
++			if (!tbl_hrule(tp, sp, sp, NULL, TBL_OPT_BOX))
++				goto fail;
+ 		if (tp->enc == TERMENC_ASCII &&
+ 		    sp->opts->opts & TBL_OPT_DBOX)
+-			tbl_hrule(tp, sp, sp, NULL, TBL_OPT_DBOX);
++			if (!tbl_hrule(tp, sp, sp, NULL, TBL_OPT_DBOX))
++				goto fail;
+ 		assert(tp->tbl.cols);
+ 		free(tp->tbl.cols);
+ 		tp->tbl.cols = NULL;
+ 	} else if (horiz == 0 && sp->opts->opts & TBL_OPT_ALLBOX &&
+ 	    (sp->next == NULL || sp->next->pos == TBL_SPAN_DATA ||
+ 	     sp->next->next != NULL))
+-		tbl_hrule(tp, sp, sp, sp->next, TBL_OPT_ALLBOX);
++		if (!tbl_hrule(tp, sp, sp, sp->next, TBL_OPT_ALLBOX))
++			goto fail;
+ 
+ 	tp->tcol->offset = save_offset;
+ 	tp->flags &= ~TERMP_NONOSPACE;
++	if (!term_exec_table_row(tp, sp, 0))
++		goto fail;
++	if (sp->next == NULL &&
++	    !term_exec_table(tp, sp, 0, 0, 0, 0))
++		goto fail;
++	return;
++
++fail:
++	term_setcol(tp, 1);
++	tp->flags &= ~(TERMP_MULTICOL | TERMP_NONOSPACE);
++	tp->tcol->rmargin = tp->maxrmargin;
++	tp->tcol->offset = save_offset;
++	free(tp->tbl.cols);
++	tp->tbl.cols = NULL;
+ }
+ 
+-static void
++static int
+ tbl_hrule(struct termp *tp, const struct tbl_span *spp,
+     const struct tbl_span *sp, const struct tbl_span *spn, int flags)
+ {
+@@ -645,15 +755,18 @@ tbl_hrule(struct termp *tp, const struct tbl_span *spp,
+ 	enw = term_len(tp, 1);
+ 	if (tp->viscol == 0)
+ 		(*tp->advance)(tp, tp->tcols->offset);
++	if (term_exec_failed(tp))
++		return 0;
+ 	if (flags != 0) {
+-		tbl_direct_border(tp,
++		if (!tbl_direct_border(tp,
+ 		    (spp == NULL ? 0 : BUP * bw) +
+ 		    (spn == NULL ? 0 : BDOWN * bw) +
+ 		    (spp == NULL || cpn == NULL ||
+-		     cpn->pos != TBL_CELL_DOWN ? BRIGHT * hw : 0), enw);
+-		tbl_direct_border(tp,
++		     cpn->pos != TBL_CELL_DOWN ? BRIGHT * hw : 0), enw) ||
++		    !tbl_direct_border(tp,
+ 		    (spp == NULL || cpn == NULL ||
+-		     cpn->pos != TBL_CELL_DOWN ? BHORIZ * hw : 0), enw);
++		     cpn->pos != TBL_CELL_DOWN ? BHORIZ * hw : 0), enw))
++			return 0;
+ 	}
+ 
+ 	col = tp->tbl.cols;
+@@ -670,8 +783,9 @@ tbl_hrule(struct termp *tp, const struct tbl_span *spp,
+ 		     (dpn == NULL || dpn->string == NULL ||
+ 		      strcmp(dpn->string, "\\^") != 0))
+ 		    ? hw : 0;
+-		tbl_direct_border(tp, BHORIZ * lw,
+-		    col->width + term_len(tp, col->spacing / 2));
++		if (!tbl_direct_border(tp, BHORIZ * lw,
++		    col->width + term_len(tp, col->spacing / 2)))
++			return 0;
+ 
+ 		/*
+ 		 * Figure out whether a vertical line is crossing
+@@ -723,8 +837,9 @@ tbl_hrule(struct termp *tp, const struct tbl_span *spp,
+ 		/* The line crossing at the end of this column. */
+ 
+ 		if (col->spacing)
+-			tbl_direct_border(tp, BLEFT * lw +
+-			    BRIGHT * rw + BUP * uw + BDOWN * dw, enw);
++			if (!tbl_direct_border(tp, BLEFT * lw +
++			    BRIGHT * rw + BUP * uw + BDOWN * dw, enw))
++				return 0;
+ 
+ 		/*
+ 		 * In ASCII output, a crossing may print two characters.
+@@ -733,60 +848,62 @@ tbl_hrule(struct termp *tp, const struct tbl_span *spp,
+ 		if (tp->enc != TERMENC_ASCII || (uw < 2 && dw < 2))
+ 			uw = dw = 0;
+ 		if (col->spacing > 2)
+-			tbl_direct_border(tp,
+-                            BHORIZ * rw + BUP * uw + BDOWN * dw, enw);
++			if (!tbl_direct_border(tp,
++			    BHORIZ * rw + BUP * uw + BDOWN * dw, enw))
++				return 0;
+ 
+ 		/* Padding before the start of the next column. */
+ 
+ 		if (col->spacing > 4)
+-			tbl_direct_border(tp,
++			if (!tbl_direct_border(tp,
+ 			    BHORIZ * rw,
+-			    term_len(tp, (col->spacing - 3) / 2));
++			    term_len(tp, (col->spacing - 3) / 2)))
++				return 0;
+ 	}
+ 
+ 	/* Print the right end of the line. */
+ 
+ 	if (flags != 0) {
+-		tbl_direct_border(tp,
++		if (!tbl_direct_border(tp,
+ 		    (spp == NULL ? 0 : BUP * bw) +
+ 		    (spn == NULL ? 0 : BDOWN * bw) +
+ 		    (spp == NULL || spn == NULL ||
+ 		     spn->layout->last->pos != TBL_CELL_DOWN ?
+-		     BLEFT * hw : 0), enw);
++		     BLEFT * hw : 0), enw))
++			return 0;
+ 		(*tp->endline)(tp);
++		if (term_exec_failed(tp))
++			return 0;
+ 	}
++	return 1;
+ }
+ 
+-static void
++static int
+ tbl_data(struct termp *tp, const struct tbl_opts *opts,
+     const struct tbl_cell *cp, const struct tbl_dat *dp,
+     const struct roffcol *col, size_t *coloff)
+ {
+ 	switch (cp->pos) {
+ 	case TBL_CELL_HORIZ:
+-		tbl_fill_border(tp, BHORIZ, coloff, col->width);
+-		return;
++		return tbl_fill_border(tp, BHORIZ, coloff, col->width);
+ 	case TBL_CELL_DHORIZ:
+-		tbl_fill_border(tp, BHORIZ * 2, coloff, col->width);
+-		return;
++		return tbl_fill_border(tp, BHORIZ * 2, coloff, col->width);
+ 	default:
+ 		break;
+ 	}
+ 
+ 	if (dp == NULL)
+-		return;
++		return 1;
+ 
+ 	switch (dp->pos) {
+ 	case TBL_DATA_NONE:
+-		return;
++		return 1;
+ 	case TBL_DATA_HORIZ:
+ 	case TBL_DATA_NHORIZ:
+-		tbl_fill_border(tp, BHORIZ, coloff, col->width);
+-		return;
++		return tbl_fill_border(tp, BHORIZ, coloff, col->width);
+ 	case TBL_DATA_NDHORIZ:
+ 	case TBL_DATA_DHORIZ:
+-		tbl_fill_border(tp, BHORIZ * 2, coloff, col->width);
+-		return;
++		return tbl_fill_border(tp, BHORIZ * 2, coloff, col->width);
+ 	default:
+ 		break;
+ 	}
+@@ -796,74 +913,76 @@ tbl_data(struct termp *tp, const struct tbl_opts *opts,
+ 	case TBL_CELL_CENTRE:
+ 	case TBL_CELL_LEFT:
+ 	case TBL_CELL_RIGHT:
+-		tbl_literal(tp, dp, col, coloff);
+-		break;
++		return tbl_literal(tp, dp, col, coloff);
+ 	case TBL_CELL_NUMBER:
+-		tbl_number(tp, opts, dp, col, coloff);
+-		break;
++		return tbl_number(tp, opts, dp, col, coloff);
+ 	case TBL_CELL_DOWN:
+ 	case TBL_CELL_SPAN:
+-		break;
++		return 1;
+ 	default:
+ 		abort();
+ 	}
++	return 0;
+ }
+ 
+ /*
+  * Print multiple copies of the string cp to advance to
+  * len basic units from the left edge of the current column.
+  */
+-static void
++static int
+ tbl_fill_string(struct termp *tp, const char *cp, size_t *coloff, size_t len)
+ {
+ 	size_t	 sz;      /* Width of the string cp in basic units. */
+ 	size_t	 target;  /* Distance from the left margin in basic units. */
+ 
+ 	if (len == 0)
+-		return;
++		return 1;
+ 	sz = term_strlen(tp, cp);
+ 	target = tp->tcol->offset + len;
+ 	while (*coloff < target) {
+ 		term_word(tp, cp);
++		if (term_exec_failed(tp))
++			return 0;
+ 		*coloff += sz;
+ 	}
++	return 1;
+ }
+ 
+ /*
+  * Print multiple copies of the ASCII character c to advance to
+  * len basic units from the left edge of the current column.
+  */
+-static void
++static int
+ tbl_fill_char(struct termp *tp, char c, size_t *coloff, size_t len)
+ {
+ 	char	 cp[2];
+ 
+ 	cp[0] = c;
+ 	cp[1] = '\0';
+-	tbl_fill_string(tp, cp, coloff, len);
++	return tbl_fill_string(tp, cp, coloff, len);
+ }
+ 
+ /*
+  * Print multiple copies of the border c to fill len basic units.
+  * Used for horizontal lines inside table cells.
+  */
+-static void
++static int
+ tbl_fill_border(struct termp *tp, int c, size_t *coloff, size_t len)
+ {
+ 	char	 buf[16];
+ 
+ 	if ((c = tp->tbl_borders[c]) > 127) {
+ 		(void)snprintf(buf, sizeof(buf), "\\[u%04x]", c);
+-		tbl_fill_string(tp, buf, coloff, len);
++		return tbl_fill_string(tp, buf, coloff, len);
+ 	} else
+-		tbl_fill_char(tp, c, coloff, len);
++		return tbl_fill_char(tp, c, coloff, len);
+ }
+ 
+ /*
+  * The same, but bypassing term_flushln().
+  * Used for horizontal and vertical lines at the edges of table cells.
+  */
+-static void
++static int
+ tbl_direct_border(struct termp *tp, int c, size_t len)
+ {
+ 	size_t	 sz;      /* Width of the character in basic units. */
+@@ -876,11 +995,14 @@ tbl_direct_border(struct termp *tp, int c, size_t len)
+ 	target = tp->viscol + len;
+ 	while (tp->viscol + enw2 < target) {
+ 		(*tp->letter)(tp, c);
++		if (term_exec_failed(tp))
++			return 0;
+ 		tp->viscol += sz;
+ 	}
++	return 1;
+ }
+ 
+-static void
++static int
+ tbl_literal(struct termp *tp, const struct tbl_dat *dp,
+ 		const struct roffcol *col, size_t *coloff)
+ {
+@@ -896,11 +1018,13 @@ tbl_literal(struct termp *tp, const struct tbl_dat *dp,
+ 		ic++;
+ 		width += tp->tbl.cols[ic].width;
+ 	}
+-	tbl_word(tp, dp);
++	if (!tbl_word(tp, dp))
++		return 0;
+ 	*coloff += width;
++	return 1;
+ }
+ 
+-static void
++static int
+ tbl_number(struct termp *tp, const struct tbl_opts *opts,
+ 		const struct tbl_dat *dp,
+ 		const struct roffcol *col, size_t *coloff)
+@@ -963,12 +1087,14 @@ tbl_number(struct termp *tp, const struct tbl_opts *opts,
+ 	} else if (col->width > totsz)
+ 		pad = (col->width - totsz) / 2;
+ 
+-	tbl_fill_char(tp, ASCII_NBRSP, coloff, pad);
+-	tbl_word(tp, dp);
++	if (!tbl_fill_char(tp, ASCII_NBRSP, coloff, pad) ||
++	    !tbl_word(tp, dp))
++		return 0;
+ 	*coloff += col->width;
++	return 1;
+ }
+ 
+-static void
++static int
+ tbl_word(struct termp *tp, const struct tbl_dat *dp)
+ {
+ 	int		 prev_font;
+@@ -993,7 +1119,12 @@ tbl_word(struct termp *tp, const struct tbl_dat *dp)
+ 			abort();
+ 	}
+ 
++	tp->exec_table_cell_payload = 1;
+ 	term_word(tp, dp->string);
++	tp->exec_table_cell_payload = 0;
++	if (term_exec_failed(tp))
++		return 0;
+ 
+ 	term_fontpopq(tp, prev_font);
++	return !term_exec_failed(tp);
+ }
+diff --git a/term.c b/term.c
+index 3efb8e86..00f9b17b 100644
+--- a/term.c
++++ b/term.c
+@@ -54,6 +54,7 @@ term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
+ 	p->exec_failed = 0;
+ 	p->exec_write_role = 4;
+ 	p->exec_fragment_role = TERM_EXEC_FRAGMENT_CONTENT;
++	p->exec_table_cell_payload = 0;
+ }
+ 
+ int
+@@ -152,6 +153,69 @@ term_exec_anchor(struct termp *p, const struct roff_node *node)
+ 	return !p->exec_failed;
+ }
+ 
++int
++term_exec_table_preflight(struct termp *p, size_t amount)
++{
++	TERM_EXEC_CALL(p, table_preflight, amount);
++}
++
++int
++term_exec_table(struct termp *p, const struct tbl_span *span, int entering,
++    size_t rows, size_t layout_cells, size_t data_cells)
++{
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops == NULL)
++		return 1;
++	if (entering && p->exec_ops->table_begin != NULL &&
++	    !p->exec_ops->table_begin(p->exec_arg, p, p->exec_node, span,
++	    rows, layout_cells, data_cells))
++		p->exec_failed = 1;
++	else if (!entering && p->exec_ops->table_end != NULL &&
++	    !p->exec_ops->table_end(p->exec_arg, p, p->exec_node, span))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
++term_exec_table_row(struct termp *p, const struct tbl_span *span, int entering)
++{
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops == NULL)
++		return 1;
++	if (entering && p->exec_ops->table_row_begin != NULL &&
++	    !p->exec_ops->table_row_begin(p->exec_arg, p, p->exec_node, span))
++		p->exec_failed = 1;
++	else if (!entering && p->exec_ops->table_row_end != NULL &&
++	    !p->exec_ops->table_row_end(p->exec_arg, p, p->exec_node, span))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
++term_exec_table_cell(struct termp *p, const struct tbl_span *span,
++    const struct tbl_cell *cell, const struct tbl_dat *data, int entering,
++    size_t ordinal, size_t data_ordinal, size_t coloff_before,
++    size_t coloff_after)
++{
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops == NULL)
++		return 1;
++	if (entering && p->exec_ops->table_cell_begin != NULL &&
++	    !p->exec_ops->table_cell_begin(p->exec_arg, p, p->exec_node,
++	    span, cell, data, ordinal, data_ordinal, coloff_before,
++	    coloff_after))
++		p->exec_failed = 1;
++	else if (!entering && p->exec_ops->table_cell_end != NULL &&
++	    !p->exec_ops->table_cell_end(p->exec_arg, p, p->exec_node,
++	    span, cell, data, ordinal, data_ordinal, coloff_before,
++	    coloff_after))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
+ int
+ term_exec_word(struct termp *p, const char *word, size_t length, int entering)
+ {
+@@ -327,6 +391,7 @@ void
+ term_free(struct termp *p)
+ {
+ 	term_tab_free();
++	free(p->tbl.cols);
+ 	for (p->tcol = p->tcols; p->tcol < p->tcols + p->maxtcol; p->tcol++)
+ 		free(p->tcol->buf);
+ 	free(p->tcols);
+@@ -929,10 +994,12 @@ term_word(struct termp *p, const char *word)
+ 	int		 sz;		/* Argument length in bytes. */
+ 	int		 uc;		/* Unicode codepoint number. */
+ 	int		 bu;		/* Width in basic units. */
++	int		 word_role;	/* Provenance after the word-begin hook. */
+ 	enum mandoc_esc	 esc;
+ 
+ 	if (!term_exec_word(p, word, strlen(word), 1))
+ 		return;
++	word_role = p->exec_write_role;
+ 	if ((p->flags & TERMP_NOBUF) == 0) {
+ 		if ((p->flags & TERMP_NOSPACE) == 0) {
+ 			p->exec_write_role = 2;
+@@ -942,7 +1009,7 @@ term_word(struct termp *p, const char *word)
+ 					bufferc(p, ' ');
+ 			} else
+ 				bufferc(p, ASCII_NBRSP);
+-			p->exec_write_role = 1;
++			p->exec_write_role = word_role;
+ 		}
+ 		if (p->flags & TERMP_PREKEEP)
+ 			p->flags |= TERMP_KEEP;
+diff --git a/term.h b/term.h
+index 8532464c..e879200a 100644
+--- a/term.h
++++ b/term.h
+@@ -47,6 +47,8 @@ enum term_exec_fragment_role {
+ struct	eqn_box;
+ struct	roff_meta;
+ struct	roff_node;
++struct	tbl_cell;
++struct	tbl_dat;
+ struct	tbl_span;
+ struct	termp;
+ 
+@@ -117,6 +119,25 @@ struct term_exec_ops {
+ 	    const struct roff_node *);
+ 	int (*anchor)(void *, const struct termp *, const struct roff_node *,
+ 	    const char *, size_t, size_t, int);
++	int (*table_preflight)(void *, const struct termp *,
++	    const struct roff_node *, size_t);
++	int (*table_begin)(void *, const struct termp *,
++	    const struct roff_node *, const struct tbl_span *, size_t,
++	    size_t, size_t);
++	int (*table_end)(void *, const struct termp *,
++	    const struct roff_node *, const struct tbl_span *);
++	int (*table_row_begin)(void *, const struct termp *,
++	    const struct roff_node *, const struct tbl_span *);
++	int (*table_row_end)(void *, const struct termp *,
++	    const struct roff_node *, const struct tbl_span *);
++	int (*table_cell_begin)(void *, const struct termp *,
++	    const struct roff_node *, const struct tbl_span *,
++	    const struct tbl_cell *, const struct tbl_dat *, size_t, size_t,
++	    size_t, size_t);
++	int (*table_cell_end)(void *, const struct termp *,
++	    const struct roff_node *, const struct tbl_span *,
++	    const struct tbl_cell *, const struct tbl_dat *, size_t, size_t,
++	    size_t, size_t);
+ };
+ 
+ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
+@@ -208,6 +229,7 @@ struct	termp {
+ 	int		  exec_field_active;
+ 	int		  exec_write_role;
+ 	int		  exec_fragment_role;
++	int		  exec_table_cell_payload;
+ };
+ 
+ 
+@@ -273,3 +295,10 @@ int		  term_exec_reference_begin(struct termp *, int,
+ 			const char *, const char *, int);
+ int		  term_exec_reference_end(struct termp *);
+ int		  term_exec_anchor(struct termp *, const struct roff_node *);
++int		  term_exec_table_preflight(struct termp *, size_t);
++int		  term_exec_table(struct termp *, const struct tbl_span *, int,
++			size_t, size_t, size_t);
++int		  term_exec_table_row(struct termp *, const struct tbl_span *, int);
++int		  term_exec_table_cell(struct termp *, const struct tbl_span *,
++			const struct tbl_cell *, const struct tbl_dat *, int,
++			size_t, size_t, size_t, size_t);
