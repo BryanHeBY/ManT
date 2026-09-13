@@ -1,5 +1,5 @@
 diff --git a/man_term.c b/man_term.c
-index 8d82bb87..6bda6c8f 100644
+index 8d82bb87..0b3389dc 100644
 --- a/man_term.c
 +++ b/man_term.c
 @@ -63,6 +63,7 @@ struct	man_term_act {
@@ -10,7 +10,98 @@ index 8d82bb87..6bda6c8f 100644
  static	void		  print_man_head(struct termp *,
  				const struct roff_meta *);
  static	void		  print_man_foot(struct termp *,
-@@ -910,6 +911,22 @@ post_UR(DECL_ARGS)
+@@ -322,22 +323,33 @@ pre_B(DECL_ARGS)
+ static int
+ pre_MR(DECL_ARGS)
+ {
++	const struct roff_node *name, *section, *suffix;
++
+ 	term_fontrepl(p, TERMFONT_NONE);
+-	n = n->child;
+-	if (n != NULL) {
+-		term_word(p, n->string);   /* name */
++	name = n->child;
++	section = name == NULL ? NULL : name->next;
++	suffix = section == NULL ? NULL : section->next;
++	if (name != NULL && !term_exec_reference_begin(p,
++	    TERM_EXEC_REFERENCE_MANUAL, n, name, name->string,
++	    section == NULL ? NULL : section->string,
++	    TERM_EXEC_AFFINITY_INLINE))
++		return 0;
++	if (name != NULL) {
++		term_word(p, name->string);   /* name */
+ 		p->flags |= TERMP_NOSPACE;
+ 	}
+ 	term_word(p, "(");
+ 	p->flags |= TERMP_NOSPACE;
+-	if (n != NULL && (n = n->next) != NULL) {
+-		term_word(p, n->string);   /* section */
++	if (section != NULL) {
++		term_word(p, section->string);   /* section */
+ 		p->flags |= TERMP_NOSPACE;
+ 	}
+ 	term_word(p, ")");
+-	if (n != NULL && (n = n->next) != NULL) {
++	if (name != NULL && !term_exec_reference_end(p))
++		return 0;
++	if (suffix != NULL) {
+ 		p->flags |= TERMP_NOSPACE;
+-		term_word(p, n->string);   /* suffix */
++		term_word(p, suffix->string);   /* suffix */
+ 	}
+ 	return 0;
+ }
+@@ -889,14 +901,43 @@ post_SY(DECL_ARGS)
+ static int
+ pre_UR(DECL_ARGS)
+ {
++	const struct roff_node *block, *target;
++	int kind;
++
++	if (n->type == ROFFT_BODY && n->child != NULL) {
++		block = n->parent;
++		target = block->head->child;
++		kind = block->tok == MAN_MT ?
++		    TERM_EXEC_REFERENCE_EMAIL :
++		    TERM_EXEC_REFERENCE_EXTERNAL_URI;
++		if (target != NULL && !term_exec_reference_begin(p, kind,
++		    block, target, target->string, NULL,
++		    TERM_EXEC_AFFINITY_INLINE))
++			return 0;
++	}
+ 	return n->type != ROFFT_HEAD;
+ }
+ 
+ static void
+ post_UR(DECL_ARGS)
+ {
++	const struct roff_node *target;
++	int kind;
++
++	if (n->type == ROFFT_BODY) {
++		if (n->child != NULL)
++			(void)term_exec_reference_end(p);
++		return;
++	}
+ 	if (n->type != ROFFT_BLOCK)
+ 		return;
++	target = n->head->child;
++	kind = n->tok == MAN_MT ? TERM_EXEC_REFERENCE_EMAIL :
++	    TERM_EXEC_REFERENCE_EXTERNAL_URI;
++	if (n->body->child == NULL && target != NULL &&
++	    !term_exec_reference_begin(p, kind, n, target,
++	    target->string, NULL, TERM_EXEC_AFFINITY_INLINE))
++		return;
+ 
+ 	term_word(p, "<");
+ 	p->flags |= TERMP_NOSPACE;
+@@ -906,10 +947,28 @@ post_UR(DECL_ARGS)
+ 
+ 	p->flags |= TERMP_NOSPACE;
+ 	term_word(p, ">");
++	if (n->body->child == NULL && target != NULL)
++		(void)term_exec_reference_end(p);
+ }
  
  static void
  print_man_node(DECL_ARGS)
@@ -33,7 +124,20 @@ index 8d82bb87..6bda6c8f 100644
  {
  	const struct man_term_act *act;
  	int c;
-@@ -984,9 +1001,13 @@ print_man_node(DECL_ARGS)
+@@ -930,8 +989,11 @@ print_man_node(DECL_ARGS)
+ 		p->flags &= ~TERMP_BRNEVER;
+ 	}
+ 
+-	if (n->flags & NODE_ID)
++	if (n->flags & NODE_ID) {
++		if (!term_exec_anchor(p, n))
++			return;
+ 		term_tag_write(n, p->line);
++	}
+ 
+ 	switch (n->type) {
+ 	case ROFFT_TEXT:
+@@ -984,9 +1046,13 @@ print_man_node(DECL_ARGS)
  	c = 1;
  	if (act->pre != NULL)
  		c = (*act->pre)(p, mt, n, meta);
@@ -47,7 +151,7 @@ index 8d82bb87..6bda6c8f 100644
  
  	if (act->post != NULL)
  		(*act->post)(p, mt, n, meta);
-@@ -1007,7 +1028,7 @@ out:
+@@ -1007,7 +1073,7 @@ out:
  static void
  print_man_nodelist(DECL_ARGS)
  {
@@ -57,7 +161,7 @@ index 8d82bb87..6bda6c8f 100644
  		n = n->next;
  	}
 diff --git a/mdoc_term.c b/mdoc_term.c
-index f76f0190..713ba5c5 100644
+index f76f0190..48cca7c2 100644
 --- a/mdoc_term.c
 +++ b/mdoc_term.c
 @@ -60,6 +60,7 @@ static	int	  a2width(const struct termp *, const char *);
@@ -100,7 +204,36 @@ index f76f0190..713ba5c5 100644
  {
  	const struct mdoc_term_act *act;
  	struct termpair	 npair;
-@@ -402,9 +419,13 @@ print_mdoc_node(DECL_ARGS)
+@@ -335,8 +352,11 @@ print_mdoc_node(DECL_ARGS)
+ 	npair.ppair = pair;
+ 
+ 	if (n->flags & NODE_ID && n->tok != MDOC_Pp &&
+-	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK))
++	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK)) {
++		if (!term_exec_anchor(p, n))
++			return;
+ 		term_tag_write(n, p->line);
++	}
+ 
+ 	/*
+ 	 * Keeps only work until the end of a line.  If a keep was
+@@ -374,7 +394,15 @@ print_mdoc_node(DECL_ARGS)
+ 		}
+ 		if (NODE_DELIMC & n->flags)
+ 			p->flags |= TERMP_NOSPACE;
++		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
++		    !term_exec_reference_begin(p, TERM_EXEC_REFERENCE_EMAIL,
++		    n->parent, n, n->string, NULL,
++		    TERM_EXEC_AFFINITY_INLINE))
++			return;
+ 		term_word(p, n->string);
++		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
++		    !term_exec_reference_end(p))
++			return;
+ 		if (NODE_DELIMO & n->flags)
+ 			p->flags |= TERMP_NOSPACE;
+ 		break;
+@@ -402,9 +430,13 @@ print_mdoc_node(DECL_ARGS)
  			chld = (*act->pre)(p, &npair, meta, n);
  		break;
  	}
@@ -114,6 +247,121 @@ index f76f0190..713ba5c5 100644
  
  	term_fontpopq(p,
  	    (ENDBODY_NOT == n->end ? n : n->body)->prev_font);
+@@ -638,8 +670,11 @@ termp_it_pre(DECL_ARGS)
+ 
+ 	if (n->type == ROFFT_BLOCK) {
+ 		print_bvspace(p, n->parent->parent, n);
+-		if (n->flags & NODE_ID)
++		if (n->flags & NODE_ID) {
++			if (!term_exec_anchor(p, n))
++				return 0;
+ 			term_tag_write(n, p->line);
++		}
+ 		return 1;
+ 	}
+ 
+@@ -1154,24 +1189,36 @@ termp_bl_post(DECL_ARGS)
+ static int
+ termp_xr_pre(DECL_ARGS)
+ {
+-	if (NULL == (n = n->child))
++	const struct roff_node *owner, *name, *section;
++
++	owner = n;
++	if (NULL == (name = n->child))
++		return 0;
++	section = name->next;
++	if (!term_exec_reference_begin(p, TERM_EXEC_REFERENCE_MANUAL,
++	    owner, name, name->string,
++	    section == NULL ? NULL : section->string,
++	    TERM_EXEC_AFFINITY_INLINE))
+ 		return 0;
+ 
+-	assert(n->type == ROFFT_TEXT);
+-	term_word(p, n->string);
++	assert(name->type == ROFFT_TEXT);
++	term_word(p, name->string);
+ 
+-	if (NULL == (n = n->next))
++	if (section == NULL) {
++		(void)term_exec_reference_end(p);
+ 		return 0;
++	}
+ 
+ 	p->flags |= TERMP_NOSPACE;
+ 	term_word(p, "(");
+ 	p->flags |= TERMP_NOSPACE;
+ 
+-	assert(n->type == ROFFT_TEXT);
+-	term_word(p, n->string);
++	assert(section->type == ROFFT_TEXT);
++	term_word(p, section->string);
+ 
+ 	p->flags |= TERMP_NOSPACE;
+ 	term_word(p, ")");
++	(void)term_exec_reference_end(p);
+ 
+ 	return 0;
+ }
+@@ -1579,8 +1626,11 @@ static int
+ termp_pp_pre(DECL_ARGS)
+ {
+ 	term_vspace(p);
+-	if (n->flags & NODE_ID)
++	if (n->flags & NODE_ID) {
++		if (!term_exec_anchor(p, n))
++			return 0;
+ 		term_tag_write(n, p->line);
++	}
+ 	return 0;
+ }
+ 
+@@ -1881,6 +1931,7 @@ static int
+ termp_lk_pre(DECL_ARGS)
+ {
+ 	const struct roff_node *link, *descr, *punct;
++	int has_descr;
+ 
+ 	if ((link = n->child) == NULL)
+ 		return 0;
+@@ -1892,7 +1943,13 @@ termp_lk_pre(DECL_ARGS)
+ 	punct = punct->next;
+ 
+ 	/* Link text. */
+-	if ((descr = link->next) != NULL && descr != punct) {
++	descr = link->next;
++	has_descr = descr != NULL && descr != punct;
++	if (has_descr) {
++		if (!term_exec_reference_begin(p,
++		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
++		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
++			return 0;
+ 		term_fontpush(p, TERMFONT_UNDER);
+ 		while (descr != punct) {
+ 			if (descr->flags & (NODE_DELIMC | NODE_DELIMO))
+@@ -1901,12 +1958,22 @@ termp_lk_pre(DECL_ARGS)
+ 			descr = descr->next;
+ 		}
+ 		term_fontpop(p);
++		if (!term_exec_reference_end(p))
++			return 0;
+ 		p->flags |= TERMP_NOSPACE;
+ 		term_word(p, ":");
+ 	}
+ 
+ 	/* Link target. */
++	if (!has_descr)
++		if (!term_exec_reference_begin(p,
++		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
++		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
++			return 0;
+ 	term_word(p, link->string);
++	if (!has_descr)
++		if (!term_exec_reference_end(p))
++			return 0;
+ 
+ 	/* Trailing punctuation. */
+ 	while (punct != NULL) {
 diff --git a/roff.c b/roff.c
 index 98a36f2f..2670ec61 100644
 --- a/roff.c
@@ -139,10 +387,15 @@ index 471b1404..da748e59 100644
  	enum roff_macroset macroset; /* Kind of high-level macros used. */
  };
 diff --git a/term.c b/term.c
-index e3f0f270..f15f7ef8 100644
+index e3f0f270..3efb8e86 100644
 --- a/term.c
 +++ b/term.c
-@@ -33,15 +33,233 @@
+@@ -29,19 +29,286 @@
+ #include "mandoc.h"
+ #include "mandoc_aux.h"
+ #include "out.h"
++#include "roff.h"
+ #include "term.h"
  #include "main.h"
  
  static	size_t		 cond_width(const struct termp *, int, int *);
@@ -214,6 +467,54 @@ index e3f0f270..f15f7ef8 100644
 +		p->exec_failed = 1;
 +	else if (!entering && p->exec_ops->node_leave != NULL &&
 +	    !p->exec_ops->node_leave(p->exec_arg, p, node))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
++term_exec_reference_begin(struct termp *p, int kind,
++    const struct roff_node *owner, const struct roff_node *target_node,
++    const char *primary, const char *secondary, int affinity)
++{
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
++	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
++	    owner, target_node, kind, primary,
++	    primary == NULL ? 0 : strlen(primary), secondary,
++	    secondary == NULL ? 0 : strlen(secondary), affinity))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
++term_exec_reference_end(struct termp *p)
++{
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops != NULL && p->exec_ops->reference_end != NULL &&
++	    !p->exec_ops->reference_end(p->exec_arg, p, p->exec_node))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
++term_exec_anchor(struct termp *p, const struct roff_node *node)
++{
++	const char *target;
++
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops == NULL || p->exec_ops->anchor == NULL)
++		return 1;
++	target = node->tag;
++	if (target == NULL && node->child != NULL)
++		target = node->child->string;
++	if (target == NULL)
++		return 1;
++	if (p->line == SIZE_MAX || !p->exec_ops->anchor(p->exec_arg, p,
++	    node, target, strlen(target), p->line + 1,
++	    TERM_EXEC_AFFINITY_BEFORE_OUTPUT))
 +		p->exec_failed = 1;
 +	return !p->exec_failed;
 +}
@@ -378,7 +679,7 @@ index e3f0f270..f15f7ef8 100644
  
  
  void
-@@ -110,6 +328,8 @@ term_flushln(struct termp *p)
+@@ -110,6 +377,8 @@ term_flushln(struct termp *p)
  	 * NOPAD flag, start writing at the current position instead.
  	 */
  
@@ -387,7 +688,7 @@ index e3f0f270..f15f7ef8 100644
  	vbl = (p->flags & TERMP_NOPAD) || p->tcol->offset < p->viscol ?
  	    0 : p->tcol->offset - p->viscol;
  	if (p->minbl > 0 && vbl < term_len(p, p->minbl))
-@@ -142,8 +362,14 @@ term_flushln(struct termp *p)
+@@ -142,8 +411,14 @@ term_flushln(struct termp *p)
  
  		term_fill(p, &nbr, &vbr,
  		    p->flags & TERMP_BRNEVER ? SIZE_MAX / 2 : vtarget);
@@ -403,7 +704,7 @@ index e3f0f270..f15f7ef8 100644
  
  		/*
  		 * With the CENTER or RIGHT flag, increase the indentation
-@@ -160,7 +386,11 @@ term_flushln(struct termp *p)
+@@ -160,7 +435,11 @@ term_flushln(struct termp *p)
  
  		/* Finally, print the field content. */
  
@@ -415,7 +716,7 @@ index e3f0f270..f15f7ef8 100644
  		if (vbr < vtarget)
  			p->tcol->taboff += vbr;
  		else
-@@ -194,17 +424,23 @@ term_flushln(struct termp *p)
+@@ -194,17 +473,23 @@ term_flushln(struct termp *p)
  			}
  			break;
  		}
@@ -440,7 +741,7 @@ index e3f0f270..f15f7ef8 100644
  
  		/*
  		 * In multi-column mode, leave the rest of the text
-@@ -214,9 +450,13 @@ term_flushln(struct termp *p)
+@@ -214,9 +499,13 @@ term_flushln(struct termp *p)
  		 * In single-column mode, simply break the line.
  		 */
  
@@ -455,7 +756,7 @@ index e3f0f270..f15f7ef8 100644
  		endline(p);
  
  		/*
-@@ -232,6 +472,8 @@ term_flushln(struct termp *p)
+@@ -232,6 +521,8 @@ term_flushln(struct termp *p)
  
  	/* Reset output state in preparation for the next field. */
  
@@ -464,7 +765,7 @@ index e3f0f270..f15f7ef8 100644
  	p->col = p->tcol->col = p->tcol->lastcol = 0;
  	p->minbl = p->trailspace;
  	p->flags &= ~(TERMP_BACKAFTER | TERMP_BACKBEFORE | TERMP_NOPAD);
-@@ -251,6 +493,7 @@ term_flushln(struct termp *p)
+@@ -251,6 +542,7 @@ term_flushln(struct termp *p)
  	    ((p->flags & TERMP_NOBREAK) == 0 ||
  	     vbr + term_len(p, p->trailspace) > vfield + term_len(p, 1) / 2))
  		endline(p);
@@ -472,7 +773,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  /*
-@@ -279,6 +522,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+@@ -279,6 +571,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
  	enw = (*p->getwidth)(p, ' ');
  	vtarget += enw / 2;
  	for (ic = p->tcol->col; ic < p->tcol->lastcol; ic++) {
@@ -481,7 +782,7 @@ index e3f0f270..f15f7ef8 100644
  		switch (p->tcol->buf[ic]) {
  		case '\b':  /* Escape \o (overstrike) or backspace markup. */
  			assert(ic > 0);
-@@ -314,6 +559,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+@@ -314,6 +608,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
  			 * hyphen such that we get the correct width.
  			 */
  			p->tcol->buf[ic] = '-';
@@ -490,7 +791,7 @@ index e3f0f270..f15f7ef8 100644
  			vis += (*p->getwidth)(p, '-');
  			if (vis > vtarget) {
  				ic++;
-@@ -341,6 +588,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
+@@ -341,6 +637,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
  				break;
  			case ASCII_NBRSP:  /* Non-breakable space. */
  				p->tcol->buf[ic] = ' ';
@@ -499,7 +800,7 @@ index e3f0f270..f15f7ef8 100644
  				/* FALLTHROUGH */
  			default:  /* Printable character. */
  				vis += (*p->getwidth)(p, p->tcol->buf[ic]);
-@@ -381,10 +630,15 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -381,10 +679,15 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  	int	 taboff; /* Temporary offset for literal tabs. */
  
  	size_t	 ic;	/* Byte position in the input buffer. */
@@ -515,7 +816,7 @@ index e3f0f270..f15f7ef8 100644
  
  		/*
  		 * To avoid the printing of trailing whitespace,
-@@ -395,8 +649,12 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -395,8 +698,12 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  		case '\n':
  		case ASCII_BREAK:
  		case ASCII_NBRZW:
@@ -528,7 +829,7 @@ index e3f0f270..f15f7ef8 100644
  			taboff = -vis - (*p->getwidth)(p, ' ');
  			continue;
  		case '\t':
-@@ -412,6 +670,8 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -412,6 +719,8 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  				dv = (*p->getwidth)(p, ' ');
  			vbl += dv;
  			vis += dv;
@@ -537,7 +838,7 @@ index e3f0f270..f15f7ef8 100644
  			continue;
  		default:
  			break;
-@@ -424,11 +684,18 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -424,11 +733,18 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  
  		if (vbl > 0) {
  			(*p->advance)(p, vbl);
@@ -556,7 +857,7 @@ index e3f0f270..f15f7ef8 100644
  		(*p->letter)(p, p->tcol->buf[ic]);
  		if (p->tcol->buf[ic] == '\b') {
  			dv = (*p->getwidth)(p, p->tcol->buf[ic - 1]);
-@@ -439,7 +706,13 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -439,7 +755,13 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  			p->viscol += dv;
  			vis += dv;
  		}
@@ -570,7 +871,7 @@ index e3f0f270..f15f7ef8 100644
  	p->tcol->col = nbr;
  }
  
-@@ -450,6 +723,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
+@@ -450,6 +772,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  static void
  endline(struct termp *p)
  {
@@ -581,7 +882,7 @@ index e3f0f270..f15f7ef8 100644
  	if ((p->flags & (TERMP_NEWMC | TERMP_ENDMC)) == TERMP_ENDMC) {
  		p->mc = NULL;
  		p->flags &= ~TERMP_ENDMC;
-@@ -459,10 +736,14 @@ endline(struct termp *p)
+@@ -459,10 +785,14 @@ endline(struct termp *p)
  			(*p->advance)(p,
  			    p->maxrmargin - p->viscol + term_len(p, 1));
  		p->flags |= TERMP_NOBUF | TERMP_NOSPACE;
@@ -596,7 +897,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  /*
-@@ -473,10 +754,13 @@ endline(struct termp *p)
+@@ -473,10 +803,13 @@ endline(struct termp *p)
  void
  term_newln(struct termp *p)
  {
@@ -610,7 +911,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  /*
-@@ -488,12 +772,16 @@ term_newln(struct termp *p)
+@@ -488,12 +821,16 @@ term_newln(struct termp *p)
  void
  term_vspace(struct termp *p)
  {
@@ -628,7 +929,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  /* Swap current and previous font; for \fP and .ft P */
-@@ -501,20 +789,27 @@ void
+@@ -501,20 +838,27 @@ void
  term_fontlast(struct termp *p)
  {
  	enum termfont	 f;
@@ -656,7 +957,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  /* Set font, save previous; for mdoc(7), eqn(7), and tbl(7). */
-@@ -522,32 +817,49 @@ void
+@@ -522,32 +866,49 @@ void
  term_fontpush(struct termp *p, enum termfont f)
  {
  	enum termfont	 fl;
@@ -708,7 +1009,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  /*
-@@ -570,14 +882,18 @@ term_word(struct termp *p, const char *word)
+@@ -570,14 +931,18 @@ term_word(struct termp *p, const char *word)
  	int		 bu;		/* Width in basic units. */
  	enum mandoc_esc	 esc;
  
@@ -727,7 +1028,7 @@ index e3f0f270..f15f7ef8 100644
  		}
  		if (p->flags & TERMP_PREKEEP)
  			p->flags |= TERMP_KEEP;
-@@ -590,6 +906,8 @@ term_word(struct termp *p, const char *word)
+@@ -590,6 +955,8 @@ term_word(struct termp *p, const char *word)
  	}
  
  	while ('\0' != *word) {
@@ -736,7 +1037,7 @@ index e3f0f270..f15f7ef8 100644
  		if ('\\' != *word) {
  			if (TERMP_NBRWORD & p->flags) {
  				if (' ' == *word) {
-@@ -789,8 +1107,12 @@ term_word(struct termp *p, const char *word)
+@@ -789,8 +1156,12 @@ term_word(struct termp *p, const char *word)
  			/* Trim trailing backspace/blank pair. */
  			if (p->tcol->lastcol > 2 &&
  			    (p->tcol->buf[p->tcol->lastcol - 1] == ' ' ||
@@ -750,7 +1051,7 @@ index e3f0f270..f15f7ef8 100644
  			if (p->col > p->tcol->lastcol)
  				p->col = p->tcol->lastcol;
  			continue;
-@@ -817,16 +1139,29 @@ term_word(struct termp *p, const char *word)
+@@ -817,16 +1188,29 @@ term_word(struct termp *p, const char *word)
  		}
  	}
  	p->flags &= ~TERMP_NBRWORD;
@@ -783,7 +1084,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  /*
-@@ -838,6 +1173,8 @@ adjbuf(struct termp_col *c, size_t sz)
+@@ -838,6 +1222,8 @@ adjbuf(struct termp_col *c, size_t sz)
  static void
  directc(struct termp *p, int c)
  {
@@ -792,7 +1093,7 @@ index e3f0f270..f15f7ef8 100644
  	switch (c) {
  	case ASCII_BREAK:
  	case ASCII_NBRZW:
-@@ -851,7 +1188,9 @@ directc(struct termp *p, int c)
+@@ -851,7 +1237,9 @@ directc(struct termp *p, int c)
  	default:
  		break;
  	}
@@ -802,7 +1103,7 @@ index e3f0f270..f15f7ef8 100644
  }
  
  static void
-@@ -861,14 +1200,39 @@ bufferc(struct termp *p, char c)
+@@ -861,14 +1249,39 @@ bufferc(struct termp *p, char c)
  		directc(p, c);
  		return;
  	}
@@ -846,7 +1147,7 @@ index e3f0f270..f15f7ef8 100644
  void
  term_tab_ref(struct termp *p)
  {
-@@ -892,8 +1256,9 @@ encode1(struct termp *p, int c)
+@@ -892,8 +1305,9 @@ encode1(struct termp *p, int c)
  		return;
  	}
  
@@ -858,7 +1159,7 @@ index e3f0f270..f15f7ef8 100644
  
  	f = (c == ASCII_HYPH || c > 127 || isgraph(c)) ?
  	    p->fontq[p->fonti] : TERMFONT_NONE;
-@@ -903,22 +1268,21 @@ encode1(struct termp *p, int c)
+@@ -903,22 +1317,21 @@ encode1(struct termp *p, int c)
  		    p->tcol->buf[p->col - 1] == '\t')
  			p->col--;
  		else
@@ -888,7 +1189,7 @@ index e3f0f270..f15f7ef8 100644
  	if (p->tcol->lastcol < ++p->col)
  		p->tcol->lastcol = p->col;
  	if (p->flags & TERMP_BACKAFTER) {
-@@ -938,17 +1302,18 @@ encode(struct termp *p, const char *word, size_t sz)
+@@ -938,17 +1351,18 @@ encode(struct termp *p, const char *word, size_t sz)
  		return;
  	}
  
@@ -913,10 +1214,10 @@ index e3f0f270..f15f7ef8 100644
  
  			/*
 diff --git a/term.h b/term.h
-index 35c83ceb..e22a17c6 100644
+index 35c83ceb..8532464c 100644
 --- a/term.h
 +++ b/term.h
-@@ -37,12 +37,68 @@ enum	termfont {
+@@ -37,12 +37,88 @@ enum	termfont {
  	TERMFONT__MAX
  };
  
@@ -933,6 +1234,18 @@ index 35c83ceb..e22a17c6 100644
  struct	tbl_span;
  struct	termp;
  
++enum term_exec_reference_kind {
++	TERM_EXEC_REFERENCE_EXTERNAL_URI,
++	TERM_EXEC_REFERENCE_EMAIL,
++	TERM_EXEC_REFERENCE_MANUAL,
++	TERM_EXEC_REFERENCE_SECTION
++};
++
++enum term_exec_affinity {
++	TERM_EXEC_AFFINITY_INLINE,
++	TERM_EXEC_AFFINITY_BEFORE_OUTPUT
++};
++
 +struct term_exec_ops {
 +	int (*node_enter)(void *, const struct termp *,
 +	    const struct roff_node *);
@@ -980,12 +1293,20 @@ index 35c83ceb..e22a17c6 100644
 +	    const struct roff_node *, size_t, size_t, size_t, size_t);
 +	int (*font)(void *, const struct termp *, const struct roff_node *,
 +	    int, int, size_t, size_t);
++	int (*reference_begin)(void *, const struct termp *,
++	    const struct roff_node *, const struct roff_node *,
++	    const struct roff_node *, int, const char *, size_t,
++	    const char *, size_t, int);
++	int (*reference_end)(void *, const struct termp *,
++	    const struct roff_node *);
++	int (*anchor)(void *, const struct termp *, const struct roff_node *,
++	    const char *, size_t, size_t, int);
 +};
 +
  typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
  
  struct	termp_col {
-@@ -124,6 +180,14 @@ struct	termp {
+@@ -124,6 +200,14 @@ struct	termp {
  	const void	 *argf;		/* arg for headf/footf */
  	const char	 *mc;		/* Margin character. */
  	struct termp_ps	 *ps;
@@ -1000,7 +1321,7 @@ index 35c83ceb..e22a17c6 100644
  };
  
  
-@@ -159,3 +223,28 @@ void		  term_fontpop(struct termp *);
+@@ -159,3 +243,33 @@ void		  term_fontpop(struct termp *);
  void		  term_fontpopq(struct termp *, int);
  void		  term_fontrepl(struct termp *, enum termfont);
  void		  term_fontlast(struct termp *);
@@ -1029,6 +1350,11 @@ index 35c83ceb..e22a17c6 100644
 +int		  term_exec_device_endline(struct termp *, size_t, size_t,
 +			size_t, size_t);
 +int		  term_exec_font(struct termp *, int, int, size_t, size_t);
++int		  term_exec_reference_begin(struct termp *, int,
++			const struct roff_node *, const struct roff_node *,
++			const char *, const char *, int);
++int		  term_exec_reference_end(struct termp *);
++int		  term_exec_anchor(struct termp *, const struct roff_node *);
 diff --git a/term_ascii.c b/term_ascii.c
 index c60bdbfb..0edd1409 100644
 --- a/term_ascii.c

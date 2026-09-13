@@ -63,6 +63,7 @@ struct mant_mandoc_execution_report {
 	RECORD_STORAGE(boundaries, mant_mandoc_boundary_record);
 	RECORD_STORAGE(geometries, mant_mandoc_geometry_record);
 	RECORD_STORAGE(wrappers, mant_mandoc_wrapper_record);
+	RECORD_STORAGE(references, mant_mandoc_reference_record);
 	RECORD_STORAGE(anchors, mant_mandoc_anchor_record);
 	RECORD_STORAGE(diagnostics, mant_mandoc_execution_diagnostic_record);
 	size_t pool_length;
@@ -74,6 +75,7 @@ struct mant_mandoc_execution_report {
 	size_t buffer_count;
 	uint64_t buffer_cells;
 	uint32_t current_wrapper;
+	uint32_t current_reference;
 	uint32_t current_word_start;
 	uint32_t current_word_length;
 	uint32_t current_word_node;
@@ -132,6 +134,14 @@ static int execution_device_endline(void *, const struct termp *,
     const struct roff_node *, size_t, size_t, size_t, size_t);
 static int execution_font(void *, const struct termp *,
     const struct roff_node *, int, int, size_t, size_t);
+static int execution_reference_begin(void *, const struct termp *,
+    const struct roff_node *, const struct roff_node *,
+    const struct roff_node *, int, const char *, size_t,
+    const char *, size_t, int);
+static int execution_reference_end(void *, const struct termp *,
+    const struct roff_node *);
+static int execution_anchor(void *, const struct termp *,
+    const struct roff_node *, const char *, size_t, size_t, int);
 
 static const struct term_exec_ops execution_ops = {
 	execution_node_enter,
@@ -156,7 +166,10 @@ static const struct term_exec_ops execution_ops = {
 	execution_device_advance,
 	execution_device_letter,
 	execution_device_endline,
-	execution_font
+	execution_font,
+	execution_reference_begin,
+	execution_reference_end,
+	execution_anchor
 };
 
 static void fail_report(struct mant_mandoc_execution_report *, int,
@@ -238,6 +251,8 @@ DEFINE_RESERVE(flushes, mant_mandoc_flush_record)
 DEFINE_RESERVE(boundaries, mant_mandoc_boundary_record)
 DEFINE_RESERVE(geometries, mant_mandoc_geometry_record)
 DEFINE_RESERVE(wrappers, mant_mandoc_wrapper_record)
+DEFINE_RESERVE(references, mant_mandoc_reference_record)
+DEFINE_RESERVE(anchors, mant_mandoc_anchor_record)
 #undef DEFINE_RESERVE
 
 struct mant_mandoc_execution_report *
@@ -264,6 +279,7 @@ mant_mandoc_execution_alloc(const char *source_path,
 		return NULL;
 	report->limits = *limits;
 	report->current_wrapper = MANT_MANDOC_EXEC_NONE;
+	report->current_reference = MANT_MANDOC_EXEC_NONE;
 	report->current_flush = MANT_MANDOC_EXEC_NONE;
 	report->current_boundary = MANT_MANDOC_EXEC_NONE;
 	report->current_word_node = MANT_MANDOC_EXEC_NONE;
@@ -411,6 +427,7 @@ mant_mandoc_execution_free(struct mant_mandoc_execution_report *report)
 	free(report->boundaries);
 	free(report->geometries);
 	free(report->wrappers);
+	free(report->references);
 	free(report->anchors);
 	free(report->diagnostics);
 	free(report->pool);
@@ -1123,7 +1140,7 @@ execution_font(void *arg, const struct termp *p,
 	record->key = (uint32_t)report->wrappers_count++;
 	record->parent = report->current_wrapper;
 	record->node = lookup_node(report, node);
-		record->kind = MANT_MANDOC_WRAPPER_FONT;
+	record->kind = MANT_MANDOC_WRAPPER_FONT;
 	record->target_start = MANT_MANDOC_EXEC_NONE;
 	record->enter_atom = (uint32_t)report->atoms_count;
 	record->leave_atom = record->enter_atom;
@@ -1133,6 +1150,148 @@ execution_font(void *arg, const struct termp *p,
 	record->depth_after = (uint32_t)depth_after;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = record->enter_sequence;
+	return 1;
+}
+
+static int
+execution_reference_begin(void *arg, const struct termp *p,
+    const struct roff_node *current, const struct roff_node *owner,
+    const struct roff_node *target_node, int kind, const char *primary,
+    size_t primary_length, const char *secondary, size_t secondary_length,
+    int affinity)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_reference_record *record;
+	uint32_t stable_kind, stable_affinity, primary_start, secondary_start;
+	uint32_t owner_key, target_key;
+
+	(void)p;
+	(void)current;
+	switch (kind) {
+	case TERM_EXEC_REFERENCE_EXTERNAL_URI:
+		stable_kind = MANT_MANDOC_REFERENCE_EXTERNAL_URI;
+		break;
+	case TERM_EXEC_REFERENCE_EMAIL:
+		stable_kind = MANT_MANDOC_REFERENCE_EMAIL;
+		break;
+	case TERM_EXEC_REFERENCE_MANUAL:
+		stable_kind = MANT_MANDOC_REFERENCE_MANUAL;
+		break;
+	case TERM_EXEC_REFERENCE_SECTION:
+		stable_kind = MANT_MANDOC_REFERENCE_SECTION;
+		break;
+	default:
+		return 0;
+	}
+	switch (affinity) {
+	case TERM_EXEC_AFFINITY_INLINE:
+		stable_affinity = MANT_MANDOC_AFFINITY_INLINE;
+		break;
+	case TERM_EXEC_AFFINITY_BEFORE_OUTPUT:
+		stable_affinity = MANT_MANDOC_AFFINITY_BEFORE_OUTPUT;
+		break;
+	default:
+		return 0;
+	}
+	owner_key = lookup_node(report, owner);
+	target_key = lookup_node(report, target_node);
+	if (primary == NULL || owner_key == MANT_MANDOC_EXEC_NONE ||
+	    target_key == MANT_MANDOC_EXEC_NONE ||
+	    report->atoms_count > UINT32_MAX ||
+	    primary_length > UINT32_MAX || secondary_length > UINT32_MAX ||
+	    (secondary == NULL && secondary_length != 0) ||
+	    !charge_work(report, primary_length) ||
+	    !charge_work(report, 1) ||
+	    !charge_work(report, secondary_length) ||
+	    !append_pool(report, primary, primary_length, &primary_start) ||
+	    (secondary != NULL && !append_pool(report, secondary,
+	    secondary_length, &secondary_start)) ||
+	    !charge_record(report) ||
+	    !reserve_references(report, report->references_count + 1))
+		return 0;
+	record = &report->references[report->references_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->references_count++;
+	record->parent = report->current_reference;
+	record->owner_node = owner_key;
+	record->target_node = target_key;
+	record->kind = stable_kind;
+	record->primary_start = primary_start;
+	record->primary_length = (uint32_t)primary_length;
+	record->secondary_start = secondary == NULL ?
+	    MANT_MANDOC_EXEC_NONE : secondary_start;
+	record->secondary_length = (uint32_t)secondary_length;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->label_start_atom = record->enter_atom;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->affinity = stable_affinity;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_reference = record->key;
+	return 1;
+}
+
+static int
+execution_reference_end(void *arg, const struct termp *p,
+    const struct roff_node *current)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_reference_record *record;
+
+	(void)p;
+	(void)current;
+	if (!charge_work(report, 1) ||
+	    report->current_reference == MANT_MANDOC_EXEC_NONE ||
+	    report->current_reference >= report->references_count ||
+	    report->atoms_count > UINT32_MAX)
+		return 0;
+	record = &report->references[report->current_reference];
+	if (record->leave_atom != MANT_MANDOC_EXEC_NONE)
+		return 0;
+	record->leave_atom = (uint32_t)report->atoms_count;
+	while (record->label_start_atom < record->leave_atom &&
+	    report->atoms[record->label_start_atom].role ==
+	    MANT_MANDOC_ATOM_IMPLICIT_SPACE)
+		record->label_start_atom++;
+	record->leave_sequence = report->sequence++;
+	report->current_reference = record->parent;
+	return 1;
+}
+
+static int
+execution_anchor(void *arg, const struct termp *p,
+    const struct roff_node *node, const char *target, size_t target_length,
+    size_t device_line, int affinity)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_anchor_record *record;
+	uint32_t target_start, stable_affinity;
+
+	(void)p;
+	if (affinity != TERM_EXEC_AFFINITY_BEFORE_OUTPUT || target == NULL ||
+	    target_length > UINT32_MAX || device_line == 0 ||
+	    device_line > UINT32_MAX || report->atoms_count > UINT32_MAX ||
+	    report->fragments_count > UINT32_MAX ||
+	    lookup_node(report, node) == MANT_MANDOC_EXEC_NONE)
+		return 0;
+	stable_affinity = MANT_MANDOC_AFFINITY_BEFORE_OUTPUT;
+	if (!charge_work(report, target_length) ||
+	    !charge_work(report, 1) ||
+	    !append_pool(report, target, target_length, &target_start) ||
+	    !charge_record(report) ||
+	    !reserve_anchors(report, report->anchors_count + 1))
+		return 0;
+	record = &report->anchors[report->anchors_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->anchors_count++;
+	record->node = lookup_node(report, node);
+	record->target_start = target_start;
+	record->target_length = (uint32_t)target_length;
+	record->device_line = (uint32_t)device_line;
+	record->atom_cursor = (uint32_t)report->atoms_count;
+	record->fragment_cursor = (uint32_t)report->fragments_count;
+	record->affinity = stable_affinity;
+	record->sequence = report->sequence++;
 	return 1;
 }
 
@@ -1411,6 +1570,7 @@ seal_report(struct mant_mandoc_execution_report *report)
 	ADD_RECORD_COUNT(boundaries);
 	ADD_RECORD_COUNT(geometries);
 	ADD_RECORD_COUNT(wrappers);
+	ADD_RECORD_COUNT(references);
 	ADD_RECORD_COUNT(anchors);
 	ADD_RECORD_COUNT(diagnostics);
 #undef ADD_RECORD_COUNT
@@ -1435,6 +1595,11 @@ seal_report(struct mant_mandoc_execution_report *report)
 			return 0;
 		}
 	}
+	if (report->current_reference != MANT_MANDOC_EXEC_NONE) {
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+		    "native execution left a semantic reference open");
+		return 0;
+	}
 	if (!validate_sealed_report(report))
 		return 0;
 	report->status = MANT_MANDOC_EXECUTION_COMPLETE;
@@ -1451,8 +1616,11 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	struct mant_mandoc_flush_record *flush, *next_flush;
 	struct mant_mandoc_geometry_record *geometry;
 	struct mant_mandoc_wrapper_record *wrapper;
+	struct mant_mandoc_reference_record *semantic_reference;
+	struct mant_mandoc_anchor_record *anchor;
 	uint32_t *next_generation, *last_capacity, *last_close_reason;
-	uint64_t *last_close_sequence;
+	uint64_t *last_close_sequence, *last_reference_child_leave;
+	uint64_t last_root_reference_leave;
 	unsigned char *covered_refs, *referenced_atoms, *replaced_atoms;
 	unsigned char *covered_fragments;
 	unsigned char *covered_glyph_geometry;
@@ -1480,6 +1648,9 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    calloc(report->fragments_count, 1);
 	fragment_flush_outcome = report->fragments_count == 0 ? NULL :
 	    calloc(report->fragments_count, sizeof(*fragment_flush_outcome));
+	last_reference_child_leave = report->references_count == 0 ? NULL :
+	    calloc(report->references_count,
+	    sizeof(*last_reference_child_leave));
 	if ((report->buffer_count != 0 &&
 	    (next_generation == NULL || last_capacity == NULL ||
 	    last_close_reason == NULL || last_close_sequence == NULL)) ||
@@ -1487,11 +1658,14 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    (report->atoms_count != 0 &&
 	    (referenced_atoms == NULL || replaced_atoms == NULL)) ||
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
-	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL))) {
+	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
+	    (report->references_count != 0 &&
+	    last_reference_child_leave == NULL)) {
 		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
 		    "could not validate native execution relationships");
 		goto fail;
 	}
+	last_root_reference_leave = 0;
 	capacity_total = 0;
 	for (index = 0; index < report->buffer_count; index++) {
 		if (report->buffers[index].capacity > UINT32_MAX ||
@@ -1543,6 +1717,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	for (index = 0; index < report->atoms_count; index++) {
 		atom = &report->atoms[index];
 		if (atom->key != index ||
+		    (index != 0 && report->atoms[index - 1].sequence >=
+		    atom->sequence) ||
 		    ((atom->disposition == MANT_MANDOC_ATOM_REPLACED) !=
 		    (atom->replaced_by != MANT_MANDOC_EXEC_NONE)))
 			goto invalid_atom;
@@ -1592,7 +1768,9 @@ invalid_atom:
 	}
 	for (index = 0; index < report->fragments_count; index++) {
 		fragment = &report->fragments[index];
-		if (fragment->key != index || fragment->atom_ref_length != 1 ||
+		if (fragment->key != index ||
+		    (index != 0 && report->fragments[index - 1].sequence >=
+		    fragment->sequence) || fragment->atom_ref_length != 1 ||
 		    fragment->atom_ref_start > report->fragment_atoms_count ||
 		    fragment->atom_ref_length > report->fragment_atoms_count -
 		    fragment->atom_ref_start)
@@ -1779,6 +1957,130 @@ invalid_wrapper:
 		    "native execution wrapper relationship is inconsistent");
 		goto fail;
 	}
+	for (index = 0; index < report->references_count; index++) {
+		uint64_t *last_sibling_leave;
+
+		semantic_reference = &report->references[index];
+		if (semantic_reference->key != index ||
+		    (index != 0 && report->references[index - 1].enter_sequence >=
+		    semantic_reference->enter_sequence) ||
+		    (semantic_reference->parent != MANT_MANDOC_EXEC_NONE &&
+		    semantic_reference->parent >= index) ||
+		    semantic_reference->owner_node >= report->nodes_count ||
+		    semantic_reference->target_node >= report->nodes_count ||
+		    semantic_reference->kind < MANT_MANDOC_REFERENCE_EXTERNAL_URI ||
+		    semantic_reference->kind > MANT_MANDOC_REFERENCE_SECTION ||
+		    semantic_reference->primary_start == MANT_MANDOC_EXEC_NONE ||
+		    semantic_reference->primary_start > report->pool_length ||
+		    semantic_reference->primary_length > report->pool_length -
+		    semantic_reference->primary_start ||
+		    (semantic_reference->secondary_start == MANT_MANDOC_EXEC_NONE ?
+		    semantic_reference->secondary_length != 0 :
+		    semantic_reference->secondary_start > report->pool_length ||
+		    semantic_reference->secondary_length > report->pool_length -
+		    semantic_reference->secondary_start) ||
+		    semantic_reference->enter_atom >
+		    semantic_reference->label_start_atom ||
+		    semantic_reference->label_start_atom >
+		    semantic_reference->leave_atom ||
+		    semantic_reference->leave_atom > report->atoms_count ||
+		    semantic_reference->affinity != MANT_MANDOC_AFFINITY_INLINE ||
+		    semantic_reference->flags != 0 ||
+		    semantic_reference->leave_sequence <=
+		    semantic_reference->enter_sequence)
+			goto invalid_reference;
+		if (semantic_reference->kind != MANT_MANDOC_REFERENCE_MANUAL &&
+		    semantic_reference->secondary_start != MANT_MANDOC_EXEC_NONE)
+			goto invalid_reference;
+		if ((semantic_reference->enter_atom != 0 &&
+		    report->atoms[semantic_reference->enter_atom - 1].sequence >=
+		    semantic_reference->enter_sequence) ||
+		    (semantic_reference->enter_atom <
+		    semantic_reference->leave_atom &&
+		    report->atoms[semantic_reference->enter_atom].sequence <=
+		    semantic_reference->enter_sequence) ||
+		    (semantic_reference->enter_atom ==
+		    semantic_reference->leave_atom &&
+		    semantic_reference->enter_atom < report->atoms_count &&
+		    report->atoms[semantic_reference->enter_atom].sequence <=
+		    semantic_reference->leave_sequence) ||
+		    (semantic_reference->enter_atom <
+		    semantic_reference->leave_atom &&
+		    report->atoms[semantic_reference->leave_atom - 1].sequence >=
+		    semantic_reference->leave_sequence) ||
+		    (semantic_reference->leave_atom < report->atoms_count &&
+		    report->atoms[semantic_reference->leave_atom].sequence <=
+		    semantic_reference->leave_sequence))
+			goto invalid_reference;
+		for (inner = semantic_reference->enter_atom;
+		    inner < semantic_reference->label_start_atom; inner++)
+			if (report->atoms[inner].role !=
+			    MANT_MANDOC_ATOM_IMPLICIT_SPACE)
+				goto invalid_reference;
+		if (semantic_reference->label_start_atom <
+		    semantic_reference->leave_atom &&
+		    report->atoms[semantic_reference->label_start_atom].role ==
+		    MANT_MANDOC_ATOM_IMPLICIT_SPACE)
+			goto invalid_reference;
+		if (semantic_reference->parent == MANT_MANDOC_EXEC_NONE)
+			last_sibling_leave = &last_root_reference_leave;
+		else {
+			struct mant_mandoc_reference_record *parent;
+
+			parent = &report->references[semantic_reference->parent];
+			if (parent->enter_sequence >=
+			    semantic_reference->enter_sequence ||
+			    parent->leave_sequence <=
+			    semantic_reference->leave_sequence ||
+			    parent->enter_atom > semantic_reference->enter_atom ||
+			    parent->leave_atom < semantic_reference->leave_atom)
+				goto invalid_reference;
+			last_sibling_leave = &last_reference_child_leave[
+			    semantic_reference->parent];
+		}
+		if (*last_sibling_leave != 0 && semantic_reference->enter_sequence <=
+		    *last_sibling_leave)
+			goto invalid_reference;
+		*last_sibling_leave = semantic_reference->leave_sequence;
+		inner = semantic_reference->target_node;
+		while (inner != semantic_reference->owner_node &&
+		    report->nodes[inner].parent != MANT_MANDOC_EXEC_NONE)
+			inner = report->nodes[inner].parent;
+		if (inner != semantic_reference->owner_node)
+			goto invalid_reference;
+		for (inner = semantic_reference->enter_atom;
+		    inner < semantic_reference->leave_atom; inner++)
+			if (report->atoms[inner].sequence <=
+			    semantic_reference->enter_sequence ||
+			    report->atoms[inner].sequence >=
+			    semantic_reference->leave_sequence)
+				goto invalid_reference;
+	}
+	for (index = 0; index < report->anchors_count; index++) {
+		anchor = &report->anchors[index];
+		if (anchor->key != index || anchor->node >= report->nodes_count ||
+		    anchor->target_start == MANT_MANDOC_EXEC_NONE ||
+		    anchor->target_start > report->pool_length ||
+		    anchor->target_length > report->pool_length -
+		    anchor->target_start || anchor->device_line == 0 ||
+		    anchor->atom_cursor > report->atoms_count ||
+		    anchor->fragment_cursor > report->fragments_count ||
+		    (anchor->atom_cursor != 0 &&
+		    report->atoms[anchor->atom_cursor - 1].sequence >=
+		    anchor->sequence) ||
+		    (anchor->atom_cursor < report->atoms_count &&
+		    report->atoms[anchor->atom_cursor].sequence <=
+		    anchor->sequence) ||
+		    (anchor->fragment_cursor != 0 &&
+		    report->fragments[anchor->fragment_cursor - 1].sequence >=
+		    anchor->sequence) ||
+		    (anchor->fragment_cursor < report->fragments_count &&
+		    report->fragments[anchor->fragment_cursor].sequence <=
+		    anchor->sequence) ||
+		    anchor->affinity != MANT_MANDOC_AFFINITY_BEFORE_OUTPUT ||
+		    anchor->reserved != 0)
+			goto invalid_anchor;
+	}
 	for (index = 0; index < report->atoms_count; index++) {
 		atom = &report->atoms[index];
 		if (atom->wrapper == MANT_MANDOC_EXEC_NONE)
@@ -1815,11 +2117,20 @@ invalid_wrapper:
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
+	free(last_reference_child_leave);
 	return 1;
 
 invalid_event_wrapper:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution event wrapper is inconsistent");
+	goto fail;
+invalid_reference:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution semantic reference is inconsistent");
+	goto fail;
+invalid_anchor:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution anchor is inconsistent");
 fail:
 	free(next_generation);
 	free(last_capacity);
@@ -1831,6 +2142,7 @@ fail:
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
+	free(last_reference_child_leave);
 	return 0;
 }
 
@@ -2348,11 +2660,33 @@ static const size_t wrapper_offsets[] = {
 	OFF(mant_mandoc_wrapper_record, depth_before), OFF(mant_mandoc_wrapper_record, depth_after),
 	OFF(mant_mandoc_wrapper_record, enter_sequence), OFF(mant_mandoc_wrapper_record, leave_sequence)
 };
+static const size_t reference_offsets[] = {
+	OFF(mant_mandoc_reference_record, key),
+	OFF(mant_mandoc_reference_record, parent),
+	OFF(mant_mandoc_reference_record, owner_node),
+	OFF(mant_mandoc_reference_record, target_node),
+	OFF(mant_mandoc_reference_record, kind),
+	OFF(mant_mandoc_reference_record, primary_start),
+	OFF(mant_mandoc_reference_record, primary_length),
+	OFF(mant_mandoc_reference_record, secondary_start),
+	OFF(mant_mandoc_reference_record, secondary_length),
+	OFF(mant_mandoc_reference_record, enter_atom),
+	OFF(mant_mandoc_reference_record, label_start_atom),
+	OFF(mant_mandoc_reference_record, leave_atom),
+	OFF(mant_mandoc_reference_record, affinity),
+	OFF(mant_mandoc_reference_record, flags),
+	OFF(mant_mandoc_reference_record, enter_sequence),
+	OFF(mant_mandoc_reference_record, leave_sequence)
+};
 static const size_t anchor_offsets[] = {
-	OFF(mant_mandoc_anchor_record, node), OFF(mant_mandoc_anchor_record, target_start),
-	OFF(mant_mandoc_anchor_record, target_length), OFF(mant_mandoc_anchor_record, fragment),
-	OFF(mant_mandoc_anchor_record, atom), OFF(mant_mandoc_anchor_record, affinity),
-	OFF(mant_mandoc_anchor_record, reserved0), OFF(mant_mandoc_anchor_record, reserved1),
+	OFF(mant_mandoc_anchor_record, key), OFF(mant_mandoc_anchor_record, node),
+	OFF(mant_mandoc_anchor_record, target_start),
+	OFF(mant_mandoc_anchor_record, target_length),
+	OFF(mant_mandoc_anchor_record, device_line),
+	OFF(mant_mandoc_anchor_record, atom_cursor),
+	OFF(mant_mandoc_anchor_record, fragment_cursor),
+	OFF(mant_mandoc_anchor_record, affinity),
+	OFF(mant_mandoc_anchor_record, reserved),
 	OFF(mant_mandoc_anchor_record, sequence)
 };
 static const size_t diagnostic_offsets[] = {
@@ -2374,6 +2708,7 @@ DEFINE_RECORD_API(flush, flushes, mant_mandoc_flush_record, flush_offsets)
 DEFINE_RECORD_API(boundary, boundaries, mant_mandoc_boundary_record, boundary_offsets)
 DEFINE_RECORD_API(geometry, geometries, mant_mandoc_geometry_record, geometry_offsets)
 DEFINE_RECORD_API(wrapper, wrappers, mant_mandoc_wrapper_record, wrapper_offsets)
+DEFINE_RECORD_API(reference, references, mant_mandoc_reference_record, reference_offsets)
 DEFINE_RECORD_API(anchor, anchors, mant_mandoc_anchor_record, anchor_offsets)
 DEFINE_RECORD_API(diagnostic, diagnostics, mant_mandoc_execution_diagnostic_record, diagnostic_offsets)
 

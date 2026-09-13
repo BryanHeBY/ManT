@@ -50,6 +50,18 @@ struct	roff_node;
 struct	tbl_span;
 struct	termp;
 
+enum term_exec_reference_kind {
+	TERM_EXEC_REFERENCE_EXTERNAL_URI,
+	TERM_EXEC_REFERENCE_EMAIL,
+	TERM_EXEC_REFERENCE_MANUAL,
+	TERM_EXEC_REFERENCE_SECTION
+};
+
+enum term_exec_affinity {
+	TERM_EXEC_AFFINITY_INLINE,
+	TERM_EXEC_AFFINITY_BEFORE_OUTPUT
+};
+
 struct term_exec_ops {
 	int (*node_enter)(void *, const struct termp *,
 	    const struct roff_node *);
@@ -97,6 +109,14 @@ struct term_exec_ops {
 	    const struct roff_node *, size_t, size_t, size_t, size_t);
 	int (*font)(void *, const struct termp *, const struct roff_node *,
 	    int, int, size_t, size_t);
+	int (*reference_begin)(void *, const struct termp *,
+	    const struct roff_node *, const struct roff_node *,
+	    const struct roff_node *, int, const char *, size_t,
+	    const char *, size_t, int);
+	int (*reference_end)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*anchor)(void *, const struct termp *, const struct roff_node *,
+	    const char *, size_t, size_t, int);
 };
 
 typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
@@ -248,3 +268,8 @@ int		  term_exec_device_letter(struct termp *, size_t, int, size_t,
 int		  term_exec_device_endline(struct termp *, size_t, size_t,
 			size_t, size_t);
 int		  term_exec_font(struct termp *, int, int, size_t, size_t);
+int		  term_exec_reference_begin(struct termp *, int,
+			const struct roff_node *, const struct roff_node *,
+			const char *, const char *, int);
+int		  term_exec_reference_end(struct termp *);
+int		  term_exec_anchor(struct termp *, const struct roff_node *);

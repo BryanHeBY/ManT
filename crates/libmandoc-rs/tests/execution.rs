@@ -1,8 +1,8 @@
 #![cfg(feature = "execute")]
 
 use libmandoc_rs::{
-    AtomRole, ExecutionErrorKind, ExecutionLimits, FlushOutcome, FragmentRole, InputFormat, Node,
-    ParseOptions, Parser,
+    AtomRole, ExecutionErrorKind, ExecutionFont, ExecutionLimits, ExecutionReferenceKind,
+    FlushOutcome, FragmentRole, InputFormat, NativeExecutionReport, Node, ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -12,6 +12,12 @@ const EQUATION: &[u8] = include_bytes!("fixtures/execution/unsupported-equation.
 const EXECUTED_SO: &[u8] = include_bytes!("fixtures/execution/executed-so.1");
 const INACTIVE_SO: &[u8] = include_bytes!("fixtures/execution/inactive-so.1");
 const DEVICE_ROLES: &[u8] = include_bytes!("fixtures/execution/device-roles.1");
+const ANNOTATED_MAN: &[u8] = include_bytes!("fixtures/execution/annotated-man.1");
+const ANNOTATED_MDOC: &[u8] = include_bytes!("fixtures/execution/annotated-mdoc.1");
+const REFERENCES_MAN: &[u8] = include_bytes!("fixtures/execution/references-man.1");
+const REFERENCES_MDOC: &[u8] = include_bytes!("fixtures/execution/references-mdoc.1");
+const WRAPPED_REFERENCE_MDOC: &[u8] = include_bytes!("fixtures/execution/wrapped-reference-mdoc.1");
+const NESTED_REFERENCE_MAN: &[u8] = include_bytes!("fixtures/execution/nested-reference-man.1");
 
 fn execute(name: &str, input_format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
@@ -51,6 +57,36 @@ fn assert_ast_report_identity(node: &Node, report: &libmandoc_rs::NativeExecutio
     for child in &node.children {
         assert_ast_report_identity(child, report);
     }
+}
+
+fn pool(report: &NativeExecutionReport, range: libmandoc_rs::PoolRange) -> &[u8] {
+    report.pool_bytes(range).expect("valid report pool range")
+}
+
+fn has_ancestor_macro(
+    report: &NativeExecutionReport,
+    mut node: libmandoc_rs::ExecutionNodeKey,
+    expected: &str,
+) -> bool {
+    loop {
+        let current = &report.nodes[node.0 as usize];
+        if current.macro_name.as_deref() == Some(expected) {
+            return true;
+        }
+        let Some(parent) = current.parent else {
+            return false;
+        };
+        node = parent;
+    }
+}
+
+fn ast_node_by_execution_key(node: &Node, key: u32) -> Option<&Node> {
+    if node.execution_node_key == Some(key) {
+        return Some(node);
+    }
+    node.children
+        .iter()
+        .find_map(|child| ast_node_by_execution_key(child, key))
 }
 
 #[test]
@@ -192,6 +228,274 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
         margin_node.line, 4,
         "margin must not inherit VISIBLE's owner"
     );
+}
+
+#[test]
+fn reports_native_definition_fonts_references_and_actual_targets() {
+    for (name, format, source, owner_macro) in [
+        ("annotated-man.1", InputFormat::Man, ANNOTATED_MAN, "UR"),
+        ("annotated-mdoc.1", InputFormat::Mdoc, ANNOTATED_MDOC, "Lk"),
+    ] {
+        let report = execute(name, format, source);
+        let execution = &report.execution;
+        let reference = execution
+            .references
+            .iter()
+            .find(|reference| reference.kind == ExecutionReferenceKind::ExternalUri)
+            .expect("native URI reference");
+        assert_eq!(
+            pool(execution, reference.primary),
+            b"https://example.org/manual"
+        );
+        assert_eq!(reference.secondary, None);
+        assert_eq!(
+            execution.nodes[reference.owner_node.0 as usize]
+                .macro_name
+                .as_deref(),
+            Some(owner_macro)
+        );
+        assert_eq!(
+            ast_node_by_execution_key(&report.document.root, reference.target_node.0)
+                .and_then(|node| node.text.as_deref()),
+            Some("https://example.org/manual")
+        );
+        let label_operands = execution.atoms
+            [reference.atoms.start as usize..reference.atoms.end as usize]
+            .iter()
+            .filter_map(|atom| atom.operand)
+            .map(|range| pool(execution, range))
+            .collect::<Vec<_>>();
+        assert!(label_operands.iter().any(|operand| {
+            operand
+                .windows(b"linked".len())
+                .any(|part| part == b"linked")
+        }));
+        assert!(
+            label_operands
+                .iter()
+                .any(|operand| operand.windows(b"label".len()).any(|part| part == b"label"))
+        );
+        assert!(!label_operands.contains(&b"https://example.org/manual".as_slice()));
+        assert!(execution.atoms.iter().any(|atom| {
+            atom.font == ExecutionFont::Underline
+                && atom.operand.is_some_and(|range| {
+                    pool(execution, range)
+                        .windows(b"styled".len())
+                        .any(|part| part == b"styled")
+                })
+        }));
+        assert!(execution.flushes.iter().any(|flush| {
+            flush.node.is_some_and(|node| {
+                has_ancestor_macro(
+                    execution,
+                    node,
+                    if format == InputFormat::Man {
+                        "TP"
+                    } else {
+                        "It"
+                    },
+                )
+            }) && flush.outcome != FlushOutcome::NoContent
+        }));
+    }
+
+    let mdoc = execute("annotated-mdoc.1", InputFormat::Mdoc, ANNOTATED_MDOC);
+    let anchor = mdoc
+        .execution
+        .anchors
+        .iter()
+        .find(|anchor| pool(&mdoc.execution, anchor.target) == b"custom-target")
+        .expect("moved native .Tg target");
+    let owner = &mdoc.execution.nodes[anchor.node.0 as usize];
+    assert_eq!(owner.macro_name.as_deref(), Some("It"));
+    assert_eq!(owner.kind, 2, "target must attach to the actual It head");
+    assert!(anchor.device_line > 0);
+    assert!(
+        usize::try_from(anchor.atom_cursor)
+            .is_ok_and(|cursor| cursor <= mdoc.execution.atoms.len())
+    );
+    assert!(
+        usize::try_from(anchor.fragment_cursor)
+            .is_ok_and(|cursor| cursor <= mdoc.execution.fragments.len())
+    );
+}
+
+#[test]
+fn reports_typed_reference_components_and_exact_label_intervals() {
+    for (name, format, source, expected) in [
+        (
+            "references-man.1",
+            InputFormat::Man,
+            REFERENCES_MAN,
+            vec![
+                (
+                    ExecutionReferenceKind::Manual,
+                    b"printf".as_slice(),
+                    Some(b"3".as_slice()),
+                ),
+                (
+                    ExecutionReferenceKind::ExternalUri,
+                    b"https://example.org/path".as_slice(),
+                    None,
+                ),
+                (
+                    ExecutionReferenceKind::Email,
+                    b"one@example.org".as_slice(),
+                    None,
+                ),
+            ],
+        ),
+        (
+            "references-mdoc.1",
+            InputFormat::Mdoc,
+            REFERENCES_MDOC,
+            vec![
+                (
+                    ExecutionReferenceKind::ExternalUri,
+                    b"https://example.org/path".as_slice(),
+                    None,
+                ),
+                (
+                    ExecutionReferenceKind::Email,
+                    b"one@example.org".as_slice(),
+                    None,
+                ),
+                (
+                    ExecutionReferenceKind::Email,
+                    b"two@example.org".as_slice(),
+                    None,
+                ),
+                (
+                    ExecutionReferenceKind::Manual,
+                    b"printf".as_slice(),
+                    Some(b"3".as_slice()),
+                ),
+            ],
+        ),
+    ] {
+        let report = execute(name, format, source);
+        let actual = report
+            .execution
+            .references
+            .iter()
+            .map(|reference| {
+                (
+                    reference.kind,
+                    pool(&report.execution, reference.primary),
+                    reference
+                        .secondary
+                        .map(|range| pool(&report.execution, range)),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
+        assert!(report.execution.references.iter().all(|reference| {
+            reference.atoms.start < reference.atoms.end
+                && reference.atoms.end as usize <= report.execution.atoms.len()
+                && report.execution.atoms[reference.atoms.start as usize].role
+                    != AtomRole::ImplicitSpace
+                && report.execution.atoms
+                    [reference.execution_atoms.start as usize..reference.atoms.start as usize]
+                    .iter()
+                    .all(|atom| atom.role == AtomRole::ImplicitSpace)
+        }));
+        let manual = report
+            .execution
+            .references
+            .iter()
+            .find(|reference| reference.kind == ExecutionReferenceKind::Manual)
+            .unwrap();
+        let operands = report.execution.atoms
+            [manual.atoms.start as usize..manual.atoms.end as usize]
+            .iter()
+            .filter_map(|atom| atom.operand)
+            .map(|range| pool(&report.execution, range))
+            .collect::<Vec<_>>();
+        assert!(operands.contains(&b"printf".as_slice()));
+        assert!(operands.contains(&b"3".as_slice()));
+        assert!(!operands.contains(&b",".as_slice()));
+    }
+}
+
+#[test]
+fn nested_native_references_form_a_parent_linked_execution_stack() {
+    let report = execute(
+        "nested-reference-man.1",
+        InputFormat::Man,
+        NESTED_REFERENCE_MAN,
+    );
+    assert_eq!(report.execution.references.len(), 2);
+    let outer = &report.execution.references[0];
+    let inner = &report.execution.references[1];
+    assert_eq!(outer.kind, ExecutionReferenceKind::ExternalUri);
+    assert_eq!(inner.kind, ExecutionReferenceKind::Manual);
+    assert_eq!(outer.parent, None);
+    assert_eq!(inner.parent, Some(outer.key));
+    assert!(outer.execution_atoms.start <= inner.execution_atoms.start);
+    assert!(outer.execution_atoms.end >= inner.execution_atoms.end);
+    assert!(outer.enter_sequence < inner.enter_sequence);
+    assert!(outer.leave_sequence > inner.leave_sequence);
+}
+
+#[test]
+fn one_native_reference_interval_survives_multiple_flushes() {
+    let report = execute(
+        "wrapped-reference-mdoc.1",
+        InputFormat::Mdoc,
+        WRAPPED_REFERENCE_MDOC,
+    );
+    let reference = report
+        .execution
+        .references
+        .iter()
+        .find(|reference| reference.kind == ExecutionReferenceKind::ExternalUri)
+        .expect("wrapped URI reference");
+    assert_eq!(
+        pool(&report.execution, reference.primary),
+        b"https://example.org/wrapped"
+    );
+    let mut device_lines = report
+        .execution
+        .fragments
+        .iter()
+        .filter(|fragment| {
+            fragment
+                .atoms
+                .iter()
+                .any(|atom| reference.atoms.start <= atom.0 && atom.0 < reference.atoms.end)
+        })
+        .map(|fragment| fragment.device_line)
+        .collect::<Vec<_>>();
+    device_lines.sort_unstable();
+    device_lines.dedup();
+    assert_eq!(device_lines.len(), 2);
+}
+
+#[test]
+fn semantic_reference_and_anchor_callbacks_obey_report_budgets() {
+    let baseline = execute("annotated-mdoc.1", InputFormat::Mdoc, ANNOTATED_MDOC);
+    for limits in [
+        ExecutionLimits {
+            max_work: baseline.execution.work_units - 1,
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
+            max_records: baseline.execution.record_count - 1,
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
+            max_pool_bytes: baseline.execution.pool_len() as u64 - 1,
+            ..ExecutionLimits::default()
+        },
+    ] {
+        let error = Parser::default()
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes("annotated-mdoc.1", ANNOTATED_MDOC, limits)
+            .unwrap_err();
+        assert_eq!(error.kind, ExecutionErrorKind::Budget);
+    }
 }
 
 #[cfg(feature = "serde")]

@@ -7,11 +7,12 @@ use super::{
 };
 use crate::{
     AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
-    BufferCloseReason, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
+    BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
     ExecutionBufferGeneration, ExecutionDiagnostic, ExecutionErrorKind, ExecutionFlush,
     ExecutionFont, ExecutionFragment, ExecutionGeometry, ExecutionLimits, ExecutionNode,
-    ExecutionNodeKey, ExecutionSource, ExecutionWrapper, FlushOutcome, FragmentKey, FragmentRole,
-    GeometryKind, GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
+    ExecutionNodeKey, ExecutionReference, ExecutionReferenceKind, ExecutionSource,
+    ExecutionWrapper, ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
+    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -198,15 +199,36 @@ struct CWrapperRecord {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+struct CReferenceRecord {
+    key: u32,
+    parent: u32,
+    owner_node: u32,
+    target_node: u32,
+    kind: u32,
+    primary_start: u32,
+    primary_length: u32,
+    secondary_start: u32,
+    secondary_length: u32,
+    enter_atom: u32,
+    label_start_atom: u32,
+    leave_atom: u32,
+    affinity: u32,
+    flags: u32,
+    enter_sequence: u64,
+    leave_sequence: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 struct CAnchorRecord {
+    key: u32,
     node: u32,
     target_start: u32,
     target_length: u32,
-    fragment: u32,
-    atom: u32,
+    device_line: u32,
+    atom_cursor: u32,
+    fragment_cursor: u32,
     affinity: u32,
-    reserved0: u32,
-    reserved1: u32,
+    reserved: u32,
     sequence: u64,
 }
 #[repr(C)]
@@ -343,6 +365,14 @@ declare_record_api!(
     mant_mandoc_execution_wrapper_field_count,
     mant_mandoc_execution_wrapper_offset,
     mant_mandoc_execution_copy_wrappers
+);
+declare_record_api!(
+    mant_mandoc_execution_reference_count,
+    mant_mandoc_execution_reference_size,
+    mant_mandoc_execution_reference_align,
+    mant_mandoc_execution_reference_field_count,
+    mant_mandoc_execution_reference_offset,
+    mant_mandoc_execution_copy_references
 );
 declare_record_api!(
     mant_mandoc_execution_anchor_count,
@@ -505,6 +535,7 @@ struct RawRecords {
     boundaries: Vec<CBoundaryRecord>,
     geometry: Vec<CGeometryRecord>,
     wrappers: Vec<CWrapperRecord>,
+    references: Vec<CReferenceRecord>,
     anchors: Vec<CAnchorRecord>,
     diagnostics: Vec<CDiagnosticRecord>,
 }
@@ -644,6 +675,18 @@ copy_record_table!(
     mant_mandoc_execution_copy_wrappers
 );
 copy_record_table!(
+    copy_references,
+    CReferenceRecord,
+    reference_offsets,
+    "reference",
+    mant_mandoc_execution_reference_count,
+    mant_mandoc_execution_reference_size,
+    mant_mandoc_execution_reference_align,
+    mant_mandoc_execution_reference_field_count,
+    mant_mandoc_execution_reference_offset,
+    mant_mandoc_execution_copy_references
+);
+copy_record_table!(
     copy_anchors,
     CAnchorRecord,
     anchor_offsets,
@@ -680,6 +723,7 @@ unsafe fn copy_raw_records(report: *const CExecutionReport) -> Result<RawRecords
         boundaries: unsafe { copy_boundaries(report) }?,
         geometry: unsafe { copy_geometry(report) }?,
         wrappers: unsafe { copy_wrappers(report) }?,
+        references: unsafe { copy_references(report) }?,
         anchors: unsafe { copy_anchors(report) }?,
         diagnostics: unsafe { copy_diagnostics(report) }?,
     })
@@ -800,6 +844,21 @@ fn node_key(value: u32, nodes: usize, field: &str) -> Result<ExecutionNodeKey, S
         Err(format!("invalid execution node key in {field}"))
     }
 }
+fn node_is_within(
+    nodes: &[ExecutionNode],
+    mut node: ExecutionNodeKey,
+    ancestor: ExecutionNodeKey,
+) -> bool {
+    loop {
+        if node == ancestor {
+            return true;
+        }
+        let Some(parent) = nodes[node.0 as usize].parent else {
+            return false;
+        };
+        node = parent;
+    }
+}
 fn optional_node_key(
     value: u32,
     nodes: usize,
@@ -897,6 +956,7 @@ fn convert_report(
         boundaries: boundary_records,
         geometry: geometry_records,
         wrappers: wrapper_records,
+        references: reference_records,
         anchors: anchor_records,
         diagnostics: diagnostic_records,
     } = records;
@@ -906,6 +966,7 @@ fn convert_report(
     let buffer_generation_count = buffer_generation_records.len();
     let fragment_count = fragment_records.len();
     let wrapper_count = wrapper_records.len();
+    let reference_count = reference_records.len();
     let expected_records = [
         source_count,
         node_count,
@@ -917,6 +978,7 @@ fn convert_report(
         boundary_records.len(),
         geometry_records.len(),
         wrapper_count,
+        reference_count,
         anchor_records.len(),
         diagnostic_records.len(),
     ]
@@ -1691,9 +1753,11 @@ fn convert_report(
             return Err("unbalanced execution wrapper".to_owned());
         }
         let node = optional_node_key(value.node, node_count, "wrapper")?;
-        if !(1..=3).contains(&value.kind) {
-            return Err("unknown execution wrapper kind".to_owned());
-        }
+        let kind = match value.kind {
+            1 => ExecutionWrapperKind::Node,
+            2 => ExecutionWrapperKind::Font,
+            _ => return Err("unknown execution wrapper kind".to_owned()),
+        };
         if value.enter_atom as usize > atom_count
             || value.leave_atom == NONE
             || value.leave_atom as usize > atom_count
@@ -1701,10 +1765,10 @@ fn convert_report(
         {
             return Err("invalid execution wrapper atom range".to_owned());
         }
-        if value.kind == 1 && node.is_none() {
+        if kind == ExecutionWrapperKind::Node && node.is_none() {
             return Err("node wrapper has no execution node".to_owned());
         }
-        if value.kind == 2
+        if kind == ExecutionWrapperKind::Font
             && (value.state_before > 3 || value.state_after > 3 || value.target_start != NONE)
         {
             return Err("invalid execution font transition".to_owned());
@@ -1713,7 +1777,7 @@ fn convert_report(
             key: value.key,
             parent,
             node,
-            kind: value.kind,
+            kind,
             target: optional_pool(
                 value.target_start,
                 value.target_length,
@@ -1741,7 +1805,7 @@ fn convert_report(
                 return Err("execution wrapper is outside its parent".to_owned());
             }
         }
-        if wrapper.kind == 1
+        if wrapper.kind == ExecutionWrapperKind::Node
             && (wrapper.enter_atom as usize > atom_count
                 || wrapper.leave_atom as usize > atom_count)
         {
@@ -1751,7 +1815,7 @@ fn convert_report(
     for atom in &atoms {
         if let Some(wrapper_key) = atom.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
-            if wrapper.kind != 1
+            if wrapper.kind != ExecutionWrapperKind::Node
                 || atom.sequence <= wrapper.enter_sequence
                 || atom.sequence >= wrapper.leave_sequence
                 || atom.key.0 < wrapper.enter_atom
@@ -1764,7 +1828,7 @@ fn convert_report(
     for fragment in &fragments {
         if let Some(wrapper_key) = fragment.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
-            if wrapper.kind != 1
+            if wrapper.kind != ExecutionWrapperKind::Node
                 || fragment.sequence <= wrapper.enter_sequence
                 || fragment.sequence >= wrapper.leave_sequence
             {
@@ -1772,23 +1836,164 @@ fn convert_report(
             }
         }
     }
+    if atoms
+        .windows(2)
+        .any(|pair| pair[0].sequence > pair[1].sequence)
+        || fragments
+            .windows(2)
+            .any(|pair| pair[0].sequence > pair[1].sequence)
+    {
+        return Err("native execution event keys are not in execution order".to_owned());
+    }
+    let mut references: Vec<ExecutionReference> =
+        reserved_vec(reference_records.len(), "reference")?;
+    let mut last_child_leave =
+        reserved_filled_vec(None::<u64>, reference_count, "reference sibling order")?;
+    let mut last_root_leave = None;
+    for (index, value) in reference_records.into_iter().enumerate() {
+        dense(value.key, index, "reference")?;
+        if value.flags != 0
+            || value.enter_atom > value.label_start_atom
+            || value.label_start_atom > value.leave_atom
+            || value.leave_atom as usize > atom_count
+            || value.leave_sequence <= value.enter_sequence
+            || (index != 0 && references[index - 1].enter_sequence >= value.enter_sequence)
+        {
+            return Err("invalid execution semantic reference".to_owned());
+        }
+        let kind = match value.kind {
+            1 => ExecutionReferenceKind::ExternalUri,
+            2 => ExecutionReferenceKind::Email,
+            3 => ExecutionReferenceKind::Manual,
+            4 => ExecutionReferenceKind::SameDocumentSection,
+            _ => return Err("unknown execution semantic reference kind".to_owned()),
+        };
+        let affinity = match value.affinity {
+            1 => ExecutionAffinity::Inline,
+            _ => return Err("invalid execution semantic reference affinity".to_owned()),
+        };
+        let owner_node = node_key(value.owner_node, node_count, "reference owner")?;
+        let target_node = node_key(value.target_node, node_count, "reference target")?;
+        let execution_atoms = value.enter_atom..value.leave_atom;
+        let label_atoms = value.label_start_atom..value.leave_atom;
+        let previous_atom = value
+            .enter_atom
+            .checked_sub(1)
+            .and_then(|key| atoms.get(key as usize));
+        let first_atom = atoms.get(value.enter_atom as usize);
+        let last_atom = value
+            .leave_atom
+            .checked_sub(1)
+            .and_then(|key| atoms.get(key as usize));
+        let next_atom = atoms.get(value.leave_atom as usize);
+        if !node_is_within(&nodes, target_node, owner_node)
+            || previous_atom.is_some_and(|atom| atom.sequence >= value.enter_sequence)
+            || (value.enter_atom < value.leave_atom
+                && first_atom.is_none_or(|atom| atom.sequence <= value.enter_sequence))
+            || (value.enter_atom == value.leave_atom
+                && first_atom.is_some_and(|atom| atom.sequence <= value.leave_sequence))
+            || (value.enter_atom < value.leave_atom
+                && last_atom.is_none_or(|atom| atom.sequence >= value.leave_sequence))
+            || next_atom.is_some_and(|atom| atom.sequence <= value.leave_sequence)
+            || atoms[value.enter_atom as usize..value.leave_atom as usize]
+                .iter()
+                .any(|atom| {
+                    atom.sequence <= value.enter_sequence || atom.sequence >= value.leave_sequence
+                })
+            || atoms[value.enter_atom as usize..value.label_start_atom as usize]
+                .iter()
+                .any(|atom| atom.role != AtomRole::ImplicitSpace)
+            || atoms
+                .get(value.label_start_atom as usize)
+                .is_some_and(|atom| {
+                    value.label_start_atom < value.leave_atom
+                        && atom.role == AtomRole::ImplicitSpace
+                })
+        {
+            return Err("invalid execution semantic reference relationship".to_owned());
+        }
+        let secondary = optional_pool(
+            value.secondary_start,
+            value.secondary_length,
+            &pool,
+            "reference secondary target",
+        )?;
+        if kind != ExecutionReferenceKind::Manual && secondary.is_some() {
+            return Err("invalid execution semantic reference components".to_owned());
+        }
+        let parent = option(value.parent);
+        let last_sibling_leave = if let Some(parent) = parent {
+            let parent_index = usize::try_from(parent)
+                .ok()
+                .filter(|parent| *parent < index)
+                .ok_or_else(|| "invalid execution reference parent".to_owned())?;
+            let parent_reference = &references[parent_index];
+            if parent_reference.enter_sequence >= value.enter_sequence
+                || parent_reference.leave_sequence <= value.leave_sequence
+                || parent_reference.execution_atoms.start > execution_atoms.start
+                || parent_reference.execution_atoms.end < execution_atoms.end
+            {
+                return Err("invalid execution reference nesting".to_owned());
+            }
+            &mut last_child_leave[parent_index]
+        } else {
+            &mut last_root_leave
+        };
+        if last_sibling_leave.is_some_and(|sequence| value.enter_sequence <= sequence) {
+            return Err("overlapping execution reference siblings".to_owned());
+        }
+        *last_sibling_leave = Some(value.leave_sequence);
+        references.push(ExecutionReference {
+            key: value.key,
+            parent,
+            owner_node,
+            target_node,
+            kind,
+            primary: pool_range(
+                value.primary_start,
+                value.primary_length,
+                &pool,
+                "reference primary target",
+            )?,
+            secondary,
+            execution_atoms,
+            atoms: label_atoms,
+            affinity,
+            enter_sequence: value.enter_sequence,
+            leave_sequence: value.leave_sequence,
+        });
+    }
     let mut anchors = reserved_vec(anchor_records.len(), "anchor")?;
-    for value in anchor_records {
-        if value.reserved0 != 0 || value.reserved1 != 0 {
+    for (index, value) in anchor_records.into_iter().enumerate() {
+        dense(value.key, index, "anchor")?;
+        if value.reserved != 0 {
             return Err("non-zero reserved execution anchor field".to_owned());
         }
-        if option(value.fragment).is_some_and(|key| {
-            usize::try_from(key)
-                .ok()
-                .is_none_or(|key| key >= fragment_count)
-        }) || option(value.atom).is_some_and(|key| {
-            usize::try_from(key)
-                .ok()
-                .is_none_or(|key| key >= atom_count)
-        }) {
+        if value.device_line == 0
+            || value.atom_cursor as usize > atom_count
+            || value.fragment_cursor as usize > fragment_count
+            || value.affinity != 2
+            || value
+                .atom_cursor
+                .checked_sub(1)
+                .and_then(|key| atoms.get(key as usize))
+                .is_some_and(|atom| atom.sequence >= value.sequence)
+            || atoms
+                .get(value.atom_cursor as usize)
+                .is_some_and(|atom| atom.sequence <= value.sequence)
+            || value
+                .fragment_cursor
+                .checked_sub(1)
+                .and_then(|key| fragments.get(key as usize))
+                .is_some_and(|fragment| fragment.sequence >= value.sequence)
+            || fragments
+                .get(value.fragment_cursor as usize)
+                .is_some_and(|fragment| fragment.sequence <= value.sequence)
+        {
             return Err("invalid execution anchor attachment".to_owned());
         }
         anchors.push(ExecutionAnchor {
+            key: value.key,
             node: node_key(value.node, node_count, "anchor")?,
             target: pool_range(
                 value.target_start,
@@ -1796,9 +2001,10 @@ fn convert_report(
                 &pool,
                 "anchor target",
             )?,
-            fragment: option(value.fragment).map(FragmentKey),
-            atom: option(value.atom).map(AtomKey),
-            affinity: value.affinity,
+            device_line: value.device_line,
+            atom_cursor: value.atom_cursor,
+            fragment_cursor: value.fragment_cursor,
+            affinity: ExecutionAffinity::BeforeOutput,
             sequence: value.sequence,
         });
     }
@@ -1826,6 +2032,7 @@ fn convert_report(
         &boundaries,
         &geometry,
         &wrappers,
+        &references,
         &anchors,
         &diagnostics,
     )?;
@@ -1843,6 +2050,7 @@ fn convert_report(
         boundaries,
         geometry,
         wrappers,
+        references,
         anchors,
         diagnostics,
     })
@@ -1857,6 +2065,7 @@ fn validate_event_sequences(
     boundaries: &[ExecutionBoundary],
     geometry: &[ExecutionGeometry],
     wrappers: &[ExecutionWrapper],
+    references: &[ExecutionReference],
     anchors: &[ExecutionAnchor],
     diagnostics: &[ExecutionDiagnostic],
 ) -> Result<(), String> {
@@ -1872,6 +2081,10 @@ fn validate_event_sequences(
         .len()
         .checked_mul(2)
         .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
+    let reference_sequences = references
+        .len()
+        .checked_mul(2)
+        .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
     let sequence_count = [
         atoms.len(),
         generation_sequences,
@@ -1880,6 +2093,7 @@ fn validate_event_sequences(
         boundaries.len(),
         geometry.len(),
         wrapper_sequences,
+        reference_sequences,
         anchors.len(),
         diagnostics.len(),
     ]
@@ -1926,6 +2140,10 @@ fn validate_event_sequences(
         if wrapper.leave_sequence != wrapper.enter_sequence {
             seen.push(wrapper.leave_sequence);
         }
+    }
+    for reference in references {
+        seen.push(reference.enter_sequence);
+        seen.push(reference.leave_sequence);
     }
     for anchor in anchors {
         seen.push(anchor.sequence);
@@ -2110,16 +2328,37 @@ fn wrapper_offsets() -> [usize; 16] {
         offset_of!(CWrapperRecord, leave_sequence),
     ]
 }
-fn anchor_offsets() -> [usize; 9] {
+fn reference_offsets() -> [usize; 16] {
     [
+        offset_of!(CReferenceRecord, key),
+        offset_of!(CReferenceRecord, parent),
+        offset_of!(CReferenceRecord, owner_node),
+        offset_of!(CReferenceRecord, target_node),
+        offset_of!(CReferenceRecord, kind),
+        offset_of!(CReferenceRecord, primary_start),
+        offset_of!(CReferenceRecord, primary_length),
+        offset_of!(CReferenceRecord, secondary_start),
+        offset_of!(CReferenceRecord, secondary_length),
+        offset_of!(CReferenceRecord, enter_atom),
+        offset_of!(CReferenceRecord, label_start_atom),
+        offset_of!(CReferenceRecord, leave_atom),
+        offset_of!(CReferenceRecord, affinity),
+        offset_of!(CReferenceRecord, flags),
+        offset_of!(CReferenceRecord, enter_sequence),
+        offset_of!(CReferenceRecord, leave_sequence),
+    ]
+}
+fn anchor_offsets() -> [usize; 10] {
+    [
+        offset_of!(CAnchorRecord, key),
         offset_of!(CAnchorRecord, node),
         offset_of!(CAnchorRecord, target_start),
         offset_of!(CAnchorRecord, target_length),
-        offset_of!(CAnchorRecord, fragment),
-        offset_of!(CAnchorRecord, atom),
+        offset_of!(CAnchorRecord, device_line),
+        offset_of!(CAnchorRecord, atom_cursor),
+        offset_of!(CAnchorRecord, fragment_cursor),
         offset_of!(CAnchorRecord, affinity),
-        offset_of!(CAnchorRecord, reserved0),
-        offset_of!(CAnchorRecord, reserved1),
+        offset_of!(CAnchorRecord, reserved),
         offset_of!(CAnchorRecord, sequence),
     ]
 }
@@ -2191,6 +2430,7 @@ mod tests {
             boundaries: Vec::new(),
             geometry: Vec::new(),
             wrappers: Vec::new(),
+            references: Vec::new(),
             anchors: Vec::new(),
             diagnostics: Vec::new(),
         }
@@ -2270,6 +2510,56 @@ mod tests {
         }
     }
 
+    fn node() -> CNodeRecord {
+        CNodeRecord {
+            key: 0,
+            parent: NONE,
+            source: 0,
+            line: 1,
+            column: 1,
+            kind: 5,
+            flags: 0,
+            macro_start: NONE,
+            macro_length: 0,
+        }
+    }
+
+    fn reference() -> CReferenceRecord {
+        CReferenceRecord {
+            key: 0,
+            parent: NONE,
+            owner_node: 0,
+            target_node: 0,
+            kind: 1,
+            primary_start: 0,
+            primary_length: 1,
+            secondary_start: NONE,
+            secondary_length: 0,
+            enter_atom: 0,
+            label_start_atom: 0,
+            leave_atom: 0,
+            affinity: 1,
+            flags: 0,
+            enter_sequence: 1,
+            leave_sequence: 2,
+        }
+    }
+
+    fn anchor() -> CAnchorRecord {
+        CAnchorRecord {
+            key: 0,
+            node: 0,
+            target_start: 0,
+            target_length: 1,
+            device_line: 1,
+            atom_cursor: 0,
+            fragment_cursor: 0,
+            affinity: 2,
+            reserved: 0,
+            sequence: 1,
+        }
+    }
+
     fn flush() -> CFlushRecord {
         CFlushRecord {
             key: 0,
@@ -2341,6 +2631,23 @@ mod tests {
         records
     }
 
+    fn records_with_reference_atom() -> RawRecords {
+        let mut records = records_with_emitted_fragment();
+        records.nodes.push(node());
+        records.buffer_generations[0].close_sequence = 20;
+        records.atoms[0].sequence = 2;
+        records.flushes[0].sequence = 4;
+        records.flushes[0].outcome_sequence = 7;
+        records.fragments[0].sequence = 5;
+        records.geometry[0].sequence = 6;
+        let mut reference = reference();
+        reference.leave_atom = 1;
+        reference.enter_sequence = 1;
+        reference.leave_sequence = 3;
+        records.references.push(reference);
+        records
+    }
+
     fn record_count(records: &RawRecords) -> u64 {
         [
             records.sources.len(),
@@ -2353,6 +2660,7 @@ mod tests {
             records.boundaries.len(),
             records.geometry.len(),
             records.wrappers.len(),
+            records.references.len(),
             records.anchors.len(),
             records.diagnostics.len(),
         ]
@@ -2438,6 +2746,130 @@ mod tests {
         value.leave_sequence = 0;
         records.wrappers.push(value);
         assert_eq!(rejection(records), "unbalanced execution wrapper");
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_semantic_references() {
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut value = reference();
+        value.kind = u32::MAX;
+        records.references.push(value);
+        assert_eq!(
+            rejection(records),
+            "unknown execution semantic reference kind"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut value = reference();
+        value.leave_atom = 1;
+        records.references.push(value);
+        assert_eq!(rejection(records), "invalid execution semantic reference");
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut value = reference();
+        value.owner_node = 1;
+        records.references.push(value);
+        assert_eq!(
+            rejection(records),
+            "invalid execution node key in reference owner"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut unrelated = node();
+        unrelated.key = 1;
+        records.nodes.push(unrelated);
+        let mut value = reference();
+        value.target_node = 1;
+        records.references.push(value);
+        assert_eq!(
+            rejection(records),
+            "invalid execution semantic reference relationship"
+        );
+
+        let mut records = records_with_reference_atom();
+        records.references[0].enter_atom = 1;
+        records.references[0].label_start_atom = 1;
+        records.references[0].leave_atom = 1;
+        assert_eq!(
+            rejection(records),
+            "invalid execution semantic reference relationship"
+        );
+
+        let mut records = records_with_reference_atom();
+        records.references[0].label_start_atom = 1;
+        assert_eq!(
+            rejection(records),
+            "invalid execution semantic reference relationship"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut outer = reference();
+        outer.enter_sequence = 1;
+        outer.leave_sequence = 6;
+        let mut overlapping = reference();
+        overlapping.key = 1;
+        overlapping.enter_sequence = 2;
+        overlapping.leave_sequence = 5;
+        records.references.extend([outer, overlapping]);
+        assert_eq!(
+            rejection(records),
+            "overlapping execution reference siblings"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut value = reference();
+        value.secondary_start = 0;
+        value.secondary_length = 1;
+        records.references.push(value);
+        assert_eq!(
+            rejection(records),
+            "invalid execution semantic reference components"
+        );
+
+        let mut records = records_with_emitted_fragment();
+        records.nodes.push(node());
+        let mut value = reference();
+        value.leave_atom = 1;
+        value.enter_sequence = 6;
+        value.leave_sequence = 7;
+        records.references.push(value);
+        assert_eq!(
+            rejection(records),
+            "invalid execution semantic reference relationship"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_anchor_attachments() {
+        for value in [
+            CAnchorRecord {
+                device_line: 0,
+                ..anchor()
+            },
+            CAnchorRecord {
+                affinity: 1,
+                ..anchor()
+            },
+        ] {
+            let mut records = raw_records();
+            records.nodes.push(node());
+            records.anchors.push(value);
+            assert_eq!(rejection(records), "invalid execution anchor attachment");
+        }
+
+        let mut records = records_with_emitted_fragment();
+        records.nodes.push(node());
+        records.anchors.push(CAnchorRecord {
+            sequence: 6,
+            ..anchor()
+        });
+        assert_eq!(rejection(records), "invalid execution anchor attachment");
     }
 
     #[test]

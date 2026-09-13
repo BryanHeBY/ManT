@@ -323,22 +323,33 @@ pre_B(DECL_ARGS)
 static int
 pre_MR(DECL_ARGS)
 {
+	const struct roff_node *name, *section, *suffix;
+
 	term_fontrepl(p, TERMFONT_NONE);
-	n = n->child;
-	if (n != NULL) {
-		term_word(p, n->string);   /* name */
+	name = n->child;
+	section = name == NULL ? NULL : name->next;
+	suffix = section == NULL ? NULL : section->next;
+	if (name != NULL && !term_exec_reference_begin(p,
+	    TERM_EXEC_REFERENCE_MANUAL, n, name, name->string,
+	    section == NULL ? NULL : section->string,
+	    TERM_EXEC_AFFINITY_INLINE))
+		return 0;
+	if (name != NULL) {
+		term_word(p, name->string);   /* name */
 		p->flags |= TERMP_NOSPACE;
 	}
 	term_word(p, "(");
 	p->flags |= TERMP_NOSPACE;
-	if (n != NULL && (n = n->next) != NULL) {
-		term_word(p, n->string);   /* section */
+	if (section != NULL) {
+		term_word(p, section->string);   /* section */
 		p->flags |= TERMP_NOSPACE;
 	}
 	term_word(p, ")");
-	if (n != NULL && (n = n->next) != NULL) {
+	if (name != NULL && !term_exec_reference_end(p))
+		return 0;
+	if (suffix != NULL) {
 		p->flags |= TERMP_NOSPACE;
-		term_word(p, n->string);   /* suffix */
+		term_word(p, suffix->string);   /* suffix */
 	}
 	return 0;
 }
@@ -890,13 +901,42 @@ post_SY(DECL_ARGS)
 static int
 pre_UR(DECL_ARGS)
 {
+	const struct roff_node *block, *target;
+	int kind;
+
+	if (n->type == ROFFT_BODY && n->child != NULL) {
+		block = n->parent;
+		target = block->head->child;
+		kind = block->tok == MAN_MT ?
+		    TERM_EXEC_REFERENCE_EMAIL :
+		    TERM_EXEC_REFERENCE_EXTERNAL_URI;
+		if (target != NULL && !term_exec_reference_begin(p, kind,
+		    block, target, target->string, NULL,
+		    TERM_EXEC_AFFINITY_INLINE))
+			return 0;
+	}
 	return n->type != ROFFT_HEAD;
 }
 
 static void
 post_UR(DECL_ARGS)
 {
+	const struct roff_node *target;
+	int kind;
+
+	if (n->type == ROFFT_BODY) {
+		if (n->child != NULL)
+			(void)term_exec_reference_end(p);
+		return;
+	}
 	if (n->type != ROFFT_BLOCK)
+		return;
+	target = n->head->child;
+	kind = n->tok == MAN_MT ? TERM_EXEC_REFERENCE_EMAIL :
+	    TERM_EXEC_REFERENCE_EXTERNAL_URI;
+	if (n->body->child == NULL && target != NULL &&
+	    !term_exec_reference_begin(p, kind, n, target,
+	    target->string, NULL, TERM_EXEC_AFFINITY_INLINE))
 		return;
 
 	term_word(p, "<");
@@ -907,6 +947,8 @@ post_UR(DECL_ARGS)
 
 	p->flags |= TERMP_NOSPACE;
 	term_word(p, ">");
+	if (n->body->child == NULL && target != NULL)
+		(void)term_exec_reference_end(p);
 }
 
 static void
@@ -947,8 +989,11 @@ print_man_node_inner(DECL_ARGS)
 		p->flags &= ~TERMP_BRNEVER;
 	}
 
-	if (n->flags & NODE_ID)
+	if (n->flags & NODE_ID) {
+		if (!term_exec_anchor(p, n))
+			return;
 		term_tag_write(n, p->line);
+	}
 
 	switch (n->type) {
 	case ROFFT_TEXT:

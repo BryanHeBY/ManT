@@ -29,12 +29,12 @@ pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocatio
 #[cfg(feature = "execute")]
 pub use execution::{
     AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
-    BufferCloseReason, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
+    BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
     ExecutionBufferGeneration, ExecutionDiagnostic, ExecutionError, ExecutionErrorKind,
     ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry, ExecutionLimits,
-    ExecutionNode, ExecutionNodeKey, ExecutionReport, ExecutionSource, ExecutionWrapper,
-    FlushOutcome, FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
-    NativeExecutionReport, PoolRange,
+    ExecutionNode, ExecutionNodeKey, ExecutionReference, ExecutionReferenceKind, ExecutionReport,
+    ExecutionSource, ExecutionWrapper, ExecutionWrapperKind, FlushOutcome, FragmentKey,
+    FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange,
 };
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,

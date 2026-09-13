@@ -177,6 +177,37 @@ pub enum GeometryOriginKind {
     Fragment,
 }
 
+/// Stable kind of an execution scope or instantaneous state transition.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionWrapperKind {
+    /// Syntax-node execution interval.
+    Node,
+    /// Instantaneous font-stack transition.
+    Font,
+}
+
+/// Semantic destination kind observed at the native macro handler.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionReferenceKind {
+    /// External URI.
+    ExternalUri,
+    /// Email address.
+    Email,
+    /// Manual name and optional section.
+    Manual,
+    /// Same-document section phrase.
+    SameDocumentSection,
+}
+
+/// Relationship between an execution fact and surrounding emitted content.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionAffinity {
+    /// The fact spans inline formatter atoms.
+    Inline,
+    /// The fact attaches before the next output owned by its node.
+    BeforeOutput,
+}
+
 /// One input source participating in the execution.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionSource {
@@ -446,7 +477,7 @@ pub struct ExecutionWrapper {
     /// Owning syntax node.
     pub node: Option<ExecutionNodeKey>,
     /// Stable wrapper-kind code.
-    pub kind: u32,
+    pub kind: ExecutionWrapperKind,
     /// Optional target or label bytes associated with the wrapper.
     pub target: Option<PoolRange>,
     /// Atom cursor on entry and leave.
@@ -471,19 +502,54 @@ pub struct ExecutionWrapper {
     pub leave_sequence: u64,
 }
 
+/// One semantic reference and the exact formatter-atom interval used as its
+/// visible label.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionReference {
+    /// Dense report-local reference key.
+    pub key: u32,
+    /// Enclosing reference when native inline macros are nested.
+    pub parent: Option<u32>,
+    /// Macro node that created the reference.
+    pub owner_node: ExecutionNodeKey,
+    /// Syntax node carrying the primary authored target.
+    pub target_node: ExecutionNodeKey,
+    /// Semantic destination kind.
+    pub kind: ExecutionReferenceKind,
+    /// Primary authored target bytes.
+    pub primary: PoolRange,
+    /// Optional second target component, such as a manual section.
+    pub secondary: Option<PoolRange>,
+    /// Complete half-open atom interval executed while this reference was open.
+    pub execution_atoms: Range<u32>,
+    /// Half-open interval used as the visible label, excluding the leading
+    /// implicit word-boundary space emitted by `term_word()`.
+    pub atoms: Range<u32>,
+    /// Attachment affinity.
+    pub affinity: ExecutionAffinity,
+    /// Total execution order on entry and leave.
+    pub enter_sequence: u64,
+    /// Total execution order on leave.
+    pub leave_sequence: u64,
+}
+
 /// One source target attached during native execution.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionAnchor {
+    /// Dense report-local anchor key.
+    pub key: u32,
     /// Owning syntax node.
     pub node: ExecutionNodeKey,
     /// Authored target bytes.
     pub target: PoolRange,
-    /// Nearest emitted fragment, when available.
-    pub fragment: Option<FragmentKey>,
-    /// Nearest buffered atom, when available.
-    pub atom: Option<AtomKey>,
+    /// One-based device line at the actual terminal tag attachment.
+    pub device_line: u32,
+    /// Atom cursor at attachment time.
+    pub atom_cursor: u32,
+    /// Fragment cursor at attachment time.
+    pub fragment_cursor: u32,
     /// Stable attachment affinity.
-    pub affinity: u32,
+    pub affinity: ExecutionAffinity,
     /// Total execution order.
     pub sequence: u64,
 }
@@ -529,6 +595,8 @@ pub struct NativeExecutionReport {
     pub geometry: Vec<ExecutionGeometry>,
     /// Execution scopes and instantaneous state transitions.
     pub wrappers: Vec<ExecutionWrapper>,
+    /// Semantic references observed at their native macro handlers.
+    pub references: Vec<ExecutionReference>,
     /// Native target attachments.
     pub anchors: Vec<ExecutionAnchor>,
     /// Non-fatal report diagnostics.

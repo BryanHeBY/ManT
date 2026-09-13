@@ -114,8 +114,19 @@ enum mant_mandoc_execution_geometry_origin_kind {
 
 enum mant_mandoc_execution_wrapper_kind {
 	MANT_MANDOC_WRAPPER_NODE = 1,
-	MANT_MANDOC_WRAPPER_FONT,
-	MANT_MANDOC_WRAPPER_LINK
+	MANT_MANDOC_WRAPPER_FONT
+};
+
+enum mant_mandoc_execution_reference_kind {
+	MANT_MANDOC_REFERENCE_EXTERNAL_URI = 1,
+	MANT_MANDOC_REFERENCE_EMAIL,
+	MANT_MANDOC_REFERENCE_MANUAL,
+	MANT_MANDOC_REFERENCE_SECTION
+};
+
+enum mant_mandoc_execution_affinity {
+	MANT_MANDOC_AFFINITY_INLINE = 1,
+	MANT_MANDOC_AFFINITY_BEFORE_OUTPUT
 };
 
 struct mant_mandoc_execution_limits {
@@ -295,15 +306,35 @@ struct mant_mandoc_wrapper_record {
 	uint64_t leave_sequence;
 };
 
+struct mant_mandoc_reference_record {
+	uint32_t key;
+	uint32_t parent;
+	uint32_t owner_node;
+	uint32_t target_node;
+	uint32_t kind;
+	uint32_t primary_start;
+	uint32_t primary_length;
+	uint32_t secondary_start;
+	uint32_t secondary_length;
+	uint32_t enter_atom;
+	uint32_t label_start_atom;
+	uint32_t leave_atom;
+	uint32_t affinity;
+	uint32_t flags;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
 struct mant_mandoc_anchor_record {
+	uint32_t key;
 	uint32_t node;
 	uint32_t target_start;
 	uint32_t target_length;
-	uint32_t fragment;
-	uint32_t atom;
+	uint32_t device_line;
+	uint32_t atom_cursor;
+	uint32_t fragment_cursor;
 	uint32_t affinity;
-	uint32_t reserved0;
-	uint32_t reserved1;
+	uint32_t reserved;
 	uint64_t sequence;
 };
 
@@ -358,6 +389,7 @@ MANT_DECLARE_RECORD_API(flush, flushes);
 MANT_DECLARE_RECORD_API(boundary, boundaries);
 MANT_DECLARE_RECORD_API(geometry, geometries);
 MANT_DECLARE_RECORD_API(wrapper, wrappers);
+MANT_DECLARE_RECORD_API(reference, references);
 MANT_DECLARE_RECORD_API(anchor, anchors);
 MANT_DECLARE_RECORD_API(diagnostic, diagnostics);
 

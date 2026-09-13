@@ -352,8 +352,11 @@ print_mdoc_node_inner(DECL_ARGS)
 	npair.ppair = pair;
 
 	if (n->flags & NODE_ID && n->tok != MDOC_Pp &&
-	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK))
+	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK)) {
+		if (!term_exec_anchor(p, n))
+			return;
 		term_tag_write(n, p->line);
+	}
 
 	/*
 	 * Keeps only work until the end of a line.  If a keep was
@@ -391,7 +394,15 @@ print_mdoc_node_inner(DECL_ARGS)
 		}
 		if (NODE_DELIMC & n->flags)
 			p->flags |= TERMP_NOSPACE;
+		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
+		    !term_exec_reference_begin(p, TERM_EXEC_REFERENCE_EMAIL,
+		    n->parent, n, n->string, NULL,
+		    TERM_EXEC_AFFINITY_INLINE))
+			return;
 		term_word(p, n->string);
+		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
+		    !term_exec_reference_end(p))
+			return;
 		if (NODE_DELIMO & n->flags)
 			p->flags |= TERMP_NOSPACE;
 		break;
@@ -659,8 +670,11 @@ termp_it_pre(DECL_ARGS)
 
 	if (n->type == ROFFT_BLOCK) {
 		print_bvspace(p, n->parent->parent, n);
-		if (n->flags & NODE_ID)
+		if (n->flags & NODE_ID) {
+			if (!term_exec_anchor(p, n))
+				return 0;
 			term_tag_write(n, p->line);
+		}
 		return 1;
 	}
 
@@ -1175,24 +1189,36 @@ termp_bl_post(DECL_ARGS)
 static int
 termp_xr_pre(DECL_ARGS)
 {
-	if (NULL == (n = n->child))
+	const struct roff_node *owner, *name, *section;
+
+	owner = n;
+	if (NULL == (name = n->child))
+		return 0;
+	section = name->next;
+	if (!term_exec_reference_begin(p, TERM_EXEC_REFERENCE_MANUAL,
+	    owner, name, name->string,
+	    section == NULL ? NULL : section->string,
+	    TERM_EXEC_AFFINITY_INLINE))
 		return 0;
 
-	assert(n->type == ROFFT_TEXT);
-	term_word(p, n->string);
+	assert(name->type == ROFFT_TEXT);
+	term_word(p, name->string);
 
-	if (NULL == (n = n->next))
+	if (section == NULL) {
+		(void)term_exec_reference_end(p);
 		return 0;
+	}
 
 	p->flags |= TERMP_NOSPACE;
 	term_word(p, "(");
 	p->flags |= TERMP_NOSPACE;
 
-	assert(n->type == ROFFT_TEXT);
-	term_word(p, n->string);
+	assert(section->type == ROFFT_TEXT);
+	term_word(p, section->string);
 
 	p->flags |= TERMP_NOSPACE;
 	term_word(p, ")");
+	(void)term_exec_reference_end(p);
 
 	return 0;
 }
@@ -1600,8 +1626,11 @@ static int
 termp_pp_pre(DECL_ARGS)
 {
 	term_vspace(p);
-	if (n->flags & NODE_ID)
+	if (n->flags & NODE_ID) {
+		if (!term_exec_anchor(p, n))
+			return 0;
 		term_tag_write(n, p->line);
+	}
 	return 0;
 }
 
@@ -1902,6 +1931,7 @@ static int
 termp_lk_pre(DECL_ARGS)
 {
 	const struct roff_node *link, *descr, *punct;
+	int has_descr;
 
 	if ((link = n->child) == NULL)
 		return 0;
@@ -1913,7 +1943,13 @@ termp_lk_pre(DECL_ARGS)
 	punct = punct->next;
 
 	/* Link text. */
-	if ((descr = link->next) != NULL && descr != punct) {
+	descr = link->next;
+	has_descr = descr != NULL && descr != punct;
+	if (has_descr) {
+		if (!term_exec_reference_begin(p,
+		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
+		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
+			return 0;
 		term_fontpush(p, TERMFONT_UNDER);
 		while (descr != punct) {
 			if (descr->flags & (NODE_DELIMC | NODE_DELIMO))
@@ -1922,12 +1958,22 @@ termp_lk_pre(DECL_ARGS)
 			descr = descr->next;
 		}
 		term_fontpop(p);
+		if (!term_exec_reference_end(p))
+			return 0;
 		p->flags |= TERMP_NOSPACE;
 		term_word(p, ":");
 	}
 
 	/* Link target. */
+	if (!has_descr)
+		if (!term_exec_reference_begin(p,
+		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
+		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
+			return 0;
 	term_word(p, link->string);
+	if (!has_descr)
+		if (!term_exec_reference_end(p))
+			return 0;
 
 	/* Trailing punctuation. */
 	while (punct != NULL) {

@@ -216,6 +216,9 @@
 #define term_exec_fill_scan mant_vendored_term_exec_fill_scan
 #define term_exec_flush mant_vendored_term_exec_flush
 #define term_exec_font mant_vendored_term_exec_font
+#define term_exec_reference_begin mant_vendored_term_exec_reference_begin
+#define term_exec_reference_end mant_vendored_term_exec_reference_end
+#define term_exec_anchor mant_vendored_term_exec_anchor
 #define term_exec_node mant_vendored_term_exec_node
 #define term_exec_word mant_vendored_term_exec_word
 #define terminal_man mant_vendored_terminal_man

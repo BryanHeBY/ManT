@@ -29,6 +29,7 @@
 #include "mandoc.h"
 #include "mandoc_aux.h"
 #include "out.h"
+#include "roff.h"
 #include "term.h"
 #include "main.h"
 
@@ -99,6 +100,54 @@ term_exec_node(struct termp *p, const struct roff_node *node, int entering)
 		p->exec_failed = 1;
 	else if (!entering && p->exec_ops->node_leave != NULL &&
 	    !p->exec_ops->node_leave(p->exec_arg, p, node))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_reference_begin(struct termp *p, int kind,
+    const struct roff_node *owner, const struct roff_node *target_node,
+    const char *primary, const char *secondary, int affinity)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
+	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
+	    owner, target_node, kind, primary,
+	    primary == NULL ? 0 : strlen(primary), secondary,
+	    secondary == NULL ? 0 : strlen(secondary), affinity))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_reference_end(struct termp *p)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops != NULL && p->exec_ops->reference_end != NULL &&
+	    !p->exec_ops->reference_end(p->exec_arg, p, p->exec_node))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_anchor(struct termp *p, const struct roff_node *node)
+{
+	const char *target;
+
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL || p->exec_ops->anchor == NULL)
+		return 1;
+	target = node->tag;
+	if (target == NULL && node->child != NULL)
+		target = node->child->string;
+	if (target == NULL)
+		return 1;
+	if (p->line == SIZE_MAX || !p->exec_ops->anchor(p->exec_arg, p,
+	    node, target, strlen(target), p->line + 1,
+	    TERM_EXEC_AFFINITY_BEFORE_OUTPUT))
 		p->exec_failed = 1;
 	return !p->exec_failed;
 }
