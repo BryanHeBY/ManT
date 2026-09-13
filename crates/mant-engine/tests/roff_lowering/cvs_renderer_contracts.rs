@@ -31,6 +31,8 @@ struct TerminalCase {
 
 struct StrongText(bool);
 
+struct ExactTailInline(Option<Inline>);
+
 struct AuthoredSectionLink {
     id: &'static str,
     found: bool,
@@ -42,6 +44,16 @@ impl<'ir> Visit<'ir> for StrongText {
             && super::inline_text(children) == "TAIL"
         {
             self.0 = true;
+        }
+        visit::walk_inline(self, inline);
+    }
+}
+
+impl<'ir> Visit<'ir> for ExactTailInline {
+    fn visit_inline(&mut self, inline: &'ir Inline) {
+        if self.0.is_none() && mant_ir::inline_plain_text(std::slice::from_ref(inline)) == "TAIL" {
+            self.0 = Some(inline.clone());
+            return;
         }
         visit::walk_inline(self, inline);
     }
@@ -90,6 +102,14 @@ fn lowered_terminal(source: &str) -> String {
     let query = mant_loader::load_roff_bytes(source.as_bytes())
         .expect("lower the same pinned CVS contract through ManT");
     mant_render::render_query_text(&query)
+}
+
+fn without_line_indentation(output: &str) -> String {
+    output
+        .lines()
+        .map(str::trim_start)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn first_definition_item(document: &Document) -> &DefinitionItem {
@@ -291,6 +311,21 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
             ),
             native_contains: &["     FIRST\n         SECOND\n         THIRD"],
             lowered_contains: &["FIRSTSECOND\n    THIRD"],
+            selected: SelectedContract::Groff,
+        },
+        TerminalCase {
+            label: "overrun hang field keeps source content across a margin flush",
+            source: concat!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n",
+                ".Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n",
+                ".Bl -hang -width 6n\n.It Xo\n.No LONGTEXT\n.mc\n.No A\n",
+                ".An -split\n.An Bob\n.Xc\n.No BODY\n.El\n",
+            ),
+            // CVS loses A when the overrun HANG field is committed under
+            // NOBREAK. GNU groff retains it; ManT selects the content-safe
+            // projection rather than reproducing that terminal artifact.
+            native_contains: &["     LONGTEXT Bob BODY"],
+            lowered_contains: &["LONGTEXT A Bob BODY"],
             selected: SelectedContract::Groff,
         },
         TerminalCase {
@@ -509,6 +544,36 @@ fn sx_display_state_cannot_change_its_authored_destination() {
     };
     correct.visit_document(document);
     assert!(correct.found, "Sx target was inferred from display text");
+}
+
+#[test]
+fn section_and_sx_share_cvs_deroff_authored_normalization() {
+    for (heading, reference) in [("\\&NEXT", "NEXT"), ("NEXT", "\\&NEXT")] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh {heading}\n.No BODY\n.Sh SEE ALSO\n.Sx {reference}\n"
+        );
+        let native = Renderer::new(RenderFormat::Html)
+            .with_html_fragment(true)
+            .render_bytes("sx-deroff.1", source.as_bytes())
+            .expect("render native deroff identity")
+            .output;
+        assert!(
+            native.contains("class=\"Sx\" href=\"#NEXT\""),
+            "native HTML: {native}"
+        );
+
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower deroff identity");
+        let document = query.document.as_ref().expect("lowered document");
+        let mut link = AuthoredSectionLink {
+            id: "next",
+            found: false,
+        };
+        link.visit_document(document);
+        assert!(link.found, "authored target did not normalize: {query:?}");
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code.as_deref() != Some("unresolved-section-reference")
+        }));
+    }
 }
 
 #[test]
@@ -732,6 +797,387 @@ fn heading_and_diagnostic_scopes_preserve_previous_font_execution() {
 }
 
 #[test]
+fn man_and_mdoc_headings_keep_distinct_previous_font_contracts() {
+    for heading in ["SH", "SS"] {
+        let source = format!(
+            ".TH PROBE 1 \"September 13, 2026\"\n.SH NAME\nprobe \\- test\n.{heading} NEXT\\fI\n\\fPTAIL\n"
+        );
+        let native = native_terminal_raw(&source);
+        assert!(native.contains("TAIL"), "man {heading}: {native:?}");
+        assert!(
+            !native.contains("T\u{8}TA\u{8}AI\u{8}IL\u{8}L"),
+            "man {heading} left TAIL bold: {native:?}"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower man heading");
+        let mut tail = ExactTailInline(None);
+        tail.visit_document(query.document.as_ref().expect("lowered document"));
+        assert_eq!(
+            tail.0,
+            Some(Inline::Text {
+                value: "TAIL".to_owned()
+            }),
+            "man {heading} retained the wrong font state"
+        );
+    }
+
+    for heading in ["Sh", "Ss"] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.{heading} NEXT\\fI\n\\fPTAIL\n"
+        );
+        let native = native_terminal_raw(&source);
+        assert!(
+            native.contains("T\u{8}TA\u{8}AI\u{8}IL\u{8}L"),
+            "mdoc {heading} lost bold TAIL: {native:?}"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower mdoc heading");
+        let mut tail = ExactTailInline(None);
+        tail.visit_document(query.document.as_ref().expect("lowered document"));
+        assert_eq!(
+            tail.0,
+            Some(Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "TAIL".to_owned()
+                }]
+            }),
+            "mdoc {heading} lost the exact previous-font state"
+        );
+    }
+}
+
+#[test]
+fn definition_heads_execute_author_modes_in_native_node_order() {
+    let cases = [
+        concat!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+            ".Sh DESCRIPTION\n.Bl -inset\n.It Xo An -split An Alice An Bob Xc\n",
+            ".No BODY\n.El\n.No END\n",
+        ),
+        concat!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+            ".Sh DESCRIPTION\n.Bl -inset\n.It Xo\n.Ao\n.An -split\n.An Alice\n",
+            ".An Bob\n.Ac\n.Xc\n.No BODY\n.El\n.No END\n",
+        ),
+    ];
+    for source in cases {
+        let native = native_terminal(source);
+        assert!(
+            native.contains("Alice\n"),
+            "native author split: {native:?}"
+        );
+        assert!(native.contains("Bob"), "native author output: {native:?}");
+
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower author head");
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let terms = item
+            .terms
+            .iter()
+            .map(|term| super::inline_text(term))
+            .collect::<Vec<_>>();
+        assert!(
+            terms.iter().any(|term| term.contains("Alice"))
+                && terms.iter().any(|term| term.contains("Bob")),
+            "author alternatives: {item:?}"
+        );
+        let lowered = without_line_indentation(&lowered_terminal(source));
+        assert!(
+            lowered.contains("Alice\nBob") && lowered.contains("BODY"),
+            "author split vanished: {lowered:?}"
+        );
+    }
+}
+
+#[test]
+fn nested_paragraph_authors_use_the_same_ordered_execution_stream() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+        ".Sh DESCRIPTION\n.Dq An -split An Alice An Bob\n.No END\n",
+    );
+    let native = without_line_indentation(&native_terminal(source));
+    assert!(native.contains("“\nAlice\nBob” END"), "native: {native:?}");
+    let lowered = without_line_indentation(&lowered_terminal(source));
+    assert!(
+        lowered.contains("“\nAlice\nBob” END"),
+        "nested author execution: {lowered:?}"
+    );
+}
+
+#[test]
+fn block_authors_execute_each_mode_transition_once() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+        ".Sh AUTHORS\n.No PREFIX\n.An Alice\n.An Bob\n",
+    );
+    let native = without_line_indentation(&native_terminal(source));
+    assert!(native.contains("PREFIX Alice\nBob"), "native: {native:?}");
+    let lowered = without_line_indentation(&lowered_terminal(source));
+    assert!(
+        lowered.contains("PREFIX Alice\nBob"),
+        "author mode executed more than once: {lowered:?}"
+    );
+}
+
+#[test]
+fn detached_definition_heads_project_author_flushes_by_list_style() {
+    let cases = [
+        ("inset", "Alice\nBob BODY"),
+        ("tag", "Alice  Bob\n"),
+        ("hang", "Alice Bob BODY"),
+        ("ohang", "Alice\nBob\nBODY"),
+    ];
+    for (style, expected) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style}\n.It Xo An -split An Alice An Bob Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source)).replace('\u{a0}', " ");
+        assert!(native.contains(expected), "native {style}: {native:?}");
+        let lowered = without_line_indentation(&lowered_terminal(&source)).replace('\u{a0}', " ");
+        assert!(lowered.contains(expected), "lowered {style}: {lowered:?}");
+    }
+}
+
+#[test]
+fn control_only_authors_preserve_native_rows_and_field_origins() {
+    for control in [r"\&", r"\p"] {
+        for style in ["inset", "tag", "hang", "ohang"] {
+            let source = format!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style}\n.It Xo\n.An -split\n.An {control}\n.An Bob\n.Xc\n.No BODY\n.El\n"
+            );
+            let native = native_terminal(&source).replace('\u{a0}', " ");
+            let lowered = lowered_terminal(&source).replace('\u{a0}', " ");
+            match style {
+                "inset" => {
+                    assert!(
+                        native.contains("DESCRIPTION\n\n     Bob BODY"),
+                        "native: {native:?}"
+                    );
+                    assert!(
+                        lowered.contains("DESCRIPTION\n\nBob BODY"),
+                        "lowered: {lowered:?}"
+                    );
+                }
+                "ohang" => {
+                    assert!(
+                        native.contains("DESCRIPTION\n\n     Bob\n     BODY"),
+                        "native: {native:?}"
+                    );
+                    assert!(
+                        lowered.contains("DESCRIPTION\n\nBob\nBODY"),
+                        "lowered: {lowered:?}"
+                    );
+                }
+                "tag" | "hang" => {
+                    let native_line = native.lines().find(|line| line.contains("Bob")).unwrap();
+                    let lowered_line = lowered.lines().find(|line| line.contains("Bob")).unwrap();
+                    assert_eq!(
+                        lowered_line,
+                        native_line.trim_start(),
+                        "{style} {control} must retain the native term origin and body column"
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+#[test]
+fn no_break_flush_releases_a_word_boundary_after_fixed_run_in_cells() {
+    for (style, spaces) in [("inset", 2), ("diag", 3)] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style}\n.It A\n.mc\n.No BODY\n.El\n"
+        );
+        let native = native_terminal(&source);
+        let expected = format!("A{}BODY", " ".repeat(spaces));
+        let normalized_native = native.replace('\u{a0}', " ");
+        assert!(
+            normalized_native.contains(&expected),
+            "native {style} gap: {native:?}"
+        );
+
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower run-in margin");
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let description = item
+            .description
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                _ => None,
+            })
+            .expect("run-in description");
+        assert_eq!(description, format!("{}BODY", " ".repeat(spaces)));
+    }
+}
+
+#[test]
+fn no_break_field_separator_survives_spacing_modes() {
+    for (style, spaces) in [("inset", 2), ("diag", 3)] {
+        for spacing in ["", ".Sm off\n"] {
+            let source = format!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style}\n.It A\n{spacing}.mc\n.No BODY\n.El\n"
+            );
+            let native = native_terminal(&source).replace('\u{a0}', " ");
+            let expected = format!("A{}BODY", " ".repeat(spaces));
+            assert!(native.contains(&expected), "native {style}: {native:?}");
+            let lowered = lowered_terminal(&source).replace('\u{a0}', " ");
+            assert!(
+                lowered.contains(&expected),
+                "lowered {style} {spacing:?}: {lowered:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn no_break_flush_trims_word_padding_but_keeps_its_field_separator() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+        ".Sh DESCRIPTION\n.No A \"\"\n.mc\n.No BODY\n",
+    );
+    let native = native_terminal(source);
+    assert!(native.contains("A BODY"), "native: {native:?}");
+    assert!(!native.contains("A  BODY"), "native: {native:?}");
+
+    let lowered = lowered_terminal(source);
+    assert!(lowered.contains("A BODY"), "lowered: {lowered:?}");
+    assert!(!lowered.contains("A  BODY"), "lowered: {lowered:?}");
+}
+
+#[test]
+fn no_break_field_separator_survives_transparent_and_tight_nodes() {
+    let cases = [
+        (".Tg mark\n.No BODY", "A BODY"),
+        (".Ns\n.No BODY", "A BODY"),
+        (".No )", "A )"),
+    ];
+    for (tail, expected) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No A\n.mc\n{tail}\n"
+        );
+        let native = native_terminal(&source);
+        assert!(native.contains(expected), "native {tail:?}: {native:?}");
+        let lowered = lowered_terminal(&source);
+        assert!(lowered.contains(expected), "lowered {tail:?}: {lowered:?}");
+    }
+}
+
+#[test]
+fn no_break_flush_keeps_nonbreaking_formatter_cells_distinct_from_padding() {
+    for escape in [r"\~", r"\0"] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No {escape}\n.mc\n.No BODY\n"
+        );
+        let native = native_terminal(&source).replace('\u{a0}', " ");
+        assert!(native.contains("  BODY"), "native {escape}: {native:?}");
+        let lowered = lowered_terminal(&source).replace('\u{a0}', " ");
+        assert!(lowered.contains("  BODY"), "lowered {escape}: {lowered:?}");
+    }
+}
+
+#[test]
+fn no_break_field_preserves_formatter_word_order_for_empty_fixed_and_zero_width_words() {
+    let cases = [
+        ("empty", ".No \"\"", "A  BODY"),
+        ("empty-spacing-off", ".Sm off\n.No \"\"", "A BODY"),
+        ("empty-tight", ".Ns\n.No \"\"", "A  BODY"),
+        ("nonbreaking-space", r".No \~", "A   BODY"),
+        ("fixed-width-space", r".No \0", "A   BODY"),
+        ("zero-advance", r".No \zX", "A XBODY"),
+    ];
+    for (label, middle, expected) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No A\n.mc\n{middle}\n.No BODY\n"
+        );
+        let native = native_terminal(&source).replace('\u{a0}', " ");
+        assert!(native.contains(expected), "native {label}: {native:?}");
+        let lowered = lowered_terminal(&source).replace('\u{a0}', " ");
+        assert!(lowered.contains(expected), "lowered {label}: {lowered:?}");
+    }
+}
+
+#[test]
+fn invisible_formatter_fields_still_own_their_empty_word_boundary() {
+    for (label, first) in [
+        ("zero-width", r"\&"),
+        ("word-end-break", r"\p"),
+        ("zero-advance-break", r"\z\p"),
+    ] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No {first}\n.mc\n.No \"\"\n.No BODY\n"
+        );
+        let native = native_terminal(&source);
+        assert!(
+            native.contains("\n       BODY"),
+            "native {label}: {native:?}"
+        );
+
+        let query = mant_loader::load_roff_bytes(source.as_bytes())
+            .expect("lower invisible no-break field");
+        let document = query.document.as_ref().expect("lowered document");
+        let paragraph = document.sections[1]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                _ => None,
+            })
+            .expect("description paragraph");
+        assert_eq!(paragraph, "  BODY", "lowered {label}");
+    }
+}
+
+#[test]
+fn control_only_word_end_break_drops_a_trailing_no_break_field_separator() {
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n",
+        ".Sh DESCRIPTION\n.No A\n.mc\n.No \\p\n.No BODY\n",
+    );
+
+    // Pinned CVS `term_field()` correctly drops the separator because the
+    // control-only field has no printable cell.  Its current renderer then
+    // also loses BODY at this edge; ManT deliberately follows groff's
+    // content-preserving result while retaining CVS's no-trailing-blank
+    // field contract.
+    let native = native_terminal(source);
+    assert!(native.contains("\n     A\n"), "native: {native:?}");
+    assert!(!native.contains("\n     A \n"), "native: {native:?}");
+
+    let lowered = lowered_terminal(source);
+    assert!(lowered.contains("\nA\nBODY"), "lowered: {lowered:?}");
+    assert!(!lowered.contains("\nA \n"), "lowered: {lowered:?}");
+}
+
+#[test]
+fn run_in_no_break_flush_preserves_fixed_and_pending_cells() {
+    for (style, head, spaces) in [
+        ("inset", "", 0),
+        ("diag", "", 3),
+        ("inset", r"A\z", 2),
+        ("diag", r"A\z", 2),
+    ] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style}\n.It {head}\n.mc\n.No BODY\n.El\n"
+        );
+        let expected = format!("{}BODY", " ".repeat(spaces));
+        let native = native_terminal(&source).replace('\u{a0}', " ");
+        assert!(
+            native.contains(&expected),
+            "native {style} {head:?}: {native:?}"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower run-in cells");
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let description = item
+            .description
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                _ => None,
+            })
+            .expect("run-in description");
+        assert_eq!(description, expected, "lowered {style} {head:?}: {item:?}");
+    }
+}
+
+#[test]
 fn repeated_authored_section_titles_remain_ambiguous() {
     // CVS HTML resolves this to the first duplicate fragment.  ManT's stricter
     // navigation contract deliberately refuses to choose between two authored
@@ -808,4 +1254,612 @@ fn font_stack_divergence_is_pinned_in_native_html_and_lowered_ir() {
     let mut strong_tail = StrongText(false);
     strong_tail.visit_document(query.document.as_ref().expect("lowered document"));
     assert!(strong_tail.0, "lowered IR did not retain bold TAIL");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // This table is one pinned native field ledger.
+fn definition_head_controls_settle_the_same_native_field() {
+    // Verified against the pinned CVS `termp_it_pre/post()`,
+    // `roff_term_pre_br/sp/ti()`, and `term_flushln()`.  NOBREAK, BRIND,
+    // HANG, trailspace, and the body origin form one formatter field; none of
+    // these requests may be lowered as an unrelated paragraph break.
+    let cases = [
+        (
+            "tag br overrun",
+            "tag",
+            "6n",
+            ".br",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n        A\nBob\n        BODY",
+        ),
+        (
+            "tag br fit",
+            "tag",
+            "12n",
+            ".br",
+            "LONGTEXT      A\nBob\nBODY",
+            "LONGTEXT      A\nBob\n              BODY",
+        ),
+        (
+            "tag temporary indent",
+            "tag",
+            "6n",
+            ".ti 2n",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n  A\nBob\n        BODY",
+        ),
+        (
+            "tag temporary indent fit",
+            "tag",
+            "12n",
+            ".ti 2n",
+            "LONGTEXT  A\nBob\nBODY",
+            "LONGTEXT  A\nBob\n              BODY",
+        ),
+        (
+            "tag vertical space",
+            "tag",
+            "6n",
+            ".sp 1",
+            "LONGTEXT\n\nA\nBob\nBODY",
+            "LONGTEXT\n\n        A\nBob\n        BODY",
+        ),
+        (
+            "tag fill boundary",
+            "tag",
+            "6n",
+            ".nf",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n        A\nBob\n        BODY",
+        ),
+        (
+            "tag fill boundary fit",
+            "tag",
+            "12n",
+            ".nf",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n              A\nBob\n              BODY",
+        ),
+        (
+            "tag vertical space fit",
+            "tag",
+            "12n",
+            ".sp 1",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n              A\nBob\n              BODY",
+        ),
+        (
+            "hang br overrun",
+            "hang",
+            "6n",
+            ".br",
+            "LONGTEXT ABobBODY",
+            "LONGTEXT ABobBODY",
+        ),
+        (
+            "hang temporary indent overrun",
+            "hang",
+            "6n",
+            ".ti 2n",
+            "LONGTEXT ABobBODY",
+            "LONGTEXT ABobBODY",
+        ),
+        (
+            "hang vertical space closes its occupied row",
+            "hang",
+            "6n",
+            ".sp 1",
+            "LONGTEXT\nABobBODY",
+            "LONGTEXT\n        ABobBODY",
+        ),
+        (
+            "hang br fit",
+            "hang",
+            "12n",
+            ".br",
+            "LONGTEXT      ABobBODY",
+            "LONGTEXT      ABobBODY",
+        ),
+        (
+            "hang temporary indent",
+            "hang",
+            "12n",
+            ".ti 2n",
+            "LONGTEXT ABob BODY",
+            "LONGTEXT ABob BODY",
+        ),
+        (
+            "hang vertical space fit",
+            "hang",
+            "12n",
+            ".sp 1",
+            "LONGTEXT\nABobBODY",
+            "LONGTEXT\n              ABobBODY",
+        ),
+        (
+            "hang fill boundary overrun",
+            "hang",
+            "6n",
+            ".nf",
+            "LONGTEXTABob\nBODY",
+            "LONGTEXTABob\n        BODY",
+        ),
+        (
+            "hang fill boundary fit",
+            "hang",
+            "12n",
+            ".nf",
+            "LONGTEXT      ABob\nBODY",
+            "LONGTEXT      ABob\n              BODY",
+        ),
+    ];
+
+    for (label, style, width, request, native_expected, lowered_expected) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style} -width {width}\n.It Xo\n.No LONGTEXT\n{request}\n.No A\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        assert!(
+            native.contains(native_expected),
+            "{label} native output: {native:?}"
+        );
+        let lowered = lowered_terminal(&source);
+        assert!(
+            lowered.contains(lowered_expected),
+            "{label} lowered output: {lowered:?}"
+        );
+    }
+}
+
+#[test]
+fn no_break_field_retains_brind_and_hang_for_following_controls() {
+    // Verified against CVS `roff_term_pre_mc()`: only NOBREAK and NOSPACE
+    // are cleared after the flush. BRIND/HANG and the field geometry remain
+    // live for a following request, even though `.mc` itself emitted no text.
+    let cases = [
+        (
+            "tag/br",
+            "tag",
+            ".br",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n              A\nBob\n              BODY",
+        ),
+        (
+            "tag/ti",
+            "tag",
+            ".ti 4n",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n    A\nBob\n              BODY",
+        ),
+        (
+            "tag/sp",
+            "tag",
+            ".sp 1",
+            "LONGTEXT\n\nA\nBob\nBODY",
+            "LONGTEXT\n\n              A\nBob\n              BODY",
+        ),
+        (
+            "tag/nf",
+            "tag",
+            ".nf",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n              A\nBob\n              BODY",
+        ),
+        (
+            "hang/br",
+            "hang",
+            ".br",
+            "LONGTEXT      ABobBODY",
+            "LONGTEXT      ABobBODY",
+        ),
+        (
+            "hang/ti",
+            "hang",
+            ".ti 4n",
+            "LONGTEXT ABob BODY",
+            "LONGTEXT ABob BODY",
+        ),
+        (
+            "hang/sp",
+            "hang",
+            ".sp 1",
+            "LONGTEXT\nABobBODY",
+            "LONGTEXT\n              ABobBODY",
+        ),
+        (
+            "hang/nf",
+            "hang",
+            ".nf",
+            "LONGTEXT      ABob\nBODY",
+            "LONGTEXT      ABob\n              BODY",
+        ),
+    ];
+
+    for (label, style, request, native_expected, lowered_expected) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style} -width 12n\n.It Xo\n.No LONGTEXT\n.mc\n{request}\n.No A\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        assert!(
+            native.contains(native_expected),
+            "{label} native output: {native:?}"
+        );
+        let lowered = lowered_terminal(&source);
+        assert!(
+            lowered.contains(lowered_expected),
+            "{label} lowered output: {lowered:?}"
+        );
+    }
+}
+
+#[test]
+fn no_break_field_classifies_following_words_before_a_control() {
+    // Verified against CVS `term_word()`, `term_fill()`, and
+    // `roff_term_pre_br()`. Empty/NBRZW words do not advance the visual
+    // field, while a visible word does; BRIND and HANG remain independent of
+    // both facts after `.mc` clears NOBREAK and NOSPACE.
+    let cases = [
+        (
+            "tag/empty",
+            "tag",
+            r#""""#,
+            ".No A\n",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n              A\nBob\n              BODY",
+        ),
+        (
+            "tag/ignore",
+            "tag",
+            r"\&",
+            ".No A\n",
+            "LONGTEXT\nA\nBob\nBODY",
+            "LONGTEXT\n              A\nBob\n              BODY",
+        ),
+        (
+            "tag/visible",
+            "tag",
+            "A",
+            "",
+            "LONGTEXT   A\nBob\nBODY",
+            "LONGTEXT   A\nBob\n              BODY",
+        ),
+        (
+            "hang/empty",
+            "hang",
+            r#""""#,
+            ".No A\n",
+            "LONGTEXT      ABobBODY",
+            "LONGTEXT      ABobBODY",
+        ),
+        (
+            "hang/ignore",
+            "hang",
+            r"\&",
+            ".No A\n",
+            "LONGTEXT      ABobBODY",
+            "LONGTEXT      ABobBODY",
+        ),
+        (
+            "hang/visible",
+            "hang",
+            "A",
+            "",
+            "LONGTEXT  ABobBODY",
+            "LONGTEXT  ABobBODY",
+        ),
+        (
+            "tag/empty before control-only author",
+            "tag",
+            r#""""#,
+            "",
+            "LONGTEXT\nBob\nBODY",
+            "LONGTEXT\nBob\n              BODY",
+        ),
+        (
+            "tag/ignore before control-only author",
+            "tag",
+            r"\&",
+            "",
+            "LONGTEXT\nBob\nBODY",
+            "LONGTEXT\nBob\n              BODY",
+        ),
+        (
+            "hang/empty before control-only author",
+            "hang",
+            r#""""#,
+            "",
+            "LONGTEXTBob   BODY",
+            "LONGTEXTBob   BODY",
+        ),
+        (
+            "hang/ignore before control-only author",
+            "hang",
+            r"\&",
+            "",
+            "LONGTEXTBob   BODY",
+            "LONGTEXTBob   BODY",
+        ),
+    ];
+
+    for (label, style, operand, after_control, native_expected, lowered_expected) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style} -width 12n\n.It Xo\n.No LONGTEXT\n.mc\n.No {operand}\n.br\n{after_control}.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        assert!(
+            native.contains(native_expected),
+            "{label} native output: {native:?}"
+        );
+        let lowered = lowered_terminal(&source);
+        assert!(
+            lowered.contains(lowered_expected),
+            "{label} lowered output: {lowered:?}"
+        );
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // This table is one pinned native field ledger.
+fn control_only_author_handoffs_settle_buffer_and_device_rows_separately() {
+    // Verified first with the pinned CVS renderer.  An empty word has no
+    // native field cell at a tight list-head boundary, `\&` does have one,
+    // and a bare `\z` only arms BACKAFTER.  After `.mc`, `viscol` keeps the
+    // device row occupied even when the current field buffer is empty, so a
+    // later control must flush and clear BACKAFTER before Bob executes.
+    let cases = [
+        (
+            "tag device row, empty before ti",
+            "tag",
+            ".No LONGTEXT\n.mc\n",
+            r#""""#,
+            ".ti 4n",
+            "LONGTEXT\nBob\nBODY",
+            "LONGTEXT\nBob\n              BODY",
+        ),
+        (
+            "tag device row, zero-width cell before ti",
+            "tag",
+            ".No LONGTEXT\n.mc\n",
+            r"\&",
+            ".ti 4n",
+            "LONGTEXT\nBob\nBODY",
+            "LONGTEXT\nBob\n              BODY",
+        ),
+        (
+            "tag device row, bare zero before ti",
+            "tag",
+            ".No LONGTEXT\n.mc\n",
+            r"\z",
+            ".ti 4n",
+            "LONGTEXT\nBob\nBODY",
+            "LONGTEXT\nBob\n              BODY",
+        ),
+        (
+            "hang device row, empty before ti",
+            "hang",
+            ".No LONGTEXT\n.mc\n",
+            r#""""#,
+            ".ti 4n",
+            "LONGTEXTBob   BODY",
+            "LONGTEXTBob   BODY",
+        ),
+        (
+            "hang device row, zero-width cell before ti",
+            "hang",
+            ".No LONGTEXT\n.mc\n",
+            r"\&",
+            ".ti 4n",
+            "LONGTEXTBob   BODY",
+            "LONGTEXTBob   BODY",
+        ),
+        (
+            "hang device row, bare zero before ti",
+            "hang",
+            ".No LONGTEXT\n.mc\n",
+            r"\z",
+            ".ti 4n",
+            "LONGTEXTBob   BODY",
+            "LONGTEXTBob   BODY",
+        ),
+        (
+            "hang device row, bare zero before fill boundary",
+            "hang",
+            ".No LONGTEXT\n.mc\n",
+            r"\z",
+            ".nf",
+            "LONGTEXTBob\nBODY",
+            "LONGTEXTBob\n              BODY",
+        ),
+        (
+            "tag empty before ti",
+            "tag",
+            "",
+            r#""""#,
+            ".ti 4n",
+            "Bob\nBODY",
+            "Bob\n              BODY",
+        ),
+        (
+            "tag zero-width cell before ti",
+            "tag",
+            "",
+            r"\&",
+            ".ti 4n",
+            "Bob\nBODY",
+            "Bob\n              BODY",
+        ),
+        (
+            "tag bare zero before br",
+            "tag",
+            "",
+            r"\z",
+            ".br",
+            "ob\nBODY",
+            "ob\n              BODY",
+        ),
+        (
+            "tag bare zero before ti",
+            "tag",
+            "",
+            r"\z",
+            ".ti 4n",
+            "ob\nBODY",
+            "ob\n              BODY",
+        ),
+        (
+            "tag bare zero before vertical space",
+            "tag",
+            "",
+            r"\z",
+            ".sp 1",
+            "\nob\nBODY",
+            "\nob\n              BODY",
+        ),
+        (
+            "tag bare zero before fill boundary",
+            "tag",
+            "",
+            r"\z",
+            ".nf",
+            "ob\nBODY",
+            "ob\n              BODY",
+        ),
+        (
+            "hang zero-width cell before ti",
+            "hang",
+            "",
+            r"\&",
+            ".ti 4n",
+            "Bob           BODY",
+            "Bob           BODY",
+        ),
+        (
+            "hang zero-width cell before fill boundary",
+            "hang",
+            "",
+            r"\&",
+            ".nf",
+            "Bob\nBODY",
+            "Bob\n              BODY",
+        ),
+        (
+            "hang bare zero before br",
+            "hang",
+            "",
+            r"\z",
+            ".br",
+            "ob            BODY",
+            "ob            BODY",
+        ),
+        (
+            "hang bare zero before ti",
+            "hang",
+            "",
+            r"\z",
+            ".ti 4n",
+            "ob            BODY",
+            "ob            BODY",
+        ),
+        (
+            "hang bare zero before vertical space",
+            "hang",
+            "",
+            r"\z",
+            ".sp 1",
+            "\nob            BODY",
+            "\nob            BODY",
+        ),
+        (
+            "hang bare zero before fill boundary",
+            "hang",
+            "",
+            r"\z",
+            ".nf",
+            "ob\nBODY",
+            "ob\n              BODY",
+        ),
+        (
+            "tag empty before explicit break and visible word",
+            "tag",
+            "",
+            r#""""#,
+            ".br\n.No A",
+            "A\nBob\nBODY",
+            "              A\nBob\n              BODY",
+        ),
+        (
+            "tag bare zero before explicit break and visible word",
+            "tag",
+            "",
+            r"\z",
+            ".br\n.No A",
+            "A\nBob\nBODY",
+            "              A\nBob\n              BODY",
+        ),
+        (
+            "hang empty before explicit break and visible word",
+            "hang",
+            "",
+            r#""""#,
+            ".br\n.No A",
+            "ABobBODY",
+            "              ABobBODY",
+        ),
+        (
+            "hang bare zero before explicit break and visible word",
+            "hang",
+            "",
+            r"\z",
+            ".br\n.No A",
+            "ABobBODY",
+            "              ABobBODY",
+        ),
+    ];
+
+    for (label, style, prefix, operand, control, native_expected, lowered_expected) in cases {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -{style} -width 12n\n.It Xo\n{prefix}.No {operand}\n{control}\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        assert!(
+            native.contains(native_expected),
+            "{label} native output: {native:?}"
+        );
+        let lowered = lowered_terminal(&source);
+        assert!(
+            lowered.contains(lowered_expected),
+            "{label} lowered output: {lowered:?}"
+        );
+    }
+}
+
+#[test]
+fn formatter_boundaries_precede_pending_zero_advance_glyphs() {
+    // CVS `term_word()` buffers each word boundary before decoding `\zX`;
+    // BACKBEFORE then lets X overwrite the following word's boundary.  The
+    // ordering is the same for an explicit empty word, `\&`, and the fixed
+    // blank glyph `\0`, with or without `.mc` settling the previous field.
+    for predecessor in [r#""""#, r"\&", r"\0", r"\~"] {
+        for zero_expression in [r"\zX", r"\p\zX", r"\zX\p"] {
+            for margin_request in ["", ".mc\n"] {
+                let source = format!(
+                    ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No A\n.No {predecessor}\n{margin_request}.No {zero_expression}\n.No BODY\n"
+                );
+                let native = without_line_indentation(&native_terminal(&source));
+                assert!(
+                    native.contains("XBODY"),
+                    "{predecessor:?}/{zero_expression:?}/{margin_request:?} native output: {native:?}"
+                );
+                let lowered = lowered_terminal(&source);
+                assert!(
+                    lowered.contains("XBODY"),
+                    "{predecessor:?}/{zero_expression:?}/{margin_request:?} lowered output: {lowered:?}"
+                );
+                assert!(
+                    !lowered.contains("X BODY"),
+                    "boundary moved after pending glyph: {lowered:?}"
+                );
+            }
+        }
+    }
 }

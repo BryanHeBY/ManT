@@ -2238,6 +2238,9 @@ fn margin_flush_obeys_current_cell_and_continuation_state() {
     )));
 
     for (label, first, expected) in [
+        // With `\c`, CVS retains the occupied zero-width field until `.mc`;
+        // its NOBREAK flush commits one relative separator before the next
+        // source word even though the field has no visible glyph.
         ("word-break", r"\p\c", " B C"),
         ("zero-width-word-break", r"\&\p\c", " B C"),
         ("uncontinued-word-break", r"\p", "\nB C"),

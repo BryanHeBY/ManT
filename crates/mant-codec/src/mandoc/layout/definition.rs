@@ -19,6 +19,10 @@ pub(in crate::mandoc) struct DefinitionGeometry {
 }
 
 impl DefinitionGeometry {
+    pub(in crate::mandoc) fn body_columns(self) -> u16 {
+        u16::try_from(self.body.position_columns().max(0)).unwrap_or(u16::MAX)
+    }
+
     pub(in crate::mandoc) fn resolve(
         self,
         context: &LoweringContext<'_>,

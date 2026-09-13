@@ -20,13 +20,22 @@ pub(super) struct DefinitionFlow {
     pub(super) head: DefinitionHeadFlow,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub(super) enum DefinitionHeadFlow {
-    #[default]
-    Detached,
+    Detached {
+        author_break_effect: crate::mandoc::inline::AuthorBreakEffect,
+    },
     /// CVS inset and diagnostic lists execute HEAD, their generated separator
     /// cells, and BODY in one formatter stream instead of flushing the head.
     RunIn { cells: u8, style: RunInHeadStyle },
+}
+
+impl Default for DefinitionHeadFlow {
+    fn default() -> Self {
+        Self::Detached {
+            author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Line,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -40,8 +49,17 @@ pub(super) enum RunInHeadStyle {
 impl DefinitionHeadFlow {
     fn generated_cells(self) -> Option<u8> {
         match self {
-            Self::Detached => None,
+            Self::Detached { .. } => None,
             Self::RunIn { cells, .. } => Some(cells),
+        }
+    }
+
+    fn author_break_effect(self) -> crate::mandoc::inline::AuthorBreakEffect {
+        match self {
+            Self::Detached {
+                author_break_effect,
+            } => author_break_effect,
+            Self::RunIn { .. } => crate::mandoc::inline::AuthorBreakEffect::Line,
         }
     }
 
@@ -348,7 +366,7 @@ pub(super) fn definition_item(
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
-    let (mut term, run_in_execution) =
+    let (mut term, run_in_execution, definition_field_exited, definition_body_gap_consumed) =
         lower_definition_head(head, &displaced_equations, context, flow, formatter);
     // CVS executes the `.It`/`.TP` head before its detached body.  Derive the
     // pending-row plan from the resulting formatter state so head-side `.An`,
@@ -361,6 +379,12 @@ pub(super) fn definition_item(
     );
     if flow.shares_pending_term_row && pending_head.placement_breaks {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+    }
+    if definition_field_exited {
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+    }
+    if definition_body_gap_consumed {
+        geometry.gap = 0;
     }
     if let Some(id) = definition_head_anchor(node) {
         term.insert(0, Inline::anchor_at(id, source_span(node)));
@@ -442,6 +466,8 @@ fn lower_definition_head(
 ) -> (
     Vec<Inline>,
     Option<crate::mandoc::inline::PreservedInlineState>,
+    bool,
+    bool,
 ) {
     let groups = std::iter::once(head).chain(
         displaced_equations
@@ -460,18 +486,29 @@ fn lower_definition_head(
             .chain(displaced_equations.iter().copied())
             .filter_map(latest_source_line)
             .max();
-        return (term, Some(execution));
+        return (term, Some(execution), false, false);
     }
 
     let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
+    let mut definition_field_exited = false;
+    let mut definition_body_gap_consumed = false;
     for group in groups {
-        term_builder.append(context.lower_inline_with_spacing(
+        let (lowered, field_exited, body_gap_consumed) = context.lower_inline_with_author_break(
             group,
             flow.spacing_enabled,
             formatter,
-        ));
+            flow.head.author_break_effect(),
+        );
+        term_builder.append(lowered);
+        definition_field_exited |= field_exited;
+        definition_body_gap_consumed |= body_gap_consumed;
     }
-    (term_builder.finish(), None)
+    (
+        term_builder.finish(),
+        None,
+        definition_field_exited,
+        definition_body_gap_consumed,
+    )
 }
 
 fn latest_source_line(node: &Node) -> Option<u32> {
@@ -623,8 +660,17 @@ pub(super) fn split_definition_terms(term: Vec<Inline>) -> Vec<Vec<Inline>> {
     let mut current = Vec::new();
     for node in term {
         if node == Inline::LineBreak {
-            if !current.is_empty() {
+            if mant_ir::has_printable_character(&current) {
                 terms.push(std::mem::take(&mut current));
+            } else {
+                // An executed but invisible author word (`\&`, or a
+                // control-only `\p`) still owns a physical formatter row.
+                // Keep that row attached to the next visible spelling rather
+                // than manufacturing an empty semantic alternative that
+                // renderers are required to ignore.
+                current
+                    .retain(|inline| !matches!(inline, Inline::Text { value } if value.is_empty()));
+                current.push(Inline::LineBreak);
             }
         } else {
             current.push(node);

@@ -200,7 +200,9 @@ fn lower_man_item(
             // source-flow evidence even when the body has not emitted IR yet.
             paragraph_predecessor: true,
             shares_pending_term_row: true,
-            head: super::super::DefinitionHeadFlow::Detached,
+            head: super::super::DefinitionHeadFlow::Detached {
+                author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Line,
+            },
         },
         formatter,
     );

@@ -1,5 +1,6 @@
 //! Stateful roff font decoding shared by prose, macro operands and table cells.
 use super::super::reference::trailing_sphinx_manual_reference;
+use super::flow::TrailingOutput;
 use super::{
     Font, FontState, Inline, InlineBuilder, Node, RoffInlineEvent, append_inline_nodes, decode,
     is_formatter_word_blank,
@@ -598,6 +599,7 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) joins_preceding_node: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
+    pub(in crate::mandoc) trailing_output: TrailingOutput,
 }
 
 /// One presentation segment inside a single native formatter word.
@@ -731,7 +733,6 @@ fn execute_formatter_word_events(
     let mut explicit_line_continuation = None;
     let mut text_state = TextEventState::new(pending_word_end_break);
     zero_advance.begin_fragment();
-
     for (index, event) in events.iter().enumerate() {
         match event {
             FormatterWordEvent::Code(value) => {
@@ -797,17 +798,14 @@ fn execute_formatter_word_events(
                 link.clone_from(target);
             }
             FormatterWordEvent::Source(RoffInlineEvent::EmptyDestination) => {
-                text_state.suppress_break_whitespace = false;
-                if !recognize_generated_references
-                    || !promote_sphinx_manual_reference(
-                        &mut output,
-                        &mut buffer,
-                        font,
-                        link.as_deref(),
-                    )
-                {
-                    buffer.push_str("<>");
-                }
+                append_empty_destination(
+                    &mut output,
+                    &mut buffer,
+                    font,
+                    link.as_deref(),
+                    recognize_generated_references,
+                    &mut text_state,
+                );
             }
             FormatterWordEvent::Source(RoffInlineEvent::LineBreak) => {
                 text_state.pending_word_end_break = true;
@@ -820,12 +818,98 @@ fn execute_formatter_word_events(
         }
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
+    finish_text_execution(
+        events,
+        output,
+        zero_advance,
+        explicit_line_continuation,
+        text_state.pending_word_end_break,
+    )
+}
+
+fn append_empty_destination(
+    output: &mut Vec<Inline>,
+    buffer: &mut String,
+    font: Font,
+    link: Option<&str>,
+    recognize_generated_references: bool,
+    text_state: &mut TextEventState,
+) {
+    text_state.suppress_break_whitespace = false;
+    if !recognize_generated_references
+        || !promote_sphinx_manual_reference(output, buffer, font, link)
+    {
+        buffer.push_str("<>");
+    }
+}
+
+fn finish_text_execution(
+    events: &[FormatterWordEvent],
+    output: Vec<Inline>,
+    zero_advance: &mut ZeroAdvanceState,
+    source_continuation: Option<bool>,
+    pending_word_end_break: bool,
+) -> TextExecution {
+    let trailing_output = match mant_ir::last_visible_character(&output) {
+        None | Some('\n') => TrailingOutput::None,
+        Some(character) if !character.is_whitespace() => TrailingOutput::NonBlank,
+        Some(_) => {
+            let count =
+                trailing_breakable_spaces(events).min(super::flow::trailing_ascii_spaces(&output));
+            if count == 0 {
+                TrailingOutput::FixedBlank
+            } else {
+                TrailingOutput::BreakableBlank(count)
+            }
+        }
+    };
     TextExecution {
         output,
         joins_preceding_node: zero_advance.take_preceding_join(),
-        source_continuation: explicit_line_continuation,
-        pending_word_end_break: text_state.pending_word_end_break,
+        source_continuation,
+        pending_word_end_break,
+        trailing_output,
     }
+}
+
+/// Count only ordinary source blanks eligible for CVS `term_field()` trim.
+/// Glyph events spelling a space originate from `\~`, `\0`, or mandoc's
+/// internal `ASCII_NBRSP` and remain formatter graph rather than word padding.
+fn trailing_breakable_spaces(events: &[FormatterWordEvent]) -> usize {
+    let mut count = 0;
+    for event in events.iter().rev() {
+        match event {
+            FormatterWordEvent::Source(RoffInlineEvent::Text(value)) => {
+                if value.is_empty() {
+                    continue;
+                }
+                let trailing = value.chars().rev().take_while(|&ch| ch == ' ').count();
+                count += trailing;
+                if trailing != value.chars().count() {
+                    return count;
+                }
+            }
+            FormatterWordEvent::Source(
+                RoffInlineEvent::Font(_)
+                | RoffInlineEvent::PreviousFont
+                | RoffInlineEvent::ZeroAdvance
+                | RoffInlineEvent::NoSpace
+                | RoffInlineEvent::Presentation { .. }
+                | RoffInlineEvent::ZeroWidthGlyph
+                | RoffInlineEvent::LineBreak,
+            ) => {}
+            FormatterWordEvent::Code(_)
+            | FormatterWordEvent::Source(
+                RoffInlineEvent::Glyph(_)
+                | RoffInlineEvent::FallbackGlyph(_)
+                | RoffInlineEvent::DeviceName
+                | RoffInlineEvent::Overstrike { .. }
+                | RoffInlineEvent::Link(_)
+                | RoffInlineEvent::EmptyDestination,
+            ) => return count,
+        }
+    }
+    count
 }
 
 fn append_code_event(

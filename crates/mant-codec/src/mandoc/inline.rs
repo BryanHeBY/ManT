@@ -13,7 +13,7 @@ pub(super) use links::lower_man_link;
 mod scopes;
 mod source_cursor;
 mod source_fragment;
-pub(in crate::mandoc) use flow::PreservedInlineState;
+pub(in crate::mandoc) use flow::{AuthorBreakEffect, PreservedInlineState};
 pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
 
@@ -65,14 +65,64 @@ pub(super) fn authored_section_phrase(nodes: &[Node], default_name: Option<&str>
         return nodes
             .iter()
             .filter_map(|node| node.text.as_deref())
+            .filter_map(deroff_text_fragment)
             .collect::<Vec<_>>()
-            .join(" ")
-            .trim()
-            .to_owned();
+            .join(" ");
     }
     plain_text(&lower_inline_nodes(nodes, default_name))
         .trim()
         .to_owned()
+}
+
+/// Normalize one direct text child exactly like CVS `roff.c::deroff()`.
+///
+/// This is deliberately narrower than visible-text decoding.  Section
+/// identities retain embedded escapes such as `A\zBC`; only leading spacing
+/// escapes, a trailing continuation backslash, and surrounding ASCII
+/// whitespace are removed from each authored fragment.
+fn deroff_text_fragment(source: &str) -> Option<&str> {
+    let bytes = source.as_bytes();
+    let mut start = 0;
+    while start < bytes.len() {
+        if bytes[start] == b'\\'
+            && bytes
+                .get(start + 1)
+                .is_some_and(|next| b" %&0^|~".contains(next))
+        {
+            start += 2;
+        } else if bytes[start].is_ascii_whitespace() {
+            start += 1;
+        } else {
+            break;
+        }
+    }
+
+    let mut end = bytes.len();
+    if end > start && bytes[end - 1] == b'\\' {
+        end -= 1;
+    }
+    while end > start && bytes[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    (start < end).then(|| &source[start..end])
+}
+
+#[cfg(test)]
+mod authored_phrase_tests {
+    use super::deroff_text_fragment;
+
+    #[test]
+    fn deroff_matches_cvs_per_fragment_identity_rules() {
+        for escape in [
+            r"\ NEXT", r"\%NEXT", r"\&NEXT", r"\0NEXT", r"\^NEXT", r"\|NEXT", r"\~NEXT",
+        ] {
+            assert_eq!(deroff_text_fragment(escape), Some("NEXT"), "{escape}");
+        }
+        assert_eq!(deroff_text_fragment(r"\&"), None);
+        assert_eq!(deroff_text_fragment("  NEXT  \\"), Some("NEXT"));
+        assert_eq!(deroff_text_fragment(r"A\&B"), Some(r"A\&B"));
+        assert_eq!(deroff_text_fragment(r"A\zBC"), Some(r"A\zBC"));
+    }
 }
 
 /// Apply one validated mdoc `Sm` state transition.
@@ -150,7 +200,9 @@ pub(super) fn append_inline_node_with_next(
         // it separates alternative terms without ending the owning item.
         // Keeping both inline lets the definition lowering retain that
         // distinction instead of concatenating the alternatives.
-        Some("br") => builder.hard_break(),
+        Some("br") => {
+            builder.control_line_break();
+        }
         Some("Pp") => {
             // Extended definition heads can retain a Pp target as well as
             // a label break. Block/display flow handles paragraph spacing
@@ -187,6 +239,18 @@ pub(super) fn append_inline_node_with_next(
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
             builder.set_spacing(setting.trim());
         }
+        Some("ti") => {
+            let columns = node
+                .children
+                .first()
+                .and_then(|child| child.text.as_deref())
+                .and_then(super::layout::Distance::parse)
+                .map_or(0, |distance| distance.position_columns().max(0));
+            builder.temporary_indent(usize::try_from(columns).unwrap_or(usize::MAX));
+        }
+        Some("nf" | "fi") => {
+            builder.fill_mode_boundary();
+        }
         Some("sp") => {
             let lines = builder.resolve_vertical_space(super::layout::vertical_space_delta(node));
             builder.vertical_space(lines.into());
@@ -195,7 +259,9 @@ pub(super) fn append_inline_node_with_next(
             .is_some_and(|control| !control.specialized) =>
         {
             match super::controls::formatter_control(name).map(|control| control.boundary) {
-                Some(super::controls::FormatterBoundary::Line) => builder.hard_break(),
+                Some(super::controls::FormatterBoundary::Line) => {
+                    builder.control_line_break();
+                }
                 Some(super::controls::FormatterBoundary::NoBreak) => builder.no_break_flush(),
                 Some(super::controls::FormatterBoundary::None) | None => {}
             }
@@ -208,6 +274,15 @@ pub(super) fn append_inline_node_with_next(
         }
         _ => scopes::append(builder, node, default_name),
     }
+    finish_inline_node_execution(builder, node, next, final_word_join_before);
+}
+
+fn finish_inline_node_execution(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    next: Option<&Node>,
+    final_word_join_before: Option<bool>,
+) {
     // A bare Fl followed by a callable macro on the same source line owns an
     // external join. An explicit empty operand is different: it consumes the
     // prefix's operand position and must leave that sibling separate.
@@ -300,7 +375,11 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.tighten_next_boundary();
         builder.note_zero_advance_join();
     }
-    builder.append_word_with_literal_row(execution.output, occupies_literal_row);
+    builder.append_word_with_literal_row(
+        execution.output,
+        occupies_literal_row,
+        execution.trailing_output,
+    );
     if execution.pending_word_end_break {
         builder.request_word_end_break();
     }

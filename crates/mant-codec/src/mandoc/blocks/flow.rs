@@ -224,6 +224,15 @@ impl BlockState {
         self.paragraph.inherit_zero_advance_armed(armed);
     }
 
+    pub(super) fn inherit_author_execution(
+        &mut self,
+        flow: crate::mandoc::formatter::AuthorFlow,
+        authors_section: bool,
+    ) {
+        self.paragraph
+            .inherit_author_execution(flow, authors_section);
+    }
+
     pub(super) fn inherit_run_in_execution(
         &mut self,
         state: crate::mandoc::inline::PreservedInlineState,
@@ -244,6 +253,9 @@ impl BlockState {
         formatter.spacing = self.spacing_enabled;
         formatter.vertical_space_debt = self.paragraph.vertical_space_debt();
         formatter.zero_advance_armed = self.paragraph.take_zero_advance_armed();
+        if let Some(author_flow) = self.paragraph.author_flow() {
+            formatter.set_author_flow(author_flow);
+        }
     }
 
     pub(super) fn flush_paragraph(&mut self) {

@@ -5,7 +5,7 @@
 //! literal flush; structural output receives pending targets only after it is
 //! emitted. Subdomains execute a node once and return, never replay its macros.
 
-use libmandoc_rs::{AuthorMode, DisplayKind, Node, NodeKind};
+use libmandoc_rs::{DisplayKind, Node, NodeKind};
 use mant_ir::{Block, Inline, Section};
 
 use super::{
@@ -166,6 +166,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         let mut state = BlockState::with_output(indent_columns, spacing_enabled, output);
         state.inherit_vertical_space_debt(formatter.vertical_space_debt);
         state.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        state.inherit_author_execution(
+            formatter.author_flow(),
+            context.active_mdoc_section()
+                == crate::mandoc::source_context::MdocSectionContext::Authors,
+        );
         Self {
             context,
             indent_columns,
@@ -308,15 +313,24 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 self.state
                     .set_source_indent(self.indent_columns.macro_origin());
             }
-            self.state.inherit_spacing(self.formatter.spacing);
-            self.state
-                .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
-            self.state
-                .inherit_zero_advance_armed(std::mem::take(&mut self.formatter.zero_advance_armed));
+            self.sync_paragraph_formatter_state();
             self.state
                 .queue_targets(structural_targets, source_span(node));
             self.state.attach_pending_to_structural_output(output_start);
         }
+    }
+
+    fn sync_paragraph_formatter_state(&mut self) {
+        self.state.inherit_spacing(self.formatter.spacing);
+        self.state.inherit_author_execution(
+            self.formatter.author_flow(),
+            self.context.active_mdoc_section()
+                == crate::mandoc::source_context::MdocSectionContext::Authors,
+        );
+        self.state
+            .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
+        self.state
+            .inherit_zero_advance_armed(std::mem::take(&mut self.formatter.zero_advance_armed));
     }
 
     fn prepare_node_execution(&mut self, node: &Node) {

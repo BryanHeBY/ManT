@@ -55,6 +55,18 @@ impl ParagraphFlow {
         self.builder.inherit_zero_advance_armed(armed);
     }
 
+    pub(super) fn inherit_author_execution(
+        &mut self,
+        flow: crate::mandoc::formatter::AuthorFlow,
+        authors_section: bool,
+    ) {
+        self.builder.inherit_author_execution(flow, authors_section);
+    }
+
+    pub(super) fn author_flow(&self) -> Option<crate::mandoc::formatter::AuthorFlow> {
+        self.builder.author_flow()
+    }
+
     pub(super) fn inherit_preserved_execution(
         &mut self,
         state: crate::mandoc::inline::PreservedInlineState,

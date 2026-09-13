@@ -225,17 +225,23 @@ fn zero_width_cells_trigger_real_formatter_boundaries() {
             );
         }
 
-        // `.mc` flushes the zero-width cell without ending the visual row.
+        // `.mc` flushes the occupied zero-width field without ending the
+        // visual row. CVS `term_flushln()` commits one field separator before
+        // the following word even though `\&` has no visible glyph.
         let source = format!("{prefix}\n.mc |\n{word}\n");
         let rendered = mant_render::render_query_text(
             &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
         );
         assert!(
-            rendered.contains("DESCRIPTION\nB"),
+            rendered.contains("DESCRIPTION\n B"),
             "{dialect}: {rendered:?}"
         );
         assert!(
-            !rendered.contains("DESCRIPTION\n\nB"),
+            !rendered.contains("DESCRIPTION\n  B"),
+            "{dialect}: {rendered:?}"
+        );
+        assert!(
+            !rendered.contains("DESCRIPTION\n\n"),
             "{dialect}: {rendered:?}"
         );
 

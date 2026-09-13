@@ -301,7 +301,23 @@ fn lower_mdoc_definition_item(
                     cells: 2,
                     style: RunInHeadStyle::Strong,
                 },
-                _ => DefinitionHeadFlow::Detached,
+                Some(DefinitionListStyle::Tag) => DefinitionHeadFlow::Detached {
+                    author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field {
+                        gap_cells: 2,
+                        body_width_columns: geometry.body_columns(),
+                        wraps: true,
+                    },
+                },
+                Some(DefinitionListStyle::Hang) => DefinitionHeadFlow::Detached {
+                    author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field {
+                        gap_cells: 1,
+                        body_width_columns: geometry.body_columns(),
+                        wraps: false,
+                    },
+                },
+                _ => DefinitionHeadFlow::Detached {
+                    author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Line,
+                },
             },
         },
         formatter,

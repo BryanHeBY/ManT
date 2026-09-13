@@ -136,26 +136,47 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
-        // `.An -split` and `.An -nosplit` are formatter requests even when
-        // they occur inside an inline definition head such as `It Xo`.
-        // They return without rendering children in CVS, so execute their
-        // persistent state here before lowering the visible head payload.
-        execute_inline_author_modes(
+        self.lower_inline_with_author_break(
             nodes,
+            spacing,
             formatter,
-            self.active_mdoc_section() == MdocSectionContext::Authors,
-        );
+            inline::AuthorBreakEffect::Line,
+        )
+        .0
+    }
+
+    pub(super) fn lower_inline_with_author_break(
+        &self,
+        nodes: &[Node],
+        spacing: bool,
+        formatter: &mut formatter::FormatterState,
+        author_break_effect: inline::AuthorBreakEffect,
+    ) -> (Vec<mant_ir::Inline>, bool, bool) {
         let mut builder = inline::InlineBuilder::with_spacing(spacing);
         builder.font = formatter.font;
         builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
         builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        builder.inherit_author_execution_with_effect(
+            formatter.author_flow(),
+            self.active_mdoc_section() == MdocSectionContext::Authors,
+            author_break_effect,
+        );
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+        if let Some(author_flow) = builder.author_flow() {
+            formatter.set_author_flow(author_flow);
+        }
         formatter.font = builder.font;
         formatter.spacing = builder.spacing_enabled();
         formatter.vertical_space_debt = builder.vertical_space_debt();
+        let definition_field_exited = builder.definition_field_exited();
+        let definition_body_gap_consumed = builder.definition_body_gap_consumed();
         let (output, surviving_armed) = builder.finish_formatter_line();
         formatter.zero_advance_armed = surviving_armed;
-        output
+        (
+            output,
+            definition_field_exited,
+            definition_body_gap_consumed,
+        )
     }
 
     /// Lower a definition head without executing a formatter line boundary.
@@ -175,21 +196,23 @@ impl<'a> LoweringContext<'a> {
         builder.font = formatter.font;
         builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
         builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        builder.inherit_author_execution(
+            formatter.author_flow(),
+            self.active_mdoc_section() == MdocSectionContext::Authors,
+        );
         let saved_font = strong_scope.then(|| {
             builder
                 .font
                 .push_scope(super::roff_escape::RoffFont::Strong)
         });
         for nodes in groups {
-            execute_inline_author_modes(
-                nodes,
-                formatter,
-                self.active_mdoc_section() == MdocSectionContext::Authors,
-            );
             inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         }
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);
+        }
+        if let Some(author_flow) = builder.author_flow() {
+            formatter.set_author_flow(author_flow);
         }
         formatter.font = builder.font;
         formatter.spacing = builder.spacing_enabled();
@@ -215,9 +238,18 @@ impl<'a> LoweringContext<'a> {
         builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
         builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
         builder.inherit_author_execution(formatter.author_flow(), authors_section);
-        let heading_font = builder.font.push_heading_scope();
-        inline::append_inline_nodes(&mut builder, nodes, self.default_name);
-        builder.font.pop_heading_scope(heading_font);
+        match self.macro_set {
+            MacroSet::Man | MacroSet::None => {
+                builder.font.begin_man_heading();
+                inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+                builder.font.end_man_heading();
+            }
+            MacroSet::Mdoc => {
+                let heading_font = builder.font.push_heading_scope();
+                inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+                builder.font.pop_heading_scope(heading_font);
+            }
+        }
         if let Some(author_flow) = builder.author_flow() {
             formatter.set_author_flow(author_flow);
         }
@@ -416,24 +448,6 @@ fn remove_structural_heading_bold(nodes: Vec<mant_ir::Inline>) -> Vec<mant_ir::I
         }
     }
     output
-}
-
-fn execute_inline_author_modes(
-    nodes: &[Node],
-    formatter: &mut formatter::FormatterState,
-    authors_section: bool,
-) {
-    for node in nodes {
-        if node.macro_name.as_deref() == Some("An") {
-            // CVS `termp_an_pre()` changes persistent state for ordinary
-            // author names too: the first `.An` in AUTHORS enables splitting
-            // for later names unless `-nosplit` is active.  This prepass is
-            // used by detached definition heads whose visible children are
-            // lowered separately from their structural execution state.
-            formatter.execute_author(node.author_mode, authors_section);
-        }
-        execute_inline_author_modes(&node.children, formatter, authors_section);
-    }
 }
 
 #[cfg(test)]
