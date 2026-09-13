@@ -468,6 +468,9 @@ void mant_mandoc_execution_free(struct mant_mandoc_execution_report *);
 int mant_mandoc_execution_status(const struct mant_mandoc_execution_report *);
 const char *mant_mandoc_execution_error(
     const struct mant_mandoc_execution_report *);
+
+/* Native invariant smoke test used only by the repository test suite. */
+uint32_t mant_mandoc_execution_validation_selftest(void);
 size_t mant_mandoc_execution_pool_length(
     const struct mant_mandoc_execution_report *);
 uint64_t mant_mandoc_execution_work_count(

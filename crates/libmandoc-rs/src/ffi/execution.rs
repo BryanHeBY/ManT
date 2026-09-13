@@ -22,6 +22,7 @@ use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStringExt;
 use std::{
+    collections::BTreeMap,
     mem::{MaybeUninit, align_of, offset_of, size_of},
     ops::Range,
     os::raw::{c_char, c_void},
@@ -520,6 +521,7 @@ macro_rules! api {
 
 pub(super) fn copy_executed_document(
     pointer: *mut CDocument,
+    limits: ExecutionLimits,
 ) -> Result<(RawDocument, NativeExecutionReport), (ExecutionErrorKind, String)> {
     let handle = DocumentHandle(NonNull::new(pointer).ok_or_else(|| {
         (
@@ -548,6 +550,8 @@ pub(super) fn copy_executed_document(
         return Err((kind, message));
     }
     let execution_node_count = unsafe { mant_mandoc_execution_node_count(report) };
+    validate_execution_node_transfer_count(execution_node_count, limits)
+        .map_err(|message| (ExecutionErrorKind::Transfer, message))?;
     let mut ast_keys = reserved_vec(execution_node_count, "AST node-key")
         .map_err(|message| (ExecutionErrorKind::Transfer, message))?;
     let raw_document = copy_document_from_handle(&handle, Some(&mut ast_keys))
@@ -558,16 +562,11 @@ pub(super) fn copy_executed_document(
             "native execution cannot transfer a truncated syntax tree".to_owned(),
         ));
     }
-    let execution = unsafe { copy_report(report) }
+    let execution = unsafe { copy_report(report, limits) }
         .map_err(|message| (ExecutionErrorKind::Transfer, message))?;
-    validate_table_ast_bindings(&raw_document.document.root, &execution)
+    validate_execution_ast_bindings(&raw_document.document.root, &execution)
         .map_err(|message| (ExecutionErrorKind::Transfer, message))?;
-    if ast_keys.len() != execution.nodes.len()
-        || !ast_keys
-            .iter()
-            .zip(&execution.nodes)
-            .all(|(actual, expected)| *actual == expected.key.0)
-    {
+    if ast_keys.len() != execution.nodes.len() {
         return Err((
             ExecutionErrorKind::Transfer,
             "owned syntax tree and execution report node identities differ".to_owned(),
@@ -576,40 +575,171 @@ pub(super) fn copy_executed_document(
     Ok((raw_document, execution))
 }
 
-fn validate_table_ast_bindings(
+fn validate_execution_node_transfer_count(
+    node_count: usize,
+    limits: ExecutionLimits,
+) -> Result<(), String> {
+    if u64::try_from(node_count).map_or(true, |count| count > limits.max_nodes)
+        || node_count > (isize::MAX as usize) / size_of::<u32>()
+    {
+        return Err("native execution node transfer exceeds its declared limit".to_owned());
+    }
+    Ok(())
+}
+
+fn stable_ast_node_flags(flags: crate::NodeFlags) -> u32 {
+    u32::from(flags.generated)
+        | u32::from(flags.sentence_end) << 1
+        | u32::from(flags.no_print) << 2
+        | u32::from(flags.no_fill) << 3
+        | u32::from(flags.deep_link_target) << 4
+        | u32::from(flags.permalink) << 5
+        | u32::from(flags.line_start) << 6
+        | u32::from(flags.delimiter_open) << 7
+        | u32::from(flags.delimiter_close) << 8
+        | u32::from(flags.synopsis_pretty) << 9
+}
+
+fn validate_execution_ast_bindings(
     root: &crate::Node,
     report: &NativeExecutionReport,
 ) -> Result<(), String> {
-    let mut counts = reserved_filled_vec(None, report.nodes.len(), "AST table-cell count")?;
-    let mut pending = reserved_vec(1, "AST table traversal")?;
-    pending.push(root);
-    while let Some(node) = pending.pop() {
+    let ast_nodes = collect_execution_ast_nodes(root, report)?;
+    validate_execution_table_ast_bindings(&ast_nodes, report)
+}
+
+fn collect_execution_ast_nodes<'a>(
+    root: &'a crate::Node,
+    report: &NativeExecutionReport,
+) -> Result<Vec<&'a crate::Node>, String> {
+    let mut ast_nodes = reserved_vec(report.nodes.len(), "AST execution binding")?;
+    let mut pending = reserved_vec(1, "AST execution traversal")?;
+    pending.push((root, None));
+    while let Some((node, parent)) = pending.pop() {
         let key = node
             .execution_node_key
             .ok_or_else(|| "executed AST node has no report-local identity".to_owned())?;
-        let slot = counts
-            .get_mut(key as usize)
-            .ok_or_else(|| "executed AST table node key is out of range".to_owned())?;
-        *slot = Some(node.table_cells.len());
+        if key as usize != ast_nodes.len() {
+            return Err("executed AST node identities are not dense DFS keys".to_owned());
+        }
+        let origin = report
+            .nodes
+            .get(key as usize)
+            .ok_or_else(|| "executed AST node key is out of range".to_owned())?;
+        if origin.key.0 != key
+            || origin.parent.map(|key| key.0) != parent
+            || origin.source != 0
+            || origin.kind != node.kind
+            || origin.flags != stable_ast_node_flags(node.flags)
+            || origin.macro_name != node.macro_name
+            || origin.line != node.line
+            || origin.column != node.column
+        {
+            return Err("owned syntax node does not match its execution origin".to_owned());
+        }
+        ast_nodes.push(node);
         pending
             .try_reserve(node.children.len())
-            .map_err(|_| "could not allocate AST table traversal".to_owned())?;
-        pending.extend(node.children.iter());
+            .map_err(|_| "could not allocate AST execution traversal".to_owned())?;
+        pending.extend(node.children.iter().rev().map(|child| (child, Some(key))));
     }
+    if ast_nodes.len() != report.nodes.len() {
+        return Err("owned syntax tree and execution report node counts differ".to_owned());
+    }
+    Ok(ast_nodes)
+}
+
+fn validate_execution_table_ast_bindings(
+    ast_nodes: &[&crate::Node],
+    report: &NativeExecutionReport,
+) -> Result<(), String> {
+    let mut bound_rows = reserved_filled_vec(false, ast_nodes.len(), "AST table-row binding")?;
     for row in &report.table_rows {
-        let ast_count = counts
+        let ast_row = ast_nodes
             .get(row.node.0 as usize)
-            .and_then(|count| *count)
             .ok_or_else(|| "execution table row has no matching AST node".to_owned())?;
-        let cells = &report.table_cells[row.cells.start as usize..row.cells.end as usize];
-        for (expected_data_ordinal, cell) in cells.iter().enumerate() {
-            if usize::try_from(cell.data_ordinal).ok() != Some(expected_data_ordinal) {
-                return Err("execution table data ordinal is not dense".to_owned());
-            }
+        if bound_rows[row.node.0 as usize] {
+            return Err("owned AST table row has multiple execution rows".to_owned());
         }
-        if cells.len() != ast_count {
+        bound_rows[row.node.0 as usize] = true;
+        let expected_row_kind = match ast_row.table_row_kind.as_ref() {
+            Some(crate::TableRowKind::Data | crate::TableRowKind::LayoutRule { .. }) => {
+                ExecutionTableRowKind::Data
+            }
+            Some(crate::TableRowKind::HorizontalRule) => ExecutionTableRowKind::HorizontalRule,
+            Some(crate::TableRowKind::DoubleHorizontalRule) => {
+                ExecutionTableRowKind::DoubleHorizontalRule
+            }
+            None => {
+                return Err("execution table row is not a table row in the owned AST".to_owned());
+            }
+        };
+        if ast_row.kind != crate::NodeKind::Table || row.kind != expected_row_kind {
+            return Err("execution table row kind does not match the owned AST".to_owned());
+        }
+        let cells = &report.table_cells[row.cells.start as usize..row.cells.end as usize];
+        let mut logical_column = 0_u32;
+        for (expected_data_ordinal, (cell, ast_cell)) in
+            cells.iter().zip(&ast_row.table_cells).enumerate()
+        {
+            let expected_kind = match ast_cell.kind {
+                crate::TableCellKind::Text => ExecutionTableDataKind::Text,
+                crate::TableCellKind::Empty => ExecutionTableDataKind::None,
+                crate::TableCellKind::HorizontalRule => ExecutionTableDataKind::HorizontalRule,
+                crate::TableCellKind::DoubleHorizontalRule => {
+                    ExecutionTableDataKind::DoubleHorizontalRule
+                }
+                crate::TableCellKind::IsolatedHorizontalRule => {
+                    ExecutionTableDataKind::IsolatedHorizontalRule
+                }
+                crate::TableCellKind::IsolatedDoubleHorizontalRule => {
+                    ExecutionTableDataKind::IsolatedDoubleHorizontalRule
+                }
+            };
+            let expected_alignment = match ast_cell.alignment {
+                crate::TableAlignment::Left => matches!(
+                    cell.alignment,
+                    ExecutionTableAlignment::None
+                        | ExecutionTableAlignment::Left
+                        | ExecutionTableAlignment::Long
+                ),
+                crate::TableAlignment::Center => cell.alignment == ExecutionTableAlignment::Center,
+                crate::TableAlignment::Right => matches!(
+                    cell.alignment,
+                    ExecutionTableAlignment::Right | ExecutionTableAlignment::Numeric
+                ),
+            };
+            if usize::try_from(cell.data_ordinal).ok() != Some(expected_data_ordinal)
+                || cell.node != row.node
+                || cell.logical_column != logical_column
+                || cell.column_span != u32::from(ast_cell.column_span)
+                || cell.row_span != u32::from(ast_cell.row_span)
+                || cell.data_kind != expected_kind
+                || !expected_alignment
+                || cell.flags.contains(ExecutionTableCellFlags::TEXT_BLOCK) != ast_cell.text_block
+                || cell
+                    .flags
+                    .contains(ExecutionTableCellFlags::SOURCE_RECOVERY_SAFE)
+                    != ast_cell.source_recovery_safe
+                || cell
+                    .flags
+                    .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION)
+                    != ast_cell.vertical_continuation
+            {
+                return Err("execution table cell does not match the owned AST row".to_owned());
+            }
+            logical_column = logical_column
+                .checked_add(cell.column_span)
+                .ok_or_else(|| "execution table logical column overflow".to_owned())?;
+        }
+        if cells.len() != ast_row.table_cells.len() || logical_column > row.logical_columns {
             return Err("execution table cells do not match the owned AST row".to_owned());
         }
+    }
+    if ast_nodes.iter().enumerate().any(|(key, node)| {
+        node.table_row_kind.is_some() != bound_rows.get(key).copied().unwrap_or(false)
+    }) {
+        return Err("owned AST and execution report table-row sets differ".to_owned());
     }
     Ok(())
 }
@@ -651,12 +781,28 @@ pub(super) fn validate_limits_layout() -> Result<(), String> {
     )
 }
 
-unsafe fn copy_report(report: *const CExecutionReport) -> Result<NativeExecutionReport, String> {
-    let records = unsafe { copy_raw_records(report) }?;
-    let pool = unsafe { copy_pool(report) }?;
+unsafe fn copy_report(
+    report: *const CExecutionReport,
+    limits: ExecutionLimits,
+) -> Result<NativeExecutionReport, String> {
     let work_units = unsafe { mant_mandoc_execution_work_count(report) };
     let record_count = unsafe { mant_mandoc_execution_record_count(report) };
     let buffer_cells = unsafe { raw::mant_mandoc_execution_buffer_cell_count(report) };
+    let pool_length = unsafe { mant_mandoc_execution_pool_length(report) };
+    if work_units > limits.max_work
+        || record_count > limits.max_records
+        || buffer_cells > limits.max_buffer_cells
+        || u64::try_from(pool_length).map_or(true, |length| length > limits.max_pool_bytes)
+        || pool_length > isize::MAX as usize
+    {
+        return Err("native execution transfer exceeds its declared limits".to_owned());
+    }
+    let expected_records = usize::try_from(record_count)
+        .map_err(|_| "native execution record count exceeds addressable memory".to_owned())?;
+    let node_count = unsafe { mant_mandoc_execution_node_count(report) };
+    validate_execution_node_transfer_count(node_count, limits)?;
+    let records = unsafe { copy_raw_records(report, expected_records) }?;
+    let pool = unsafe { copy_pool(report, pool_length) }?;
     convert_report(pool, work_units, record_count, buffer_cells, records)
 }
 
@@ -681,12 +827,16 @@ struct RawRecords {
 
 macro_rules! copy_record_table {
     ($function:ident, $type:ty, $offsets:ident, $name:literal, $count:ident, $size:ident, $align:ident, $fields:ident, $offset:ident, $copy:ident) => {
-        unsafe fn $function(report: *const CExecutionReport) -> Result<Vec<$type>, String> {
+        unsafe fn $function(
+            report: *const CExecutionReport,
+            remaining: &mut usize,
+        ) -> Result<Vec<$type>, String> {
             unsafe {
                 copy_table(
                     report,
                     &api!($name, $count, $size, $align, $fields, $offset, $copy),
                     &$offsets(),
+                    remaining,
                 )
             }
         }
@@ -886,31 +1036,40 @@ copy_record_table!(
     mant_mandoc_execution_copy_diagnostics
 );
 
-unsafe fn copy_raw_records(report: *const CExecutionReport) -> Result<RawRecords, String> {
-    Ok(RawRecords {
-        sources: unsafe { copy_sources(report) }?,
-        nodes: unsafe { copy_nodes(report) }?,
-        buffer_generations: unsafe { copy_buffer_generations(report) }?,
-        atoms: unsafe { copy_atoms(report) }?,
-        fragments: unsafe { copy_fragments(report) }?,
-        fragment_atoms: unsafe { copy_fragment_atoms(report) }?,
-        flushes: unsafe { copy_flushes(report) }?,
-        boundaries: unsafe { copy_boundaries(report) }?,
-        geometry: unsafe { copy_geometry(report) }?,
-        wrappers: unsafe { copy_wrappers(report) }?,
-        references: unsafe { copy_references(report) }?,
-        anchors: unsafe { copy_anchors(report) }?,
-        tables: unsafe { copy_tables(report) }?,
-        table_rows: unsafe { copy_table_rows(report) }?,
-        table_cells: unsafe { copy_table_cells(report) }?,
-        diagnostics: unsafe { copy_diagnostics(report) }?,
-    })
+unsafe fn copy_raw_records(
+    report: *const CExecutionReport,
+    expected_records: usize,
+) -> Result<RawRecords, String> {
+    let mut remaining = expected_records;
+    let records = RawRecords {
+        sources: unsafe { copy_sources(report, &mut remaining) }?,
+        nodes: unsafe { copy_nodes(report, &mut remaining) }?,
+        buffer_generations: unsafe { copy_buffer_generations(report, &mut remaining) }?,
+        atoms: unsafe { copy_atoms(report, &mut remaining) }?,
+        fragments: unsafe { copy_fragments(report, &mut remaining) }?,
+        fragment_atoms: unsafe { copy_fragment_atoms(report, &mut remaining) }?,
+        flushes: unsafe { copy_flushes(report, &mut remaining) }?,
+        boundaries: unsafe { copy_boundaries(report, &mut remaining) }?,
+        geometry: unsafe { copy_geometry(report, &mut remaining) }?,
+        wrappers: unsafe { copy_wrappers(report, &mut remaining) }?,
+        references: unsafe { copy_references(report, &mut remaining) }?,
+        anchors: unsafe { copy_anchors(report, &mut remaining) }?,
+        tables: unsafe { copy_tables(report, &mut remaining) }?,
+        table_rows: unsafe { copy_table_rows(report, &mut remaining) }?,
+        table_cells: unsafe { copy_table_cells(report, &mut remaining) }?,
+        diagnostics: unsafe { copy_diagnostics(report, &mut remaining) }?,
+    };
+    if remaining != 0 {
+        return Err("native execution record accounting mismatch".to_owned());
+    }
+    Ok(records)
 }
 
 unsafe fn copy_table<T: Copy>(
     report: *const CExecutionReport,
     api: &RecordApi,
     offsets: &[usize],
+    remaining: &mut usize,
 ) -> Result<Vec<T>, String> {
     let native_size = unsafe { (api.size)() };
     let native_align = unsafe { (api.align)() };
@@ -926,9 +1085,21 @@ unsafe fn copy_table<T: Copy>(
         |field| unsafe { (api.offset)(field) },
     )?;
     let count = unsafe { (api.count)(report) };
+    if count > *remaining {
+        return Err(format!(
+            "libmandoc {} record count exceeds the sealed report",
+            api.name
+        ));
+    }
     let bytes = count
         .checked_mul(size_of::<T>())
         .ok_or_else(|| format!("libmandoc {} record byte count overflow", api.name))?;
+    if bytes > isize::MAX as usize {
+        return Err(format!(
+            "libmandoc {} record byte count exceeds addressable memory",
+            api.name
+        ));
+    }
     let mut records = Vec::<MaybeUninit<T>>::new();
     records
         .try_reserve_exact(count)
@@ -957,6 +1128,7 @@ unsafe fn copy_table<T: Copy>(
     let length = records.len();
     let capacity = records.capacity();
     std::mem::forget(records);
+    *remaining -= count;
     Ok(unsafe { Vec::from_raw_parts(pointer, length, capacity) })
 }
 
@@ -989,8 +1161,14 @@ fn validate_record_layout(
     Ok(())
 }
 
-unsafe fn copy_pool(report: *const CExecutionReport) -> Result<Vec<u8>, String> {
+unsafe fn copy_pool(
+    report: *const CExecutionReport,
+    expected_length: usize,
+) -> Result<Vec<u8>, String> {
     let length = unsafe { mant_mandoc_execution_pool_length(report) };
+    if length != expected_length || length > isize::MAX as usize {
+        return Err("native execution byte-pool length changed during transfer".to_owned());
+    }
     let mut pool = Vec::new();
     pool.try_reserve_exact(length)
         .map_err(|_| "could not allocate execution byte-pool transfer".to_owned())?;
@@ -1269,8 +1447,21 @@ fn convert_report(
         if parent.is_some_and(|key| usize::try_from(key.0).ok().is_none_or(|key| key >= index)) {
             return Err("execution node parent is not an earlier node".to_owned());
         }
-        if value.kind > 9 || value.flags & !0x03ff != 0 {
-            return Err("unknown execution node kind or flags".to_owned());
+        let kind = match value.kind {
+            0 => crate::NodeKind::Root,
+            1 => crate::NodeKind::Block,
+            2 => crate::NodeKind::Head,
+            3 => crate::NodeKind::Body,
+            4 => crate::NodeKind::Tail,
+            5 => crate::NodeKind::Element,
+            6 => crate::NodeKind::Text,
+            7 => crate::NodeKind::Comment,
+            8 => crate::NodeKind::Table,
+            9 => crate::NodeKind::Equation,
+            _ => return Err("unknown execution node kind".to_owned()),
+        };
+        if value.flags & !0x03ff != 0 {
+            return Err("unknown execution node flags".to_owned());
         }
         let macro_range =
             optional_pool(value.macro_start, value.macro_length, &pool, "node macro")?;
@@ -1283,29 +1474,13 @@ fn convert_report(
             source: value.source,
             line: value.line,
             column: value.column,
-            kind: value.kind,
+            kind,
             flags: value.flags,
             macro_name,
         });
     }
-    let buffer_identity_count =
-        buffer_generation_records
-            .iter()
-            .try_fold(0_usize, |count, generation| {
-                usize::try_from(generation.buffer)
-                    .ok()
-                    .and_then(|buffer| buffer.checked_add(1))
-                    .map(|next| count.max(next))
-            });
-    let Some(buffer_identity_count) = buffer_identity_count else {
-        return Err("invalid execution buffer identity".to_owned());
-    };
     let mut buffer_generations = reserved_vec(buffer_generation_count, "buffer-generation")?;
-    let mut latest_generation = reserved_filled_vec(
-        None::<(u32, u32, BufferCloseReason, u64)>,
-        buffer_identity_count,
-        "buffer-generation state",
-    )?;
+    let mut latest_generation = BTreeMap::<u32, (u32, u32, BufferCloseReason, u64)>::new();
     for (index, value) in buffer_generation_records.iter().copied().enumerate() {
         dense(value.key, index, "buffer-generation")?;
         if value.reserved != 0 || value.extent > value.capacity {
@@ -1319,20 +1494,12 @@ fn convert_report(
         if value.open_sequence >= value.close_sequence {
             return Err("invalid execution buffer-generation lifetime".to_owned());
         }
-        let state = latest_generation
-            .get_mut(
-                usize::try_from(value.buffer)
-                    .ok()
-                    .filter(|buffer| *buffer < buffer_identity_count)
-                    .ok_or_else(|| "invalid execution buffer identity".to_owned())?,
-            )
-            .expect("checked buffer generation state");
         if let Some((
             previous_generation,
             previous_capacity,
             previous_close_reason,
             previous_close,
-        )) = *state
+        )) = latest_generation.get(&value.buffer).copied()
         {
             if value.generation != previous_generation.saturating_add(1)
                 || value.capacity < previous_capacity
@@ -1344,12 +1511,15 @@ fn convert_report(
         } else if value.generation != 0 {
             return Err("execution buffer generation does not begin at zero".to_owned());
         }
-        *state = Some((
-            value.generation,
-            value.capacity,
-            close_reason,
-            value.close_sequence,
-        ));
+        latest_generation.insert(
+            value.buffer,
+            (
+                value.generation,
+                value.capacity,
+                close_reason,
+                value.close_sequence,
+            ),
+        );
         buffer_generations.push(ExecutionBufferGeneration {
             key: value.key,
             buffer: value.buffer,
@@ -1361,9 +1531,11 @@ fn convert_report(
             close_sequence: value.close_sequence,
         });
     }
-    let accounted_buffer_cells = latest_generation.iter().try_fold(0_u64, |total, state| {
-        total.checked_add(state.map_or(0, |(_, capacity, _, _)| u64::from(capacity)))
-    });
+    let accounted_buffer_cells = latest_generation
+        .values()
+        .try_fold(0_u64, |total, (_, capacity, _, _)| {
+            total.checked_add(u64::from(*capacity))
+        });
     if accounted_buffer_cells != Some(buffer_cells) {
         return Err("native execution buffer capacity accounting mismatch".to_owned());
     }
@@ -1415,6 +1587,9 @@ fn convert_report(
             .is_none_or(|key| key >= source_count)
         {
             return Err("invalid execution atom source".to_owned());
+        }
+        if node.map_or(0, |key| nodes[key.0 as usize].source) != value.source {
+            return Err("execution atom source does not match its node".to_owned());
         }
         let wrapper = option(value.wrapper);
         if wrapper.is_some_and(|key| {
@@ -1537,6 +1712,9 @@ fn convert_report(
         if value.reserved != 0 {
             return Err("non-zero reserved execution fragment field".to_owned());
         }
+        if value.start_bu < 0 || value.end_bu < 0 {
+            return Err("invalid execution fragment geometry".to_owned());
+        }
         let start = usize::try_from(value.atom_ref_start)
             .map_err(|_| "fragment atom range overflow".to_owned())?;
         let end = start
@@ -1572,8 +1750,9 @@ fn convert_report(
             || origin_atom.buffer != value.buffer
             || origin_atom.generation != value.generation
             || origin_atom.buffer_generation != value.buffer_generation
+            || origin_atom.node != value.node
         {
-            return Err("fragment atom belongs to another buffer generation".to_owned());
+            return Err("fragment atom belongs to another execution origin".to_owned());
         }
         let buffer = option(value.buffer);
         let generation = option(value.generation);
@@ -1861,21 +2040,32 @@ fn convert_report(
             4 => GeometryOriginKind::Fragment,
             _ => return Err("unknown execution geometry origin kind".to_owned()),
         };
+        let node = optional_node_key(value.node, node_count, "geometry")?;
         match kind {
             GeometryKind::Advance => {
+                let effective = value
+                    .after
+                    .checked_sub(value.before)
+                    .filter(|_| value.before >= 0 && value.after >= 0);
+                let origin_flush = option(value.origin_key)
+                    .and_then(|key| usize::try_from(key).ok())
+                    .and_then(|key| flushes.get(key));
                 if unit != GeometryUnit::Basic
+                    || value.requested < 0
+                    || effective != Some(value.effective)
                     || !matches!(
                         origin_kind,
                         GeometryOriginKind::None | GeometryOriginKind::Flush
                     )
                     || (origin_kind == GeometryOriginKind::None)
                         != option(value.origin_key).is_none()
-                    || option(value.origin_key).is_some_and(|key| {
-                        usize::try_from(key)
-                            .ok()
-                            .is_none_or(|key| key >= flushes.len())
-                    })
                     || option(value.related) != option(value.origin_key)
+                    || (origin_kind == GeometryOriginKind::Flush
+                        && origin_flush.is_none_or(|flush| {
+                            node != flush.node
+                                || value.sequence <= flush.sequence
+                                || value.sequence >= flush.outcome_sequence
+                        }))
                 {
                     return Err("invalid execution advance geometry relationship".to_owned());
                 }
@@ -1895,13 +2085,16 @@ fn convert_report(
                     return Err("invalid execution glyph geometry relationship".to_owned());
                 };
                 let fragment = &fragments[related_fragment];
+                let Some(fragment_width) = fragment.end_bu.checked_sub(fragment.start_bu) else {
+                    return Err("invalid execution glyph geometry relationship".to_owned());
+                };
                 if unit != GeometryUnit::Basic
                     || origin_kind != GeometryOriginKind::Atom
                     || glyph_geometry_coverage[related_fragment]
                     || fragment.atoms.as_slice() != [AtomKey(value.origin_key)]
                     || atoms[origin_atom].disposition != AtomDisposition::Emitted
-                    || optional_node_key(value.node, node_count, "glyph geometry")? != fragment.node
-                    || value.requested != fragment.end_bu - fragment.start_bu
+                    || node != fragment.node
+                    || value.requested != fragment_width
                     || value.effective != value.requested
                     || value.before != fragment.start_bu
                     || value.after != fragment.end_bu
@@ -1914,27 +2107,42 @@ fn convert_report(
                 glyph_geometry_coverage[related_fragment] = true;
             }
             GeometryKind::Endline => {
+                let boundary = option(value.origin_key)
+                    .and_then(|key| usize::try_from(key).ok())
+                    .and_then(|key| boundaries.get(key));
                 if unit != GeometryUnit::DeviceLine
+                    || value.requested != 1
+                    || value.effective != 1
+                    || value.before < 0
+                    || value.after < 0
                     || origin_kind != GeometryOriginKind::Boundary
                     || option(value.origin_key) != option(value.related)
-                    || option(value.related).is_none_or(|key| {
-                        usize::try_from(key)
-                            .ok()
-                            .is_none_or(|key| key >= boundaries.len())
+                    || boundary.is_none_or(|boundary| {
+                        boundary.request != BoundaryRequest::DeviceEndline
+                            || boundary.effect != BoundaryEffect::EndedLine
+                            || node != boundary.node
+                            || value.before != boundary.line_before
+                            || value.after != boundary.line_after
+                            || value.sequence <= boundary.sequence
                     })
                 {
                     return Err("invalid execution endline geometry relationship".to_owned());
                 }
             }
             GeometryKind::Field => {
+                let flush = option(value.origin_key)
+                    .and_then(|key| usize::try_from(key).ok())
+                    .and_then(|key| flushes.get(key));
                 if unit != GeometryUnit::Basic
+                    || value.before < 0
+                    || value.after < 0
                     || origin_kind != GeometryOriginKind::Flush
-                    || option(value.origin_key).is_none_or(|key| {
-                        usize::try_from(key)
-                            .ok()
-                            .is_none_or(|key| key >= flushes.len())
-                    })
                     || option(value.related) != option(value.origin_key)
+                    || flush.is_none_or(|flush| {
+                        node != flush.node
+                            || value.sequence <= flush.sequence
+                            || value.sequence >= flush.outcome_sequence
+                    })
                 {
                     return Err("invalid execution field geometry relationship".to_owned());
                 }
@@ -1942,7 +2150,7 @@ fn convert_report(
         }
         geometry.push(ExecutionGeometry {
             key: value.key,
-            node: optional_node_key(value.node, node_count, "geometry")?,
+            node,
             related: option(value.related),
             kind,
             unit,
@@ -1958,17 +2166,18 @@ fn convert_report(
     if glyph_geometry_coverage.iter().any(|covered| !covered) {
         return Err("execution fragment has no unique glyph geometry".to_owned());
     }
-    let mut wrappers = reserved_vec(wrapper_count, "wrapper")?;
+    let mut wrappers: Vec<ExecutionWrapper> = reserved_vec(wrapper_count, "wrapper")?;
+    let mut last_wrapper_child_leave =
+        reserved_filled_vec(None::<u64>, wrapper_count, "wrapper sibling order")?;
+    let mut last_root_wrapper_leave = None;
     for (index, value) in wrapper_records.into_iter().enumerate() {
         dense(value.key, index, "wrapper")?;
+        if index != 0 && wrappers[index - 1].enter_sequence >= value.enter_sequence {
+            return Err("execution wrappers are not in entry order".to_owned());
+        }
         let parent = option(value.parent);
         if parent.is_some_and(|key| usize::try_from(key).ok().is_none_or(|key| key >= index)) {
             return Err("execution wrapper parent is not an earlier wrapper".to_owned());
-        }
-        if value.leave_sequence < value.enter_sequence
-            || value.depth_after > value.depth_before.saturating_add(1)
-        {
-            return Err("unbalanced execution wrapper".to_owned());
         }
         let node = optional_node_key(value.node, node_count, "wrapper")?;
         let kind = match value.kind {
@@ -1976,21 +2185,61 @@ fn convert_report(
             2 => ExecutionWrapperKind::Font,
             _ => return Err("unknown execution wrapper kind".to_owned()),
         };
-        if value.enter_atom as usize > atom_count
+        if value.affinity != 0
+            || value.flags != 0
+            || value.enter_atom as usize > atom_count
             || value.leave_atom == NONE
             || value.leave_atom as usize > atom_count
             || value.enter_atom > value.leave_atom
         {
             return Err("invalid execution wrapper atom range".to_owned());
         }
-        if kind == ExecutionWrapperKind::Node && node.is_none() {
-            return Err("node wrapper has no execution node".to_owned());
+        match kind {
+            ExecutionWrapperKind::Node
+                if node.is_none()
+                    || value.target_start != NONE
+                    || value.target_length != 0
+                    || value.state_before != 0
+                    || value.state_after != 0
+                    || value.depth_before != 0
+                    || value.depth_after != 0
+                    || value.enter_sequence >= value.leave_sequence =>
+            {
+                return Err("invalid execution node wrapper".to_owned());
+            }
+            ExecutionWrapperKind::Font
+                if value.target_start != NONE
+                    || value.target_length != 0
+                    || value.enter_atom != value.leave_atom
+                    || value.enter_sequence != value.leave_sequence
+                    || value.state_before > 3
+                    || value.state_after > 3
+                    || value
+                        .depth_before
+                        .checked_add(1)
+                        .is_none_or(|maximum| value.depth_after > maximum) =>
+            {
+                return Err("invalid execution font transition".to_owned());
+            }
+            _ => {}
         }
-        if kind == ExecutionWrapperKind::Font
-            && (value.state_before > 3 || value.state_after > 3 || value.target_start != NONE)
-        {
-            return Err("invalid execution font transition".to_owned());
+        let last_sibling_leave = if let Some(parent) = parent {
+            let parent = usize::try_from(parent)
+                .map_err(|_| "execution wrapper parent key overflow".to_owned())?;
+            let parent_wrapper = &wrappers[parent];
+            if parent_wrapper.enter_sequence >= value.enter_sequence
+                || parent_wrapper.leave_sequence <= value.leave_sequence
+            {
+                return Err("execution wrapper is outside its parent".to_owned());
+            }
+            &mut last_wrapper_child_leave[parent]
+        } else {
+            &mut last_root_wrapper_leave
+        };
+        if last_sibling_leave.is_some_and(|leave| value.enter_sequence <= leave) {
+            return Err("overlapping execution wrapper siblings".to_owned());
         }
+        *last_sibling_leave = Some(value.leave_sequence);
         wrappers.push(ExecutionWrapper {
             key: value.key,
             parent,
@@ -2014,22 +2263,6 @@ fn convert_report(
             leave_sequence: value.leave_sequence,
         });
     }
-    for wrapper in &wrappers {
-        if let Some(parent) = wrapper.parent {
-            let parent = &wrappers[parent as usize];
-            if parent.enter_sequence >= wrapper.enter_sequence
-                || parent.leave_sequence <= wrapper.leave_sequence
-            {
-                return Err("execution wrapper is outside its parent".to_owned());
-            }
-        }
-        if wrapper.kind == ExecutionWrapperKind::Node
-            && (wrapper.enter_atom as usize > atom_count
-                || wrapper.leave_atom as usize > atom_count)
-        {
-            return Err("invalid node wrapper atom range".to_owned());
-        }
-    }
     for atom in &atoms {
         if let Some(wrapper_key) = atom.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
@@ -2038,6 +2271,11 @@ fn convert_report(
                 || atom.sequence >= wrapper.leave_sequence
                 || atom.key.0 < wrapper.enter_atom
                 || atom.key.0 >= wrapper.leave_atom
+                || atom.node.is_none_or(|node| {
+                    wrapper
+                        .node
+                        .is_none_or(|owner| !node_is_within(&nodes, node, owner))
+                })
             {
                 return Err("execution atom is outside its node wrapper".to_owned());
             }
@@ -2046,6 +2284,11 @@ fn convert_report(
     for fragment in &fragments {
         if let Some(wrapper_key) = fragment.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
+            // A buffered atom can be emitted after its source node wrapper
+            // unwinds.  The fragment wrapper therefore identifies the later
+            // execution interval, while the referenced atom carries the AST
+            // source owner; requiring that owner to be below this wrapper
+            // would reject the delayed flushes performed by term_flushln().
             if wrapper.kind != ExecutionWrapperKind::Node
                 || fragment.sequence <= wrapper.enter_sequence
                 || fragment.sequence >= wrapper.leave_sequence
@@ -2150,6 +2393,8 @@ fn convert_report(
                 || parent_reference.leave_sequence <= value.leave_sequence
                 || parent_reference.execution_atoms.start > execution_atoms.start
                 || parent_reference.execution_atoms.end < execution_atoms.end
+                || parent_reference.atoms.start > label_atoms.start
+                || parent_reference.atoms.end < label_atoms.end
             {
                 return Err("invalid execution reference nesting".to_owned());
             }
@@ -2344,7 +2589,7 @@ fn convert_report(
             || value.leave_sequence >= table.leave_sequence
             || previous_row_leave[table_index].is_some_and(|leave| value.enter_sequence <= leave)
             || (kind != ExecutionTableRowKind::Data && !cells.is_empty())
-            || nodes[node.0 as usize].kind != 8
+            || nodes[node.0 as usize].kind != crate::NodeKind::Table
             || !exact_sequence_range(
                 &atoms,
                 &row_atoms,
@@ -3109,6 +3354,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn node_transfer_budget_is_checked_before_ast_key_allocation() {
+        let limits = ExecutionLimits {
+            max_nodes: 1,
+            ..ExecutionLimits::default()
+        };
+        assert_eq!(
+            validate_execution_node_transfer_count(2, limits).unwrap_err(),
+            "native execution node transfer exceeds its declared limit"
+        );
+
+        let limits = ExecutionLimits {
+            max_nodes: u64::MAX,
+            ..ExecutionLimits::default()
+        };
+        assert_eq!(
+            validate_execution_node_transfer_count(usize::MAX, limits).unwrap_err(),
+            "native execution node transfer exceeds its declared limit"
+        );
+    }
+
+    #[test]
     fn record_layout_validation_rejects_each_abi_dimension() {
         let offsets = [0, 4, 8];
         let valid = |field: u32| offsets[field as usize];
@@ -3126,6 +3392,42 @@ mod tests {
             })
             .unwrap_err(),
             "libmandoc test record offset mismatch at field 1"
+        );
+    }
+
+    #[test]
+    fn ast_binding_rejects_reassigned_execution_origins() {
+        let source = br".TH PROBE 1
+.SH NAME
+probe \- test
+.SH DESCRIPTION
+body
+";
+        let mut report = crate::Parser::new(crate::ParseOptions::default())
+            .with_input_format(crate::InputFormat::Man)
+            .execute_bytes("probe.1", source, ExecutionLimits::default())
+            .unwrap();
+        let root = &report.document.root;
+        validate_execution_ast_bindings(root, &report.execution).unwrap();
+
+        let original = report.execution.nodes[0].line;
+        report.execution.nodes[0].line = original.saturating_add(1);
+        assert_eq!(
+            validate_execution_ast_bindings(root, &report.execution).unwrap_err(),
+            "owned syntax node does not match its execution origin"
+        );
+        report.execution.nodes[0].line = original;
+
+        let section = report
+            .execution
+            .nodes
+            .iter()
+            .position(|node| node.macro_name.as_deref() == Some("SH"))
+            .expect("section node");
+        report.execution.nodes[section].parent = None;
+        assert_eq!(
+            validate_execution_ast_bindings(root, &report.execution).unwrap_err(),
+            "owned syntax node does not match its execution origin"
         );
     }
 
@@ -3241,7 +3543,7 @@ mod tests {
             depth_before: 0,
             depth_after: 0,
             enter_sequence: 1,
-            leave_sequence: 2,
+            leave_sequence: 1,
         }
     }
 
@@ -3596,7 +3898,19 @@ mod tests {
 
         assert_eq!(
             rejection(records),
-            "fragment atom belongs to another buffer generation"
+            "fragment atom belongs to another execution origin"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_fragment_node_reassignment() {
+        let mut records = records_with_emitted_fragment();
+        records.nodes.push(node());
+        records.atoms[0].node = 0;
+
+        assert_eq!(
+            rejection(records),
+            "fragment atom belongs to another execution origin"
         );
     }
 
@@ -3606,13 +3920,146 @@ mod tests {
         let mut value = wrapper();
         value.depth_after = 2;
         records.wrappers.push(value);
-        assert_eq!(rejection(records), "unbalanced execution wrapper");
+        assert_eq!(rejection(records), "invalid execution font transition");
 
         let mut records = raw_records();
         let mut value = wrapper();
         value.leave_sequence = 0;
         records.wrappers.push(value);
-        assert_eq!(rejection(records), "unbalanced execution wrapper");
+        assert_eq!(rejection(records), "invalid execution font transition");
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_wrapper_variants() {
+        for mutate in [
+            |value: &mut CWrapperRecord| value.affinity = 1,
+            |value: &mut CWrapperRecord| value.flags = 1,
+            |value: &mut CWrapperRecord| value.state_before = 1,
+            |value: &mut CWrapperRecord| value.depth_after = 1,
+            |value: &mut CWrapperRecord| value.target_start = 0,
+        ] {
+            let mut records = raw_records();
+            let mut value = wrapper();
+            value.kind = 1;
+            value.node = 0;
+            value.leave_sequence = 2;
+            records.nodes.push(node());
+            mutate(&mut value);
+            records.wrappers.push(value);
+            assert!(matches!(
+                rejection(records).as_str(),
+                "invalid execution wrapper atom range" | "invalid execution node wrapper"
+            ));
+        }
+
+        for mutate in [
+            |value: &mut CWrapperRecord| value.leave_atom = 1,
+            |value: &mut CWrapperRecord| value.leave_sequence = 3,
+            |value: &mut CWrapperRecord| value.depth_before = u32::MAX,
+            |value: &mut CWrapperRecord| value.state_after = 4,
+        ] {
+            let mut records = raw_records();
+            let mut value = wrapper();
+            mutate(&mut value);
+            records.wrappers.push(value);
+            assert!(matches!(
+                rejection(records).as_str(),
+                "invalid execution wrapper atom range" | "invalid execution font transition"
+            ));
+        }
+    }
+
+    #[test]
+    fn convert_report_rejects_overlapping_or_misordered_node_wrappers() {
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut outer = wrapper();
+        outer.kind = 1;
+        outer.node = 0;
+        outer.enter_sequence = 1;
+        outer.leave_sequence = 9;
+        let mut overlapping = outer;
+        overlapping.key = 1;
+        overlapping.enter_sequence = 2;
+        overlapping.leave_sequence = 8;
+        records.wrappers.extend([outer, overlapping]);
+        assert_eq!(rejection(records), "overlapping execution wrapper siblings");
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut later = wrapper();
+        later.kind = 1;
+        later.node = 0;
+        later.enter_sequence = 2;
+        later.leave_sequence = 3;
+        let mut earlier = later;
+        earlier.key = 1;
+        earlier.enter_sequence = 1;
+        earlier.leave_sequence = 4;
+        records.wrappers.extend([later, earlier]);
+        assert_eq!(
+            rejection(records),
+            "execution wrappers are not in entry order"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_atoms_from_another_node_wrapper_subtree() {
+        let mut records = records_with_emitted_fragment();
+        records.nodes.push(node());
+        records.nodes.push(CNodeRecord { key: 1, ..node() });
+        records.buffer_generations[0].close_sequence = 20;
+        records.atoms[0].node = 1;
+        records.atoms[0].wrapper = 0;
+        records.atoms[0].sequence = 2;
+        records.flushes[0].node = 1;
+        records.flushes[0].sequence = 3;
+        records.flushes[0].outcome_sequence = 6;
+        records.fragments[0].node = 1;
+        records.fragments[0].sequence = 4;
+        records.geometry[0].node = 1;
+        records.geometry[0].sequence = 5;
+        let mut value = wrapper();
+        value.kind = 1;
+        value.node = 0;
+        value.leave_atom = 1;
+        value.enter_sequence = 1;
+        value.leave_sequence = 10;
+        records.wrappers.push(value);
+        assert_eq!(
+            rejection(records),
+            "execution atom is outside its node wrapper"
+        );
+    }
+
+    #[test]
+    fn convert_report_allows_buffered_fragments_to_flush_in_another_node_wrapper() {
+        let mut records = records_with_emitted_fragment();
+        records.nodes.push(node());
+        records.nodes.push(CNodeRecord { key: 1, ..node() });
+        records.buffer_generations[0].close_sequence = 20;
+        records.atoms[0].node = 1;
+        records.atoms[0].sequence = 2;
+        records.flushes[0].node = 1;
+        records.flushes[0].sequence = 3;
+        records.flushes[0].outcome_sequence = 6;
+        records.fragments[0].node = 1;
+        records.fragments[0].wrapper = 0;
+        records.fragments[0].sequence = 4;
+        records.geometry[0].node = 1;
+        records.geometry[0].sequence = 5;
+        let mut value = wrapper();
+        value.kind = 1;
+        value.node = 0;
+        value.leave_atom = 1;
+        value.enter_sequence = 1;
+        value.leave_sequence = 10;
+        records.wrappers.push(value);
+
+        let count = record_count(&records);
+        let report = convert_report(b"x".to_vec(), 2, count, 2, records).unwrap();
+        assert_eq!(report.fragments[0].node, Some(ExecutionNodeKey(1)));
+        assert_eq!(report.fragments[0].wrapper, Some(0));
     }
 
     #[test]
@@ -3820,6 +4267,16 @@ mod tests {
     }
 
     #[test]
+    fn convert_report_does_not_allocate_from_sparse_buffer_keys() {
+        let mut records = raw_records();
+        records.buffer_generations[0].buffer = u32::MAX - 1;
+        let count = record_count(&records);
+        let report = convert_report(b"x".to_vec(), 0, count, 2, records).unwrap();
+
+        assert_eq!(report.buffer_generations[0].buffer, u32::MAX - 1);
+    }
+
+    #[test]
     fn convert_report_rejects_invalid_flush_facts() {
         let mut records = raw_records();
         let mut value = flush();
@@ -3941,7 +4398,7 @@ mod tests {
         records.atoms[0].disposition = 3;
         assert_eq!(
             rejection(records),
-            "fragment atom belongs to another buffer generation"
+            "fragment atom belongs to another execution origin"
         );
 
         let mut records = records_with_emitted_fragment();
@@ -3969,6 +4426,11 @@ mod tests {
         );
 
         let mut records = records_with_emitted_fragment();
+        records.fragments[0].start_bu = i64::MIN;
+        records.fragments[0].end_bu = i64::MAX;
+        assert_eq!(rejection(records), "invalid execution fragment geometry");
+
+        let mut records = records_with_emitted_fragment();
         records.geometry[0].sequence = records.flushes[0].outcome_sequence;
         assert_eq!(
             rejection(records),
@@ -3983,6 +4445,100 @@ mod tests {
         assert_eq!(
             rejection(records),
             "invalid execution glyph geometry relationship"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_geometry_reassigned_to_another_node() {
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut flush_record = flush();
+        flush_record.node = 0;
+        flush_record.sequence = 1;
+        flush_record.outcome_sequence = 5;
+        records.flushes.push(flush_record);
+        records.geometry.push(CGeometryRecord {
+            key: 0,
+            node: NONE,
+            related: 0,
+            kind: 1,
+            unit: 1,
+            origin_kind: 2,
+            origin_key: 0,
+            reserved: 0,
+            requested: 24,
+            effective: 24,
+            before: 0,
+            after: 24,
+            sequence: 2,
+        });
+        assert_eq!(
+            rejection(records),
+            "invalid execution advance geometry relationship"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        records.boundaries.push(CBoundaryRecord {
+            key: 0,
+            node: 0,
+            parent: NONE,
+            request: 4,
+            effect: 2,
+            flags_before: 0,
+            flags_after: 0,
+            line_before: 0,
+            line_after: 1,
+            visual_before: 24,
+            visual_after: 0,
+            sequence: 1,
+            reserved: 0,
+        });
+        records.geometry.push(CGeometryRecord {
+            key: 0,
+            node: NONE,
+            related: 0,
+            kind: 3,
+            unit: 3,
+            origin_kind: 3,
+            origin_key: 0,
+            reserved: 0,
+            requested: 1,
+            effective: 1,
+            before: 0,
+            after: 1,
+            sequence: 2,
+        });
+        assert_eq!(
+            rejection(records),
+            "invalid execution endline geometry relationship"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut flush_record = flush();
+        flush_record.node = 0;
+        flush_record.sequence = 1;
+        flush_record.outcome_sequence = 5;
+        records.flushes.push(flush_record);
+        records.geometry.push(CGeometryRecord {
+            key: 0,
+            node: NONE,
+            related: 0,
+            kind: 4,
+            unit: 1,
+            origin_kind: 2,
+            origin_key: 0,
+            reserved: 0,
+            requested: 0,
+            effective: 0,
+            before: 0,
+            after: 0,
+            sequence: 2,
+        });
+        assert_eq!(
+            rejection(records),
+            "invalid execution field geometry relationship"
         );
     }
 

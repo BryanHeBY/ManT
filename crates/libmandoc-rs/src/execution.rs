@@ -2,6 +2,8 @@
 
 use std::{fmt, ops::Range, path::PathBuf};
 
+use crate::NodeKind;
+
 /// Sentinel-free report-local identity of a syntax node.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionNodeKey(pub u32);
@@ -347,8 +349,8 @@ pub struct ExecutionNode {
     pub line: u32,
     /// One-based source column, or zero when unavailable.
     pub column: u32,
-    /// Stable node-kind code shared with the owned AST snapshot.
-    pub kind: u32,
+    /// Structural kind shared with the owned AST snapshot.
+    pub kind: NodeKind,
     /// Stable node flags.
     pub flags: u32,
     /// Source macro name, when applicable.
@@ -790,44 +792,152 @@ pub struct ExecutionDiagnostic {
 pub struct NativeExecutionReport {
     pub(crate) pool: Vec<u8>,
     /// Native work units charged by this execution.
-    pub work_units: u64,
+    pub(crate) work_units: u64,
     /// Total records stored across all typed tables.
-    pub record_count: u64,
+    pub(crate) record_count: u64,
     /// Peak native terminal buffer capacity charged to this execution.
-    pub buffer_cells: u64,
+    pub(crate) buffer_cells: u64,
     /// Participating sources.
-    pub sources: Vec<ExecutionSource>,
+    pub(crate) sources: Vec<ExecutionSource>,
     /// Final-tree node registry.
-    pub nodes: Vec<ExecutionNode>,
+    pub(crate) nodes: Vec<ExecutionNode>,
     /// Native buffer lifetimes referenced by atoms, fragments, and flushes.
-    pub buffer_generations: Vec<ExecutionBufferGeneration>,
+    pub(crate) buffer_generations: Vec<ExecutionBufferGeneration>,
     /// Buffer atoms.
-    pub atoms: Vec<ExecutionAtom>,
+    pub(crate) atoms: Vec<ExecutionAtom>,
     /// Device fragments.
-    pub fragments: Vec<ExecutionFragment>,
+    pub(crate) fragments: Vec<ExecutionFragment>,
     /// Native field segments.
-    pub flushes: Vec<ExecutionFlush>,
+    pub(crate) flushes: Vec<ExecutionFlush>,
     /// Ordered boundary requests and effects.
-    pub boundaries: Vec<ExecutionBoundary>,
+    pub(crate) boundaries: Vec<ExecutionBoundary>,
     /// Objective native geometry.
-    pub geometry: Vec<ExecutionGeometry>,
+    pub(crate) geometry: Vec<ExecutionGeometry>,
     /// Execution scopes and instantaneous state transitions.
-    pub wrappers: Vec<ExecutionWrapper>,
+    pub(crate) wrappers: Vec<ExecutionWrapper>,
     /// Semantic references observed at their native macro handlers.
-    pub references: Vec<ExecutionReference>,
+    pub(crate) references: Vec<ExecutionReference>,
     /// Native target attachments.
-    pub anchors: Vec<ExecutionAnchor>,
+    pub(crate) anchors: Vec<ExecutionAnchor>,
     /// Native table executions.
-    pub tables: Vec<ExecutionTable>,
+    pub(crate) tables: Vec<ExecutionTable>,
     /// Native table rows.
-    pub table_rows: Vec<ExecutionTableRow>,
+    pub(crate) table_rows: Vec<ExecutionTableRow>,
     /// Native table cells.
-    pub table_cells: Vec<ExecutionTableCell>,
+    pub(crate) table_cells: Vec<ExecutionTableCell>,
     /// Non-fatal report diagnostics.
-    pub diagnostics: Vec<ExecutionDiagnostic>,
+    pub(crate) diagnostics: Vec<ExecutionDiagnostic>,
 }
 
 impl NativeExecutionReport {
+    /// Native work units charged by this execution.
+    #[must_use]
+    pub const fn work_units(&self) -> u64 {
+        self.work_units
+    }
+
+    /// Total records stored across all typed tables.
+    #[must_use]
+    pub const fn record_count(&self) -> u64 {
+        self.record_count
+    }
+
+    /// Peak native terminal buffer capacity charged to this execution.
+    #[must_use]
+    pub const fn buffer_cells(&self) -> u64 {
+        self.buffer_cells
+    }
+
+    /// Participating sources.
+    #[must_use]
+    pub fn sources(&self) -> &[ExecutionSource] {
+        &self.sources
+    }
+
+    /// Final-tree node registry.
+    #[must_use]
+    pub fn nodes(&self) -> &[ExecutionNode] {
+        &self.nodes
+    }
+
+    /// Native terminal-buffer lifetimes.
+    #[must_use]
+    pub fn buffer_generations(&self) -> &[ExecutionBufferGeneration] {
+        &self.buffer_generations
+    }
+
+    /// Native buffer atoms.
+    #[must_use]
+    pub fn atoms(&self) -> &[ExecutionAtom] {
+        &self.atoms
+    }
+
+    /// Device fragments.
+    #[must_use]
+    pub fn fragments(&self) -> &[ExecutionFragment] {
+        &self.fragments
+    }
+
+    /// Native field segments.
+    #[must_use]
+    pub fn flushes(&self) -> &[ExecutionFlush] {
+        &self.flushes
+    }
+
+    /// Ordered boundary requests and effects.
+    #[must_use]
+    pub fn boundaries(&self) -> &[ExecutionBoundary] {
+        &self.boundaries
+    }
+
+    /// Native geometry facts.
+    #[must_use]
+    pub fn geometry(&self) -> &[ExecutionGeometry] {
+        &self.geometry
+    }
+
+    /// Execution scopes and state transitions.
+    #[must_use]
+    pub fn wrappers(&self) -> &[ExecutionWrapper] {
+        &self.wrappers
+    }
+
+    /// Semantic references observed by native handlers.
+    #[must_use]
+    pub fn references(&self) -> &[ExecutionReference] {
+        &self.references
+    }
+
+    /// Native target attachments.
+    #[must_use]
+    pub fn anchors(&self) -> &[ExecutionAnchor] {
+        &self.anchors
+    }
+
+    /// Native table executions.
+    #[must_use]
+    pub fn tables(&self) -> &[ExecutionTable] {
+        &self.tables
+    }
+
+    /// Native table rows.
+    #[must_use]
+    pub fn table_rows(&self) -> &[ExecutionTableRow] {
+        &self.table_rows
+    }
+
+    /// Native table cells.
+    #[must_use]
+    pub fn table_cells(&self) -> &[ExecutionTableCell] {
+        &self.table_cells
+    }
+
+    /// Non-fatal execution diagnostics.
+    #[must_use]
+    pub fn diagnostics(&self) -> &[ExecutionDiagnostic] {
+        &self.diagnostics
+    }
+
     /// Number of bytes in the immutable report pool.
     #[must_use]
     pub fn pool_len(&self) -> usize {

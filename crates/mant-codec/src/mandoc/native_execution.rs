@@ -66,7 +66,7 @@ pub(super) struct NativeOrigin {
     pub(super) source: PathBuf,
     pub(super) line: u32,
     pub(super) column: u32,
-    pub(super) kind: u32,
+    pub(super) kind: NodeKind,
     pub(super) macro_name: Option<String>,
 }
 
@@ -180,16 +180,16 @@ fn definition_facts(
         body_flushes: Vec<ExecutionFlush>,
     }
 
-    let mut definition_items = vec![false; report.nodes.len()];
+    let mut definition_items = vec![false; report.nodes().len()];
     mark_definition_items(&document.root, None, &mut definition_items);
-    let mut owner_definition = vec![None; report.nodes.len()];
+    let mut owner_definition = vec![None; report.nodes().len()];
     let mut definitions = Vec::new();
-    for node in &report.nodes {
+    for node in report.nodes() {
         let is_man_definition =
             matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "TQ" | "HP"));
         let is_mdoc_definition =
             node.macro_name.as_deref() == Some("It") && definition_items[node.key.0 as usize];
-        if node.kind == 1 && (is_man_definition || is_mdoc_definition) {
+        if node.kind == NodeKind::Block && (is_man_definition || is_mdoc_definition) {
             owner_definition[node.key.0 as usize] = Some(definitions.len());
             definitions.push(PendingDefinition {
                 owner: Some(node.key),
@@ -199,8 +199,8 @@ fn definition_facts(
         }
     }
 
-    let mut direct_content_definition = vec![None; report.nodes.len()];
-    for node in &report.nodes {
+    let mut direct_content_definition = vec![None; report.nodes().len()];
+    for node in report.nodes() {
         let Some(parent) = node.parent else {
             continue;
         };
@@ -208,11 +208,11 @@ fn definition_facts(
             continue;
         };
         match node.kind {
-            2 => {
+            NodeKind::Head => {
                 definitions[definition].head = Some(node.key);
                 direct_content_definition[node.key.0 as usize] = Some((definition, true));
             }
-            3 => {
+            NodeKind::Body => {
                 definitions[definition].body = Some(node.key);
                 direct_content_definition[node.key.0 as usize] = Some((definition, false));
             }
@@ -220,8 +220,8 @@ fn definition_facts(
         }
     }
 
-    let mut content_definition = vec![None; report.nodes.len()];
-    for node in &report.nodes {
+    let mut content_definition = vec![None; report.nodes().len()];
+    for node in report.nodes() {
         content_definition[node.key.0 as usize] = direct_content_definition[node.key.0 as usize]
             .or_else(|| {
                 node.parent
@@ -229,7 +229,7 @@ fn definition_facts(
             });
     }
 
-    for flush in &report.flushes {
+    for flush in report.flushes() {
         let Some(node) = flush.node else {
             continue;
         };
@@ -258,9 +258,9 @@ fn definition_facts(
 }
 
 fn atom_reference_owners(report: &NativeExecutionReport) -> Vec<Option<u32>> {
-    let mut atom_references = vec![None; report.atoms.len()];
+    let mut atom_references = vec![None; report.atoms().len()];
     let mut reference_events = report
-        .references
+        .references()
         .iter()
         .filter(|reference| !reference.atoms.is_empty())
         .flat_map(|reference| {
@@ -309,7 +309,7 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
     let mut runs: Vec<NativeTextRun> = Vec::new();
     let atom_references = atom_reference_owners(report);
     let mut visible_cells: BTreeMap<u32, BTreeMap<i64, char>> = BTreeMap::new();
-    for fragment in &report.fragments {
+    for fragment in report.fragments() {
         let Some(node) = fragment.node else {
             continue;
         };
@@ -317,10 +317,10 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
             continue;
         }
         for key in &fragment.atoms {
-            let atom = &report.atoms[key.0 as usize];
+            let atom = &report.atoms()[key.0 as usize];
             let reference = atom_references[key.0 as usize];
-            let origin = &report.nodes[node.0 as usize];
-            let source = report.sources[origin.source as usize].path.clone();
+            let origin = &report.nodes()[node.0 as usize];
+            let source = report.sources()[origin.source as usize].path.clone();
             let Some(character) = char::from_u32(atom.display_scalar) else {
                 continue;
             };
@@ -491,7 +491,7 @@ fn table_cell_content(report: &NativeExecutionReport, atoms: Range<u32>) -> Vec<
     let mut buffer = String::new();
     let mut font = None;
     let mut consume_break_space = false;
-    for atom in &report.atoms[start..end] {
+    for atom in &report.atoms()[start..end] {
         if atom.role != AtomRole::TableCellPayload {
             continue;
         }
@@ -666,11 +666,11 @@ fn project_table_row(
             .as_ref()
             .expect("owned AST table row kind"),
     );
-    let origin = &report.nodes[row.node.0 as usize];
+    let origin = &report.nodes()[row.node.0 as usize];
     assert_eq!(ast_row.line, origin.line, "table row source line");
     assert_eq!(ast_row.column, origin.column, "table row source column");
-    let source = report.sources[origin.source as usize].path.clone();
-    let execution_cells = &report.table_cells[row.cells.start as usize..row.cells.end as usize];
+    let source = report.sources()[origin.source as usize].path.clone();
+    let execution_cells = &report.table_cells()[row.cells.start as usize..row.cells.end as usize];
     let mut data_cells = vec![None; ast_row.table_cells.len()];
     let projected_cells = execution_cells
         .iter()
@@ -716,32 +716,32 @@ fn project_table_row(
 }
 
 fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -> Vec<NativeTable> {
-    if report.tables.is_empty() {
+    if report.tables().is_empty() {
         return Vec::new();
     }
-    let ast_nodes = native_nodes_by_execution_key(document, report.nodes.len());
-    let mut fragments_by_generation = vec![Vec::new(); report.buffer_generations.len()];
-    for fragment in &report.fragments {
+    let ast_nodes = native_nodes_by_execution_key(document, report.nodes().len());
+    let mut fragments_by_generation = vec![Vec::new(); report.buffer_generations().len()];
+    for fragment in report.fragments() {
         if let Some(generation) = fragment.buffer_generation {
             fragments_by_generation[generation as usize].push(fragment.clone());
         }
     }
-    let mut flushes_by_generation = vec![Vec::new(); report.buffer_generations.len()];
-    for flush in &report.flushes {
+    let mut flushes_by_generation = vec![Vec::new(); report.buffer_generations().len()];
+    for flush in report.flushes() {
         flushes_by_generation[flush.buffer_generation as usize].push(flush.clone());
     }
 
     report
-        .tables
+        .tables()
         .iter()
         .map(|table| {
-            let first_origin = &report.nodes[table.first_row_node.0 as usize];
-            let source = report.sources[first_origin.source as usize].path.clone();
+            let first_origin = &report.nodes()[table.first_row_node.0 as usize];
+            let source = report.sources()[first_origin.source as usize].path.clone();
             let row_start = table.rows.start as usize;
             let row_end = table.rows.end as usize;
             let mut rows = Vec::with_capacity(row_end - row_start);
             let mut ir_rows = Vec::with_capacity(row_end - row_start);
-            for row in &report.table_rows[row_start..row_end] {
+            for row in &report.table_rows()[row_start..row_end] {
                 let (projected, ir_row) = project_table_row(
                     &ast_nodes,
                     report,
@@ -775,12 +775,12 @@ pub(super) fn project(
     let (runs, visible_lines) = text_projection(report);
     NativeProjection {
         origins: report
-            .nodes
+            .nodes()
             .iter()
             .map(|node| NativeOrigin {
                 key: node.key,
                 parent: node.parent,
-                source: report.sources[node.source as usize].path.clone(),
+                source: report.sources()[node.source as usize].path.clone(),
                 line: node.line,
                 column: node.column,
                 kind: node.kind,
@@ -790,24 +790,24 @@ pub(super) fn project(
         runs,
         visible_lines,
         implicit_spaces: report
-            .atoms
+            .atoms()
             .iter()
             .filter(|atom| atom.role == AtomRole::ImplicitSpace)
             .count(),
         hard_boundaries: report
-            .boundaries
+            .boundaries()
             .iter()
             .filter(|boundary| boundary.effect == BoundaryEffect::EndedLine)
             .count(),
         glyph_geometries: report
-            .geometry
+            .geometry()
             .iter()
             .filter(|fact| {
                 fact.kind == GeometryKind::Glyph && fact.origin_kind == GeometryOriginKind::Atom
             })
             .count(),
         references: report
-            .references
+            .references()
             .iter()
             .map(|reference| NativeReference {
                 key: reference.key,
@@ -831,7 +831,7 @@ pub(super) fn project(
             })
             .collect(),
         anchors: report
-            .anchors
+            .anchors()
             .iter()
             .map(|anchor| NativeAnchor {
                 key: anchor.key,
@@ -991,7 +991,7 @@ mod tests {
             );
             assert_eq!(
                 projection.glyph_geometries,
-                report.execution.fragments.len()
+                report.execution.fragments().len()
             );
             assert!(projection.runs.iter().all(|run| run.end_bu >= run.start_bu));
             if format == InputFormat::Man {
@@ -1025,7 +1025,7 @@ mod tests {
                     .find(|run| run.text == "emphasized")
                     .expect("native emphasized run");
                 assert_eq!(emphasized.font, ExecutionFont::Underline);
-                assert_eq!(report.execution.nodes[emphasized.node.0 as usize].line, 9);
+                assert_eq!(report.execution.nodes()[emphasized.node.0 as usize].line, 9);
             }
         }
     }
@@ -1092,11 +1092,11 @@ mod tests {
                 assert!(anchor.device_line > 0);
                 assert!(
                     usize::try_from(anchor.atom_cursor)
-                        .is_ok_and(|cursor| cursor <= report.execution.atoms.len())
+                        .is_ok_and(|cursor| cursor <= report.execution.atoms().len())
                 );
                 assert!(
                     usize::try_from(anchor.fragment_cursor)
-                        .is_ok_and(|cursor| cursor <= report.execution.fragments.len())
+                        .is_ok_and(|cursor| cursor <= report.execution.fragments().len())
                 );
             }
             drop(report);

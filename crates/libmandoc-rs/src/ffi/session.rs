@@ -29,7 +29,7 @@ pub(crate) fn execute_buffer(
 ) -> Result<(RawDocument, NativeExecutionReport), (ExecutionErrorKind, String)> {
     super::execution::validate_limits_layout()
         .map_err(|message| (ExecutionErrorKind::Transfer, message))?;
-    let limits = super::execution::native_limits(limits);
+    let native_limits = super::execution::native_limits(limits);
     let pointer = unsafe {
         raw::mant_mandoc_execute_buffer(
             path.as_ptr(),
@@ -37,10 +37,10 @@ pub(crate) fn execute_buffer(
             buffer.len(),
             input_format_code(input_format),
             operating_system.map_or(std::ptr::null(), CStr::as_ptr),
-            &raw const limits,
+            &raw const native_limits,
         )
     };
-    super::execution::copy_executed_document(pointer)
+    super::execution::copy_executed_document(pointer, limits)
 }
 
 #[cfg(unix)]

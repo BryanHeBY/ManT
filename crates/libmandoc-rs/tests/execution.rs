@@ -4,7 +4,7 @@ use libmandoc_rs::{
     AtomRole, ExecutionErrorKind, ExecutionFont, ExecutionLimits, ExecutionReferenceKind,
     ExecutionTableAlignment, ExecutionTableDataKind, ExecutionTableLayoutKind,
     ExecutionTableRowKind, FlushOutcome, FragmentRole, InputFormat, NativeExecutionReport, Node,
-    ParseOptions, Parser,
+    NodeKind, ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -62,7 +62,7 @@ fn assert_ast_report_identity(node: &Node, report: &libmandoc_rs::NativeExecutio
     let key = node
         .execution_node_key
         .expect("executed AST node must expose its report-local key");
-    let execution = &report.nodes[key as usize];
+    let execution = &report.nodes()[key as usize];
     assert_eq!(execution.key.0, key);
     assert_eq!(execution.line, node.line, "line mismatch for node {key}");
     assert_eq!(
@@ -89,7 +89,7 @@ fn has_ancestor_macro(
     expected: &str,
 ) -> bool {
     loop {
-        let current = &report.nodes[node.0 as usize];
+        let current = &report.nodes()[node.0 as usize];
         if current.macro_name.as_deref() == Some(expected) {
             return true;
         }
@@ -116,12 +116,12 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
         ("plain-mdoc.1", InputFormat::Mdoc, MDOC),
     ] {
         let report = execute(name, format, source);
-        assert!(!report.execution.nodes.is_empty());
-        assert!(!report.execution.atoms.is_empty());
-        assert!(!report.execution.fragments.is_empty());
-        assert_eq!(report.execution.sources.len(), 1);
-        assert_eq!(report.execution.sources[0].path.to_string_lossy(), name);
-        assert_eq!(report.execution.nodes[0].key.0, 0);
+        assert!(!report.execution.nodes().is_empty());
+        assert!(!report.execution.atoms().is_empty());
+        assert!(!report.execution.fragments().is_empty());
+        assert_eq!(report.execution.sources().len(), 1);
+        assert_eq!(report.execution.sources()[0].path.to_string_lossy(), name);
+        assert_eq!(report.execution.nodes()[0].key.0, 0);
         assert_ast_report_identity(&report.document.root, &report.execution);
         let mut ast_keys = Vec::new();
         execution_keys(&report.document.root, &mut ast_keys);
@@ -129,7 +129,7 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
             ast_keys,
             report
                 .execution
-                .nodes
+                .nodes()
                 .iter()
                 .map(|node| node.key.0)
                 .collect::<Vec<_>>()
@@ -137,7 +137,7 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
         assert!(
             report
                 .execution
-                .nodes
+                .nodes()
                 .iter()
                 .enumerate()
                 .all(|(index, node)| { usize::try_from(node.key.0).ok() == Some(index) })
@@ -145,22 +145,22 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
         assert!(
             report
                 .execution
-                .atoms
+                .atoms()
                 .windows(2)
                 .all(|atoms| { atoms[0].sequence < atoms[1].sequence })
         );
-        assert!(!report.execution.buffer_generations.is_empty());
+        assert!(!report.execution.buffer_generations().is_empty());
         assert!(
             report
                 .execution
-                .buffer_generations
+                .buffer_generations()
                 .iter()
                 .all(|generation| {
                     generation.extent <= generation.capacity
                         && generation.open_sequence < generation.close_sequence
                 })
         );
-        assert!(report.execution.flushes.iter().all(|flush| {
+        assert!(report.execution.flushes().iter().all(|flush| {
             flush.scanned.start == flush.accepted.start
                 && flush.accepted == flush.consumed
                 && flush.accepted.end == flush.remaining.start
@@ -172,7 +172,7 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
     let report = execute("plain-mdoc.1", InputFormat::Mdoc, MDOC);
     let plain = report
         .execution
-        .atoms
+        .atoms()
         .iter()
         .find(|atom| {
             atom.role == AtomRole::Authored
@@ -181,7 +181,7 @@ fn one_native_session_owns_matching_ast_and_execution_nodes() {
                 })
         })
         .expect("authored Plain operand");
-    let origin = &report.execution.nodes[plain.node.expect("authored word node").0 as usize];
+    let origin = &report.execution.nodes()[plain.node.expect("authored word node").0 as usize];
     assert_eq!(origin.macro_name, None);
 }
 
@@ -191,7 +191,7 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
     assert!(
         plain
             .execution
-            .flushes
+            .flushes()
             .iter()
             .any(|flush| flush.outcome == FlushOutcome::Wrapped),
         "the fixed 78-column execution must expose its native wrap branch"
@@ -199,7 +199,7 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
     assert!(
         plain
             .execution
-            .flushes
+            .flushes()
             .iter()
             .any(|flush| flush.outcome == FlushOutcome::Exhausted)
     );
@@ -208,31 +208,31 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
     assert!(
         decorated
             .execution
-            .fragments
+            .fragments()
             .iter()
             .any(|fragment| fragment.role == FragmentRole::Content)
     );
     assert!(
         decorated
             .execution
-            .fragments
+            .fragments()
             .iter()
             .any(|fragment| fragment.role == FragmentRole::MarginDecoration)
     );
     assert!(
         decorated
             .execution
-            .fragments
+            .fragments()
             .iter()
             .any(|fragment| fragment.role == FragmentRole::PageDecoration)
     );
     let margin = decorated
         .execution
-        .fragments
+        .fragments()
         .iter()
         .find(|fragment| fragment.role == FragmentRole::MarginDecoration)
         .expect("native .mc margin fragment");
-    let margin_atom = &decorated.execution.atoms[margin.atoms[0].0 as usize];
+    let margin_atom = &decorated.execution.atoms()[margin.atoms[0].0 as usize];
     assert_eq!(margin_atom.role, AtomRole::Authored);
     assert_eq!(
         margin_atom
@@ -241,7 +241,7 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
         Some(b"|".as_slice())
     );
     let margin_node =
-        &decorated.execution.nodes[margin_atom.node.expect(".mc operand node").0 as usize];
+        &decorated.execution.nodes()[margin_atom.node.expect(".mc operand node").0 as usize];
     assert_eq!(margin_node.line, 3);
     assert_eq!(margin.node, margin_atom.node);
     assert_ne!(
@@ -259,7 +259,7 @@ fn reports_native_definition_fonts_references_and_actual_targets() {
         let report = execute(name, format, source);
         let execution = &report.execution;
         let reference = execution
-            .references
+            .references()
             .iter()
             .find(|reference| reference.kind == ExecutionReferenceKind::ExternalUri)
             .expect("native URI reference");
@@ -269,7 +269,7 @@ fn reports_native_definition_fonts_references_and_actual_targets() {
         );
         assert_eq!(reference.secondary, None);
         assert_eq!(
-            execution.nodes[reference.owner_node.0 as usize]
+            execution.nodes()[reference.owner_node.0 as usize]
                 .macro_name
                 .as_deref(),
             Some(owner_macro)
@@ -279,7 +279,7 @@ fn reports_native_definition_fonts_references_and_actual_targets() {
                 .and_then(|node| node.text.as_deref()),
             Some("https://example.org/manual")
         );
-        let label_operands = execution.atoms
+        let label_operands = execution.atoms()
             [reference.atoms.start as usize..reference.atoms.end as usize]
             .iter()
             .filter_map(|atom| atom.operand)
@@ -296,7 +296,7 @@ fn reports_native_definition_fonts_references_and_actual_targets() {
                 .any(|operand| operand.windows(b"label".len()).any(|part| part == b"label"))
         );
         assert!(!label_operands.contains(&b"https://example.org/manual".as_slice()));
-        assert!(execution.atoms.iter().any(|atom| {
+        assert!(execution.atoms().iter().any(|atom| {
             atom.font == ExecutionFont::Underline
                 && atom.operand.is_some_and(|range| {
                     pool(execution, range)
@@ -304,7 +304,7 @@ fn reports_native_definition_fonts_references_and_actual_targets() {
                         .any(|part| part == b"styled")
                 })
         }));
-        assert!(execution.flushes.iter().any(|flush| {
+        assert!(execution.flushes().iter().any(|flush| {
             flush.node.is_some_and(|node| {
                 has_ancestor_macro(
                     execution,
@@ -322,21 +322,25 @@ fn reports_native_definition_fonts_references_and_actual_targets() {
     let mdoc = execute("annotated-mdoc.1", InputFormat::Mdoc, ANNOTATED_MDOC);
     let anchor = mdoc
         .execution
-        .anchors
+        .anchors()
         .iter()
         .find(|anchor| pool(&mdoc.execution, anchor.target) == b"custom-target")
         .expect("moved native .Tg target");
-    let owner = &mdoc.execution.nodes[anchor.node.0 as usize];
+    let owner = &mdoc.execution.nodes()[anchor.node.0 as usize];
     assert_eq!(owner.macro_name.as_deref(), Some("It"));
-    assert_eq!(owner.kind, 2, "target must attach to the actual It head");
+    assert_eq!(
+        owner.kind,
+        NodeKind::Head,
+        "target must attach to the actual It head"
+    );
     assert!(anchor.device_line > 0);
     assert!(
         usize::try_from(anchor.atom_cursor)
-            .is_ok_and(|cursor| cursor <= mdoc.execution.atoms.len())
+            .is_ok_and(|cursor| cursor <= mdoc.execution.atoms().len())
     );
     assert!(
         usize::try_from(anchor.fragment_cursor)
-            .is_ok_and(|cursor| cursor <= mdoc.execution.fragments.len())
+            .is_ok_and(|cursor| cursor <= mdoc.execution.fragments().len())
     );
 }
 
@@ -396,7 +400,7 @@ fn reports_typed_reference_components_and_exact_label_intervals() {
         let report = execute(name, format, source);
         let actual = report
             .execution
-            .references
+            .references()
             .iter()
             .map(|reference| {
                 (
@@ -409,23 +413,23 @@ fn reports_typed_reference_components_and_exact_label_intervals() {
             })
             .collect::<Vec<_>>();
         assert_eq!(actual, expected);
-        assert!(report.execution.references.iter().all(|reference| {
+        assert!(report.execution.references().iter().all(|reference| {
             reference.atoms.start < reference.atoms.end
-                && reference.atoms.end as usize <= report.execution.atoms.len()
-                && report.execution.atoms[reference.atoms.start as usize].role
+                && reference.atoms.end as usize <= report.execution.atoms().len()
+                && report.execution.atoms()[reference.atoms.start as usize].role
                     != AtomRole::ImplicitSpace
-                && report.execution.atoms
+                && report.execution.atoms()
                     [reference.execution_atoms.start as usize..reference.atoms.start as usize]
                     .iter()
                     .all(|atom| atom.role == AtomRole::ImplicitSpace)
         }));
         let manual = report
             .execution
-            .references
+            .references()
             .iter()
             .find(|reference| reference.kind == ExecutionReferenceKind::Manual)
             .unwrap();
-        let operands = report.execution.atoms
+        let operands = report.execution.atoms()
             [manual.atoms.start as usize..manual.atoms.end as usize]
             .iter()
             .filter_map(|atom| atom.operand)
@@ -444,9 +448,9 @@ fn nested_native_references_form_a_parent_linked_execution_stack() {
         InputFormat::Man,
         NESTED_REFERENCE_MAN,
     );
-    assert_eq!(report.execution.references.len(), 2);
-    let outer = &report.execution.references[0];
-    let inner = &report.execution.references[1];
+    assert_eq!(report.execution.references().len(), 2);
+    let outer = &report.execution.references()[0];
+    let inner = &report.execution.references()[1];
     assert_eq!(outer.kind, ExecutionReferenceKind::ExternalUri);
     assert_eq!(inner.kind, ExecutionReferenceKind::Manual);
     assert_eq!(outer.parent, None);
@@ -466,7 +470,7 @@ fn one_native_reference_interval_survives_multiple_flushes() {
     );
     let reference = report
         .execution
-        .references
+        .references()
         .iter()
         .find(|reference| reference.kind == ExecutionReferenceKind::ExternalUri)
         .expect("wrapped URI reference");
@@ -476,7 +480,7 @@ fn one_native_reference_interval_survives_multiple_flushes() {
     );
     let mut device_lines = report
         .execution
-        .fragments
+        .fragments()
         .iter()
         .filter(|fragment| {
             fragment
@@ -496,11 +500,11 @@ fn semantic_reference_and_anchor_callbacks_obey_report_budgets() {
     let baseline = execute("annotated-mdoc.1", InputFormat::Mdoc, ANNOTATED_MDOC);
     for limits in [
         ExecutionLimits {
-            max_work: baseline.execution.work_units - 1,
+            max_work: baseline.execution.work_units() - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_records: baseline.execution.record_count - 1,
+            max_records: baseline.execution.record_count() - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
@@ -531,14 +535,14 @@ fn exhausted_budget_never_exposes_a_partial_report() {
     let baseline = execute("plain-man.1", InputFormat::Man, MAN);
     let max_depth = baseline
         .execution
-        .nodes
+        .nodes()
         .iter()
         .map(|node| {
             let mut depth = 1_u64;
             let mut parent = node.parent;
             while let Some(key) = parent {
                 depth += 1;
-                parent = baseline.execution.nodes[key.0 as usize].parent;
+                parent = baseline.execution.nodes()[key.0 as usize].parent;
             }
             depth
         })
@@ -546,7 +550,7 @@ fn exhausted_budget_never_exposes_a_partial_report() {
         .unwrap();
     let exact = [
         ExecutionLimits {
-            max_nodes: baseline.execution.nodes.len() as u64,
+            max_nodes: baseline.execution.nodes().len() as u64,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
@@ -554,11 +558,11 @@ fn exhausted_budget_never_exposes_a_partial_report() {
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_work: baseline.execution.work_units,
+            max_work: baseline.execution.work_units(),
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_records: baseline.execution.record_count,
+            max_records: baseline.execution.record_count(),
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
@@ -566,7 +570,7 @@ fn exhausted_budget_never_exposes_a_partial_report() {
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_buffer_cells: baseline.execution.buffer_cells,
+            max_buffer_cells: baseline.execution.buffer_cells(),
             ..ExecutionLimits::default()
         },
     ];
@@ -578,7 +582,7 @@ fn exhausted_budget_never_exposes_a_partial_report() {
     }
     let insufficient = [
         ExecutionLimits {
-            max_nodes: baseline.execution.nodes.len() as u64 - 1,
+            max_nodes: baseline.execution.nodes().len() as u64 - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
@@ -586,11 +590,11 @@ fn exhausted_budget_never_exposes_a_partial_report() {
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_work: baseline.execution.work_units - 1,
+            max_work: baseline.execution.work_units() - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_records: baseline.execution.record_count - 1,
+            max_records: baseline.execution.record_count() - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
@@ -598,7 +602,7 @@ fn exhausted_budget_never_exposes_a_partial_report() {
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_buffer_cells: baseline.execution.buffer_cells - 1,
+            max_buffer_cells: baseline.execution.buffer_cells() - 1,
             ..ExecutionLimits::default()
         },
     ];
@@ -613,7 +617,7 @@ fn exhausted_budget_never_exposes_a_partial_report() {
     assert!(
         !execute("plain-man.1", InputFormat::Man, MAN)
             .execution
-            .fragments
+            .fragments()
             .is_empty()
     );
 }
@@ -649,12 +653,12 @@ fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
     // with two left-aligned data cells and renders `left   right`.
     let report = execute("table.1", InputFormat::Man, TABLE);
     let execution = &report.execution;
-    assert_eq!(execution.tables.len(), 1);
-    assert_eq!(execution.table_rows.len(), 1);
-    assert_eq!(execution.table_cells.len(), 2);
+    assert_eq!(execution.tables().len(), 1);
+    assert_eq!(execution.table_rows().len(), 1);
+    assert_eq!(execution.table_cells().len(), 2);
 
-    let table = &execution.tables[0];
-    let row = &execution.table_rows[0];
+    let table = &execution.tables()[0];
+    let row = &execution.table_rows()[0];
     assert_eq!(table.rows, 0..1);
     assert_eq!(table.cells, 0..2);
     assert_eq!(table.logical_columns, 2);
@@ -664,7 +668,7 @@ fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
     assert_eq!(row.cells, 0..2);
     assert_eq!(row.node, table.first_row_node);
 
-    for (index, cell) in execution.table_cells.iter().enumerate() {
+    for (index, cell) in execution.table_cells().iter().enumerate() {
         let index = u32::try_from(index).unwrap();
         assert_eq!(cell.row, row.key);
         assert_eq!(cell.ordinal, index);
@@ -679,9 +683,9 @@ fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
         let generation_key = cell
             .buffer_generation
             .expect("non-empty table cell generation");
-        let generation = &execution.buffer_generations[generation_key as usize];
+        let generation = &execution.buffer_generations()[generation_key as usize];
         assert_eq!(generation.buffer, buffer);
-        let payload_atoms = execution.atoms[cell.atoms.start as usize..cell.atoms.end as usize]
+        let payload_atoms = execution.atoms()[cell.atoms.start as usize..cell.atoms.end as usize]
             .iter()
             .filter(|atom| atom.role == AtomRole::TableCellPayload)
             .collect::<Vec<_>>();
@@ -690,14 +694,14 @@ fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
             atom.buffer == Some(buffer) && atom.buffer_generation == Some(generation_key)
         }));
         assert!(
-            execution.flushes[row.flushes.start as usize..row.flushes.end as usize]
+            execution.flushes()[row.flushes.start as usize..row.flushes.end as usize]
                 .iter()
                 .any(|flush| flush.buffer_generation == generation_key)
         );
     }
 
     let owned_table = table.clone();
-    let owned_cells = execution.table_cells.clone();
+    let owned_cells = execution.table_cells().to_vec();
     drop(report);
     assert_eq!(owned_table.logical_columns, 2);
     assert_eq!(owned_cells[0].data_ordinal, 0);
@@ -709,15 +713,15 @@ fn table_execution_budget_failure_is_atomic_and_reentrant() {
     let baseline = execute("table.1", InputFormat::Man, TABLE);
     for limits in [
         ExecutionLimits {
-            max_work: baseline.execution.work_units - 1,
+            max_work: baseline.execution.work_units() - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_records: baseline.execution.record_count - 1,
+            max_records: baseline.execution.record_count() - 1,
             ..ExecutionLimits::default()
         },
         ExecutionLimits {
-            max_buffer_cells: baseline.execution.buffer_cells - 1,
+            max_buffer_cells: baseline.execution.buffer_cells() - 1,
             ..ExecutionLimits::default()
         },
     ] {
@@ -728,8 +732,8 @@ fn table_execution_budget_failure_is_atomic_and_reentrant() {
         assert_eq!(error.kind, ExecutionErrorKind::Budget);
 
         let next = execute("table.1", InputFormat::Man, TABLE);
-        assert_eq!(next.execution.tables.len(), 1);
-        assert_eq!(next.execution.table_cells.len(), 2);
+        assert_eq!(next.execution.tables().len(), 1);
+        assert_eq!(next.execution.table_cells().len(), 2);
     }
 }
 
@@ -739,14 +743,22 @@ fn empty_native_table_cell_has_no_buffer_identity() {
     // emits `left` and `third`; tbl_term.c still executes the empty middle
     // logical data cell.
     let report = execute("empty-table.1", InputFormat::Man, TABLE_WITH_EMPTY_CELL);
-    assert_eq!(report.execution.table_cells.len(), 3);
-    assert!(report.execution.table_cells[0].buffer.is_some());
-    assert!(report.execution.table_cells[0].buffer_generation.is_some());
-    assert_eq!(report.execution.table_cells[1].buffer, None);
-    assert_eq!(report.execution.table_cells[1].buffer_generation, None);
-    assert!(report.execution.table_cells[1].atoms.is_empty());
-    assert!(report.execution.table_cells[2].buffer.is_some());
-    assert!(report.execution.table_cells[2].buffer_generation.is_some());
+    assert_eq!(report.execution.table_cells().len(), 3);
+    assert!(report.execution.table_cells()[0].buffer.is_some());
+    assert!(
+        report.execution.table_cells()[0]
+            .buffer_generation
+            .is_some()
+    );
+    assert_eq!(report.execution.table_cells()[1].buffer, None);
+    assert_eq!(report.execution.table_cells()[1].buffer_generation, None);
+    assert!(report.execution.table_cells()[1].atoms.is_empty());
+    assert!(report.execution.table_cells()[2].buffer.is_some());
+    assert!(
+        report.execution.table_cells()[2]
+            .buffer_generation
+            .is_some()
+    );
 }
 
 #[test]
@@ -760,9 +772,9 @@ fn explicit_table_vertical_continuation_matches_the_owned_ast() {
         InputFormat::Man,
         TABLE_VERTICAL_CONTINUATION,
     );
-    assert_eq!(report.execution.table_rows.len(), 2);
-    assert_eq!(report.execution.table_cells.len(), 2);
-    let continuation = &report.execution.table_cells[1];
+    assert_eq!(report.execution.table_rows().len(), 2);
+    assert_eq!(report.execution.table_cells().len(), 2);
+    let continuation = &report.execution.table_cells()[1];
     assert!(
         continuation
             .flags
@@ -778,8 +790,8 @@ fn table_payload_role_does_not_overwrite_implicit_spacing_provenance() {
     // The pinned CVS renderer was run before this assertion was written and
     // emits `left alpha` followed by the two native words `outside words`.
     let report = execute("spaced-table.1", InputFormat::Man, TABLE_WITH_WORD_SPACING);
-    let cell = &report.execution.table_cells[0];
-    let atoms = &report.execution.atoms[cell.atoms.start as usize..cell.atoms.end as usize];
+    let cell = &report.execution.table_cells()[0];
+    let atoms = &report.execution.atoms()[cell.atoms.start as usize..cell.atoms.end as usize];
     assert!(
         atoms
             .iter()
@@ -788,7 +800,7 @@ fn table_payload_role_does_not_overwrite_implicit_spacing_provenance() {
     assert!(
         report
             .execution
-            .atoms
+            .atoms()
             .iter()
             .any(|atom| atom.role == AtomRole::ImplicitSpace)
     );
@@ -825,5 +837,5 @@ fn unsupported_execution_shapes_fail_before_returning_a_partial_report() {
         .with_input_format(InputFormat::Man)
         .execute_bytes("inactive-so.1", INACTIVE_SO, ExecutionLimits::default())
         .unwrap();
-    assert!(!inactive.execution.fragments.is_empty());
+    assert!(!inactive.execution.fragments().is_empty());
 }

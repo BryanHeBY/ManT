@@ -89,6 +89,14 @@ struct mant_mandoc_execution_report {
 	uint32_t current_table;
 	uint32_t current_table_row;
 	uint32_t current_table_cell;
+	const struct roff_node *current_table_cell_node;
+	const struct tbl_span *current_table_cell_span;
+	const struct tbl_cell *current_table_cell_layout;
+	const struct tbl_dat *current_table_cell_data;
+	size_t current_table_cell_ordinal;
+	size_t current_table_cell_data_ordinal;
+	size_t current_table_cell_column;
+	size_t current_table_cell_coloff;
 	uint64_t sequence;
 	int word_active;
 	int status;
@@ -213,8 +221,16 @@ static int append_pool(struct mant_mandoc_execution_report *, const void *,
 static int tree_supported(struct mant_mandoc_execution_report *,
     const struct roff_node *, uint64_t, uint64_t *);
 static int seal_report(struct mant_mandoc_execution_report *);
+static int validate_report_storage(struct mant_mandoc_execution_report *);
 static int validate_sealed_report(struct mant_mandoc_execution_report *);
 static int validate_table_records(struct mant_mandoc_execution_report *);
+static int valid_pool_range(const struct mant_mandoc_execution_report *,
+    uint32_t, uint32_t, int);
+static int valid_scalar(uint32_t);
+static int size_to_report_i64(struct mant_mandoc_execution_report *, size_t,
+    int64_t *);
+static int size_delta_to_report_i64(struct mant_mandoc_execution_report *,
+    size_t, size_t, int64_t *);
 static int collect_nodes(struct mant_mandoc_execution_report *,
     const struct roff_node *, uint32_t, uint64_t);
 static int compare_node_index(const void *, const void *);
@@ -228,6 +244,8 @@ static uint32_t stable_node_flags(const struct roff_node *);
 static uint32_t stable_term_flags(int);
 static uint32_t stable_font(int);
 static uint32_t atom_kind(int);
+static uint32_t table_layout_kind(enum tbl_cellt);
+static uint32_t table_data_kind(enum tbl_datt);
 static int ensure_buffer(struct mant_mandoc_execution_report *, size_t,
     size_t);
 static int note_buffer_extent(struct mant_mandoc_execution_report *, size_t,
@@ -289,6 +307,7 @@ DEFINE_RESERVE(anchors, mant_mandoc_anchor_record)
 DEFINE_RESERVE(tables, mant_mandoc_table_record)
 DEFINE_RESERVE(table_rows, mant_mandoc_table_row_record)
 DEFINE_RESERVE(table_cells, mant_mandoc_table_cell_record)
+DEFINE_RESERVE(diagnostics, mant_mandoc_execution_diagnostic_record)
 #undef DEFINE_RESERVE
 
 struct mant_mandoc_execution_report *
@@ -648,8 +667,10 @@ execution_buffer_write(void *arg, const struct termp *p,
 	struct buffer_origin *buffer;
 	size_t buffer_key;
 	uint32_t replaced;
+	int64_t width_bu;
 
-	if (!charge_work(report, 1))
+	if (!size_to_report_i64(report, (*p->getwidth)(p, scalar), &width_bu) ||
+	    !charge_work(report, 1))
 		return 0;
 	if (role < MANT_MANDOC_ATOM_AUTHORED ||
 	    role > MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD) {
@@ -679,7 +700,7 @@ execution_buffer_write(void *arg, const struct termp *p,
 	record->role = (uint32_t)role;
 	record->input_scalar = (uint32_t)scalar;
 	record->display_scalar = (uint32_t)scalar;
-	record->width_bu = (int64_t)(*p->getwidth)(p, scalar);
+	record->width_bu = width_bu;
 	record->node = report->word_active ? report->current_word_node :
 	    lookup_node(report, node);
 	record->source = record->node != MANT_MANDOC_EXEC_NONE ?
@@ -736,9 +757,11 @@ execution_buffer_rewrite(void *arg, const struct termp *p,
 	struct buffer_origin *buffer;
 	size_t key;
 	uint32_t atom;
+	int64_t width_bu;
 
 	(void)node;
-	if (!charge_work(report, 1))
+	if (!size_to_report_i64(report, (*p->getwidth)(p, scalar), &width_bu) ||
+	    !charge_work(report, 1))
 		return 0;
 	key = (size_t)(p->tcol - p->tcols);
 	if (key >= report->buffer_count ||
@@ -756,7 +779,7 @@ execution_buffer_rewrite(void *arg, const struct termp *p,
 	}
 	report->atoms[atom].display_scalar = (uint32_t)scalar;
 	report->atoms[atom].kind = atom_kind(scalar);
-	report->atoms[atom].width_bu = (int64_t)(*p->getwidth)(p, scalar);
+	report->atoms[atom].width_bu = width_bu;
 	return 1;
 }
 
@@ -867,8 +890,12 @@ execution_fill_decision(void *arg, const struct termp *p,
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
 	size_t buffer_key;
+	int64_t content_bu, target_bu, visual_bu;
 
-	if (!charge_record(report) ||
+	if (!size_to_report_i64(report, content_width, &content_bu) ||
+	    !size_to_report_i64(report, target_width, &target_bu) ||
+	    !size_to_report_i64(report, p->viscol, &visual_bu) ||
+	    !charge_record(report) ||
 	    !reserve_flushes(report, report->flushes_count + 1))
 		return 0;
 	buffer_key = (size_t)(p->tcol - p->tcols);
@@ -897,12 +924,12 @@ execution_fill_decision(void *arg, const struct termp *p,
 	record->flags_before = stable_term_flags(p->flags);
 	record->flags_after = record->flags_before;
 	record->boundary = report->current_boundary;
-	record->content_bu = (int64_t)content_width;
-	record->target_bu = (int64_t)target_width;
+	record->content_bu = content_bu;
+	record->target_bu = target_bu;
 	record->taboff_before = p->tcol->taboff;
 	record->taboff_after = p->tcol->taboff;
-	record->visual_before = (int64_t)p->viscol;
-	record->visual_after = (int64_t)p->viscol;
+	record->visual_before = visual_bu;
+	record->visual_after = visual_bu;
 	record->sequence = report->sequence++;
 	record->outcome_sequence = UINT64_MAX;
 	report->current_flush = record->key;
@@ -942,19 +969,24 @@ execution_field_begin(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
+	int64_t field_bu, leading_bu, visual_bu;
 
 	(void)node;
-	if (!charge_work(report, 1) ||
+	if (!size_to_report_i64(report, leading, &leading_bu) ||
+	    !size_to_report_i64(report,
+	    p->tcol->rmargin > visual ? p->tcol->rmargin - visual : 0,
+	    &field_bu) ||
+	    !size_to_report_i64(report, visual, &visual_bu) ||
+	    !charge_work(report, 1) ||
 	    report->current_flush == MANT_MANDOC_EXEC_NONE ||
 	    report->current_flush >= report->flushes_count)
 		return 0;
 	record = &report->flushes[report->current_flush];
-	record->leading_bu = (int64_t)leading;
-	record->field_bu = (int64_t)(p->tcol->rmargin > visual ?
-	    p->tcol->rmargin - visual : 0);
+	record->leading_bu = leading_bu;
+	record->field_bu = field_bu;
 	record->accepted_end = (uint32_t)accepted;
 	record->fragment_start = (uint32_t)report->fragments_count;
-	record->visual_before = (int64_t)visual;
+	record->visual_before = visual_bu;
 	return 1;
 }
 
@@ -976,10 +1008,12 @@ execution_field_end(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
+	int64_t visual_bu;
 
 	(void)node;
 	(void)leading;
-	if (!charge_work(report, 1) ||
+	if (!size_to_report_i64(report, visual, &visual_bu) ||
+	    !charge_work(report, 1) ||
 	    report->current_flush == MANT_MANDOC_EXEC_NONE ||
 	    report->current_flush >= report->flushes_count)
 		return 0;
@@ -988,7 +1022,7 @@ execution_field_end(void *arg, const struct termp *p,
 	record->remaining_start = (uint32_t)accepted;
 	record->fragment_length = (uint32_t)(report->fragments_count -
 	    record->fragment_start);
-	record->visual_after = (int64_t)visual;
+	record->visual_after = visual_bu;
 	record->taboff_after = p->tcol->taboff;
 	record->flags_after = stable_term_flags(p->flags);
 	return 1;
@@ -1001,15 +1035,17 @@ execution_flush_end(void *arg, const struct termp *p,
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
 	size_t buffer_key;
+	int64_t visual_bu;
 
 	(void)node;
-	if (!charge_work(report, 1))
+	if (!size_to_report_i64(report, p->viscol, &visual_bu) ||
+	    !charge_work(report, 1))
 		return 0;
 	if (report->current_flush != MANT_MANDOC_EXEC_NONE &&
 	    report->current_flush < report->flushes_count) {
 		record = &report->flushes[report->current_flush];
 		record->flags_after = stable_term_flags(p->flags);
-		record->visual_after = (int64_t)p->viscol;
+		record->visual_after = visual_bu;
 		record->taboff_after = p->tcol->taboff;
 	}
 	buffer_key = (size_t)(p->tcol - p->tcols);
@@ -1044,12 +1080,15 @@ execution_boundary_leave(void *arg, const struct termp *p,
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_boundary_record *record;
 	uint32_t expected;
+	int64_t line_after, visual_after;
 
 	(void)node;
 	expected = request == 1 ? MANT_MANDOC_BOUNDARY_NEWLINE :
 	    request == 2 ? MANT_MANDOC_BOUNDARY_VERTICAL_SPACE :
 	    request == 3 ? MANT_MANDOC_BOUNDARY_ENDLINE : MANT_MANDOC_EXEC_NONE;
-	if (!charge_work(report, 1) ||
+	if (!size_to_report_i64(report, p->line, &line_after) ||
+	    !size_to_report_i64(report, p->viscol, &visual_after) ||
+	    !charge_work(report, 1) ||
 	    report->current_boundary == MANT_MANDOC_EXEC_NONE ||
 	    report->current_boundary >= report->boundaries_count)
 		return 0;
@@ -1060,8 +1099,8 @@ execution_boundary_leave(void *arg, const struct termp *p,
 		return 0;
 	}
 	record->flags_after = stable_term_flags(p->flags);
-	record->line_after = (int64_t)p->line;
-	record->visual_after = (int64_t)p->viscol;
+	record->line_after = line_after;
+	record->visual_after = visual_after;
 	if (record->line_after > record->line_before)
 		record->effect = request == 2 ?
 		    MANT_MANDOC_BOUNDARY_ADDED_VERTICAL_SPACE :
@@ -1079,26 +1118,36 @@ execution_device_advance(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_geometry_record *record;
+	int64_t requested_bu, effective_bu, before_bu, after_bu;
+	uint32_t flush_origin;
 
-	if (!charge_work(report, (after >= before ? after - before : 0) / 24 + 1) ||
+	if (!size_to_report_i64(report, requested, &requested_bu) ||
+	    !size_delta_to_report_i64(report, before, after, &effective_bu) ||
+	    !size_to_report_i64(report, before, &before_bu) ||
+	    !size_to_report_i64(report, after, &after_bu) ||
+	    !charge_work(report, (after >= before ? after - before : 0) / 24 + 1) ||
 	    !charge_record(report) ||
 	    !reserve_geometries(report, report->geometries_count + 1))
 		return 0;
 	record = &report->geometries[report->geometries_count];
 	memset(record, 0, sizeof(*record));
+	flush_origin = report->current_flush != MANT_MANDOC_EXEC_NONE &&
+	    report->current_flush < report->flushes_count &&
+	    report->flushes[report->current_flush].outcome_sequence == UINT64_MAX ?
+	    report->current_flush : MANT_MANDOC_EXEC_NONE;
 	record->key = (uint32_t)report->geometries_count++;
 	record->node = lookup_node(report, node);
-	record->related = report->current_flush;
+	record->related = flush_origin;
 	record->kind = MANT_MANDOC_GEOMETRY_ADVANCE;
 	record->unit = MANT_MANDOC_UNIT_BASIC;
-	record->requested = (int64_t)requested;
-	record->effective = (int64_t)after - (int64_t)before;
-	record->before = (int64_t)before;
-	record->after = (int64_t)after;
-	record->origin_kind = report->current_flush == MANT_MANDOC_EXEC_NONE ?
+	record->requested = requested_bu;
+	record->effective = effective_bu;
+	record->before = before_bu;
+	record->after = after_bu;
+	record->origin_kind = flush_origin == MANT_MANDOC_EXEC_NONE ?
 	    MANT_MANDOC_GEOMETRY_ORIGIN_NONE :
 	    MANT_MANDOC_GEOMETRY_ORIGIN_FLUSH;
-	record->origin_key = report->current_flush;
+	record->origin_key = flush_origin;
 	record->sequence = report->sequence++;
 	return 1;
 }
@@ -1120,17 +1169,23 @@ execution_device_endline(void *arg, const struct termp *p,
 	struct mant_mandoc_geometry_record *record;
 	struct mant_mandoc_boundary_record *boundary;
 	uint32_t parent;
+	int64_t line_before_value, line_after_value;
+	int64_t visual_before_value, visual_after_value;
 
 	parent = report->current_boundary;
-	if (!append_boundary(report, p, node,
+	if (!size_to_report_i64(report, line_before, &line_before_value) ||
+	    !size_to_report_i64(report, line_after, &line_after_value) ||
+	    !size_to_report_i64(report, visual_before, &visual_before_value) ||
+	    !size_to_report_i64(report, visual_after, &visual_after_value) ||
+	    !append_boundary(report, p, node,
 	    MANT_MANDOC_BOUNDARY_DEVICE_ENDLINE,
 	    MANT_MANDOC_BOUNDARY_ENDED_LINE))
 		return 0;
 	boundary = &report->boundaries[report->current_boundary];
-	boundary->line_before = (int64_t)line_before;
-	boundary->line_after = (int64_t)line_after;
-	boundary->visual_before = (int64_t)visual_before;
-	boundary->visual_after = (int64_t)visual_after;
+	boundary->line_before = line_before_value;
+	boundary->line_after = line_after_value;
+	boundary->visual_before = visual_before_value;
+	boundary->visual_after = visual_after_value;
 	boundary->flags_after = stable_term_flags(p->flags);
 	report->current_boundary = parent;
 	if (!charge_work(report, 1) || !charge_record(report) ||
@@ -1147,15 +1202,13 @@ execution_device_endline(void *arg, const struct termp *p,
 	record->effective = 1;
 	record->origin_kind = MANT_MANDOC_GEOMETRY_ORIGIN_BOUNDARY;
 	record->origin_key = boundary->key;
-	record->before = (int64_t)line_before;
-	record->after = (int64_t)line_after;
+	record->before = line_before_value;
+	record->after = line_after_value;
 	record->sequence = report->sequence++;
 	if (parent != MANT_MANDOC_EXEC_NONE &&
 	    parent < report->boundaries_count) {
-		report->boundaries[parent].line_after =
-		    (int64_t)line_after;
-		report->boundaries[parent].visual_after =
-		    (int64_t)visual_after;
+		report->boundaries[parent].line_after = line_after_value;
+		report->boundaries[parent].visual_after = visual_after_value;
 		report->boundaries[parent].effect =
 		    report->boundaries[parent].request ==
 		    MANT_MANDOC_BOUNDARY_VERTICAL_SPACE ?
@@ -1495,13 +1548,36 @@ execution_table_row_end(void *arg, const struct termp *p,
 static uint32_t
 table_layout_kind(enum tbl_cellt kind)
 {
-	return (uint32_t)kind + 1;
+	switch (kind) {
+	case TBL_CELL_CENTRE: return MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER;
+	case TBL_CELL_RIGHT: return MANT_MANDOC_EXEC_TABLE_LAYOUT_RIGHT;
+	case TBL_CELL_LEFT: return MANT_MANDOC_EXEC_TABLE_LAYOUT_LEFT;
+	case TBL_CELL_NUMBER: return MANT_MANDOC_EXEC_TABLE_LAYOUT_NUMERIC;
+	case TBL_CELL_SPAN: return MANT_MANDOC_EXEC_TABLE_LAYOUT_SPAN;
+	case TBL_CELL_LONG: return MANT_MANDOC_EXEC_TABLE_LAYOUT_LONG;
+	case TBL_CELL_DOWN: return MANT_MANDOC_EXEC_TABLE_LAYOUT_DOWN;
+	case TBL_CELL_HORIZ: return MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE;
+	case TBL_CELL_DHORIZ:
+		return MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE;
+	default: return MANT_MANDOC_EXEC_NONE;
+	}
 }
 
 static uint32_t
 table_data_kind(enum tbl_datt kind)
 {
-	return (uint32_t)kind + 1;
+	switch (kind) {
+	case TBL_DATA_NONE: return MANT_MANDOC_EXEC_TABLE_DATA_NONE;
+	case TBL_DATA_DATA: return MANT_MANDOC_EXEC_TABLE_DATA_TEXT;
+	case TBL_DATA_HORIZ: return MANT_MANDOC_EXEC_TABLE_DATA_SINGLE_RULE;
+	case TBL_DATA_DHORIZ:
+		return MANT_MANDOC_EXEC_TABLE_DATA_DOUBLE_RULE;
+	case TBL_DATA_NHORIZ:
+		return MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_SINGLE_RULE;
+	case TBL_DATA_NDHORIZ:
+		return MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE;
+	default: return MANT_MANDOC_EXEC_NONE;
+	}
 }
 
 static uint32_t
@@ -1543,6 +1619,9 @@ execution_table_cell_begin(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_table_cell_record *record;
+	uint32_t layout_kind, data_kind, font;
+	size_t buffer;
+	int64_t offset_bu, rmargin_bu, coloff_before_bu;
 
 	(void)span;
 	(void)coloff_after;
@@ -1554,6 +1633,22 @@ execution_table_cell_begin(void *arg, const struct termp *p,
 	    !charge_record(report) ||
 	    !reserve_table_cells(report, report->table_cells_count + 1))
 		return 0;
+	if (p->tcol < p->tcols || p->tcol >= p->tcols + p->maxtcol)
+		return 0;
+	buffer = (size_t)(p->tcol - p->tcols);
+	layout_kind = table_layout_kind(cell->pos);
+	data_kind = table_data_kind(data->pos);
+	font = stable_font(cell->font == ESCAPE_FONTBI ? TERMFONT_BI :
+	    cell->font == ESCAPE_FONTBOLD || cell->font == ESCAPE_FONTCB ?
+	    TERMFONT_BOLD : cell->font == ESCAPE_FONTITALIC ||
+	    cell->font == ESCAPE_FONTCI ? TERMFONT_UNDER : TERMFONT_NONE);
+	if (!size_to_report_i64(report, p->tcol->offset, &offset_bu) ||
+	    !size_to_report_i64(report, p->tcol->rmargin, &rmargin_bu) ||
+	    !size_to_report_i64(report, coloff_before, &coloff_before_bu) ||
+	    layout_kind == MANT_MANDOC_EXEC_NONE ||
+	    data_kind == MANT_MANDOC_EXEC_NONE ||
+	    font == MANT_MANDOC_EXEC_NONE)
+		return 0;
 	record = &report->table_cells[report->table_cells_count];
 	memset(record, 0, sizeof(*record));
 	record->key = (uint32_t)report->table_cells_count++;
@@ -1564,25 +1659,30 @@ execution_table_cell_begin(void *arg, const struct termp *p,
 	record->logical_column = (uint32_t)cell->col;
 	record->column_span = (uint32_t)data->hspans + 1;
 	record->row_span = (uint32_t)data->vspans + 1;
-	record->layout_kind = table_layout_kind(cell->pos);
-	record->data_kind = table_data_kind(data->pos);
+	record->layout_kind = layout_kind;
+	record->data_kind = data_kind;
 	record->alignment = table_alignment(cell->pos);
-	record->font = stable_font(cell->font == ESCAPE_FONTBI ? TERMFONT_BI :
-	    cell->font == ESCAPE_FONTBOLD || cell->font == ESCAPE_FONTCB ?
-	    TERMFONT_BOLD : cell->font == ESCAPE_FONTITALIC ||
-	    cell->font == ESCAPE_FONTCI ? TERMFONT_UNDER : TERMFONT_NONE);
+	record->font = font;
 	record->flags = table_cell_flags(cell, data);
 	record->buffer = MANT_MANDOC_EXEC_NONE;
 	record->buffer_generation = MANT_MANDOC_EXEC_NONE;
 	record->enter_atom = (uint32_t)report->atoms_count;
 	record->leave_atom = MANT_MANDOC_EXEC_NONE;
-	record->offset_bu = (int64_t)p->tcol->offset;
-	record->rmargin_bu = (int64_t)p->tcol->rmargin;
-	record->coloff_before_bu = (int64_t)coloff_before;
-	record->coloff_after_bu = (int64_t)coloff_before;
+	record->offset_bu = offset_bu;
+	record->rmargin_bu = rmargin_bu;
+	record->coloff_before_bu = coloff_before_bu;
+	record->coloff_after_bu = coloff_before_bu;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
 	report->current_table_cell = record->key;
+	report->current_table_cell_node = node;
+	report->current_table_cell_span = span;
+	report->current_table_cell_layout = cell;
+	report->current_table_cell_data = data;
+	report->current_table_cell_ordinal = ordinal;
+	report->current_table_cell_data_ordinal = data_ordinal;
+	report->current_table_cell_column = buffer;
+	report->current_table_cell_coloff = coloff_before;
 	return 1;
 }
 
@@ -1595,29 +1695,39 @@ execution_table_cell_end(void *arg, const struct termp *p,
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_table_cell_record *record;
 	size_t buffer;
+	int64_t coloff_after_bu;
 
-	(void)node;
-	(void)span;
-	(void)cell;
-	(void)data;
-	(void)ordinal;
-	(void)data_ordinal;
-	(void)coloff_before;
-	if (report->current_table_cell == MANT_MANDOC_EXEC_NONE ||
+	if (!size_to_report_i64(report, coloff_after, &coloff_after_bu) ||
+	    report->current_table_cell == MANT_MANDOC_EXEC_NONE ||
 	    report->current_table_cell >= report->table_cells_count ||
 	    report->atoms_count > UINT32_MAX || !charge_work(report, 1))
 		return 0;
 	record = &report->table_cells[report->current_table_cell];
+	if (node != report->current_table_cell_node ||
+	    span != report->current_table_cell_span ||
+	    cell != report->current_table_cell_layout ||
+	    data != report->current_table_cell_data ||
+	    ordinal != report->current_table_cell_ordinal ||
+	    data_ordinal != report->current_table_cell_data_ordinal ||
+	    coloff_before != report->current_table_cell_coloff ||
+	    p->tcol < p->tcols || p->tcol >= p->tcols + p->maxtcol)
+		return 0;
 	buffer = (size_t)(p->tcol - p->tcols);
+	if (buffer != report->current_table_cell_column)
+		return 0;
 	if (buffer < report->buffer_count &&
 	    report->buffers[buffer].generation_record != MANT_MANDOC_EXEC_NONE) {
 		record->buffer = (uint32_t)buffer;
 		record->buffer_generation = report->buffers[buffer].generation_record;
 	}
 	record->leave_atom = (uint32_t)report->atoms_count;
-	record->coloff_after_bu = (int64_t)coloff_after;
+	record->coloff_after_bu = coloff_after_bu;
 	record->leave_sequence = report->sequence++;
 	report->current_table_cell = MANT_MANDOC_EXEC_NONE;
+	report->current_table_cell_node = NULL;
+	report->current_table_cell_span = NULL;
+	report->current_table_cell_layout = NULL;
+	report->current_table_cell_data = NULL;
 	return 1;
 }
 
@@ -1631,10 +1741,21 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 	struct mant_mandoc_table_cell_record *cell;
 	struct mant_mandoc_table_row_record *previous_row;
 	struct mant_mandoc_table_cell_record *previous_cell;
-	size_t index, inner, row_cursor, cell_cursor, payload_cell;
-	uint32_t previous_data_ordinal;
+	struct mant_mandoc_flush_record *flush;
+	struct mant_mandoc_fragment_record *fragment;
+	size_t index, inner, row_cursor, cell_cursor, payload_cell, owner;
+	uint32_t next_data_ordinal, next_column, *generation_cell;
 
 	row_cursor = cell_cursor = 0;
+	generation_cell = report->buffer_generations_count == 0 ? NULL :
+	    malloc(report->buffer_generations_count * sizeof(*generation_cell));
+	if (report->buffer_generations_count != 0 && generation_cell == NULL) {
+		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
+		    "could not validate native table generation ownership");
+		return 0;
+	}
+	for (index = 0; index < report->buffer_generations_count; index++)
+		generation_cell[index] = MANT_MANDOC_EXEC_NONE;
 
 	for (index = 0; index < report->tables_count; index++) {
 		table = &report->tables[index];
@@ -1695,7 +1816,7 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 				goto invalid;
 
 			previous_cell = NULL;
-			previous_data_ordinal = 0;
+			next_data_ordinal = next_column = 0;
 			for (cell_cursor = row->cell_start;
 			    cell_cursor < row->cell_start + row->cell_length;
 			    cell_cursor++) {
@@ -1703,8 +1824,8 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 				if (cell->key != cell_cursor || cell->row != row->key ||
 				    cell->node != row->node ||
 				    cell->ordinal != cell_cursor - row->cell_start ||
-				    (previous_cell != NULL &&
-				    cell->data_ordinal <= previous_data_ordinal) ||
+				    cell->data_ordinal != next_data_ordinal ||
+				    cell->logical_column < next_column ||
 				    cell->logical_column >= row->logical_columns ||
 				    cell->column_span == 0 ||
 				    cell->column_span > row->logical_columns -
@@ -1718,7 +1839,7 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 				    MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE ||
 				    cell->alignment > MANT_MANDOC_EXEC_TABLE_ALIGN_LONG ||
 				    cell->font > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
-				    cell->reserved != 0 ||
+				    cell->flags & ~0x01ffU || cell->reserved != 0 ||
 				    cell->enter_atom > cell->leave_atom ||
 				    cell->enter_atom < row->enter_atom ||
 				    cell->leave_atom > row->leave_atom ||
@@ -1736,6 +1857,31 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 				    (cell->enter_atom < previous_cell->leave_atom ||
 				    cell->enter_sequence <= previous_cell->leave_sequence))
 					goto invalid;
+				if ((cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_LEFT &&
+				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_LEFT) ||
+				    (cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER &&
+				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_CENTER) ||
+				    (cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_RIGHT &&
+				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_RIGHT) ||
+				    (cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_NUMERIC &&
+				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_NUMERIC) ||
+				    (cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_LONG &&
+				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_LONG) ||
+				    ((cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_SPAN ||
+				    cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOWN ||
+				    cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE ||
+				    cell->layout_kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE) &&
+				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_NONE))
+					goto invalid;
 				if (cell->buffer_generation != MANT_MANDOC_EXEC_NONE) {
 					if (cell->buffer_generation >=
 					    report->buffer_generations_count)
@@ -1746,10 +1892,40 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 					    generation->open_sequence <=
 					    cell->enter_sequence ||
 					    generation->open_sequence >=
-					    cell->leave_sequence)
+					    cell->leave_sequence ||
+					    generation->close_sequence >=
+					    row->leave_sequence ||
+					    generation_cell[cell->buffer_generation] !=
+					    MANT_MANDOC_EXEC_NONE ||
+					    cell->enter_atom == cell->leave_atom)
+						goto invalid;
+					generation_cell[cell->buffer_generation] = cell->key;
+				} else if (cell->enter_atom != cell->leave_atom)
+					goto invalid;
+				if ((cell->enter_atom != 0 &&
+				    report->atoms[cell->enter_atom - 1].sequence >=
+				    cell->enter_sequence) ||
+				    (cell->enter_atom < cell->leave_atom &&
+				    report->atoms[cell->enter_atom].sequence <=
+				    cell->enter_sequence) ||
+				    (cell->enter_atom < cell->leave_atom &&
+				    report->atoms[cell->leave_atom - 1].sequence >=
+				    cell->leave_sequence) ||
+				    (cell->leave_atom < report->atoms_count &&
+				    report->atoms[cell->leave_atom].sequence <=
+				    cell->leave_sequence))
+					goto invalid;
+				for (owner = cell->enter_atom;
+				    owner < cell->leave_atom; owner++) {
+					atom = &report->atoms[owner];
+					if (atom->node != cell->node ||
+					    atom->buffer != cell->buffer ||
+					    atom->buffer_generation !=
+					    cell->buffer_generation)
 						goto invalid;
 				}
-				previous_data_ordinal = cell->data_ordinal;
+				next_data_ordinal++;
+				next_column = cell->logical_column + cell->column_span;
 				previous_cell = cell;
 			}
 			cell_cursor = row->cell_start + row->cell_length;
@@ -1785,9 +1961,43 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 		    cell->buffer_generation)
 			goto invalid;
 	}
+	for (index = 0; index < report->flushes_count; index++) {
+		flush = &report->flushes[index];
+		if (flush->buffer_generation >= report->buffer_generations_count)
+			continue;
+		owner = generation_cell[flush->buffer_generation];
+		if (owner == MANT_MANDOC_EXEC_NONE)
+			continue;
+		cell = &report->table_cells[owner];
+		row = &report->table_rows[cell->row];
+		table = &report->tables[row->table];
+		if (flush->key < row->enter_flush || flush->key >= row->leave_flush ||
+		    flush->key < table->enter_flush ||
+		    flush->key >= table->leave_flush)
+			goto invalid;
+	}
+	for (index = 0; index < report->fragments_count; index++) {
+		fragment = &report->fragments[index];
+		if (fragment->buffer_generation == MANT_MANDOC_EXEC_NONE ||
+		    fragment->buffer_generation >= report->buffer_generations_count)
+			continue;
+		owner = generation_cell[fragment->buffer_generation];
+		if (owner == MANT_MANDOC_EXEC_NONE)
+			continue;
+		cell = &report->table_cells[owner];
+		row = &report->table_rows[cell->row];
+		table = &report->tables[row->table];
+		if (fragment->key < row->enter_fragment ||
+		    fragment->key >= row->leave_fragment ||
+		    fragment->key < table->enter_fragment ||
+		    fragment->key >= table->leave_fragment)
+			goto invalid;
+	}
+	free(generation_cell);
 	return 1;
 
 invalid:
+	free(generation_cell);
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution table relationship is inconsistent");
 	return 0;
@@ -1805,8 +2015,12 @@ append_fragment(struct mant_mandoc_execution_report *report,
 	struct buffer_origin *buffer;
 	size_t buffer_key;
 	uint32_t atom_key;
+	int64_t start_bu, end_bu, width_bu;
 
-	if (!charge_work(report, 1))
+	if (!size_to_report_i64(report, before, &start_bu) ||
+	    !size_to_report_i64(report, after, &end_bu) ||
+	    !size_delta_to_report_i64(report, before, after, &width_bu) ||
+	    !charge_work(report, 1))
 		return 0;
 	buffer_key = (size_t)(p->tcol - p->tcols);
 	atom_key = MANT_MANDOC_EXEC_NONE;
@@ -1832,7 +2046,7 @@ append_fragment(struct mant_mandoc_execution_report *report,
 		    MANT_MANDOC_ATOM_DEVICE_GENERATED;
 		atom->input_scalar = (uint32_t)scalar;
 		atom->display_scalar = (uint32_t)scalar;
-		atom->width_bu = (int64_t)after - (int64_t)before;
+		atom->width_bu = width_bu;
 		atom->node = report->word_active ? report->current_word_node :
 		    lookup_node(report, node);
 		atom->source = atom->node != MANT_MANDOC_EXEC_NONE ?
@@ -1856,8 +2070,7 @@ append_fragment(struct mant_mandoc_execution_report *report,
 		}
 		report->atoms[atom_key].display_scalar = (uint32_t)scalar;
 		report->atoms[atom_key].kind = atom_kind(scalar);
-		report->atoms[atom_key].width_bu =
-		    (int64_t)after - (int64_t)before;
+		report->atoms[atom_key].width_bu = width_bu;
 		report->atoms[atom_key].disposition = MANT_MANDOC_ATOM_EMITTED;
 	} else
 		return 0;
@@ -1901,8 +2114,8 @@ append_fragment(struct mant_mandoc_execution_report *report,
 	else
 		fragment->role = MANT_MANDOC_FRAGMENT_CONTENT;
 	fragment->wrapper = report->current_wrapper;
-	fragment->start_bu = (int64_t)before;
-	fragment->end_bu = (int64_t)after;
+	fragment->start_bu = start_bu;
+	fragment->end_bu = end_bu;
 	fragment->sequence = report->sequence++;
 	reference = &report->fragment_atoms[report->fragment_atoms_count++];
 	reference->fragment = fragment->key;
@@ -1916,7 +2129,7 @@ append_fragment(struct mant_mandoc_execution_report *report,
 	geometry->unit = MANT_MANDOC_UNIT_BASIC;
 	geometry->origin_kind = MANT_MANDOC_GEOMETRY_ORIGIN_ATOM;
 	geometry->origin_key = atom_key;
-	geometry->requested = (int64_t)after - (int64_t)before;
+	geometry->requested = width_bu;
 	geometry->effective = geometry->requested;
 	geometry->before = fragment->start_bu;
 	geometry->after = fragment->end_bu;
@@ -1930,8 +2143,11 @@ append_boundary(struct mant_mandoc_execution_report *report,
     uint32_t effect)
 {
 	struct mant_mandoc_boundary_record *record;
+	int64_t line, visual;
 
-	if (!charge_work(report, 1) || !charge_record(report) ||
+	if (!size_to_report_i64(report, p->line, &line) ||
+	    !size_to_report_i64(report, p->viscol, &visual) ||
+	    !charge_work(report, 1) || !charge_record(report) ||
 	    !reserve_boundaries(report, report->boundaries_count + 1))
 		return 0;
 	record = &report->boundaries[report->boundaries_count];
@@ -1943,10 +2159,10 @@ append_boundary(struct mant_mandoc_execution_report *report,
 	record->effect = effect;
 	record->flags_before = stable_term_flags(p->flags);
 	record->flags_after = record->flags_before;
-	record->line_before = (int64_t)p->line;
-	record->line_after = (int64_t)p->line;
-	record->visual_before = (int64_t)p->viscol;
-	record->visual_after = (int64_t)p->viscol;
+	record->line_before = line;
+	record->line_after = line;
+	record->visual_before = visual;
+	record->visual_after = visual;
 	record->sequence = report->sequence++;
 	report->current_boundary = record->key;
 	return 1;
@@ -2034,6 +2250,8 @@ seal_report(struct mant_mandoc_execution_report *report)
 	uint64_t expected;
 	size_t index;
 
+	if (!validate_report_storage(report))
+		return 0;
 	if (report->current_wrapper != MANT_MANDOC_EXEC_NONE ||
 	    report->current_boundary != MANT_MANDOC_EXEC_NONE ||
 	    report->current_flush != MANT_MANDOC_EXEC_NONE ||
@@ -2111,26 +2329,120 @@ seal_report(struct mant_mandoc_execution_report *report)
 }
 
 static int
+validate_report_storage(struct mant_mandoc_execution_report *report)
+{
+	if (report == NULL)
+		return 0;
+	if (report->pool_length > report->pool_capacity ||
+	    (report->pool_length != 0 && report->pool == NULL) ||
+	    (report->buffer_count != 0 && report->buffers == NULL)) {
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+		    "native execution report storage is inconsistent");
+		return 0;
+	}
+#define VALIDATE_RECORD_STORAGE(name) do { \
+	if (report->name##_count > report->name##_capacity || \
+	    (report->name##_count != 0 && report->name == NULL)) { \
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL, \
+		    "native execution report storage is inconsistent"); \
+		return 0; \
+	} \
+} while (0)
+	VALIDATE_RECORD_STORAGE(sources);
+	VALIDATE_RECORD_STORAGE(nodes);
+	VALIDATE_RECORD_STORAGE(buffer_generations);
+	VALIDATE_RECORD_STORAGE(atoms);
+	VALIDATE_RECORD_STORAGE(fragments);
+	VALIDATE_RECORD_STORAGE(fragment_atoms);
+	VALIDATE_RECORD_STORAGE(flushes);
+	VALIDATE_RECORD_STORAGE(boundaries);
+	VALIDATE_RECORD_STORAGE(geometries);
+	VALIDATE_RECORD_STORAGE(wrappers);
+	VALIDATE_RECORD_STORAGE(references);
+	VALIDATE_RECORD_STORAGE(anchors);
+	VALIDATE_RECORD_STORAGE(tables);
+	VALIDATE_RECORD_STORAGE(table_rows);
+	VALIDATE_RECORD_STORAGE(table_cells);
+	VALIDATE_RECORD_STORAGE(diagnostics);
+#undef VALIDATE_RECORD_STORAGE
+	return 1;
+}
+
+static int
+valid_pool_range(const struct mant_mandoc_execution_report *report,
+    uint32_t start, uint32_t length, int optional)
+{
+	if (start == MANT_MANDOC_EXEC_NONE)
+		return optional && length == 0;
+	return start <= report->pool_length &&
+	    length <= report->pool_length - start;
+}
+
+static int
+valid_scalar(uint32_t scalar)
+{
+	return scalar <= 0x10ffffU &&
+	    (scalar < 0xd800U || scalar > 0xdfffU);
+}
+
+static int
+size_to_report_i64(struct mant_mandoc_execution_report *report,
+    size_t value, int64_t *converted)
+{
+	if (converted == NULL || value > (size_t)INT64_MAX) {
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+		    "native execution coordinate exceeds the report width");
+		return 0;
+	}
+	*converted = (int64_t)value;
+	return 1;
+}
+
+static int
+size_delta_to_report_i64(struct mant_mandoc_execution_report *report,
+    size_t before, size_t after, int64_t *converted)
+{
+	size_t magnitude;
+
+	magnitude = after >= before ? after - before : before - after;
+	if (converted == NULL || magnitude > (size_t)INT64_MAX) {
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+		    "native execution delta exceeds the report width");
+		return 0;
+	}
+	*converted = after >= before ? (int64_t)magnitude : -(int64_t)magnitude;
+	return 1;
+}
+
+static int
 validate_sealed_report(struct mant_mandoc_execution_report *report)
 {
+	struct mant_mandoc_source_record *source;
+	struct mant_mandoc_node_record *node;
 	struct mant_mandoc_buffer_generation_record *generation;
 	struct mant_mandoc_atom_record *atom;
 	struct mant_mandoc_fragment_record *fragment;
 	struct mant_mandoc_fragment_atom_record *reference;
 	struct mant_mandoc_flush_record *flush, *next_flush;
+	struct mant_mandoc_boundary_record *boundary;
 	struct mant_mandoc_geometry_record *geometry;
 	struct mant_mandoc_wrapper_record *wrapper;
 	struct mant_mandoc_reference_record *semantic_reference;
 	struct mant_mandoc_anchor_record *anchor;
-	uint32_t *next_generation, *last_capacity, *last_close_reason;
+	struct mant_mandoc_execution_diagnostic_record *diagnostic;
+	uint32_t *next_generation, *last_capacity, *last_close_reason, origin;
 	uint64_t *last_close_sequence, *last_reference_child_leave;
-	uint64_t last_root_reference_leave;
+	uint64_t *last_wrapper_child_leave;
+	uint64_t last_root_reference_leave, last_root_wrapper_leave;
 	unsigned char *covered_refs, *referenced_atoms, *replaced_atoms;
 	unsigned char *covered_fragments;
 	unsigned char *covered_glyph_geometry;
 	uint64_t *fragment_flush_outcome;
 	uint64_t capacity_total;
 	size_t index, inner, end;
+
+	if (!validate_report_storage(report))
+		return 0;
 
 	next_generation = report->buffer_count == 0 ? NULL :
 	    calloc(report->buffer_count, sizeof(*next_generation));
@@ -2155,6 +2467,9 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	last_reference_child_leave = report->references_count == 0 ? NULL :
 	    calloc(report->references_count,
 	    sizeof(*last_reference_child_leave));
+	last_wrapper_child_leave = report->wrappers_count == 0 ? NULL :
+	    calloc(report->wrappers_count,
+	    sizeof(*last_wrapper_child_leave));
 	if ((report->buffer_count != 0 &&
 	    (next_generation == NULL || last_capacity == NULL ||
 	    last_close_reason == NULL || last_close_sequence == NULL)) ||
@@ -2164,12 +2479,37 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
 	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
 	    (report->references_count != 0 &&
-	    last_reference_child_leave == NULL)) {
+	    last_reference_child_leave == NULL) ||
+	    (report->wrappers_count != 0 &&
+	    last_wrapper_child_leave == NULL)) {
 		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
 		    "could not validate native execution relationships");
 		goto fail;
 	}
 	last_root_reference_leave = 0;
+	last_root_wrapper_leave = 0;
+	if (report->sources_count != 1 || report->nodes_count == 0 ||
+	    report->node_count != report->nodes_count)
+		goto invalid_origin;
+	for (index = 0; index < report->sources_count; index++) {
+		source = &report->sources[index];
+		if (source->key != index || source->flags != 0 ||
+		    source->parent != MANT_MANDOC_EXEC_NONE ||
+		    source->include_node != MANT_MANDOC_EXEC_NONE ||
+		    !valid_pool_range(report, source->path_start,
+		    source->path_length, 0) || source->path_length == 0)
+			goto invalid_origin;
+	}
+	for (index = 0; index < report->nodes_count; index++) {
+		node = &report->nodes[index];
+		if (node->key != index || node->source >= report->sources_count ||
+		    (node->parent != MANT_MANDOC_EXEC_NONE &&
+		    node->parent >= index) || node->kind > 9 ||
+		    node->flags & ~0x03ffU ||
+		    !valid_pool_range(report, node->macro_start,
+		    node->macro_length, 1))
+			goto invalid_origin;
+	}
 	capacity_total = 0;
 	for (index = 0; index < report->buffer_count; index++) {
 		if (report->buffers[index].capacity > UINT32_MAX ||
@@ -2226,6 +2566,20 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		if (atom->key != index ||
 		    (index != 0 && report->atoms[index - 1].sequence >=
 		    atom->sequence) ||
+		    atom->kind < MANT_MANDOC_ATOM_GLYPH ||
+		    atom->kind > MANT_MANDOC_ATOM_BREAK_POINT ||
+		    atom->role < MANT_MANDOC_ATOM_AUTHORED ||
+		    atom->role > MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD ||
+		    atom->font > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
+		    atom->disposition < MANT_MANDOC_ATOM_EMITTED ||
+		    atom->disposition > MANT_MANDOC_ATOM_TRAILING_DISCARD ||
+		    !valid_scalar(atom->input_scalar) ||
+		    !valid_scalar(atom->display_scalar) ||
+		    !valid_pool_range(report, atom->operand_start,
+		    atom->operand_length, 1) ||
+		    (atom->node == MANT_MANDOC_EXEC_NONE ? atom->source != 0 :
+		    atom->node >= report->nodes_count ||
+		    atom->source != report->nodes[atom->node].source) ||
 		    ((atom->disposition == MANT_MANDOC_ATOM_REPLACED) !=
 		    (atom->replaced_by != MANT_MANDOC_EXEC_NONE)))
 			goto invalid_atom;
@@ -2280,7 +2634,12 @@ invalid_atom:
 		    fragment->sequence) || fragment->atom_ref_length != 1 ||
 		    fragment->atom_ref_start > report->fragment_atoms_count ||
 		    fragment->atom_ref_length > report->fragment_atoms_count -
-		    fragment->atom_ref_start)
+		    fragment->atom_ref_start || fragment->reserved != 0 ||
+		    fragment->role < MANT_MANDOC_FRAGMENT_CONTENT ||
+		    fragment->role > MANT_MANDOC_FRAGMENT_PAGE_DECORATION ||
+		    fragment->start_bu < 0 || fragment->end_bu < 0 ||
+		    (fragment->node != MANT_MANDOC_EXEC_NONE &&
+		    fragment->node >= report->nodes_count))
 			goto invalid_fragment;
 		end = fragment->atom_ref_start + fragment->atom_ref_length;
 		for (inner = fragment->atom_ref_start; inner < end; inner++) {
@@ -2293,6 +2652,7 @@ invalid_atom:
 			referenced_atoms[reference->atom] = 1;
 			atom = &report->atoms[reference->atom];
 			if (atom->disposition != MANT_MANDOC_ATOM_EMITTED ||
+			    atom->node != fragment->node ||
 			    atom->buffer != fragment->buffer ||
 			    atom->generation != fragment->generation ||
 			    atom->buffer_generation != fragment->buffer_generation)
@@ -2340,9 +2700,15 @@ invalid_fragment:
 	for (index = 0; index < report->flushes_count; index++) {
 		flush = &report->flushes[index];
 		if (flush->key != index ||
+		    (flush->node != MANT_MANDOC_EXEC_NONE &&
+		    flush->node >= report->nodes_count) ||
 		    flush->buffer_generation >= report->buffer_generations_count ||
 		    flush->outcome < MANT_MANDOC_FLUSH_NO_CONTENT ||
 		    flush->outcome > MANT_MANDOC_FLUSH_DEFERRED_COLUMN ||
+		    flush->flags_before & ~0x7fffffU ||
+		    flush->flags_after & ~0x7fffffU ||
+		    (flush->boundary != MANT_MANDOC_EXEC_NONE &&
+		    flush->boundary >= report->boundaries_count) ||
 		    flush->sequence >= flush->outcome_sequence)
 			goto invalid_flush;
 		generation = &report->buffer_generations[flush->buffer_generation];
@@ -2399,6 +2765,9 @@ invalid_fragment:
 			    next_flush->scan_start > flush->remaining_end)
 				goto invalid_flush;
 		}
+		if (flush->boundary != MANT_MANDOC_EXEC_NONE &&
+		    report->boundaries[flush->boundary].sequence >= flush->sequence)
+			goto invalid_flush;
 		continue;
 invalid_flush:
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
@@ -2414,12 +2783,109 @@ invalid_flush:
 			goto fail;
 		}
 	}
+	for (index = 0; index < report->boundaries_count; index++) {
+		boundary = &report->boundaries[index];
+		if (boundary->key != index ||
+		    (boundary->node != MANT_MANDOC_EXEC_NONE &&
+		    boundary->node >= report->nodes_count) ||
+		    (boundary->parent != MANT_MANDOC_EXEC_NONE &&
+		    boundary->parent >= index) ||
+		    boundary->request < MANT_MANDOC_BOUNDARY_NEWLINE ||
+		    boundary->request > MANT_MANDOC_BOUNDARY_DEVICE_ENDLINE ||
+		    boundary->effect > MANT_MANDOC_BOUNDARY_ADDED_VERTICAL_SPACE ||
+		    boundary->flags_before & ~0x7fffffU ||
+		    boundary->flags_after & ~0x7fffffU ||
+		    boundary->reserved != 0)
+			goto invalid_boundary;
+		if (boundary->parent != MANT_MANDOC_EXEC_NONE &&
+		    report->boundaries[boundary->parent].sequence >=
+		    boundary->sequence)
+			goto invalid_boundary;
+	}
 	for (index = 0; index < report->geometries_count; index++) {
 		geometry = &report->geometries[index];
-		if (geometry->key != index)
+		if (geometry->key != index ||
+		    (geometry->node != MANT_MANDOC_EXEC_NONE &&
+		    geometry->node >= report->nodes_count) ||
+		    geometry->kind < MANT_MANDOC_GEOMETRY_ADVANCE ||
+		    geometry->kind > MANT_MANDOC_GEOMETRY_FIELD ||
+		    geometry->unit < MANT_MANDOC_UNIT_BASIC ||
+		    geometry->unit > MANT_MANDOC_UNIT_DEVICE_LINE ||
+		    geometry->origin_kind > MANT_MANDOC_GEOMETRY_ORIGIN_FRAGMENT ||
+		    geometry->reserved != 0)
 			goto invalid_geometry;
-		if (geometry->kind != MANT_MANDOC_GEOMETRY_GLYPH)
+		switch (geometry->kind) {
+		case MANT_MANDOC_GEOMETRY_ADVANCE:
+			if (geometry->unit != MANT_MANDOC_UNIT_BASIC ||
+			    geometry->requested < 0 || geometry->before < 0 ||
+			    geometry->after < 0 || geometry->effective !=
+			    geometry->after - geometry->before ||
+			    (geometry->origin_kind ==
+			    MANT_MANDOC_GEOMETRY_ORIGIN_NONE ?
+			    geometry->origin_key != MANT_MANDOC_EXEC_NONE ||
+			    geometry->related != MANT_MANDOC_EXEC_NONE :
+			    geometry->origin_kind !=
+			    MANT_MANDOC_GEOMETRY_ORIGIN_FLUSH ||
+			    geometry->origin_key >= report->flushes_count ||
+			    geometry->related != geometry->origin_key ||
+			    geometry->node != report->flushes[
+			    geometry->origin_key].node || geometry->sequence <=
+			    report->flushes[geometry->origin_key].sequence ||
+			    geometry->sequence >= report->flushes[
+			    geometry->origin_key].outcome_sequence))
+				goto invalid_advance_geometry;
 			continue;
+		invalid_advance_geometry:
+			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+			    "native execution advance geometry is inconsistent");
+			goto fail;
+		case MANT_MANDOC_GEOMETRY_ENDLINE:
+			if (geometry->unit != MANT_MANDOC_UNIT_DEVICE_LINE ||
+			    geometry->requested != 1 || geometry->effective != 1 ||
+			    geometry->before < 0 || geometry->after < 0 ||
+			    geometry->origin_kind !=
+			    MANT_MANDOC_GEOMETRY_ORIGIN_BOUNDARY ||
+			    geometry->origin_key >= report->boundaries_count ||
+			    geometry->related != geometry->origin_key ||
+			    report->boundaries[geometry->origin_key].request !=
+			    MANT_MANDOC_BOUNDARY_DEVICE_ENDLINE ||
+			    report->boundaries[geometry->origin_key].effect !=
+			    MANT_MANDOC_BOUNDARY_ENDED_LINE ||
+			    geometry->node != report->boundaries[
+			    geometry->origin_key].node || geometry->before !=
+			    report->boundaries[geometry->origin_key].line_before ||
+			    geometry->after != report->boundaries[
+			    geometry->origin_key].line_after || geometry->sequence <=
+			    report->boundaries[geometry->origin_key].sequence)
+				goto invalid_endline_geometry;
+			continue;
+		invalid_endline_geometry:
+			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+			    "native execution endline geometry is inconsistent");
+			goto fail;
+		case MANT_MANDOC_GEOMETRY_FIELD:
+			if (geometry->unit != MANT_MANDOC_UNIT_BASIC ||
+			    geometry->before < 0 || geometry->after < 0 ||
+			    geometry->origin_kind !=
+			    MANT_MANDOC_GEOMETRY_ORIGIN_FLUSH ||
+			    geometry->origin_key >= report->flushes_count ||
+			    geometry->related != geometry->origin_key ||
+			    geometry->node != report->flushes[
+			    geometry->origin_key].node || geometry->sequence <=
+			    report->flushes[geometry->origin_key].sequence ||
+			    geometry->sequence >= report->flushes[
+			    geometry->origin_key].outcome_sequence)
+				goto invalid_field_geometry;
+			continue;
+		invalid_field_geometry:
+			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+			    "native execution field geometry is inconsistent");
+			goto fail;
+		case MANT_MANDOC_GEOMETRY_GLYPH:
+			break;
+		default:
+			goto invalid_geometry;
+		}
 		if (geometry->origin_kind != MANT_MANDOC_GEOMETRY_ORIGIN_ATOM ||
 		    geometry->origin_key >= report->atoms_count ||
 		    geometry->related >= report->fragments_count ||
@@ -2427,7 +2893,8 @@ invalid_flush:
 			goto invalid_geometry;
 		fragment = &report->fragments[geometry->related];
 		reference = &report->fragment_atoms[fragment->atom_ref_start];
-		if (reference->atom != geometry->origin_key ||
+		if (fragment->start_bu < 0 || fragment->end_bu < 0 ||
+		    reference->atom != geometry->origin_key ||
 		    geometry->node != fragment->node ||
 		    geometry->requested != fragment->end_bu - fragment->start_bu ||
 		    geometry->effective != geometry->requested ||
@@ -2439,7 +2906,7 @@ invalid_flush:
 		    fragment_flush_outcome[geometry->related])) {
 invalid_geometry:
 			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
-			    "native execution glyph geometry is inconsistent");
+			    "native execution geometry is inconsistent");
 			goto fail;
 		}
 		covered_glyph_geometry[geometry->related] = 1;
@@ -2448,7 +2915,21 @@ invalid_geometry:
 		if (!covered_glyph_geometry[index])
 			goto invalid_geometry;
 	for (index = 0; index < report->wrappers_count; index++) {
+		uint64_t *last_sibling_leave;
+
 		wrapper = &report->wrappers[index];
+		if (wrapper->key != index ||
+		    (index != 0 && report->wrappers[index - 1].enter_sequence >=
+		    wrapper->enter_sequence) ||
+		    wrapper->kind < MANT_MANDOC_WRAPPER_NODE ||
+		    wrapper->kind > MANT_MANDOC_WRAPPER_FONT ||
+		    wrapper->affinity != 0 || wrapper->flags != 0 ||
+		    wrapper->enter_atom > report->atoms_count ||
+		    wrapper->leave_atom > report->atoms_count ||
+		    wrapper->enter_atom > wrapper->leave_atom ||
+		    wrapper->state_before > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
+		    wrapper->state_after > MANT_MANDOC_FONT_BOLD_UNDERLINE)
+			goto invalid_wrapper;
 		if (wrapper->parent != MANT_MANDOC_EXEC_NONE) {
 			if (wrapper->parent >= index)
 				goto invalid_wrapper;
@@ -2457,7 +2938,28 @@ invalid_geometry:
 			    report->wrappers[wrapper->parent].leave_sequence <=
 			    wrapper->leave_sequence)
 				goto invalid_wrapper;
-		}
+			last_sibling_leave = &last_wrapper_child_leave[wrapper->parent];
+		} else
+			last_sibling_leave = &last_root_wrapper_leave;
+		if (*last_sibling_leave != 0 &&
+		    wrapper->enter_sequence <= *last_sibling_leave)
+			goto invalid_wrapper;
+		*last_sibling_leave = wrapper->leave_sequence;
+		if (wrapper->kind == MANT_MANDOC_WRAPPER_NODE) {
+			if (wrapper->node >= report->nodes_count ||
+			    wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
+			    wrapper->target_length != 0 ||
+			    wrapper->state_before != 0 || wrapper->state_after != 0 ||
+			    wrapper->depth_before != 0 || wrapper->depth_after != 0 ||
+			    wrapper->enter_sequence >= wrapper->leave_sequence)
+				goto invalid_wrapper;
+		} else if (wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
+		    wrapper->target_length != 0 ||
+		    wrapper->enter_atom != wrapper->leave_atom ||
+		    wrapper->enter_sequence != wrapper->leave_sequence ||
+		    wrapper->depth_after > wrapper->depth_before +
+		    (wrapper->depth_before != UINT32_MAX))
+			goto invalid_wrapper;
 		continue;
 invalid_wrapper:
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
@@ -2588,6 +3090,14 @@ invalid_wrapper:
 		    anchor->reserved != 0)
 			goto invalid_anchor;
 	}
+	for (index = 0; index < report->diagnostics_count; index++) {
+		diagnostic = &report->diagnostics[index];
+		if ((diagnostic->node != MANT_MANDOC_EXEC_NONE &&
+		    diagnostic->node >= report->nodes_count) ||
+		    !valid_pool_range(report, diagnostic->message_start,
+		    diagnostic->message_length, 0))
+			goto invalid_diagnostic;
+	}
 	for (index = 0; index < report->atoms_count; index++) {
 		atom = &report->atoms[index];
 		if (atom->wrapper == MANT_MANDOC_EXEC_NONE)
@@ -2600,6 +3110,12 @@ invalid_wrapper:
 		    atom->sequence >= wrapper->leave_sequence ||
 		    atom->key < wrapper->enter_atom ||
 		    atom->key >= wrapper->leave_atom)
+			goto invalid_event_wrapper;
+		origin = atom->node;
+		while (origin != MANT_MANDOC_EXEC_NONE &&
+		    origin != wrapper->node)
+			origin = report->nodes[origin].parent;
+		if (origin != wrapper->node)
 			goto invalid_event_wrapper;
 	}
 	for (index = 0; index < report->fragments_count; index++) {
@@ -2625,8 +3141,17 @@ invalid_wrapper:
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
 	free(last_reference_child_leave);
+	free(last_wrapper_child_leave);
 	return 1;
 
+invalid_origin:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution source or node origin is inconsistent");
+	goto fail;
+invalid_boundary:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution boundary relationship is inconsistent");
+	goto fail;
 invalid_event_wrapper:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution event wrapper is inconsistent");
@@ -2638,6 +3163,10 @@ invalid_reference:
 invalid_anchor:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution anchor is inconsistent");
+	goto fail;
+invalid_diagnostic:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution diagnostic relationship is inconsistent");
 	goto fail;
 fail:
 	free(next_generation);
@@ -2651,6 +3180,7 @@ fail:
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
 	free(last_reference_child_leave);
+	free(last_wrapper_child_leave);
 	return 0;
 }
 
@@ -3008,9 +3538,251 @@ fail_report(struct mant_mandoc_execution_report *report, int status,
 		memcpy(report->error, message, length);
 }
 
+uint32_t
+mant_mandoc_execution_validation_selftest(void)
+{
+	struct mant_mandoc_execution_report *report;
+	struct mant_mandoc_source_record *source;
+	struct mant_mandoc_node_record *node;
+	struct mant_mandoc_atom_record *atom;
+	struct mant_mandoc_boundary_record *boundary;
+	struct mant_mandoc_geometry_record *geometry;
+	struct mant_mandoc_wrapper_record *wrapper;
+	struct mant_mandoc_execution_diagnostic_record *diagnostic;
+	struct mant_mandoc_node_record *node_storage;
+	struct roff_node native_node;
+	struct tbl_span span;
+	struct tbl_cell cell;
+	struct tbl_dat data;
+	struct termp term;
+	struct termp_col columns[2];
+	struct mant_mandoc_execution_limits limits;
+	size_t node_capacity;
+	int64_t converted;
+	uint32_t failures = 0;
+
+	memset(&limits, 0, sizeof(limits));
+	limits.abi_version = MANT_MANDOC_EXECUTION_LIMITS_VERSION;
+	limits.abi_size = sizeof(limits);
+	limits.max_nodes = limits.max_depth = 16;
+	limits.max_work = limits.max_records = 1024;
+	limits.max_pool_bytes = 4096;
+	limits.max_buffer_cells = 1024;
+	report = mant_mandoc_execution_alloc("native-selftest.1", &limits);
+	if (report == NULL)
+		return UINT32_MAX;
+	if (!reserve_nodes(report, 1)) {
+		failures |= 1U << 0;
+		goto out;
+	}
+	report->node_count = report->nodes_count = 1;
+	node = &report->nodes[0];
+	memset(node, 0, sizeof(*node));
+	node->parent = MANT_MANDOC_EXEC_NONE;
+	node->macro_start = MANT_MANDOC_EXEC_NONE;
+	if (!validate_sealed_report(report))
+		failures |= 1U << 0;
+	source = &report->sources[0];
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	node_storage = report->nodes;
+	report->nodes = NULL;
+	if (seal_report(report))
+		failures |= 1U << 13;
+	report->nodes = node_storage;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	node_capacity = report->nodes_capacity;
+	report->nodes_capacity = 0;
+	if (validate_sealed_report(report))
+		failures |= 1U << 11;
+	report->nodes_capacity = node_capacity;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	source->path_start = (uint32_t)report->pool_length + 1;
+	if (validate_sealed_report(report))
+		failures |= 1U << 1;
+	source->path_start = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	node->kind = 10;
+	if (validate_sealed_report(report))
+		failures |= 1U << 2;
+	node->kind = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (!reserve_atoms(report, 1)) {
+		failures |= 1U << 3;
+		goto out;
+	}
+	report->atoms_count = 1;
+	atom = &report->atoms[0];
+	memset(atom, 0, sizeof(*atom));
+	atom->buffer = atom->generation = atom->buffer_generation =
+	    atom->slot = MANT_MANDOC_EXEC_NONE;
+	atom->kind = MANT_MANDOC_ATOM_GLYPH;
+	atom->role = UINT32_MAX;
+	atom->input_scalar = atom->display_scalar = 'x';
+	atom->node = 0;
+	atom->operand_start = MANT_MANDOC_EXEC_NONE;
+	atom->wrapper = atom->replaced_by = MANT_MANDOC_EXEC_NONE;
+	atom->disposition = MANT_MANDOC_ATOM_EMITTED;
+	atom->sequence = 1;
+	if (validate_sealed_report(report))
+		failures |= 1U << 3;
+	atom->role = MANT_MANDOC_ATOM_AUTHORED;
+	atom->source = 1;
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (validate_sealed_report(report))
+		failures |= 1U << 4;
+	report->atoms_count = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (!reserve_boundaries(report, 1)) {
+		failures |= 1U << 5;
+		goto out;
+	}
+	report->boundaries_count = 1;
+	boundary = &report->boundaries[0];
+	memset(boundary, 0, sizeof(*boundary));
+	boundary->node = boundary->parent = MANT_MANDOC_EXEC_NONE;
+	boundary->request = UINT32_MAX;
+	if (validate_sealed_report(report))
+		failures |= 1U << 5;
+	report->boundaries_count = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (!reserve_geometries(report, 1)) {
+		failures |= 1U << 6;
+		goto out;
+	}
+	report->geometries_count = 1;
+	geometry = &report->geometries[0];
+	memset(geometry, 0, sizeof(*geometry));
+	geometry->node = geometry->related = geometry->origin_key =
+	    MANT_MANDOC_EXEC_NONE;
+	geometry->kind = UINT32_MAX;
+	if (validate_sealed_report(report))
+		failures |= 1U << 6;
+	report->geometries_count = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (!reserve_diagnostics(report, 1)) {
+		failures |= 1U << 7;
+		goto out;
+	}
+	report->diagnostics_count = 1;
+	diagnostic = &report->diagnostics[0];
+	memset(diagnostic, 0, sizeof(*diagnostic));
+	diagnostic->node = MANT_MANDOC_EXEC_NONE;
+	diagnostic->message_start = (uint32_t)report->pool_length + 1;
+	if (validate_sealed_report(report))
+		failures |= 1U << 7;
+	report->diagnostics_count = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (!reserve_wrappers(report, 1)) {
+		failures |= 1U << 8;
+		goto out;
+	}
+	report->wrappers_count = 1;
+	wrapper = &report->wrappers[0];
+	memset(wrapper, 0, sizeof(*wrapper));
+	wrapper->parent = MANT_MANDOC_EXEC_NONE;
+	wrapper->node = 0;
+	wrapper->kind = UINT32_MAX;
+	wrapper->target_start = MANT_MANDOC_EXEC_NONE;
+	wrapper->enter_sequence = 1;
+	wrapper->leave_sequence = 2;
+	if (validate_sealed_report(report))
+		failures |= 1U << 8;
+	report->wrappers_count = 0;
+
+	if (table_layout_kind(TBL_CELL_CENTRE) !=
+	    MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER ||
+	    table_layout_kind(TBL_CELL_DHORIZ) !=
+	    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE ||
+	    table_layout_kind(TBL_CELL_MAX) != MANT_MANDOC_EXEC_NONE ||
+	    table_data_kind(TBL_DATA_NONE) != MANT_MANDOC_EXEC_TABLE_DATA_NONE ||
+	    table_data_kind(TBL_DATA_NDHORIZ) !=
+	    MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE ||
+	    table_data_kind((enum tbl_datt)-1) != MANT_MANDOC_EXEC_NONE)
+		failures |= 1U << 9;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	memset(&native_node, 0, sizeof(native_node));
+	free(report->node_index);
+	report->node_index = calloc(1, sizeof(*report->node_index));
+	if (report->node_index == NULL) {
+		failures |= 1U << 10;
+		goto out;
+	}
+	report->node_index[0].node = &native_node;
+	report->node_index[0].key = 0;
+	memset(&span, 0, sizeof(span));
+	memset(&cell, 0, sizeof(cell));
+	memset(&data, 0, sizeof(data));
+	memset(&term, 0, sizeof(term));
+	memset(columns, 0, sizeof(columns));
+	cell.pos = TBL_CELL_LEFT;
+	data.layout = &cell;
+	data.pos = TBL_DATA_DATA;
+	term.tcols = columns;
+	term.tcol = columns + 1;
+	term.maxtcol = 2;
+	report->current_table_row = 0;
+	if (!execution_table_cell_begin(report, &term, &native_node, &span,
+	    &cell, &data, 0, 0, 0, 0))
+		failures |= 1U << 10;
+	term.tcol = columns;
+	if (execution_table_cell_end(report, &term, &native_node, &span,
+	    &cell, &data, 0, 0, 0, 0))
+		failures |= 1U << 10;
+	term.tcol = columns + 1;
+	if (execution_table_cell_end(report, &term, &native_node, &span,
+	    &cell, &data, 1, 0, 0, 0) ||
+	    !execution_table_cell_end(report, &term, &native_node, &span,
+	    &cell, &data, 0, 0, 0, 0))
+		failures |= 1U << 10;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (SIZE_MAX > (size_t)INT64_MAX &&
+	    size_to_report_i64(report, SIZE_MAX, &converted))
+		failures |= 1U << 12;
+
+out:
+	mant_mandoc_execution_free(report);
+	return failures;
+}
+
 static int
 copy_records(const struct mant_mandoc_execution_report *report,
-    const void *records, size_t record_count, size_t record_size,
+    const void *records, size_t record_count, size_t record_capacity,
+    size_t record_size,
     size_t record_align, size_t start, void *destination,
     size_t destination_bytes, size_t element_size, size_t count,
     size_t *written)
@@ -3021,6 +3793,8 @@ copy_records(const struct mant_mandoc_execution_report *report,
 		*written = 0;
 	if (report == NULL ||
 	    report->status != MANT_MANDOC_EXECUTION_COMPLETE ||
+	    record_count > record_capacity ||
+	    (record_count != 0 && records == NULL) ||
 	    written == NULL || element_size != record_size ||
 	    start > record_count || count > record_count - start ||
 	    count > SIZE_MAX / record_size)
@@ -3062,7 +3836,8 @@ mant_mandoc_execution_copy_##plural( \
     size_t count, size_t *written) \
 { \
 	return copy_records(report, report == NULL ? NULL : report->plural, \
-	    report == NULL ? 0 : report->plural##_count, sizeof(struct type), \
+	    report == NULL ? 0 : report->plural##_count, \
+	    report == NULL ? 0 : report->plural##_capacity, sizeof(struct type), \
 	    offsetof(struct mant_##name##_alignment, value), start, destination, \
 	    destination_bytes, element_size, count, written); \
 }
@@ -3297,6 +4072,8 @@ mant_mandoc_execution_copy_pool(
 		*written = 0;
 	if (report == NULL ||
 	    report->status != MANT_MANDOC_EXECUTION_COMPLETE ||
+	    report->pool_length > report->pool_capacity ||
+	    (report->pool_length != 0 && report->pool == NULL) ||
 	    written == NULL || start > report->pool_length ||
 	    length > report->pool_length - start ||
 	    (length != 0 && destination == NULL))
