@@ -1,7 +1,13 @@
 //! Explicit persistent state, separate from source services and local joins.
 use libmandoc_rs::AuthorMode;
 
-use super::inline::FontState;
+use super::inline::{AuthorBreakEffect, FontState, InlineBuilder, PreservedInlineState};
+
+pub(super) struct FinishedInlineLine {
+    pub(super) output: Vec<mant_ir::Inline>,
+    pub(super) definition_field_exited: bool,
+    pub(super) definition_body_gap_consumed: bool,
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::mandoc) enum AuthorFlow {
@@ -41,6 +47,66 @@ impl Default for FormatterState {
 }
 
 impl FormatterState {
+    /// Start an inline formatter session with every document-global register
+    /// transferred together.
+    ///
+    /// Keeping this paired with [`Self::finish_inline_line`] and
+    /// [`Self::finish_inline_scope`] prevents callers from silently omitting
+    /// a newly added execution register during a structural handoff. Live
+    /// paragraph flows and isolated table fragments intentionally have split
+    /// ownership and do not use this author-aware session.
+    pub(super) fn begin_inline_session(
+        &mut self,
+        spacing: bool,
+        authors_section: bool,
+        author_break_effect: AuthorBreakEffect,
+    ) -> InlineBuilder {
+        let mut builder = InlineBuilder::with_spacing(spacing);
+        builder.font = self.font;
+        builder.inherit_vertical_space_debt(self.vertical_space_debt);
+        builder.inherit_zero_advance_armed(std::mem::take(&mut self.zero_advance_armed));
+        builder.inherit_author_execution_with_effect(
+            self.author_flow,
+            authors_section,
+            author_break_effect,
+        );
+        builder
+    }
+
+    /// Commit an inline session at a native formatter-line boundary.
+    pub(super) fn finish_inline_line(&mut self, builder: InlineBuilder) -> FinishedInlineLine {
+        self.inherit_inline_registers(&builder);
+        let definition_field_exited = builder.definition_field_exited();
+        let definition_body_gap_consumed = builder.definition_body_gap_consumed();
+        let (output, surviving_armed) = builder.finish_formatter_line();
+        self.zero_advance_armed = surviving_armed;
+        FinishedInlineLine {
+            output,
+            definition_field_exited,
+            definition_body_gap_consumed,
+        }
+    }
+
+    /// Commit persistent registers while leaving the local inline execution
+    /// state available to a run-in continuation in the surrounding stream.
+    pub(super) fn finish_inline_scope(
+        &mut self,
+        builder: InlineBuilder,
+    ) -> (Vec<mant_ir::Inline>, PreservedInlineState) {
+        self.inherit_inline_registers(&builder);
+        self.zero_advance_armed = false;
+        builder.finish_preserving_execution()
+    }
+
+    fn inherit_inline_registers(&mut self, builder: &InlineBuilder) {
+        if let Some(author_flow) = builder.author_flow() {
+            self.author_flow = author_flow;
+        }
+        self.font = builder.font;
+        self.spacing = builder.spacing_enabled();
+        self.vertical_space_debt = builder.vertical_space_debt();
+    }
+
     /// Enter the body of a top-level mdoc AUTHORS section.
     ///
     /// CVS clears both renderer-global author switches at this exact point;

@@ -152,30 +152,17 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
     ) -> (Vec<mant_ir::Inline>, bool, bool) {
-        let mut builder = inline::InlineBuilder::with_spacing(spacing);
-        builder.font = formatter.font;
-        builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
-        builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
-        builder.inherit_author_execution_with_effect(
-            formatter.author_flow(),
+        let mut builder = formatter.begin_inline_session(
+            spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
-        if let Some(author_flow) = builder.author_flow() {
-            formatter.set_author_flow(author_flow);
-        }
-        formatter.font = builder.font;
-        formatter.spacing = builder.spacing_enabled();
-        formatter.vertical_space_debt = builder.vertical_space_debt();
-        let definition_field_exited = builder.definition_field_exited();
-        let definition_body_gap_consumed = builder.definition_body_gap_consumed();
-        let (output, surviving_armed) = builder.finish_formatter_line();
-        formatter.zero_advance_armed = surviving_armed;
+        let finished = formatter.finish_inline_line(builder);
         (
-            output,
-            definition_field_exited,
-            definition_body_gap_consumed,
+            finished.output,
+            finished.definition_field_exited,
+            finished.definition_body_gap_consumed,
         )
     }
 
@@ -192,13 +179,10 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         strong_scope: bool,
     ) -> (Vec<mant_ir::Inline>, inline::PreservedInlineState) {
-        let mut builder = inline::InlineBuilder::with_spacing(spacing);
-        builder.font = formatter.font;
-        builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
-        builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
-        builder.inherit_author_execution(
-            formatter.author_flow(),
+        let mut builder = formatter.begin_inline_session(
+            spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
+            inline::AuthorBreakEffect::Line,
         );
         let saved_font = strong_scope.then(|| {
             builder
@@ -211,14 +195,7 @@ impl<'a> LoweringContext<'a> {
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);
         }
-        if let Some(author_flow) = builder.author_flow() {
-            formatter.set_author_flow(author_flow);
-        }
-        formatter.font = builder.font;
-        formatter.spacing = builder.spacing_enabled();
-        formatter.vertical_space_debt = builder.vertical_space_debt();
-        formatter.zero_advance_armed = false;
-        builder.finish_preserving_execution()
+        formatter.finish_inline_scope(builder)
     }
 
     /// Execute a section heading in the surrounding formatter stream.
@@ -233,11 +210,11 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         authors_section: bool,
     ) -> Vec<mant_ir::Inline> {
-        let mut builder = inline::InlineBuilder::with_spacing(formatter.spacing);
-        builder.font = formatter.font;
-        builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
-        builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
-        builder.inherit_author_execution(formatter.author_flow(), authors_section);
+        let mut builder = formatter.begin_inline_session(
+            formatter.spacing,
+            authors_section,
+            inline::AuthorBreakEffect::Line,
+        );
         match self.macro_set {
             MacroSet::Man | MacroSet::None => {
                 builder.font.begin_man_heading();
@@ -250,15 +227,7 @@ impl<'a> LoweringContext<'a> {
                 builder.font.pop_heading_scope(heading_font);
             }
         }
-        if let Some(author_flow) = builder.author_flow() {
-            formatter.set_author_flow(author_flow);
-        }
-        formatter.font = builder.font;
-        formatter.spacing = builder.spacing_enabled();
-        formatter.vertical_space_debt = builder.vertical_space_debt();
-        let (output, surviving_armed) = builder.finish_formatter_line();
-        formatter.zero_advance_armed = surviving_armed;
-        remove_structural_heading_bold(output)
+        remove_structural_heading_bold(formatter.finish_inline_line(builder).output)
     }
 
     pub(super) fn lower_text(
