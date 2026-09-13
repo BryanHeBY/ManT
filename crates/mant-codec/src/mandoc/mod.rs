@@ -124,6 +124,7 @@ fn lower_mandoc_document_with_source(
     navigation::resolve_navigation(
         &mut root_blocks,
         &mut sections,
+        &context.authored_section_targets,
         &retained_targets,
         &mut diagnostics,
     );

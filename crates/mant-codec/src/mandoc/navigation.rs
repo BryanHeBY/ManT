@@ -17,11 +17,16 @@ type SectionTargets = HashMap<String, Option<String>>;
 pub(super) fn resolve_navigation(
     root_blocks: &mut [Block],
     sections: &mut [Section],
+    authored_section_targets: &SectionTargets,
     retained_targets: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let mut targets = SectionTargets::new();
-    collect_section_targets(sections, &mut targets);
+    // Navigation names belong to the authored heading namespace.  Formatter
+    // execution can change the visible heading (for example, a preceding
+    // zero-width glyph can consume its first character), but that projection
+    // must neither create aliases nor make a distinct authored heading
+    // ambiguous.
+    let targets = authored_section_targets.clone();
     resolve_blocks(root_blocks, &targets, retained_targets, diagnostics);
     promote_manual_references(root_blocks);
     for section in sections {
@@ -130,16 +135,6 @@ pub(super) fn native_anchor_ids(root_blocks: &[Block], sections: &[Section]) -> 
         collector.visit_section(section);
     }
     collector.ids
-}
-
-fn collect_section_targets(sections: &[Section], targets: &mut SectionTargets) {
-    for section in sections {
-        targets
-            .entry(section.heading.plain_text())
-            .and_modify(|target| *target = None)
-            .or_insert_with(|| Some(section.id.to_string()));
-        collect_section_targets(&section.children, targets);
-    }
 }
 
 fn resolve_section(
@@ -413,6 +408,10 @@ impl LoweringContext<'_> {
         node: &Node,
     ) -> (String, Vec<mant_ir::FragmentAlias>) {
         let id = self.section_id(title);
+        self.authored_section_targets
+            .entry(title.to_owned())
+            .and_modify(|target| *target = None)
+            .or_insert_with(|| Some(id.clone()));
         let fragment_aliases = targets::section_target(node)
             .filter(|target| self.explicit_targets.contains(target))
             .map(|target| vec![target.into()])

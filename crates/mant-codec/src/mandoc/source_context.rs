@@ -24,6 +24,7 @@ pub(super) struct LoweringContext<'a> {
     native_table_requests: RefCell<HashMap<String, bool>>,
     pub(super) section_ids: HashMap<String, usize>,
     pub(super) assigned_section_ids: HashSet<String>,
+    pub(super) authored_section_targets: HashMap<String, Option<String>>,
     pub(super) explicit_targets: HashSet<String>,
     pub(super) diagnostics: RefCell<Vec<Diagnostic>>,
     active_mdoc_section: std::cell::Cell<MdocSectionContext>,
@@ -114,6 +115,7 @@ impl<'a> LoweringContext<'a> {
             native_table_requests: RefCell::new(HashMap::new()),
             section_ids: HashMap::new(),
             assigned_section_ids: HashSet::new(),
+            authored_section_targets: HashMap::new(),
             explicit_targets: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
             active_mdoc_section: std::cell::Cell::new(MdocSectionContext::Other),
@@ -151,8 +153,38 @@ impl<'a> LoweringContext<'a> {
         formatter.font = builder.font;
         formatter.spacing = builder.spacing_enabled();
         formatter.vertical_space_debt = builder.vertical_space_debt();
-        formatter.zero_advance_armed = builder.take_zero_advance_armed();
-        builder.finish()
+        let (output, surviving_armed) = builder.finish_formatter_line();
+        formatter.zero_advance_armed = surviving_armed;
+        output
+    }
+
+    /// Execute a section heading in the surrounding formatter stream.
+    ///
+    /// CVS renders `Sh`/`Ss` heads as a scoped bold font, then calls
+    /// `term_newln()`.  The semantic heading supplies its own presentation,
+    /// so inherited font state is deliberately not projected into its IR;
+    /// spacing and zero-advance execution remain document-global.
+    pub(super) fn lower_section_heading(
+        &self,
+        nodes: &[Node],
+        formatter: &mut formatter::FormatterState,
+        authors_section: bool,
+    ) -> Vec<mant_ir::Inline> {
+        let mut builder = inline::InlineBuilder::with_spacing(formatter.spacing);
+        builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
+        builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        append_heading_nodes(
+            &mut builder,
+            nodes,
+            self.default_name,
+            formatter,
+            authors_section,
+        );
+        formatter.spacing = builder.spacing_enabled();
+        formatter.vertical_space_debt = builder.vertical_space_debt();
+        let (output, surviving_armed) = builder.finish_formatter_line();
+        formatter.zero_advance_armed = surviving_armed;
+        output
     }
 
     pub(super) fn lower_text(
@@ -314,6 +346,35 @@ impl<'a> LoweringContext<'a> {
             .first()
             .is_some_and(|head| head.contains("\\n+"))
     }
+}
+
+/// Execute direct heading children in native source order.
+///
+/// Callable mdoc macros in a `Sh`/`Ss` head are direct siblings in the native
+/// tree.  Splitting the stream only at `.An` keeps the ordinary inline sibling
+/// rules intact while applying CVS `termp_an_pre()` exactly where each author
+/// request executes; a returned newline therefore precedes that author name,
+/// and the resulting mode remains available to the section body.
+fn append_heading_nodes(
+    builder: &mut inline::InlineBuilder,
+    nodes: &[Node],
+    default_name: Option<&str>,
+    formatter: &mut formatter::FormatterState,
+    authors_section: bool,
+) {
+    let mut chunk_start = 0;
+    for (index, node) in nodes.iter().enumerate() {
+        if node.macro_name.as_deref() != Some("An") {
+            continue;
+        }
+        inline::append_inline_nodes(builder, &nodes[chunk_start..index], default_name);
+        if formatter.execute_author(node.author_mode, authors_section) {
+            builder.hard_break();
+        }
+        inline::append_inline_nodes(builder, std::slice::from_ref(node), default_name);
+        chunk_start = index + 1;
+    }
+    inline::append_inline_nodes(builder, &nodes[chunk_start..], default_name);
 }
 
 fn execute_inline_author_modes(

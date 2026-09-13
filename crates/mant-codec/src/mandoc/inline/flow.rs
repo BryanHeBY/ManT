@@ -1181,6 +1181,25 @@ impl InlineBuilder {
         self.finish_nodes()
     }
 
+    /// Finish one native formatter line and return a bare `\\z` request only
+    /// when no formatter cell was occupied.
+    ///
+    /// CVS `term_newln()` calls `term_flushln()` only after text, a pending
+    /// glyph, or another formatter event occupied the current cell.  That
+    /// flush clears both backtracking flags.  An otherwise empty line leaves
+    /// `TERMP_BACKAFTER` live for the next formatter word.  Returning the
+    /// surviving flag together with the committed output prevents callers
+    /// from exporting state before this boundary has executed.
+    pub(in crate::mandoc) fn finish_formatter_line(mut self) -> (Vec<Inline>, bool) {
+        let surviving_armed = if self.has_formatter_cell() {
+            false
+        } else {
+            self.zero_advance.take_armed()
+        };
+        self.flush_zero_advance();
+        (self.finish_nodes(), surviving_armed)
+    }
+
     /// Return an inner scope without forcing a pending `\\z` glyph to become
     /// visible.  CVS mandoc carries its backtracking flags through nested
     /// `term_word()` calls, so the caller must continue the state in the

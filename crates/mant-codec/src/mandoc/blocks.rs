@@ -101,9 +101,7 @@ fn lower_blocks_with_predecessor(
     );
     lowerer.paragraph_predecessor = paragraph_predecessor;
     lowerer.push_nodes(nodes);
-    lowerer.state.sync_formatter_state(&mut lowerer.formatter);
-    *formatter = lowerer.formatter;
-    lowerer.finish()
+    lowerer.finish_into(formatter)
 }
 
 const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
@@ -330,9 +328,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             .inherit_zero_advance_armed(self.no_fill_inline.take_bare_zero_advance_armed());
     }
 
-    fn finish(mut self) -> Vec<Block> {
+    fn finish_into(
+        mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) -> Vec<Block> {
         self.settle_no_fill_inline();
-        let blocks = self.state.finish();
+        let blocks = self.state.finish_with_formatter(&mut self.formatter);
+        *formatter = self.formatter;
         self.context.check_gap_bounds(&blocks);
         blocks
     }

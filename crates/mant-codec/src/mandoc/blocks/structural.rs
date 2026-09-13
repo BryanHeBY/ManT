@@ -182,9 +182,8 @@ impl StructuralLowerer<'_, '_, '_> {
             ));
         }
         lowerer.push_nodes(children);
-        lowerer.state.sync_formatter_state(&mut lowerer.formatter);
-        *self.formatter = lowerer.formatter;
-        extend_blocks_with_spacing(self.output, lowerer.finish(), spacing, node);
+        let nested = lowerer.finish_into(self.formatter);
+        extend_blocks_with_spacing(self.output, nested, spacing, node);
     }
 
     fn lower_transparent_container(&mut self, node: &Node) -> bool {
@@ -234,9 +233,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 );
                 lowerer.paragraph_predecessor = paragraph_predecessor;
                 lowerer.push_nodes(first_part_children(node, NodeKind::Body));
-                lowerer.state.sync_formatter_state(&mut lowerer.formatter);
-                *self.formatter = lowerer.formatter;
-                let mut nested = lowerer.finish();
+                let mut nested = lowerer.finish_into(self.formatter);
                 if continues_item {
                     if append_relative_continuation(
                         self.output,

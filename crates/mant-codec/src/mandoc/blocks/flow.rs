@@ -335,12 +335,28 @@ impl BlockState {
         self.consume_hanging_first_line();
     }
 
+    #[cfg(test)]
     pub(super) fn finish(mut self) -> Vec<Block> {
+        self.settle();
+        self.output
+    }
+
+    /// Execute all pending formatter boundaries before exporting persistent
+    /// state to an enclosing structural driver.
+    pub(super) fn finish_with_formatter(
+        mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) -> Vec<Block> {
+        self.settle();
+        self.sync_formatter_state(formatter);
+        self.output
+    }
+
+    fn settle(&mut self) {
         self.flush_preformatted();
         self.flush_paragraph();
         let output_end = self.output.len();
         self.attach_pending_to_structural_output(output_end);
-        self.output
     }
 }
 

@@ -30,7 +30,7 @@ pub(in crate::mandoc) fn lower_document_structure(
             context,
             crate::mandoc::layout::SourceIndent::default(),
             &mut root_paragraph_distance,
-            true,
+            formatter.spacing,
             &mut formatter,
         ));
         root_start = index + 1;
@@ -55,7 +55,7 @@ pub(in crate::mandoc) fn lower_document_structure(
         context,
         crate::mandoc::layout::SourceIndent::default(),
         &mut root_paragraph_distance,
-        true,
+        formatter.spacing,
         &mut formatter,
     ));
     (root_blocks, sections)
@@ -69,24 +69,28 @@ fn lower_section(
     formatter: &mut crate::mandoc::formatter::FormatterState,
     top_level: bool,
 ) -> Section {
-    let heading = lower_inline_nodes(
-        first_part_children(node, NodeKind::Head),
-        context.default_name,
-    );
-    let title = plain_text(&heading).trim().to_owned();
-    // Allocate IDs in visible document order. Besides being deterministic for
-    // consumers, this makes `.Sx` resolution independent of tree recursion.
-    let (id, fragment_aliases) = context.section_identity_for(&title, node);
-    let body = first_part_children(node, NodeKind::Body);
-    let first_subsection = body
-        .iter()
-        .position(|child| is_section(child, false))
-        .unwrap_or(body.len());
+    let head = first_part_children(node, NodeKind::Head);
     let section_context = if top_level {
         native_mdoc_section_context(node)
     } else {
         context.active_mdoc_section()
     };
+    let authored_title = plain_text(&lower_inline_nodes(head, context.default_name))
+        .trim()
+        .to_owned();
+    let heading = context.lower_section_heading(
+        head,
+        formatter,
+        section_context == crate::mandoc::source_context::MdocSectionContext::Authors,
+    );
+    // Allocate IDs in visible document order. Besides being deterministic for
+    // consumers, this makes `.Sx` resolution independent of tree recursion.
+    let (id, fragment_aliases) = context.section_identity_for(&authored_title, node);
+    let body = first_part_children(node, NodeKind::Body);
+    let first_subsection = body
+        .iter()
+        .position(|child| is_section(child, false))
+        .unwrap_or(body.len());
     let previous_section = context.replace_mdoc_section(section_context);
     if top_level && section_context == crate::mandoc::source_context::MdocSectionContext::Authors {
         formatter.enter_authors_section();
@@ -96,7 +100,7 @@ fn lower_section(
         context,
         crate::mandoc::layout::SourceIndent::default(),
         paragraph_distance,
-        true,
+        formatter.spacing,
         formatter,
     );
     let mut children = Vec::new();
