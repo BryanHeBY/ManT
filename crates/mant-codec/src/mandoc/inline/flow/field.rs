@@ -151,17 +151,19 @@ impl InlineBuilder {
         self.trailing_output = TrailingOutput::FixedBlank;
     }
 
-    /// Execute `.ti` after the definition field's `roff_term_pre_br()` step.
-    /// The temporary absolute offset is independent from whether NOBREAK
-    /// actually ended a line; HANG keeps the current field and uses only its
-    /// ordinary trailspace.
-    pub(in crate::mandoc) fn temporary_indent(&mut self, count: usize) {
+    /// Execute `.ti` through its preceding `roff_term_pre_br()` boundary.
+    ///
+    /// `ManT` deliberately omits the device-specific temporary offset.  In
+    /// particular, the numeric operand is not printable padding: the pinned
+    /// renderer applies it to `p->ti` and `tcol->offset` only after flushing
+    /// the current field.  Retain the field's own trailspace and boundary,
+    /// then discard the temporary device position as documented.
+    pub(in crate::mandoc) fn temporary_indent(&mut self) {
         if let Some(field) = self.take_no_break_field() {
             self.restore_no_break_field_projection(field);
             match field.style {
                 DefinitionFieldStyle::Tag => {
                     self.force_output_line_break();
-                    self.pending_line_indent = count;
                     self.definition_outcome.mark_field_exited();
                 }
                 DefinitionFieldStyle::Hang => {
@@ -210,9 +212,8 @@ impl InlineBuilder {
         let overruns = wraps && field_width.saturating_add(usize::from(gap)) > usize::from(body);
         if overruns {
             self.hard_break();
-            self.pending_line_indent = count;
         } else {
-            self.append_fixed_cells(if wraps { count } else { usize::from(gap) });
+            self.append_fixed_cells(usize::from(gap));
         }
         if let Some(execution) = &mut self.author_execution {
             execution.field_output_start = self.nodes.len();
@@ -304,7 +305,14 @@ impl InlineBuilder {
             } else {
                 self.retain_line_breaks(rows.saturating_sub(1));
             }
-            self.pending_definition_indent = Some(field.body_width);
+            // For tag fields the request closes the device row before
+            // `roff_term_pre_br()` consumes BRIND; the node-local offset is
+            // restored by mdoc traversal, so later head content resumes at
+            // the list origin. HANG deliberately keeps its run-in body origin.
+            self.pending_definition_indent = match field.style {
+                DefinitionFieldStyle::Tag => None,
+                DefinitionFieldStyle::Hang => Some(field.body_width),
+            };
             if field.style == DefinitionFieldStyle::Tag {
                 self.definition_outcome.mark_field_exited();
             }
@@ -404,7 +412,14 @@ impl InlineBuilder {
         // roff_term_pre_mc() only calls term_flushln() after the formatter
         // has advanced the current output column. A completed `\zX` glyph
         // has entered the buffer; a bare armed `\z` has not.
-        if !self.has_formatter_cell() {
+        let executed_field_word = self
+            .no_break_field
+            .is_some_and(|field| self.execution_epoch != field.resumed_execution_epoch);
+        if !self.has_formatter_cell() && !executed_field_word {
+            return;
+        }
+        if let Some(field) = self.take_no_break_field() {
+            self.continue_no_break_definition_field(field);
             return;
         }
         if self.no_break_definition_field() {
@@ -464,6 +479,90 @@ impl InlineBuilder {
         self.final_word_join = Some(false);
     }
 
+    /// Flush another formatter cell while a prior `.mc` field remains live.
+    ///
+    /// CVS clears NOBREAK and NOSPACE after each request, but BRIND/HANG,
+    /// trailspace, and the list field geometry survive.  Consequently a later
+    /// `.mc` must not fall back to the ordinary one-cell path merely because
+    /// `AuthorBreakEffect` changed after the first flush.
+    fn continue_no_break_definition_field(&mut self, mut field: NoBreakField) {
+        let resumed_has_cell = self.restore_no_break_field_projection(field);
+        if !resumed_has_cell {
+            // Whitespace-only and zero-width formatter words make
+            // `term_flushln()` run, but `term_fill()` commits no field.
+            // Restore the one separator that was waiting for the next real
+            // field instead of consuming it or manufacturing a second one.
+            field.output_end_before_separator = self.nodes.len();
+            self.append_field_separator(field.separator_cells);
+            self.boundary = PendingBoundary::Tight;
+            field.resumed_output_start = self.nodes.len();
+            field.resumed_execution_epoch = self.execution_epoch;
+            self.no_break_field = Some(field);
+            self.reset_after_no_break_field();
+            // The complete native field boundary is already represented by
+            // the retained separator.  Do not let the block/source handoff
+            // append a second ordinary word blank before the next field.
+            self.final_word_join = Some(true);
+            return;
+        }
+
+        let resumed = self
+            .nodes
+            .get(field.resumed_output_start..)
+            .unwrap_or_default();
+        let resumed_width = mant_ir::geometry::text_width(&super::super::plain_text(resumed));
+        let row_width = self.current_formatter_row_width();
+        let overrun = row_width.saturating_add(field.trailspace_cells) > field.body_width;
+        let output_end_before_separator = self.nodes.len();
+
+        let separator_cells = if field.style == DefinitionFieldStyle::Tag && overrun {
+            self.hard_break();
+            // `roff_term_pre_mc()` clears NOSPACE after the NOBREAK flush,
+            // so the first word on the new device row still owns one normal
+            // formatter boundary at the list origin.
+            1
+        } else if overrun {
+            1
+        } else {
+            field.trailspace_cells.saturating_add(1)
+        };
+        self.append_field_separator(separator_cells);
+        self.boundary = PendingBoundary::Tight;
+
+        field.output_end_before_separator = output_end_before_separator;
+        field.resumed_output_start = self.nodes.len();
+        field.resumed_execution_epoch = self.execution_epoch;
+        field.field_width = resumed_width;
+        field.separator_cells = separator_cells;
+        self.no_break_field = Some(field);
+        self.reset_after_no_break_field();
+    }
+
+    fn reset_after_no_break_field(&mut self) {
+        self.empty_word = false;
+        self.pending_breakable_spaces = 0;
+        self.pending_field_spaces = 0;
+        self.word_end_break = WordEndBreak::Clear;
+        self.formatter_column = FormatterColumn::Origin;
+        self.final_word_join = Some(false);
+    }
+
+    fn current_formatter_row_width(&self) -> usize {
+        let start = self
+            .nodes
+            .iter()
+            .rposition(|node| matches!(node, Inline::LineBreak))
+            .map_or(0, |index| index + 1);
+        mant_ir::geometry::text_width(&super::super::plain_text(&self.nodes[start..]))
+    }
+
+    fn append_field_separator(&mut self, count: usize) {
+        self.append_fixed_cells(count);
+        if count > 0 {
+            self.trailing_output = TrailingOutput::FieldBlank(count);
+        }
+    }
+
     fn no_break_definition_field(&mut self) -> bool {
         let Some((start, gap, body, wraps)) =
             self.author_execution
@@ -494,9 +593,10 @@ impl InlineBuilder {
                 self.hard_break();
                 // Clearing NOSPACE after `.mc` leaves one ordinary boundary
                 // at the list origin; BRIND is not executed by this request.
-                self.pending_definition_indent = Some(1);
+                self.append_field_separator(1);
+                self.boundary = PendingBoundary::Tight;
             } else {
-                self.append_fixed_cells(usize::from(gap).saturating_add(1));
+                self.append_field_separator(usize::from(gap).saturating_add(1));
                 self.boundary = PendingBoundary::Tight;
             }
             self.definition_outcome.mark_field_exited();
@@ -521,10 +621,12 @@ impl InlineBuilder {
         self.no_break_field = Some(NoBreakField {
             output_end_before_separator,
             resumed_output_start: self.nodes.len(),
+            resumed_execution_epoch: self.execution_epoch,
             field_width: width,
             body_width: usize::from(body),
+            trailspace_cells: usize::from(gap),
             separator_cells: if overrun {
-                usize::from(!wraps)
+                1
             } else {
                 usize::from(gap).saturating_add(1)
             },
@@ -533,7 +635,6 @@ impl InlineBuilder {
             } else {
                 DefinitionFieldStyle::Hang
             },
-            overrun,
         });
         self.empty_word = false;
         self.pending_breakable_spaces = 0;
@@ -554,14 +655,18 @@ impl InlineBuilder {
         // completed zero-advance glyph and, critically, clear a bare
         // BACKAFTER request before the next word runs.
         self.flush_zero_advance();
-        let resumed_visible = super::super::plain_text(
-            self.nodes
-                .get(field.resumed_output_start..)
-                .unwrap_or_default(),
-        )
-        .chars()
-        .any(|ch| !ch.is_whitespace());
-        if !field.overrun && !resumed_visible {
+        let resumed = self
+            .nodes
+            .get(field.resumed_output_start..)
+            .unwrap_or_default();
+        let resumed_text = super::super::plain_text(resumed);
+        // `term_fill()` commits a fixed/non-breaking blank glyph, but drops
+        // an ordinary whitespace-only formatter word.  Both occupy the Rust
+        // projection, so printable text alone cannot distinguish them.
+        let resumed_has_cell = resumed_text.chars().any(|ch| !ch.is_whitespace())
+            || (has_printable_character(resumed)
+                && self.trailing_output == TrailingOutput::FixedBlank);
+        if !resumed_has_cell {
             trim_trailing_breakable_spaces(&mut self.nodes, field.separator_cells);
             let mut index = self.nodes.len();
             while index > field.output_end_before_separator {
@@ -580,7 +685,7 @@ impl InlineBuilder {
         }
         self.pending_breakable_spaces = 0;
         self.pending_field_spaces = 0;
-        resumed_visible
+        resumed_has_cell
     }
 
     fn settle_no_break_field_line(&mut self, field: NoBreakField) {

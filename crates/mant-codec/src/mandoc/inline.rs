@@ -240,13 +240,7 @@ pub(super) fn append_inline_node_with_next(
             builder.set_spacing(setting.trim());
         }
         Some("ti") => {
-            let columns = node
-                .children
-                .first()
-                .and_then(|child| child.text.as_deref())
-                .and_then(super::layout::Distance::parse)
-                .map_or(0, |distance| distance.position_columns().max(0));
-            builder.temporary_indent(usize::try_from(columns).unwrap_or(usize::MAX));
+            builder.temporary_indent();
         }
         Some("nf" | "fi") => {
             builder.fill_mode_boundary();

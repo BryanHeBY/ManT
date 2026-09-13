@@ -99,6 +99,11 @@ that crate was not published for that change.
   and the first body word in one formatter execution stream. Zero-advance
   glyphs can therefore be overwritten at the native head/body boundary
   without turning an IR ownership split into a spurious line flush.
+- Preserve definition-field execution across repeated `.mc` requests. Each
+  flush now recomputes the remaining row width, retains fixed-width blank
+  glyphs, and distinguishes empty formatter words from visible cells. `.ti`
+  keeps its preceding field boundary without rendering the device-specific
+  temporary offset as document padding.
 
 ### mant-ui 0.12.0
 

@@ -93,11 +93,12 @@ impl DefinitionOutcome {
 struct NoBreakField {
     output_end_before_separator: usize,
     resumed_output_start: usize,
+    resumed_execution_epoch: u64,
     field_width: usize,
     body_width: usize,
+    trailspace_cells: usize,
     separator_cells: usize,
     style: DefinitionFieldStyle,
-    overrun: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
