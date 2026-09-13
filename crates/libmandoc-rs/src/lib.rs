@@ -7,6 +7,8 @@ mod build_config;
 mod ast;
 mod compression;
 mod diagnostics;
+#[cfg(feature = "execute")]
+mod execution;
 #[allow(unsafe_code)]
 mod ffi;
 mod parser;
@@ -24,6 +26,16 @@ pub use ast::{
 };
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocation};
+#[cfg(feature = "execute")]
+pub use execution::{
+    AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
+    BufferCloseReason, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
+    ExecutionBufferGeneration, ExecutionDiagnostic, ExecutionError, ExecutionErrorKind,
+    ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry, ExecutionLimits,
+    ExecutionNode, ExecutionNodeKey, ExecutionReport, ExecutionSource, ExecutionWrapper,
+    FlushOutcome, FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
+    NativeExecutionReport, PoolRange,
+};
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,
     Parser,

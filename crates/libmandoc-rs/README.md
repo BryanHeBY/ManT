@@ -18,14 +18,22 @@ to depend on libmandoc's private C structures or parser lifetime.
 - Structured non-fatal diagnostics and typed source/decompression failures.
 - Top-level uncompressed, gzip, and zstd manual sources.
 - Concurrent parser calls with thread-local upstream and shim state.
+- An optional `execute` feature exposing one bounded, pointer-free report of
+  the pinned terminal executor's sources, nodes, buffer generations, atoms,
+  fragments, flushes, boundaries, geometry, wrappers, anchors, and findings.
 - An optional `render` feature exposing bounded upstream ASCII, deterministic
   UTF-8, and HTML reference output without writing to process standard output.
 
 The default crate remains a parser layer only. It intentionally does not
 locate system manual pages, interpret application-specific section models, or
-run a pager. The optional reference renderers format the native tree in the
-same call that parses it; they do not turn the owned Rust AST into a second
-document model, and `ManT`'s existing engine integration remains unchanged.
+run a pager. `Parser::execute_bytes` parses and traverses one caller-owned root
+buffer in the same native session at a fixed 78-column terminal profile, then
+returns matching owned AST and sealed execution facts. This first execution
+boundary rejects includes, tables, and equations before traversal rather than
+returning a partial report. The optional reference renderers likewise format
+the native tree in the same call that parses it. Neither feature turns the
+owned Rust AST into a second document model, and `ManT`'s production lowering
+remains unchanged until the native-execution migration is complete.
 
 ## Boundary model
 
@@ -38,6 +46,9 @@ Rust transport and policy ──> private C shim ──> libmandoc cvs-20260911
           ├─ owned ParseReport <────┘                 │
           │  ├─ Document syntax tree                  │
           │  └─ structured diagnostics                │
+          ├─ owned ExecutionReport <──────────────────┤  (`execute` feature)
+          │  ├─ matching Document syntax tree         │
+          │  └─ sealed typed execution facts          │
           └─ bounded RenderReport <───────────────────┘  (`render` feature)
              ├─ complete reference output
              └─ structured diagnostics
@@ -74,11 +85,12 @@ returns, while the returned report remains fully owned and freely movable.
 
 Within that private boundary, `ffi::session` owns the native document drop
 guard and keeps bundle paths and source bytes alive for the call;
-`ffi::owned` transfers the syntax tree, while `ffi::render` copies bounded
-reference output using the same guard. A failed native call releases its own
-session without invalidating previously returned reports. Raw declarations
-and the Windows root callback remain private to the FFI boundary; none of
-these internal modules is a consumer-facing API.
+`ffi::owned` transfers the syntax tree, `ffi::execution` validates and copies
+the sealed execution report, and `ffi::render` copies bounded reference output
+using the same guard. A failed native call releases its own session without
+invalidating previously returned reports. Raw declarations and the Windows
+root callback remain private to the FFI boundary; none of these internal
+modules is a consumer-facing API.
 
 Table cells expose their effective `TableCellKind`: layout rules override data,
 and connecting/isolated single/double rules remain distinguishable. A rule may
@@ -349,7 +361,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 27 ordered patches in `patches/series`. The following group contains
+the 28 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -421,6 +433,10 @@ The remaining patches implement the synchronous embedding boundary:
   in the Windows memory-only formatter build.
 - `0022-apply-private-config-to-roff-escapes.patch` applies the private target
   configuration, character policy, and symbol prefix to the new escape unit.
+- `0028-observe-native-terminal-execution.patch` adds typed, fail-fast observer
+  hooks at the existing terminal traversal, buffer, fill, field, boundary, and
+  device output points. It reports native execution facts without adding a
+  second formatter or changing behavior when no observer is installed.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

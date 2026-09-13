@@ -49,23 +49,46 @@ const LIBMANDOC_SOURCES: &[&str] = &[
     "tag.c",
 ];
 
-const RENDER_SOURCES: &[&str] = &[
+const TERMINAL_SOURCES: &[&str] = &[
     "out.c",
     "term.c",
     "term_ascii.c",
     "term_tab.c",
     "roff_term.c",
-    "roff_html.c",
     "man_term.c",
     "mdoc_term.c",
     "tbl_term.c",
     "eqn_term.c",
+];
+
+const HTML_SOURCES: &[&str] = &[
+    "roff_html.c",
     "html.c",
     "man_html.c",
     "mdoc_html.c",
     "tbl_html.c",
     "eqn_html.c",
 ];
+
+#[derive(Clone, Copy)]
+enum NativeIo {
+    MemoryOnly,
+    Filesystem,
+}
+
+#[derive(Clone, Copy)]
+enum Sanitizer {
+    None,
+    Thread,
+    Address,
+}
+
+#[derive(Clone, Copy)]
+struct NativeBuildOptions {
+    io: NativeIo,
+    sanitizer: Sanitizer,
+    deny_warnings: bool,
+}
 
 fn main() {
     let crate_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
@@ -77,99 +100,72 @@ fn main() {
     let thread_sanitizer = env::var_os("LIBMANDOC_RS_TSAN").is_some();
     let address_sanitizer = env::var_os("LIBMANDOC_RS_ASAN").is_some();
     let deny_native_warnings = env::var_os("LIBMANDOC_RS_DENY_WARNINGS").is_some();
+    let execute = env::var_os("CARGO_FEATURE_EXECUTE").is_some();
     let render = env::var_os("CARGO_FEATURE_RENDER").is_some();
+    let terminal = execute || render;
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
 
-    assert!(
-        !(thread_sanitizer && address_sanitizer),
-        "libmandoc-rs cannot enable ThreadSanitizer and AddressSanitizer together"
-    );
-    assert!(
-        !thread_sanitizer || matches!(target_os.as_str(), "linux" | "macos"),
-        "libmandoc-rs ThreadSanitizer instrumentation supports Linux and macOS targets"
-    );
-    assert!(
-        !address_sanitizer || matches!(target_os.as_str(), "linux" | "macos"),
-        "libmandoc-rs AddressSanitizer instrumentation supports Linux and macOS targets"
-    );
+    validate_sanitizers(&target_os, thread_sanitizer, address_sanitizer);
 
     fs::copy(crate_dir.join(config), out_dir.join("config.h"))
         .expect("copy checked mandoc target configuration");
     generate_special_character_table(&vendor_dir, &out_dir);
     generate_text_sentinels(&vendor_dir, &out_dir);
 
-    let mut build = cc::Build::new();
-    build
-        .include(&out_dir)
-        .include(&vendor_dir)
-        .include(crate_dir.join("config"))
-        .include(crate_dir.join("shim"))
-        .warnings(true)
-        .flag_if_supported("-W")
-        .flag_if_supported("-Wmissing-prototypes")
-        .flag_if_supported("-Wstrict-prototypes")
-        .flag_if_supported("-Wwrite-strings")
-        .flag_if_supported("-Wno-discarded-qualifiers")
-        // GCC's optimizer reports a false positive in pinned upstream roff.c
-        // on every incremental Cargo invocation. Clang ignores this through
-        // flag_if_supported, while GCC development output remains readable.
-        .flag_if_supported("-Wno-maybe-uninitialized")
-        .flag_if_supported("-Wno-unused-parameter");
-    if deny_native_warnings {
-        // Project verification opts into a warning-free native boundary on
-        // every supported compiler. Do not impose -Werror on ordinary
-        // downstream builds, where a newer compiler could add diagnostics
-        // independently of this crate release.
-        build.warnings_into_errors(true);
-    }
-    if thread_sanitizer {
-        // Rust's sanitizer flag does not instrument the separately compiled
-        // vendored C parser. Keep this explicit opt-in paired with the local
-        // runner so a passing test covers both sides of the FFI boundary.
-        build
-            .flag("-fsanitize=thread")
-            .flag("-fno-omit-frame-pointer")
-            .flag("-g");
-    }
-    if address_sanitizer {
-        // Match Rust's opt-in AddressSanitizer build so reads in the vendored
-        // C parser are checked at the FFI boundary too.
-        build
-            .flag("-fsanitize=address")
-            .flag("-fno-omit-frame-pointer")
-            .flag("-g");
-    }
-    if !memory_only {
-        // The local libmandoc patch uses C11 thread-local storage for the
-        // parser's mutable static state. Windows/MSVC uses its native static
-        // TLS spelling and does not need this language-mode flag.
-        build.flag_if_supported("-std=c11");
-    }
-    if memory_only {
-        build.define("MANDOC_MEMORY_ONLY", None);
-    } else {
-        // Only read.c calls open() in the selected parser sources. Redirecting
-        // it avoids a process-wide chdir while preserving source-relative .so.
-        build.define("open", "mant_mandoc_source_open");
-    }
+    let mut build = configured_build(
+        &crate_dir,
+        &vendor_dir,
+        &out_dir,
+        NativeBuildOptions {
+            io: if memory_only {
+                NativeIo::MemoryOnly
+            } else {
+                NativeIo::Filesystem
+            },
+            sanitizer: if thread_sanitizer {
+                Sanitizer::Thread
+            } else if address_sanitizer {
+                Sanitizer::Address
+            } else {
+                Sanitizer::None
+            },
+            deny_warnings: deny_native_warnings,
+        },
+    );
 
     let mut upstream_sources = LIBMANDOC_SOURCES
         .iter()
         .chain(compat_sources.iter())
         .map(|source| vendor_dir.join(source))
         .collect::<Vec<_>>();
+    if terminal {
+        build.define("MANT_MANDOC_TERMINAL", None);
+        upstream_sources.extend(
+            TERMINAL_SOURCES
+                .iter()
+                .map(|source| vendor_dir.join(source)),
+        );
+    }
     if render {
         build.define("MANT_MANDOC_RENDER", None);
-        upstream_sources.extend(RENDER_SOURCES.iter().map(|source| vendor_dir.join(source)));
+        upstream_sources.extend(HTML_SOURCES.iter().map(|source| vendor_dir.join(source)));
     }
+    assert_unique_sources(&upstream_sources);
     let mut owned_sources = Vec::new();
-    if render {
+    if terminal {
         owned_sources.push(crate_dir.join("shim/mant_mandoc_output.c"));
+    }
+    if execute {
+        build.define("MANT_MANDOC_EXECUTE", None);
+        owned_sources.push(crate_dir.join("shim/mant_mandoc_execution.c"));
     }
     if memory_only {
         owned_sources.push(crate_dir.join("shim/windows_compat.c"));
     }
     owned_sources.push(crate_dir.join("shim/mant_mandoc_shim.c"));
+    let mut all_sources = upstream_sources.clone();
+    all_sources.extend(owned_sources.iter().cloned());
+    assert_unique_sources(&all_sources);
 
     compile_native_archive(
         build,
@@ -182,17 +178,87 @@ fn main() {
         // Unix native-file parsing retains libmandoc's gzip transport.
         println!("cargo:rustc-link-lib=z");
     }
+    emit_rerun_directives(&vendor_dir);
+}
+
+fn validate_sanitizers(target_os: &str, thread: bool, address: bool) {
+    assert!(
+        !(thread && address),
+        "libmandoc-rs cannot enable ThreadSanitizer and AddressSanitizer together"
+    );
+    assert!(
+        !thread || matches!(target_os, "linux" | "macos"),
+        "libmandoc-rs ThreadSanitizer instrumentation supports Linux and macOS targets"
+    );
+    assert!(
+        !address || matches!(target_os, "linux" | "macos"),
+        "libmandoc-rs AddressSanitizer instrumentation supports Linux and macOS targets"
+    );
+}
+
+fn configured_build(
+    crate_dir: &std::path::Path,
+    vendor_dir: &std::path::Path,
+    out_dir: &std::path::Path,
+    options: NativeBuildOptions,
+) -> cc::Build {
+    let mut build = cc::Build::new();
+    build
+        .include(out_dir)
+        .include(vendor_dir)
+        .include(crate_dir.join("config"))
+        .include(crate_dir.join("shim"))
+        .warnings(true)
+        .flag_if_supported("-W")
+        .flag_if_supported("-Wmissing-prototypes")
+        .flag_if_supported("-Wstrict-prototypes")
+        .flag_if_supported("-Wwrite-strings")
+        .flag_if_supported("-Wno-discarded-qualifiers")
+        .flag_if_supported("-Wno-maybe-uninitialized")
+        .flag_if_supported("-Wno-unused-parameter");
+    if options.deny_warnings {
+        build.warnings_into_errors(true);
+    }
+    if !matches!(options.sanitizer, Sanitizer::None) {
+        build
+            .flag(match options.sanitizer {
+                Sanitizer::Thread => "-fsanitize=thread",
+                Sanitizer::Address => "-fsanitize=address",
+                Sanitizer::None => unreachable!(),
+            })
+            .flag("-fno-omit-frame-pointer")
+            .flag("-g");
+    }
+    if matches!(options.io, NativeIo::MemoryOnly) {
+        build.define("MANDOC_MEMORY_ONLY", None);
+    } else {
+        build
+            .flag_if_supported("-std=c11")
+            .define("open", "mant_mandoc_source_open");
+    }
+    build
+}
+
+fn emit_rerun_directives(vendor_dir: &std::path::Path) {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_DENY_WARNINGS");
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_TSAN");
-    // Target selection lives here and is pulled in via #[path]; Cargo does not
-    // discover that dependency, so track it explicitly or edits to the config
-    // map would reuse a stale config.h and source list on incremental builds.
     println!("cargo:rerun-if-changed=src/build_config.rs");
     println!("cargo:rerun-if-changed=config");
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_ASAN");
+}
+
+fn assert_unique_sources(sources: &[PathBuf]) {
+    let mut unique = HashSet::with_capacity(sources.len());
+    for source in sources {
+        assert!(
+            unique.insert(source),
+            "native source is included more than once: {}",
+            source.display()
+        );
+    }
 }
 
 fn compile_native_archive(

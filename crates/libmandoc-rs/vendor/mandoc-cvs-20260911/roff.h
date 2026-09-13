@@ -561,6 +561,7 @@ struct	roff_meta {
 	char		 *sodest;  /* .so target file name or NULL. */
 	int		  hasbody; /* Document is not empty. */
 	int		  rcsids;  /* Bits indexed by enum mandoc_os. */
+	int		  source_request_seen; /* Executed .so/.soquiet request. */
 	enum mandoc_os	  os_e;    /* Operating system. */
 	enum roff_macroset macroset; /* Kind of high-level macros used. */
 };

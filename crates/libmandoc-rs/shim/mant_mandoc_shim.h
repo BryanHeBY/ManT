@@ -3,6 +3,7 @@
 #define MANT_MANDOC_SHIM_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,10 @@ struct mant_mandoc_document;
 struct mant_mandoc_node;
 struct mant_mandoc_table_cell;
 struct mparse;
+#ifdef MANT_MANDOC_EXECUTE
+struct mant_mandoc_execution_limits;
+struct mant_mandoc_execution_report;
+#endif
 
 struct mant_mandoc_source {
 	const char		*path;
@@ -27,23 +32,24 @@ struct mant_mandoc_resolved_source {
 
 /* Borrowed scalar/string projection of one live libmandoc syntax node. */
 struct mant_mandoc_node_view {
-	int			 kind;
+	int32_t			 kind;
+	uint32_t		 execution_node_key;
 	const char		*macro_name;
 	const char		*text;
 	const char		*tag;
-	int			 line;
-	int			 column;
-	size_t			 flow_epoch;
-	int			 table_escape;
-	int			 table_source_recovery_safe;
-	int			 table_row_kind;
-	unsigned int		 flags;
-	int			 list_kind;
-	int			 definition_list_style;
-	int			 display_kind;
-	int			 font_kind;
-	int			 author_mode;
-	int			 compact;
+	int32_t			 line;
+	int32_t			 column;
+	uint64_t		 flow_epoch;
+	int32_t			 table_escape;
+	int32_t			 table_source_recovery_safe;
+	int32_t			 table_row_kind;
+	uint32_t		 flags;
+	int32_t			 list_kind;
+	int32_t			 definition_list_style;
+	int32_t			 display_kind;
+	int32_t			 font_kind;
+	int32_t			 author_mode;
+	int32_t			 compact;
 	const char		*offset;
 	const char		*width;
 	const char		*enclosure_open;
@@ -58,19 +64,19 @@ struct mant_mandoc_node_view {
 /* Borrowed projection of one live tbl(7) data cell. */
 struct mant_mandoc_table_cell_view {
 	const char		*text;
-	int			 kind;
-	int			 text_block;
-	int			 source_recovery_safe;
-	int			 vertical_continuation;
-	unsigned int		 column_span;
-	unsigned int		 row_span;
-	int			 alignment;
+	int32_t			 kind;
+	int32_t			 text_block;
+	int32_t			 source_recovery_safe;
+	int32_t			 vertical_continuation;
+	uint32_t		 column_span;
+	uint32_t		 row_span;
+	int32_t			 alignment;
 	const struct mant_mandoc_table_cell *next;
 };
 
 /* Borrowed projection of one layout-only tbl(7) rule cell. */
 struct mant_mandoc_table_rule_cell_view {
-	int			 kind;
+	int32_t			 kind;
 	const struct mant_mandoc_table_rule_cell *next;
 };
 
@@ -161,6 +167,13 @@ struct mant_mandoc_document *mant_mandoc_parse_buffer(
 struct mant_mandoc_document *mant_mandoc_parse_bundle(
     const char *, const struct mant_mandoc_source *, size_t, int,
     const char *);
+#ifdef MANT_MANDOC_EXECUTE
+struct mant_mandoc_document *mant_mandoc_execute_buffer(
+    const char *, const unsigned char *, size_t, int, const char *,
+    const struct mant_mandoc_execution_limits *);
+const struct mant_mandoc_execution_report *mant_mandoc_document_execution(
+    const struct mant_mandoc_document *);
+#endif
 #ifdef MANT_MANDOC_RENDER
 struct mant_mandoc_document *mant_mandoc_render_file(
     const char *, const char *, int, int, const char *, int, size_t, int,
@@ -198,18 +211,27 @@ int mant_mandoc_document_equation_truncated(
     const struct mant_mandoc_document *);
 int mant_mandoc_is_native_roff_request(const char *, size_t);
 size_t mant_mandoc_node_view_size(void);
+size_t mant_mandoc_node_view_align(void);
+uint32_t mant_mandoc_node_view_field_count(void);
+size_t mant_mandoc_node_view_offset(unsigned int);
 size_t mant_mandoc_table_cell_view_size(void);
+size_t mant_mandoc_table_cell_view_align(void);
+uint32_t mant_mandoc_table_cell_view_field_count(void);
+size_t mant_mandoc_table_cell_view_offset(unsigned int);
 size_t mant_mandoc_table_rule_cell_view_size(void);
+size_t mant_mandoc_table_rule_cell_view_align(void);
+uint32_t mant_mandoc_table_rule_cell_view_field_count(void);
+size_t mant_mandoc_table_rule_cell_view_offset(unsigned int);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
 int mant_mandoc_node_snapshot(struct mant_mandoc_document *,
-    const struct mant_mandoc_node *, struct mant_mandoc_node_view *);
+    const struct mant_mandoc_node *, struct mant_mandoc_node_view *, size_t);
 int mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *,
     const struct mant_mandoc_table_cell *,
-    struct mant_mandoc_table_cell_view *);
+    struct mant_mandoc_table_cell_view *, size_t);
 int mant_mandoc_table_rule_cell_snapshot(const struct mant_mandoc_document *,
     const struct mant_mandoc_table_rule_cell *,
-    struct mant_mandoc_table_rule_cell_view *);
+    struct mant_mandoc_table_rule_cell_view *, size_t);
 #ifdef MANT_MANDOC_RENDER
 const unsigned char *mant_mandoc_document_output(
     const struct mant_mandoc_document *);

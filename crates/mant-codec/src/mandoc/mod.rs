@@ -9,6 +9,7 @@ mod diagnostics;
 mod formatter;
 pub(crate) mod inline;
 mod layout;
+mod native_execution;
 mod navigation;
 mod redirect;
 mod reference;

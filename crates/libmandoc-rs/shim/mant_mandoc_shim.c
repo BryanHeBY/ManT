@@ -32,11 +32,14 @@
 #include "mandoc_parse.h"
 
 #include "mant_mandoc_shim.h"
-#ifdef MANT_MANDOC_RENDER
+#ifdef MANT_MANDOC_TERMINAL
 #include "main.h"
 #include "manconf.h"
 #include "mant_mandoc_output.h"
 #include "term_tag.h"
+#endif
+#ifdef MANT_MANDOC_EXECUTE
+#include "mant_mandoc_execution.h"
 #endif
 
 struct mant_mandoc_document {
@@ -50,6 +53,26 @@ struct mant_mandoc_document {
 #ifdef MANT_MANDOC_RENDER
 	struct mant_mandoc_output *output;
 	int			 render_status;
+#endif
+#ifdef MANT_MANDOC_EXECUTE
+	struct mant_mandoc_execution_report *execution;
+#endif
+};
+
+enum mant_mandoc_input_operation {
+	MANT_INPUT_PARSE,
+	MANT_INPUT_RENDER,
+	MANT_INPUT_EXECUTE
+};
+
+struct mant_mandoc_input_action {
+	enum mant_mandoc_input_operation operation;
+	int render_format;
+	size_t render_width;
+	int html_fragment;
+	size_t output_limit;
+#ifdef MANT_MANDOC_EXECUTE
+	const struct mant_mandoc_execution_limits *execution_limits;
 #endif
 };
 
@@ -79,6 +102,11 @@ MANT_THREAD_LOCAL const struct mant_mandoc_source *bundle_sources;
 MANT_THREAD_LOCAL size_t bundle_source_count;
 MANT_THREAD_LOCAL mant_mandoc_source_resolver source_resolver;
 MANT_THREAD_LOCAL void *source_resolver_context;
+/*
+ * Parser, diagnostics, character, source, and terminal state are independent
+ * across OS threads but cannot be recursively entered on one thread.
+ */
+MANT_THREAD_LOCAL int native_session_active;
 
 #ifndef MANDOC_MEMORY_ONLY
 MANT_THREAD_LOCAL char *source_root;
@@ -142,11 +170,17 @@ set_mant_progname(void)
 #define MANT_MANDOC_MAX_COPY_DEPTH 256
 
 static char *copy_string(const char *);
+static int32_t snapshot_node_kind(enum roff_type);
+static struct mant_mandoc_document *error_document(const char *);
+static int native_session_enter(void);
+static void native_session_leave(void);
 static struct mant_mandoc_document *parse_input(const char *,
     const unsigned char *, size_t, const char *, int, int, const char *,
-    int, size_t, int, size_t, mant_mandoc_source_resolver, void *, int);
+    mant_mandoc_source_resolver, void *,
+    const struct mant_mandoc_input_action *);
 static struct mant_mandoc_document *parse_bundle_mode(const char *,
-    const struct mant_mandoc_source *, size_t, int, const char *, int);
+    const struct mant_mandoc_source *, size_t, int, const char *,
+    const struct mant_mandoc_input_action *);
 static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
 static char *normalize_requested_bundle_path(const char *);
@@ -173,8 +207,18 @@ struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, const char *include_root,
     int allow_include, int input_format, const char *operating_system)
 {
-	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, operating_system, 0, 0, 0, 0, NULL, NULL, 1);
+	struct mant_mandoc_document *document;
+	const struct mant_mandoc_input_action action = {
+		.operation = MANT_INPUT_PARSE
+	};
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_input(path, NULL, 0, include_root, allow_include,
+	    input_format, operating_system, NULL, NULL, &action);
+	native_session_leave();
+	return document;
 }
 
 struct mant_mandoc_document *
@@ -183,9 +227,18 @@ mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
     int input_format, const char *operating_system,
     mant_mandoc_source_resolver resolver, void *resolver_context)
 {
-	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format, operating_system, 0, 0, 0, 0, resolver,
-	    resolver_context, 1);
+	struct mant_mandoc_document *document;
+	const struct mant_mandoc_input_action action = {
+		.operation = MANT_INPUT_PARSE
+	};
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_input(path, buffer, length, include_root, allow_include,
+	    input_format, operating_system, resolver, resolver_context, &action);
+	native_session_leave();
+	return document;
 }
 
 struct mant_mandoc_document *
@@ -193,14 +246,53 @@ mant_mandoc_parse_bundle(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
     int input_format, const char *operating_system)
 {
-	return parse_bundle_mode(root, sources, source_count, input_format,
-	    operating_system, 1);
+	struct mant_mandoc_document *document;
+	const struct mant_mandoc_input_action action = {
+		.operation = MANT_INPUT_PARSE
+	};
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_bundle_mode(root, sources, source_count, input_format,
+	    operating_system, &action);
+	native_session_leave();
+	return document;
 }
+
+#ifdef MANT_MANDOC_EXECUTE
+struct mant_mandoc_document *
+mant_mandoc_execute_buffer(const char *path, const unsigned char *buffer,
+    size_t length, int input_format, const char *operating_system,
+    const struct mant_mandoc_execution_limits *limits)
+{
+	struct mant_mandoc_document *document;
+	const struct mant_mandoc_input_action action = {
+		.operation = MANT_INPUT_EXECUTE,
+		.execution_limits = limits
+	};
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_input(path, buffer, length, NULL, 0, input_format,
+	    operating_system, NULL, NULL, &action);
+	native_session_leave();
+	return document;
+}
+
+const struct mant_mandoc_execution_report *
+mant_mandoc_document_execution(const struct mant_mandoc_document *document)
+{
+	return document == NULL ? NULL : document->execution;
+}
+#endif
 
 static struct mant_mandoc_document *
 parse_bundle_mode(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
-    int input_format, const char *operating_system, int retain_parser)
+    int input_format, const char *operating_system,
+    const struct mant_mandoc_input_action *action)
 {
 	const struct mant_mandoc_source	*source;
 	struct mant_mandoc_document	*document;
@@ -228,8 +320,7 @@ parse_bundle_mode(const char *root,
 			    "source bundle does not contain the requested root");
 	} else
 		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format, operating_system, 0, 0, 0, 0, NULL, NULL,
-		    retain_parser);
+		    NULL, 1, input_format, operating_system, NULL, NULL, action);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
 	return document;
@@ -238,10 +329,8 @@ parse_bundle_mode(const char *root,
 static struct mant_mandoc_document *
 parse_input(const char *path, const unsigned char *buffer, size_t length,
     const char *include_root, int allow_include, int input_format,
-    const char *operating_system, int render_format, size_t render_width,
-    int html_fragment, size_t output_limit,
-    mant_mandoc_source_resolver resolver, void *resolver_context,
-    int retain_parser)
+    const char *operating_system, mant_mandoc_source_resolver resolver,
+    void *resolver_context, const struct mant_mandoc_input_action *action)
 {
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
@@ -255,6 +344,10 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	document = calloc(1, sizeof(*document));
 	if (document == NULL)
 		return NULL;
+	if (action == NULL) {
+		document->error = copy_string("native input action is missing");
+		return document;
+	}
 	if (path == NULL || *path == '\0') {
 		document->error = copy_string("manual source path is empty");
 		return document;
@@ -349,31 +442,49 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		    "native syntax tree exceeds the 512-level nesting limit");
 		goto cleanup;
 	}
+	switch (action->operation) {
+	case MANT_INPUT_PARSE:
+		document->ok = meta->first != NULL;
+		break;
 #ifdef MANT_MANDOC_RENDER
-	if (render_format != 0)
-		document->ok = render_document(document, meta, render_format,
-		    render_width, html_fragment, output_limit);
-	else
-#else
-	(void)render_format;
-	(void)render_width;
-	(void)html_fragment;
-	(void)output_limit;
+	case MANT_INPUT_RENDER:
+		document->ok = render_document(document, meta,
+		    action->render_format, action->render_width,
+		    action->html_fragment, action->output_limit);
+		break;
 #endif
-	{
-		if (!retain_parser) {
+#ifdef MANT_MANDOC_EXECUTE
+	case MANT_INPUT_EXECUTE:
+		if (buffer == NULL || allow_include || resolver != NULL ||
+		    bundle_sources != NULL) {
 			document->error = copy_string(
-			    "syntax tree requested without retaining the parser");
-		} else {
-			document->parser = parser;
-			document->meta = meta;
-			parser = NULL;
-			document->ok = meta->first != NULL;
-			if (!document->ok)
-				document->error = copy_string(
-				    "libmandoc produced no syntax tree");
+			    "native execution requires one caller-owned root buffer without includes");
+			break;
 		}
+		document->execution = mant_mandoc_execution_alloc(path,
+		    action->execution_limits);
+		if (document->execution == NULL) {
+			document->error = copy_string(
+			    "could not allocate native execution report");
+			break;
+		}
+		document->ok = mant_mandoc_execution_run(
+		    document->execution, meta);
+		if (!document->ok)
+			document->error = copy_string(mant_mandoc_execution_error(
+			    document->execution));
+		break;
+#endif
+	default:
+		document->error = copy_string("unknown native input action");
+		break;
 	}
+	if (document->ok && action->operation != MANT_INPUT_RENDER) {
+		document->parser = parser;
+		document->meta = meta;
+		parser = NULL;
+	} else if (!document->ok && document->error == NULL)
+		document->error = copy_string("libmandoc produced no usable result");
 
 cleanup:
 	mandoc_msg_setinfilename(NULL);
@@ -406,9 +517,22 @@ mant_mandoc_render_file(const char *path, const char *include_root,
     int render_format, size_t render_width, int html_fragment,
     size_t output_limit)
 {
-	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, operating_system, render_format, render_width,
-	    html_fragment, output_limit, NULL, NULL, 0);
+	struct mant_mandoc_document *document;
+	const struct mant_mandoc_input_action action = {
+		.operation = MANT_INPUT_RENDER,
+		.render_format = render_format,
+		.render_width = render_width,
+		.html_fragment = html_fragment,
+		.output_limit = output_limit
+	};
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_input(path, NULL, 0, include_root, allow_include,
+	    input_format, operating_system, NULL, NULL, &action);
+	native_session_leave();
+	return document;
 }
 
 struct mant_mandoc_document *
@@ -418,9 +542,22 @@ mant_mandoc_render_buffer(const char *path, const unsigned char *buffer,
     size_t render_width, int html_fragment, size_t output_limit,
     mant_mandoc_source_resolver resolver, void *resolver_context)
 {
-	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format, operating_system, render_format, render_width,
-	    html_fragment, output_limit, resolver, resolver_context, 0);
+	struct mant_mandoc_document *document;
+	const struct mant_mandoc_input_action action = {
+		.operation = MANT_INPUT_RENDER,
+		.render_format = render_format,
+		.render_width = render_width,
+		.html_fragment = html_fragment,
+		.output_limit = output_limit
+	};
+
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	document = parse_input(path, buffer, length, include_root, allow_include,
+	    input_format, operating_system, resolver, resolver_context, &action);
+	native_session_leave();
+	return document;
 }
 
 struct mant_mandoc_document *
@@ -431,16 +568,25 @@ mant_mandoc_render_bundle(const char *root,
 {
 	const struct mant_mandoc_source	*source;
 	struct mant_mandoc_document	*document;
+	const struct mant_mandoc_input_action action = {
+		.operation = MANT_INPUT_RENDER,
+		.render_format = render_format,
+		.render_width = render_width,
+		.html_fragment = html_fragment,
+		.output_limit = output_limit
+	};
 
-	if (sources == NULL || source_count == 0)
-		return mant_mandoc_parse_bundle(root, sources, source_count,
-		    input_format, operating_system);
+	if (!native_session_enter())
+		return error_document(
+		    "recursive libmandoc session entry is unsupported");
+	if (sources == NULL || source_count == 0) {
+		document = error_document("source bundle is empty");
+		goto done;
+	}
 	if (bundle_sources != NULL) {
-		document = calloc(1, sizeof(*document));
-		if (document != NULL)
-			document->error = copy_string(
-			    "recursive libmandoc bundle entry is unsupported");
-		return document;
+		document = error_document(
+		    "recursive libmandoc bundle entry is unsupported");
+		goto done;
 	}
 	bundle_sources = sources;
 	bundle_source_count = source_count;
@@ -452,10 +598,11 @@ mant_mandoc_render_bundle(const char *root,
 			    "source bundle does not contain the requested root");
 	} else
 		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format, operating_system, render_format,
-		    render_width, html_fragment, output_limit, NULL, NULL, 0);
+		    NULL, 1, input_format, operating_system, NULL, NULL, &action);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
+done:
+	native_session_leave();
 	return document;
 }
 
@@ -555,7 +702,10 @@ render_document(struct mant_mandoc_document *document,
 	return status == 0;
 }
 
-/* Embedded rendering never creates pager tag files. */
+#endif
+
+#ifdef MANT_MANDOC_TERMINAL
+/* Embedded terminal execution never creates pager tag files. */
 void
 term_tag_write(struct roff_node *node, size_t line)
 {
@@ -997,6 +1147,9 @@ mant_mandoc_document_free(struct mant_mandoc_document *document)
 #ifdef MANT_MANDOC_RENDER
 	mant_mandoc_output_free(document->output);
 #endif
+#ifdef MANT_MANDOC_EXECUTE
+	mant_mandoc_execution_free(document->execution);
+#endif
 	free(document);
 }
 
@@ -1013,6 +1166,32 @@ copy_string(const char *source)
 	if (copy != NULL)
 		memcpy(copy, source, length);
 	return copy;
+}
+
+static struct mant_mandoc_document *
+error_document(const char *message)
+{
+	struct mant_mandoc_document *document;
+
+	document = calloc(1, sizeof(*document));
+	if (document != NULL)
+		document->error = copy_string(message);
+	return document;
+}
+
+static int
+native_session_enter(void)
+{
+	if (native_session_active)
+		return 0;
+	native_session_active = 1;
+	return 1;
+}
+
+static void
+native_session_leave(void)
+{
+	native_session_active = 0;
 }
 
 #ifndef MANDOC_MEMORY_ONLY
@@ -1108,6 +1287,29 @@ read_diagnostics(FILE *stream)
 	count = fread(buffer, 1, (size_t)length, stream);
 	buffer[count] = '\0';
 	return buffer;
+}
+
+/*
+ * roff_type is private to the pinned CVS snapshot.  Keep its numeric values
+ * out of the C/Rust boundary even though they currently happen to match the
+ * ManT discriminants.
+ */
+static int32_t
+snapshot_node_kind(enum roff_type kind)
+{
+	switch (kind) {
+	case ROFFT_ROOT: return MANT_MANDOC_ROOT;
+	case ROFFT_BLOCK: return MANT_MANDOC_BLOCK;
+	case ROFFT_HEAD: return MANT_MANDOC_HEAD;
+	case ROFFT_BODY: return MANT_MANDOC_BODY;
+	case ROFFT_TAIL: return MANT_MANDOC_TAIL;
+	case ROFFT_ELEM: return MANT_MANDOC_ELEMENT;
+	case ROFFT_TEXT: return MANT_MANDOC_TEXT;
+	case ROFFT_COMMENT: return MANT_MANDOC_COMMENT;
+	case ROFFT_TBL: return MANT_MANDOC_TABLE;
+	case ROFFT_EQN: return MANT_MANDOC_EQUATION;
+	default: return -1;
+	}
 }
 
 static unsigned int
@@ -1413,8 +1615,16 @@ mant_mandoc_document_diagnostics(const struct mant_mandoc_document *document)
 int
 mant_mandoc_document_macroset(const struct mant_mandoc_document *document)
 {
-	return document == NULL || document->meta == NULL ? 0 :
-	    (int)document->meta->macroset;
+	if (document == NULL || document->meta == NULL)
+		return MANT_MANDOC_MACROSET_NONE;
+	switch (document->meta->macroset) {
+	case MACROSET_MDOC:
+		return MANT_MANDOC_MACROSET_MDOC;
+	case MACROSET_MAN:
+		return MANT_MANDOC_MACROSET_MAN;
+	default:
+		return -1;
+	}
 }
 
 #define DOCUMENT_META_STRING_ACCESSOR(name, field) \
@@ -1450,6 +1660,66 @@ mant_mandoc_node_view_size(void)
 	return sizeof(struct mant_mandoc_node_view);
 }
 
+#if defined(_MSC_VER)
+#define MANT_ALIGNOF(type) __alignof(type)
+#else
+#define MANT_ALIGNOF(type) _Alignof(type)
+#endif
+
+size_t
+mant_mandoc_node_view_align(void)
+{
+	return MANT_ALIGNOF(struct mant_mandoc_node_view);
+}
+
+uint32_t
+mant_mandoc_node_view_field_count(void)
+{
+	return 27;
+}
+
+#define MANT_VIEW_OFFSET_CASE(index, type, field) \
+	case index: return offsetof(type, field)
+
+size_t
+mant_mandoc_node_view_offset(unsigned int field)
+{
+	switch (field) {
+	MANT_VIEW_OFFSET_CASE(0, struct mant_mandoc_node_view, kind);
+	MANT_VIEW_OFFSET_CASE(1, struct mant_mandoc_node_view,
+	    execution_node_key);
+	MANT_VIEW_OFFSET_CASE(2, struct mant_mandoc_node_view, macro_name);
+	MANT_VIEW_OFFSET_CASE(3, struct mant_mandoc_node_view, text);
+	MANT_VIEW_OFFSET_CASE(4, struct mant_mandoc_node_view, tag);
+	MANT_VIEW_OFFSET_CASE(5, struct mant_mandoc_node_view, line);
+	MANT_VIEW_OFFSET_CASE(6, struct mant_mandoc_node_view, column);
+	MANT_VIEW_OFFSET_CASE(7, struct mant_mandoc_node_view, flow_epoch);
+	MANT_VIEW_OFFSET_CASE(8, struct mant_mandoc_node_view, table_escape);
+	MANT_VIEW_OFFSET_CASE(9, struct mant_mandoc_node_view,
+	    table_source_recovery_safe);
+	MANT_VIEW_OFFSET_CASE(10, struct mant_mandoc_node_view, table_row_kind);
+	MANT_VIEW_OFFSET_CASE(11, struct mant_mandoc_node_view, flags);
+	MANT_VIEW_OFFSET_CASE(12, struct mant_mandoc_node_view, list_kind);
+	MANT_VIEW_OFFSET_CASE(13, struct mant_mandoc_node_view,
+	    definition_list_style);
+	MANT_VIEW_OFFSET_CASE(14, struct mant_mandoc_node_view, display_kind);
+	MANT_VIEW_OFFSET_CASE(15, struct mant_mandoc_node_view, font_kind);
+	MANT_VIEW_OFFSET_CASE(16, struct mant_mandoc_node_view, author_mode);
+	MANT_VIEW_OFFSET_CASE(17, struct mant_mandoc_node_view, compact);
+	MANT_VIEW_OFFSET_CASE(18, struct mant_mandoc_node_view, offset);
+	MANT_VIEW_OFFSET_CASE(19, struct mant_mandoc_node_view, width);
+	MANT_VIEW_OFFSET_CASE(20, struct mant_mandoc_node_view, enclosure_open);
+	MANT_VIEW_OFFSET_CASE(21, struct mant_mandoc_node_view, enclosure_close);
+	MANT_VIEW_OFFSET_CASE(22, struct mant_mandoc_node_view, equation);
+	MANT_VIEW_OFFSET_CASE(23, struct mant_mandoc_node_view, table_cells);
+	MANT_VIEW_OFFSET_CASE(24, struct mant_mandoc_node_view,
+	    table_rule_cells);
+	MANT_VIEW_OFFSET_CASE(25, struct mant_mandoc_node_view, child);
+	MANT_VIEW_OFFSET_CASE(26, struct mant_mandoc_node_view, next);
+	default: return (size_t)-1;
+	}
+}
+
 size_t
 mant_mandoc_table_cell_view_size(void)
 {
@@ -1457,10 +1727,66 @@ mant_mandoc_table_cell_view_size(void)
 }
 
 size_t
+mant_mandoc_table_cell_view_align(void)
+{
+	return MANT_ALIGNOF(struct mant_mandoc_table_cell_view);
+}
+
+uint32_t
+mant_mandoc_table_cell_view_field_count(void)
+{
+	return 9;
+}
+
+size_t
+mant_mandoc_table_cell_view_offset(unsigned int field)
+{
+	switch (field) {
+	MANT_VIEW_OFFSET_CASE(0, struct mant_mandoc_table_cell_view, text);
+	MANT_VIEW_OFFSET_CASE(1, struct mant_mandoc_table_cell_view, kind);
+	MANT_VIEW_OFFSET_CASE(2, struct mant_mandoc_table_cell_view, text_block);
+	MANT_VIEW_OFFSET_CASE(3, struct mant_mandoc_table_cell_view,
+	    source_recovery_safe);
+	MANT_VIEW_OFFSET_CASE(4, struct mant_mandoc_table_cell_view,
+	    vertical_continuation);
+	MANT_VIEW_OFFSET_CASE(5, struct mant_mandoc_table_cell_view, column_span);
+	MANT_VIEW_OFFSET_CASE(6, struct mant_mandoc_table_cell_view, row_span);
+	MANT_VIEW_OFFSET_CASE(7, struct mant_mandoc_table_cell_view, alignment);
+	MANT_VIEW_OFFSET_CASE(8, struct mant_mandoc_table_cell_view, next);
+	default: return (size_t)-1;
+	}
+}
+
+size_t
 mant_mandoc_table_rule_cell_view_size(void)
 {
 	return sizeof(struct mant_mandoc_table_rule_cell_view);
 }
+
+size_t
+mant_mandoc_table_rule_cell_view_align(void)
+{
+	return MANT_ALIGNOF(struct mant_mandoc_table_rule_cell_view);
+}
+
+uint32_t
+mant_mandoc_table_rule_cell_view_field_count(void)
+{
+	return 2;
+}
+
+size_t
+mant_mandoc_table_rule_cell_view_offset(unsigned int field)
+{
+	switch (field) {
+	MANT_VIEW_OFFSET_CASE(0, struct mant_mandoc_table_rule_cell_view, kind);
+	MANT_VIEW_OFFSET_CASE(1, struct mant_mandoc_table_rule_cell_view, next);
+	default: return (size_t)-1;
+	}
+}
+
+#undef MANT_VIEW_OFFSET_CASE
+#undef MANT_ALIGNOF
 
 const struct mant_mandoc_node *
 mant_mandoc_document_root(const struct mant_mandoc_document *document)
@@ -1473,16 +1799,27 @@ mant_mandoc_document_root(const struct mant_mandoc_document *document)
 int
 mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
     const struct mant_mandoc_node *node,
-    struct mant_mandoc_node_view *view)
+    struct mant_mandoc_node_view *view, size_t view_size)
 {
 	const struct roff_node *source;
+	int32_t kind;
 
 	if (document == NULL || document->parser == NULL || node == NULL ||
-	    view == NULL)
+	    view == NULL || view_size != sizeof(*view))
 		return 0;
 	source = (const struct roff_node *)node;
+	kind = snapshot_node_kind(source->type);
+	if (kind < 0)
+		return 0;
 	memset(view, 0, sizeof(*view));
-	view->kind = (int)source->type;
+	view->kind = kind;
+	view->execution_node_key = UINT32_MAX;
+#ifdef MANT_MANDOC_EXECUTE
+	if (document->execution != NULL &&
+	    !mant_mandoc_execution_node_key(document->execution, source,
+	    &view->execution_node_key))
+		return 0;
+#endif
 	if (source->type != ROFFT_ROOT && source->tok != TOKEN_NONE)
 		view->macro_name = roff_name[source->tok];
 	if (source->type == ROFFT_TEXT || source->type == ROFFT_COMMENT)
@@ -1490,7 +1827,7 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	view->tag = source->tag;
 	view->line = source->line;
 	view->column = source->pos + 1;
-	view->flow_epoch = source->flow_epoch;
+	view->flow_epoch = (uint64_t)source->flow_epoch;
 	view->table_escape = source->type == ROFFT_TBL ? source->tbl_escape : -1;
 	if (source->type == ROFFT_TBL && source->span != NULL) {
 		const struct tbl_dat *dat;
@@ -1565,12 +1902,12 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 int
 mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
     const struct mant_mandoc_table_cell *cell,
-    struct mant_mandoc_table_cell_view *view)
+    struct mant_mandoc_table_cell_view *view, size_t view_size)
 {
 	const struct tbl_dat *source;
 
 	if (document == NULL || document->parser == NULL || cell == NULL ||
-	    view == NULL)
+	    view == NULL || view_size != sizeof(*view))
 		return 0;
 	source = (const struct tbl_dat *)cell;
 	memset(view, 0, sizeof(*view));
@@ -1590,8 +1927,8 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 		default: break;
 		}
 	}
-	view->text_block = source->block;
-	view->source_recovery_safe = source->source_safe;
+	view->text_block = source->block != 0;
+	view->source_recovery_safe = source->source_safe != 0;
 	view->vertical_continuation =
 	    (source->layout != NULL && source->layout->pos == TBL_CELL_DOWN) ||
 	    (source->string != NULL && !strcmp(source->string, "\\^"));
@@ -1614,12 +1951,12 @@ int
 mant_mandoc_table_rule_cell_snapshot(
     const struct mant_mandoc_document *document,
     const struct mant_mandoc_table_rule_cell *cell,
-    struct mant_mandoc_table_rule_cell_view *view)
+    struct mant_mandoc_table_rule_cell_view *view, size_t view_size)
 {
 	const struct tbl_cell *source;
 
 	if (document == NULL || document->parser == NULL || cell == NULL ||
-	    view == NULL)
+	    view == NULL || view_size != sizeof(*view))
 		return 0;
 	source = (const struct tbl_cell *)cell;
 	memset(view, 0, sizeof(*view));

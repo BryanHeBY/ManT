@@ -60,6 +60,7 @@ static	int	  a2width(const struct termp *, const char *);
 static	void	  print_bvspace(struct termp *,
 			struct roff_node *, struct roff_node *);
 static	void	  print_mdoc_node(DECL_ARGS);
+static	void	  print_mdoc_node_inner(DECL_ARGS);
 static	void	  print_mdoc_nodelist(DECL_ARGS);
 static	void	  print_mdoc_head(struct termp *, const struct roff_meta *);
 static	void	  print_mdoc_foot(struct termp *, const struct roff_meta *);
@@ -292,7 +293,7 @@ terminal_mdoc(void *arg, const struct roff_meta *mdoc)
 static void
 print_mdoc_nodelist(DECL_ARGS)
 {
-	while (n != NULL) {
+	while (n != NULL && !term_exec_failed(p)) {
 		print_mdoc_node(p, pair, meta, n);
 		n = n->next;
 	}
@@ -300,6 +301,22 @@ print_mdoc_nodelist(DECL_ARGS)
 
 static void
 print_mdoc_node(DECL_ARGS)
+{
+	const struct roff_node *previous;
+
+	if (term_exec_failed(p))
+		return;
+	previous = p->exec_node;
+	p->exec_node = n;
+	if (term_exec_node(p, n, 1)) {
+		print_mdoc_node_inner(p, pair, meta, n);
+		term_exec_node(p, n, 0);
+	}
+	p->exec_node = previous;
+}
+
+static void
+print_mdoc_node_inner(DECL_ARGS)
 {
 	const struct mdoc_term_act *act;
 	struct termpair	 npair;
@@ -402,9 +419,13 @@ print_mdoc_node(DECL_ARGS)
 			chld = (*act->pre)(p, &npair, meta, n);
 		break;
 	}
+	if (term_exec_failed(p))
+		return;
 
 	if (chld && n->child)
 		print_mdoc_nodelist(p, &npair, meta, n->child);
+	if (term_exec_failed(p))
+		return;
 
 	term_fontpopq(p,
 	    (ENDBODY_NOT == n->end ? n : n->body)->prev_font);

@@ -33,6 +33,7 @@ all-features = true
 
 [features]
 default = []
+execute = ["dep:unicode-width"]
 render = ["dep:unicode-width"]
 serde = ["dep:serde"]
 

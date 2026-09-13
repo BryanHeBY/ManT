@@ -2,6 +2,8 @@
 #[cfg(windows)]
 use super::windows_root;
 use super::{owned::copy_document, raw};
+#[cfg(feature = "execute")]
+use crate::{ExecutionErrorKind, ExecutionLimits, NativeExecutionReport};
 use crate::{InputFormat, RawDocument, SourceBundle};
 #[cfg(windows)]
 use std::path::Path;
@@ -15,6 +17,30 @@ impl Drop for DocumentHandle {
     fn drop(&mut self) {
         unsafe { raw::mant_mandoc_document_free(self.0.as_ptr()) };
     }
+}
+
+#[cfg(feature = "execute")]
+pub(crate) fn execute_buffer(
+    path: &CStr,
+    buffer: &[u8],
+    input_format: InputFormat,
+    operating_system: Option<&CStr>,
+    limits: ExecutionLimits,
+) -> Result<(RawDocument, NativeExecutionReport), (ExecutionErrorKind, String)> {
+    super::execution::validate_limits_layout()
+        .map_err(|message| (ExecutionErrorKind::Transfer, message))?;
+    let limits = super::execution::native_limits(limits);
+    let pointer = unsafe {
+        raw::mant_mandoc_execute_buffer(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
+            &raw const limits,
+        )
+    };
+    super::execution::copy_executed_document(pointer)
 }
 
 #[cfg(unix)]
@@ -154,6 +180,48 @@ pub(super) const fn input_format_code(input_format: InputFormat) -> i32 {
 mod tests {
     use super::*;
 
+    struct ReentryProbe {
+        called: bool,
+        rejected: bool,
+    }
+
+    extern "C" fn reenter_from_resolver(
+        context: *mut std::ffi::c_void,
+        _current_path: *const std::ffi::c_char,
+        _requested_path: *const std::ffi::c_char,
+        _resolved: *mut raw::CResolvedSource,
+    ) -> i32 {
+        let state = unsafe { &mut *context.cast::<ReentryProbe>() };
+        state.called = true;
+        let path = c"nested.1";
+        let source = b".TH NESTED 1\n.SH NAME\nnested \\- probe\n";
+        let document = unsafe {
+            raw::mant_mandoc_parse_buffer(
+                path.as_ptr(),
+                source.as_ptr(),
+                source.len(),
+                std::ptr::null(),
+                0,
+                input_format_code(InputFormat::Man),
+                std::ptr::null(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        if !document.is_null() {
+            let rejected = unsafe { raw::mant_mandoc_document_ok(document) } == 0;
+            let error = unsafe { raw::mant_mandoc_document_error(document) };
+            state.rejected = rejected
+                && !error.is_null()
+                && unsafe { CStr::from_ptr(error) }
+                    .to_bytes()
+                    .windows(b"recursive libmandoc session entry".len())
+                    .any(|window| window == b"recursive libmandoc session entry");
+            unsafe { raw::mant_mandoc_document_free(document) };
+        }
+        0
+    }
+
     #[test]
     fn bundle_arguments_keep_paths_and_source_bytes_paired_after_move() {
         let mut bundle = SourceBundle::new();
@@ -172,5 +240,32 @@ mod tests {
                 bytes
             );
         }
+    }
+
+    #[test]
+    fn source_callbacks_cannot_reenter_the_same_native_session() {
+        let path = c"outer.1";
+        let source = b".TH OUTER 1\n.SH NAME\nouter \\- probe\n.so nested.1\n";
+        let mut probe = ReentryProbe {
+            called: false,
+            rejected: false,
+        };
+        let document = unsafe {
+            raw::mant_mandoc_parse_buffer(
+                path.as_ptr(),
+                source.as_ptr(),
+                source.len(),
+                std::ptr::null(),
+                1,
+                input_format_code(InputFormat::Man),
+                std::ptr::null(),
+                Some(reenter_from_resolver),
+                std::ptr::from_mut(&mut probe).cast(),
+            )
+        };
+        assert!(!document.is_null());
+        unsafe { raw::mant_mandoc_document_free(document) };
+        assert!(probe.called);
+        assert!(probe.rejected);
     }
 }

@@ -8,6 +8,7 @@ use mant_ir::Block;
 
 fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
     Node {
+        execution_node_key: None,
         kind,
         macro_name: None,
         text: text.map(ToOwned::to_owned),

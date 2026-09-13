@@ -11,7 +11,13 @@ use crate::{
     NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
     TableCell, TableCellKind, TableRowKind, TableRuleCellKind,
 };
-use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
+use std::{
+    ffi::CStr,
+    mem::{align_of, offset_of, size_of},
+    os::raw::c_char,
+    ptr::NonNull,
+    sync::OnceLock,
+};
 const NODE_GENERATED: u32 = 1 << 0;
 const NODE_SENTENCE_END: u32 = 1 << 1;
 const NODE_NO_PRINT: u32 = 1 << 2;
@@ -23,15 +29,46 @@ const NODE_DELIMITER_OPEN: u32 = 1 << 7;
 const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
 const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
 const NODE_TABLE_START: u32 = 1 << 10;
+const KNOWN_NODE_FLAGS: u32 = NODE_GENERATED
+    | NODE_SENTENCE_END
+    | NODE_NO_PRINT
+    | NODE_NO_FILL
+    | NODE_DEEP_LINK_TARGET
+    | NODE_PERMALINK
+    | NODE_LINE_START
+    | NODE_DELIMITER_OPEN
+    | NODE_DELIMITER_CLOSE
+    | NODE_SYNOPSIS_PRETTY
+    | NODE_TABLE_START;
 const MAX_OWNED_NODE_DEPTH: usize = 256;
+static SNAPSHOT_LAYOUT_VALIDATION: OnceLock<Result<(), String>> = OnceLock::new();
+
+#[derive(Clone, Copy)]
+struct NativeLayout {
+    size: usize,
+    align: usize,
+    field_count: u32,
+    offset: unsafe extern "C" fn(u32) -> usize,
+}
 
 pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
     let handle = DocumentHandle(
         NonNull::new(pointer)
             .ok_or_else(|| "libmandoc could not allocate a document".to_owned())?,
     );
+    copy_document_from_handle(&handle, None)
+}
+
+pub(super) fn copy_document_from_handle(
+    handle: &DocumentHandle,
+    mut execution_node_keys: Option<&mut Vec<u32>>,
+) -> Result<RawDocument, String> {
     let document = handle.0.as_ptr();
-    if unsafe { raw::mant_mandoc_document_ok(document) } == 0 {
+    validate_snapshot_layouts()?;
+    if !native_bool(
+        unsafe { raw::mant_mandoc_document_ok(document) },
+        "document-ok",
+    )? {
         return Err(
             unsafe { optional_string(raw::mant_mandoc_document_error(document)) }
                 .unwrap_or_else(|| "libmandoc could not parse the source".to_owned()),
@@ -44,7 +81,16 @@ pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, Stri
     }
 
     let mut node_truncated = false;
-    let root = unsafe { copy_node(document, root, 0, &mut node_truncated) }?.0;
+    let root = unsafe {
+        copy_node(
+            document,
+            root,
+            0,
+            &mut node_truncated,
+            &mut execution_node_keys,
+        )
+    }?
+    .0;
     Ok(RawDocument {
         document: Document {
             macro_set: macro_set(unsafe { raw::mant_mandoc_document_macroset(document) })?,
@@ -59,7 +105,10 @@ pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, Stri
                 alias_target: unsafe {
                     optional_string(raw::mant_mandoc_document_alias_target(document))
                 },
-                has_body: unsafe { raw::mant_mandoc_document_has_body(document) } != 0,
+                has_body: native_bool(
+                    unsafe { raw::mant_mandoc_document_has_body(document) },
+                    "document has-body",
+                )?,
             },
             root,
         },
@@ -67,8 +116,142 @@ pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, Stri
             optional_string(raw::mant_mandoc_document_diagnostics(document)).unwrap_or_default()
         },
         node_truncated,
-        equation_truncated: unsafe { raw::mant_mandoc_document_equation_truncated(document) } != 0,
+        equation_truncated: native_bool(
+            unsafe { raw::mant_mandoc_document_equation_truncated(document) },
+            "document equation-truncated",
+        )?,
     })
+}
+
+pub(super) fn validate_snapshot_layouts() -> Result<(), String> {
+    SNAPSHOT_LAYOUT_VALIDATION
+        .get_or_init(compute_snapshot_layout_validation)
+        .clone()
+}
+
+fn compute_snapshot_layout_validation() -> Result<(), String> {
+    let node_offsets = [
+        offset_of!(CNodeView, kind),
+        offset_of!(CNodeView, execution_node_key),
+        offset_of!(CNodeView, macro_name),
+        offset_of!(CNodeView, text),
+        offset_of!(CNodeView, tag),
+        offset_of!(CNodeView, line),
+        offset_of!(CNodeView, column),
+        offset_of!(CNodeView, flow_epoch),
+        offset_of!(CNodeView, table_escape),
+        offset_of!(CNodeView, table_source_recovery_safe),
+        offset_of!(CNodeView, table_row_kind),
+        offset_of!(CNodeView, flags),
+        offset_of!(CNodeView, list_kind),
+        offset_of!(CNodeView, definition_list_style),
+        offset_of!(CNodeView, display_kind),
+        offset_of!(CNodeView, font_kind),
+        offset_of!(CNodeView, author_mode),
+        offset_of!(CNodeView, compact),
+        offset_of!(CNodeView, offset),
+        offset_of!(CNodeView, width),
+        offset_of!(CNodeView, enclosure_open),
+        offset_of!(CNodeView, enclosure_close),
+        offset_of!(CNodeView, equation),
+        offset_of!(CNodeView, table_cells),
+        offset_of!(CNodeView, table_rule_cells),
+        offset_of!(CNodeView, child),
+        offset_of!(CNodeView, next),
+    ];
+    let table_cell_offsets = [
+        offset_of!(CTableCellView, text),
+        offset_of!(CTableCellView, kind),
+        offset_of!(CTableCellView, text_block),
+        offset_of!(CTableCellView, source_recovery_safe),
+        offset_of!(CTableCellView, vertical_continuation),
+        offset_of!(CTableCellView, column_span),
+        offset_of!(CTableCellView, row_span),
+        offset_of!(CTableCellView, alignment),
+        offset_of!(CTableCellView, next),
+    ];
+    let table_rule_cell_offsets = [
+        offset_of!(CTableRuleCellView, kind),
+        offset_of!(CTableRuleCellView, next),
+    ];
+
+    validate_layout(
+        "node view",
+        size_of::<CNodeView>(),
+        align_of::<CNodeView>(),
+        &node_offsets,
+        NativeLayout {
+            size: unsafe { raw::mant_mandoc_node_view_size() },
+            align: unsafe { raw::mant_mandoc_node_view_align() },
+            field_count: unsafe { raw::mant_mandoc_node_view_field_count() },
+            offset: raw::mant_mandoc_node_view_offset,
+        },
+    )?;
+    validate_layout(
+        "table cell view",
+        size_of::<CTableCellView>(),
+        align_of::<CTableCellView>(),
+        &table_cell_offsets,
+        NativeLayout {
+            size: unsafe { raw::mant_mandoc_table_cell_view_size() },
+            align: unsafe { raw::mant_mandoc_table_cell_view_align() },
+            field_count: unsafe { raw::mant_mandoc_table_cell_view_field_count() },
+            offset: raw::mant_mandoc_table_cell_view_offset,
+        },
+    )?;
+    validate_layout(
+        "table rule cell view",
+        size_of::<CTableRuleCellView>(),
+        align_of::<CTableRuleCellView>(),
+        &table_rule_cell_offsets,
+        NativeLayout {
+            size: unsafe { raw::mant_mandoc_table_rule_cell_view_size() },
+            align: unsafe { raw::mant_mandoc_table_rule_cell_view_align() },
+            field_count: unsafe { raw::mant_mandoc_table_rule_cell_view_field_count() },
+            offset: raw::mant_mandoc_table_rule_cell_view_offset,
+        },
+    )
+}
+
+fn validate_layout(
+    name: &str,
+    rust_size: usize,
+    rust_align: usize,
+    rust_offsets: &[usize],
+    native: NativeLayout,
+) -> Result<(), String> {
+    if rust_size != native.size || rust_align != native.align {
+        return Err(format!(
+            "libmandoc {name} ABI mismatch: Rust size/alignment {rust_size}/{rust_align}, native {}/{}",
+            native.size, native.align
+        ));
+    }
+    if usize::try_from(native.field_count).ok() != Some(rust_offsets.len()) {
+        return Err(format!(
+            "libmandoc {name} ABI mismatch: Rust has {} fields, native has {}",
+            rust_offsets.len(),
+            native.field_count
+        ));
+    }
+    for (field, &rust_offset) in rust_offsets.iter().enumerate() {
+        let field =
+            u32::try_from(field).map_err(|_| format!("libmandoc {name} field count overflow"))?;
+        let native_offset = unsafe { (native.offset)(field) };
+        if rust_offset != native_offset {
+            return Err(format!(
+                "libmandoc {name} ABI mismatch at field {field}: Rust offset {rust_offset}, native {native_offset}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn native_bool(value: i32, field: &str) -> Result<bool, String> {
+    match value {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(format!("libmandoc returned an invalid {field} flag")),
+    }
 }
 
 pub(super) unsafe fn optional_string(pointer: *const c_char) -> Option<String> {
@@ -209,26 +392,59 @@ unsafe fn copy_node(
     pointer: *const CNode,
     depth: usize,
     truncated: &mut bool,
+    execution_node_keys: &mut Option<&mut Vec<u32>>,
 ) -> Result<(Node, *const CNode), String> {
     let mut view = std::mem::MaybeUninit::<CNodeView>::uninit();
-    if unsafe { raw::mant_mandoc_node_snapshot(document, pointer, view.as_mut_ptr()) } == 0 {
+    if unsafe {
+        raw::mant_mandoc_node_snapshot(document, pointer, view.as_mut_ptr(), size_of::<CNodeView>())
+    } != 1
+    {
         return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
     }
     let view = unsafe { view.assume_init() };
+    if let Some(keys) = execution_node_keys.as_deref_mut() {
+        keys.try_reserve(1)
+            .map_err(|_| "could not allocate execution AST node-key transfer".to_owned())?;
+        keys.push(view.execution_node_key);
+    }
+    if view.flags & !KNOWN_NODE_FLAGS != 0 {
+        return Err("libmandoc returned unknown syntax node flags".to_owned());
+    }
     let text = unsafe { visible_string(view.text) };
     let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
     let enclosure_open = unsafe { optional_string(view.enclosure_open) };
     let enclosure_close = unsafe { optional_string(view.enclosure_close) };
     let mut node = Node {
+        execution_node_key: (view.execution_node_key != u32::MAX)
+            .then_some(view.execution_node_key),
         kind: node_kind(view.kind)?,
         macro_name: unsafe { optional_string(view.macro_name) },
         text,
         tag: unsafe { visible_string(view.tag) },
-        line: view.line.try_into().unwrap_or_default(),
-        column: view.column.try_into().unwrap_or_default(),
-        flow_epoch: view.flow_epoch,
-        table_escape: u8::try_from(view.table_escape).ok(),
-        table_source_recovery_safe: view.table_source_recovery_safe != 0,
+        line: view
+            .line
+            .try_into()
+            .map_err(|_| "libmandoc returned a negative source line".to_owned())?,
+        column: view
+            .column
+            .try_into()
+            .map_err(|_| "libmandoc returned a negative source column".to_owned())?,
+        flow_epoch: view
+            .flow_epoch
+            .try_into()
+            .map_err(|_| "libmandoc returned an oversized flow epoch".to_owned())?,
+        table_escape: match view.table_escape {
+            -1 => None,
+            value => Some(
+                value
+                    .try_into()
+                    .map_err(|_| "libmandoc returned an invalid table escape".to_owned())?,
+            ),
+        },
+        table_source_recovery_safe: native_bool(
+            view.table_source_recovery_safe,
+            "table source-recovery-safe",
+        )?,
         table_row_kind: table_row_kind(view.table_row_kind, unsafe {
             copy_table_rule_cells(document, view.table_rule_cells)
         }?)?,
@@ -255,7 +471,7 @@ unsafe fn copy_node(
             opening,
             closing: enclosure_close,
         }),
-        compact: view.compact != 0,
+        compact: native_bool(view.compact, "compact")?,
         offset: unsafe { optional_string(view.offset) },
         width: unsafe { optional_string(view.width) },
         table_cells: unsafe { copy_table_cells(document, view.table_cells) }?,
@@ -268,7 +484,8 @@ unsafe fn copy_node(
     if depth + 1 < MAX_OWNED_NODE_DEPTH {
         let mut child = view.child;
         while !child.is_null() {
-            let (owned, next) = unsafe { copy_node(document, child, depth + 1, truncated) }?;
+            let (owned, next) =
+                unsafe { copy_node(document, child, depth + 1, truncated, execution_node_keys) }?;
             node.children.push(owned);
             child = next;
         }
@@ -302,31 +519,51 @@ unsafe fn copy_table_cells(
     let mut cells = Vec::new();
     while !pointer.is_null() {
         let mut view = std::mem::MaybeUninit::<CTableCellView>::uninit();
-        if unsafe { raw::mant_mandoc_table_cell_snapshot(document, pointer, view.as_mut_ptr()) }
-            == 0
+        if unsafe {
+            raw::mant_mandoc_table_cell_snapshot(
+                document,
+                pointer,
+                view.as_mut_ptr(),
+                size_of::<CTableCellView>(),
+            )
+        } != 1
         {
             return Err("libmandoc returned an invalid borrowed table cell".to_owned());
         }
         let view = unsafe { view.assume_init() };
         cells.push(TableCell {
             kind: match view.kind {
+                0 => TableCellKind::Text,
                 1 => TableCellKind::Empty,
                 2 => TableCellKind::HorizontalRule,
                 3 => TableCellKind::DoubleHorizontalRule,
                 4 => TableCellKind::IsolatedHorizontalRule,
                 5 => TableCellKind::IsolatedDoubleHorizontalRule,
-                _ => TableCellKind::Text,
+                _ => return Err("libmandoc returned an unknown table cell kind".to_owned()),
             },
             text: unsafe { visible_string(view.text) },
-            text_block: view.text_block != 0,
-            source_recovery_safe: view.source_recovery_safe != 0,
-            vertical_continuation: view.vertical_continuation != 0,
-            column_span: view.column_span.try_into().unwrap_or(u16::MAX),
-            row_span: view.row_span.try_into().unwrap_or(u16::MAX),
+            text_block: native_bool(view.text_block, "table text-block")?,
+            source_recovery_safe: native_bool(
+                view.source_recovery_safe,
+                "table source-recovery-safe",
+            )?,
+            vertical_continuation: native_bool(
+                view.vertical_continuation,
+                "table vertical-continuation",
+            )?,
+            column_span: view
+                .column_span
+                .try_into()
+                .map_err(|_| "libmandoc returned an oversized table column span".to_owned())?,
+            row_span: view
+                .row_span
+                .try_into()
+                .map_err(|_| "libmandoc returned an oversized table row span".to_owned())?,
             alignment: match view.alignment {
+                0 => TableAlignment::Left,
                 1 => TableAlignment::Center,
                 2 => TableAlignment::Right,
-                _ => TableAlignment::Left,
+                _ => return Err("libmandoc returned an unknown table alignment".to_owned()),
             },
         });
         pointer = view.next;
@@ -342,8 +579,13 @@ unsafe fn copy_table_rule_cells(
     while !pointer.is_null() {
         let mut view = std::mem::MaybeUninit::<CTableRuleCellView>::uninit();
         if unsafe {
-            raw::mant_mandoc_table_rule_cell_snapshot(document, pointer, view.as_mut_ptr())
-        } == 0
+            raw::mant_mandoc_table_rule_cell_snapshot(
+                document,
+                pointer,
+                view.as_mut_ptr(),
+                size_of::<CTableRuleCellView>(),
+            )
+        } != 1
         {
             return Err("libmandoc returned an invalid borrowed table rule cell".to_owned());
         }
@@ -390,5 +632,13 @@ mod tests {
             Some("café 日本 😀\t")
         );
         assert_eq!(unsafe { visible_string(std::ptr::null()) }, None);
+    }
+
+    #[test]
+    fn native_flags_reject_non_boolean_values() {
+        assert_eq!(native_bool(0, "probe"), Ok(false));
+        assert_eq!(native_bool(1, "probe"), Ok(true));
+        assert!(native_bool(-1, "probe").is_err());
+        assert!(native_bool(2, "probe").is_err());
     }
 }

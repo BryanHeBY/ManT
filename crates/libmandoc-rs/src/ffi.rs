@@ -1,4 +1,6 @@
 //! Immediate ownership transfer from an opaque native session.
+#[cfg(feature = "execute")]
+mod execution;
 mod owned;
 mod raw;
 #[cfg(feature = "render")]
@@ -9,11 +11,6 @@ mod windows_root;
 
 #[cfg(test)]
 use crate::{InputFormat, Node};
-#[cfg(test)]
-use raw::{
-    CNodeView, CTableCellView, CTableRuleCellView, mant_mandoc_node_view_size,
-    mant_mandoc_table_cell_view_size, mant_mandoc_table_rule_cell_view_size,
-};
 #[cfg(windows)]
 use raw::{CResolvedSource, CSourceResolver};
 #[cfg(all(feature = "render", test))]
@@ -22,6 +19,8 @@ pub(crate) use render::ctype_locale;
 pub(super) use render::render_file;
 #[cfg(feature = "render")]
 pub(super) use render::{NativeRenderError, render_buffer, render_bundle};
+#[cfg(feature = "execute")]
+pub(super) use session::execute_buffer;
 #[cfg(unix)]
 pub(super) use session::parse_file;
 pub(super) use session::{parse_buffer, parse_bundle};
@@ -43,25 +42,22 @@ mod tests {
 
     use flate2::read::MultiGzDecoder;
 
-    use super::{
-        CNodeView, CTableCellView, CTableRuleCellView, InputFormat, Node,
-        mant_mandoc_node_view_size, mant_mandoc_table_cell_view_size,
-        mant_mandoc_table_rule_cell_view_size, parse_buffer,
-    };
+    use super::{InputFormat, Node, parse_buffer};
 
     #[test]
     fn borrowed_snapshot_views_match_the_native_abi() {
+        super::owned::validate_snapshot_layouts().unwrap();
         assert_eq!(
-            unsafe { mant_mandoc_node_view_size() },
-            std::mem::size_of::<CNodeView>()
+            unsafe { super::raw::mant_mandoc_node_view_offset(u32::MAX) },
+            usize::MAX
         );
         assert_eq!(
-            unsafe { mant_mandoc_table_cell_view_size() },
-            std::mem::size_of::<CTableCellView>()
+            unsafe { super::raw::mant_mandoc_table_cell_view_offset(u32::MAX) },
+            usize::MAX
         );
         assert_eq!(
-            unsafe { mant_mandoc_table_rule_cell_view_size() },
-            std::mem::size_of::<CTableRuleCellView>()
+            unsafe { super::raw::mant_mandoc_table_rule_cell_view_offset(u32::MAX) },
+            usize::MAX
         );
     }
 

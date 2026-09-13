@@ -4043,6 +4043,7 @@ roff_so(ROFF_ARGS)
 {
 	char *name;
 
+	r->man->meta.source_request_seen = 1;
 	name = buf->buf + pos;
 	mandoc_msg(MANDOCERR_SO, ln, ppos, "so %s", name);
 

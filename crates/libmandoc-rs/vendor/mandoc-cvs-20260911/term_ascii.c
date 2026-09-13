@@ -220,7 +220,8 @@ ascii_letter(struct termp *p, int c)
 {
 	unsigned char byte = (unsigned char)c;
 
-	mant_mandoc_output_write(&byte, 1);
+	if (p->exec_ops == NULL)
+		mant_mandoc_output_write(&byte, 1);
 }
 
 static size_t
@@ -246,24 +247,40 @@ utf8_letter(struct termp *p, int c)
 {
 	if (c == ASCII_NBRSP)
 		c = ' ';
-	mant_mandoc_output_utf8(c);
+	if (p->exec_ops == NULL)
+		mant_mandoc_output_utf8(c);
 }
 
 static void
 ascii_begin(struct termp *p)
 {
+	int fragment_role;
+
+	fragment_role = p->exec_fragment_role;
+	p->exec_fragment_role = TERM_EXEC_FRAGMENT_PAGE;
 	(*p->headf)(p, p->argf);
+	p->exec_fragment_role = fragment_role;
 }
 
 static void
 ascii_end(struct termp *p)
 {
+	int fragment_role;
+
+	fragment_role = p->exec_fragment_role;
+	p->exec_fragment_role = TERM_EXEC_FRAGMENT_PAGE;
 	(*p->footf)(p, p->argf);
+	p->exec_fragment_role = fragment_role;
 }
 
 static void
 ascii_endline(struct termp *p)
 {
+	size_t line_before;
+	size_t visual_before;
+
+	line_before = p->line;
+	visual_before = p->viscol;
 	p->line++;
 	if ((int)p->tcol->offset > p->ti)
 		p->tcol->offset -= p->ti;
@@ -272,7 +289,11 @@ ascii_endline(struct termp *p)
 	p->ti = 0;
 	p->minbl = 0;
 	p->viscol = 0;
-	mant_mandoc_output_write("\n", 1);
+	if (!term_exec_device_endline(p, line_before, p->line,
+	    visual_before, p->viscol))
+		return;
+	if (p->exec_ops == NULL)
+		mant_mandoc_output_write("\n", 1);
 }
 
 static void
@@ -280,23 +301,28 @@ ascii_advance(struct termp *p, size_t len)
 {
 	size_t		 dst;	/* Destination column in basic units. */
 	size_t		 sz;	/* Width of a space in basic units. */
+	size_t		 requested;
+	size_t		 before;
 
 	sz = (*p->getwidth)(p, ' ');
-
 	/*
 	 * XXX We used to have "assert(len < UINT16_MAX)" here.
 	 * that is not quite right because the input document
 	 * can trigger that by merely providing large input.
 	 * For now, simply truncate.
 	 */
-	if (len > 256 * sz)
-		len = 256 * sz;
+	requested = len;
+	before = p->viscol;
+	dst = len > 256 * sz ? 256 * sz : len;
+	len = dst;
 
 	dst = p->viscol + len;
 	while (p->viscol + sz / 2 < dst) {
-		mant_mandoc_output_write(" ", 1);
+		if (p->exec_ops == NULL)
+			mant_mandoc_output_write(" ", 1);
 		p->viscol += sz;
 	}
+	term_exec_device_advance(p, requested, before, p->viscol);
 }
 
 static int

@@ -1,0 +1,370 @@
+/*
+ * ManT-owned, pointer-free transfer boundary for one pinned mandoc terminal
+ * execution.  This is a private same-build ABI, not an upstream interface.
+ */
+#ifndef MANT_MANDOC_EXECUTION_H
+#define MANT_MANDOC_EXECUTION_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+struct roff_meta;
+struct roff_node;
+
+#define MANT_MANDOC_EXEC_NONE UINT32_MAX
+
+enum mant_mandoc_execution_status {
+	MANT_MANDOC_EXECUTION_BUILDING = 0,
+	MANT_MANDOC_EXECUTION_COMPLETE = 1,
+	MANT_MANDOC_EXECUTION_UNSUPPORTED = 2,
+	MANT_MANDOC_EXECUTION_BUDGET = 3,
+	MANT_MANDOC_EXECUTION_ALLOCATION = 4,
+	MANT_MANDOC_EXECUTION_INTERNAL = 5
+};
+
+enum mant_mandoc_execution_atom_kind {
+	MANT_MANDOC_ATOM_GLYPH = 1,
+	MANT_MANDOC_ATOM_BREAKABLE_SPACE,
+	MANT_MANDOC_ATOM_NONBREAKABLE_SPACE,
+	MANT_MANDOC_ATOM_BREAKABLE_HYPHEN,
+	MANT_MANDOC_ATOM_ZERO_WIDTH,
+	MANT_MANDOC_ATOM_TAB,
+	MANT_MANDOC_ATOM_TAB_REFERENCE,
+	MANT_MANDOC_ATOM_BACKSPACE,
+	MANT_MANDOC_ATOM_WORD_END_BREAK,
+	MANT_MANDOC_ATOM_BREAK_POINT
+};
+
+enum mant_mandoc_execution_atom_role {
+	MANT_MANDOC_ATOM_AUTHORED = 1,
+	MANT_MANDOC_ATOM_IMPLICIT_SPACE,
+	MANT_MANDOC_ATOM_FONT_DECORATION,
+	MANT_MANDOC_ATOM_MACRO_GENERATED,
+	MANT_MANDOC_ATOM_DEVICE_GENERATED
+};
+
+enum mant_mandoc_execution_atom_disposition {
+	MANT_MANDOC_ATOM_BUFFERED = 1,
+	MANT_MANDOC_ATOM_EMITTED,
+	MANT_MANDOC_ATOM_CONSUMED,
+	MANT_MANDOC_ATOM_REPLACED,
+	MANT_MANDOC_ATOM_TRAILING_DISCARD
+};
+
+enum mant_mandoc_execution_font {
+	MANT_MANDOC_FONT_ROMAN = 0,
+	MANT_MANDOC_FONT_BOLD = 1,
+	MANT_MANDOC_FONT_UNDERLINE = 2,
+	MANT_MANDOC_FONT_BOLD_UNDERLINE = 3
+};
+
+enum mant_mandoc_execution_fragment_role {
+	MANT_MANDOC_FRAGMENT_CONTENT = 1,
+	MANT_MANDOC_FRAGMENT_FONT_DECORATION = 2,
+	MANT_MANDOC_FRAGMENT_MARGIN_DECORATION = 3,
+	MANT_MANDOC_FRAGMENT_PAGE_DECORATION = 4
+};
+
+enum mant_mandoc_execution_flush_outcome {
+	MANT_MANDOC_FLUSH_NO_CONTENT = 1,
+	MANT_MANDOC_FLUSH_EXHAUSTED = 2,
+	MANT_MANDOC_FLUSH_WRAPPED = 3,
+	MANT_MANDOC_FLUSH_DEFERRED_COLUMN = 4
+};
+
+enum mant_mandoc_execution_buffer_close_reason {
+	MANT_MANDOC_BUFFER_RESET = 1,
+	MANT_MANDOC_BUFFER_REPORT_END = 2
+};
+
+enum mant_mandoc_execution_boundary_request {
+	MANT_MANDOC_BOUNDARY_NEWLINE = 1,
+	MANT_MANDOC_BOUNDARY_VERTICAL_SPACE,
+	MANT_MANDOC_BOUNDARY_ENDLINE,
+	MANT_MANDOC_BOUNDARY_DEVICE_ENDLINE
+};
+
+enum mant_mandoc_execution_boundary_effect {
+	MANT_MANDOC_BOUNDARY_NO_OUTPUT = 0,
+	MANT_MANDOC_BOUNDARY_FLUSHED = 1,
+	MANT_MANDOC_BOUNDARY_ENDED_LINE = 2,
+	MANT_MANDOC_BOUNDARY_ADDED_VERTICAL_SPACE = 3
+};
+
+enum mant_mandoc_execution_geometry_kind {
+	MANT_MANDOC_GEOMETRY_ADVANCE = 1,
+	MANT_MANDOC_GEOMETRY_GLYPH,
+	MANT_MANDOC_GEOMETRY_ENDLINE,
+	MANT_MANDOC_GEOMETRY_FIELD
+};
+
+enum mant_mandoc_execution_geometry_unit {
+	MANT_MANDOC_UNIT_BASIC = 1,
+	MANT_MANDOC_UNIT_BUFFER_SLOT,
+	MANT_MANDOC_UNIT_DEVICE_LINE
+};
+
+enum mant_mandoc_execution_geometry_origin_kind {
+	MANT_MANDOC_GEOMETRY_ORIGIN_NONE = 0,
+	MANT_MANDOC_GEOMETRY_ORIGIN_ATOM,
+	MANT_MANDOC_GEOMETRY_ORIGIN_FLUSH,
+	MANT_MANDOC_GEOMETRY_ORIGIN_BOUNDARY,
+	MANT_MANDOC_GEOMETRY_ORIGIN_FRAGMENT
+};
+
+enum mant_mandoc_execution_wrapper_kind {
+	MANT_MANDOC_WRAPPER_NODE = 1,
+	MANT_MANDOC_WRAPPER_FONT,
+	MANT_MANDOC_WRAPPER_LINK
+};
+
+struct mant_mandoc_execution_limits {
+	uint32_t abi_version;
+	uint32_t abi_size;
+	uint64_t max_nodes;
+	uint64_t max_depth;
+	uint64_t max_work;
+	uint64_t max_records;
+	uint64_t max_pool_bytes;
+	uint64_t max_buffer_cells;
+};
+
+#define MANT_MANDOC_EXECUTION_LIMITS_VERSION 1U
+size_t mant_mandoc_execution_limits_size(void);
+size_t mant_mandoc_execution_limits_align(void);
+uint32_t mant_mandoc_execution_limits_field_count(void);
+size_t mant_mandoc_execution_limits_offset(uint32_t);
+
+struct mant_mandoc_source_record {
+	uint32_t key;
+	uint32_t parent;
+	uint32_t include_node;
+	uint32_t flags;
+	uint32_t path_start;
+	uint32_t path_length;
+};
+
+struct mant_mandoc_node_record {
+	uint32_t key;
+	uint32_t parent;
+	uint32_t source;
+	uint32_t line;
+	uint32_t column;
+	uint32_t kind;
+	uint32_t flags;
+	uint32_t macro_start;
+	uint32_t macro_length;
+};
+
+struct mant_mandoc_buffer_generation_record {
+	uint32_t key;
+	uint32_t buffer;
+	uint32_t generation;
+	uint32_t capacity;
+	uint32_t extent;
+	uint32_t close_reason;
+	uint32_t reserved;
+	uint64_t open_sequence;
+	uint64_t close_sequence;
+};
+
+struct mant_mandoc_atom_record {
+	uint32_t key;
+	uint32_t buffer;
+	uint32_t generation;
+	uint32_t buffer_generation;
+	uint32_t slot;
+	uint32_t kind;
+	uint32_t role;
+	uint32_t input_scalar;
+	uint32_t display_scalar;
+	int64_t width_bu;
+	uint32_t node;
+	uint32_t source;
+	uint32_t operand_start;
+	uint32_t operand_length;
+	uint32_t font;
+	uint32_t wrapper;
+	uint32_t replaced_by;
+	uint32_t disposition;
+	uint64_t sequence;
+};
+
+struct mant_mandoc_fragment_record {
+	uint32_t key;
+	uint32_t node;
+	uint32_t buffer;
+	uint32_t generation;
+	uint32_t buffer_generation;
+	uint32_t atom_ref_start;
+	uint32_t atom_ref_length;
+	uint32_t device_line;
+	uint32_t role;
+	uint32_t wrapper;
+	uint32_t reserved;
+	int64_t start_bu;
+	int64_t end_bu;
+	uint64_t sequence;
+};
+
+struct mant_mandoc_fragment_atom_record {
+	uint32_t fragment;
+	uint32_t atom;
+};
+
+struct mant_mandoc_flush_record {
+	uint32_t key;
+	uint32_t node;
+	uint32_t buffer;
+	uint32_t generation;
+	uint32_t buffer_generation;
+	uint32_t scan_start;
+	uint32_t scan_end;
+	uint32_t accepted_start;
+	uint32_t accepted_end;
+	uint32_t consumed_start;
+	uint32_t consumed_end;
+	uint32_t remaining_start;
+	uint32_t remaining_end;
+	uint32_t fragment_start;
+	uint32_t fragment_length;
+	uint32_t flags_before;
+	uint32_t flags_after;
+	uint32_t boundary;
+	uint32_t outcome;
+	int64_t leading_bu;
+	int64_t content_bu;
+	int64_t field_bu;
+	int64_t target_bu;
+	int64_t taboff_before;
+	int64_t taboff_after;
+	int64_t visual_before;
+	int64_t visual_after;
+	uint64_t sequence;
+	uint64_t outcome_sequence;
+};
+
+struct mant_mandoc_boundary_record {
+	uint32_t key;
+	uint32_t node;
+	uint32_t parent;
+	uint32_t request;
+	uint32_t effect;
+	uint32_t flags_before;
+	uint32_t flags_after;
+	uint32_t reserved;
+	int64_t line_before;
+	int64_t line_after;
+	int64_t visual_before;
+	int64_t visual_after;
+	uint64_t sequence;
+};
+
+struct mant_mandoc_geometry_record {
+	uint32_t key;
+	uint32_t node;
+	uint32_t related;
+	uint32_t kind;
+	uint32_t unit;
+	uint32_t origin_kind;
+	uint32_t origin_key;
+	uint32_t reserved;
+	int64_t requested;
+	int64_t effective;
+	int64_t before;
+	int64_t after;
+	uint64_t sequence;
+};
+
+struct mant_mandoc_wrapper_record {
+	uint32_t key;
+	uint32_t parent;
+	uint32_t node;
+	uint32_t kind;
+	uint32_t target_start;
+	uint32_t target_length;
+	uint32_t enter_atom;
+	uint32_t leave_atom;
+	uint32_t affinity;
+	uint32_t flags;
+	uint32_t state_before;
+	uint32_t state_after;
+	uint32_t depth_before;
+	uint32_t depth_after;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
+struct mant_mandoc_anchor_record {
+	uint32_t node;
+	uint32_t target_start;
+	uint32_t target_length;
+	uint32_t fragment;
+	uint32_t atom;
+	uint32_t affinity;
+	uint32_t reserved0;
+	uint32_t reserved1;
+	uint64_t sequence;
+};
+
+struct mant_mandoc_execution_diagnostic_record {
+	uint32_t code;
+	uint32_t node;
+	uint32_t message_start;
+	uint32_t message_length;
+	uint64_t sequence;
+};
+
+struct mant_mandoc_execution_report;
+
+struct mant_mandoc_execution_report *mant_mandoc_execution_alloc(
+    const char *, const struct mant_mandoc_execution_limits *);
+int mant_mandoc_execution_run(struct mant_mandoc_execution_report *,
+    const struct roff_meta *);
+void mant_mandoc_execution_free(struct mant_mandoc_execution_report *);
+int mant_mandoc_execution_status(const struct mant_mandoc_execution_report *);
+const char *mant_mandoc_execution_error(
+    const struct mant_mandoc_execution_report *);
+size_t mant_mandoc_execution_pool_length(
+    const struct mant_mandoc_execution_report *);
+uint64_t mant_mandoc_execution_work_count(
+    const struct mant_mandoc_execution_report *);
+uint64_t mant_mandoc_execution_record_count(
+    const struct mant_mandoc_execution_report *);
+uint64_t mant_mandoc_execution_buffer_cell_count(
+    const struct mant_mandoc_execution_report *);
+int mant_mandoc_execution_node_key(
+    const struct mant_mandoc_execution_report *, const struct roff_node *,
+    uint32_t *);
+
+#define MANT_DECLARE_RECORD_API(name, plural) \
+	size_t mant_mandoc_execution_##name##_count( \
+	    const struct mant_mandoc_execution_report *); \
+	size_t mant_mandoc_execution_##name##_size(void); \
+	size_t mant_mandoc_execution_##name##_align(void); \
+	uint32_t mant_mandoc_execution_##name##_field_count(void); \
+	size_t mant_mandoc_execution_##name##_offset(uint32_t); \
+	int mant_mandoc_execution_copy_##plural( \
+	    const struct mant_mandoc_execution_report *, size_t, void *, \
+	    size_t, size_t, size_t, size_t *)
+
+MANT_DECLARE_RECORD_API(source, sources);
+MANT_DECLARE_RECORD_API(node, nodes);
+MANT_DECLARE_RECORD_API(buffer_generation, buffer_generations);
+MANT_DECLARE_RECORD_API(atom, atoms);
+MANT_DECLARE_RECORD_API(fragment, fragments);
+MANT_DECLARE_RECORD_API(fragment_atom, fragment_atoms);
+MANT_DECLARE_RECORD_API(flush, flushes);
+MANT_DECLARE_RECORD_API(boundary, boundaries);
+MANT_DECLARE_RECORD_API(geometry, geometries);
+MANT_DECLARE_RECORD_API(wrapper, wrappers);
+MANT_DECLARE_RECORD_API(anchor, anchors);
+MANT_DECLARE_RECORD_API(diagnostic, diagnostics);
+
+#undef MANT_DECLARE_RECORD_API
+
+int mant_mandoc_execution_copy_pool(
+    const struct mant_mandoc_execution_report *, size_t, void *, size_t,
+    size_t *);
+
+#endif

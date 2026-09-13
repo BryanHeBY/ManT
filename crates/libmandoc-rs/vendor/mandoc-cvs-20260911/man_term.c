@@ -63,6 +63,7 @@ struct	man_term_act {
 
 static	void		  print_man_nodelist(DECL_ARGS);
 static	void		  print_man_node(DECL_ARGS);
+static	void		  print_man_node_inner(DECL_ARGS);
 static	void		  print_man_head(struct termp *,
 				const struct roff_meta *);
 static	void		  print_man_foot(struct termp *,
@@ -911,6 +912,22 @@ post_UR(DECL_ARGS)
 static void
 print_man_node(DECL_ARGS)
 {
+	const struct roff_node *previous;
+
+	if (term_exec_failed(p))
+		return;
+	previous = p->exec_node;
+	p->exec_node = n;
+	if (term_exec_node(p, n, 1)) {
+		print_man_node_inner(p, mt, n, meta);
+		term_exec_node(p, n, 0);
+	}
+	p->exec_node = previous;
+}
+
+static void
+print_man_node_inner(DECL_ARGS)
+{
 	const struct man_term_act *act;
 	int c;
 
@@ -984,9 +1001,13 @@ print_man_node(DECL_ARGS)
 	c = 1;
 	if (act->pre != NULL)
 		c = (*act->pre)(p, mt, n, meta);
+	if (term_exec_failed(p))
+		return;
 
 	if (c && n->child != NULL)
 		print_man_nodelist(p, mt, n->child, meta);
+	if (term_exec_failed(p))
+		return;
 
 	if (act->post != NULL)
 		(*act->post)(p, mt, n, meta);
@@ -1007,7 +1028,7 @@ out:
 static void
 print_man_nodelist(DECL_ARGS)
 {
-	while (n != NULL) {
+	while (n != NULL && !term_exec_failed(p)) {
 		print_man_node(p, mt, n, meta);
 		n = n->next;
 	}

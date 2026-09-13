@@ -539,6 +539,7 @@ Escape.
         children: Vec<Node>,
     ) -> Node {
         Node {
+            execution_node_key: None,
             kind,
             macro_name: macro_name.map(ToOwned::to_owned),
             text: text.map(ToOwned::to_owned),

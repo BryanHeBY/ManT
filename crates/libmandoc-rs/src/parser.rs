@@ -16,6 +16,8 @@ use std::io::Read;
 use crate::{
     Diagnostic, DiagnosticLevel, Document, RawDocument, SourceBundle, compression, diagnostics, ffi,
 };
+#[cfg(feature = "execute")]
+use crate::{ExecutionError, ExecutionErrorKind, ExecutionLimits, ExecutionReport};
 
 /// Selects the macro language before parsing begins.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -242,6 +244,88 @@ impl Parser {
         let source = crate::transport::prepare_bytes(source, self.options.compression)
             .map_err(|error| decompression_error(path, &error))?;
         self.parse_plain_bytes(path, &source)
+    }
+
+    /// Parse one caller-owned source buffer and execute the pinned native
+    /// terminal traversal exactly once, returning its owned execution facts.
+    ///
+    /// This first execution boundary intentionally accepts one root buffer
+    /// only. Include expansion, tables, and equations return an explicit
+    /// [`ExecutionErrorKind::Unsupported`] error until their provenance and
+    /// cleanup contracts are represented by the report.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionError`] when input preparation, native parsing,
+    /// execution, a configured budget, or the strict owned transfer fails.
+    #[cfg(feature = "execute")]
+    pub fn execute_bytes(
+        &self,
+        source_path: impl AsRef<Path>,
+        source: &[u8],
+        limits: ExecutionLimits,
+    ) -> Result<ExecutionReport, ExecutionError> {
+        let path = source_path.as_ref();
+        if self.options.includes != IncludePolicy::Deny {
+            return Err(ExecutionError {
+                path: path.to_path_buf(),
+                kind: ExecutionErrorKind::Unsupported,
+                message: "native execution currently requires IncludePolicy::Deny".into(),
+            });
+        }
+        if limits.max_nodes == 0
+            || limits.max_depth == 0
+            || limits.max_work == 0
+            || limits.max_records == 0
+            || limits.max_pool_bytes == 0
+            || limits.max_buffer_cells == 0
+            || limits.max_nodes > u64::from(u32::MAX)
+            || limits.max_depth > u64::from(u32::MAX)
+            || limits.max_records > u64::from(u32::MAX)
+            || limits.max_pool_bytes > u64::from(u32::MAX)
+            || limits.max_buffer_cells > u64::from(u32::MAX)
+        {
+            return Err(ExecutionError {
+                path: path.to_path_buf(),
+                kind: ExecutionErrorKind::Budget,
+                message: "native execution limits must be non-zero and fit their report widths"
+                    .into(),
+            });
+        }
+        let source =
+            crate::transport::prepare_bytes(source, self.options.compression).map_err(|error| {
+                ExecutionError {
+                    path: path.to_path_buf(),
+                    kind: ExecutionErrorKind::Native,
+                    message: error.to_string(),
+                }
+            })?;
+        let prepared =
+            PreparedInput::new(path, &self.options.includes).map_err(|error| ExecutionError {
+                path: path.to_path_buf(),
+                kind: match error.kind {
+                    ParseErrorKind::Unsupported => ExecutionErrorKind::Unsupported,
+                    _ => ExecutionErrorKind::Native,
+                },
+                message: error.message,
+            })?;
+        let (raw, execution) = ffi::execute_buffer(
+            &prepared.path,
+            &source,
+            self.input_format,
+            self.mdoc_operating_system(),
+            limits,
+        )
+        .map_err(|(kind, message)| ExecutionError {
+            path: path.to_path_buf(),
+            kind,
+            message,
+        })?;
+        Ok(ExecutionReport {
+            document: raw.document,
+            diagnostics: diagnostics::parse_diagnostics(&raw.diagnostics),
+            execution,
+        })
     }
 
     /// Parse one root from a bounded, read-only virtual source tree.

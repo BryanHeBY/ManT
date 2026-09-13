@@ -37,11 +37,67 @@ enum	termfont {
 	TERMFONT__MAX
 };
 
+/* ManT observer-only output purpose, orthogonal to atom provenance. */
+enum term_exec_fragment_role {
+	TERM_EXEC_FRAGMENT_CONTENT = 1,
+	TERM_EXEC_FRAGMENT_MARGIN = 3,
+	TERM_EXEC_FRAGMENT_PAGE = 4
+};
+
 struct	eqn_box;
 struct	roff_meta;
 struct	roff_node;
 struct	tbl_span;
 struct	termp;
+
+struct term_exec_ops {
+	int (*node_enter)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*node_leave)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*word_begin)(void *, const struct termp *,
+	    const struct roff_node *, const char *, size_t, int *);
+	int (*word_end)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*buffer_write)(void *, const struct termp *,
+	    const struct roff_node *, size_t, int, int, int);
+	int (*buffer_reserve)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t);
+	int (*buffer_rewrite)(void *, const struct termp *,
+	    const struct roff_node *, size_t, int);
+	int (*buffer_discard)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t, int);
+	int (*buffer_reset)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*flush_begin)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*fill_scan)(void *, const struct termp *,
+	    const struct roff_node *, size_t);
+	int (*fill_decision)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t, size_t, size_t);
+	int (*fill_outcome)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*field_begin)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t, size_t);
+	int (*field_atom)(void *, const struct termp *,
+	    const struct roff_node *, size_t, int);
+	int (*field_end)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t, size_t);
+	int (*flush_end)(void *, const struct termp *,
+	    const struct roff_node *);
+	int (*boundary_enter)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*boundary_leave)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*device_advance)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t, size_t);
+	int (*device_letter)(void *, const struct termp *,
+	    const struct roff_node *, size_t, int, size_t, size_t);
+	int (*device_endline)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t, size_t, size_t);
+	int (*font)(void *, const struct termp *, const struct roff_node *,
+	    int, int, size_t, size_t);
+};
 
 typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
 
@@ -124,6 +180,14 @@ struct	termp {
 	const void	 *argf;		/* arg for headf/footf */
 	const char	 *mc;		/* Margin character. */
 	struct termp_ps	 *ps;
+	const struct term_exec_ops *exec_ops; /* Optional execution observer. */
+	void		 *exec_arg;
+	const struct roff_node *exec_node;
+	int		  exec_failed;
+	size_t		  exec_field_slot;
+	int		  exec_field_active;
+	int		  exec_write_role;
+	int		  exec_fragment_role;
 };
 
 
@@ -159,3 +223,28 @@ void		  term_fontpop(struct termp *);
 void		  term_fontpopq(struct termp *, int);
 void		  term_fontrepl(struct termp *, enum termfont);
 void		  term_fontlast(struct termp *);
+void		  term_exec_attach(struct termp *,
+			const struct term_exec_ops *, void *);
+int		  term_exec_failed(const struct termp *);
+int		  term_exec_node(struct termp *, const struct roff_node *, int);
+int		  term_exec_word(struct termp *, const char *, size_t, int);
+int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
+int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);
+int		  term_exec_buffer_rewrite(struct termp *, size_t, int);
+int		  term_exec_buffer_discard(struct termp *, size_t, size_t, int);
+int		  term_exec_buffer_reset(struct termp *);
+int		  term_exec_flush(struct termp *, int);
+int		  term_exec_fill_scan(struct termp *, size_t);
+int		  term_exec_fill_decision(struct termp *, size_t, size_t,
+			size_t, size_t);
+int		  term_exec_fill_outcome(struct termp *, int);
+int		  term_exec_field(struct termp *, int, size_t, size_t, size_t);
+int		  term_exec_field_atom(struct termp *, size_t, int);
+int		  term_exec_boundary(struct termp *, int, int);
+int		  term_exec_device_advance(struct termp *, size_t, size_t,
+			size_t);
+int		  term_exec_device_letter(struct termp *, size_t, int, size_t,
+			size_t);
+int		  term_exec_device_endline(struct termp *, size_t, size_t,
+			size_t, size_t);
+int		  term_exec_font(struct termp *, int, int, size_t, size_t);

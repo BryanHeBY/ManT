@@ -1,10 +1,30 @@
 //! Raw C ABI declarations. Snapshots are borrowed only for immediate copying.
 use std::os::raw::{c_char, c_void};
-#[cfg(feature = "render")]
+#[cfg(any(feature = "execute", feature = "render"))]
 use unicode_width::UnicodeWidthChar;
 #[repr(C)]
 pub(super) struct CDocument {
     pub(super) _private: [u8; 0],
+}
+
+#[cfg(feature = "execute")]
+#[repr(C)]
+pub(super) struct CExecutionReport {
+    pub(super) _private: [u8; 0],
+}
+
+#[cfg(feature = "execute")]
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+pub(super) struct CExecutionLimits {
+    pub(super) abi_version: u32,
+    pub(super) abi_size: u32,
+    pub(super) max_nodes: u64,
+    pub(super) max_depth: u64,
+    pub(super) max_work: u64,
+    pub(super) max_records: u64,
+    pub(super) max_pool_bytes: u64,
+    pub(super) max_buffer_cells: u64,
 }
 
 #[repr(C)]
@@ -25,12 +45,13 @@ pub(super) struct CTableRuleCell {
 #[repr(C)]
 pub(super) struct CNodeView {
     pub(super) kind: i32,
+    pub(super) execution_node_key: u32,
     pub(super) macro_name: *const c_char,
     pub(super) text: *const c_char,
     pub(super) tag: *const c_char,
     pub(super) line: i32,
     pub(super) column: i32,
-    pub(super) flow_epoch: usize,
+    pub(super) flow_epoch: u64,
     pub(super) table_escape: i32,
     pub(super) table_source_recovery_safe: i32,
     pub(super) table_row_kind: i32,
@@ -88,7 +109,7 @@ pub(super) struct CResolvedSource {
 pub(super) type CSourceResolver =
     extern "C" fn(*mut c_void, *const c_char, *const c_char, *mut CResolvedSource) -> i32;
 
-#[cfg(feature = "render")]
+#[cfg(any(feature = "execute", feature = "render"))]
 #[unsafe(no_mangle)]
 extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
     u32::try_from(codepoint)
@@ -99,6 +120,14 @@ extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
 }
 
 unsafe extern "C" {
+    #[cfg(feature = "execute")]
+    pub(super) fn mant_mandoc_execution_limits_size() -> usize;
+    #[cfg(feature = "execute")]
+    pub(super) fn mant_mandoc_execution_limits_align() -> usize;
+    #[cfg(feature = "execute")]
+    pub(super) fn mant_mandoc_execution_limits_field_count() -> u32;
+    #[cfg(feature = "execute")]
+    pub(super) fn mant_mandoc_execution_limits_offset(field: u32) -> usize;
     #[cfg(unix)]
     pub(super) fn mant_mandoc_parse_file(
         path: *const c_char,
@@ -125,6 +154,21 @@ unsafe extern "C" {
         input_format: i32,
         operating_system: *const c_char,
     ) -> *mut CDocument;
+    #[cfg(feature = "execute")]
+    pub(super) fn mant_mandoc_execute_buffer(
+        path: *const c_char,
+        buffer: *const u8,
+        length: usize,
+        input_format: i32,
+        operating_system: *const c_char,
+        limits: *const CExecutionLimits,
+    ) -> *mut CDocument;
+    #[cfg(feature = "execute")]
+    pub(super) fn mant_mandoc_document_execution(
+        document: *const CDocument,
+    ) -> *const CExecutionReport;
+    #[cfg(feature = "execute")]
+    pub(super) fn mant_mandoc_execution_buffer_cell_count(report: *const CExecutionReport) -> u64;
     #[cfg(all(feature = "render", unix))]
     pub(super) fn mant_mandoc_render_file(
         path: *const c_char,
@@ -181,27 +225,36 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_equation_truncated(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_is_native_roff_request(name: *const c_char, length: usize) -> i32;
-    #[cfg(test)]
     pub(super) fn mant_mandoc_node_view_size() -> usize;
-    #[cfg(test)]
+    pub(super) fn mant_mandoc_node_view_align() -> usize;
+    pub(super) fn mant_mandoc_node_view_field_count() -> u32;
+    pub(super) fn mant_mandoc_node_view_offset(field: u32) -> usize;
     pub(super) fn mant_mandoc_table_cell_view_size() -> usize;
-    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_cell_view_align() -> usize;
+    pub(super) fn mant_mandoc_table_cell_view_field_count() -> u32;
+    pub(super) fn mant_mandoc_table_cell_view_offset(field: u32) -> usize;
     pub(super) fn mant_mandoc_table_rule_cell_view_size() -> usize;
+    pub(super) fn mant_mandoc_table_rule_cell_view_align() -> usize;
+    pub(super) fn mant_mandoc_table_rule_cell_view_field_count() -> u32;
+    pub(super) fn mant_mandoc_table_rule_cell_view_offset(field: u32) -> usize;
     pub(super) fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
     pub(super) fn mant_mandoc_node_snapshot(
         document: *mut CDocument,
         node: *const CNode,
         view: *mut CNodeView,
+        view_size: usize,
     ) -> i32;
     pub(super) fn mant_mandoc_table_cell_snapshot(
         document: *const CDocument,
         cell: *const CTableCell,
         view: *mut CTableCellView,
+        view_size: usize,
     ) -> i32;
     pub(super) fn mant_mandoc_table_rule_cell_snapshot(
         document: *const CDocument,
         cell: *const CTableRuleCell,
         view: *mut CTableRuleCellView,
+        view_size: usize,
     ) -> i32;
     #[cfg(feature = "render")]
     pub(super) fn mant_mandoc_document_output(document: *const CDocument) -> *const u8;

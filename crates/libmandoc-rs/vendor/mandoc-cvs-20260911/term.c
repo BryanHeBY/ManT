@@ -33,15 +33,233 @@
 #include "main.h"
 
 static	size_t		 cond_width(const struct termp *, int, int *);
-static	void		 adjbuf(struct termp_col *, size_t);
+static	int		 adjbuf(struct termp *, struct termp_col *, size_t);
 static	void		 bufferc(struct termp *, char);
+static	void		 buffer_store(struct termp *, size_t, int, int, int);
+static	void		 buffer_append(struct termp *, int, int);
 static	void		 directc(struct termp *, int);
 static	void		 encode(struct termp *, const char *, size_t);
 static	void		 encode1(struct termp *, int);
 static	void		 endline(struct termp *);
 static	void		 term_field(struct termp *, size_t, size_t);
 static	void		 term_fill(struct termp *, size_t *, size_t *,
-				size_t);
+			    size_t);
+
+void
+term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
+{
+	p->exec_ops = ops;
+	p->exec_arg = arg;
+	p->exec_failed = 0;
+	p->exec_write_role = 4;
+	p->exec_fragment_role = TERM_EXEC_FRAGMENT_CONTENT;
+}
+
+int
+term_exec_failed(const struct termp *p)
+{
+	return p->exec_failed;
+}
+
+#define TERM_EXEC_CALL(p, member, ...) \
+	do { \
+		if ((p)->exec_failed) \
+			return 0; \
+		if ((p)->exec_ops != NULL && (p)->exec_ops->member != NULL && \
+		    !(p)->exec_ops->member((p)->exec_arg, (p), \
+		    (p)->exec_node, __VA_ARGS__)) { \
+			(p)->exec_failed = 1; \
+			return 0; \
+		} \
+		return 1; \
+	} while (0)
+
+#define TERM_EXEC_CALL0(p, member) \
+	do { \
+		if ((p)->exec_failed) \
+			return 0; \
+		if ((p)->exec_ops != NULL && (p)->exec_ops->member != NULL && \
+		    !(p)->exec_ops->member((p)->exec_arg, (p), \
+		    (p)->exec_node)) { \
+			(p)->exec_failed = 1; \
+			return 0; \
+		} \
+		return 1; \
+	} while (0)
+
+int
+term_exec_node(struct termp *p, const struct roff_node *node, int entering)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (entering && p->exec_ops->node_enter != NULL &&
+	    !p->exec_ops->node_enter(p->exec_arg, p, node))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->node_leave != NULL &&
+	    !p->exec_ops->node_leave(p->exec_arg, p, node))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_word(struct termp *p, const char *word, size_t length, int entering)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (entering && p->exec_ops->word_begin != NULL &&
+	    !p->exec_ops->word_begin(p->exec_arg, p, p->exec_node,
+	    word, length, &p->exec_write_role))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->word_end != NULL &&
+	    !p->exec_ops->word_end(p->exec_arg, p, p->exec_node))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_buffer_write(struct termp *p, size_t slot, int scalar,
+    int stored, int role)
+{
+	TERM_EXEC_CALL(p, buffer_write, slot, scalar, stored, role);
+}
+
+int
+term_exec_buffer_reserve(struct termp *p, size_t before, size_t after)
+{
+	TERM_EXEC_CALL(p, buffer_reserve, before, after);
+}
+
+int
+term_exec_buffer_rewrite(struct termp *p, size_t slot, int scalar)
+{
+	TERM_EXEC_CALL(p, buffer_rewrite, slot, scalar);
+}
+
+int
+term_exec_buffer_discard(struct termp *p, size_t start, size_t end,
+    int disposition)
+{
+	TERM_EXEC_CALL(p, buffer_discard, start, end, disposition);
+}
+
+int
+term_exec_buffer_reset(struct termp *p)
+{
+	TERM_EXEC_CALL0(p, buffer_reset);
+}
+
+int
+term_exec_flush(struct termp *p, int entering)
+{
+	if (entering)
+		TERM_EXEC_CALL0(p, flush_begin);
+	TERM_EXEC_CALL0(p, flush_end);
+}
+
+int
+term_exec_fill_scan(struct termp *p, size_t slot)
+{
+	TERM_EXEC_CALL(p, fill_scan, slot);
+}
+
+int
+term_exec_fill_decision(struct termp *p, size_t scan_end, size_t accepted,
+    size_t content_width, size_t target_width)
+{
+	TERM_EXEC_CALL(p, fill_decision, scan_end, accepted,
+	    content_width, target_width);
+}
+
+int
+term_exec_fill_outcome(struct termp *p, int outcome)
+{
+	TERM_EXEC_CALL(p, fill_outcome, outcome);
+}
+
+int
+term_exec_field(struct termp *p, int phase, size_t leading, size_t accepted,
+    size_t visual)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (phase == 0 && p->exec_ops->field_begin != NULL &&
+	    !p->exec_ops->field_begin(p->exec_arg, p, p->exec_node,
+	    leading, accepted, visual))
+		p->exec_failed = 1;
+	else if (phase != 0 && p->exec_ops->field_end != NULL &&
+	    !p->exec_ops->field_end(p->exec_arg, p, p->exec_node,
+	    leading, accepted, visual))
+		p->exec_failed = 1;
+	if (phase != 0)
+		p->exec_field_active = 0;
+	return !p->exec_failed;
+}
+
+int
+term_exec_field_atom(struct termp *p, size_t slot, int scalar)
+{
+	p->exec_field_slot = slot;
+	p->exec_field_active = 1;
+	TERM_EXEC_CALL(p, field_atom, slot, scalar);
+}
+
+int
+term_exec_boundary(struct termp *p, int request, int entering)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops == NULL)
+		return 1;
+	if (request < 1 || request > 3)
+		p->exec_failed = 1;
+	else if (entering && p->exec_ops->boundary_enter != NULL &&
+	    !p->exec_ops->boundary_enter(p->exec_arg, p, p->exec_node,
+	    request))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->boundary_leave != NULL &&
+	    !p->exec_ops->boundary_leave(p->exec_arg, p, p->exec_node,
+	    request))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_device_advance(struct termp *p, size_t requested, size_t before,
+    size_t after)
+{
+	TERM_EXEC_CALL(p, device_advance, requested, before, after);
+}
+
+int
+term_exec_device_letter(struct termp *p, size_t slot, int scalar,
+    size_t before, size_t after)
+{
+	TERM_EXEC_CALL(p, device_letter, slot, scalar, before, after);
+}
+
+int
+term_exec_device_endline(struct termp *p, size_t line_before,
+    size_t line_after, size_t visual_before, size_t visual_after)
+{
+	TERM_EXEC_CALL(p, device_endline, line_before, line_after,
+	    visual_before, visual_after);
+}
+
+int
+term_exec_font(struct termp *p, int before, int after,
+    size_t depth_before, size_t depth_after)
+{
+	TERM_EXEC_CALL(p, font, before, after, depth_before, depth_after);
+}
+
+#undef TERM_EXEC_CALL
+#undef TERM_EXEC_CALL0
 
 
 void
@@ -110,6 +328,8 @@ term_flushln(struct termp *p)
 	 * NOPAD flag, start writing at the current position instead.
 	 */
 
+	if (!term_exec_flush(p, 1))
+		return;
 	vbl = (p->flags & TERMP_NOPAD) || p->tcol->offset < p->viscol ?
 	    0 : p->tcol->offset - p->viscol;
 	if (p->minbl > 0 && vbl < term_len(p, p->minbl))
@@ -142,8 +362,14 @@ term_flushln(struct termp *p)
 
 		term_fill(p, &nbr, &vbr,
 		    p->flags & TERMP_BRNEVER ? SIZE_MAX / 2 : vtarget);
-		if (nbr == 0)
+		if (term_exec_failed(p))
+			return;
+		term_exec_fill_decision(p, p->tcol->lastcol, nbr, vbr,
+		    vtarget);
+		if (nbr == 0) {
+			term_exec_fill_outcome(p, 1);
 			break;
+		}
 
 		/*
 		 * With the CENTER or RIGHT flag, increase the indentation
@@ -160,7 +386,11 @@ term_flushln(struct termp *p)
 
 		/* Finally, print the field content. */
 
+		term_exec_field(p, 0, vbl, nbr, p->viscol);
 		term_field(p, vbl, nbr);
+		term_exec_field(p, 1, vbl, nbr, p->viscol);
+		if (term_exec_failed(p))
+			return;
 		if (vbr < vtarget)
 			p->tcol->taboff += vbr;
 		else
@@ -194,17 +424,23 @@ term_flushln(struct termp *p)
 			}
 			break;
 		}
-		if (ic == p->tcol->lastcol)
+		if (ic == p->tcol->lastcol) {
+			term_exec_fill_outcome(p, 2);
 			break;
+		}
 
 		/*
 		 * At the location of an automatic line break, input
 		 * space characters are consumed by the line break.
 		 */
 
+		ic = p->tcol->col;
 		while (p->tcol->col < p->tcol->lastcol &&
 		    p->tcol->buf[p->tcol->col] == ' ')
 			p->tcol->col++;
+		if (p->tcol->col != ic &&
+		    !term_exec_buffer_discard(p, ic, p->tcol->col, 3))
+			return;
 
 		/*
 		 * In multi-column mode, leave the rest of the text
@@ -214,9 +450,13 @@ term_flushln(struct termp *p)
 		 * In single-column mode, simply break the line.
 		 */
 
-		if (p->flags & TERMP_MULTICOL)
+		if (p->flags & TERMP_MULTICOL) {
+			term_exec_fill_outcome(p, 4);
+			term_exec_flush(p, 0);
 			return;
+		}
 
+		term_exec_fill_outcome(p, 3);
 		endline(p);
 
 		/*
@@ -232,6 +472,8 @@ term_flushln(struct termp *p)
 
 	/* Reset output state in preparation for the next field. */
 
+	if (!term_exec_buffer_reset(p))
+		return;
 	p->col = p->tcol->col = p->tcol->lastcol = 0;
 	p->minbl = p->trailspace;
 	p->flags &= ~(TERMP_BACKAFTER | TERMP_BACKBEFORE | TERMP_NOPAD);
@@ -251,6 +493,7 @@ term_flushln(struct termp *p)
 	    ((p->flags & TERMP_NOBREAK) == 0 ||
 	     vbr + term_len(p, p->trailspace) > vfield + term_len(p, 1) / 2))
 		endline(p);
+	term_exec_flush(p, 0);
 }
 
 /*
@@ -279,6 +522,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
 	enw = (*p->getwidth)(p, ' ');
 	vtarget += enw / 2;
 	for (ic = p->tcol->col; ic < p->tcol->lastcol; ic++) {
+		if (!term_exec_fill_scan(p, ic))
+			return;
 		switch (p->tcol->buf[ic]) {
 		case '\b':  /* Escape \o (overstrike) or backspace markup. */
 			assert(ic > 0);
@@ -314,6 +559,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
 			 * hyphen such that we get the correct width.
 			 */
 			p->tcol->buf[ic] = '-';
+			if (!term_exec_buffer_rewrite(p, ic, '-'))
+				return;
 			vis += (*p->getwidth)(p, '-');
 			if (vis > vtarget) {
 				ic++;
@@ -341,6 +588,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
 				break;
 			case ASCII_NBRSP:  /* Non-breakable space. */
 				p->tcol->buf[ic] = ' ';
+				if (!term_exec_buffer_rewrite(p, ic, ' '))
+					return;
 				/* FALLTHROUGH */
 			default:  /* Printable character. */
 				vis += (*p->getwidth)(p, p->tcol->buf[ic]);
@@ -381,10 +630,15 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 	int	 taboff; /* Temporary offset for literal tabs. */
 
 	size_t	 ic;	/* Byte position in the input buffer. */
+	size_t	 pending;	/* First pending whitespace byte. */
+	size_t	 before;	/* Device position before one glyph. */
 
 	vis = 0;
+	pending = SIZE_MAX;
 	taboff = p->tcol->taboff;
 	for (ic = p->tcol->col; ic < nbr; ic++) {
+		if (!term_exec_field_atom(p, ic, p->tcol->buf[ic]))
+			return;
 
 		/*
 		 * To avoid the printing of trailing whitespace,
@@ -395,8 +649,12 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 		case '\n':
 		case ASCII_BREAK:
 		case ASCII_NBRZW:
+			if (!term_exec_buffer_discard(p, ic, ic + 1, 3))
+				return;
 			continue;
 		case ASCII_TABREF:
+			if (!term_exec_buffer_discard(p, ic, ic + 1, 3))
+				return;
 			taboff = -vis - (*p->getwidth)(p, ' ');
 			continue;
 		case '\t':
@@ -412,6 +670,8 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 				dv = (*p->getwidth)(p, ' ');
 			vbl += dv;
 			vis += dv;
+			if (pending == SIZE_MAX)
+				pending = ic;
 			continue;
 		default:
 			break;
@@ -424,11 +684,18 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 
 		if (vbl > 0) {
 			(*p->advance)(p, vbl);
+			if (term_exec_failed(p))
+				return;
+			if (pending != SIZE_MAX &&
+			    !term_exec_buffer_discard(p, pending, ic, 2))
+				return;
+			pending = SIZE_MAX;
 			vbl = 0;
 		}
 
 		/* Print the character and adjust the visual position. */
 
+		before = p->viscol;
 		(*p->letter)(p, p->tcol->buf[ic]);
 		if (p->tcol->buf[ic] == '\b') {
 			dv = (*p->getwidth)(p, p->tcol->buf[ic - 1]);
@@ -439,7 +706,13 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 			p->viscol += dv;
 			vis += dv;
 		}
+		if (!term_exec_device_letter(p, ic, p->tcol->buf[ic],
+		    before, p->viscol))
+			return;
 	}
+	if (pending != SIZE_MAX &&
+	    !term_exec_buffer_discard(p, pending, nbr, 5))
+		return;
 	p->tcol->col = nbr;
 }
 
@@ -450,6 +723,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 static void
 endline(struct termp *p)
 {
+	int fragment_role;
+
+	if (!term_exec_boundary(p, 3, 1))
+		return;
 	if ((p->flags & (TERMP_NEWMC | TERMP_ENDMC)) == TERMP_ENDMC) {
 		p->mc = NULL;
 		p->flags &= ~TERMP_ENDMC;
@@ -459,10 +736,14 @@ endline(struct termp *p)
 			(*p->advance)(p,
 			    p->maxrmargin - p->viscol + term_len(p, 1));
 		p->flags |= TERMP_NOBUF | TERMP_NOSPACE;
+		fragment_role = p->exec_fragment_role;
+		p->exec_fragment_role = TERM_EXEC_FRAGMENT_MARGIN;
 		term_word(p, p->mc);
+		p->exec_fragment_role = fragment_role;
 		p->flags &= ~(TERMP_NOBUF | TERMP_NEWMC);
 	}
 	(*p->endline)(p);
+	term_exec_boundary(p, 3, 0);
 }
 
 /*
@@ -473,10 +754,13 @@ endline(struct termp *p)
 void
 term_newln(struct termp *p)
 {
+	if (!term_exec_boundary(p, 1, 1))
+		return;
 	p->flags |= TERMP_NOSPACE;
 	if (p->tcol->lastcol || p->viscol)
 		term_flushln(p);
 	p->tcol->taboff = 0;
+	term_exec_boundary(p, 1, 0);
 }
 
 /*
@@ -488,12 +772,16 @@ term_newln(struct termp *p)
 void
 term_vspace(struct termp *p)
 {
-
+	if (!term_exec_boundary(p, 2, 1))
+		return;
 	term_newln(p);
+	if (term_exec_failed(p))
+		return;
 	if (0 < p->skipvsp)
 		p->skipvsp--;
 	else
 		(*p->endline)(p);
+	term_exec_boundary(p, 2, 0);
 }
 
 /* Swap current and previous font; for \fP and .ft P */
@@ -501,20 +789,27 @@ void
 term_fontlast(struct termp *p)
 {
 	enum termfont	 f;
+	enum termfont	 before;
 
+	before = p->fontq[p->fonti];
 	f = p->fontl;
 	p->fontl = p->fontq[p->fonti];
 	p->fontq[p->fonti] = f;
+	term_exec_font(p, before, f, p->fonti, p->fonti);
 }
 
 /* Set font, save current, discard previous; for \f, .ft, and man(7). */
 void
 term_fontrepl(struct termp *p, enum termfont f)
 {
+	enum termfont before;
+
+	before = p->fontq[p->fonti];
 	p->fontl = p->fontq[p->fonti];
 	if (p->fontibi && f == TERMFONT_UNDER)
 		f = TERMFONT_BI;
 	p->fontq[p->fonti] = f;
+	term_exec_font(p, before, f, p->fonti, p->fonti);
 }
 
 /* Set font, save previous; for mdoc(7), eqn(7), and tbl(7). */
@@ -522,32 +817,49 @@ void
 term_fontpush(struct termp *p, enum termfont f)
 {
 	enum termfont	 fl;
+	size_t		 before;
 
 	fl = p->fontq[p->fonti];
+	before = p->fonti;
 	if (++p->fonti == p->fontsz) {
 		p->fontsz += 8;
 		p->fontq = mandoc_reallocarray(p->fontq,
 		    p->fontsz, sizeof(*p->fontq));
 	}
-	p->fontq[p->fonti] = fl;
-	term_fontrepl(p, f);
+	p->fontl = fl;
+	if (p->fontibi && f == TERMFONT_UNDER)
+		f = TERMFONT_BI;
+	p->fontq[p->fonti] = f;
+	term_exec_font(p, fl, f, before, p->fonti);
 }
 
 /* Flush to make the saved pointer current again. */
 void
 term_fontpopq(struct termp *p, int i)
 {
+	enum termfont before;
+	size_t depth;
+
 	assert(i >= 0);
+	before = p->fontq[p->fonti];
+	depth = p->fonti;
 	if (p->fonti > i)
 		p->fonti = i;
+	term_exec_font(p, before, p->fontq[p->fonti], depth, p->fonti);
 }
 
 /* Pop one font off the stack. */
 void
 term_fontpop(struct termp *p)
 {
+	enum termfont before;
+	size_t depth;
+
 	assert(p->fonti > 0);
+	before = p->fontq[p->fonti];
+	depth = p->fonti;
 	p->fonti--;
+	term_exec_font(p, before, p->fontq[p->fonti], depth, p->fonti);
 }
 
 /*
@@ -570,14 +882,18 @@ term_word(struct termp *p, const char *word)
 	int		 bu;		/* Width in basic units. */
 	enum mandoc_esc	 esc;
 
+	if (!term_exec_word(p, word, strlen(word), 1))
+		return;
 	if ((p->flags & TERMP_NOBUF) == 0) {
 		if ((p->flags & TERMP_NOSPACE) == 0) {
+			p->exec_write_role = 2;
 			if ((p->flags & TERMP_KEEP) == 0) {
 				bufferc(p, ' ');
 				if (p->flags & TERMP_SENTENCE)
 					bufferc(p, ' ');
 			} else
 				bufferc(p, ASCII_NBRSP);
+			p->exec_write_role = 1;
 		}
 		if (p->flags & TERMP_PREKEEP)
 			p->flags |= TERMP_KEEP;
@@ -590,6 +906,8 @@ term_word(struct termp *p, const char *word)
 	}
 
 	while ('\0' != *word) {
+		if (term_exec_failed(p))
+			return;
 		if ('\\' != *word) {
 			if (TERMP_NBRWORD & p->flags) {
 				if (' ' == *word) {
@@ -789,8 +1107,12 @@ term_word(struct termp *p, const char *word)
 			/* Trim trailing backspace/blank pair. */
 			if (p->tcol->lastcol > 2 &&
 			    (p->tcol->buf[p->tcol->lastcol - 1] == ' ' ||
-			     p->tcol->buf[p->tcol->lastcol - 1] == '\t'))
+			     p->tcol->buf[p->tcol->lastcol - 1] == '\t')) {
+				if (!term_exec_buffer_discard(p,
+				    p->tcol->lastcol - 2, p->tcol->lastcol, 5))
+					return;
 				p->tcol->lastcol -= 2;
+			}
 			if (p->col > p->tcol->lastcol)
 				p->col = p->tcol->lastcol;
 			continue;
@@ -817,16 +1139,29 @@ term_word(struct termp *p, const char *word)
 		}
 	}
 	p->flags &= ~TERMP_NBRWORD;
+	term_exec_word(p, NULL, 0, 0);
+	p->exec_write_role = 4;
 }
 
-static void
-adjbuf(struct termp_col *c, size_t sz)
+static int
+adjbuf(struct termp *p, struct termp_col *c, size_t sz)
 {
+	size_t before;
+
+	before = c->maxcols;
 	if (c->maxcols == 0)
 		c->maxcols = 1024;
-	while (c->maxcols <= sz)
+	while (c->maxcols <= sz) {
+		if (c->maxcols > SIZE_MAX >> 2)
+			return 0;
 		c->maxcols <<= 2;
+	}
+	if (!term_exec_buffer_reserve(p, before, c->maxcols)) {
+		c->maxcols = before;
+		return 0;
+	}
 	c->buf = mandoc_reallocarray(c->buf, c->maxcols, sizeof(*c->buf));
+	return 1;
 }
 
 /*
@@ -838,6 +1173,8 @@ adjbuf(struct termp_col *c, size_t sz)
 static void
 directc(struct termp *p, int c)
 {
+	size_t before;
+
 	switch (c) {
 	case ASCII_BREAK:
 	case ASCII_NBRZW:
@@ -851,7 +1188,9 @@ directc(struct termp *p, int c)
 	default:
 		break;
 	}
+	before = p->viscol;
 	(*p->letter)(p, c);
+	term_exec_device_letter(p, SIZE_MAX, c, before, p->viscol);
 }
 
 static void
@@ -861,12 +1200,37 @@ bufferc(struct termp *p, char c)
 		directc(p, c);
 		return;
 	}
-	if (p->col + 1 >= p->tcol->maxcols)
-		adjbuf(p->tcol, p->col + 1);
-	if (p->tcol->lastcol <= p->col || (c != ' ' && c != ASCII_NBRSP))
-		p->tcol->buf[p->col] = c;
+	if (p->col + 1 >= p->tcol->maxcols &&
+	    !adjbuf(p, p->tcol, p->col + 1))
+		return;
+	buffer_store(p, p->col, (unsigned char)c, p->exec_write_role, 1);
 	if (p->tcol->lastcol < ++p->col)
 		p->tcol->lastcol = p->col;
+}
+
+/*
+ * Keep the provenance observer on the exact mutation path.  Conditional
+ * stores intentionally report a non-store so the sidecar retains the atom
+ * already occupying that buffer slot.
+ */
+static void
+buffer_store(struct termp *p, size_t slot, int scalar, int role,
+    int conditional)
+{
+	int stored;
+
+	stored = !conditional || p->tcol->lastcol <= slot ||
+	    (scalar != ' ' && scalar != ASCII_NBRSP);
+	if (stored)
+		p->tcol->buf[slot] = scalar;
+	term_exec_buffer_write(p, slot, scalar, stored, role);
+}
+
+static void
+buffer_append(struct termp *p, int scalar, int role)
+{
+	buffer_store(p, p->col, scalar, role, 0);
+	p->col++;
 }
 
 void
@@ -892,8 +1256,9 @@ encode1(struct termp *p, int c)
 		return;
 	}
 
-	if (p->col + 7 >= p->tcol->maxcols)
-		adjbuf(p->tcol, p->col + 7);
+	if (p->col + 7 >= p->tcol->maxcols &&
+	    !adjbuf(p, p->tcol, p->col + 7))
+		return;
 
 	f = (c == ASCII_HYPH || c > 127 || isgraph(c)) ?
 	    p->fontq[p->fonti] : TERMFONT_NONE;
@@ -903,22 +1268,21 @@ encode1(struct termp *p, int c)
 		    p->tcol->buf[p->col - 1] == '\t')
 			p->col--;
 		else
-			p->tcol->buf[p->col++] = '\b';
+			buffer_append(p, '\b', 3);
 		p->flags &= ~TERMP_BACKBEFORE;
 	}
 	if (f == TERMFONT_UNDER || f == TERMFONT_BI) {
-		p->tcol->buf[p->col++] = '_';
-		p->tcol->buf[p->col++] = '\b';
+		buffer_append(p, '_', 3);
+		buffer_append(p, '\b', 3);
 	}
 	if (f == TERMFONT_BOLD || f == TERMFONT_BI) {
 		if (c == ASCII_HYPH)
-			p->tcol->buf[p->col++] = '-';
+			buffer_append(p, '-', 3);
 		else
-			p->tcol->buf[p->col++] = c;
-		p->tcol->buf[p->col++] = '\b';
+			buffer_append(p, c, 3);
+		buffer_append(p, '\b', 3);
 	}
-	if (p->tcol->lastcol <= p->col || (c != ' ' && c != ASCII_NBRSP))
-		p->tcol->buf[p->col] = c;
+	buffer_store(p, p->col, c, p->exec_write_role, 1);
 	if (p->tcol->lastcol < ++p->col)
 		p->tcol->lastcol = p->col;
 	if (p->flags & TERMP_BACKAFTER) {
@@ -938,17 +1302,18 @@ encode(struct termp *p, const char *word, size_t sz)
 		return;
 	}
 
-	if (p->col + 2 + (sz * 5) >= p->tcol->maxcols)
-		adjbuf(p->tcol, p->col + 2 + (sz * 5));
+	if (sz > (SIZE_MAX - p->col - 2) / 5 ||
+	    (p->col + 2 + sz * 5 >= p->tcol->maxcols &&
+	    !adjbuf(p, p->tcol, p->col + 2 + sz * 5)))
+		return;
 
 	for (i = 0; i < sz; i++) {
 		if (ASCII_HYPH == word[i] ||
 		    isgraph((unsigned char)word[i]))
 			encode1(p, word[i]);
 		else {
-			if (p->tcol->lastcol <= p->col ||
-			    (word[i] != ' ' && word[i] != ASCII_NBRSP))
-				p->tcol->buf[p->col] = word[i];
+			buffer_store(p, p->col, (unsigned char)word[i],
+			    p->exec_write_role, 1);
 			p->col++;
 
 			/*

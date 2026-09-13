@@ -264,6 +264,10 @@ pub struct NodeFlags {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Node {
+    /// Report-local key assigned when this tree was copied together with a
+    /// native execution report. Ordinary parse-only trees have no key.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub execution_node_key: Option<u32>,
     /// Structural role of this node in the libmandoc tree.
     pub kind: NodeKind,
     /// Source macro name, without the leading dot, when applicable.
