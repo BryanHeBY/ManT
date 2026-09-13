@@ -530,6 +530,31 @@ Treat its timing as comparative local evidence rather than a stable CI
 threshold; sanitizer and semantic regression tests remain the correctness
 gates.
 
+For changes to the staged native execution boundary, keep its finite checkpoint
+separate from production lowering and run the relevant feature combinations in
+the repository target directory:
+
+```sh
+cargo test --locked -p libmandoc-rs --no-default-features --features execute
+cargo test --locked -p libmandoc-rs --no-default-features --features render
+cargo test --locked -p libmandoc-rs --no-default-features --features execute,render
+cargo test --locked -p libmandoc-rs --all-features
+cargo test --locked -p mant-codec --all-features
+cargo test --locked --release -p libmandoc-rs --no-default-features --features execute,render
+cargo clippy --locked -p libmandoc-rs -p mant-codec --all-targets --all-features -- -D warnings
+bash scripts/check-libmandoc-symbols.sh
+crates/libmandoc-rs/scripts/sync-vendor --verify --archive /path/to/pinned-cvs.tar.gz
+```
+
+Behavioral fixture expectations must first be run as complete documents through
+the fixed, unpatched CVS reference. Record its source manifest and binary hash,
+the input bytes, width/profile, and whether ManT deliberately follows CVS when
+groff differs. Execution tests then assert both the typed native report and its
+private codec consumer; an AST-only assertion or matching visible string cannot
+prove ownership, source ranges, table interleaving, or cleanup. Freeze the final
+candidate diff before the native, FFI/safety, and projection reviewers inspect
+the same fingerprint. A prior PASS does not cover later edits.
+
 When changing a versioned IR projection or protocol type, update the Rust contract,
 generated-schema, process, and projection tests in the same change. External
 stdio remains a closed boundary: unknown request fields and incompatible

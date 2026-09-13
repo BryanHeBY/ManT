@@ -400,6 +400,83 @@ through a per-call output sink. These are library capabilities, not a second
 ManT rendering path: `mant-codec` consumes the owned parser tree, while
 `mant-render` reports and the UI render the resulting shared source-neutral IR.
 
+#### Native execution migration checkpoint
+
+The S1 checkpoint adds a staged execution path without changing the production
+lowering selection. It parses and executes a caller-owned root exactly once in
+the pinned native session, copies one matching owned AST plus a typed execution
+report, releases all per-call C document and report storage, and lets a private
+codec projection consume only owned values. Public roff loading still uses the
+established AST lowering until the later atomic switch. There is no
+document-dependent choice between the two executors and no fallback from a
+failed native report to the old formatter.
+
+The implemented source-to-interface chain is:
+
+| Fixed upstream source | Observed fact | Owned/private interface |
+| --- | --- | --- |
+| `roff.h` and the finalized syntax tree | node identity, parentage, source coordinates and normalized roles | `ExecutionNode` keys paired with the owned `Document` |
+| `term.c` | buffer generations, atoms, partial flush ranges, boundaries, fixed-device geometry and state wrappers | typed vectors and checked `PoolRange` values in `NativeExecutionReport` |
+| `man_term.c` and `mdoc_term.c` | definition head/body ownership, fonts, references and target attachment | codec-owned visible runs, definitions, references and anchors |
+| `tbl_term.c` | table/row/cell topology, data ownership and interleaved cell flushes | bounded execution table records and private `mant-ir::Block::Table` projection |
+| private shim and `ffi::execution` | C discriminants, slice counts, ranges and report status | validated Rust enums/vectors; no borrowed pointer escapes the call |
+
+Current coverage is deliberately finite: ordinary man/mdoc prose, tag/hang
+definitions, partial flushes, font changes, nested manual/URI references,
+zero-width target attachment, and representative multi-column tables have
+end-to-end fixtures. Table rules, empty cells, spans, cell-local hard breaks,
+and the explicit data spelling `\^` have focused transfer or projection checks.
+`T&` and the layout `^` spelling currently have AST coverage only and remain
+execution/projection work. This is not yet the complete production table
+lowering. Include-enabled sessions, executed `.so` requests, and equations
+return `Unsupported`; a false conditional branch containing `.so` does not
+execute the request and therefore does not trip that rejection. Later stages
+must add include and equation provenance and cleanup contracts before enabling
+them. General macro, escape, list, synopsis, display, table, and equation
+coverage, responsive IR constraints, consumer migration, legacy-executor
+deletion, and corpus audits remain work rather than implicit support.
+
+The checkpoint applies the six migration decisions as follows:
+
+| Decision | S1 status |
+| --- | --- |
+| D01 deterministic device | Native execution uses the pinned locale-independent UTF-8 terminal at 78 columns and default indent 5. Reference fixtures were also inspected at 32 and 120 columns; responsive readers still need the later source-neutral layout work and never re-execute roff on resize. |
+| D02 execution protocol | Native handlers produce bounded typed records and one byte pool; Rust validates and owns them before codec projection. Native code does not manufacture ManT layout constraints. |
+| D03 native route | Observation hooks run inside the existing CVS traversal and `termp` implementation. No Rust formatter or parsed terminal-text route is added to this staged path. |
+| D04 atomic migration | K03-K05 are private checkpoints. Production remains wholly on the old path until the planned one-time switch. |
+| D05 failure and cleanup | Node/depth/work/record/pool/buffer limits fail atomically. Native table-budget integration tests verify cleanup and a subsequent call; pure Rust malformed-report tests separately prove safe rejection of bad layouts, discriminants, keys, ranges and relationships, not native-session recovery. Broader cancellation and all later feature paths remain to be proven. |
+| D06 ABI and licensing | C views have checked size/alignment/offset and slice/range validation, private discriminant mapping, prefixed symbols, replayable patches, and contemporaneous notices. Debug/release execute-only and execute+render transfer paths are exercised. |
+
+The default execution limits are 1,000,000 nodes, depth 256, 16,000,000 work
+units, 4,000,000 records, a 16 MiB pool, and 1,000,000 native buffer cells.
+They bound native work and storage independently. Transfer first bulk-copies C
+arrays into temporary raw Rust record vectors and the byte pool, then validates
+and converts them into final owned vectors. Unconverted raw arrays and the
+growing final report overlap; paths, macro names, and fragment atom membership
+also allocate outside the retained pool. During this window the prepared source
+and C tree/report remain live. All per-call C document and report storage is
+freed before codec projection, whose IR materialization has its own
+consumer-owned cost.
+
+This checkpoint has not isolated per-phase allocator usage or peak RSS. Its
+reproducible memory evidence is limited to report counts, pool length, charged
+buffer cells, configured ceilings, and the copy topology above; a measured
+parse/execute/transfer/release/projection baseline remains an explicit
+pre-switch performance task. The fixed reference binary used for behavioral
+expectations has SHA-256
+`f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59`.
+Representative fixture hashes are:
+
+| Fixture | SHA-256 |
+| --- | --- |
+| `plain-man.1` | `07e0debad1c24544e651126e7e109331854d14db357408f9ce61c43c141c8cd3` |
+| `plain-mdoc.1` | `61dabe4b1adbf8deded45500eaca36db09b21c506cfa01e5bff31a27d5550e26` |
+| `annotated-man.1` | `d082f97afbfdd3bb88bdbd2cb558a0cf4deefa0d67132368dedda71ed29c8f0b` |
+| `annotated-mdoc.1` | `d16222f47918daa334cb9fd5225939f0d2c345a888a048fa081fa97f14818c71` |
+| `native-execution-table-matrix.1` | `2f3def9c96f50b46da630db626b8ca79b17ff87e6d7dd3155577c75d63606174` |
+| `native-execution-table-interleaving.1` | `dc8bde130be25a2b15f9c334c3606ffb6834fdcd859fac608fb6a0b91660ff1b` |
+| `native-execution-table-vertical-continuation.1` | `a4138d01ac21268ed1ea985e6604e6ca28a9c60ab849ebd62841c025497e64be` |
+
 The active libmandoc baseline is the fixed mandoc `cvs-20260911` snapshot,
 checked out at 2026-09-11 08:00:00 UTC and recorded by a checksummed per-file
 CVS revision manifest. Remaining mutable character, diagnostic, tag,

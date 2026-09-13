@@ -21,6 +21,8 @@ to depend on libmandoc's private C structures or parser lifetime.
 - An optional `execute` feature exposing one bounded, pointer-free report of
   the pinned terminal executor's sources, nodes, buffer generations, atoms,
   fragments, flushes, boundaries, geometry, wrappers, anchors, and findings.
+  Typed table, row, and cell records retain authored payload ownership apart
+  from device-generated padding and rules.
 - An optional `render` feature exposing bounded upstream ASCII, deterministic
   UTF-8, and HTML reference output without writing to process standard output.
 
@@ -29,11 +31,13 @@ locate system manual pages, interpret application-specific section models, or
 run a pager. `Parser::execute_bytes` parses and traverses one caller-owned root
 buffer in the same native session at a fixed 78-column terminal profile, then
 returns matching owned AST and sealed execution facts. This first execution
-boundary rejects includes, tables, and equations before traversal rather than
-returning a partial report. The optional reference renderers likewise format
-the native tree in the same call that parses it. Neither feature turns the
-owned Rust AST into a second document model, and `ManT`'s production lowering
-remains unchanged until the native-execution migration is complete.
+boundary rejects includes and equations before terminal traversal rather than
+returning a partial report. It accepts bounded native tables and reports their
+typed topology and cell-local execution. The optional reference renderers
+likewise format the native tree in the same call that parses it. Neither
+feature turns the owned Rust AST into a second document model, and `ManT`'s
+production lowering remains unchanged until the native-execution migration is
+complete.
 
 ## Boundary model
 
@@ -82,6 +86,31 @@ snapshot and copied directly into the public Rust tree; no borrowed pointer
 escapes the call and no intermediate heap-owned C AST is materialized. The
 private parser handle is destroyed on the calling thread before `Parser`
 returns, while the returned report remains fully owned and freely movable.
+
+The transfer deliberately has one bounded synchronous copy window. The C
+record arrays are first bulk-copied into temporary `RawRecords` storage backed
+by `Vec<C...>` fields together with the byte pool, then validated and converted
+into the public owned vectors. During conversion, unconverted raw arrays
+coexist with the growing final report. Source paths and macro names are copied
+out of the pool into `PathBuf` and `String`, and fragment atom memberships use
+their own vectors; other byte payloads retain checked ranges into the shared
+immutable pool. The caller's prepared source, native syntax tree and C report
+also remain alive until the complete Rust AST/report has been built. All
+per-call C document and report storage is then released before the call
+returns, so later codec projection never consults C memory.
+
+This describes allocation ownership, not a measured peak-RSS baseline. The
+K03-K05 implementation records report counts, pool length, and charged buffer
+cells and enforces their limits, but did not separately instrument allocator or
+RSS peaks for each transfer phase. That measurement remains required before
+switching production lowering.
+
+`ExecutionLimits::default()` starts with independent ceilings of 1,000,000
+syntax nodes, depth 256, 16,000,000 charged work units, 4,000,000 typed
+records, a 16 MiB immutable byte pool, and 1,000,000 native buffer cells. A
+zero, unrepresentable, or exhausted limit fails the whole execution; it never
+returns a successful partial report. These are safety ceilings rather than a
+promise that ordinary inputs approach those allocations.
 
 Within that private boundary, `ffi::session` owns the native document drop
 guard and keeps bundle paths and source bytes alive for the call;
@@ -361,7 +390,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 28 ordered patches in `patches/series`. The following group contains
+the 29 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -437,6 +466,10 @@ The remaining patches implement the synchronous embedding boundary:
   hooks at the existing terminal traversal, buffer, fill, field, boundary, and
   device output points. It reports native execution facts without adding a
   second formatter or changing behavior when no observer is installed.
+- `0029-observe-native-table-execution.patch` extends the same observer through
+  the existing `tbl_term.c` traversal with bounded table, row, cell, and
+  authored-payload records. It preserves column interleaving as execution
+  evidence while keeping device padding and rule glyphs out of cell content.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

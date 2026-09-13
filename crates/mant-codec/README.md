@@ -41,8 +41,22 @@ have not passed whole-document representability checks.
 
 Native lowering internals live under `src/mandoc/`, behind the optional `roff`
 feature. Public entry points return the shared IR, not a second document model.
-The following boundaries keep source interpretation shared across prose,
-literal displays, lists and table recovery:
+Production currently remains on the existing owned-AST lowering until the
+native-execution migration reaches its single atomic switch. The private
+`native_execution` projection is the staged replacement seam: it consumes the
+AST and execution facts returned by one `libmandoc-rs::Parser::execute_bytes`
+call, performs no second parse or source replay, and cannot be selected as a
+per-page fallback by public entry points.
+
+At the S1 checkpoint that private seam projects ordinary man/mdoc visible
+lines, definition head/body ownership and partial flushes, font runs, nested
+manual/URI references, exact target attachments, and a bounded native table
+matrix. Its table projection keeps authored cell payload and topology while
+discarding device padding, border glyphs, and alternating column flush order.
+Include-enabled sessions, executed `.so` requests, and equations remain
+explicit unsupported execution inputs, and the general macro/tbl/eqn
+production migration remains unfinished. The following boundaries describe
+the current production implementation until that switch:
 
 | Responsibility | Owner and lifetime |
 | --- | --- |
