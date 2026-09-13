@@ -116,27 +116,38 @@ pub(in crate::mandoc) enum AuthorBreakEffect {
     },
 }
 
-/// A checkpoint for output that may be semantically annotated or discarded
-/// after it has executed. Formatter state deliberately remains live: a
-/// hidden operand can select a font or consume a `\\z` glyph even when its
-/// projected characters are not retained in Mant's compact presentation.
+/// An output transaction around source that must execute before its compact
+/// presentation is chosen.
 #[derive(Clone)]
-pub(in crate::mandoc) struct OutputCheckpoint {
+pub(in crate::mandoc) struct OutputTransaction {
+    rollback: OutputRollback,
+    inbound: InboundExecution,
+}
+
+/// State owned by the compacted output rather than the continuing formatter.
+///
+/// This includes queued presentation cells that must be rematerialized by a
+/// fallback after the hidden spelling is removed.  Formatter registers not
+/// listed here remain live by construction and cannot be accidentally reset
+/// when a new execution field is added to [`InlineBuilder`].
+#[derive(Clone)]
+struct OutputRollback {
     node_count: usize,
-    boundary: PendingBoundary,
     last_visible_character: Option<char>,
     has_printable_content: bool,
-    formatter_column: FormatterColumn,
-    empty_word: bool,
     trailing_output: TrailingOutput,
+    /// Padding queued solely for the spelling being compacted. A fallback
+    /// rematerializes this boundary explicitly; it is not persistent
+    /// formatter execution state.
     pending_breakable_spaces: usize,
     pending_field_spaces: usize,
-    pending_line_indent: usize,
-    pending_definition_indent: Option<usize>,
-    word_end_break: WordEndBreak,
-    keep: KeepState,
-    source_cursor: Option<super::source_cursor::SourceCursor>,
-    final_word_join: Option<bool>,
+}
+
+/// Execution facts at transaction entry.  Replacement output may consult
+/// them, but rollback never restores them: hidden source remains executed.
+#[derive(Clone, Copy)]
+struct InboundExecution {
+    boundary: PendingBoundary,
     final_source_continuation: Option<bool>,
 }
 

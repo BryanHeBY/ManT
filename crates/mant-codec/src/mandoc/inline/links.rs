@@ -30,7 +30,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         // `termp_lk_pre()` presents the label first, then its colon and URI,
         // regardless of source operand order. Preserve that execution order:
         // a hidden URI's controls must be applied after label controls.
-        let checkpoint = builder.output_checkpoint();
+        let checkpoint = builder.begin_output_transaction();
         builder.with_font_scope(Font::Emphasis, |builder| {
             append_inline_nodes(builder, label, default_name);
         });
@@ -41,7 +41,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
             // Controls in an empty or fully overstruck label still execute,
             // including source-line continuation.  Remove only its rendered
             // output before deciding whether the URI must become visible.
-            builder.discard_output_preserving_execution(checkpoint);
+            builder.discard_output_preserving_execution(&checkpoint);
         }
         // CVS `termp_lk_pre()` writes a generated colon between the
         // descriptive label and URI. Compact Mant output intentionally hides
@@ -104,22 +104,22 @@ fn execute_hidden_node(builder: &mut InlineBuilder, node: &Node, default_name: O
     // `TERMP_BACKAFTER` across `term_word()` calls; it does not retroactively
     // make the resolved glyph part of the later hidden word.
     builder.begin_word_projection(true);
-    let checkpoint = builder.output_checkpoint();
+    let checkpoint = builder.begin_output_transaction();
     builder.without_source_node_boundaries(|builder| {
         append_inline_node(builder, node, default_name);
     });
-    builder.discard_output_preserving_execution(checkpoint);
+    builder.discard_output_preserving_execution(&checkpoint);
     builder.zero_advance.discard_hidden_pending_glyph();
 }
 
 fn execute_hidden_generated_text(builder: &mut InlineBuilder, value: &str) {
-    let checkpoint = builder.output_checkpoint();
+    let checkpoint = builder.begin_output_transaction();
     // `termp_lk_pre()` sets TERMP_NOSPACE before it calls term_word(":").
     // The generated colon is hidden in compact output but still consumes the
     // exact formatter boundary established by a label or its `\\c` escape.
     builder.tighten_next_boundary();
     builder.append_text(value);
-    builder.discard_output_preserving_execution(checkpoint);
+    builder.discard_output_preserving_execution(&checkpoint);
 }
 
 fn append_link_target_or_text(
@@ -167,7 +167,7 @@ fn append_external_link(
 /// only known after `\\z` and generated colon projection have run.
 fn wrap_external_link_output(
     builder: &mut InlineBuilder,
-    checkpoint: &super::flow::OutputCheckpoint,
+    checkpoint: &super::flow::OutputTransaction,
     address: String,
 ) {
     builder.wrap_output_since(checkpoint, |children| {
@@ -329,7 +329,7 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
         builder.tighten_next_boundary();
         builder.append_generated_word("-");
         builder.tighten_next_boundary();
-        let checkpoint = builder.output_checkpoint();
+        let checkpoint = builder.begin_output_transaction();
         append_inline_node(builder, child, name);
         if !builder.output_since_has_non_whitespace_glyph(&checkpoint) {
             builder.consume_compacted_pending_padding();
@@ -343,7 +343,7 @@ fn execute_bsd_replacement(
     replacement: &str,
     default_name: Option<&str>,
 ) {
-    let checkpoint = builder.output_checkpoint();
+    let checkpoint = builder.begin_output_transaction();
     for node in nodes {
         append_inline_node(builder, node, default_name);
     }
