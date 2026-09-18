@@ -2,10 +2,10 @@
 
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryRequest, ExecutionCancellation,
-    ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionLimits,
-    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
-    ExecutionTableLayoutKind, ExecutionTableRowKind, FlushOutcome, FragmentRole, InputFormat,
-    NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
+    ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
+    ExecutionLimits, ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
+    ExecutionTableLayoutKind, ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome,
+    FragmentRole, InputFormat, NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -55,6 +55,8 @@ const REFERENCES_MAN: &[u8] = include_bytes!("fixtures/execution/references-man.
 const REFERENCES_MDOC: &[u8] = include_bytes!("fixtures/execution/references-mdoc.1");
 const WRAPPED_REFERENCE_MDOC: &[u8] = include_bytes!("fixtures/execution/wrapped-reference-mdoc.1");
 const NESTED_REFERENCE_MAN: &[u8] = include_bytes!("fixtures/execution/nested-reference-man.1");
+const HEADING_EXECUTION_MDOC: &[u8] = include_bytes!("fixtures/execution/heading-execution-mdoc.1");
+const HEADING_EXECUTION_MAN: &[u8] = include_bytes!("fixtures/execution/heading-execution-man.1");
 
 fn execute(name: &str, input_format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
@@ -1158,6 +1160,166 @@ fn reports_typed_reference_components_and_exact_label_intervals() {
         assert!(operands.contains(&b"3".as_slice()));
         assert!(!operands.contains(&b",".as_slice()));
     }
+}
+
+#[test]
+fn reports_sx_authored_identity_separately_from_executed_display() {
+    // Fixed CVS `html_make_id()` deroffs the authored `.Sx` phrase while
+    // `mdoc_term.c::termp_sm_pre()` independently removes display spacing.
+    // The exact fixture was checked with both the pinned UTF-8 and HTML
+    // renderers before this assertion was written: its href is
+    // `#NEXT_SECTION`, while its visible label is `NEXTSECTION`.
+    let report = execute(
+        "heading-execution-mdoc.1",
+        InputFormat::Mdoc,
+        HEADING_EXECUTION_MDOC,
+    );
+    let reference = report
+        .execution
+        .references()
+        .iter()
+        .find(|reference| reference.kind == ExecutionReferenceKind::SameDocumentSection)
+        .expect("native Sx reference");
+    assert_eq!(pool(&report.execution, reference.primary), b"NEXT SECTION");
+    assert_eq!(reference.secondary, None);
+    assert_eq!(
+        report.execution.nodes()[reference.owner_node.0 as usize]
+            .macro_name
+            .as_deref(),
+        Some("Sx")
+    );
+    assert_eq!(
+        report.execution.nodes()[reference.target_node.0 as usize].kind,
+        NodeKind::Text
+    );
+    let operands = report.execution.atoms()
+        [reference.atoms.start as usize..reference.atoms.end as usize]
+        .iter()
+        .filter_map(|atom| atom.operand)
+        .map(|range| pool(&report.execution, range))
+        .collect::<Vec<_>>();
+    assert!(operands.contains(&b"NEXT".as_slice()));
+    assert!(operands.contains(&b"SECTION".as_slice()));
+}
+
+#[test]
+fn reports_typed_heading_scopes_with_authored_phrases() {
+    for (name, format, source, expected) in [
+        (
+            "heading-execution-mdoc.1",
+            InputFormat::Mdoc,
+            HEADING_EXECUTION_MDOC,
+            vec![
+                (ExecutionHeadingKind::MdocSection, "NAME"),
+                (ExecutionHeadingKind::MdocSection, "Alice"),
+                (ExecutionHeadingKind::MdocSection, "$ Alice"),
+                (ExecutionHeadingKind::MdocSection, r"PARENT\fI"),
+                (ExecutionHeadingKind::MdocSubsection, r"CHILD\fI"),
+                (ExecutionHeadingKind::MdocSection, "NEXT SECTION"),
+                (ExecutionHeadingKind::MdocSection, "NEXTSECTION"),
+                (ExecutionHeadingKind::MdocSection, "AUTHORS"),
+                (ExecutionHeadingKind::MdocSection, "Alice"),
+                (ExecutionHeadingKind::MdocSection, "SPACING"),
+                (ExecutionHeadingKind::MdocSection, "NEXT"),
+                (ExecutionHeadingKind::MdocSection, "SEE ALSO"),
+            ],
+        ),
+        (
+            "heading-execution-man.1",
+            InputFormat::Man,
+            HEADING_EXECUTION_MAN,
+            vec![
+                (ExecutionHeadingKind::ManSection, "NAME"),
+                (ExecutionHeadingKind::ManSection, r"NEXT\fI"),
+                (ExecutionHeadingKind::ManSubsection, r"SUB\fI"),
+            ],
+        ),
+    ] {
+        let report = execute(name, format, source);
+        let headings = report
+            .execution
+            .wrappers()
+            .iter()
+            .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::Heading)
+            .collect::<Vec<_>>();
+        assert_eq!(headings.len(), expected.len(), "{name}");
+        for (wrapper, (kind, phrase)) in headings.into_iter().zip(expected) {
+            assert_eq!(wrapper.heading_kind, Some(kind), "{name}");
+            assert_eq!(
+                wrapper
+                    .target
+                    .and_then(|range| report.execution.pool_bytes(range)),
+                Some(phrase.as_bytes()),
+                "{name}"
+            );
+            assert!(wrapper.enter_sequence < wrapper.leave_sequence, "{name}");
+            assert!(wrapper.enter_atom <= wrapper.leave_atom, "{name}");
+            let parent = &report.execution.wrappers()[wrapper.parent.unwrap() as usize];
+            assert_eq!(parent.kind, ExecutionWrapperKind::Node, "{name}");
+            assert_eq!(parent.node, wrapper.node, "{name}");
+            assert!(parent.enter_sequence < wrapper.enter_sequence, "{name}");
+            assert!(parent.leave_sequence > wrapper.leave_sequence, "{name}");
+        }
+    }
+}
+
+#[test]
+fn heading_authored_phrases_obey_report_budgets_and_cancellation() {
+    // The complete fixture was rendered by the pinned CVS binary before this
+    // assertion was added.  Fixed `roff.c::deroff()` recursively visits every
+    // authored heading fragment; the execution observer performs the same
+    // normalization directly into its bounded pool instead of allocating an
+    // unmetered temporary string.
+    let baseline = execute(
+        "heading-execution-mdoc.1",
+        InputFormat::Mdoc,
+        HEADING_EXECUTION_MDOC,
+    );
+    for limits in [
+        ExecutionLimits {
+            max_work: baseline.execution.work_units() - 1,
+            ..ExecutionLimits::default()
+        },
+        ExecutionLimits {
+            max_pool_bytes: baseline.execution.pool_len() as u64 - 1,
+            ..ExecutionLimits::default()
+        },
+    ] {
+        let error = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes("heading-execution-mdoc.1", HEADING_EXECUTION_MDOC, limits)
+            .unwrap_err();
+        assert_eq!(error.kind, ExecutionErrorKind::Budget);
+    }
+
+    let cancellation = ExecutionCancellation::new();
+    cancellation.cancel();
+    let error = Parser::new(ParseOptions::default())
+        .with_input_format(InputFormat::Mdoc)
+        .with_mdoc_operating_system("ManT")
+        .unwrap()
+        .execute_bytes_with_cancellation(
+            "heading-cancelled.1",
+            HEADING_EXECUTION_MDOC,
+            ExecutionLimits::default(),
+            &cancellation,
+        )
+        .unwrap_err();
+    assert_eq!(error.kind, ExecutionErrorKind::Cancelled);
+
+    let next = execute(
+        "heading-after-cancellation.1",
+        InputFormat::Mdoc,
+        HEADING_EXECUTION_MDOC,
+    );
+    assert!(
+        next.execution
+            .wrappers()
+            .iter()
+            .any(|wrapper| wrapper.kind == ExecutionWrapperKind::Heading)
+    );
 }
 
 #[test]

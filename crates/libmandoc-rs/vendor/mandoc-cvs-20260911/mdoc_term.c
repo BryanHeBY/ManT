@@ -115,6 +115,8 @@ static	int	  termp_rs_pre(DECL_ARGS);
 static	int	  termp_sh_pre(DECL_ARGS);
 static	int	  termp_skip_pre(DECL_ARGS);
 static	int	  termp_sm_pre(DECL_ARGS);
+static	int	  termp_sx_pre(DECL_ARGS);
+static	void	  termp_sx_post(DECL_ARGS);
 static	int	  termp_pp_pre(DECL_ARGS);
 static	int	  termp_ss_pre(DECL_ARGS);
 static	int	  termp_under_pre(DECL_ARGS);
@@ -213,7 +215,7 @@ static const struct mdoc_term_act mdoc_term_acts[MDOC_MAX - MDOC_Dd] = {
 	{ termp_quote_pre, termp_quote_post }, /* So */
 	{ termp_quote_pre, termp_quote_post }, /* Sq */
 	{ termp_sm_pre, NULL }, /* Sm */
-	{ termp_under_pre, NULL }, /* Sx */
+	{ termp_sx_pre, termp_sx_post }, /* Sx */
 	{ termp_bold_pre, NULL }, /* Sy */
 	{ NULL, NULL }, /* Tn */
 	{ termp_xx_pre, termp_xx_post }, /* Ux */
@@ -303,13 +305,22 @@ static void
 print_mdoc_node(DECL_ARGS)
 {
 	const struct roff_node *previous;
+	int heading;
 
 	if (term_exec_failed(p))
 		return;
 	previous = p->exec_node;
 	p->exec_node = n;
+	heading = n->type == ROFFT_HEAD && n->tok == MDOC_Sh ?
+	    TERM_EXEC_HEADING_MDOC_SH :
+	    n->type == ROFFT_HEAD && n->tok == MDOC_Ss ?
+	    TERM_EXEC_HEADING_MDOC_SS : -1;
 	if (term_exec_node(p, n, 1)) {
-		print_mdoc_node_inner(p, pair, meta, n);
+		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
+			print_mdoc_node_inner(p, pair, meta, n);
+			if (heading != -1)
+				term_exec_heading(p, n, heading, 0);
+		}
 		term_exec_node(p, n, 0);
 	}
 	p->exec_node = previous;
@@ -1880,6 +1891,25 @@ termp_sm_pre(DECL_ARGS)
 		p->flags &= ~TERMP_NOSPACE;
 
 	return 0;
+}
+
+static int
+termp_sx_pre(DECL_ARGS)
+{
+	pair->count = 0;
+	if (!term_exec_reference_node_begin(p, TERM_EXEC_REFERENCE_SECTION,
+	    n, n->child, TERM_EXEC_AFFINITY_INLINE, &pair->count)) {
+		pair->count = 0;
+		return 0;
+	}
+	return termp_under_pre(p, pair, meta, n);
+}
+
+static void
+termp_sx_post(DECL_ARGS)
+{
+	if (pair->count)
+		(void)term_exec_reference_end(p);
 }
 
 static int

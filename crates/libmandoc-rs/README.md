@@ -499,6 +499,16 @@ The remaining patches implement the synchronous embedding boundary:
   the existing `tbl_term.c` traversal with bounded table, row, cell, and
   authored-payload records. It preserves column interleaving as execution
   evidence while keeping device padding and rule glyphs out of cell content.
+- `0030-observe-native-control-execution.patch` reports the exact before/after
+  state, primitive boundaries, generated geometry, source origin, and bounded
+  work of terminal control requests instead of reconstructing their effects
+  from the owned syntax tree.
+- `0031-project-native-heading-execution.patch` brackets man and mdoc heading
+  execution inside the existing node traversal. Its observer alone derives
+  the fixed-CVS `deroff` phrase linearly into the bounded report pool, keeping
+  authored identity separate from terminal display atoms without adding work
+  to ordinary rendering. Each macro set retains its native font, spacing,
+  author, and section-reference behavior.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

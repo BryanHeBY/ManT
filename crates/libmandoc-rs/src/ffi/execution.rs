@@ -10,13 +10,13 @@ use crate::{
     BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
     ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest, ExecutionDiagnostic,
     ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
-    ExecutionLimits, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
-    ExecutionReferenceKind, ExecutionSource, ExecutionTable, ExecutionTableAlignment,
-    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
-    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
-    ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind,
-    FlushOutcome, FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
-    NativeExecutionReport, PoolRange, RawDocument,
+    ExecutionHeadingKind, ExecutionLimits, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey,
+    ExecutionReference, ExecutionReferenceKind, ExecutionSource, ExecutionTable,
+    ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
+    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
+    ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper,
+    ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
+    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -268,7 +268,7 @@ struct CWrapperRecord {
     target_length: u32,
     enter_atom: u32,
     leave_atom: u32,
-    affinity: u32,
+    detail: u32,
     flags: u32,
     state_before: u32,
     state_after: u32,
@@ -1539,7 +1539,7 @@ fn validate_active_wrapper_owners(
             if wrapper.parent != active.last().copied() {
                 return Err("execution wrapper parent is not its active node owner".to_owned());
             }
-            if wrapper.kind == ExecutionWrapperKind::Node {
+            if is_structural_wrapper(wrapper.kind) {
                 active.push(wrapper.key);
             }
             cursor += 1;
@@ -1559,6 +1559,26 @@ fn validate_active_wrapper_owners(
         }
     }
     Ok(())
+}
+
+fn is_structural_wrapper(kind: ExecutionWrapperKind) -> bool {
+    matches!(
+        kind,
+        ExecutionWrapperKind::Node | ExecutionWrapperKind::Heading
+    )
+}
+
+fn expected_heading_kind(node: &ExecutionNode) -> Option<ExecutionHeadingKind> {
+    if node.kind != crate::NodeKind::Head {
+        return None;
+    }
+    match node.macro_name.as_deref() {
+        Some("SH") => Some(ExecutionHeadingKind::ManSection),
+        Some("SS") => Some(ExecutionHeadingKind::ManSubsection),
+        Some("Sh") => Some(ExecutionHeadingKind::MdocSection),
+        Some("Ss") => Some(ExecutionHeadingKind::MdocSubsection),
+        _ => None,
+    }
 }
 fn dense(key: u32, index: usize, field: &str) -> Result<(), String> {
     (usize::try_from(key).ok() == Some(index))
@@ -2556,7 +2576,7 @@ fn convert_report(
         }
         if let Some(wrapper) = wrapper {
             let wrapper = &wrapper_records[wrapper as usize];
-            if wrapper.kind != 1
+            if !matches!(wrapper.kind, 1 | 3)
                 || wrapper.node != value.node
                 || wrapper.enter_sequence >= value.enter_sequence
                 || wrapper.leave_sequence <= value.leave_sequence
@@ -2732,7 +2752,7 @@ fn convert_report(
             .atom_start
             .checked_add(value.atom_length)
             .ok_or_else(|| "invalid execution control atom range".to_owned())?;
-        if wrapper_record.kind != 1
+        if !matches!(wrapper_record.kind, 1 | 3)
             || !node_is_within(
                 &nodes,
                 node,
@@ -3122,6 +3142,7 @@ fn convert_report(
         return Err("execution fragment has no unique glyph geometry".to_owned());
     }
     let mut wrappers: Vec<ExecutionWrapper> = reserved_vec(wrapper_count, "wrapper")?;
+    let mut heading_nodes = reserved_filled_vec(false, node_count, "heading node ownership")?;
     let mut last_wrapper_child_leave =
         reserved_filled_vec(None::<u64>, wrapper_count, "wrapper sibling order")?;
     let mut last_root_wrapper_leave = None;
@@ -3138,10 +3159,21 @@ fn convert_report(
         let kind = match value.kind {
             1 => ExecutionWrapperKind::Node,
             2 => ExecutionWrapperKind::Font,
+            3 => ExecutionWrapperKind::Heading,
             _ => return Err("unknown execution wrapper kind".to_owned()),
         };
-        if value.affinity != 0
-            || value.flags != 0
+        let heading_kind = match (kind, value.detail) {
+            (ExecutionWrapperKind::Heading, 1) => Some(ExecutionHeadingKind::ManSection),
+            (ExecutionWrapperKind::Heading, 2) => Some(ExecutionHeadingKind::ManSubsection),
+            (ExecutionWrapperKind::Heading, 3) => Some(ExecutionHeadingKind::MdocSection),
+            (ExecutionWrapperKind::Heading, 4) => Some(ExecutionHeadingKind::MdocSubsection),
+            (ExecutionWrapperKind::Heading, _) => {
+                return Err("invalid execution heading kind".to_owned());
+            }
+            (_, 0) => None,
+            _ => return Err("unexpected execution wrapper heading kind".to_owned()),
+        };
+        if value.flags != 0
             || value.enter_atom as usize > atom_count
             || value.leave_atom == NONE
             || value.leave_atom as usize > atom_count
@@ -3176,6 +3208,20 @@ fn convert_report(
             {
                 return Err("invalid execution font transition".to_owned());
             }
+            ExecutionWrapperKind::Heading
+                if node.is_none()
+                    || value.state_before != 0
+                    || value.state_after != 0
+                    || value.depth_before != 0
+                    || value.depth_after != 0
+                    || value.enter_sequence >= value.leave_sequence
+                    || parent.is_none()
+                    || node.is_none_or(|key| {
+                        expected_heading_kind(&nodes[key.0 as usize]) != heading_kind
+                    }) =>
+            {
+                return Err("invalid execution heading wrapper".to_owned());
+            }
             _ => {}
         }
         let last_sibling_leave = if let Some(parent) = parent {
@@ -3187,6 +3233,12 @@ fn convert_report(
             {
                 return Err("execution wrapper is outside its parent".to_owned());
             }
+            if kind == ExecutionWrapperKind::Heading
+                && (parent_wrapper.kind != ExecutionWrapperKind::Node
+                    || parent_wrapper.node != node)
+            {
+                return Err("execution heading is not nested in its head node".to_owned());
+            }
             &mut last_wrapper_child_leave[parent]
         } else {
             &mut last_root_wrapper_leave
@@ -3195,6 +3247,13 @@ fn convert_report(
             return Err("overlapping execution wrapper siblings".to_owned());
         }
         *last_sibling_leave = Some(value.leave_sequence);
+        if kind == ExecutionWrapperKind::Heading {
+            let node = node.expect("validated heading node").0 as usize;
+            if heading_nodes[node] {
+                return Err("duplicate execution heading wrapper".to_owned());
+            }
+            heading_nodes[node] = true;
+        }
         wrappers.push(ExecutionWrapper {
             key: value.key,
             parent,
@@ -3208,7 +3267,7 @@ fn convert_report(
             )?,
             enter_atom: value.enter_atom,
             leave_atom: value.leave_atom,
-            affinity: value.affinity,
+            heading_kind,
             flags: value.flags,
             state_before: value.state_before,
             state_after: value.state_after,
@@ -3217,6 +3276,13 @@ fn convert_report(
             enter_sequence: value.enter_sequence,
             leave_sequence: value.leave_sequence,
         });
+    }
+    if nodes
+        .iter()
+        .enumerate()
+        .any(|(index, node)| expected_heading_kind(node).is_some() != heading_nodes[index])
+    {
+        return Err("missing execution heading wrapper".to_owned());
     }
     validate_active_wrapper_owners(&wrappers, &boundaries, &controls)?;
     // Upstream roff_term_pre_mc() stores an authored margin character and a
@@ -3250,7 +3316,7 @@ fn convert_report(
                     && !word.atoms.is_empty()
                     && word.atoms.clone().all(|atom| margin_atoms[atom as usize])
             });
-            if wrapper.kind != ExecutionWrapperKind::Node
+            if !is_structural_wrapper(wrapper.kind)
                 || word.enter_sequence <= wrapper.enter_sequence
                 || word.leave_sequence >= wrapper.leave_sequence
                 || word.atoms.start < wrapper.enter_atom
@@ -3270,7 +3336,7 @@ fn convert_report(
             let delayed_margin = atom.node.is_some_and(|node| {
                 margin_control_nodes[node.0 as usize] && margin_atoms[atom.key.0 as usize]
             });
-            if wrapper.kind != ExecutionWrapperKind::Node
+            if !is_structural_wrapper(wrapper.kind)
                 || atom.sequence <= wrapper.enter_sequence
                 || atom.sequence >= wrapper.leave_sequence
                 || atom.key.0 < wrapper.enter_atom
@@ -3292,7 +3358,7 @@ fn convert_report(
             // execution interval, while the referenced atom carries the AST
             // source owner; requiring that owner to be below this wrapper
             // would reject the delayed flushes performed by term_flushln().
-            if wrapper.kind != ExecutionWrapperKind::Node
+            if !is_structural_wrapper(wrapper.kind)
                 || fragment.sequence <= wrapper.enter_sequence
                 || fragment.sequence >= wrapper.leave_sequence
             {
@@ -4332,7 +4398,7 @@ fn wrapper_offsets() -> [usize; 16] {
         offset_of!(CWrapperRecord, target_length),
         offset_of!(CWrapperRecord, enter_atom),
         offset_of!(CWrapperRecord, leave_atom),
-        offset_of!(CWrapperRecord, affinity),
+        offset_of!(CWrapperRecord, detail),
         offset_of!(CWrapperRecord, flags),
         offset_of!(CWrapperRecord, state_before),
         offset_of!(CWrapperRecord, state_after),
@@ -4457,6 +4523,11 @@ fn diagnostic_offsets() -> [usize; 5] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    type InvalidHeadingCase = (
+        Option<fn(&mut CNodeRecord)>,
+        Option<fn(&mut CWrapperRecord)>,
+    );
 
     #[test]
     fn node_transfer_budget_is_checked_before_ast_key_allocation() {
@@ -4670,7 +4741,7 @@ body
             target_length: 0,
             enter_atom: 0,
             leave_atom: 0,
-            affinity: 0,
+            detail: 0,
             flags: 0,
             state_before: 0,
             state_after: 0,
@@ -4679,6 +4750,36 @@ body
             enter_sequence: 1,
             leave_sequence: 1,
         }
+    }
+
+    fn assert_heading_cardinality_rejected(
+        head: CNodeRecord,
+        parent: CWrapperRecord,
+        heading: CWrapperRecord,
+    ) {
+        let mut missing = raw_records();
+        missing.nodes.push(head);
+        missing.wrappers.push(parent);
+        assert_eq!(
+            rejection_with_pool(b"xShNAME".to_vec(), missing),
+            "missing execution heading wrapper"
+        );
+
+        let mut duplicate = raw_records();
+        duplicate.nodes.push(head);
+        let mut duplicate_parent = parent;
+        duplicate_parent.leave_sequence = 6;
+        let mut second_heading = heading;
+        second_heading.key = 2;
+        second_heading.enter_sequence = 4;
+        second_heading.leave_sequence = 5;
+        duplicate
+            .wrappers
+            .extend([duplicate_parent, heading, second_heading]);
+        assert_eq!(
+            rejection_with_pool(b"xShNAME".to_vec(), duplicate),
+            "duplicate execution heading wrapper"
+        );
     }
 
     fn node() -> CNodeRecord {
@@ -5268,7 +5369,7 @@ body
     #[test]
     fn convert_report_rejects_invalid_wrapper_variants() {
         for mutate in [
-            |value: &mut CWrapperRecord| value.affinity = 1,
+            |value: &mut CWrapperRecord| value.detail = 1,
             |value: &mut CWrapperRecord| value.flags = 1,
             |value: &mut CWrapperRecord| value.state_before = 1,
             |value: &mut CWrapperRecord| value.depth_after = 1,
@@ -5284,7 +5385,9 @@ body
             records.wrappers.push(value);
             assert!(matches!(
                 rejection(records).as_str(),
-                "invalid execution wrapper atom range" | "invalid execution node wrapper"
+                "invalid execution wrapper atom range"
+                    | "invalid execution node wrapper"
+                    | "unexpected execution wrapper heading kind"
             ));
         }
 
@@ -5303,6 +5406,98 @@ body
                 "invalid execution wrapper atom range" | "invalid execution font transition"
             ));
         }
+    }
+
+    #[test]
+    fn convert_report_requires_typed_heading_scopes_inside_head_nodes() {
+        let mut records = raw_records();
+        let mut head = node();
+        head.kind = 2;
+        head.macro_start = 1;
+        head.macro_length = 2;
+        records.nodes.push(head);
+        let mut parent = wrapper();
+        parent.kind = 1;
+        parent.node = 0;
+        parent.enter_sequence = 1;
+        parent.leave_sequence = 4;
+        let heading = CWrapperRecord {
+            key: 1,
+            parent: 0,
+            node: 0,
+            kind: 3,
+            target_start: 3,
+            target_length: 4,
+            enter_atom: 0,
+            leave_atom: 0,
+            detail: 3,
+            flags: 0,
+            state_before: 0,
+            state_after: 0,
+            depth_before: 0,
+            depth_after: 0,
+            enter_sequence: 2,
+            leave_sequence: 3,
+        };
+        records.wrappers.extend([parent, heading]);
+        let count = record_count(&records);
+        let report = convert_report(b"xShNAME".to_vec(), 0, count, 2, records).unwrap();
+        assert_eq!(report.wrappers[1].kind, ExecutionWrapperKind::Heading);
+        assert_eq!(
+            report.wrappers[1].heading_kind,
+            Some(ExecutionHeadingKind::MdocSection)
+        );
+        assert_eq!(
+            report.pool_bytes(report.wrappers[1].target.unwrap()),
+            Some(b"NAME".as_slice())
+        );
+
+        let invalid_cases: [InvalidHeadingCase; 7] = [
+            (None, Some(|value: &mut CWrapperRecord| value.detail = 0)),
+            (None, Some(|value: &mut CWrapperRecord| value.parent = NONE)),
+            (
+                None,
+                Some(|value: &mut CWrapperRecord| value.state_before = 1),
+            ),
+            (
+                None,
+                Some(|value: &mut CWrapperRecord| value.leave_sequence = 2),
+            ),
+            (Some(|value: &mut CNodeRecord| value.kind = 5), None),
+            (
+                Some(|value: &mut CNodeRecord| value.macro_start = NONE),
+                None,
+            ),
+            (Some(|value: &mut CNodeRecord| value.macro_start = 3), None),
+        ];
+        for (mutate_node, mutate_wrapper) in invalid_cases {
+            let mut records = raw_records();
+            let mut invalid_head = head;
+            if let Some(mutate) = mutate_node {
+                mutate(&mut invalid_head);
+            }
+            records.nodes.push(invalid_head);
+            records.wrappers.push(parent);
+            let mut invalid = heading;
+            if let Some(mutate) = mutate_wrapper {
+                mutate(&mut invalid);
+            }
+            records.wrappers.push(invalid);
+            let error = rejection_with_pool(b"xShNAME".to_vec(), records);
+            assert!(
+                matches!(
+                    error.as_str(),
+                    "invalid execution heading kind"
+                        | "invalid execution heading wrapper"
+                        | "invalid absent execution pool range in node macro"
+                        | "execution wrapper parent is not its active node owner"
+                        | "duplicate native execution event sequence"
+                ),
+                "{error}"
+            );
+        }
+
+        assert_heading_cardinality_rejected(head, parent, heading);
     }
 
     #[test]

@@ -327,6 +327,21 @@ pub enum ExecutionWrapperKind {
     Node,
     /// Instantaneous font-stack transition.
     Font,
+    /// Native section-heading execution interval.
+    Heading,
+}
+
+/// Native lifecycle used to execute one section heading.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionHeadingKind {
+    /// man(7) `.SH` heading.
+    ManSection,
+    /// man(7) `.SS` heading.
+    ManSubsection,
+    /// mdoc(7) `.Sh` heading.
+    MdocSection,
+    /// mdoc(7) `.Ss` heading.
+    MdocSubsection,
 }
 
 /// Semantic destination kind observed at the native macro handler.
@@ -432,7 +447,7 @@ pub struct ExecutionWord {
     pub operand: PoolRange,
     /// Default origin role assigned to glyphs from this word.
     pub role: AtomRole,
-    /// Innermost syntax-node wrapper.
+    /// Innermost structural execution wrapper.
     pub wrapper: Option<u32>,
     /// Atoms created while this word executed.
     pub atoms: Range<u32>,
@@ -605,7 +620,7 @@ pub struct ExecutionBoundary {
     pub flags_after: u32,
     /// Innermost control request that directly owns this boundary.
     pub control: Option<u32>,
-    /// Innermost native node wrapper active for this boundary.
+    /// Innermost native structural wrapper active for this boundary.
     pub wrapper: Option<u32>,
     /// Device line before/after.
     pub line_before: i64,
@@ -776,7 +791,7 @@ pub struct ExecutionGeometry {
 }
 
 /// Execution scope or instantaneous state transition for a syntax node,
-/// font, or link.
+/// heading, or font.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionWrapper {
     /// Wrapper identity.
@@ -793,8 +808,8 @@ pub struct ExecutionWrapper {
     pub enter_atom: u32,
     /// Atom cursor on leave.
     pub leave_atom: u32,
-    /// Stable attachment affinity.
-    pub affinity: u32,
+    /// Native heading lifecycle when this is a heading wrapper.
+    pub heading_kind: Option<ExecutionHeadingKind>,
     /// Stable wrapper flags.
     pub flags: u32,
     /// Effective state before and after state transitions.

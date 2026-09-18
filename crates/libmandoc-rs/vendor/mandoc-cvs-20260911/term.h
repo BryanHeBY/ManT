@@ -64,6 +64,13 @@ enum term_exec_affinity {
 	TERM_EXEC_AFFINITY_BEFORE_OUTPUT
 };
 
+enum term_exec_heading_kind {
+	TERM_EXEC_HEADING_MAN_SH,
+	TERM_EXEC_HEADING_MAN_SS,
+	TERM_EXEC_HEADING_MDOC_SH,
+	TERM_EXEC_HEADING_MDOC_SS
+};
+
 struct term_exec_ops {
 	int (*work)(void *, const struct termp *,
 	    const struct roff_node *, size_t);
@@ -73,6 +80,10 @@ struct term_exec_ops {
 	    const struct roff_node *);
 	int (*node_leave)(void *, const struct termp *,
 	    const struct roff_node *);
+	int (*heading_begin)(void *, const struct termp *,
+	    const struct roff_node *, int, const char *, size_t);
+	int (*heading_end)(void *, const struct termp *,
+	    const struct roff_node *, int);
 	int (*word_begin)(void *, const struct termp *,
 	    const struct roff_node *, const char *, size_t, int *);
 	int (*word_end)(void *, const struct termp *,
@@ -122,7 +133,7 @@ struct term_exec_ops {
 	int (*reference_begin)(void *, const struct termp *,
 	    const struct roff_node *, const struct roff_node *,
 	    const struct roff_node *, int, const char *, size_t,
-	    const char *, size_t, int);
+	    const char *, size_t, int, int *);
 	int (*reference_end)(void *, const struct termp *,
 	    const struct roff_node *);
 	int (*anchor)(void *, const struct termp *, const struct roff_node *,
@@ -280,6 +291,8 @@ int		  term_exec_failed(const struct termp *);
 void		  term_exec_abort(struct termp *);
 int		  term_exec_work(struct termp *, size_t);
 int		  term_exec_node(struct termp *, const struct roff_node *, int);
+int		  term_exec_heading(struct termp *, const struct roff_node *,
+			int, int);
 int		  term_exec_word(struct termp *, const char *, size_t, int);
 int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
 int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);
@@ -305,6 +318,9 @@ int		  term_exec_font(struct termp *, int, int, size_t, size_t);
 int		  term_exec_reference_begin(struct termp *, int,
 			const struct roff_node *, const struct roff_node *,
 			const char *, const char *, int);
+int		  term_exec_reference_node_begin(struct termp *, int,
+			const struct roff_node *, const struct roff_node *, int,
+			int *);
 int		  term_exec_reference_end(struct termp *);
 int		  term_exec_anchor(struct termp *, const struct roff_node *);
 int		  term_exec_table_preflight(struct termp *, size_t);

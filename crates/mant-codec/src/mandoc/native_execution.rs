@@ -7,18 +7,18 @@
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryEffect, Document as NativeDocument,
     ExecutionAffinity, ExecutionBoundary, ExecutionControl, ExecutionFlush, ExecutionFont,
-    ExecutionFragment, ExecutionNodeKey, ExecutionReferenceKind, ExecutionTableAlignment,
-    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
-    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
-    FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport, Node as NativeNode,
-    NodeKind, NormalizedListKind, TableAlignment as NativeTableAlignment,
-    TableCellKind as NativeTableCellKind, TableRowKind as NativeTableRowKind,
-    TableRuleCellKind as NativeTableRuleCellKind,
+    ExecutionFragment, ExecutionHeadingKind, ExecutionNodeKey, ExecutionReferenceKind,
+    ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
+    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
+    ExecutionTableRowKey, ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind,
+    NativeExecutionReport, Node as NativeNode, NodeKind, NormalizedListKind,
+    TableAlignment as NativeTableAlignment, TableCellKind as NativeTableCellKind,
+    TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 #[allow(dead_code)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct NativeTextRun {
     pub(super) node: ExecutionNodeKey,
     pub(super) source: PathBuf,
@@ -30,6 +30,35 @@ pub(super) struct NativeTextRun {
     pub(super) start_bu: i64,
     pub(super) end_bu: i64,
     pub(super) reference: Option<u32>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum NativeHeadingKind {
+    ManSection,
+    ManSubsection,
+    MdocSection,
+    MdocSubsection,
+}
+
+/// One section heading projected from the exact native node-execution scope.
+///
+/// The parser-owned tag remains independent from `display_lines`: fixed CVS
+/// derives same-document identities from authored syntax, while terminal
+/// execution may remove spacing, overstrike glyphs, or split author names.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeHeadingFact {
+    pub(super) kind: NativeHeadingKind,
+    pub(super) section: ExecutionNodeKey,
+    pub(super) head: ExecutionNodeKey,
+    pub(super) body: ExecutionNodeKey,
+    pub(super) authored_phrase: Option<String>,
+    pub(super) atoms: Range<u32>,
+    pub(super) boundaries: Vec<ExecutionBoundary>,
+    pub(super) runs: Vec<NativeTextRun>,
+    pub(super) display_lines: Vec<String>,
+    pub(super) label: String,
 }
 
 #[allow(dead_code)]
@@ -194,6 +223,7 @@ pub(super) struct NativeProjection {
     pub(super) definitions: Vec<NativeDefinitionFact>,
     pub(super) fields: Vec<NativeFieldFact>,
     pub(super) controls: Vec<NativeControlFact>,
+    pub(super) headings: Vec<NativeHeadingFact>,
     pub(super) tables: Vec<NativeTable>,
 }
 
@@ -534,6 +564,186 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
         })
         .collect();
     (runs, visible_lines)
+}
+
+fn heading_kind(kind: ExecutionHeadingKind) -> NativeHeadingKind {
+    match kind {
+        ExecutionHeadingKind::ManSection => NativeHeadingKind::ManSection,
+        ExecutionHeadingKind::ManSubsection => NativeHeadingKind::ManSubsection,
+        ExecutionHeadingKind::MdocSection => NativeHeadingKind::MdocSection,
+        ExecutionHeadingKind::MdocSubsection => NativeHeadingKind::MdocSubsection,
+    }
+}
+
+fn heading_display_lines(runs: &[NativeTextRun]) -> Vec<String> {
+    let mut lines = BTreeMap::<u32, Vec<&NativeTextRun>>::new();
+    for run in runs {
+        lines.entry(run.device_line).or_default().push(run);
+    }
+    lines
+        .into_values()
+        .map(|mut line| {
+            line.sort_unstable_by_key(|run| run.start_bu);
+            let mut output = String::new();
+            let mut cursor = line.first().map_or(0, |run| run.start_bu);
+            for run in line {
+                if run.start_bu > cursor {
+                    let cells = usize::try_from((run.start_bu - cursor) / 24)
+                        .expect("validated native heading geometry");
+                    output.extend(std::iter::repeat_n(' ', cells));
+                }
+                output.push_str(&run.text);
+                cursor = cursor.max(run.end_bu);
+            }
+            output
+        })
+        .collect()
+}
+
+struct HeadingCollector<'a> {
+    report: &'a NativeExecutionReport,
+    wrapper_by_node: &'a [Option<usize>],
+    heading_by_head: &'a mut [Option<usize>],
+    heading_by_wrapper: &'a mut [Option<usize>],
+    headings: &'a mut Vec<NativeHeadingFact>,
+}
+
+impl HeadingCollector<'_> {
+    fn visit(&mut self, node: &NativeNode) {
+        if matches!(
+            (node.kind, node.macro_name.as_deref()),
+            (NodeKind::Block, Some("SH" | "SS" | "Sh" | "Ss"))
+        ) {
+            self.collect(node);
+        }
+        for child in &node.children {
+            self.visit(child);
+        }
+    }
+
+    fn collect(&mut self, node: &NativeNode) {
+        let child_key = |kind, message| {
+            ExecutionNodeKey(
+                node.children
+                    .iter()
+                    .find(|child| child.kind == kind)
+                    .and_then(|child| child.execution_node_key)
+                    .expect(message),
+            )
+        };
+        let section = ExecutionNodeKey(
+            node.execution_node_key
+                .expect("executed section block has a native key"),
+        );
+        let head = child_key(NodeKind::Head, "native section block has an executed head");
+        let body = child_key(NodeKind::Body, "native section block has an executed body");
+        let wrapper_index =
+            self.wrapper_by_node[head.0 as usize].expect("validated native heading wrapper");
+        let wrapper = &self.report.wrappers()[wrapper_index];
+        let heading_index = self.headings.len();
+        assert!(
+            self.heading_by_head[head.0 as usize]
+                .replace(heading_index)
+                .is_none(),
+            "one native heading per head node"
+        );
+        assert!(
+            self.heading_by_wrapper[wrapper_index]
+                .replace(heading_index)
+                .is_none(),
+            "one native fact per heading wrapper"
+        );
+        self.headings.push(NativeHeadingFact {
+            kind: heading_kind(wrapper.heading_kind.expect("typed native heading kind")),
+            section,
+            head,
+            body,
+            authored_phrase: wrapper.target.map(|range| {
+                String::from_utf8_lossy(
+                    self.report
+                        .pool_bytes(range)
+                        .expect("validated native heading phrase"),
+                )
+                .into_owned()
+            }),
+            atoms: wrapper.enter_atom..wrapper.leave_atom,
+            boundaries: Vec::new(),
+            runs: Vec::new(),
+            display_lines: Vec::new(),
+            label: String::new(),
+        });
+    }
+}
+
+fn heading_facts(
+    document: &NativeDocument,
+    report: &NativeExecutionReport,
+    runs: &[NativeTextRun],
+) -> Vec<NativeHeadingFact> {
+    let mut heading_wrapper_by_node = vec![None; report.nodes().len()];
+    for (wrapper_index, wrapper) in report.wrappers().iter().enumerate() {
+        if wrapper.kind == ExecutionWrapperKind::Heading {
+            let node = wrapper.node.expect("validated native heading node");
+            assert!(
+                heading_wrapper_by_node[node.0 as usize]
+                    .replace(wrapper_index)
+                    .is_none(),
+                "one native heading wrapper per head node"
+            );
+        }
+    }
+    let mut headings = Vec::new();
+    let mut heading_by_head = vec![None; report.nodes().len()];
+    let mut heading_by_wrapper = vec![None; report.wrappers().len()];
+    HeadingCollector {
+        report,
+        wrapper_by_node: &heading_wrapper_by_node,
+        heading_by_head: &mut heading_by_head,
+        heading_by_wrapper: &mut heading_by_wrapper,
+        headings: &mut headings,
+    }
+    .visit(&document.root);
+
+    let mut heading_by_node = vec![None; report.nodes().len()];
+    for node in report.nodes() {
+        heading_by_node[node.key.0 as usize] = heading_by_head[node.key.0 as usize].or_else(|| {
+            node.parent
+                .and_then(|parent| heading_by_node[parent.0 as usize])
+        });
+    }
+    for run in runs {
+        if let Some(heading) = heading_by_node[run.node.0 as usize] {
+            headings[heading].runs.push(run.clone());
+        }
+    }
+
+    let mut heading_by_active_wrapper = vec![None; report.wrappers().len()];
+    for wrapper in report.wrappers() {
+        heading_by_active_wrapper[wrapper.key as usize] = heading_by_wrapper[wrapper.key as usize]
+            .or_else(|| {
+                wrapper
+                    .parent
+                    .and_then(|parent| heading_by_active_wrapper[parent as usize])
+            });
+    }
+    for boundary in report.boundaries() {
+        if let Some(heading) = boundary
+            .wrapper
+            .and_then(|wrapper| heading_by_active_wrapper[wrapper as usize])
+        {
+            headings[heading].boundaries.push(boundary.clone());
+        }
+    }
+    for heading in &mut headings {
+        heading.display_lines = heading_display_lines(&heading.runs);
+        heading.label = heading
+            .display_lines
+            .iter()
+            .flat_map(|line| line.split_whitespace())
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
+    headings
 }
 
 fn native_nodes_by_execution_key(document: &NativeDocument, node_count: usize) -> Vec<&NativeNode> {
@@ -936,6 +1146,7 @@ pub(super) fn project(
     report: &NativeExecutionReport,
 ) -> NativeProjection {
     let (runs, visible_lines) = text_projection(report);
+    let headings = heading_facts(document, report, &runs);
     NativeProjection {
         origins: report
             .nodes()
@@ -1030,6 +1241,7 @@ pub(super) fn project(
         definitions: definition_facts(document, report),
         fields: field_facts(report),
         controls: control_facts(report),
+        headings,
         tables: table_projection(document, report),
     }
 }
@@ -1051,6 +1263,139 @@ mod tests {
             panic!("printable staged table cell must contain one paragraph");
         };
         children
+    }
+
+    fn assert_run_descends_from_heading(
+        report: &NativeExecutionReport,
+        projection: &NativeProjection,
+        heading_label: &str,
+        body_text: &str,
+        expected_font: Option<ExecutionFont>,
+    ) {
+        let heading = projection
+            .headings
+            .iter()
+            .find(|heading| heading.label == heading_label)
+            .expect("projected heading");
+        let run = projection
+            .runs
+            .iter()
+            .find(|run| run.text == body_text)
+            .expect("heading body run");
+        if let Some(expected_font) = expected_font {
+            assert_eq!(run.font, expected_font, "{body_text}");
+        }
+        let mut node = run.node;
+        while node != heading.body {
+            node = report.nodes()[node.0 as usize]
+                .parent
+                .expect("body run descends from its section body");
+        }
+    }
+
+    fn assert_mdoc_heading_projection(
+        report: &NativeExecutionReport,
+        projection: &NativeProjection,
+    ) {
+        assert_eq!(
+            projection
+                .headings
+                .iter()
+                .map(|heading| {
+                    (
+                        heading.kind,
+                        heading.authored_phrase.as_deref(),
+                        heading.label.as_str(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            [
+                (NativeHeadingKind::MdocSection, Some("NAME"), "NAME"),
+                (NativeHeadingKind::MdocSection, Some("Alice"), "-Alice"),
+                (NativeHeadingKind::MdocSection, Some("$ Alice"), "$Alice"),
+                (NativeHeadingKind::MdocSection, Some(r"PARENT\fI"), "PARENT"),
+                (
+                    NativeHeadingKind::MdocSubsection,
+                    Some(r"CHILD\fI"),
+                    "CHILD",
+                ),
+                (
+                    NativeHeadingKind::MdocSection,
+                    Some("NEXT SECTION"),
+                    "NEXT SECTION",
+                ),
+                (
+                    NativeHeadingKind::MdocSection,
+                    Some("NEXTSECTION"),
+                    "NEXTSECTION",
+                ),
+                (NativeHeadingKind::MdocSection, Some("AUTHORS"), "AUTHORS"),
+                (NativeHeadingKind::MdocSection, Some("Alice"), "“ Alice”"),
+                (NativeHeadingKind::MdocSection, Some("SPACING"), "SPACING"),
+                (NativeHeadingKind::MdocSection, Some("NEXT"), "NEXT"),
+                (NativeHeadingKind::MdocSection, Some("SEE ALSO"), "SEEALSO"),
+            ]
+        );
+        let multiline = projection
+            .headings
+            .iter()
+            .find(|heading| heading.label == "“ Alice”")
+            .expect("multiline author heading");
+        assert_eq!(multiline.display_lines, ["“", "Alice”"]);
+        assert!(
+            projection
+                .visible_lines
+                .iter()
+                .any(|line| line.contains("threefour"))
+        );
+
+        for (heading, body, font) in [
+            ("-Alice", "FLAGBODY", None),
+            ("$Alice", "PREFIXBODY", None),
+            ("PARENT", "SECTION-BODY", Some(ExecutionFont::Bold)),
+            ("CHILD", "SUB-BODY", Some(ExecutionFont::Bold)),
+        ] {
+            assert_run_descends_from_heading(report, projection, heading, body, font);
+        }
+
+        let sx = projection
+            .references
+            .iter()
+            .find(|reference| reference.kind == ExecutionReferenceKind::SameDocumentSection)
+            .expect("projected Sx reference");
+        assert_eq!(sx.primary, b"NEXT SECTION");
+        assert_eq!(
+            projection
+                .runs
+                .iter()
+                .filter(|run| run.reference == Some(sx.key))
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            "NEXTSECTION"
+        );
+    }
+
+    fn assert_man_heading_projection(projection: &NativeProjection) {
+        assert_eq!(
+            projection
+                .headings
+                .iter()
+                .map(|heading| (heading.kind, heading.label.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (NativeHeadingKind::ManSection, "NAME"),
+                (NativeHeadingKind::ManSection, "NEXT"),
+                (NativeHeadingKind::ManSubsection, "SUB"),
+            ]
+        );
+        for text in ["TAIL", "TEXT"] {
+            let run = projection
+                .runs
+                .iter()
+                .find(|run| run.text == text)
+                .expect("man heading body run");
+            assert_eq!(run.font, ExecutionFont::Roman, "{text}");
+        }
     }
 
     fn assert_matrix_execution(table: &NativeTable) {
@@ -1444,6 +1789,41 @@ mod tests {
                 .sum::<usize>(),
             expected.len()
         );
+    }
+
+    #[test]
+    fn projects_native_heading_identity_content_and_body_handoff() {
+        // Both fixtures were rendered with the pinned CVS terminal before
+        // these expectations were written.  The mdoc fixture also used the
+        // pinned HTML renderer to confirm `NEXT SECTION` resolves to
+        // `#NEXT_SECTION` even though `.Sm off` displays `NEXTSECTION`.
+        let mdoc = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "heading-execution-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/heading-execution-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projected = project(&mdoc.document, &mdoc.execution);
+        assert_mdoc_heading_projection(&mdoc.execution, &projected);
+
+        let man = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "heading-execution-man.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/heading-execution-man.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projected = project(&man.document, &man.execution);
+        assert_man_heading_projection(&projected);
     }
 
     #[test]

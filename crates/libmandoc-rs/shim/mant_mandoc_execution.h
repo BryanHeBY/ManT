@@ -131,7 +131,15 @@ enum mant_mandoc_execution_geometry_origin_kind {
 
 enum mant_mandoc_execution_wrapper_kind {
 	MANT_MANDOC_WRAPPER_NODE = 1,
-	MANT_MANDOC_WRAPPER_FONT
+	MANT_MANDOC_WRAPPER_FONT,
+	MANT_MANDOC_WRAPPER_HEADING
+};
+
+enum mant_mandoc_execution_heading_kind {
+	MANT_MANDOC_HEADING_MAN_SECTION = 1,
+	MANT_MANDOC_HEADING_MAN_SUBSECTION,
+	MANT_MANDOC_HEADING_MDOC_SECTION,
+	MANT_MANDOC_HEADING_MDOC_SUBSECTION
 };
 
 enum mant_mandoc_execution_reference_kind {
@@ -432,7 +440,7 @@ struct mant_mandoc_wrapper_record {
 	uint32_t target_length;
 	uint32_t enter_atom;
 	uint32_t leave_atom;
-	uint32_t affinity;
+	uint32_t detail;
 	uint32_t flags;
 	uint32_t state_before;
 	uint32_t state_after;

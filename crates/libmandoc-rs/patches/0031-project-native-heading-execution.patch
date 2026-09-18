@@ -1,0 +1,212 @@
+--- a/man_term.c
++++ b/man_term.c
+@@ -955,13 +955,22 @@
+ print_man_node(DECL_ARGS)
+ {
+ 	const struct roff_node *previous;
++	int heading;
+ 
+ 	if (term_exec_failed(p))
+ 		return;
+ 	previous = p->exec_node;
+ 	p->exec_node = n;
++	heading = n->type == ROFFT_HEAD && n->tok == MAN_SH ?
++	    TERM_EXEC_HEADING_MAN_SH :
++	    n->type == ROFFT_HEAD && n->tok == MAN_SS ?
++	    TERM_EXEC_HEADING_MAN_SS : -1;
+ 	if (term_exec_node(p, n, 1)) {
+-		print_man_node_inner(p, mt, n, meta);
++		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
++			print_man_node_inner(p, mt, n, meta);
++			if (heading != -1)
++				term_exec_heading(p, n, heading, 0);
++		}
+ 		term_exec_node(p, n, 0);
+ 	}
+ 	p->exec_node = previous;
+--- a/mdoc_term.c
++++ b/mdoc_term.c
+@@ -115,6 +115,8 @@
+ static	int	  termp_sh_pre(DECL_ARGS);
+ static	int	  termp_skip_pre(DECL_ARGS);
+ static	int	  termp_sm_pre(DECL_ARGS);
++static	int	  termp_sx_pre(DECL_ARGS);
++static	void	  termp_sx_post(DECL_ARGS);
+ static	int	  termp_pp_pre(DECL_ARGS);
+ static	int	  termp_ss_pre(DECL_ARGS);
+ static	int	  termp_under_pre(DECL_ARGS);
+@@ -213,7 +215,7 @@
+ 	{ termp_quote_pre, termp_quote_post }, /* So */
+ 	{ termp_quote_pre, termp_quote_post }, /* Sq */
+ 	{ termp_sm_pre, NULL }, /* Sm */
+-	{ termp_under_pre, NULL }, /* Sx */
++	{ termp_sx_pre, termp_sx_post }, /* Sx */
+ 	{ termp_bold_pre, NULL }, /* Sy */
+ 	{ NULL, NULL }, /* Tn */
+ 	{ termp_xx_pre, termp_xx_post }, /* Ux */
+@@ -303,13 +305,22 @@
+ print_mdoc_node(DECL_ARGS)
+ {
+ 	const struct roff_node *previous;
++	int heading;
+ 
+ 	if (term_exec_failed(p))
+ 		return;
+ 	previous = p->exec_node;
+ 	p->exec_node = n;
++	heading = n->type == ROFFT_HEAD && n->tok == MDOC_Sh ?
++	    TERM_EXEC_HEADING_MDOC_SH :
++	    n->type == ROFFT_HEAD && n->tok == MDOC_Ss ?
++	    TERM_EXEC_HEADING_MDOC_SS : -1;
+ 	if (term_exec_node(p, n, 1)) {
+-		print_mdoc_node_inner(p, pair, meta, n);
++		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
++			print_mdoc_node_inner(p, pair, meta, n);
++			if (heading != -1)
++				term_exec_heading(p, n, heading, 0);
++		}
+ 		term_exec_node(p, n, 0);
+ 	}
+ 	p->exec_node = previous;
+@@ -1883,6 +1894,25 @@
+ }
+ 
+ static int
++termp_sx_pre(DECL_ARGS)
++{
++	pair->count = 0;
++	if (!term_exec_reference_node_begin(p, TERM_EXEC_REFERENCE_SECTION,
++	    n, n->child, TERM_EXEC_AFFINITY_INLINE, &pair->count)) {
++		pair->count = 0;
++		return 0;
++	}
++	return termp_under_pre(p, pair, meta, n);
++}
++
++static void
++termp_sx_post(DECL_ARGS)
++{
++	if (pair->count)
++		(void)term_exec_reference_end(p);
++}
++
++static int
+ termp_ap_pre(DECL_ARGS)
+ {
+ 	p->flags |= TERMP_NOSPACE;
+--- a/term.c
++++ b/term.c
+@@ -122,17 +122,57 @@
+ }
+ 
+ int
++term_exec_heading(struct termp *p, const struct roff_node *node,
++    int kind, int entering)
++{
++	if (p->exec_failed || p->exec_ops == NULL)
++		return !p->exec_failed;
++	if (entering) {
++		if (p->exec_ops->heading_begin == NULL)
++			return 1;
++		if (!p->exec_ops->heading_begin(p->exec_arg, p, node, kind,
++		    NULL, 0))
++			p->exec_failed = 1;
++	} else if (p->exec_ops->heading_end != NULL &&
++	    !p->exec_ops->heading_end(p->exec_arg, p, node, kind))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
++term_exec_reference_node_begin(struct termp *p, int kind,
++    const struct roff_node *owner, const struct roff_node *target_node,
++    int affinity, int *opened)
++{
++	if (opened != NULL)
++		*opened = 0;
++	if (p->exec_failed || opened == NULL)
++		return 0;
++	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
++	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
++	    owner, target_node, kind, NULL, 0, NULL, 0, affinity, opened))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
+ term_exec_reference_begin(struct termp *p, int kind,
+     const struct roff_node *owner, const struct roff_node *target_node,
+     const char *primary, const char *secondary, int affinity)
+ {
++	int opened;
++
+ 	if (p->exec_failed)
+ 		return 0;
++	opened = 0;
+ 	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
+ 	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
+ 	    owner, target_node, kind, primary,
+ 	    primary == NULL ? 0 : strlen(primary), secondary,
+-	    secondary == NULL ? 0 : strlen(secondary), affinity))
++	    secondary == NULL ? 0 : strlen(secondary), affinity, &opened))
++		p->exec_failed = 1;
++	else if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
++	    !opened)
+ 		p->exec_failed = 1;
+ 	return !p->exec_failed;
+ }
+--- a/term.h
++++ b/term.h
+@@ -64,6 +64,13 @@
+ 	TERM_EXEC_AFFINITY_BEFORE_OUTPUT
+ };
+ 
++enum term_exec_heading_kind {
++	TERM_EXEC_HEADING_MAN_SH,
++	TERM_EXEC_HEADING_MAN_SS,
++	TERM_EXEC_HEADING_MDOC_SH,
++	TERM_EXEC_HEADING_MDOC_SS
++};
++
+ struct term_exec_ops {
+ 	int (*work)(void *, const struct termp *,
+ 	    const struct roff_node *, size_t);
+@@ -73,6 +80,10 @@
+ 	    const struct roff_node *);
+ 	int (*node_leave)(void *, const struct termp *,
+ 	    const struct roff_node *);
++	int (*heading_begin)(void *, const struct termp *,
++	    const struct roff_node *, int, const char *, size_t);
++	int (*heading_end)(void *, const struct termp *,
++	    const struct roff_node *, int);
+ 	int (*word_begin)(void *, const struct termp *,
+ 	    const struct roff_node *, const char *, size_t, int *);
+ 	int (*word_end)(void *, const struct termp *,
+@@ -122,7 +133,7 @@
+ 	int (*reference_begin)(void *, const struct termp *,
+ 	    const struct roff_node *, const struct roff_node *,
+ 	    const struct roff_node *, int, const char *, size_t,
+-	    const char *, size_t, int);
++	    const char *, size_t, int, int *);
+ 	int (*reference_end)(void *, const struct termp *,
+ 	    const struct roff_node *);
+ 	int (*anchor)(void *, const struct termp *, const struct roff_node *,
+@@ -280,6 +291,8 @@
+ void		  term_exec_abort(struct termp *);
+ int		  term_exec_work(struct termp *, size_t);
+ int		  term_exec_node(struct termp *, const struct roff_node *, int);
++int		  term_exec_heading(struct termp *, const struct roff_node *,
++			int, int);
+ int		  term_exec_word(struct termp *, const char *, size_t, int);
+ int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
+ int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);
+@@ -305,6 +318,9 @@
+ int		  term_exec_reference_begin(struct termp *, int,
+ 			const struct roff_node *, const struct roff_node *,
+ 			const char *, const char *, int);
++int		  term_exec_reference_node_begin(struct termp *, int,
++			const struct roff_node *, const struct roff_node *, int,
++			int *);
+ int		  term_exec_reference_end(struct termp *);
+ int		  term_exec_anchor(struct termp *, const struct roff_node *);
+ int		  term_exec_table_preflight(struct termp *, size_t);

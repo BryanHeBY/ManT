@@ -9,6 +9,7 @@
 
 #include <sys/types.h>
 
+#include <ctype.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -132,6 +133,10 @@ static int execution_node_enter(void *, const struct termp *,
     const struct roff_node *);
 static int execution_node_leave(void *, const struct termp *,
     const struct roff_node *);
+static int execution_heading_begin(void *, const struct termp *,
+    const struct roff_node *, int, const char *, size_t);
+static int execution_heading_end(void *, const struct termp *,
+    const struct roff_node *, int);
 static int execution_word_begin(void *, const struct termp *,
     const struct roff_node *, const char *, size_t, int *);
 static int execution_word_end(void *, const struct termp *,
@@ -181,7 +186,7 @@ static int execution_font(void *, const struct termp *,
 static int execution_reference_begin(void *, const struct termp *,
     const struct roff_node *, const struct roff_node *,
     const struct roff_node *, int, const char *, size_t,
-    const char *, size_t, int);
+    const char *, size_t, int, int *);
 static int execution_reference_end(void *, const struct termp *,
     const struct roff_node *);
 static int execution_anchor(void *, const struct termp *,
@@ -209,6 +214,8 @@ static const struct term_exec_ops execution_ops = {
 	execution_abort,
 	execution_node_enter,
 	execution_node_leave,
+	execution_heading_begin,
+	execution_heading_end,
 	execution_word_begin,
 	execution_word_end,
 	execution_buffer_write,
@@ -720,6 +727,225 @@ execution_node_leave(void *arg, const struct termp *p,
 	record = &report->wrappers[report->current_wrapper];
 	if (record->kind != MANT_MANDOC_WRAPPER_NODE ||
 	    record->node != lookup_node(report, node))
+		return 0;
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->leave_sequence = report->sequence++;
+	report->current_wrapper = record->parent;
+	return 1;
+}
+
+static uint32_t
+stable_heading_kind(int kind)
+{
+	switch (kind) {
+	case TERM_EXEC_HEADING_MAN_SH:
+		return MANT_MANDOC_HEADING_MAN_SECTION;
+	case TERM_EXEC_HEADING_MAN_SS:
+		return MANT_MANDOC_HEADING_MAN_SUBSECTION;
+	case TERM_EXEC_HEADING_MDOC_SH:
+		return MANT_MANDOC_HEADING_MDOC_SECTION;
+	case TERM_EXEC_HEADING_MDOC_SS:
+		return MANT_MANDOC_HEADING_MDOC_SUBSECTION;
+	default:
+		return MANT_MANDOC_EXEC_NONE;
+	}
+}
+
+/*
+ * Preserve the fixed-CVS deroff() spelling without its recursive
+ * concatenate-and-copy allocation pattern.  The observer owns the only
+ * derived copy, charges every visited node and source byte, and appends
+ * directly to the bounded report pool.  An execution without this observer
+ * never walks the tree merely to derive metadata.
+ */
+static int
+append_authored_phrase_nodes(struct mant_mandoc_execution_report *report,
+    const struct roff_node *node, size_t *length)
+{
+	const unsigned char *cp, *end;
+	const struct roff_node *child;
+	size_t fragment_length;
+	uint32_t ignored_start;
+
+	if (node == NULL)
+		return 1;
+	if (!charge_work(report, 1))
+		return 0;
+	if (node->string == NULL) {
+		for (child = node->child; child != NULL; child = child->next)
+			if (!append_authored_phrase_nodes(report, child, length))
+				return 0;
+		return 1;
+	}
+
+	cp = (const unsigned char *)node->string;
+	end = cp;
+	while (*end != '\0') {
+		if (!charge_work(report, 1))
+			return 0;
+		end++;
+	}
+	while (cp < end) {
+		if (*cp == '\\' && cp + 1 < end &&
+		    strchr(" %&0^|~", cp[1]) != NULL)
+			cp += 2;
+		else if (isspace(*cp))
+			cp++;
+		else
+			break;
+	}
+	fragment_length = (size_t)(end - cp);
+	if (fragment_length != 0 && cp[fragment_length - 1] == '\\')
+		fragment_length--;
+	while (fragment_length != 0 && isspace(cp[fragment_length - 1]))
+		fragment_length--;
+	if (fragment_length == 0)
+		return 1;
+	if (*length != 0) {
+		if (!charge_work(report, 1) ||
+		    !append_pool(report, " ", 1, &ignored_start))
+			return 0;
+		(*length)++;
+	}
+	if (!append_pool(report, cp, fragment_length, &ignored_start))
+		return 0;
+	if (fragment_length > UINT32_MAX - *length) {
+		fail_report(report, MANT_MANDOC_EXECUTION_BUDGET,
+		    "native execution authored phrase is too large");
+		return 0;
+	}
+	*length += fragment_length;
+	return 1;
+}
+
+static int
+append_authored_phrase(struct mant_mandoc_execution_report *report,
+    const struct roff_node *node, uint32_t *start, uint32_t *length)
+{
+	size_t phrase_length;
+
+	if (report == NULL || start == NULL || length == NULL)
+		return 0;
+	phrase_length = 0;
+	*start = (uint32_t)report->pool_length;
+	if (!append_authored_phrase_nodes(report, node, &phrase_length))
+		return 0;
+	if (phrase_length == 0)
+		*start = MANT_MANDOC_EXEC_NONE;
+	*length = (uint32_t)phrase_length;
+	return 1;
+}
+
+static int
+wrapper_is_structural(uint32_t kind)
+{
+	return kind == MANT_MANDOC_WRAPPER_NODE ||
+	    kind == MANT_MANDOC_WRAPPER_HEADING;
+}
+
+static const char *
+stable_heading_macro(uint32_t kind)
+{
+	switch (kind) {
+	case MANT_MANDOC_HEADING_MAN_SECTION:
+		return "SH";
+	case MANT_MANDOC_HEADING_MAN_SUBSECTION:
+		return "SS";
+	case MANT_MANDOC_HEADING_MDOC_SECTION:
+		return "Sh";
+	case MANT_MANDOC_HEADING_MDOC_SUBSECTION:
+		return "Ss";
+	default:
+		return NULL;
+	}
+}
+
+static uint32_t
+stable_heading_node_kind(const struct mant_mandoc_execution_report *report,
+    const struct mant_mandoc_node_record *node)
+{
+	const unsigned char *macro;
+
+	if (report == NULL || node == NULL || node->kind != 2 ||
+	    node->macro_start == MANT_MANDOC_EXEC_NONE ||
+	    node->macro_length != 2 ||
+	    node->macro_start > report->pool_length ||
+	    node->macro_length > report->pool_length - node->macro_start)
+		return MANT_MANDOC_EXEC_NONE;
+	macro = report->pool + node->macro_start;
+	if (memcmp(macro, "SH", 2) == 0)
+		return MANT_MANDOC_HEADING_MAN_SECTION;
+	if (memcmp(macro, "SS", 2) == 0)
+		return MANT_MANDOC_HEADING_MAN_SUBSECTION;
+	if (memcmp(macro, "Sh", 2) == 0)
+		return MANT_MANDOC_HEADING_MDOC_SECTION;
+	if (memcmp(macro, "Ss", 2) == 0)
+		return MANT_MANDOC_HEADING_MDOC_SUBSECTION;
+	return MANT_MANDOC_EXEC_NONE;
+}
+
+static int
+execution_heading_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, int kind, const char *target,
+    size_t target_length)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_wrapper_record *record, *parent;
+	uint32_t node_key, stable_kind, target_start, authored_length;
+
+	(void)p;
+	node_key = lookup_node(report, node);
+	stable_kind = stable_heading_kind(kind);
+	if (node_key == MANT_MANDOC_EXEC_NONE ||
+	    stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper >= report->wrappers_count ||
+	    target != NULL || target_length != 0)
+		return 0;
+	parent = &report->wrappers[report->current_wrapper];
+	if (parent->kind != MANT_MANDOC_WRAPPER_NODE || parent->node != node_key)
+		return 0;
+	if (!append_authored_phrase(report, node, &target_start,
+	    &authored_length) ||
+	    !charge_record(report) ||
+	    !reserve_wrappers(report, report->wrappers_count + 1))
+		return 0;
+	record = &report->wrappers[report->wrappers_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->wrappers_count++;
+	record->parent = report->current_wrapper;
+	record->node = node_key;
+	record->kind = MANT_MANDOC_WRAPPER_HEADING;
+	record->target_start = target_start;
+	record->target_length = authored_length;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->detail = stable_kind;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_wrapper = record->key;
+	return 1;
+}
+
+static int
+execution_heading_end(void *arg, const struct termp *p,
+    const struct roff_node *node, int kind)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_wrapper_record *record;
+	uint32_t stable_kind;
+
+	(void)p;
+	stable_kind = stable_heading_kind(kind);
+	if (!charge_work(report, 1) ||
+	    stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper >= report->wrappers_count)
+		return 0;
+	record = &report->wrappers[report->current_wrapper];
+	if (record->kind != MANT_MANDOC_WRAPPER_HEADING ||
+	    record->node != lookup_node(report, node) ||
+	    record->detail != stable_kind)
 		return 0;
 	record->leave_atom = (uint32_t)report->atoms_count;
 	record->leave_sequence = report->sequence++;
@@ -1516,15 +1742,20 @@ execution_reference_begin(void *arg, const struct termp *p,
     const struct roff_node *current, const struct roff_node *owner,
     const struct roff_node *target_node, int kind, const char *primary,
     size_t primary_length, const char *secondary, size_t secondary_length,
-    int affinity)
+    int affinity, int *opened)
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_reference_record *record;
-	uint32_t stable_kind, stable_affinity, primary_start, secondary_start;
+	uint32_t stable_kind, stable_affinity, primary_start, primary_derived_length;
+	uint32_t secondary_start;
 	uint32_t owner_key, target_key;
+	int derive_primary;
 
 	(void)p;
 	(void)current;
+	if (opened == NULL)
+		return 0;
+	*opened = 0;
 	switch (kind) {
 	case TERM_EXEC_REFERENCE_EXTERNAL_URI:
 		stable_kind = MANT_MANDOC_REFERENCE_EXTERNAL_URI;
@@ -1552,19 +1783,33 @@ execution_reference_begin(void *arg, const struct termp *p,
 		return 0;
 	}
 	owner_key = lookup_node(report, owner);
-	target_key = lookup_node(report, target_node);
-	if (primary == NULL || owner_key == MANT_MANDOC_EXEC_NONE ||
-	    target_key == MANT_MANDOC_EXEC_NONE ||
+	derive_primary = stable_kind == MANT_MANDOC_REFERENCE_SECTION &&
+	    primary == NULL && primary_length == 0;
+	if ((!derive_primary && primary == NULL) ||
+	    owner_key == MANT_MANDOC_EXEC_NONE ||
 	    report->atoms_count > UINT32_MAX ||
 	    primary_length > UINT32_MAX || secondary_length > UINT32_MAX ||
-	    (secondary == NULL && secondary_length != 0) ||
-	    !charge_work(report, primary_length) ||
-	    !charge_work(report, 1) ||
+	    (secondary == NULL && secondary_length != 0))
+		return 0;
+	if (derive_primary) {
+		if (!append_authored_phrase(report, owner, &primary_start,
+		    &primary_derived_length))
+			return 0;
+		if (primary_derived_length == 0)
+			return 1;
+		primary_length = primary_derived_length;
+	} else if (!charge_work(report, primary_length) ||
+	    !append_pool(report, primary, primary_length, &primary_start))
+		return 0;
+	target_key = lookup_node(report, target_node);
+	if (target_key == MANT_MANDOC_EXEC_NONE)
+		return 0;
+	if (!charge_work(report, 1) ||
 	    !charge_work(report, secondary_length) ||
-	    !append_pool(report, primary, primary_length, &primary_start) ||
 	    (secondary != NULL && !append_pool(report, secondary,
-	    secondary_length, &secondary_start)) ||
-	    !charge_record(report) ||
+	    secondary_length, &secondary_start)))
+		return 0;
+	if (!charge_record(report) ||
 	    !reserve_references(report, report->references_count + 1))
 		return 0;
 	record = &report->references[report->references_count];
@@ -1586,6 +1831,7 @@ execution_reference_begin(void *arg, const struct termp *p,
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
 	report->current_reference = record->key;
+	*opened = 1;
 	return 1;
 }
 
@@ -2676,10 +2922,10 @@ seal_report(struct mant_mandoc_execution_report *report)
 		}
 	}
 	for (index = 0; index < report->wrappers_count; index++) {
-		if (report->wrappers[index].kind == MANT_MANDOC_WRAPPER_NODE &&
+		if (wrapper_is_structural(report->wrappers[index].kind) &&
 		    report->wrappers[index].leave_atom == MANT_MANDOC_EXEC_NONE) {
 			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
-			    "native execution left a node wrapper open");
+			    "native execution left a structural wrapper open");
 			return 0;
 		}
 	}
@@ -2820,7 +3066,7 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	unsigned char *word_atoms, *margin_atoms, *margin_control_nodes;
 	unsigned char *covered_fragments;
 	unsigned char *covered_glyph_geometry;
-	unsigned char *terminal_flush;
+	unsigned char *heading_nodes, *terminal_flush;
 	uint64_t *fragment_flush_outcome;
 	uint64_t capacity_total;
 	size_t index, inner, end, live_atom_count, live_index, control_cursor;
@@ -2853,6 +3099,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	margin_atoms = report->atoms_count == 0 ? NULL :
 	    calloc(report->atoms_count, 1);
 	margin_control_nodes = report->nodes_count == 0 ? NULL :
+	    calloc(report->nodes_count, 1);
+	heading_nodes = report->nodes_count == 0 ? NULL :
 	    calloc(report->nodes_count, 1);
 	covered_fragments = report->fragments_count == 0 ? NULL :
 	    calloc(report->fragments_count, 1);
@@ -2899,7 +3147,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    (report->atoms_count != 0 &&
 	    (referenced_atoms == NULL || replaced_atoms == NULL ||
 	    word_atoms == NULL || margin_atoms == NULL || live_atoms == NULL)) ||
-	    (report->nodes_count != 0 && margin_control_nodes == NULL) ||
+	    (report->nodes_count != 0 &&
+	    (margin_control_nodes == NULL || heading_nodes == NULL)) ||
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
 	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
 	    (report->references_count != 0 &&
@@ -3451,7 +3700,7 @@ invalid_flush:
 			goto invalid_boundary;
 		if (boundary->wrapper != MANT_MANDOC_EXEC_NONE) {
 			wrapper = &report->wrappers[boundary->wrapper];
-			if (wrapper->kind != MANT_MANDOC_WRAPPER_NODE ||
+			if (!wrapper_is_structural(wrapper->kind) ||
 			    wrapper->node != boundary->node ||
 			    wrapper->enter_sequence >= boundary->enter_sequence ||
 			    wrapper->leave_sequence <= boundary->leave_sequence)
@@ -3569,7 +3818,7 @@ invalid_flush:
 		origin = control->node;
 		while (origin != MANT_MANDOC_EXEC_NONE && origin != wrapper->node)
 			origin = report->nodes[origin].parent;
-		if (wrapper->kind != MANT_MANDOC_WRAPPER_NODE ||
+		if (!wrapper_is_structural(wrapper->kind) ||
 		    origin != wrapper->node ||
 		    wrapper->enter_sequence >= control->enter_sequence ||
 		    wrapper->leave_sequence <= control->leave_sequence ||
@@ -3855,8 +4104,8 @@ invalid_geometry:
 		    (index != 0 && report->wrappers[index - 1].enter_sequence >=
 		    wrapper->enter_sequence) ||
 		    wrapper->kind < MANT_MANDOC_WRAPPER_NODE ||
-		    wrapper->kind > MANT_MANDOC_WRAPPER_FONT ||
-		    wrapper->affinity != 0 || wrapper->flags != 0 ||
+		    wrapper->kind > MANT_MANDOC_WRAPPER_HEADING ||
+		    wrapper->flags != 0 ||
 		    wrapper->enter_atom > report->atoms_count ||
 		    wrapper->leave_atom > report->atoms_count ||
 		    wrapper->enter_atom > wrapper->leave_atom ||
@@ -3886,29 +4135,67 @@ invalid_geometry:
 		*last_sibling_leave = wrapper->leave_sequence;
 		if (wrapper->kind == MANT_MANDOC_WRAPPER_NODE) {
 			if (wrapper->node >= report->nodes_count ||
+			    wrapper->detail != 0 ||
 			    wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
 			    wrapper->target_length != 0 ||
 			    wrapper->state_before != 0 || wrapper->state_after != 0 ||
 			    wrapper->depth_before != 0 || wrapper->depth_after != 0 ||
 			    wrapper->enter_sequence >= wrapper->leave_sequence)
 				goto invalid_wrapper;
-		} else if (wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
+		} else if (wrapper->kind == MANT_MANDOC_WRAPPER_HEADING) {
+			const struct mant_mandoc_node_record *heading_node;
+			const char *heading_macro;
+
+			heading_node = wrapper->node < report->nodes_count ?
+			    &report->nodes[wrapper->node] : NULL;
+			heading_macro = stable_heading_macro(wrapper->detail);
+			if (wrapper->node >= report->nodes_count ||
+			    wrapper->detail < MANT_MANDOC_HEADING_MAN_SECTION ||
+			    wrapper->detail > MANT_MANDOC_HEADING_MDOC_SUBSECTION ||
+			    heading_node == NULL || heading_node->kind != 2 ||
+			    heading_macro == NULL ||
+			    heading_node->macro_start == MANT_MANDOC_EXEC_NONE ||
+			    heading_node->macro_length != strlen(heading_macro) ||
+			    memcmp(report->pool + heading_node->macro_start,
+			    heading_macro, heading_node->macro_length) != 0 ||
+			    (wrapper->target_start == MANT_MANDOC_EXEC_NONE ?
+			    wrapper->target_length != 0 :
+			    wrapper->target_start > report->pool_length ||
+			    wrapper->target_length > report->pool_length -
+			    wrapper->target_start) || wrapper->state_before != 0 ||
+			    wrapper->state_after != 0 || wrapper->depth_before != 0 ||
+			    wrapper->depth_after != 0 ||
+			    wrapper->enter_sequence >= wrapper->leave_sequence ||
+			    wrapper->parent == MANT_MANDOC_EXEC_NONE ||
+			    report->wrappers[wrapper->parent].kind !=
+			    MANT_MANDOC_WRAPPER_NODE ||
+			    report->wrappers[wrapper->parent].node != wrapper->node ||
+			    heading_nodes[wrapper->node])
+				goto invalid_wrapper;
+			heading_nodes[wrapper->node] = 1;
+		} else if (wrapper->detail != 0 ||
+		    wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
 		    wrapper->target_length != 0 ||
 		    wrapper->enter_atom != wrapper->leave_atom ||
 		    wrapper->enter_sequence != wrapper->leave_sequence ||
 		    wrapper->depth_after > wrapper->depth_before +
 		    (wrapper->depth_before != UINT32_MAX))
 			goto invalid_wrapper;
-		if (wrapper->kind == MANT_MANDOC_WRAPPER_NODE)
+		if (wrapper_is_structural(wrapper->kind))
 			active_wrapper = wrapper->key;
-		continue;
-invalid_wrapper:
-		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
-		    "native execution wrapper relationship is inconsistent");
-		goto fail;
 	}
+	for (index = 0; index < report->nodes_count; index++)
+		if ((stable_heading_node_kind(report, &report->nodes[index]) !=
+		    MANT_MANDOC_EXEC_NONE) != (heading_nodes[index] != 0))
+			goto invalid_wrapper;
+	goto valid_wrappers;
+invalid_wrapper:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution wrapper relationship is inconsistent");
+	goto fail;
+valid_wrappers:
 
-#define ADVANCE_NODE_WRAPPERS(sequence) do { \
+#define ADVANCE_STRUCTURAL_WRAPPERS(sequence) do { \
 	while (wrapper_cursor < report->wrappers_count && \
 	    report->wrappers[wrapper_cursor].enter_sequence < (sequence)) { \
 		wrapper = &report->wrappers[wrapper_cursor++]; \
@@ -3916,7 +4203,7 @@ invalid_wrapper:
 		    report->wrappers[active_wrapper].leave_sequence <= \
 		    wrapper->enter_sequence) \
 			active_wrapper = report->wrappers[active_wrapper].parent; \
-		if (wrapper->kind == MANT_MANDOC_WRAPPER_NODE) \
+		if (wrapper_is_structural(wrapper->kind)) \
 			active_wrapper = wrapper->key; \
 	} \
 	while (active_wrapper != MANT_MANDOC_EXEC_NONE && \
@@ -3927,7 +4214,7 @@ invalid_wrapper:
 	active_wrapper = MANT_MANDOC_EXEC_NONE;
 	for (index = 0; index < report->boundaries_count; index++) {
 		boundary = &report->boundaries[index];
-		ADVANCE_NODE_WRAPPERS(boundary->enter_sequence);
+		ADVANCE_STRUCTURAL_WRAPPERS(boundary->enter_sequence);
 		if (boundary->wrapper != active_wrapper)
 			goto invalid_boundary;
 	}
@@ -3935,11 +4222,11 @@ invalid_wrapper:
 	active_wrapper = MANT_MANDOC_EXEC_NONE;
 	for (index = 0; index < report->controls_count; index++) {
 		control = &report->controls[index];
-		ADVANCE_NODE_WRAPPERS(control->enter_sequence);
+		ADVANCE_STRUCTURAL_WRAPPERS(control->enter_sequence);
 		if (control->wrapper != active_wrapper)
 			goto invalid_control;
 	}
-#undef ADVANCE_NODE_WRAPPERS
+#undef ADVANCE_STRUCTURAL_WRAPPERS
 	for (index = 0; index < report->references_count; index++) {
 		uint64_t *last_sibling_leave;
 
@@ -4093,7 +4380,7 @@ invalid_wrapper:
 		if (word->wrapper >= report->wrappers_count)
 			goto invalid_word_wrapper;
 		wrapper = &report->wrappers[word->wrapper];
-		if (wrapper->kind != MANT_MANDOC_WRAPPER_NODE ||
+		if (!wrapper_is_structural(wrapper->kind) ||
 		    word->enter_sequence <= wrapper->enter_sequence ||
 		    word->leave_sequence >= wrapper->leave_sequence ||
 		    word->enter_atom < wrapper->enter_atom ||
@@ -4119,7 +4406,7 @@ invalid_wrapper:
 		if (atom->wrapper >= report->wrappers_count)
 			goto invalid_atom_wrapper;
 		wrapper = &report->wrappers[atom->wrapper];
-		if (wrapper->kind != MANT_MANDOC_WRAPPER_NODE ||
+		if (!wrapper_is_structural(wrapper->kind) ||
 		    atom->sequence <= wrapper->enter_sequence ||
 		    atom->sequence >= wrapper->leave_sequence ||
 		    atom->key < wrapper->enter_atom ||
@@ -4140,7 +4427,7 @@ invalid_wrapper:
 		if (fragment->wrapper >= report->wrappers_count)
 			goto invalid_fragment_wrapper;
 		wrapper = &report->wrappers[fragment->wrapper];
-		if (wrapper->kind != MANT_MANDOC_WRAPPER_NODE ||
+		if (!wrapper_is_structural(wrapper->kind) ||
 		    fragment->sequence <= wrapper->enter_sequence ||
 		    fragment->sequence >= wrapper->leave_sequence)
 			goto invalid_fragment_wrapper;
@@ -4156,6 +4443,7 @@ invalid_wrapper:
 	free(word_atoms);
 	free(margin_atoms);
 	free(margin_control_nodes);
+	free(heading_nodes);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
@@ -4226,6 +4514,7 @@ fail:
 	free(word_atoms);
 	free(margin_atoms);
 	free(margin_control_nodes);
+	free(heading_nodes);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
@@ -4918,6 +5207,70 @@ mant_mandoc_execution_validation_selftest(void)
 	    size_to_report_i64(report, SIZE_MAX, &converted))
 		failures |= 1U << 12;
 
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	if (!append_pool(report, "Sh", 2, &node->macro_start) ||
+	    !reserve_wrappers(report, 3)) {
+		failures |= 1U << 14;
+		goto out;
+	}
+	node->kind = 2;
+	node->macro_length = 2;
+	report->wrappers_count = 2;
+	memset(&report->wrappers[0], 0,
+	    2 * sizeof(*report->wrappers));
+	report->wrappers[0].key = 0;
+	report->wrappers[0].parent = MANT_MANDOC_EXEC_NONE;
+	report->wrappers[0].node = 0;
+	report->wrappers[0].kind = MANT_MANDOC_WRAPPER_NODE;
+	report->wrappers[0].target_start = MANT_MANDOC_EXEC_NONE;
+	report->wrappers[0].enter_sequence = 1;
+	report->wrappers[0].leave_sequence = 4;
+	report->wrappers[1].key = 1;
+	report->wrappers[1].parent = 0;
+	report->wrappers[1].node = 0;
+	report->wrappers[1].kind = MANT_MANDOC_WRAPPER_HEADING;
+	report->wrappers[1].target_start = MANT_MANDOC_EXEC_NONE;
+	report->wrappers[1].detail = MANT_MANDOC_HEADING_MDOC_SECTION;
+	report->wrappers[1].enter_sequence = 2;
+	report->wrappers[1].leave_sequence = 3;
+	if (!validate_sealed_report(report))
+		failures |= 1U << 14;
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	report->wrappers_count = 1;
+	if (validate_sealed_report(report))
+		failures |= 1U << 15;
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	report->wrappers_count = 3;
+	report->wrappers[0].leave_sequence = 6;
+	report->wrappers[2] = report->wrappers[1];
+	report->wrappers[2].key = 2;
+	report->wrappers[2].enter_sequence = 4;
+	report->wrappers[2].leave_sequence = 5;
+	if (validate_sealed_report(report))
+		failures |= 1U << 15;
+	report->wrappers_count = 2;
+	report->wrappers[0].leave_sequence = 4;
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	node->kind = 1;
+	if (validate_sealed_report(report))
+		failures |= 1U << 14;
+	node->kind = 2;
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	report->wrappers[1].detail = MANT_MANDOC_HEADING_MAN_SECTION;
+	if (validate_sealed_report(report))
+		failures |= 1U << 14;
+	report->wrappers_count = 0;
+
 out:
 	mant_mandoc_execution_free(report);
 	return failures;
@@ -5153,7 +5506,7 @@ static const size_t wrapper_offsets[] = {
 	OFF(mant_mandoc_wrapper_record, node), OFF(mant_mandoc_wrapper_record, kind),
 	OFF(mant_mandoc_wrapper_record, target_start), OFF(mant_mandoc_wrapper_record, target_length),
 	OFF(mant_mandoc_wrapper_record, enter_atom), OFF(mant_mandoc_wrapper_record, leave_atom),
-	OFF(mant_mandoc_wrapper_record, affinity), OFF(mant_mandoc_wrapper_record, flags),
+	OFF(mant_mandoc_wrapper_record, detail), OFF(mant_mandoc_wrapper_record, flags),
 	OFF(mant_mandoc_wrapper_record, state_before), OFF(mant_mandoc_wrapper_record, state_after),
 	OFF(mant_mandoc_wrapper_record, depth_before), OFF(mant_mandoc_wrapper_record, depth_after),
 	OFF(mant_mandoc_wrapper_record, enter_sequence), OFF(mant_mandoc_wrapper_record, leave_sequence)

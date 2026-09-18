@@ -122,17 +122,57 @@ term_exec_node(struct termp *p, const struct roff_node *node, int entering)
 }
 
 int
+term_exec_heading(struct termp *p, const struct roff_node *node,
+    int kind, int entering)
+{
+	if (p->exec_failed || p->exec_ops == NULL)
+		return !p->exec_failed;
+	if (entering) {
+		if (p->exec_ops->heading_begin == NULL)
+			return 1;
+		if (!p->exec_ops->heading_begin(p->exec_arg, p, node, kind,
+		    NULL, 0))
+			p->exec_failed = 1;
+	} else if (p->exec_ops->heading_end != NULL &&
+	    !p->exec_ops->heading_end(p->exec_arg, p, node, kind))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_reference_node_begin(struct termp *p, int kind,
+    const struct roff_node *owner, const struct roff_node *target_node,
+    int affinity, int *opened)
+{
+	if (opened != NULL)
+		*opened = 0;
+	if (p->exec_failed || opened == NULL)
+		return 0;
+	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
+	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
+	    owner, target_node, kind, NULL, 0, NULL, 0, affinity, opened))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
 term_exec_reference_begin(struct termp *p, int kind,
     const struct roff_node *owner, const struct roff_node *target_node,
     const char *primary, const char *secondary, int affinity)
 {
+	int opened;
+
 	if (p->exec_failed)
 		return 0;
+	opened = 0;
 	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
 	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
 	    owner, target_node, kind, primary,
 	    primary == NULL ? 0 : strlen(primary), secondary,
-	    secondary == NULL ? 0 : strlen(secondary), affinity))
+	    secondary == NULL ? 0 : strlen(secondary), affinity, &opened))
+		p->exec_failed = 1;
+	else if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
+	    !opened)
 		p->exec_failed = 1;
 	return !p->exec_failed;
 }

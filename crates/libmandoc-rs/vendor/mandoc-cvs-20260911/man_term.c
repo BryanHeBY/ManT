@@ -955,13 +955,22 @@ static void
 print_man_node(DECL_ARGS)
 {
 	const struct roff_node *previous;
+	int heading;
 
 	if (term_exec_failed(p))
 		return;
 	previous = p->exec_node;
 	p->exec_node = n;
+	heading = n->type == ROFFT_HEAD && n->tok == MAN_SH ?
+	    TERM_EXEC_HEADING_MAN_SH :
+	    n->type == ROFFT_HEAD && n->tok == MAN_SS ?
+	    TERM_EXEC_HEADING_MAN_SS : -1;
 	if (term_exec_node(p, n, 1)) {
-		print_man_node_inner(p, mt, n, meta);
+		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
+			print_man_node_inner(p, mt, n, meta);
+			if (heading != -1)
+				term_exec_heading(p, n, heading, 0);
+		}
 		term_exec_node(p, n, 0);
 	}
 	p->exec_node = previous;
