@@ -57,6 +57,9 @@ const WRAPPED_REFERENCE_MDOC: &[u8] = include_bytes!("fixtures/execution/wrapped
 const NESTED_REFERENCE_MAN: &[u8] = include_bytes!("fixtures/execution/nested-reference-man.1");
 const HEADING_EXECUTION_MDOC: &[u8] = include_bytes!("fixtures/execution/heading-execution-mdoc.1");
 const HEADING_EXECUTION_MAN: &[u8] = include_bytes!("fixtures/execution/heading-execution-man.1");
+const INLINE_ANNOTATIONS_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/inline-annotations-mdoc.1");
+const INLINE_ANNOTATIONS_MAN: &[u8] = include_bytes!("fixtures/execution/inline-annotations-man.1");
 
 fn execute(name: &str, input_format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
@@ -1374,6 +1377,102 @@ fn one_native_reference_interval_survives_multiple_flushes() {
     device_lines.sort_unstable();
     device_lines.dedup();
     assert_eq!(device_lines.len(), 2);
+}
+
+#[test]
+fn generated_inline_words_retain_native_provenance_and_reference_ranges() {
+    // Both complete fixtures were rendered with the pinned CVS binary before
+    // this assertion was written.  In fixed `mdoc_validate.c::post_bx()`, the
+    // `BSD` spelling and separators are NODE_NOSRC nodes; `termp_fn_pre()`,
+    // `termp_quote_pre/post()`, `man_term.c::pre_OP()`, and `post_UR()` emit
+    // their punctuation by calling `term_word()` with handler-owned strings.
+    for (name, format, source) in [
+        (
+            "inline-annotations-mdoc.1",
+            InputFormat::Mdoc,
+            INLINE_ANNOTATIONS_MDOC,
+        ),
+        (
+            "inline-annotations-man.1",
+            InputFormat::Man,
+            INLINE_ANNOTATIONS_MAN,
+        ),
+    ] {
+        let report = execute(name, format, source);
+        let generated = report
+            .execution
+            .words()
+            .iter()
+            .filter(|word| word.role == AtomRole::MacroGenerated)
+            .map(|word| pool(&report.execution, word.operand))
+            .collect::<Vec<_>>();
+        for value in ["[", "]"] {
+            assert_eq!(
+                generated
+                    .iter()
+                    .filter(|operand| **operand == value.as_bytes())
+                    .count(),
+                1,
+                "{name}: {value} must execute exactly once"
+            );
+        }
+
+        if format == InputFormat::Mdoc {
+            for value in ["(", ",", ")", ";", "BSD"] {
+                assert_eq!(
+                    generated
+                        .iter()
+                        .filter(|operand| **operand == value.as_bytes())
+                        .count(),
+                    1,
+                    "{name}: {value} must execute exactly once"
+                );
+            }
+            let bsd = report
+                .execution
+                .words()
+                .iter()
+                .find(|word| pool(&report.execution, word.operand) == b"BSD")
+                .expect("validator-generated Bx word");
+            assert!(
+                report.execution.nodes()[bsd.node.expect("generated Bx node").0 as usize]
+                    .flags
+                    .contains(libmandoc_rs::ExecutionNodeFlags::GENERATED)
+            );
+            assert_eq!(bsd.role, AtomRole::MacroGenerated);
+        } else {
+            for value in ["<", ">"] {
+                assert_eq!(
+                    generated
+                        .iter()
+                        .filter(|operand| **operand == value.as_bytes())
+                        .count(),
+                    2,
+                    "{name}: each UR/MT wrapper emits one {value}"
+                );
+            }
+        }
+
+        for reference in report.execution.references() {
+            if report.execution.nodes()[reference.owner_node.0 as usize]
+                .macro_name
+                .as_deref()
+                == Some("Mt")
+            {
+                continue;
+            }
+            for atom in &report.execution.atoms()
+                [reference.atoms.start as usize..reference.atoms.end as usize]
+            {
+                assert_ne!(
+                    atom.operand
+                        .and_then(|range| report.execution.pool_bytes(range)),
+                    Some(pool(&report.execution, reference.primary)),
+                    "the target operand is metadata, not part of a labelled reference"
+                );
+            }
+        }
+    }
 }
 
 #[test]

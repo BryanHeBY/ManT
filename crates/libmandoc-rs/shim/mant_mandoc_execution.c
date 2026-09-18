@@ -966,7 +966,9 @@ execution_word_begin(void *arg, const struct termp *p,
 	source_node = lookup_word_node(report, word);
 	*role = p->exec_table_cell_payload ?
 	    MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD :
-	    source_node != MANT_MANDOC_EXEC_NONE ?
+	    source_node != MANT_MANDOC_EXEC_NONE &&
+	    (report->nodes[source_node].flags &
+	    MANT_MANDOC_EXEC_NODE_GENERATED) == 0 ?
 	    MANT_MANDOC_ATOM_AUTHORED : node == NULL ?
 	    MANT_MANDOC_ATOM_DEVICE_GENERATED : MANT_MANDOC_ATOM_MACRO_GENERATED;
 	if (report->word_active || report->words_count > UINT32_MAX ||
@@ -3265,6 +3267,10 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    word->leave_atom > report->atoms_count ||
 		    word->reserved != 0 ||
 		    word->enter_sequence >= word->leave_sequence ||
+		    (word->node != MANT_MANDOC_EXEC_NONE &&
+		    (report->nodes[word->node].flags &
+		    MANT_MANDOC_EXEC_NODE_GENERATED) != 0 &&
+		    word->role == MANT_MANDOC_ATOM_AUTHORED) ||
 		    (word->enter_atom != 0 &&
 		    report->atoms[word->enter_atom - 1].sequence >=
 		    word->enter_sequence) ||
@@ -4739,7 +4745,7 @@ stable_node_flags(const struct roff_node *node)
 {
 	uint32_t flags = 0;
 
-	if (node->flags & NODE_NOSRC) flags |= 1U << 0;
+	if (node->flags & NODE_NOSRC) flags |= MANT_MANDOC_EXEC_NODE_GENERATED;
 	if (node->flags & NODE_EOS) flags |= 1U << 1;
 	if (node->flags & NODE_NOPRT) flags |= 1U << 2;
 	if (node->flags & NODE_NOFILL) flags |= 1U << 3;

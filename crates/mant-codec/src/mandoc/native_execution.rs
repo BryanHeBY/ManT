@@ -25,6 +25,14 @@ pub(super) struct NativeTextRun {
     pub(super) line: u32,
     pub(super) column: u32,
     pub(super) font: ExecutionFont,
+    /// Native provenance shared by all visible atoms in this run.
+    pub(super) role: AtomRole,
+    /// Exact formatter word that created these atoms, when one exists.
+    pub(super) word: Option<u32>,
+    /// Structural wrapper active when the atoms entered the native buffer.
+    pub(super) wrapper: Option<u32>,
+    /// Atom identities retained across delayed and partial native flushes.
+    pub(super) atoms: Vec<u32>,
     pub(super) text: String,
     pub(super) device_line: u32,
     pub(super) start_bu: i64,
@@ -498,9 +506,23 @@ fn atom_reference_owners(report: &NativeExecutionReport) -> Vec<Option<u32>> {
     atom_references
 }
 
+fn atom_word_owners(report: &NativeExecutionReport) -> Vec<Option<u32>> {
+    let mut owners = vec![None; report.atoms().len()];
+    for word in report.words() {
+        for owner in &mut owners[word.atoms.start as usize..word.atoms.end as usize] {
+            assert!(
+                owner.replace(word.key.0).is_none(),
+                "validated formatter words do not overlap"
+            );
+        }
+    }
+    owners
+}
+
 fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<String>) {
     let mut runs: Vec<NativeTextRun> = Vec::new();
     let atom_references = atom_reference_owners(report);
+    let atom_words = atom_word_owners(report);
     let mut visible_cells: BTreeMap<u32, BTreeMap<i64, char>> = BTreeMap::new();
     for fragment in report.fragments() {
         let Some(node) = fragment.node else {
@@ -512,6 +534,7 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
         for key in &fragment.atoms {
             let atom = &report.atoms()[key.0 as usize];
             let reference = atom_references[key.0 as usize];
+            let word = atom_words[key.0 as usize];
             let origin = &report.nodes()[node.0 as usize];
             let source = report.sources()[origin.source as usize].path.clone();
             let Some(character) = char::from_u32(atom.display_scalar) else {
@@ -526,11 +549,15 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
             if let Some(previous) = runs.last_mut()
                 && previous.node == node
                 && previous.font == atom.font
+                && previous.role == atom.role
+                && previous.word == word
+                && previous.wrapper == atom.wrapper
                 && previous.device_line == fragment.device_line
                 && previous.end_bu == fragment.start_bu
                 && previous.reference == reference
             {
                 previous.text.push(character);
+                previous.atoms.push(key.0);
                 previous.end_bu = fragment.end_bu;
             } else {
                 runs.push(NativeTextRun {
@@ -539,6 +566,10 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
                     line: origin.line,
                     column: origin.column,
                     font: atom.font,
+                    role: atom.role,
+                    word,
+                    wrapper: atom.wrapper,
+                    atoms: vec![key.0],
                     text: character.to_string(),
                     device_line: fragment.device_line,
                     start_bu: fragment.start_bu,
@@ -2069,6 +2100,12 @@ mod tests {
                 .iter()
                 .all(|run| run.font == ExecutionFont::Underline)
         );
+        assert!(label_runs.iter().all(|run| {
+            run.role == AtomRole::Authored
+                && run.word.is_some()
+                && run.wrapper.is_some()
+                && !run.atoms.is_empty()
+        }));
         assert!(
             wrapped_projection.runs.iter().any(|run| {
                 run.reference.is_none() && run.text == "https://example.org/wrapped"
@@ -2119,6 +2156,101 @@ mod tests {
         drop(nested);
         assert_eq!(inner.primary, b"printf");
         assert_eq!(inner.secondary.as_deref(), Some(b"3".as_slice()));
+    }
+
+    #[test]
+    fn inline_projection_preserves_native_word_and_annotation_boundaries() {
+        // These complete inputs were rendered with the pinned CVS binary
+        // before the assertions were written.  Fixed CVS emits Fn/OP/Bx
+        // punctuation as separate formatter words, and opens Lk/Mt/UR
+        // references only around the label chosen by the native handler.
+        for (path, format, source) in [
+            (
+                "inline-annotations-mdoc.1",
+                InputFormat::Mdoc,
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/inline-annotations-mdoc.1"
+                )
+                .as_slice(),
+            ),
+            (
+                "inline-annotations-man.1",
+                InputFormat::Man,
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/inline-annotations-man.1"
+                )
+                .as_slice(),
+            ),
+        ] {
+            let report = Parser::new(ParseOptions::default())
+                .with_input_format(format)
+                .with_mdoc_operating_system("ManT")
+                .unwrap()
+                .execute_bytes(path, source, ExecutionLimits::default())
+                .unwrap();
+            let projection = project(&report.document, &report.execution);
+
+            for run in &projection.runs {
+                assert!(!run.atoms.is_empty(), "{path}");
+                for &atom_key in &run.atoms {
+                    let atom = &report.execution.atoms()[atom_key as usize];
+                    assert_eq!(atom.font, run.font, "{path}");
+                    assert_eq!(atom.role, run.role, "{path}");
+                    assert_eq!(atom.wrapper, run.wrapper, "{path}");
+                    assert_eq!(
+                        projection
+                            .words
+                            .iter()
+                            .find(|word| word.atoms.contains(&atom_key))
+                            .map(|word| word.key),
+                        run.word,
+                        "{path}"
+                    );
+                }
+            }
+
+            for spelling in ["[", "]"] {
+                assert!(
+                    projection.runs.iter().any(|run| {
+                        run.text == spelling && run.role == AtomRole::MacroGenerated
+                    }),
+                    "{path}: missing generated {spelling}"
+                );
+            }
+            if format == InputFormat::Mdoc {
+                for spelling in ["(", ",", ")", ";", "BSD"] {
+                    assert!(
+                        projection.runs.iter().any(|run| {
+                            run.text == spelling && run.role == AtomRole::MacroGenerated
+                        }),
+                        "{path}: missing generated {spelling}"
+                    );
+                }
+            }
+
+            for reference in &projection.references {
+                let label = projection
+                    .runs
+                    .iter()
+                    .filter(|run| run.reference == Some(reference.key))
+                    .map(|run| run.text.as_str())
+                    .collect::<String>();
+                assert!(!label.is_empty(), "{path}: empty native reference label");
+                if projection.origins[reference.owner_node.0 as usize]
+                    .macro_name
+                    .as_deref()
+                    != Some("Mt")
+                {
+                    assert!(
+                        !label
+                            .as_bytes()
+                            .windows(reference.primary.len())
+                            .any(|part| part == reference.primary),
+                        "{path}: hidden target leaked into labelled reference"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

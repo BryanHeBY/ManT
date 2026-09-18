@@ -1868,6 +1868,14 @@ fn convert_report(
             6 => AtomRole::TableCellPayload,
             _ => return Err("unknown execution word role".to_owned()),
         };
+        if node.is_some_and(|node| {
+            nodes[node.0 as usize]
+                .flags
+                .contains(ExecutionNodeFlags::GENERATED)
+        }) && role == AtomRole::Authored
+        {
+            return Err("generated execution word is marked as authored".to_owned());
+        }
         let wrapper = option(value.wrapper);
         if wrapper.is_some_and(|key| {
             usize::try_from(key)
@@ -5222,6 +5230,15 @@ body
         assert_eq!(
             rejection(records),
             "execution atom does not match its formatter word"
+        );
+
+        let mut records = records_with_word_atom();
+        records.nodes.push(CNodeRecord { flags: 1, ..node() });
+        records.words[0].node = 0;
+        records.atoms[0].node = 0;
+        assert_eq!(
+            rejection(records),
+            "generated execution word is marked as authored"
         );
     }
 

@@ -45,6 +45,8 @@ enum mant_mandoc_execution_atom_role {
 	MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD
 };
 
+#define MANT_MANDOC_EXEC_NODE_GENERATED (1U << 0)
+
 enum mant_mandoc_execution_atom_disposition {
 	MANT_MANDOC_ATOM_BUFFERED = 1,
 	MANT_MANDOC_ATOM_EMITTED,
