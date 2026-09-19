@@ -251,7 +251,7 @@ mod tests {
                     terms: vec![vec![Inline::anchor(id.clone())]],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
-                        inline_term: false,
+                        placement: crate::DefinitionPlacement::Stacked,
                         spacing_before_lines: None,
                         ..Default::default()
                     },

@@ -37,7 +37,7 @@ fn inline_definition_continuations_keep_the_structural_description_origin() {
 }
 
 #[test]
-fn leading_spacing_and_code_do_not_become_an_inline_description() {
+fn leading_spacing_and_code_are_not_run_in_candidates() {
     for label in ["-a", "--long-option"] {
         for body in [".sp 2\nCONTENT", ".nf\nCONTENT\n.fi"] {
             let source = format!(".TH PROBE 1\n.SH OPTIONS\n.IP \"{label}\" 4\n{body}\n");

@@ -14,7 +14,7 @@ mod distance;
 mod mdoc;
 mod source_indent;
 mod spacing;
-pub(super) use definition::{DefinitionGeometry, TermPlacement};
+pub(super) use definition::DefinitionGeometry;
 pub(super) use distance::Distance;
 pub(super) use source_indent::SourceIndent;
 #[cfg(test)]

@@ -2,7 +2,7 @@
 use super::super::{
     Block, DefinitionItem, ListKind, LoweringContext, ManListState, Node, NodeKind, append_ordered,
     block_indent, definition_item, first_part_children, layout_with_spacing, ordinal_marker,
-    paragraph_distance_lines, plain_text, prepend_definition_heads, source_span, terms_fit_inline,
+    paragraph_distance_lines, plain_text, prepend_definition_heads, source_span,
 };
 
 pub(in crate::mandoc::blocks) fn lower_man_definition(
@@ -23,7 +23,6 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     let LoweredManItem {
         mut item,
         spacing_before,
-        max_width,
     } = lower_man_item(
         node,
         context,
@@ -82,7 +81,6 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
             source: source_span(node),
             indent_columns,
             spacing_before,
-            max_width,
             ordinal,
             merge,
             bullet,
@@ -105,7 +103,6 @@ struct ManDefinitionEmission {
     source: Option<mant_ir::SourceSpan>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_before: u16,
-    max_width: usize,
     ordinal: Option<super::ordered::ManOrdinalMarker>,
     merge: DefinitionMerge,
     bullet: bool,
@@ -121,7 +118,6 @@ fn emit_man_definition(
         source,
         indent_columns,
         spacing_before,
-        max_width,
         ordinal,
         merge,
         bullet,
@@ -142,15 +138,7 @@ fn emit_man_definition(
             );
             return;
         }
-        append_definition(
-            output,
-            item,
-            indent_columns,
-            spacing_before,
-            source,
-            max_width,
-            merge,
-        );
+        append_definition(output, item, indent_columns, spacing_before, source, merge);
         list_state.reset();
     }
 }
@@ -158,7 +146,6 @@ fn emit_man_definition(
 struct LoweredManItem {
     item: DefinitionItem,
     spacing_before: u16,
-    max_width: usize,
 }
 
 fn lower_man_item(
@@ -191,7 +178,7 @@ fn lower_man_item(
         paragraph_distance,
         crate::mandoc::layout::DefinitionGeometry {
             body: *definition_hanging_width,
-            placement: crate::mandoc::layout::TermPlacement::Fit,
+            placement: mant_ir::DefinitionPlacement::Fit,
             gap: 1,
         },
         super::super::DefinitionFlow {
@@ -206,16 +193,9 @@ fn lower_man_item(
         },
         formatter,
     );
-    let max_width = usize::try_from(
-        item.layout
-            .body_indent_columns
-            .saturating_sub(i32::from(item.layout.min_term_gap_columns)),
-    )
-    .unwrap_or(0);
     LoweredManItem {
         item,
         spacing_before,
-        max_width,
     }
 }
 
@@ -342,7 +322,6 @@ fn append_definition(
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
-    max_term_width: usize,
     merge: DefinitionMerge,
 ) -> DefinitionLocation {
     let block_index = output.len().saturating_sub(1);
@@ -367,9 +346,8 @@ fn append_definition(
                 prepend_definition_heads(&mut item, items.drain(first_pending..));
                 // Explicit TQ tags retain their source order and one owner;
                 // this does not assert semantic name equivalence.
-                // Adding earlier TQ heads can tighten width fitting, but
-                // cannot reopen the final head's explicitly closed line.
-                item.layout.inline_term &= terms_fit_inline(&item.terms, max_term_width);
+                // Adding earlier TQ heads cannot reopen the final head's
+                // explicitly closed line. Fit remains a reader decision.
             }
         }
         item.layout.spacing_before_lines = Some(if items.is_empty() {

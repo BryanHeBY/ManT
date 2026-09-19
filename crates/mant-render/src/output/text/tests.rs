@@ -269,7 +269,7 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
+                                placement: mant_ir::DefinitionPlacement::RunIn,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -288,7 +288,7 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
+                                placement: mant_ir::DefinitionPlacement::RunIn,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -361,7 +361,7 @@ fn man_format_keeps_inline_definitions_tight() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
+                                placement: mant_ir::DefinitionPlacement::RunIn,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -380,7 +380,7 @@ fn man_format_keeps_inline_definitions_tight() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: false,
+                                placement: mant_ir::DefinitionPlacement::Stacked,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -408,7 +408,7 @@ fn man_format_keeps_inline_definitions_tight() {
     // Inline terms use the same structural body origin as standalone
     // paragraphs, rather than introducing a label-length-dependent origin.
     assert!(man.contains("&&  Logical AND."), "got: {man:?}");
-    // inline_term=false in --format man: term on its own line.
+    // Stacked placement in --format man keeps the term on its own line.
     assert!(
         man.contains("--long-option-name\n    A lengthy flag."),
         "got: {man:?}"

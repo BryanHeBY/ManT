@@ -1,10 +1,10 @@
 //! Standalone queries over authored IR, with no parser, loader, or report renderer.
 
 use mant_ir::{
-    Block, DefinitionItem, DefinitionLayout, Document, DocumentAddress, DocumentMeta,
-    DocumentSource, EntryFacts, EntryForm, EntryKind, EntryNameBinding, EntryNameEvidence, Inline,
-    LayoutHint, LinkTarget, MarkdownOrigin, NameCase, ReferenceScope, ResolvedContent,
-    SourceFormat,
+    Block, DefinitionItem, DefinitionLayout, DefinitionPlacement, Document, DocumentAddress,
+    DocumentMeta, DocumentSource, EntryFacts, EntryForm, EntryKind, EntryNameBinding,
+    EntryNameEvidence, Inline, LayoutHint, LinkTarget, MarkdownOrigin, NameCase, ReferenceScope,
+    ResolvedContent, SourceFormat,
 };
 use mant_protocol::{
     ContentSelector, DocumentEdge, DocumentEdgeKind, DocumentScope, DocumentSelector,
@@ -73,7 +73,10 @@ fn content(name: &str, links: bool) -> ResolvedContent {
                         layout: LayoutHint::default(),
                         source: None,
                     }],
-                    layout: DefinitionLayout::default(),
+                    layout: DefinitionLayout {
+                        placement: DefinitionPlacement::Fit,
+                        ..DefinitionLayout::default()
+                    },
                     source: None,
                     entry: Some(EntryFacts {
                         id: "command-run".into(),
@@ -135,6 +138,16 @@ fn exercise_queries() -> Result<(), Box<dyn std::error::Error>> {
         assert!(mant_ir::validate_document(document.document.as_ref().unwrap()).is_empty());
     }
     let first = &documents[0];
+    let definition = match &first.document.as_ref().unwrap().blocks[0] {
+        Block::DefinitionList { items, .. } => &items[0],
+        _ => unreachable!("consumer fixture is a definition list"),
+    };
+    assert_eq!(definition.layout.placement, DefinitionPlacement::Fit);
+    let narrow = mant_ir::geometry::definition_placement(definition, 0, Some(3));
+    let wide = mant_ir::geometry::definition_placement(definition, 0, Some(80));
+    assert!(!narrow.run_in);
+    assert!(wide.run_in);
+    assert_eq!(wide.body_origin_columns, 4);
     let selector = ContentSelector::id("command-run");
     let outline = build_outline_projection(first, EntryProjection::All, Some(selector.clone()))?;
     assert!(matches!(

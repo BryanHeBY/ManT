@@ -12,11 +12,10 @@ fn keeps_section_topology() {
 }
 
 /// The operator precedence table in "PATTERNS AND ACTIONS" contains
-/// short terms (`* / %`, `&&`, `space`) that the model must flag as
-/// `inline_term = true`, and wider terms (`< > <= >= == !=`) that stay
-/// `inline_term = false`.
+/// short and wide terms retain a conditional `Fit` placement. The shared
+/// geometry resolver decides whether each final label row fits its field.
 #[test]
-fn operator_table_has_correct_inline_term_decisions() {
+fn operator_table_retains_definition_placement_decisions() {
     let doc = archlinux_manual("gawk");
     let section = common::section(doc, "PATTERNS AND ACTIONS");
     let items = common::nested_definition_items(section);
@@ -32,8 +31,8 @@ fn operator_table_has_correct_inline_term_decisions() {
             })
             .unwrap_or_else(|| panic!("missing gawk operator term {needle:?}"));
         assert!(
-            item.layout.inline_term,
-            "gawk operator {needle:?} should be inline_term=true"
+            mant_ir::geometry::definition_placement(item, 0, None).run_in,
+            "gawk operator {needle:?} should fit its field"
         );
     }
 
@@ -47,8 +46,8 @@ fn operator_table_has_correct_inline_term_decisions() {
         })
         .expect("gawk relational operator term");
     assert!(
-        !relational.layout.inline_term,
-        "gawk wide operator term should be inline_term=false"
+        !mant_ir::geometry::definition_placement(relational, 0, None).run_in,
+        "gawk wide operator term should overflow its field"
     );
 }
 
@@ -75,7 +74,8 @@ fn man_format_preserves_resolved_operator_body_columns() {
                     .any(|head| common::inline_text(head) == term)
             })
             .unwrap();
-        assert!(item.layout.inline_term);
+        assert_eq!(item.layout.placement, mant_ir::DefinitionPlacement::Fit);
+        assert!(mant_ir::geometry::definition_placement(item, 0, None).run_in);
         assert_eq!(item.layout.body_indent_columns, 7);
         let line = output.lines().find(|line| line.contains(body)).unwrap();
         assert_eq!(

@@ -1,8 +1,8 @@
 //! List markers, definition heads, and their shared content/anchor ownership.
-use super::super::inline::{shifted_reference_marks, spans_scalars};
+use super::super::inline::shifted_reference_marks;
 use super::super::{
     Block, ListKind, LogicalLine, Span, Style, StyledInlineLine, inline_anchor_rows, shifted_links,
-    spans_width, theme,
+    theme,
 };
 use super::DocumentBuilder;
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
@@ -108,17 +108,7 @@ impl DocumentBuilder<'_> {
                 self.anchors
                     .insert(identity.id.to_string(), self.lines.len());
             }
-            if item.layout.inline_term {
-                self.inline_definition(item, indent);
-            } else {
-                for term in &item.terms {
-                    self.inline_lines(term, indent, Style::default().fg(theme::TEXT));
-                }
-                self.blocks(
-                    &item.description,
-                    compose_origin(indent, item.layout.body_indent_columns),
-                );
-            }
+            self.definition(item, indent);
         }
     }
 
@@ -147,7 +137,7 @@ impl DocumentBuilder<'_> {
         (head_lines, head_targets)
     }
 
-    fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
+    fn definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
         let (mut head_lines, head_targets) = self.definition_head(item);
         let block_origin = compose_origin(indent, item.layout.body_indent_columns);
         if head_lines.is_empty() {
@@ -155,17 +145,12 @@ impl DocumentBuilder<'_> {
             self.blocks(&item.description, block_origin);
             return;
         }
-        // A trailing zero-width root shares the last head/body row when that
-        // row runs in. Its provisional slot is not a new visible line.
-        let last_target_row = if item.inline_description().is_some() {
-            head_lines.len().saturating_sub(1)
-        } else {
-            head_lines.len()
-        };
-        for (id, row) in head_targets {
+        let has_candidate = item.run_in_description().is_some();
+        let final_head_row = head_lines.len().saturating_sub(1);
+        for (id, row) in head_targets.iter().filter(|(_, row)| *row < final_head_row) {
             self.anchors
-                .entry(id)
-                .or_insert(self.lines.len() + row.min(last_target_row));
+                .entry(id.clone())
+                .or_insert(self.lines.len() + *row);
         }
         let last = head_lines.pop().unwrap_or_default();
         for line in head_lines {
@@ -175,68 +160,73 @@ impl DocumentBuilder<'_> {
                     .with_reference_marks(line.reference_marks),
             );
         }
-        let mut term_spans = last.spans;
-        let mut term_links = last.links;
-        let mut term_marks = last.reference_marks;
-        // Terminal placement measures the final visible head's graphemes;
-        // whole-string shaping can charge adjacent glyphs differently.
-        let term_width = spans_width(&term_spans);
-        if let Some((children, layout)) = item.inline_description() {
-            for (id, row) in inline_anchor_rows(children) {
-                self.anchors.entry(id).or_insert(self.lines.len() + row);
-            }
-            let first_indent = compose_origin(block_origin, layout.indent_columns);
-            let continuation_indent =
-                compose_origin(first_indent, layout.continuation_indent_columns);
-            let description_indent = first_indent.max(compose_origin(
+        if has_candidate && let Some((children, _)) = item.run_in_description() {
+            let carrier = self.definition_placement_carrier(
+                item,
                 indent,
-                coordinate(
-                    term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            ));
-            term_spans.push(Span::raw(
-                " ".repeat(
-                    padding(description_indent)
-                        .saturating_sub(padding(indent).saturating_add(term_width))
-                        .max(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            ));
-            let mut description_lines =
-                self.styled_inlines(children, Style::default().fg(theme::TEXT));
-            let first = description_lines
-                .first_mut()
-                .map_or_else(StyledInlineLine::default, std::mem::take);
-            let description_scalar_offset = spans_scalars(&term_spans);
-            term_links.extend(shifted_links(first.links, description_scalar_offset));
-            term_marks.extend(shifted_reference_marks(
-                first.reference_marks,
-                description_scalar_offset,
-            ));
-            term_spans.extend(first.spans);
-            self.push(
-                LogicalLine::hanging(padding(indent), padding(continuation_indent), term_spans)
-                    .with_links(term_links)
-                    .with_reference_marks(term_marks),
+                last,
+                &head_targets,
+                final_head_row,
+                children,
             );
-            for line in description_lines.into_iter().skip(1) {
-                self.push(
-                    LogicalLine::hanging(
-                        padding(continuation_indent),
-                        padding(continuation_indent),
-                        line.spans,
-                    )
-                    .with_links(line.links)
-                    .with_reference_marks(line.reference_marks),
-                );
-            }
+            self.push(carrier);
             self.blocks(&item.description[1..], block_origin);
         } else {
             self.push(
-                LogicalLine::hanging(padding(indent), padding(indent), term_spans)
-                    .with_links(term_links)
-                    .with_reference_marks(term_marks),
+                LogicalLine::hanging(padding(indent), padding(indent), last.spans)
+                    .with_links(last.links)
+                    .with_reference_marks(last.reference_marks)
+                    .with_anchors(
+                        head_targets
+                            .into_iter()
+                            .filter(|(_, row)| *row >= final_head_row)
+                            .map(|(id, _)| id)
+                            .collect(),
+                    ),
             );
             self.blocks(&item.description, block_origin);
         }
     }
+
+    fn definition_placement_carrier(
+        &self,
+        item: &mant_ir::DefinitionItem,
+        indent: i32,
+        last: StyledInlineLine,
+        head_targets: &[(String, usize)],
+        final_head_row: usize,
+        children: &[mant_ir::Inline],
+    ) -> LogicalLine {
+        let plan = mant_ir::geometry::definition_placement_plan(item, indent);
+        let final_head_anchors = head_targets
+            .iter()
+            .filter(|(_, row)| *row >= final_head_row)
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        let description_anchors = inline_anchor_rows(children);
+        let term = LogicalLine::hanging(padding(indent), padding(indent), last.spans)
+            .with_links(last.links)
+            .with_reference_marks(last.reference_marks)
+            .with_anchors(final_head_anchors);
+        let description = self
+            .styled_inlines(children, Style::default().fg(theme::TEXT))
+            .into_iter()
+            .enumerate()
+            .map(|(row, line)| {
+                LogicalLine::hanging(0, 0, line.spans)
+                    .with_links(line.links)
+                    .with_reference_marks(line.reference_marks)
+                    .with_anchors(anchors_at(&description_anchors, row))
+            })
+            .collect();
+        LogicalLine::conditional_definition(plan, term, description)
+    }
+}
+
+fn anchors_at(anchors: &[(String, usize)], row: usize) -> Vec<String> {
+    anchors
+        .iter()
+        .filter(|(_, anchor_row)| *anchor_row == row)
+        .map(|(id, _)| id.clone())
+        .collect()
 }

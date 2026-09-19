@@ -720,7 +720,7 @@ fn explainable_manual() -> Document {
         items: vec![DefinitionItem {
             source: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term: false,
+                placement: mant_ir::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },

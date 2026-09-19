@@ -34,7 +34,7 @@ use unicode_width::UnicodeWidthChar;
 use crate::theme;
 #[cfg(test)]
 use inline::styled_inline_lines;
-use inline::{count_sections, inline_anchor_rows, shifted_links, spans_width, tldr_style};
+use inline::{count_sections, inline_anchor_rows, shifted_links, tldr_style};
 pub use model::ExternalUri;
 pub(crate) use model::LinkTarget;
 use model::{
@@ -363,21 +363,24 @@ impl DocumentView {
 
         for line in &self.lines {
             logical_rows.push(rows.len());
-            let wrapped_lines = wrap_line_with_links(line, width);
-            search_records.extend(search_records_for_lines(&wrapped_lines, rows.len()));
-            for wrapped in wrapped_lines {
-                let row = rows.len();
-                for id in wrapped.anchors {
-                    anchor_rows.entry(id).or_insert(row);
+            let resolved_lines = line.resolved_lines(width);
+            for resolved in resolved_lines.iter() {
+                let wrapped_lines = wrap_line_with_links(resolved, width);
+                search_records.extend(search_records_for_lines(&wrapped_lines, rows.len()));
+                for wrapped in wrapped_lines {
+                    let row = rows.len();
+                    for id in wrapped.anchors {
+                        anchor_rows.entry(id).or_insert(row);
+                    }
+                    links.extend(wrapped.links.into_iter().map(|link| RenderedLinkRegion {
+                        target: link.target,
+                        row,
+                        start_column: link.start_column,
+                        end_column: link.end_column,
+                    }));
+                    rows.push(wrapped.line);
+                    surfaces.push(resolved.surface);
                 }
-                links.extend(wrapped.links.into_iter().map(|link| RenderedLinkRegion {
-                    target: link.target,
-                    row,
-                    start_column: link.start_column,
-                    end_column: link.end_column,
-                }));
-                rows.push(wrapped.line);
-                surfaces.push(line.surface);
             }
         }
         logical_rows.push(rows.len());

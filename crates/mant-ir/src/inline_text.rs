@@ -87,13 +87,6 @@ fn last_character(node: &Inline) -> Option<char> {
     }
 }
 
-/// Decide whether definition terms fit beside their first description line.
-#[must_use]
-pub fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
-    crate::geometry::definition_run_in_width(terms)
-        .is_some_and(|width| (1..=max_width).contains(&width))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,20 +164,5 @@ mod tests {
                 value: value.into()
             }]));
         }
-    }
-
-    #[test]
-    fn tag_fit_uses_visible_cells_inside_styles_and_original_hard_lines() {
-        let terms = |text: &str| {
-            vec![vec![Inline::Strong {
-                children: vec![Inline::Text { value: text.into() }],
-            }]]
-        };
-        assert!(!terms_fit_inline(&terms("日本日本"), 7));
-        assert!(terms_fit_inline(&terms("日本日本"), 8));
-        assert!(terms_fit_inline(&terms("e\u{301}"), 1));
-        assert!(terms_fit_inline(&terms("😀"), 2));
-        assert!(!terms_fit_inline(&terms("😀"), 1));
-        assert!(terms_fit_inline(&terms("abc\ndef"), 3));
     }
 }

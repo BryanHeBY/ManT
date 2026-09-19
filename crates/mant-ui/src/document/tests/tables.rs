@@ -2,6 +2,65 @@
 use super::*;
 
 #[test]
+fn fit_definition_uses_the_allocated_table_cell_width() {
+    let definition_cell = |body_indent_columns| TableCell {
+        kind: mant_ir::TableCellKind::Text,
+        blocks: vec![Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            compact: true,
+            items: vec![DefinitionItem {
+                source: None,
+                entry: None,
+                terms: vec![vec![Inline::Text {
+                    value: "12345678".into(),
+                }]],
+                description: vec![paragraph("BODY")],
+                layout: mant_ir::DefinitionLayout {
+                    placement: mant_ir::DefinitionPlacement::Fit,
+                    body_indent_columns,
+                    min_term_gap_columns: 2,
+                    spacing_before_lines: None,
+                },
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        column_span: 1,
+        row_span: 1,
+        alignment: None,
+    };
+    let mut query = bundle();
+    query.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![
+                definition_cell(12),
+                TableCell {
+                    kind: mant_ir::TableCellKind::Text,
+                    blocks: vec![paragraph("NEIGHBOUR")],
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                },
+            ],
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let view = DocumentView::new(&query);
+    let narrow = view.render(22);
+    let wide = view.render(80);
+    assert!(
+        narrow.search("BODY")[0].row > narrow.search("12345678")[0].row,
+        "{:?}",
+        narrow.text
+    );
+    assert_eq!(wide.search("BODY")[0].row, wide.search("12345678")[0].row);
+    assert_eq!(narrow.search("NEIGHBOUR").len(), 1);
+    assert_eq!(wide.search("NEIGHBOUR").len(), 1);
+}
+
+#[test]
 fn signed_table_cells_preserve_real_origins_links_and_anchors() {
     for (table_indent, child_indent, expected_column) in
         [(-2, 3, 1), (3, -2, 1), (4096, 3, 4096), (4090, 10, 4096)]
@@ -400,4 +459,325 @@ fn narrow_tables_stack_cells_instead_of_dropping_content() {
         rows.iter().map(ToString::to_string).collect::<String>(),
         "ab"
     );
+}
+
+fn tabbed_fit_definition(body_indent_columns: i32) -> Block {
+    tabbed_fit_definition_with_children(
+        body_indent_columns,
+        vec![
+            Inline::anchor("body-target"),
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section {
+                    id: "description".into(),
+                },
+                title: None,
+                children: vec![Inline::Text {
+                    value: "BODY".into(),
+                }],
+            },
+        ],
+    )
+}
+
+fn tabbed_fit_definition_with_children(body_indent_columns: i32, children: Vec<Inline>) -> Block {
+    Block::DefinitionList {
+        declaration_groups: Vec::new(),
+        compact: true,
+        items: vec![DefinitionItem {
+            source: None,
+            entry: None,
+            terms: vec![vec![Inline::Text {
+                value: "a\tb".into(),
+            }]],
+            description: vec![Block::Paragraph {
+                children,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            layout: mant_ir::DefinitionLayout {
+                placement: mant_ir::DefinitionPlacement::Fit,
+                body_indent_columns,
+                min_term_gap_columns: 1,
+                spacing_before_lines: None,
+            },
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }
+}
+
+fn text_cell(blocks: Vec<Block>) -> TableCell {
+    TableCell {
+        kind: mant_ir::TableCellKind::Text,
+        blocks,
+        column_span: 1,
+        row_span: 1,
+        alignment: None,
+    }
+}
+
+fn aligned_text_cell(blocks: Vec<Block>, alignment: mant_ir::TableAlignment) -> TableCell {
+    TableCell {
+        alignment: Some(alignment),
+        ..text_cell(blocks)
+    }
+}
+
+#[test]
+fn fit_definition_in_second_column_uses_absolute_tab_origin_and_keeps_payload() {
+    // Pinned CVS term.c::term_fill() and term_tab.c::term_tab_next() advance
+    // tabs from the device column, not from the start of a tbl cell.
+    let mut query = bundle();
+    let document = query.document.as_mut().unwrap();
+    document.sections.clear();
+    document.blocks = vec![Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![
+                text_cell(vec![paragraph("KEY")]),
+                text_cell(vec![tabbed_fit_definition(6)]),
+            ],
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+
+    let rendered = DocumentView::new(&query).render(20);
+    let term_matches = rendered.search("a");
+    let body_matches = rendered.search("BODY");
+    assert!(!term_matches.is_empty(), "{:?}", rendered.text);
+    assert!(!body_matches.is_empty(), "{:?}", rendered.text);
+    let term = &term_matches[0];
+    let body = &body_matches[0];
+    assert_eq!(term.row, body.row, "{:?}", rendered.text);
+    assert_eq!(body.start_column, 11, "{:?}", rendered.text);
+    assert_eq!(rendered.anchor_row("body-target"), Some(body.row));
+    assert_eq!(
+        rendered.link_target_at(body.row, body.start_column),
+        Some(&LinkTarget::Section("description".into()))
+    );
+}
+
+#[test]
+fn nested_second_column_resolves_tabs_from_the_outer_absolute_origin() {
+    let nested = Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![
+                text_cell(vec![paragraph("Q")]),
+                text_cell(vec![tabbed_fit_definition(8)]),
+            ],
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let mut query = bundle();
+    let document = query.document.as_mut().unwrap();
+    document.sections.clear();
+    document.blocks = vec![Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![text_cell(vec![paragraph("KEY")]), text_cell(vec![nested])],
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+
+    let rendered = DocumentView::new(&query).render(40);
+    assert!(
+        rendered.search("BODY")[0].row > rendered.search("a")[0].row,
+        "{:?}",
+        rendered.text
+    );
+}
+
+#[test]
+fn stacked_table_fallback_keeps_the_translated_tab_origin() {
+    let mut query = bundle();
+    let document = query.document.as_mut().unwrap();
+    document.sections.clear();
+    document.blocks = vec![Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![
+                text_cell(vec![paragraph("LONGKEY8")]),
+                text_cell(vec![tabbed_fit_definition(8)]),
+            ],
+        }],
+        layout: LayoutHint {
+            indent_columns: 3,
+            ..Default::default()
+        },
+        source: None,
+    }];
+
+    let rendered = DocumentView::new(&query).render(14);
+    assert_eq!(
+        rendered.search("a")[0].row,
+        rendered.search("BODY")[0].row,
+        "{:?}",
+        rendered.text
+    );
+}
+
+#[test]
+fn aligned_fit_definition_resolves_from_its_padded_absolute_origin() {
+    // The exact literal-tab probe was checked with the pinned CVS renderer.
+    // `term_flushln()` measures and aligns one field, while `term_tab_next()`
+    // advances from that field's effective device position. The IR-only Fit
+    // carrier below adds the consumer-side conditional-layout threshold.
+    for (alignment, expected_b_column, expect_run_in) in [
+        (mant_ir::TableAlignment::Right, 16, false),
+        (mant_ir::TableAlignment::Center, 8, true),
+    ] {
+        let mut query = bundle();
+        let document = query.document.as_mut().unwrap();
+        document.sections.clear();
+        document.blocks = vec![Block::Table {
+            rows: vec![
+                TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: vec![text_cell(vec![paragraph("123456789012345678901")])],
+                },
+                TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: vec![aligned_text_cell(
+                        vec![tabbed_fit_definition(10)],
+                        alignment,
+                    )],
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let rendered = DocumentView::new(&query).render(21);
+        let term = &rendered.search("b")[0];
+        let body = &rendered.search("BODY")[0];
+        assert_eq!(term.start_column, expected_b_column, "{:?}", rendered.text);
+        assert_eq!(term.row == body.row, expect_run_in, "{:?}", rendered.text);
+        if alignment == mant_ir::TableAlignment::Right {
+            assert_eq!(body.start_column + "BODY".len(), 21, "{:?}", rendered.text);
+        }
+        assert_eq!(rendered.anchor_row("body-target"), Some(body.row));
+        assert_eq!(
+            rendered.link_target_at(body.row, body.start_column),
+            Some(&LinkTarget::Section("description".into()))
+        );
+    }
+}
+
+#[test]
+fn later_hard_rows_cannot_choose_the_aligned_fit_branch_or_gap() {
+    let definition = tabbed_fit_definition_with_children(
+        10,
+        vec![
+            Inline::anchor("body-target"),
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section {
+                    id: "description".into(),
+                },
+                title: None,
+                children: vec![Inline::Text {
+                    value: "BODY".into(),
+                }],
+            },
+            Inline::LineBreak,
+            Inline::anchor("later-target"),
+            Inline::Text {
+                value: "123456789012345678901".into(),
+            },
+        ],
+    );
+    for (alignment, expected_b_column, expect_run_in) in [
+        (mant_ir::TableAlignment::Right, 16, false),
+        (mant_ir::TableAlignment::Center, 8, true),
+    ] {
+        let mut query = bundle();
+        let document = query.document.as_mut().unwrap();
+        document.sections.clear();
+        document.blocks = vec![Block::Table {
+            rows: vec![TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: vec![aligned_text_cell(vec![definition.clone()], alignment)],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let rendered = DocumentView::new(&query).render(21);
+        let term = &rendered.search("b")[0];
+        let body = &rendered.search("BODY")[0];
+        let later = &rendered.search("123456789012345678901")[0];
+        assert_eq!(term.start_column, expected_b_column, "{:?}", rendered.text);
+        assert_eq!(term.row == body.row, expect_run_in, "{:?}", rendered.text);
+        // The later description row keeps the definition continuation
+        // origin.  Its width must not participate in choosing the first-row
+        // Fit/Stacked branch or the term-to-description gap.
+        assert_eq!(later.start_column, 10, "{:?}", rendered.text);
+        assert_eq!(rendered.anchor_row("body-target"), Some(body.row));
+        assert_eq!(rendered.anchor_row("later-target"), Some(later.row));
+        assert_eq!(
+            rendered.link_target_at(body.row, body.start_column),
+            Some(&LinkTarget::Section("description".into()))
+        );
+    }
+}
+
+#[test]
+fn every_hard_row_gets_its_own_center_or_right_alignment() {
+    // Pinned CVS tbl_term.c reapplies TERMP_CENTER/TERMP_RIGHT before each
+    // term_flushln(); term.c computes vbl from that output row's own width.
+    for (alignment, long_column, short_column) in [
+        (mant_ir::TableAlignment::Right, 6, 9),
+        (mant_ir::TableAlignment::Center, 3, 4),
+    ] {
+        let content = Block::Paragraph {
+            children: vec![
+                Inline::anchor("long-row"),
+                Inline::Text {
+                    value: "LONG\n".into(),
+                },
+                Inline::anchor("short-row"),
+                Inline::Link {
+                    target: mant_ir::LinkTarget::Section {
+                        id: "description".into(),
+                    },
+                    title: None,
+                    children: vec![Inline::Text { value: "X".into() }],
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let mut query = bundle();
+        let document = query.document.as_mut().unwrap();
+        document.sections.clear();
+        document.blocks = vec![Block::Table {
+            rows: vec![
+                TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: vec![text_cell(vec![paragraph("1234567890")])],
+                },
+                TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: vec![aligned_text_cell(vec![content], alignment)],
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let rendered = DocumentView::new(&query).render(10);
+        let long = &rendered.search("LONG")[0];
+        let short = &rendered.search("X")[0];
+        assert_eq!(long.start_column, long_column, "{:?}", rendered.text);
+        assert_eq!(short.start_column, short_column, "{:?}", rendered.text);
+        assert_eq!(rendered.anchor_row("long-row"), Some(long.row));
+        assert_eq!(rendered.anchor_row("short-row"), Some(short.row));
+        assert_eq!(
+            rendered.link_target_at(short.row, short.start_column),
+            Some(&LinkTarget::Section("description".into()))
+        );
+    }
 }

@@ -42,7 +42,11 @@ fn explicit_initial_body_requests_end_short_heads_without_adding_blank_rows() {
                 let query = load_roff_bytes(source.as_bytes()).unwrap();
                 let text = render_query_text(&query);
                 let owner = item(&query);
-                assert!(!owner.layout.inline_term, "{source}\n{text}");
+                assert_eq!(
+                    owner.layout.placement,
+                    mant_ir::DefinitionPlacement::Stacked,
+                    "{source}\n{text}"
+                );
                 let lines: Vec<_> = text.lines().collect();
                 let head_row = lines
                     .iter()
@@ -69,7 +73,11 @@ fn invisible_inline_controls_do_not_hide_an_initial_body_break() {
     let query = load_roff_bytes(source).unwrap();
     let text = render_query_text(&query);
     let owner = item(&query);
-    assert!(!owner.layout.inline_term, "{text}");
+    assert_eq!(
+        owner.layout.placement,
+        mant_ir::DefinitionPlacement::Stacked,
+        "{text}"
+    );
     let lines = text.lines().collect::<Vec<_>>();
     let head_row = lines.iter().position(|line| line.trim() == "x").unwrap();
     assert_eq!(lines[head_row + 1].trim(), "BODY", "{text}");
@@ -197,7 +205,7 @@ fn pending_head_effects_recurse_through_state_only_wrappers() {
     // Op generates visible delimiters and therefore ends the transparent
     // pending prefix even when its authored operand is zero-width.
     let query = load_roff_bytes(b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bl -tag -width Ds\n.It x\n.Op \\&\n.sp 0\n.No BODY\n.El\n").unwrap();
-    assert!(item(&query).layout.inline_term);
+    assert!(mant_ir::geometry::definition_placement(item(&query), 0, None).run_in);
     let text = render_query_text(&query);
     assert!(
         text.lines()
@@ -350,7 +358,10 @@ fn pending_definition_head_executes_no_break_margin_flush_in_order() {
         ),
     ] {
         let query = load_roff_bytes(source.as_bytes()).unwrap();
-        assert!(item(&query).layout.inline_term, "{label}: {source}");
+        assert!(
+            mant_ir::geometry::definition_placement(item(&query), 0, None).run_in,
+            "{label}: {source}"
+        );
         let text = render_query_text(&query);
         assert!(
             text.lines()
@@ -368,7 +379,10 @@ fn requests_after_printable_body_do_not_retroactively_stack_the_head() {
                 format!(".TH PROBE 1\n.SH TEST\n.TP\n.B x\n{prefix}FIRST\n{request}\nSECOND\n");
             let query = load_roff_bytes(source.as_bytes()).unwrap();
             let text = render_query_text(&query);
-            assert!(item(&query).layout.inline_term, "{source}\n{text}");
+            assert!(
+                mant_ir::geometry::definition_placement(item(&query), 0, None).run_in,
+                "{source}\n{text}"
+            );
             assert!(
                 text.lines()
                     .any(|line| line.starts_with('x') && line.contains("FIRST")),
@@ -391,10 +405,14 @@ fn ordinary_fitting_and_mdoc_targeted_definitions_keep_their_existing_contracts(
     ] {
         let source = format!(".TH PROBE 1\n.SH TEST\n{head}BODY\n");
         let query = load_roff_bytes(source.as_bytes()).unwrap();
-        assert_eq!(item(&query).layout.inline_term, inline, "{source}");
+        assert_eq!(
+            mant_ir::geometry::definition_placement(item(&query), 0, None).run_in,
+            inline,
+            "{source}"
+        );
     }
     let query = load_roff_bytes(b".Dd September 11, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bl -tag -width Ds\n.Tg Exact.Target\n.It Fl x\nBODY\n.El\n").unwrap();
-    assert!(item(&query).layout.inline_term);
+    assert!(mant_ir::geometry::definition_placement(item(&query), 0, None).run_in);
     assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
     let json = serde_json::to_string(query.document.as_ref().unwrap()).unwrap();
     assert!(json.contains("Exact.Target"));

@@ -2,8 +2,8 @@
 //!
 //! The `inline-terms.1` fixture exercises every decision the model makes:
 //!
-//! * **Short terms** (`* / %`, `&&`, `space`) → `inline_term = true`
-//! * **Long terms** (`< > <= >= == !=`, `--verbose`) → `inline_term = false`
+//! * **Short terms** (`* / %`, `&&`, `space`) → `Fit` resolves run-in
+//! * **Long terms** (`< > <= >= == !=`, `--verbose`) → `Fit` resolves stacked
 //! * **Literal ASCII markers** (`o` in EXIT STATUS) → retained as definition tags
 //!
 //! Tests go through the full pipeline: `parse_manual_source` → model →
@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use mant_codec::encode::render_markdown;
 use mant_ir::{Block, Document};
+use mant_loader::load_roff_bytes;
 use mant_loader::parse_manual_source;
 use mant_render::{render_query_man, render_query_text};
 
@@ -32,17 +33,63 @@ fn document() -> &'static Document {
     DOC.get_or_init(|| parse_manual_source(&fixture_path()).expect("parse inline-terms fixture"))
 }
 
+#[test]
+fn native_definition_styles_retain_their_conditional_placement_policy() {
+    // Verified before this assertion with the pinned CVS renderer.  The
+    // placement branches come from man_term.c::pre_TP/post_TP and
+    // mdoc_term.c::termp_it_pre/post; term.c::term_flushln performs the final
+    // field-width decision.  A reader, not the producer, therefore resolves
+    // `Fit` at its allocated width.
+    let man = load_roff_bytes(
+        b".TH K17 1\n.SH OPTIONS\n.TP 8n\n.B short\nshort body\n.TP 4n\n.B longlabel\nlong body\n",
+    )
+    .unwrap();
+    let man_items =
+        common::definition_items(common::section(man.document.as_ref().unwrap(), "OPTIONS"));
+    assert_eq!(man_items.len(), 2);
+    assert!(
+        man_items
+            .iter()
+            .all(|item| item.layout.placement == mant_ir::DefinitionPlacement::Fit)
+    );
+    assert!(mant_ir::geometry::definition_placement(man_items[0], 0, None).run_in);
+    assert!(!mant_ir::geometry::definition_placement(man_items[1], 0, None).run_in);
+
+    let mdoc = load_roff_bytes(
+        b".Dd September 19, 2026\n.Dt K17 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It short\ntag body\n.It longlabel\nlong body\n.El\n.Bl -hang\n.It hang\nhang body\n.El\n.Bl -inset\n.It inset\ninset body\n.El\n.Bl -diag\n.It diag\ndiag body\n.El\n",
+    )
+    .unwrap();
+    let mdoc_items = common::definition_items(common::section(
+        mdoc.document.as_ref().unwrap(),
+        "DESCRIPTION",
+    ));
+    assert_eq!(mdoc_items.len(), 5);
+    assert_eq!(
+        mdoc_items[0].layout.placement,
+        mant_ir::DefinitionPlacement::Fit
+    );
+    assert_eq!(
+        mdoc_items[1].layout.placement,
+        mant_ir::DefinitionPlacement::Fit
+    );
+    assert!(
+        mdoc_items[2..]
+            .iter()
+            .all(|item| { item.layout.placement == mant_ir::DefinitionPlacement::RunIn })
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Model-layer assertions (lowering)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn short_terms_are_flagged_inline_and_long_terms_are_not() {
+fn fit_terms_resolve_against_the_retained_definition_field() {
     let doc = document();
     let operators = common::section(doc, "OPERATORS");
     let items = common::definition_items(operators);
 
-    // (* / %, &&, space) → inline_term = true
+    // (* / %, &&, space) fit the retained field.
     let short_terms = ["* / %", "&&", "space"];
     for needle in short_terms {
         let item = items
@@ -54,12 +101,12 @@ fn short_terms_are_flagged_inline_and_long_terms_are_not() {
             })
             .unwrap_or_else(|| panic!("missing operator term {needle:?}"));
         assert!(
-            item.layout.inline_term,
-            "term {needle:?} should be inline_term=true"
+            mant_ir::geometry::definition_placement(item, 0, None).run_in,
+            "term {needle:?} should fit"
         );
     }
 
-    // (< > <= >= == !=) is wider than 6 chars → inline_term = false
+    // (< > <= >= == !=) is wider than the retained six-column field.
     let wide = items
         .iter()
         .find(|item| {
@@ -69,8 +116,8 @@ fn short_terms_are_flagged_inline_and_long_terms_are_not() {
         })
         .expect("relational operators term");
     assert!(
-        !wide.layout.inline_term,
-        "wide term should be inline_term=false"
+        !mant_ir::geometry::definition_placement(wide, 0, None).run_in,
+        "wide term should not fit"
     );
 }
 
@@ -89,8 +136,8 @@ fn long_option_names_are_not_inline() {
         })
         .expect("--verbose option");
     assert!(
-        !verbose.layout.inline_term,
-        "--verbose should be inline_term=false"
+        !mant_ir::geometry::definition_placement(verbose, 0, None).run_in,
+        "--verbose should not fit"
     );
 }
 
@@ -172,7 +219,7 @@ fn tq_aliases_share_one_definition_and_recompute_its_layout() {
         ["-a", "--all"]
     );
     assert!(
-        item.layout.inline_term,
+        mant_ir::geometry::definition_placement(item, 0, None).run_in,
         "separate source heads are measured independently; --all fits width 7"
     );
 }
@@ -193,15 +240,15 @@ fn explicit_tp_widths_control_layout_and_persist() {
     };
 
     assert!(
-        find("tenletters").layout.inline_term,
+        mant_ir::geometry::definition_placement(find("tenletters"), 0, None).run_in,
         "a ten-column term fits a `.TP 20` hanging margin"
     );
     assert!(
-        !find("short").layout.inline_term,
+        !mant_ir::geometry::definition_placement(find("short"), 0, None).run_in,
         "a five-column term does not fit a `.TP 3` hanging margin"
     );
     assert!(
-        find("xy").layout.inline_term,
+        mant_ir::geometry::definition_placement(find("xy"), 0, None).run_in,
         "a width-less `.TP` inherits the preceding three-column margin"
     );
 }
@@ -215,7 +262,7 @@ fn query() -> mant_ir::ResolvedContent {
 }
 
 #[test]
-fn text_format_renders_inline_terms_tight_and_block_terms_hanging() {
+fn text_format_resolves_run_in_and_stacked_terms() {
     let output = render_query_text(&query());
 
     // Inline heads share their structural body origin, clearing long terms.
@@ -229,7 +276,7 @@ fn text_format_renders_inline_terms_tight_and_block_terms_hanging() {
         "got: {output:?}"
     );
 
-    // inline_term=false: term on its own line.
+    // Fit=false: term on its own line.
     assert!(
         output.contains("--verbose\n"),
         "--verbose should be on its own line, got: {output:?}"
@@ -237,7 +284,7 @@ fn text_format_renders_inline_terms_tight_and_block_terms_hanging() {
 }
 
 #[test]
-fn man_format_renders_inline_terms_tight() {
+fn man_format_resolves_run_in_terms() {
     let output = render_query_man(&query());
 
     // Same tight layout via --format man (tldr omitted, same renderer).
@@ -262,17 +309,17 @@ fn man_format_renders_inline_terms_tight() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn markdown_renders_inline_terms_on_the_same_line() {
+fn markdown_resolves_definition_placement_without_changing_source_content() {
     let output = render_markdown(&query());
 
-    // inline_term=true: term bold + space + description on one line.
+    // Fit=true: term bold + space + description on one line.
     assert!(
         output.contains("**\\* / %** Multiplication, division, and modulus.")
             || output.contains("**\\* / %** Multiplication"),
         "markdown inline term should be on one line, got: {output:?}"
     );
 
-    // inline_term=false: term on its own line, description on the next.
+    // Fit=false: term on its own line, description on the next.
     assert!(
         output.contains("**--verbose**\n"),
         "markdown block term should be on its own line, got: {output:?}"
@@ -281,4 +328,18 @@ fn markdown_renders_inline_terms_on_the_same_line() {
         output.contains("**-a**  \n  **--all** Show all entries."),
         "separate authored heads retain a hard break without invented commas, got: {output:?}"
     );
+
+    // CommonMark has no terminal field-width primitive. Export resolves the
+    // retained policy once for text placement, while reparsing preserves all
+    // authored text rather than inventing a legacy layout annotation.
+    let reparsed = mant_loader::load_markdown_text(&output, None).unwrap();
+    let text = render_query_text(&reparsed);
+    for expected in [
+        "Multiplication, division, and modulus.",
+        "The regular relational operators.",
+        "Enable verbose diagnostic output.",
+        "Show all entries.",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}: {text:?}");
+    }
 }

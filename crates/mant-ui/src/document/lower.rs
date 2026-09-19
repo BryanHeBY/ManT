@@ -128,6 +128,7 @@ impl DocumentBuilder<'_> {
                 })
                 .collect();
             self.push(LogicalLine {
+                geometry_offset: 0,
                 indent: line.indent,
                 continuation_indent: line.indent,
                 spans: line
@@ -144,6 +145,9 @@ impl DocumentBuilder<'_> {
                 table_row: None,
                 links,
                 reference_marks: Vec::new(),
+                anchors: Vec::new(),
+                positioned_anchors: Vec::new(),
+                conditional_definition: None,
             });
         }
         for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
@@ -397,6 +401,7 @@ impl DocumentBuilder<'_> {
         let lines = lines
             .into_iter()
             .map(|line| LogicalLine {
+                geometry_offset: 0,
                 indent: padding(indent),
                 continuation_indent: padding(indent),
                 spans: line.spans,
@@ -409,6 +414,9 @@ impl DocumentBuilder<'_> {
                 table_row: None,
                 links: line.links,
                 reference_marks: line.reference_marks,
+                anchors: Vec::new(),
+                positioned_anchors: Vec::new(),
+                conditional_definition: None,
             })
             .collect::<Vec<_>>();
 

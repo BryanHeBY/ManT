@@ -62,6 +62,7 @@ The important public families are:
 | --- | --- |
 | `Document`, `Section`, `Block`, `Inline` | Source-neutral content tree |
 | `ListItem`, `DefinitionItem`, `ListKind` | Distinct content shapes, independent of optional semantic annotation |
+| `DefinitionLayout`, `DefinitionPlacement`, `geometry` | Portable definition policy and the shared width-aware placement resolver |
 | `EntryFacts`, `EntryKind`, `NameCase` | Common facts and classification attached through either item's `entry` field |
 | `EntryOwner`, `EntryForm`, `EntryContentSlice` | Borrowed content owners and validated final-IR form references, without duplicate bodies |
 | `SemanticIndex`, `SemanticEntry`, `EntrySummary` | Rebuildable role-aware hierarchy, authored forms, and compact coverage |
@@ -121,6 +122,17 @@ allocating a rendered document. They do not choose a viewport, terminal style
 or output format. Display cells are distinct from source bytes and semantic
 scalar coordinates; gap request identities are operation-local, not serialized
 document identities.
+
+`DefinitionLayout::placement` keeps the source-neutral placement policy instead
+of a producer's one-width answer: `Stacked` always starts the description on a
+new row, `RunIn` joins an eligible first paragraph, and `Fit` lets each reader
+decide with `geometry::definition_placement_plan` at its allocated width. The
+shared resolver measures only the final open label row, uses absolute
+eight-column tab stops, composes the parent and body origins once, and treats
+zero-width anchors as navigation rather than label width. Text and Markdown use
+the declared definition field without a viewport; an interactive reader can
+resolve the same immutable IR again after a resize. Semantic annotations never
+change this geometry.
 
 `geometry::block_layout`, `block_layout_mut` and `block_source` provide exhaustive
 access to the optional fields on block variants. `geometry::rebase_roots` moves

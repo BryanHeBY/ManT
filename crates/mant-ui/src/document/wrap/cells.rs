@@ -18,7 +18,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
     const TAB_STOP: usize = 8;
 
     let mut cells = Vec::new();
-    let mut column = line.indent;
+    let mut column = line.geometry_offset.saturating_add(line.indent);
     let mut source_index = 0;
     // A grapheme can cross source-style boundaries. Segment the whole logical
     // row, then give each indivisible terminal glyph its first scalar's style.

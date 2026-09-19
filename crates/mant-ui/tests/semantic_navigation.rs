@@ -55,7 +55,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         }]],
         description: Vec::new(),
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            placement: mant_ir::DefinitionPlacement::Stacked,
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -102,7 +102,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             }]],
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
-                inline_term: false,
+                placement: mant_ir::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },

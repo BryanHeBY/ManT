@@ -141,7 +141,7 @@ fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
             entry: None,
             source: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term: true,
+                placement: mant_ir::DefinitionPlacement::RunIn,
                 body_indent_columns: 0,
                 ..Default::default()
             },

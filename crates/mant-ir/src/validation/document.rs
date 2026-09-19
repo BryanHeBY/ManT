@@ -538,7 +538,7 @@ mod tests {
                     terms: vec![vec![Inline::anchor(shared.clone())]],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
-                        inline_term: false,
+                        placement: crate::DefinitionPlacement::Stacked,
                         spacing_before_lines: None,
                         ..Default::default()
                     },
@@ -834,7 +834,7 @@ mod tests {
             terms: vec![vec![Inline::anchor("option-output")]],
             description: Vec::new(),
             layout: crate::DefinitionLayout {
-                inline_term: false,
+                placement: crate::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },

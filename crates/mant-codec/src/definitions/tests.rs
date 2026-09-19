@@ -11,7 +11,7 @@ fn item(value: &str) -> DefinitionItem {
         source: None,
         entry: None,
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            placement: mant_ir::DefinitionPlacement::Stacked,
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -27,7 +27,7 @@ fn strong_item(value: &str) -> DefinitionItem {
         source: None,
         entry: None,
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            placement: mant_ir::DefinitionPlacement::Stacked,
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -117,7 +117,7 @@ fn target_only_definitions_retain_anchors_without_becoming_entries() {
         source: None,
         entry: None,
         layout: mant_ir::DefinitionLayout {
-            inline_term: true,
+            placement: mant_ir::DefinitionPlacement::RunIn,
             spacing_before_lines: None,
             ..Default::default()
         },

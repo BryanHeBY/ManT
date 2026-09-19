@@ -114,7 +114,7 @@ mod tests {
                 source: None,
             }],
             layout: crate::DefinitionLayout {
-                inline_term: false,
+                placement: crate::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },

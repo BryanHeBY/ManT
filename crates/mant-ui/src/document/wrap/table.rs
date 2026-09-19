@@ -4,8 +4,29 @@ use super::{
     WrappedLink, WrappedSearchCell, wrap_line_with_links,
 };
 const TABLE_COLUMN_GAP: usize = 2;
+const MAX_ALIGNMENT_PASSES: usize = 16;
+
+struct AlignedTableCell {
+    rows: Vec<AlignedTableRow>,
+}
+
+struct AlignedTableRow {
+    row: WrappedLine,
+    left_padding: usize,
+}
+
+struct ResolvedAlignedLine {
+    line: super::LogicalLine,
+    /// Alignment origin already used to resolve conditional placement.
+    ///
+    /// The first resolved definition row is one formatter field: choosing its
+    /// Fit/Stacked branch and positioning that field must be one transaction.
+    /// Later logical rows remain independent table fields.
+    committed_padding: Option<usize>,
+}
 pub(super) fn render_table_row_with_links(
     indent: usize,
+    geometry_offset: usize,
     table: &LogicalTableRow,
     width: usize,
 ) -> Vec<WrappedLine> {
@@ -24,12 +45,12 @@ pub(super) fn render_table_row_with_links(
     let indent = super::readable_origins(indent, indent, width).0;
     let available = width.saturating_sub(indent).max(1);
     if table.layout.force_stack {
-        return stack_table_cells(indent, table, width);
+        return stack_table_cells(indent, geometry_offset, table, width);
     }
     let Some(column_widths) = table_column_widths(&table.layout.preferred_widths, available) else {
-        return stack_table_cells(indent, table, width);
+        return stack_table_cells(indent, geometry_offset, table, width);
     };
-    render_table_columns(indent, table, &column_widths)
+    render_table_columns(indent, geometry_offset, table, &column_widths)
 }
 
 fn render_layout_rule(
@@ -66,12 +87,22 @@ fn render_layout_rule(
     }]
 }
 
-fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Vec<WrappedLine> {
+fn stack_table_cells(
+    indent: usize,
+    geometry_offset: usize,
+    table: &LogicalTableRow,
+    width: usize,
+) -> Vec<WrappedLine> {
     let mut next_group = 0;
     let mut rows = table
         .cells
         .iter()
-        .flat_map(|cell| wrap_table_cell(cell, width, indent, &mut next_group))
+        .flat_map(|cell| {
+            align_table_cell(cell, width, indent, geometry_offset, &mut next_group)
+                .rows
+                .into_iter()
+                .map(|aligned| pad_wrapped_row(aligned.row, aligned.left_padding))
+        })
         .collect::<Vec<_>>();
     if rows.is_empty() {
         rows.push(WrappedLine {
@@ -85,72 +116,32 @@ fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Ve
     rows
 }
 
-/// Preserve child-local coordinates until the actual cell width is known.
-/// The resulting anchors travel with visual rows through columns, stacking
-/// and nested tables, just like links and search coordinates.
-fn wrap_table_cell(
-    cell: &LogicalTableCell,
-    width: usize,
-    indent: usize,
-    next_group: &mut usize,
-) -> Vec<WrappedLine> {
-    let mut rendered = Vec::new();
-    let mut logical_rows = Vec::with_capacity(cell.lines.len());
-    for line in &cell.lines {
-        logical_rows.push(rendered.len());
-        let mut line = line.clone();
-        line.indent = line.indent.saturating_add(indent);
-        line.continuation_indent = line.continuation_indent.saturating_add(indent);
-        let mut wrapped = wrap_line_with_links(&line, width);
-        for row in &mut wrapped {
-            for search_cell in &mut row.search_cells {
-                search_cell.group = *next_group;
-            }
-        }
-        *next_group += 1;
-        rendered.extend(wrapped);
-    }
-    if rendered.is_empty() && !cell.anchors.is_empty() {
-        rendered.push(WrappedLine {
-            source_end: None,
-            anchors: Vec::new(),
-            line: Line::default(),
-            links: Vec::new(),
-            search_cells: Vec::new(),
-        });
-    }
-    for (id, logical) in &cell.anchors {
-        let row = logical_rows
-            .get(*logical)
-            .copied()
-            .unwrap_or(rendered.len().saturating_sub(1));
-        if let Some(row) = rendered.get_mut(row) {
-            row.anchors.push(id.clone());
-        }
-    }
-    rendered
-}
-
 fn render_table_columns(
     indent: usize,
+    geometry_offset: usize,
     table: &LogicalTableRow,
     column_widths: &[usize],
 ) -> Vec<WrappedLine> {
     let mut next_search_group = 0;
+    let mut cell_origin = geometry_offset.saturating_add(indent);
     let rendered_cells = table
         .cells
         .iter()
         .zip(column_widths)
         .map(|(cell, column_width)| {
+            let origin = cell_origin;
+            cell_origin = cell_origin
+                .saturating_add(*column_width)
+                .saturating_add(TABLE_COLUMN_GAP);
             if *column_width == 0 {
-                return Vec::new();
+                return AlignedTableCell { rows: Vec::new() };
             }
-            wrap_table_cell(cell, *column_width, 0, &mut next_search_group)
+            align_table_cell(cell, *column_width, 0, origin, &mut next_search_group)
         })
         .collect::<Vec<_>>();
     let row_count = rendered_cells
         .iter()
-        .map(Vec::len)
+        .map(|cell| cell.rows.len())
         .max()
         .unwrap_or(0)
         .max(1);
@@ -166,22 +157,14 @@ fn render_table_columns(
                 spans.push(Span::raw(" ".repeat(indent)));
             }
             for (column, column_width) in column_widths.iter().enumerate() {
-                let cell_rows = rendered_cells.get(column);
-                let alignment = table
-                    .cells
-                    .get(column)
-                    .map_or(TableAlignment::Left, |cell| cell.alignment);
+                let rendered_cell = rendered_cells.get(column);
                 let mut used = 0;
-                let mut left_padding = 0;
-                if let Some(row) = cell_rows.and_then(|rows| rows.get(row_index)) {
+                let aligned = rendered_cell.and_then(|cell| cell.rows.get(row_index));
+                let left_padding = aligned.map_or(0, |row| row.left_padding);
+                if let Some(aligned) = aligned {
+                    let row = &aligned.row;
                     anchors.extend(row.anchors.iter().cloned());
                     used = super::super::inline::spans_width(&row.line.spans);
-                    let free = column_width.saturating_sub(used);
-                    left_padding = match alignment {
-                        TableAlignment::Left => 0,
-                        TableAlignment::Center => free / 2,
-                        TableAlignment::Right => free,
-                    };
                     if left_padding > 0 {
                         spans.push(Span::raw(" ".repeat(left_padding)));
                     }
@@ -217,6 +200,206 @@ fn render_table_columns(
             }
         })
         .collect()
+}
+
+/// Resolve alignment together with the content that depends on its absolute
+/// origin. Pinned CVS `term_flushln()` measures the field, applies
+/// `TERMP_CENTER`/`TERMP_RIGHT`, and then commits the same field. Tabs and
+/// conditional definition placement therefore cannot be resolved before the
+/// alignment offset is known.
+fn align_table_cell(
+    cell: &LogicalTableCell,
+    width: usize,
+    render_indent: usize,
+    origin: usize,
+    next_search_group: &mut usize,
+) -> AlignedTableCell {
+    let mut rows = Vec::new();
+    let mut logical_rows = Vec::with_capacity(cell.lines.len());
+    for line in &cell.lines {
+        logical_rows.push(rows.len());
+        let mut line = line.clone();
+        line.shift_origin(render_indent);
+        for resolved in resolve_conditional_alignment(&line, width, origin, cell.alignment) {
+            rows.extend(align_logical_line(
+                &resolved.line,
+                width,
+                origin,
+                cell.alignment,
+                resolved.committed_padding,
+                next_search_group,
+            ));
+        }
+    }
+    if rows.is_empty() && !cell.anchors.is_empty() {
+        rows.push(AlignedTableRow {
+            row: WrappedLine {
+                source_end: None,
+                anchors: Vec::new(),
+                line: Line::default(),
+                links: Vec::new(),
+                search_cells: Vec::new(),
+            },
+            left_padding: 0,
+        });
+    }
+    for (id, logical) in &cell.anchors {
+        let row = logical_rows
+            .get(*logical)
+            .copied()
+            .unwrap_or(rows.len().saturating_sub(1));
+        if let Some(row) = rows.get_mut(row) {
+            row.row.anchors.push(id.clone());
+        }
+    }
+    AlignedTableCell { rows }
+}
+
+fn resolve_conditional_alignment(
+    line: &super::LogicalLine,
+    width: usize,
+    origin: usize,
+    alignment: TableAlignment,
+) -> Vec<ResolvedAlignedLine> {
+    if line.conditional_definition.is_none() || alignment == TableAlignment::Left {
+        let mut line = line.clone();
+        line.shift_geometry_origin(origin);
+        return line
+            .resolved_lines(width)
+            .iter()
+            .cloned()
+            .map(|mut resolved| {
+                resolved.geometry_offset = 0;
+                ResolvedAlignedLine {
+                    line: resolved,
+                    committed_padding: None,
+                }
+            })
+            .collect();
+    }
+    let padding = stable_alignment_padding(width, alignment, |padding| {
+        let mut line = line.clone();
+        line.shift_geometry_origin(origin.saturating_add(padding));
+        line.resolved_lines(width.saturating_sub(padding))
+            .iter()
+            .find_map(|resolved| {
+                // Pinned CVS `term_flushln()` calls `term_fill()` against the
+                // whole table field before adding CENTER/RIGHT indentation.
+                // Measure the selected first field at that width as well;
+                // shrinking it by the candidate padding here would make line
+                // wrapping feed back into alignment and collapse the field.
+                wrap_line_with_links(resolved, width)
+                    .into_iter()
+                    .next()
+                    .map(|row| super::super::inline::spans_width(&row.line.spans))
+            })
+            .unwrap_or_default()
+    });
+    let mut line = line.clone();
+    line.shift_geometry_origin(origin.saturating_add(padding));
+    line.resolved_lines(width.saturating_sub(padding))
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(index, mut resolved)| {
+            resolved.geometry_offset = 0;
+            ResolvedAlignedLine {
+                line: resolved,
+                committed_padding: (index == 0).then_some(padding),
+            }
+        })
+        .collect()
+}
+
+fn align_logical_line(
+    line: &super::LogicalLine,
+    width: usize,
+    origin: usize,
+    alignment: TableAlignment,
+    committed_padding: Option<usize>,
+    next_search_group: &mut usize,
+) -> Vec<AlignedTableRow> {
+    let padding = committed_padding.unwrap_or_else(|| {
+        stable_alignment_padding(width, alignment, |padding| {
+            let mut line = line.clone();
+            line.shift_geometry_origin(origin.saturating_add(padding));
+            wrap_line_with_links(&line, width.saturating_sub(padding))
+                .iter()
+                .map(|row| super::super::inline::spans_width(&row.line.spans))
+                .max()
+                .unwrap_or_default()
+        })
+    });
+    let mut line = line.clone();
+    line.shift_geometry_origin(origin.saturating_add(padding));
+    let mut wrapped = wrap_line_with_links(&line, width.saturating_sub(padding));
+    for row in &mut wrapped {
+        for search_cell in &mut row.search_cells {
+            search_cell.group = *next_search_group;
+        }
+    }
+    *next_search_group += 1;
+    let has_tab = line.spans.iter().any(|span| span.content.contains('\t'));
+    wrapped
+        .into_iter()
+        .map(|row| {
+            let used = super::super::inline::spans_width(&row.line.spans);
+            AlignedTableRow {
+                row,
+                left_padding: if committed_padding.is_some() || has_tab {
+                    padding
+                } else {
+                    alignment_padding(width, used, alignment).max(padding)
+                },
+            }
+        })
+        .collect()
+}
+
+fn stable_alignment_padding(
+    width: usize,
+    alignment: TableAlignment,
+    mut used_at: impl FnMut(usize) -> usize,
+) -> usize {
+    let mut padding = 0;
+    let mut seen = Vec::new();
+    for _ in 0..MAX_ALIGNMENT_PASSES {
+        let next = alignment_padding(width, used_at(padding), alignment);
+        if next == padding {
+            return padding;
+        }
+        if seen.contains(&next) {
+            return padding.min(next);
+        }
+        seen.push(padding);
+        padding = next.min(width);
+    }
+    padding
+}
+
+fn alignment_padding(width: usize, used: usize, alignment: TableAlignment) -> usize {
+    let free = width.saturating_sub(used);
+    match alignment {
+        TableAlignment::Left => 0,
+        TableAlignment::Center => free / 2,
+        TableAlignment::Right => free,
+    }
+}
+
+fn pad_wrapped_row(mut row: WrappedLine, padding: usize) -> WrappedLine {
+    if padding == 0 {
+        return row;
+    }
+    row.line.spans.insert(0, Span::raw(" ".repeat(padding)));
+    for link in &mut row.links {
+        link.start_column = link.start_column.saturating_add(padding);
+        link.end_column = link.end_column.saturating_add(padding);
+    }
+    for cell in &mut row.search_cells {
+        cell.start_column = cell.start_column.saturating_add(padding);
+        cell.end_column = cell.end_column.saturating_add(padding);
+    }
+    row
 }
 
 fn table_column_widths(preferred_widths: &[usize], available: usize) -> Option<Vec<usize>> {

@@ -215,7 +215,7 @@ fn declared_definition(
             .collect(),
         description,
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            placement: mant_ir::DefinitionPlacement::Stacked,
             spacing_before_lines: None,
             ..Default::default()
         },

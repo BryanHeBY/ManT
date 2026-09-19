@@ -425,7 +425,11 @@ fn empty_only_reference_keeps_a_reveal_location_without_manufactured_text() {
 
 #[test]
 fn definition_term_and_run_in_description_keep_separate_source_origins() {
-    for inline_term in [false, true] {
+    for placement in [
+        mant_ir::DefinitionPlacement::Stacked,
+        mant_ir::DefinitionPlacement::RunIn,
+        mant_ir::DefinitionPlacement::Fit,
+    ] {
         let mut query = bundle();
         query.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -440,7 +444,7 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
                 entry: None,
                 source: None,
                 layout: mant_ir::DefinitionLayout {
-                    inline_term,
+                    placement,
                     ..Default::default()
                 },
             }],
@@ -456,7 +460,7 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
                 assert_eq!(
                     rendered.anchor_row(&reference.id),
                     Some(rendered.search(&reference.label)[0].row),
-                    "inline={inline_term} width={width}\n{}",
+                    "placement={placement:?} width={width}\n{}",
                     rendered.text
                 );
             }

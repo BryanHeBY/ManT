@@ -186,7 +186,8 @@ fn lower_mdoc_definition_list(
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
-    use crate::mandoc::layout::{DefinitionGeometry, Distance, TermPlacement};
+    use crate::mandoc::layout::{DefinitionGeometry, Distance};
+    use mant_ir::DefinitionPlacement;
     let width = node.width.as_deref().map_or(Distance::cells(8), |width| {
         context
             .measured_mdoc_distance(node, width, Distance::cells(6))
@@ -196,27 +197,27 @@ fn lower_mdoc_definition_list(
     let geometry = match node.definition_list_style {
         Some(DefinitionListStyle::Hang) => DefinitionGeometry {
             body: width,
-            placement: TermPlacement::RunIn,
+            placement: DefinitionPlacement::RunIn,
             gap: 1,
         },
         Some(DefinitionListStyle::Inset) => DefinitionGeometry {
             body: Distance::default(),
-            placement: TermPlacement::RunIn,
+            placement: DefinitionPlacement::RunIn,
             gap: 1,
         },
         Some(DefinitionListStyle::Diagnostic) => DefinitionGeometry {
             body: Distance::default(),
-            placement: TermPlacement::RunIn,
+            placement: DefinitionPlacement::RunIn,
             gap: 2,
         },
         Some(DefinitionListStyle::Overhang) => DefinitionGeometry {
             body: Distance::default(),
-            placement: TermPlacement::Stacked,
+            placement: DefinitionPlacement::Stacked,
             gap: 0,
         },
         _ => DefinitionGeometry {
             body: width,
-            placement: TermPlacement::Fit,
+            placement: DefinitionPlacement::Fit,
             gap: 2,
         },
     };
@@ -578,7 +579,7 @@ fn append_list_targets(
                     ],
                     description: Vec::new(),
                     layout: mant_ir::DefinitionLayout {
-                        inline_term: true,
+                        placement: mant_ir::DefinitionPlacement::RunIn,
                         spacing_before_lines: None,
                         ..Default::default()
                     },

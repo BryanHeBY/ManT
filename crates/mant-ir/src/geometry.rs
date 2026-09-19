@@ -17,7 +17,10 @@ mod gaps;
 pub use gaps::has_bounded_gap;
 
 mod terms;
-pub use terms::definition_run_in_width;
+pub use terms::{
+    DefinitionPlacementPlan, DefinitionPlacementResolution, definition_placement,
+    definition_placement_plan, definition_run_in_width, definition_run_in_width_at,
+};
 
 mod blocks;
 pub use blocks::{block_layout, block_layout_mut, block_source, rebase_roots};

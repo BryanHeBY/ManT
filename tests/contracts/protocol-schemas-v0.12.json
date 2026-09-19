@@ -1160,16 +1160,16 @@
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
-          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "placement": {
+            "description": "Conditional placement of the final open term and first description\nparagraph. Readers resolve `Fit` with the shared geometry contract at\ntheir effective width; producers must not collapse it to a boolean.",
+            "$ref": "#/$defs/DefinitionPlacement"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
@@ -1183,6 +1183,26 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionPlacement": {
+        "description": "Source-neutral placement policy for a definition label and its body.",
+        "oneOf": [
+          {
+            "description": "Start the description on a separate physical row.",
+            "type": "string",
+            "const": "stacked"
+          },
+          {
+            "description": "Join an eligible first paragraph to the final open label row.",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "Join only when the label field and minimum gap fit the effective width.",
+            "type": "string",
+            "const": "fit"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -3888,16 +3908,16 @@
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
-          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "placement": {
+            "description": "Conditional placement of the final open term and first description\nparagraph. Readers resolve `Fit` with the shared geometry contract at\ntheir effective width; producers must not collapse it to a boolean.",
+            "$ref": "#/$defs/DefinitionPlacement"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
@@ -3911,6 +3931,26 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionPlacement": {
+        "description": "Source-neutral placement policy for a definition label and its body.",
+        "oneOf": [
+          {
+            "description": "Start the description on a separate physical row.",
+            "type": "string",
+            "const": "stacked"
+          },
+          {
+            "description": "Join an eligible first paragraph to the final open label row.",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "Join only when the label field and minimum gap fit the effective width.",
+            "type": "string",
+            "const": "fit"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -9493,16 +9533,16 @@
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
-          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "placement": {
+            "description": "Conditional placement of the final open term and first description\nparagraph. Readers resolve `Fit` with the shared geometry contract at\ntheir effective width; producers must not collapse it to a boolean.",
+            "$ref": "#/$defs/DefinitionPlacement"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
@@ -9516,6 +9556,26 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionPlacement": {
+        "description": "Source-neutral placement policy for a definition label and its body.",
+        "oneOf": [
+          {
+            "description": "Start the description on a separate physical row.",
+            "type": "string",
+            "const": "stacked"
+          },
+          {
+            "description": "Join an eligible first paragraph to the final open label row.",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "Join only when the label field and minimum gap fit the effective width.",
+            "type": "string",
+            "const": "fit"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -12628,16 +12688,16 @@
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
-          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "placement": {
+            "description": "Conditional placement of the final open term and first description\nparagraph. Readers resolve `Fit` with the shared geometry contract at\ntheir effective width; producers must not collapse it to a boolean.",
+            "$ref": "#/$defs/DefinitionPlacement"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
@@ -12651,6 +12711,26 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionPlacement": {
+        "description": "Source-neutral placement policy for a definition label and its body.",
+        "oneOf": [
+          {
+            "description": "Start the description on a separate physical row.",
+            "type": "string",
+            "const": "stacked"
+          },
+          {
+            "description": "Join an eligible first paragraph to the final open label row.",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "Join only when the label field and minimum gap fit the effective width.",
+            "type": "string",
+            "const": "fit"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",

@@ -73,6 +73,7 @@ impl BlockRenderer<'_> {
     }
 
     fn render_definition(&self, item: &DefinitionItem, origin: i32) -> Flow {
+        let placement = mant_ir::geometry::definition_placement(item, origin, None);
         let body_origin = compose_origin(origin, item.layout.body_indent_columns);
         let mut terms = item
             .terms
@@ -80,17 +81,13 @@ impl BlockRenderer<'_> {
             .map(|term| self.inline_text(term, TextRole::DefinitionTerm))
             .filter(|term| !term.is_empty())
             .collect::<Vec<_>>();
-        if let Some((children, layout)) = item.inline_description()
+        if placement.run_in
+            && let Some((children, layout)) = item.run_in_description()
             && let Some(last) = terms.pop()
         {
-            let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
+            let last_width = placement.final_label_width_columns.unwrap_or(0);
             let first_origin =
-                compose_origin(body_origin, layout.indent_columns).max(compose_origin(
-                    origin,
-                    coordinate(
-                        last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                    ),
-                ));
+                i32::try_from(placement.first_description_origin_columns).unwrap_or(i32::MAX);
             let body = self.inline_text(children, TextRole::Body);
             let mut lines = body.split('\n');
             let mut output = terms

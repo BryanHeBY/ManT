@@ -37,7 +37,11 @@ fn run_in_definition_handoff_preserves_native_gap_and_source_row_contracts() {
             _ => unreachable!(),
         };
         assert_eq!(description, expected, "{style} {head:?}: {item:?}");
-        assert!(item.layout.inline_term, "{style} {head:?}: {item:?}");
+        assert_eq!(
+            item.layout.placement,
+            mant_ir::DefinitionPlacement::RunIn,
+            "{style} {head:?}: {item:?}"
+        );
         assert_eq!(item.layout.min_term_gap_columns, 0);
     }
 }

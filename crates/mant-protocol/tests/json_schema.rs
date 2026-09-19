@@ -20,6 +20,27 @@ fn required(schema: &Value) -> Vec<&str> {
         .collect()
 }
 
+fn assert_definition_placement_schema(query: &Value) {
+    let definition_layout = &query["$defs"]["DefinitionLayout"];
+    assert_eq!(definition_layout["additionalProperties"], false);
+    assert!(definition_layout["required"].is_null());
+    assert!(definition_layout["properties"].get("inlineTerm").is_none());
+    assert_eq!(
+        definition_layout["properties"]["placement"]["$ref"],
+        "#/$defs/DefinitionPlacement"
+    );
+    let placement = &query["$defs"]["DefinitionPlacement"];
+    assert_eq!(
+        placement["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|variant| variant["const"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["stacked", "run-in", "fit"]
+    );
+}
+
 #[test]
 fn request_schema_is_closed_versioned_and_deserialization_oriented() {
     let schema = value(query_request_json_schema());
@@ -82,6 +103,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(!encoded_query.contains("groff-html"));
     assert!(!encoded_query.contains("mandoc-html"));
     assert!(!encoded_query.contains("\"renderer\""));
+    assert_definition_placement_schema(&query);
 
     let outline = serde_json::to_string(&query_outline_json_schema()).expect("outline schema JSON");
     assert!(outline.contains("document-entry"));

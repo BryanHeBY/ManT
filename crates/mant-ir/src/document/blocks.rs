@@ -276,11 +276,11 @@ pub struct DefinitionItem {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DefinitionLayout {
-    /// Render the term on the same line as the first description line (a man(7)
-    /// hanging tag that fits the indent) instead of on its own line. Decided
-    /// once during lowering so every renderer lays the item out identically.
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub inline_term: bool,
+    /// Conditional placement of the final open term and first description
+    /// paragraph. Readers resolve `Fit` with the shared geometry contract at
+    /// their effective width; producers must not collapse it to a boolean.
+    #[serde(default, skip_serializing_if = "DefinitionPlacement::is_stacked")]
+    pub placement: DefinitionPlacement,
     /// Description content origin relative to the label origin. Hard and
     /// wrapped continuation lines use this origin even if a long run-in head
     /// forces the first description text further right. The generic default
@@ -302,11 +302,31 @@ pub struct DefinitionLayout {
     pub spacing_before_lines: Option<u16>,
 }
 
+/// Source-neutral placement policy for a definition label and its body.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum DefinitionPlacement {
+    /// Start the description on a separate physical row.
+    #[default]
+    Stacked,
+    /// Join an eligible first paragraph to the final open label row.
+    RunIn,
+    /// Join only when the label field and minimum gap fit the effective width.
+    Fit,
+}
+
+impl DefinitionPlacement {
+    #[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
+    const fn is_stacked(&self) -> bool {
+        matches!(self, Self::Stacked)
+    }
+}
+
 impl DefinitionLayout {
     /// Whether all presentation choices inherit their existing defaults.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        !self.inline_term
+        self.placement.is_stacked()
             && self.spacing_before_lines.is_none()
             && self.body_indent_columns == default_definition_indent()
             && self.min_term_gap_columns == default_term_gap()
@@ -316,7 +336,7 @@ impl DefinitionLayout {
 impl Default for DefinitionLayout {
     fn default() -> Self {
         Self {
-            inline_term: false,
+            placement: DefinitionPlacement::Stacked,
             body_indent_columns: default_definition_indent(),
             min_term_gap_columns: default_term_gap(),
             spacing_before_lines: None,
@@ -353,10 +373,7 @@ impl DefinitionItem {
     /// Explicit leading spacing or a non-paragraph first block prevents the
     /// inline presentation; it must not be consumed by joining the term.
     #[must_use]
-    pub fn inline_description(&self) -> Option<(&[Inline], &LayoutHint)> {
-        if !self.layout.inline_term {
-            return None;
-        }
+    pub fn run_in_description(&self) -> Option<(&[Inline], &LayoutHint)> {
         match self.description.first()? {
             Block::Paragraph {
                 children, layout, ..

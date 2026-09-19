@@ -1,15 +1,16 @@
 use mant_ir::LayoutHint;
 
 #[test]
-fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
-    use mant_ir::DefinitionLayout;
+fn definition_body_geometry_round_trips_with_closed_conditional_placement() {
+    use mant_ir::{DefinitionLayout, DefinitionPlacement};
     let layout: DefinitionLayout = serde_json::from_value(serde_json::json!({
-        "inlineTerm": true, "bodyIndentColumns": -2, "minTermGapColumns": 2,
+        "placement": "fit", "bodyIndentColumns": -2, "minTermGapColumns": 2,
         "spacingBeforeLines": 0
     }))
     .unwrap();
     assert_eq!(layout.body_indent_columns, -2);
     assert_eq!(layout.min_term_gap_columns, 2);
+    assert_eq!(layout.placement, DefinitionPlacement::Fit);
     assert_eq!(
         serde_json::from_value::<DefinitionLayout>(serde_json::to_value(layout).unwrap()).unwrap(),
         layout
@@ -18,12 +19,45 @@ fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
         serde_json::to_value(DefinitionLayout::default()).unwrap(),
         serde_json::json!({})
     );
+    for (wire, placement, canonical) in [
+        ("{}", DefinitionPlacement::Stacked, serde_json::json!({})),
+        (
+            r#"{"placement":"stacked"}"#,
+            DefinitionPlacement::Stacked,
+            serde_json::json!({}),
+        ),
+        (
+            r#"{"placement":"run-in"}"#,
+            DefinitionPlacement::RunIn,
+            serde_json::json!({"placement":"run-in"}),
+        ),
+        (
+            r#"{"placement":"fit"}"#,
+            DefinitionPlacement::Fit,
+            serde_json::json!({"placement":"fit"}),
+        ),
+    ] {
+        let decoded: DefinitionLayout = serde_json::from_str(wire).unwrap();
+        assert_eq!(decoded.placement, placement);
+        assert_eq!(serde_json::to_value(decoded).unwrap(), canonical);
+    }
     for invalid in [
         serde_json::json!({"bodyIndentColumns": null}),
         serde_json::json!({"minTermGapColumns": -1}),
         serde_json::json!({"sourceWidth": "7n"}),
+        serde_json::json!({"inlineTerm": true}),
+        serde_json::json!({"placement": null}),
+        serde_json::json!({"placement": "runIn"}),
+        serde_json::json!({"placement": "unknown"}),
+        serde_json::json!({"placement": 1}),
     ] {
         assert!(serde_json::from_value::<DefinitionLayout>(invalid).is_err());
+    }
+    for invalid in [
+        r#"{"placement":"fit","placement":"run-in"}"#,
+        r#"{"placement":"fit","inlineTerm":true}"#,
+    ] {
+        assert!(serde_json::from_str::<DefinitionLayout>(invalid).is_err());
     }
 }
 

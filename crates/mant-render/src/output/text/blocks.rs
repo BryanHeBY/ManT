@@ -719,7 +719,7 @@ mod tests {
                 source: None,
                 entry: None,
                 layout: mant_ir::DefinitionLayout {
-                    inline_term: true,
+                    placement: mant_ir::DefinitionPlacement::RunIn,
                     ..Default::default()
                 },
             }],
@@ -755,7 +755,7 @@ mod tests {
                 ],
                 description: vec![paragraph("BODY", 0)],
                 layout: mant_ir::DefinitionLayout {
-                    inline_term: true,
+                    placement: mant_ir::DefinitionPlacement::RunIn,
                     ..Default::default()
                 },
             }],

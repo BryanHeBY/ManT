@@ -1,6 +1,109 @@
 //! Existing regressions grouped by layout behavior; expected values remain independent.
 use super::*;
 
+fn responsive_definition(placement: mant_ir::DefinitionPlacement) -> Block {
+    Block::DefinitionList {
+        declaration_groups: Vec::new(),
+        compact: true,
+        items: vec![DefinitionItem {
+            source: None,
+            entry: Some(EntryFacts {
+                id: "entry-probe".into(),
+                kind: EntryKind::Term,
+                case: NameCase::Sensitive,
+                names: vec!["日\tX".into()],
+                name_bindings: Vec::new(),
+                forms: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
+                value_domain: None,
+            }),
+            terms: vec![vec![
+                Inline::anchor("term-probe"),
+                Inline::Text {
+                    value: "日\tX".into(),
+                },
+            ]],
+            description: vec![Block::Paragraph {
+                children: vec![
+                    Inline::anchor("body-probe"),
+                    Inline::Link {
+                        target: mant_ir::LinkTarget::Section {
+                            id: "description".into(),
+                        },
+                        title: None,
+                        children: vec![Inline::Text {
+                            value: "BODY".into(),
+                        }],
+                    },
+                ],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            layout: mant_ir::DefinitionLayout {
+                placement,
+                body_indent_columns: 12,
+                min_term_gap_columns: 1,
+                spacing_before_lines: None,
+            },
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }
+}
+
+#[test]
+fn fit_definitions_resolve_again_at_each_width_without_moving_ownership() {
+    let mut query = bundle();
+    query.document.as_mut().unwrap().sections[0].blocks = vec![
+        responsive_definition(mant_ir::DefinitionPlacement::Fit),
+        Block::Paragraph {
+            children: vec![
+                Inline::anchor("following"),
+                Inline::Text {
+                    value: "FOLLOWING".into(),
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        },
+    ];
+    let view = DocumentView::new(&query);
+    let narrow = view.render(9);
+    let wide = view.render(40);
+
+    let narrow_term = narrow.search("日")[0].row;
+    let narrow_body = narrow.search("BODY")[0].row;
+    let wide_term = wide.search("日")[0].row;
+    let wide_body = wide.search("BODY")[0].row;
+    assert!(narrow_body > narrow_term, "{:?}", narrow.text);
+    assert_eq!(wide_body, wide_term, "{:?}", wide.text);
+
+    for (rendered, term, body) in [
+        (&narrow, narrow_term, narrow_body),
+        (&wide, wide_term, wide_body),
+    ] {
+        assert_eq!(rendered.anchor_row("entry-probe"), Some(term));
+        assert_eq!(rendered.anchor_row("term-probe"), Some(term));
+        assert_eq!(
+            rendered.anchor_row("body-probe"),
+            Some(body),
+            "{:?}",
+            rendered.text
+        );
+        assert_eq!(
+            rendered.anchor_row("following"),
+            Some(rendered.search("FOLLOWING")[0].row)
+        );
+        let body_column = rendered.search("BODY")[0].start_column;
+        assert_eq!(
+            rendered.link_target_at(body, body_column),
+            Some(&LinkTarget::Section("description".into()))
+        );
+    }
+    assert_eq!(view.render(9).text, narrow.text);
+}
+
 #[test]
 fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
     for rows in [0, 1, 2, 3000] {
@@ -73,7 +176,11 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
 
 #[test]
 fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
-    for inline_term in [false, true] {
+    for placement in [
+        mant_ir::DefinitionPlacement::Stacked,
+        mant_ir::DefinitionPlacement::RunIn,
+        mant_ir::DefinitionPlacement::Fit,
+    ] {
         let mut builder = DocumentBuilder::new("target-rows".into(), None);
         builder.blocks(
             &[Block::DefinitionList {
@@ -83,7 +190,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                     source: None,
                     entry: None,
                     layout: mant_ir::DefinitionLayout {
-                        inline_term,
+                        placement,
                         ..Default::default()
                     },
                     terms: vec![vec![
@@ -120,11 +227,36 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
             }],
             0,
         );
-        assert_eq!(builder.anchors["second-head"], 1);
-        let first_body = if inline_term { 1 } else { 2 };
-        assert_eq!(builder.anchors["body"], first_body);
-        assert_eq!(builder.anchors["next-body"], first_body + 1);
+        let carrier = &builder.lines[1];
+        let resolved = carrier.resolved_lines(80);
+        let expected_rows = if placement == mant_ir::DefinitionPlacement::RunIn {
+            2
+        } else {
+            3
+        };
+        assert_eq!(resolved.len(), expected_rows);
+        assert!(
+            resolved
+                .iter()
+                .any(|line| line.anchors.contains(&"second-head".into()))
+        );
+        assert!(resolved.iter().any(|line| {
+            line.anchors.contains(&"body".into())
+                || line
+                    .positioned_anchors
+                    .iter()
+                    .any(|anchor| anchor.id == "body")
+        }));
+        assert!(
+            resolved
+                .iter()
+                .any(|line| line.anchors.contains(&"next-body".into()))
+        );
     }
+}
+
+#[test]
+fn ordinary_list_anchors_follow_hard_lines_and_continuation_origins() {
     let mut builder = DocumentBuilder::new("list-target".into(), None);
     builder.blocks(
         &[Block::List {
@@ -341,7 +473,11 @@ fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
 
 #[test]
 fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
-    for inline_term in [false, true] {
+    for placement in [
+        mant_ir::DefinitionPlacement::Stacked,
+        mant_ir::DefinitionPlacement::RunIn,
+        mant_ir::DefinitionPlacement::Fit,
+    ] {
         for origin in [0, i32::MAX, i32::MIN] {
             let mut builder = DocumentBuilder::new("targets".into(), None);
             builder.blocks(
@@ -359,7 +495,7 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                         ],
                         description: vec![paragraph("BODY")],
                         layout: mant_ir::DefinitionLayout {
-                            inline_term,
+                            placement,
                             ..Default::default()
                         },
                     }],
@@ -371,8 +507,13 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                 }],
                 0,
             );
-            assert_eq!(builder.anchors.get("target"), Some(&0));
-            assert!(!builder.lines[0].spans.is_empty());
+            let resolved = builder.lines[0].resolved_lines(80);
+            assert!(
+                resolved
+                    .iter()
+                    .any(|line| line.anchors.contains(&"target".into()))
+            );
+            assert!(resolved.iter().any(|line| !line.spans.is_empty()));
             assert!(
                 builder
                     .lines
@@ -403,7 +544,7 @@ fn trailing_zero_width_heads_share_the_final_run_in_row() {
                     terms,
                     description: vec![paragraph("BODY")],
                     layout: mant_ir::DefinitionLayout {
-                        inline_term: true,
+                        placement: mant_ir::DefinitionPlacement::RunIn,
                         ..Default::default()
                     },
                 }],
@@ -414,14 +555,23 @@ fn trailing_zero_width_heads_share_the_final_run_in_row() {
         );
         assert_eq!(builder.lines.len(), 1);
         for i in 0..trailing_count {
-            assert_eq!(builder.anchors.get(&format!("target-{i}")), Some(&0));
+            assert!(
+                builder.lines[0]
+                    .resolved_lines(80)
+                    .iter()
+                    .any(|line| line.anchors.contains(&format!("target-{i}")))
+            );
         }
     }
 }
 
 #[test]
 fn definition_continuations_keep_rows_when_reparented_across_spacing() {
-    for inline_term in [false, true] {
+    for placement in [
+        mant_ir::DefinitionPlacement::Stacked,
+        mant_ir::DefinitionPlacement::RunIn,
+        mant_ir::DefinitionPlacement::Fit,
+    ] {
         for label in ["-a", "--long-option", "界", "e\u{301}"] {
             for width in [18, 100] {
                 let mut document = bundle();
@@ -444,7 +594,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                         }]],
                         description: vec![paragraph("Initial description.")],
                         layout: mant_ir::DefinitionLayout {
-                            inline_term,
+                            placement,
                             spacing_before_lines: None,
                             ..Default::default()
                         },

@@ -720,8 +720,16 @@ fn mdoc_definition_layout_uses_the_normalized_list_width() {
         })
         .collect::<Vec<_>>();
     assert_eq!(lists.len(), 2);
-    assert!(lists[0][0].layout.inline_term);
-    assert!(!lists[1][0].layout.inline_term);
+    assert_eq!(
+        lists[0][0].layout.placement,
+        mant_ir::DefinitionPlacement::Fit
+    );
+    assert_eq!(
+        lists[1][0].layout.placement,
+        mant_ir::DefinitionPlacement::Fit
+    );
+    assert!(mant_ir::geometry::definition_placement(&lists[0][0], 0, None).run_in);
+    assert!(!mant_ir::geometry::definition_placement(&lists[1][0], 0, None).run_in);
 }
 
 #[test]

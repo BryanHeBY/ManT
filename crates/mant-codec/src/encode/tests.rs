@@ -364,7 +364,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term: false,
+                placement: mant_ir::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },
@@ -418,7 +418,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term: false,
+                placement: mant_ir::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },
@@ -1054,7 +1054,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
                         value: "first reference".to_owned(),
                     }])],
                     layout: mant_ir::DefinitionLayout {
-                        inline_term: true,
+                        placement: mant_ir::DefinitionPlacement::RunIn,
                         spacing_before_lines: None,
                         ..Default::default()
                     },
@@ -1084,7 +1084,7 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term: true,
+                placement: mant_ir::DefinitionPlacement::RunIn,
                 spacing_before_lines: None,
                 ..Default::default()
             },
@@ -1186,7 +1186,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
             value: "Show help.".to_owned(),
         }])],
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            placement: mant_ir::DefinitionPlacement::Stacked,
             spacing_before_lines: None,
             ..Default::default()
         },

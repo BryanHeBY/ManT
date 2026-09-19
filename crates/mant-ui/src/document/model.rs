@@ -5,6 +5,8 @@ use std::sync::Arc;
 use mant_ir::{DocumentAddress, TableAlignment, TableRuleCellKind};
 use ratatui::{style::Style, text::Span};
 
+use super::inline::{shifted_links, shifted_reference_marks, spans_scalars};
+
 /// External URI that passed `ManT`'s host-activation policy.
 ///
 /// Construction accepts only structurally valid absolute HTTP/HTTPS targets
@@ -59,6 +61,8 @@ pub(crate) enum LinkTarget {
 
 #[derive(Debug, Clone)]
 pub(super) struct LogicalLine {
+    /// Absolute terminal-column offset of this line's local coordinate space.
+    pub(super) geometry_offset: usize,
     pub(super) indent: usize,
     pub(super) continuation_indent: usize,
     pub(super) spans: Vec<Span<'static>>,
@@ -67,11 +71,46 @@ pub(super) struct LogicalLine {
     pub(super) table_row: Option<LogicalTableRow>,
     pub(super) links: Vec<LogicalLinkRange>,
     pub(super) reference_marks: Vec<ReferenceMark>,
+    /// Document-local anchors owned by the start of this exact logical row.
+    pub(super) anchors: Vec<String>,
+    /// Anchors inside a logical row, before tabs and wrapping are resolved.
+    pub(super) positioned_anchors: Vec<PositionedAnchor>,
+    pub(super) conditional_definition: Option<Box<ConditionalDefinitionLine>>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct ConditionalDefinitionLine {
+    pub(super) plan: mant_ir::geometry::DefinitionPlacementPlan,
+    pub(super) term: LogicalLine,
+    pub(super) description: Vec<LogicalLine>,
+}
+
+pub(super) enum ResolvedLogicalLines<'a> {
+    Borrowed(&'a [LogicalLine]),
+    Owned(Vec<LogicalLine>),
+}
+
+impl std::ops::Deref for ResolvedLogicalLines<'_> {
+    type Target = [LogicalLine];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Borrowed(lines) => lines,
+            Self::Owned(lines) => lines,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct ReferenceMark {
     pub(super) id: Arc<str>,
+    /// Scalar offset in this logical row, before tabs expand into cells.
+    pub(super) scalar_offset: usize,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct PositionedAnchor {
+    pub(super) id: String,
     /// Scalar offset in this logical row, before tabs expand into cells.
     pub(super) scalar_offset: usize,
 }
@@ -177,6 +216,7 @@ impl LogicalLine {
     pub(super) fn empty() -> Self {
         Self {
             indent: 0,
+            geometry_offset: 0,
             continuation_indent: 0,
             spans: Vec::new(),
             surface: LineSurface::Normal,
@@ -184,12 +224,16 @@ impl LogicalLine {
             table_row: None,
             links: Vec::new(),
             reference_marks: Vec::new(),
+            anchors: Vec::new(),
+            positioned_anchors: Vec::new(),
+            conditional_definition: None,
         }
     }
 
     pub(super) fn plain(indent: usize, value: impl Into<String>, style: Style) -> Self {
         Self {
             indent,
+            geometry_offset: 0,
             continuation_indent: indent,
             spans: vec![Span::styled(value.into(), style)],
             surface: LineSurface::Normal,
@@ -197,6 +241,9 @@ impl LogicalLine {
             table_row: None,
             links: Vec::new(),
             reference_marks: Vec::new(),
+            anchors: Vec::new(),
+            positioned_anchors: Vec::new(),
+            conditional_definition: None,
         }
     }
 
@@ -220,12 +267,130 @@ impl LogicalLine {
         self
     }
 
+    pub(super) fn with_anchors(mut self, anchors: Vec<String>) -> Self {
+        self.anchors = anchors;
+        self
+    }
+
+    pub(super) fn conditional_definition(
+        plan: mant_ir::geometry::DefinitionPlacementPlan,
+        term: Self,
+        description: Vec<Self>,
+    ) -> Self {
+        let mut line = Self::empty();
+        line.indent = term.indent;
+        line.continuation_indent = line.indent;
+        line.conditional_definition = Some(Box::new(ConditionalDefinitionLine {
+            plan,
+            term,
+            description,
+        }));
+        line
+    }
+
+    pub(super) fn resolved_lines(&self, width: usize) -> ResolvedLogicalLines<'_> {
+        self.resolved_lines_at(width.saturating_sub(self.indent), self.geometry_offset)
+    }
+
+    pub(super) fn resolved_lines_at(
+        &self,
+        allocated_width: usize,
+        geometry_offset: usize,
+    ) -> ResolvedLogicalLines<'_> {
+        let Some(conditional) = &self.conditional_definition else {
+            return ResolvedLogicalLines::Borrowed(std::slice::from_ref(self));
+        };
+        let delta = i32::try_from(geometry_offset).unwrap_or(i32::MAX);
+        let resolution = conditional
+            .plan
+            .translated(delta)
+            .resolve(Some(allocated_width));
+        let local = |origin: usize| origin.saturating_sub(geometry_offset);
+        let mut term = conditional.term.clone();
+        term.geometry_offset = geometry_offset;
+        term.indent = self.indent;
+        term.continuation_indent = self.indent;
+        let mut description = conditional.description.clone();
+        for line in &mut description {
+            line.geometry_offset = geometry_offset;
+        }
+        if resolution.run_in {
+            if let Some(first) = description.first() {
+                let term_width = resolution.final_label_width_columns.unwrap_or_default();
+                let absolute_term_origin = self.indent.saturating_add(geometry_offset);
+                let gap = resolution
+                    .first_description_origin_columns
+                    .saturating_sub(absolute_term_origin.saturating_add(term_width));
+                term.spans.push(Span::raw(" ".repeat(gap)));
+                let scalar_offset = spans_scalars(&term.spans);
+                term.links
+                    .extend(shifted_links(first.links.clone(), scalar_offset));
+                term.reference_marks.extend(shifted_reference_marks(
+                    first.reference_marks.clone(),
+                    scalar_offset,
+                ));
+                term.positioned_anchors.extend(
+                    first
+                        .anchors
+                        .iter()
+                        .cloned()
+                        .map(|id| PositionedAnchor { id, scalar_offset }),
+                );
+                term.positioned_anchors
+                    .extend(first.positioned_anchors.iter().cloned().map(|mut anchor| {
+                        anchor.scalar_offset = anchor.scalar_offset.saturating_add(scalar_offset);
+                        anchor
+                    }));
+                term.spans.extend(first.spans.clone());
+                term.continuation_indent = local(resolution.continuation_origin_columns);
+            }
+            for line in description.iter_mut().skip(1) {
+                line.indent = local(resolution.continuation_origin_columns);
+                line.continuation_indent = line.indent;
+            }
+            let mut lines = vec![term];
+            lines.extend(description.into_iter().skip(1));
+            ResolvedLogicalLines::Owned(lines)
+        } else {
+            for (row, line) in description.iter_mut().enumerate() {
+                line.indent = local(if row == 0 {
+                    resolution.stacked_description_origin_columns
+                } else {
+                    resolution.continuation_origin_columns
+                });
+                line.continuation_indent = local(resolution.continuation_origin_columns);
+            }
+            let mut lines = vec![term];
+            lines.extend(description);
+            ResolvedLogicalLines::Owned(lines)
+        }
+    }
+
+    pub(super) fn shift_origin(&mut self, delta: usize) {
+        self.indent = self.indent.saturating_add(delta);
+        self.continuation_indent = self.continuation_indent.saturating_add(delta);
+        if let Some(conditional) = &mut self.conditional_definition {
+            conditional.plan = conditional
+                .plan
+                .translated(i32::try_from(delta).unwrap_or(i32::MAX));
+            conditional.term.shift_origin(delta);
+            for line in &mut conditional.description {
+                line.shift_origin(delta);
+            }
+        }
+    }
+
+    pub(super) fn shift_geometry_origin(&mut self, delta: usize) {
+        self.geometry_offset = self.geometry_offset.saturating_add(delta);
+    }
+
     pub(super) fn hanging(
         indent: usize,
         continuation_indent: usize,
         spans: Vec<Span<'static>>,
     ) -> Self {
         Self {
+            geometry_offset: 0,
             indent,
             continuation_indent,
             spans,
@@ -234,6 +399,9 @@ impl LogicalLine {
             table_row: None,
             links: Vec::new(),
             reference_marks: Vec::new(),
+            anchors: Vec::new(),
+            positioned_anchors: Vec::new(),
+            conditional_definition: None,
         }
     }
 
@@ -243,6 +411,7 @@ impl LogicalLine {
         layout: Arc<LogicalTableLayout>,
     ) -> Self {
         Self {
+            geometry_offset: 0,
             indent,
             continuation_indent: indent,
             spans: Vec::new(),
@@ -255,6 +424,9 @@ impl LogicalLine {
             }),
             links: Vec::new(),
             reference_marks: Vec::new(),
+            anchors: Vec::new(),
+            positioned_anchors: Vec::new(),
+            conditional_definition: None,
         }
     }
 
@@ -264,6 +436,7 @@ impl LogicalLine {
         layout: Arc<LogicalTableLayout>,
     ) -> Self {
         Self {
+            geometry_offset: 0,
             indent,
             continuation_indent: indent,
             spans: Vec::new(),
@@ -276,6 +449,9 @@ impl LogicalLine {
             }),
             links: Vec::new(),
             reference_marks: Vec::new(),
+            anchors: Vec::new(),
+            positioned_anchors: Vec::new(),
+            conditional_definition: None,
         }
     }
 
@@ -296,6 +472,14 @@ impl LogicalLine {
     }
 
     fn preferred_width(&self) -> usize {
+        if self.conditional_definition.is_some() {
+            return self
+                .resolved_lines(usize::MAX)
+                .iter()
+                .map(Self::preferred_width)
+                .max()
+                .unwrap_or(1);
+        }
         let content = self.table_row.as_ref().map_or_else(
             || super::inline::spans_width(&self.spans),
             |table| table.layout.preferred_width(),

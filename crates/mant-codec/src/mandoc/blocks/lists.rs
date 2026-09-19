@@ -8,7 +8,7 @@ use mant_ir::{
 
 use super::super::{
     LoweringContext, first_part_children,
-    inline::{InlineBuilder, plain_text, terms_fit_inline},
+    inline::{InlineBuilder, plain_text},
     layout::{block_indent, layout, layout_with_spacing, paragraph_distance_lines},
     part_child_groups, source_span, targets,
 };
@@ -43,7 +43,7 @@ mod tests {
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term: false,
+                placement: mant_ir::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },
@@ -72,16 +72,6 @@ mod tests {
         super::prepend_definition_heads(&mut item, std::iter::once(definition("-a", "")));
         assert_eq!(item.source, None);
         assert_eq!(item.terms.len(), 2);
-    }
-
-    #[test]
-    fn short_terms_hang_inline_but_long_ones_do_not() {
-        // Matches man(1): a tag that fits the default hanging indent shares the
-        // first description line; wider tags take their own line.
-        assert!(super::terms_fit_inline(&[text("space")], 6));
-        assert!(super::terms_fit_inline(&[text("* / %")], 6));
-        assert!(!super::terms_fit_inline(&[text("--listed-incremental")], 6));
-        assert!(!super::terms_fit_inline(&[], 6));
     }
 
     #[test]

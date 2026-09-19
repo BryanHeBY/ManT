@@ -3,7 +3,7 @@
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::Inline;
 
-pub(crate) use mant_ir::{inline_plain_text as plain_text, terms_fit_inline};
+pub(crate) use mant_ir::inline_plain_text as plain_text;
 
 mod flow;
 mod font;

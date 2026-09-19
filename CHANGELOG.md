@@ -80,6 +80,16 @@ that crate was not published for that change.
   initialize the new fields. Text and TUI renderers now preserve empty table
   rows and distinguish whole-row, per-column, single, double, connecting, and
   isolated rules instead of inferring them from cell contents.
+- Replace `DefinitionLayout.inline_term: bool` and its `inlineTerm` wire field
+  with the closed `DefinitionPlacement::{Stacked, RunIn, Fit}` contract.
+  `Fit` retains a width-dependent native definition field until each reader
+  knows its allocated width; shared geometry measures the final open label row,
+  absolute tab stops, parent/body origins and the minimum gap. Text, Markdown,
+  terminal rendering and the TUI now consume that same resolver, while the TUI
+  can switch between run-in and stacked presentation after a resize without
+  reparsing or moving semantic and navigation ownership. The old field is
+  rejected in v0.12 rather than accepted as an alias; published v0.8–v0.11
+  snapshots remain unchanged.
 
 - Adopt `libmandoc-rs ^0.12.0` through the roff loading path. Paragraph font
   resets cover the newly preserved `P` and `LP` tokens. Standalone `soquiet`

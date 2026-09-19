@@ -15,7 +15,10 @@ fn empty_native_list_target_adds_navigation_without_an_extra_row() {
     assert_eq!(annotated.anchor_row("empty-target"), Some(after[0].row));
 }
 
-fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
+fn target_only_definition(
+    description: Vec<Block>,
+    placement: mant_ir::DefinitionPlacement,
+) -> Block {
     Block::DefinitionList {
         declaration_groups: vec![],
         compact: true,
@@ -28,7 +31,7 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
             entry: None,
             source: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term,
+                placement,
                 body_indent_columns: 0,
                 ..Default::default()
             },
@@ -40,7 +43,11 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
 
 #[test]
 fn target_only_definitions_do_not_create_rows_or_reset_pending_gaps() {
-    for inline_term in [false, true] {
+    for placement in [
+        mant_ir::DefinitionPlacement::Stacked,
+        mant_ir::DefinitionPlacement::RunIn,
+        mant_ir::DefinitionPlacement::Fit,
+    ] {
         for (before, after) in [(2, 3), (3000, 2000)] {
             let mut builder = DocumentBuilder::new("targets".into(), None);
             builder.blocks(
@@ -50,7 +57,7 @@ fn target_only_definitions_do_not_create_rows_or_reset_pending_gaps() {
                         lines: before,
                         source: None,
                     },
-                    target_only_definition(vec![], inline_term),
+                    target_only_definition(vec![], placement),
                     Block::VerticalSpace {
                         lines: after,
                         source: None,
@@ -71,13 +78,17 @@ fn target_only_definitions_do_not_create_rows_or_reset_pending_gaps() {
 
 #[test]
 fn body_only_definition_uses_body_origin_without_synthetic_term_gap() {
-    for inline_term in [false, true] {
+    for placement in [
+        mant_ir::DefinitionPlacement::Stacked,
+        mant_ir::DefinitionPlacement::RunIn,
+        mant_ir::DefinitionPlacement::Fit,
+    ] {
         let mut body = paragraph("BODY");
         if let Block::Paragraph { layout, .. } = &mut body {
             layout.spacing_before_lines = 2;
         }
         let mut builder = DocumentBuilder::new("body-only".into(), None);
-        builder.blocks(&[target_only_definition(vec![body], inline_term)], 0);
+        builder.blocks(&[target_only_definition(vec![body], placement)], 0);
         let built = builder.finish();
         assert_eq!(built.content.lines.len(), 3);
         assert_eq!(built.content.lines[2].indent, 0);
@@ -87,7 +98,13 @@ fn body_only_definition_uses_body_origin_without_synthetic_term_gap() {
     // Also cover the inline-eligible zero-gap body, which formerly gained
     // min_term_gap_columns despite having no printable term.
     let mut builder = DocumentBuilder::new("body-only".into(), None);
-    builder.blocks(&[target_only_definition(vec![paragraph("BODY")], true)], 0);
+    builder.blocks(
+        &[target_only_definition(
+            vec![paragraph("BODY")],
+            mant_ir::DefinitionPlacement::RunIn,
+        )],
+        0,
+    );
     assert_eq!(builder.lines.len(), 1);
     assert_eq!(builder.lines[0].indent, 0);
     assert_eq!(builder.lines[0].spans[0].content, "BODY");
@@ -125,7 +142,13 @@ fn standalone_zero_width_targets_cross_spacing_and_use_an_eof_sentinel() {
         assert_eq!(built.content.anchors.get("Exact.Target"), Some(&4));
     }
     let mut builder = DocumentBuilder::new("empty-definition".into(), None);
-    builder.blocks(&[target_only_definition(vec![], true)], 0);
+    builder.blocks(
+        &[target_only_definition(
+            vec![],
+            mant_ir::DefinitionPlacement::RunIn,
+        )],
+        0,
+    );
     let built = builder.finish();
     assert!(built.content.lines.is_empty());
     assert_eq!(built.content.anchors.get("target"), Some(&0));

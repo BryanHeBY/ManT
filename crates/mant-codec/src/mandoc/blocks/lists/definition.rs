@@ -378,10 +378,10 @@ pub(super) fn definition_item(
         flow.head.generated_cells().is_some_and(|cells| cells > 0),
     );
     if flow.shares_pending_term_row && pending_head.placement_breaks {
-        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+        geometry.placement = mant_ir::DefinitionPlacement::Stacked;
     }
     if definition_field_exited {
-        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+        geometry.placement = mant_ir::DefinitionPlacement::Stacked;
     }
     if definition_body_gap_consumed {
         geometry.gap = 0;
@@ -396,7 +396,7 @@ pub(super) fn definition_item(
         // adding the static geometry gap as well would count it twice.
         geometry.gap = 0;
     }
-    let (layout, body_origin) = geometry.resolve(context, node, indent_columns, &terms);
+    let (layout, body_origin) = geometry.resolve(context, node, indent_columns);
     let mut description = if let Some(execution) = run_in_execution {
         lower_blocks_with_predecessor_and_run_in(
             body,

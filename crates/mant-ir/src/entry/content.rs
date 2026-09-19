@@ -721,7 +721,7 @@ mod tests {
             ],
             description: vec![list(vec![item("child", EntryKind::Value, "auto")])],
             layout: crate::DefinitionLayout {
-                inline_term: false,
+                placement: crate::DefinitionPlacement::Stacked,
                 spacing_before_lines: None,
                 ..Default::default()
             },

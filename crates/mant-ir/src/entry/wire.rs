@@ -137,10 +137,12 @@ fn definition_layout_keeps_inherited_and_explicit_zero_spacing_distinct() {
         assert!(serde_json::from_value::<DefinitionItem>(item).is_err());
     }
     for invalid in [
-        r#"{"inlineTerm":true,"inlineTerm":false}"#,
+        r#"{"placement":"fit","placement":"run-in"}"#,
         r#"{"spacingBeforeLines":null,"spacingBeforeLines":0}"#,
         r#"{"spacingBeforeLines":-1}"#,
-        r#"{"inlineTerm":null}"#,
+        r#"{"placement":null}"#,
+        r#"{"inlineTerm":true}"#,
+        r#"{"placement":"fit","inlineTerm":true}"#,
     ] {
         assert!(
             serde_json::from_str::<DefinitionLayout>(invalid).is_err(),

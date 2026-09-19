@@ -178,7 +178,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
         source: None,
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            placement: mant_ir::DefinitionPlacement::Stacked,
             spacing_before_lines: None,
             ..Default::default()
         },

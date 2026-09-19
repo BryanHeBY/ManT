@@ -943,7 +943,7 @@ Definition-owner example:
     {
       "terms": [[{"type":"code","value":"--exclude PATTERN"}]],
       "description": [{"type":"paragraph","children":[{"type":"text","value":"Skip matching paths."}]}],
-      "layout": {"inlineTerm":true,"spacingBeforeLines":0},
+      "layout": {"placement":"fit","spacingBeforeLines":0},
       "entry": {
         "id":"option-exclude",
         "kind":{"kind":"parameter","parameterKind":"option"},
@@ -981,14 +981,19 @@ Missing/empty facts `forms` means unrecorded; null forms are invalid shape.
 Shape-valid but out-of-bounds references stay in the tree with semantic
 validation diagnostics. They never transfer a child's content to its parent.
 
-Definition `layout.inlineTerm` indicates that the term and first description
-line fit the same row. Missing/empty layout uses the default; null layout is
-rejected. `layout.spacingBeforeLines` missing/null inherits list compactness;
-explicit zero is retained. The item-level hints are distinct from block-level
-indentation and spacing.
+Definition `layout.placement` is the closed `stacked | run-in | fit` policy.
+`stacked` always starts the description on another row; `run-in` joins an
+eligible first paragraph; `fit` asks each reader to apply the shared final-label
+geometry at its effective width. Missing/empty layout defaults to `stacked`;
+null layout or placement is rejected. `layout.spacingBeforeLines` missing/null
+inherits list compactness; explicit zero is retained. The item-level hints are
+distinct from block-level indentation and spacing. A responsive reader resolves
+the same immutable `fit` item again after a resize; it does not rerun parsing or
+rewrite anchors, links, source content, or semantic facts.
 
 Rejected pre-convergence shapes: item `identity`, facts' flat `role` or semantic
-`aliases`, and item-level `inlineTerm` / `spacingBeforeLines`. They are rejected
+`aliases`, and item-level `inlineTerm` / `spacingBeforeLines`. The former nested
+`layout.inlineTerm` field is also rejected rather than treated as an alias. They are rejected
 even when mixed with valid fields. These carriers reject unknown and duplicate
 fields in actual decoding, not only in the generated schema.
 

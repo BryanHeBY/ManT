@@ -77,7 +77,17 @@ pub(super) fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> 
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
+    if line.conditional_definition.is_some() {
+        let resolved_lines = line.resolved_lines(width);
+        return resolved_lines
+            .iter()
+            .flat_map(|resolved| wrap_line_with_links(resolved, width))
+            .collect();
+    }
     let mut rows = wrap_logical_line(line, width);
+    if let Some(row) = rows.first_mut() {
+        row.anchors.extend(line.anchors.iter().cloned());
+    }
     for mark in &line.reference_marks {
         let index = rows
             .iter()
@@ -87,13 +97,22 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
             row.anchors.push(mark.id.to_string());
         }
     }
+    for anchor in &line.positioned_anchors {
+        let index = rows
+            .iter()
+            .position(|row| row.source_end.is_some_and(|end| anchor.scalar_offset < end))
+            .unwrap_or_else(|| rows.len().saturating_sub(1));
+        if let Some(row) = rows.get_mut(index) {
+            row.anchors.push(anchor.id.clone());
+        }
+    }
     rows
 }
 
 #[allow(clippy::too_many_lines)]
 fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     if let Some(table) = &line.table_row {
-        return render_table_row_with_links(line.indent, table, width);
+        return render_table_row_with_links(line.indent, line.geometry_offset, table, width);
     }
     match line.surface {
         LineSurface::TldrTop => {
