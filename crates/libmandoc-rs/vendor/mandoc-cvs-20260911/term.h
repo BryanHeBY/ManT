@@ -102,6 +102,25 @@ enum term_exec_man_block_kind {
 	TERM_EXEC_MAN_BLOCK_LP
 };
 
+/* Stable observer-side spellings of display and control execution regions. */
+enum term_exec_region_kind {
+	TERM_EXEC_REGION_MAN_SYNOPSIS_SECTION,
+	TERM_EXEC_REGION_MAN_SYNOPSIS_COMMAND,
+	TERM_EXEC_REGION_MAN_LITERAL_BEGIN,
+	TERM_EXEC_REGION_MAN_LITERAL_END,
+	TERM_EXEC_REGION_MDOC_SYNOPSIS_SECTION,
+	TERM_EXEC_REGION_MDOC_SYNOPSIS_ITEM,
+	TERM_EXEC_REGION_MDOC_DISPLAY_FILLED,
+	TERM_EXEC_REGION_MDOC_DISPLAY_UNFILLED,
+	TERM_EXEC_REGION_MDOC_DISPLAY_LITERAL,
+	TERM_EXEC_REGION_MDOC_DISPLAY_RAGGED,
+	TERM_EXEC_REGION_MDOC_DISPLAY_CENTERED,
+	TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE,
+	TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL,
+	TERM_EXEC_REGION_CENTERED_LINES,
+	TERM_EXEC_REGION_RIGHT_JUSTIFIED_LINES
+};
+
 struct term_exec_ops {
 	int (*work)(void *, const struct termp *,
 	    const struct roff_node *, size_t);
@@ -122,6 +141,10 @@ struct term_exec_ops {
 	int (*man_block_begin)(void *, const struct termp *,
 	    const struct roff_node *, int);
 	int (*man_block_end)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*region_begin)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*region_end)(void *, const struct termp *,
 	    const struct roff_node *, int);
 	int (*word_begin)(void *, const struct termp *,
 	    const struct roff_node *, const char *, size_t, int *);
@@ -335,6 +358,8 @@ int		  term_exec_heading(struct termp *, const struct roff_node *,
 int		  term_exec_mdoc_list_item(struct termp *,
 			const struct roff_node *, int, int, int);
 int		  term_exec_man_block(struct termp *, const struct roff_node *,
+			int, int);
+int		  term_exec_region(struct termp *, const struct roff_node *,
 			int, int);
 int		  term_exec_word(struct termp *, const char *, size_t, int);
 int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);

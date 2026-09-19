@@ -955,7 +955,7 @@ static void
 print_man_node(DECL_ARGS)
 {
 	const struct roff_node *previous;
-	int heading, man_block;
+	int heading, man_block, region;
 
 	if (term_exec_failed(p))
 		return;
@@ -966,6 +966,19 @@ print_man_node(DECL_ARGS)
 	    n->type == ROFFT_HEAD && n->tok == MAN_SS ?
 	    TERM_EXEC_HEADING_MAN_SS : -1;
 	man_block = -1;
+	region = -1;
+	if (n->type == ROFFT_BLOCK && n->tok == MAN_SH &&
+	    n->child != NULL && n->child->type == ROFFT_HEAD &&
+	    n->child->child != NULL && n->child->child->type == ROFFT_TEXT &&
+	    n->child->child->next == NULL &&
+	    strcmp(n->child->child->string, "SYNOPSIS") == 0)
+		region = TERM_EXEC_REGION_MAN_SYNOPSIS_SECTION;
+	else if (n->type == ROFFT_BLOCK && n->tok == MAN_SY)
+		region = TERM_EXEC_REGION_MAN_SYNOPSIS_COMMAND;
+	else if (n->type == ROFFT_ELEM && n->tok == MAN_EX)
+		region = TERM_EXEC_REGION_MAN_LITERAL_BEGIN;
+	else if (n->type == ROFFT_ELEM && n->tok == MAN_EE)
+		region = TERM_EXEC_REGION_MAN_LITERAL_END;
 	if (n->type == ROFFT_BLOCK) {
 		switch (n->tok) {
 		case MAN_IP:
@@ -999,8 +1012,11 @@ print_man_node(DECL_ARGS)
 	if (term_exec_node(p, n, 1)) {
 		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
 		    (man_block == -1 ||
-		     term_exec_man_block(p, n, man_block, 1))) {
+		     term_exec_man_block(p, n, man_block, 1)) &&
+		    (region == -1 || term_exec_region(p, n, region, 1))) {
 			print_man_node_inner(p, mt, n, meta);
+			if (region != -1)
+				term_exec_region(p, n, region, 0);
 			if (man_block != -1)
 				term_exec_man_block(p, n, man_block, 0);
 			if (heading != -1)

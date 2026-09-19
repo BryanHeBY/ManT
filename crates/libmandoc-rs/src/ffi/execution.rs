@@ -12,12 +12,12 @@ use crate::{
     ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
     ExecutionHeadingKind, ExecutionLimits, ExecutionManBlockKind, ExecutionMdocListKind,
     ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
-    ExecutionReferenceKind, ExecutionSource, ExecutionTable, ExecutionTableAlignment,
-    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
-    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
-    ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind,
-    FlushOutcome, FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
-    NativeExecutionReport, PoolRange, RawDocument,
+    ExecutionReferenceKind, ExecutionRegionKind, ExecutionSource, ExecutionTable,
+    ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
+    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
+    ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper,
+    ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
+    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -699,7 +699,120 @@ fn validate_execution_ast_bindings(
     report: &NativeExecutionReport,
 ) -> Result<(), String> {
     let ast_nodes = collect_execution_ast_nodes(root, report)?;
+    validate_execution_region_ast_bindings(&ast_nodes, report)?;
     validate_execution_table_ast_bindings(&ast_nodes, report)
+}
+
+fn ast_heading_phrase(node: &crate::Node) -> String {
+    fn collect(node: &crate::Node, words: &mut Vec<String>) {
+        if let Some(text) = node
+            .text
+            .as_deref()
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+        {
+            words.push(text.to_owned());
+        }
+        for child in &node.children {
+            collect(child, words);
+        }
+    }
+
+    let mut words = Vec::new();
+    if let Some(head) = node
+        .children
+        .iter()
+        .find(|child| child.kind == crate::NodeKind::Head)
+    {
+        collect(head, &mut words);
+    }
+    words.join(" ")
+}
+
+fn region_kind_bit(kind: ExecutionRegionKind) -> u16 {
+    1_u16 << kind as u16
+}
+
+fn expected_ast_region_mask(node: &crate::Node) -> u16 {
+    use crate::DisplayKind;
+    use ExecutionRegionKind as Region;
+
+    let mut mask = 0;
+    if node.kind == crate::NodeKind::Block
+        && node.macro_name.as_deref() == Some("SH")
+        && ast_heading_phrase(node) == "SYNOPSIS"
+    {
+        mask |= region_kind_bit(Region::ManSynopsisSection);
+    } else if node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("SY") {
+        mask |= region_kind_bit(Region::ManSynopsisCommand);
+    } else if node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("EX") {
+        mask |= region_kind_bit(Region::ManLiteralBegin);
+    } else if node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("EE") {
+        mask |= region_kind_bit(Region::ManLiteralEnd);
+    } else if node.kind == crate::NodeKind::Block
+        && node.macro_name.as_deref() == Some("Sh")
+        && ast_heading_phrase(node) == "SYNOPSIS"
+    {
+        mask |= region_kind_bit(Region::MdocSynopsisSection);
+    } else if node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("Bd") {
+        mask |= match node.display_kind {
+            Some(DisplayKind::Filled) => region_kind_bit(Region::MdocDisplayFilled),
+            Some(DisplayKind::Unfilled) => region_kind_bit(Region::MdocDisplayUnfilled),
+            Some(DisplayKind::Literal) => region_kind_bit(Region::MdocDisplayLiteral),
+            Some(DisplayKind::Ragged) => region_kind_bit(Region::MdocDisplayRagged),
+            Some(DisplayKind::Centered) => region_kind_bit(Region::MdocDisplayCentered),
+            None => 0,
+        };
+    } else if node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("D1") {
+        mask |= region_kind_bit(Region::MdocDisplayOneLine);
+    } else if node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("Dl") {
+        mask |= region_kind_bit(Region::MdocDisplayOneLineLiteral);
+    } else if matches!(node.kind, crate::NodeKind::Block | crate::NodeKind::Element)
+        && node.flags.synopsis_pretty
+        && node.macro_name.as_deref() != Some("Sh")
+    {
+        mask |= region_kind_bit(Region::MdocSynopsisItem);
+    }
+    if node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("ce") {
+        mask |= region_kind_bit(Region::CenteredLines);
+    }
+    if node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("rj") {
+        mask |= region_kind_bit(Region::RightJustifiedLines);
+    }
+    mask
+}
+
+fn validate_execution_region_ast_bindings(
+    ast_nodes: &[&crate::Node],
+    report: &NativeExecutionReport,
+) -> Result<(), String> {
+    let mut regions = reserved_filled_vec(0_u16, ast_nodes.len(), "AST execution region binding")?;
+    for wrapper in &report.wrappers {
+        if wrapper.kind != ExecutionWrapperKind::Region {
+            continue;
+        }
+        let node = wrapper
+            .node
+            .ok_or_else(|| "execution region has no syntax node".to_owned())?;
+        let slot = regions
+            .get_mut(node.0 as usize)
+            .ok_or_else(|| "execution region node is out of range".to_owned())?;
+        let bit = region_kind_bit(wrapper.region_kind.expect("typed execution region"));
+        if *slot & bit != 0 {
+            return Err("owned AST node has multiple execution regions".to_owned());
+        }
+        *slot |= bit;
+    }
+    for (node, observed) in ast_nodes.iter().zip(regions) {
+        let expected = expected_ast_region_mask(node);
+        if observed != expected {
+            return Err(format!(
+                "execution region kind does not match the owned AST: macro={:?}, kind={:?}, observed={observed:?}, expected={expected:?}",
+                node.macro_name, node.kind
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn collect_execution_ast_nodes<'a>(
@@ -1569,6 +1682,7 @@ fn is_structural_wrapper(kind: ExecutionWrapperKind) -> bool {
             | ExecutionWrapperKind::Heading
             | ExecutionWrapperKind::MdocListItem
             | ExecutionWrapperKind::ManBlock
+            | ExecutionWrapperKind::Region
     )
 }
 
@@ -1600,6 +1714,54 @@ fn expected_man_block_kind(node: &ExecutionNode) -> Option<ExecutionManBlockKind
         "P" => Some(ExecutionManBlockKind::ParagraphP),
         "LP" => Some(ExecutionManBlockKind::ParagraphLp),
         _ => None,
+    }
+}
+
+fn execution_region_matches_node(node: &ExecutionNode, kind: ExecutionRegionKind) -> bool {
+    use ExecutionRegionKind as Region;
+
+    match kind {
+        Region::ManSynopsisSection => {
+            node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("SH")
+        }
+        Region::ManSynopsisCommand => {
+            node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("SY")
+        }
+        Region::ManLiteralBegin => {
+            node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("EX")
+        }
+        Region::ManLiteralEnd => {
+            node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("EE")
+        }
+        Region::MdocSynopsisSection => {
+            node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("Sh")
+        }
+        Region::MdocSynopsisItem => {
+            matches!(node.kind, crate::NodeKind::Block | crate::NodeKind::Element)
+                && node
+                    .flags
+                    .contains(crate::ExecutionNodeFlags::SYNOPSIS_PRETTY)
+                && !matches!(node.macro_name.as_deref(), Some("Sh" | "Bd" | "D1" | "Dl"))
+        }
+        Region::MdocDisplayFilled
+        | Region::MdocDisplayUnfilled
+        | Region::MdocDisplayLiteral
+        | Region::MdocDisplayRagged
+        | Region::MdocDisplayCentered => {
+            node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("Bd")
+        }
+        Region::MdocDisplayOneLine => {
+            node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("D1")
+        }
+        Region::MdocDisplayOneLineLiteral => {
+            node.kind == crate::NodeKind::Block && node.macro_name.as_deref() == Some("Dl")
+        }
+        Region::CenteredLines => {
+            node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("ce")
+        }
+        Region::RightJustifiedLines => {
+            node.kind == crate::NodeKind::Element && node.macro_name.as_deref() == Some("rj")
+        }
     }
 }
 
@@ -2619,7 +2781,7 @@ fn convert_report(
         }
         if let Some(wrapper) = wrapper {
             let wrapper = &wrapper_records[wrapper as usize];
-            if !matches!(wrapper.kind, 1 | 3 | 4 | 5)
+            if !matches!(wrapper.kind, 1 | 3 | 4 | 5 | 6)
                 || wrapper.node != value.node
                 || wrapper.enter_sequence >= value.enter_sequence
                 || wrapper.leave_sequence <= value.leave_sequence
@@ -2795,7 +2957,7 @@ fn convert_report(
             .atom_start
             .checked_add(value.atom_length)
             .ok_or_else(|| "invalid execution control atom range".to_owned())?;
-        if !matches!(wrapper_record.kind, 1 | 3 | 4)
+        if !matches!(wrapper_record.kind, 1 | 3 | 4 | 5 | 6)
             || !node_is_within(
                 &nodes,
                 node,
@@ -3189,6 +3351,7 @@ fn convert_report(
     let mut mdoc_list_item_nodes =
         reserved_filled_vec(false, node_count, "mdoc list item ownership")?;
     let mut man_block_nodes = reserved_filled_vec(false, node_count, "man block ownership")?;
+    let mut region_nodes = reserved_filled_vec(0_u16, node_count, "region ownership")?;
     let mut last_wrapper_child_leave =
         reserved_filled_vec(None::<u64>, wrapper_count, "wrapper sibling order")?;
     let mut last_root_wrapper_leave = None;
@@ -3208,6 +3371,7 @@ fn convert_report(
             3 => ExecutionWrapperKind::Heading,
             4 => ExecutionWrapperKind::MdocListItem,
             5 => ExecutionWrapperKind::ManBlock,
+            6 => ExecutionWrapperKind::Region,
             _ => return Err("unknown execution wrapper kind".to_owned()),
         };
         let heading_kind = match (kind, value.detail) {
@@ -3218,9 +3382,13 @@ fn convert_report(
             (ExecutionWrapperKind::Heading, _) => {
                 return Err("invalid execution heading kind".to_owned());
             }
-            (ExecutionWrapperKind::MdocListItem | ExecutionWrapperKind::ManBlock, _) | (_, 0) => {
-                None
-            }
+            (
+                ExecutionWrapperKind::MdocListItem
+                | ExecutionWrapperKind::ManBlock
+                | ExecutionWrapperKind::Region,
+                _,
+            )
+            | (_, 0) => None,
             _ => return Err("unexpected execution wrapper heading kind".to_owned()),
         };
         let mdoc_list_kind = match (kind, value.detail) {
@@ -3251,6 +3419,29 @@ fn convert_report(
             (ExecutionWrapperKind::ManBlock, 8) => Some(ExecutionManBlockKind::ParagraphLp),
             (ExecutionWrapperKind::ManBlock, _) => {
                 return Err("invalid execution man block kind".to_owned());
+            }
+            (_, _) => None,
+        };
+        let region_kind = match (kind, value.detail) {
+            (ExecutionWrapperKind::Region, 1) => Some(ExecutionRegionKind::ManSynopsisSection),
+            (ExecutionWrapperKind::Region, 2) => Some(ExecutionRegionKind::ManSynopsisCommand),
+            (ExecutionWrapperKind::Region, 3) => Some(ExecutionRegionKind::ManLiteralBegin),
+            (ExecutionWrapperKind::Region, 4) => Some(ExecutionRegionKind::ManLiteralEnd),
+            (ExecutionWrapperKind::Region, 5) => Some(ExecutionRegionKind::MdocSynopsisSection),
+            (ExecutionWrapperKind::Region, 6) => Some(ExecutionRegionKind::MdocSynopsisItem),
+            (ExecutionWrapperKind::Region, 7) => Some(ExecutionRegionKind::MdocDisplayFilled),
+            (ExecutionWrapperKind::Region, 8) => Some(ExecutionRegionKind::MdocDisplayUnfilled),
+            (ExecutionWrapperKind::Region, 9) => Some(ExecutionRegionKind::MdocDisplayLiteral),
+            (ExecutionWrapperKind::Region, 10) => Some(ExecutionRegionKind::MdocDisplayRagged),
+            (ExecutionWrapperKind::Region, 11) => Some(ExecutionRegionKind::MdocDisplayCentered),
+            (ExecutionWrapperKind::Region, 12) => Some(ExecutionRegionKind::MdocDisplayOneLine),
+            (ExecutionWrapperKind::Region, 13) => {
+                Some(ExecutionRegionKind::MdocDisplayOneLineLiteral)
+            }
+            (ExecutionWrapperKind::Region, 14) => Some(ExecutionRegionKind::CenteredLines),
+            (ExecutionWrapperKind::Region, 15) => Some(ExecutionRegionKind::RightJustifiedLines),
+            (ExecutionWrapperKind::Region, _) => {
+                return Err("invalid execution region kind".to_owned());
             }
             (_, _) => None,
         };
@@ -3337,6 +3528,26 @@ fn convert_report(
             {
                 return Err("invalid execution man block wrapper".to_owned());
             }
+            ExecutionWrapperKind::Region
+                if node.is_none()
+                    || value.flags != 0
+                    || value.target_start != NONE
+                    || value.target_length != 0
+                    || value.state_before >= 1 << 23
+                    || value.state_after >= 1 << 23
+                    || value.depth_before != 0
+                    || value.depth_after != 0
+                    || value.enter_sequence >= value.leave_sequence
+                    || parent.is_none()
+                    || node.is_none_or(|key| {
+                        !execution_region_matches_node(
+                            &nodes[key.0 as usize],
+                            region_kind.expect("typed execution region"),
+                        )
+                    }) =>
+            {
+                return Err("invalid execution region wrapper".to_owned());
+            }
             _ => {}
         }
         let last_sibling_leave = if let Some(parent) = parent {
@@ -3357,6 +3568,11 @@ fn convert_report(
                 || parent_wrapper.node != node)
             {
                 return Err("execution heading is not nested in its head node".to_owned());
+            }
+            if kind == ExecutionWrapperKind::Region
+                && (!is_structural_wrapper(parent_wrapper.kind) || parent_wrapper.node != node)
+            {
+                return Err("execution region is not nested in a structural wrapper".to_owned());
             }
             &mut last_wrapper_child_leave[parent]
         } else {
@@ -3384,6 +3600,13 @@ fn convert_report(
                 return Err("duplicate execution man block wrapper".to_owned());
             }
             man_block_nodes[node] = true;
+        } else if kind == ExecutionWrapperKind::Region {
+            let node = node.expect("validated execution region node").0 as usize;
+            let bit = region_kind_bit(region_kind.expect("typed execution region"));
+            if region_nodes[node] & bit != 0 {
+                return Err("duplicate execution region wrapper".to_owned());
+            }
+            region_nodes[node] |= bit;
         }
         wrappers.push(ExecutionWrapper {
             key: value.key,
@@ -3401,6 +3624,7 @@ fn convert_report(
             heading_kind,
             mdoc_list_kind,
             man_block_kind,
+            region_kind,
             flags: value.flags,
             state_before: value.state_before,
             state_after: value.state_after,
@@ -4986,6 +5210,40 @@ body
         (pool, records)
     }
 
+    fn records_with_region_wrapper() -> (Vec<u8>, RawRecords) {
+        let pool = b"xD1".to_vec();
+        let mut records = raw_records();
+        records.nodes.push(CNodeRecord {
+            key: 0,
+            kind: 1,
+            macro_start: 1,
+            macro_length: 2,
+            ..node()
+        });
+        records.wrappers.extend([
+            CWrapperRecord {
+                key: 0,
+                parent: NONE,
+                node: 0,
+                kind: 1,
+                enter_sequence: 1,
+                leave_sequence: 4,
+                ..wrapper()
+            },
+            CWrapperRecord {
+                key: 1,
+                parent: 0,
+                node: 0,
+                kind: 6,
+                detail: 12,
+                enter_sequence: 2,
+                leave_sequence: 3,
+                ..wrapper()
+            },
+        ]);
+        (pool, records)
+    }
+
     fn assert_heading_cardinality_rejected(
         head: CNodeRecord,
         parent: CWrapperRecord,
@@ -5738,6 +5996,82 @@ body
         assert_eq!(
             rejection_with_pool(pool, records),
             "duplicate execution man block wrapper"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_region_wrappers() {
+        let (pool, records) = records_with_region_wrapper();
+        let count = record_count(&records);
+        let report = convert_report(pool, 0, count, 2, records).unwrap();
+        assert_eq!(
+            report.wrappers[1].region_kind,
+            Some(ExecutionRegionKind::MdocDisplayOneLine)
+        );
+
+        let (pool, mut records) = records_with_region_wrapper();
+        records.wrappers[1].detail = 16;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "invalid execution region kind"
+        );
+
+        let (pool, mut records) = records_with_region_wrapper();
+        records.buffer_generations[0].close_sequence = 10;
+        records.wrappers[0].leave_sequence = 6;
+        records.wrappers[1].leave_sequence = 3;
+        records.wrappers.push(CWrapperRecord {
+            key: 2,
+            parent: 0,
+            node: 0,
+            kind: 6,
+            detail: 12,
+            enter_sequence: 4,
+            leave_sequence: 5,
+            ..wrapper()
+        });
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "duplicate execution region wrapper"
+        );
+
+        let (pool, mut records) = records_with_region_wrapper();
+        records.nodes.push(CNodeRecord {
+            key: 1,
+            kind: 3,
+            ..node()
+        });
+        records.wrappers[0].node = 1;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "execution region is not nested in a structural wrapper"
+        );
+    }
+
+    #[test]
+    fn ast_binding_requires_each_exact_native_region() {
+        let source = include_bytes!("../../tests/fixtures/execution/display-control-mdoc.1");
+        let mut report = crate::Parser::new(crate::ParseOptions::default())
+            .with_input_format(crate::InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes("display-control-mdoc.1", source, ExecutionLimits::default())
+            .unwrap();
+        let root = &report.document.root;
+        validate_execution_ast_bindings(root, &report.execution).unwrap();
+        let region = report
+            .execution
+            .wrappers
+            .iter()
+            .position(|wrapper| {
+                wrapper.region_kind == Some(ExecutionRegionKind::MdocDisplayOneLine)
+            })
+            .expect("D1 region");
+        report.execution.wrappers.remove(region);
+        assert!(
+            validate_execution_ast_bindings(root, &report.execution)
+                .unwrap_err()
+                .starts_with("execution region kind does not match the owned AST")
         );
     }
 

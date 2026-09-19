@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "mandoc.h"
+#include "mdoc.h"
 #include "roff.h"
 #include "out.h"
 #include "tbl.h"
@@ -145,6 +146,10 @@ static int execution_man_block_begin(void *, const struct termp *,
     const struct roff_node *, int);
 static int execution_man_block_end(void *, const struct termp *,
     const struct roff_node *, int);
+static int execution_region_begin(void *, const struct termp *,
+    const struct roff_node *, int);
+static int execution_region_end(void *, const struct termp *,
+    const struct roff_node *, int);
 static int execution_word_begin(void *, const struct termp *,
     const struct roff_node *, const char *, size_t, int *);
 static int execution_word_end(void *, const struct termp *,
@@ -228,6 +233,8 @@ static const struct term_exec_ops execution_ops = {
 	execution_mdoc_list_item_end,
 	execution_man_block_begin,
 	execution_man_block_end,
+	execution_region_begin,
+	execution_region_end,
 	execution_word_begin,
 	execution_word_end,
 	execution_buffer_write,
@@ -819,6 +826,101 @@ stable_man_block_kind(int kind)
 	}
 }
 
+static uint32_t
+stable_region_kind(int kind)
+{
+	switch (kind) {
+	case TERM_EXEC_REGION_MAN_SYNOPSIS_SECTION:
+		return MANT_MANDOC_REGION_MAN_SYNOPSIS_SECTION;
+	case TERM_EXEC_REGION_MAN_SYNOPSIS_COMMAND:
+		return MANT_MANDOC_REGION_MAN_SYNOPSIS_COMMAND;
+	case TERM_EXEC_REGION_MAN_LITERAL_BEGIN:
+		return MANT_MANDOC_REGION_MAN_LITERAL_BEGIN;
+	case TERM_EXEC_REGION_MAN_LITERAL_END:
+		return MANT_MANDOC_REGION_MAN_LITERAL_END;
+	case TERM_EXEC_REGION_MDOC_SYNOPSIS_SECTION:
+		return MANT_MANDOC_REGION_MDOC_SYNOPSIS_SECTION;
+	case TERM_EXEC_REGION_MDOC_SYNOPSIS_ITEM:
+		return MANT_MANDOC_REGION_MDOC_SYNOPSIS_ITEM;
+	case TERM_EXEC_REGION_MDOC_DISPLAY_FILLED:
+		return MANT_MANDOC_REGION_MDOC_DISPLAY_FILLED;
+	case TERM_EXEC_REGION_MDOC_DISPLAY_UNFILLED:
+		return MANT_MANDOC_REGION_MDOC_DISPLAY_UNFILLED;
+	case TERM_EXEC_REGION_MDOC_DISPLAY_LITERAL:
+		return MANT_MANDOC_REGION_MDOC_DISPLAY_LITERAL;
+	case TERM_EXEC_REGION_MDOC_DISPLAY_RAGGED:
+		return MANT_MANDOC_REGION_MDOC_DISPLAY_RAGGED;
+	case TERM_EXEC_REGION_MDOC_DISPLAY_CENTERED:
+		return MANT_MANDOC_REGION_MDOC_DISPLAY_CENTERED;
+	case TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE:
+		return MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE;
+	case TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL:
+		return MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL;
+	case TERM_EXEC_REGION_CENTERED_LINES:
+		return MANT_MANDOC_REGION_CENTERED_LINES;
+	case TERM_EXEC_REGION_RIGHT_JUSTIFIED_LINES:
+		return MANT_MANDOC_REGION_RIGHT_JUSTIFIED_LINES;
+	default:
+		return MANT_MANDOC_EXEC_NONE;
+	}
+}
+
+static int
+stable_region_node_matches(const struct roff_node *node, uint32_t kind)
+{
+	if (node == NULL)
+		return 0;
+	if (kind == MANT_MANDOC_REGION_MAN_SYNOPSIS_SECTION)
+		return node->type == ROFFT_BLOCK && node->tok == MAN_SH &&
+	    node->child != NULL && node->child->type == ROFFT_HEAD &&
+	    node->child->child != NULL &&
+	    node->child->child->type == ROFFT_TEXT &&
+	    node->child->child->next == NULL &&
+	    strcmp(node->child->child->string, "SYNOPSIS") == 0;
+	if (kind == MANT_MANDOC_REGION_MAN_SYNOPSIS_COMMAND)
+		return node->type == ROFFT_BLOCK && node->tok == MAN_SY;
+	if (kind == MANT_MANDOC_REGION_MAN_LITERAL_BEGIN)
+		return node->type == ROFFT_ELEM && node->tok == MAN_EX;
+	if (kind == MANT_MANDOC_REGION_MAN_LITERAL_END)
+		return node->type == ROFFT_ELEM && node->tok == MAN_EE;
+	if (kind == MANT_MANDOC_REGION_MDOC_SYNOPSIS_SECTION)
+		return node->type == ROFFT_BLOCK && node->tok == MDOC_Sh &&
+		    node->sec == SEC_SYNOPSIS;
+	if (kind >= MANT_MANDOC_REGION_MDOC_DISPLAY_FILLED &&
+	    kind <= MANT_MANDOC_REGION_MDOC_DISPLAY_CENTERED &&
+	    node->type == ROFFT_BLOCK && node->tok == MDOC_Bd &&
+	    node->norm != NULL) {
+		switch (node->norm->Bd.type) {
+		case DISP_filled:
+			return kind == MANT_MANDOC_REGION_MDOC_DISPLAY_FILLED;
+		case DISP_unfilled:
+			return kind == MANT_MANDOC_REGION_MDOC_DISPLAY_UNFILLED;
+		case DISP_literal:
+			return kind == MANT_MANDOC_REGION_MDOC_DISPLAY_LITERAL;
+		case DISP_ragged:
+			return kind == MANT_MANDOC_REGION_MDOC_DISPLAY_RAGGED;
+		case DISP_centered:
+			return kind == MANT_MANDOC_REGION_MDOC_DISPLAY_CENTERED;
+		case DISP__NONE:
+			return 0;
+		}
+	}
+	if (kind == MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE)
+		return node->type == ROFFT_BLOCK && node->tok == MDOC_D1;
+	if (kind == MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL)
+		return node->type == ROFFT_BLOCK && node->tok == MDOC_Dl;
+	if (kind == MANT_MANDOC_REGION_MDOC_SYNOPSIS_ITEM)
+		return (node->type == ROFFT_BLOCK || node->type == ROFFT_ELEM) &&
+		    node->tok != MDOC_Sh && node->tok != MDOC_Bd &&
+		    node->tok != MDOC_D1 && node->tok != MDOC_Dl &&
+		    (node->flags & NODE_SYNPRETTY) != 0;
+	if (kind == MANT_MANDOC_REGION_CENTERED_LINES)
+		return node->type == ROFFT_ELEM && node->tok == ROFF_ce;
+	if (kind == MANT_MANDOC_REGION_RIGHT_JUSTIFIED_LINES)
+		return node->type == ROFFT_ELEM && node->tok == ROFF_rj;
+	return 0;
+}
+
 static const struct roff_node *
 mdoc_list_block(const struct roff_node *item)
 {
@@ -926,7 +1028,8 @@ wrapper_is_structural(uint32_t kind)
 	return kind == MANT_MANDOC_WRAPPER_NODE ||
 	    kind == MANT_MANDOC_WRAPPER_HEADING ||
 	    kind == MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM ||
-	    kind == MANT_MANDOC_WRAPPER_MAN_BLOCK;
+	    kind == MANT_MANDOC_WRAPPER_MAN_BLOCK ||
+	    kind == MANT_MANDOC_WRAPPER_REGION;
 }
 
 static const char *
@@ -1025,6 +1128,99 @@ stable_man_block_node_kind(const struct mant_mandoc_execution_report *report,
 	} else if (node->macro_length == 1 && macro[0] == 'P')
 		return MANT_MANDOC_MAN_BLOCK_P;
 	return MANT_MANDOC_EXEC_NONE;
+}
+
+static int
+stable_region_record_matches(const struct mant_mandoc_execution_report *report,
+    const struct mant_mandoc_node_record *node, uint32_t kind)
+{
+	const unsigned char *macro;
+
+	if (report == NULL || node == NULL ||
+	    node->macro_start == MANT_MANDOC_EXEC_NONE ||
+	    node->macro_start > report->pool_length ||
+	    node->macro_length > report->pool_length - node->macro_start)
+		return 0;
+	macro = report->pool + node->macro_start;
+#define REGION_MACRO(name, type) \
+	(node->kind == (type) && node->macro_length == sizeof(name) - 1 && \
+	 memcmp(macro, (name), sizeof(name) - 1) == 0)
+	switch (kind) {
+	case MANT_MANDOC_REGION_MAN_SYNOPSIS_SECTION:
+		return REGION_MACRO("SH", 1);
+	case MANT_MANDOC_REGION_MAN_SYNOPSIS_COMMAND:
+		return REGION_MACRO("SY", 1);
+	case MANT_MANDOC_REGION_MAN_LITERAL_BEGIN:
+		return REGION_MACRO("EX", 5);
+	case MANT_MANDOC_REGION_MAN_LITERAL_END:
+		return REGION_MACRO("EE", 5);
+	case MANT_MANDOC_REGION_MDOC_SYNOPSIS_SECTION:
+		return REGION_MACRO("Sh", 1);
+	case MANT_MANDOC_REGION_MDOC_SYNOPSIS_ITEM:
+		return (node->kind == 1 || node->kind == 5) &&
+		    (node->flags & (1U << 9)) != 0 &&
+		    !REGION_MACRO("Sh", 1) && !REGION_MACRO("Bd", 1) &&
+		    !REGION_MACRO("D1", 1) && !REGION_MACRO("Dl", 1);
+	case MANT_MANDOC_REGION_MDOC_DISPLAY_FILLED:
+	case MANT_MANDOC_REGION_MDOC_DISPLAY_UNFILLED:
+	case MANT_MANDOC_REGION_MDOC_DISPLAY_LITERAL:
+	case MANT_MANDOC_REGION_MDOC_DISPLAY_RAGGED:
+	case MANT_MANDOC_REGION_MDOC_DISPLAY_CENTERED:
+		return REGION_MACRO("Bd", 1);
+	case MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE:
+		return REGION_MACRO("D1", 1);
+	case MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL:
+		return REGION_MACRO("Dl", 1);
+	case MANT_MANDOC_REGION_CENTERED_LINES:
+		return REGION_MACRO("ce", 5);
+	case MANT_MANDOC_REGION_RIGHT_JUSTIFIED_LINES:
+		return REGION_MACRO("rj", 5);
+	default:
+		return 0;
+	}
+#undef REGION_MACRO
+}
+
+static int
+stable_region_record_expected(const struct mant_mandoc_execution_report *report,
+    const struct mant_mandoc_node_record *node)
+{
+	uint32_t kind;
+
+	for (kind = MANT_MANDOC_REGION_MAN_SYNOPSIS_COMMAND;
+	    kind <= MANT_MANDOC_REGION_RIGHT_JUSTIFIED_LINES; kind++)
+		if (kind != MANT_MANDOC_REGION_MDOC_SYNOPSIS_SECTION &&
+		    kind != MANT_MANDOC_REGION_MDOC_SYNOPSIS_ITEM &&
+		    stable_region_record_matches(report, node, kind))
+			return 1;
+	return 0;
+}
+
+static uint32_t
+stable_region_record_required_mask(
+    const struct mant_mandoc_execution_report *report,
+    const struct mant_mandoc_node_record *node)
+{
+	static const uint32_t exact_kinds[] = {
+		MANT_MANDOC_REGION_MAN_SYNOPSIS_COMMAND,
+		MANT_MANDOC_REGION_MAN_LITERAL_BEGIN,
+		MANT_MANDOC_REGION_MAN_LITERAL_END,
+		MANT_MANDOC_REGION_MDOC_SYNOPSIS_ITEM,
+		MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE,
+		MANT_MANDOC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL,
+		MANT_MANDOC_REGION_CENTERED_LINES,
+		MANT_MANDOC_REGION_RIGHT_JUSTIFIED_LINES
+	};
+	uint32_t index, kind, mask;
+
+	mask = 0;
+	for (index = 0; index < sizeof(exact_kinds) / sizeof(exact_kinds[0]);
+	    index++) {
+		kind = exact_kinds[index];
+		if (stable_region_record_matches(report, node, kind))
+			mask |= 1U << (kind - 1);
+	}
+	return mask;
 }
 
 static int
@@ -1224,6 +1420,71 @@ execution_man_block_end(void *arg, const struct termp *p,
 		return 0;
 	record = &report->wrappers[report->current_wrapper];
 	if (record->kind != MANT_MANDOC_WRAPPER_MAN_BLOCK ||
+	    record->node != node_key || record->detail != stable_kind ||
+	    record->leave_atom != MANT_MANDOC_EXEC_NONE)
+		return 0;
+	record->state_after = stable_term_flags(p->flags);
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->leave_sequence = report->sequence++;
+	report->current_wrapper = record->parent;
+	return 1;
+}
+
+static int
+execution_region_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, int kind)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_wrapper_record *parent, *record;
+	uint32_t node_key, stable_kind;
+
+	stable_kind = stable_region_kind(kind);
+	node_key = lookup_node(report, node);
+	if (stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    !stable_region_node_matches(node, stable_kind) ||
+	    node_key == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper >= report->wrappers_count)
+		return 0;
+	parent = &report->wrappers[report->current_wrapper];
+	if (!wrapper_is_structural(parent->kind) || parent->node != node_key ||
+	    !charge_work(report, 1) || !charge_record(report) ||
+	    !reserve_wrappers(report, report->wrappers_count + 1))
+		return 0;
+	record = &report->wrappers[report->wrappers_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->wrappers_count++;
+	record->parent = report->current_wrapper;
+	record->node = node_key;
+	record->kind = MANT_MANDOC_WRAPPER_REGION;
+	record->target_start = MANT_MANDOC_EXEC_NONE;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->detail = stable_kind;
+	record->state_before = stable_term_flags(p->flags);
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_wrapper = record->key;
+	return 1;
+}
+
+static int
+execution_region_end(void *arg, const struct termp *p,
+    const struct roff_node *node, int kind)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_wrapper_record *record;
+	uint32_t node_key, stable_kind;
+
+	stable_kind = stable_region_kind(kind);
+	node_key = lookup_node(report, node);
+	if (!charge_work(report, 1) || stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    node_key == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper >= report->wrappers_count)
+		return 0;
+	record = &report->wrappers[report->current_wrapper];
+	if (record->kind != MANT_MANDOC_WRAPPER_REGION ||
 	    record->node != node_key || record->detail != stable_kind ||
 	    record->leave_atom != MANT_MANDOC_EXEC_NONE)
 		return 0;
@@ -1812,9 +2073,9 @@ execution_control_enter(void *arg, const struct termp *p,
 	if (record->node == MANT_MANDOC_EXEC_NONE ||
 	    record->wrapper == MANT_MANDOC_EXEC_NONE ||
 	    record->wrapper >= report->wrappers_count ||
-	    report->wrappers[record->wrapper].kind != MANT_MANDOC_WRAPPER_NODE) {
+	    !wrapper_is_structural(report->wrappers[record->wrapper].kind)) {
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
-		    "native control request has no matching node wrapper");
+		    "native control request has no matching structural wrapper");
 		return 0;
 	}
 	origin = record->node;
@@ -3350,6 +3611,7 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	unsigned char *covered_fragments;
 	unsigned char *covered_glyph_geometry;
 	unsigned char *heading_nodes, *mdoc_list_item_nodes, *man_block_nodes;
+	uint32_t *region_node_kinds;
 	unsigned char *terminal_flush;
 	uint64_t *fragment_flush_outcome;
 	uint64_t capacity_total;
@@ -3390,6 +3652,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    calloc(report->nodes_count, 1);
 	man_block_nodes = report->nodes_count == 0 ? NULL :
 	    calloc(report->nodes_count, 1);
+	region_node_kinds = report->nodes_count == 0 ? NULL :
+	    calloc(report->nodes_count, sizeof(*region_node_kinds));
 	covered_fragments = report->fragments_count == 0 ? NULL :
 	    calloc(report->fragments_count, 1);
 	covered_glyph_geometry = report->fragments_count == 0 ? NULL :
@@ -3437,7 +3701,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    word_atoms == NULL || margin_atoms == NULL || live_atoms == NULL)) ||
 	    (report->nodes_count != 0 &&
 	    (margin_control_nodes == NULL || heading_nodes == NULL ||
-	    mdoc_list_item_nodes == NULL || man_block_nodes == NULL)) ||
+	    mdoc_list_item_nodes == NULL || man_block_nodes == NULL ||
+	    region_node_kinds == NULL)) ||
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
 	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
 	    (report->references_count != 0 &&
@@ -4397,7 +4662,7 @@ invalid_geometry:
 		    (index != 0 && report->wrappers[index - 1].enter_sequence >=
 		    wrapper->enter_sequence) ||
 		    wrapper->kind < MANT_MANDOC_WRAPPER_NODE ||
-		    wrapper->kind > MANT_MANDOC_WRAPPER_MAN_BLOCK ||
+		    wrapper->kind > MANT_MANDOC_WRAPPER_REGION ||
 		    wrapper->enter_atom > report->atoms_count ||
 		    wrapper->leave_atom > report->atoms_count ||
 		    wrapper->enter_atom > wrapper->leave_atom)
@@ -4507,6 +4772,37 @@ invalid_geometry:
 			    man_block_nodes[wrapper->node])
 				goto invalid_wrapper;
 			man_block_nodes[wrapper->node] = 1;
+		} else if (wrapper->kind == MANT_MANDOC_WRAPPER_REGION) {
+			uint32_t region_bit;
+
+			if (wrapper->node >= report->nodes_count ||
+			    wrapper->detail < MANT_MANDOC_REGION_MAN_SYNOPSIS_SECTION ||
+			    wrapper->detail >
+			    MANT_MANDOC_REGION_RIGHT_JUSTIFIED_LINES ||
+			    !stable_region_record_matches(report,
+			    &report->nodes[wrapper->node], wrapper->detail) ||
+			    wrapper->flags != 0 ||
+			    wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
+			    wrapper->target_length != 0 ||
+			    wrapper->state_before >= (1U << 23) ||
+			    wrapper->state_after >= (1U << 23) ||
+			    wrapper->depth_before != 0 || wrapper->depth_after != 0 ||
+			    wrapper->enter_sequence >= wrapper->leave_sequence ||
+			    wrapper->parent == MANT_MANDOC_EXEC_NONE ||
+			    !wrapper_is_structural(
+			    report->wrappers[wrapper->parent].kind) ||
+			    report->wrappers[wrapper->parent].node != wrapper->node) {
+				fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+				    "native execution region wrapper is inconsistent");
+				goto fail;
+			}
+			region_bit = 1U << (wrapper->detail - 1);
+			if ((region_node_kinds[wrapper->node] & region_bit) != 0) {
+				fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+				    "native execution region wrapper is inconsistent");
+				goto fail;
+			}
+			region_node_kinds[wrapper->node] |= region_bit;
 		} else if (wrapper->flags != 0 || wrapper->detail != 0 ||
 		    wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
 		    wrapper->target_length != 0 ||
@@ -4532,6 +4828,17 @@ invalid_geometry:
 		if ((stable_man_block_node_kind(report, &report->nodes[index]) !=
 		    MANT_MANDOC_EXEC_NONE) != (man_block_nodes[index] != 0))
 			goto invalid_wrapper;
+	for (index = 0; index < report->nodes_count; index++)
+		if ((stable_region_record_expected(report, &report->nodes[index]) &&
+		    region_node_kinds[index] == 0) ||
+		    (region_node_kinds[index] & stable_region_record_required_mask(
+		    report, &report->nodes[index])) !=
+		    stable_region_record_required_mask(report,
+		    &report->nodes[index])) {
+			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+			    "native execution region coverage is incomplete");
+			goto fail;
+		}
 	goto valid_wrappers;
 invalid_wrapper:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
@@ -4790,6 +5097,7 @@ valid_wrappers:
 	free(heading_nodes);
 	free(mdoc_list_item_nodes);
 	free(man_block_nodes);
+	free(region_node_kinds);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
@@ -4863,6 +5171,7 @@ fail:
 	free(heading_nodes);
 	free(mdoc_list_item_nodes);
 	free(man_block_nodes);
+	free(region_node_kinds);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);

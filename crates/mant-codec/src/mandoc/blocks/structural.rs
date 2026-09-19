@@ -189,7 +189,12 @@ impl StructuralLowerer<'_, '_, '_> {
     fn lower_transparent_container(&mut self, node: &Node) -> bool {
         match node.macro_name.as_deref() {
             Some("PP" | "P" | "LP" | "HP") => self.lower_man_paragraph(node),
-            Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
+            Some("Bd")
+                if matches!(
+                    node.display_kind,
+                    Some(DisplayKind::Filled | DisplayKind::Ragged | DisplayKind::Centered)
+                ) =>
+            {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let spacing_before = u16::from(has_predecessor && !node.compact);
                 let nested = lower_blocks_with_predecessor(

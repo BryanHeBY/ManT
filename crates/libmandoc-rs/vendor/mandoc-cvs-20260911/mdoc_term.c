@@ -305,7 +305,7 @@ static void
 print_mdoc_node(DECL_ARGS)
 {
 	const struct roff_node *list, *previous;
-	int heading, list_item;
+	int heading, list_item, region;
 
 	if (term_exec_failed(p))
 		return;
@@ -316,6 +316,38 @@ print_mdoc_node(DECL_ARGS)
 	    n->type == ROFFT_HEAD && n->tok == MDOC_Ss ?
 	    TERM_EXEC_HEADING_MDOC_SS : -1;
 	list_item = -1;
+	region = -1;
+	if (n->type == ROFFT_BLOCK && n->tok == MDOC_Sh &&
+	    n->sec == SEC_SYNOPSIS)
+		region = TERM_EXEC_REGION_MDOC_SYNOPSIS_SECTION;
+	else if (n->type == ROFFT_BLOCK && n->tok == MDOC_Bd &&
+	    n->norm != NULL) {
+		switch (n->norm->Bd.type) {
+		case DISP_filled:
+			region = TERM_EXEC_REGION_MDOC_DISPLAY_FILLED;
+			break;
+		case DISP_unfilled:
+			region = TERM_EXEC_REGION_MDOC_DISPLAY_UNFILLED;
+			break;
+		case DISP_literal:
+			region = TERM_EXEC_REGION_MDOC_DISPLAY_LITERAL;
+			break;
+		case DISP_ragged:
+			region = TERM_EXEC_REGION_MDOC_DISPLAY_RAGGED;
+			break;
+		case DISP_centered:
+			region = TERM_EXEC_REGION_MDOC_DISPLAY_CENTERED;
+			break;
+		case DISP__NONE:
+			break;
+		}
+	} else if (n->type == ROFFT_BLOCK && n->tok == MDOC_D1)
+		region = TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE;
+	else if (n->type == ROFFT_BLOCK && n->tok == MDOC_Dl)
+		region = TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL;
+	else if ((n->type == ROFFT_BLOCK || n->type == ROFFT_ELEM) &&
+	    n->tok != MDOC_Sh && n->flags & NODE_SYNPRETTY)
+		region = TERM_EXEC_REGION_MDOC_SYNOPSIS_ITEM;
 	list = NULL;
 	if (n->type == ROFFT_BLOCK && n->tok == MDOC_It &&
 	    n->parent != NULL && n->parent->parent != NULL &&
@@ -365,8 +397,11 @@ print_mdoc_node(DECL_ARGS)
 		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
 		    (list_item == -1 ||
 		     term_exec_mdoc_list_item(p, n, list_item,
-		     list->norm->Bl.comp, 1))) {
+		     list->norm->Bl.comp, 1)) &&
+		    (region == -1 || term_exec_region(p, n, region, 1))) {
 			print_mdoc_node_inner(p, pair, meta, n);
+			if (region != -1)
+				term_exec_region(p, n, region, 0);
 			if (list_item != -1)
 				term_exec_mdoc_list_item(p, n, list_item,
 				    list->norm->Bl.comp, 0);

@@ -4,7 +4,7 @@ use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryRequest, ExecutionCancellation,
     ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
     ExecutionLimits, ExecutionManBlockKind, ExecutionMdocListKind, ExecutionReferenceKind,
-    ExecutionTableAlignment, ExecutionTableDataKind, ExecutionTableLayoutKind,
+    ExecutionRegionKind, ExecutionTableAlignment, ExecutionTableDataKind, ExecutionTableLayoutKind,
     ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome, FragmentRole, InputFormat,
     NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
 };
@@ -64,6 +64,10 @@ const INLINE_ANNOTATIONS_MAN: &[u8] = include_bytes!("fixtures/execution/inline-
 const MDOC_LIST_LIFECYCLE: &[u8] = include_bytes!("fixtures/execution/mdoc-list-lifecycle.1");
 const MAN_DEFINITION_LIFECYCLE: &[u8] =
     include_bytes!("fixtures/execution/man-definition-lifecycle.1");
+const DISPLAY_CONTROL_MAN: &[u8] = include_bytes!("fixtures/execution/display-control-man.1");
+const DISPLAY_CONTROL_MDOC: &[u8] = include_bytes!("fixtures/execution/display-control-mdoc.1");
+const DISPLAY_CONTROL_MDOC_SYNOPSIS_OVERLAP: &[u8] =
+    include_bytes!("fixtures/execution/display-control-mdoc-synopsis-overlap.1");
 
 fn execute(name: &str, input_format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
@@ -1517,6 +1521,152 @@ fn reports_exact_man_block_lifecycles() {
         .expect("TP nested inside RS execution scope");
     assert!(nested.enter_atom >= relative.enter_atom);
     assert!(nested.leave_atom <= relative.leave_atom);
+}
+
+#[test]
+fn reports_exact_display_synopsis_literal_and_capture_regions() {
+    // Both fixtures were rendered with the pinned CVS `-Tlint`, `-Ttree`,
+    // and `-Tutf8` paths before these assertions were written.  The scopes
+    // below are the actual handler boundaries in
+    // `man_term.c::print_man_node()`, `mdoc_term.c::print_mdoc_node()`, and
+    // `roff_term.c::roff_term_pre_ce()`, not section-name inference in Rust.
+    for (name, format, source, expected) in [
+        (
+            "display-control-man.1",
+            InputFormat::Man,
+            DISPLAY_CONTROL_MAN,
+            vec![
+                (ExecutionRegionKind::ManSynopsisSection, "SH"),
+                (ExecutionRegionKind::ManSynopsisCommand, "SY"),
+                (ExecutionRegionKind::ManLiteralBegin, "EX"),
+                (ExecutionRegionKind::ManLiteralEnd, "EE"),
+                (ExecutionRegionKind::CenteredLines, "ce"),
+                (ExecutionRegionKind::RightJustifiedLines, "rj"),
+            ],
+        ),
+        (
+            "display-control-mdoc.1",
+            InputFormat::Mdoc,
+            DISPLAY_CONTROL_MDOC,
+            vec![
+                (ExecutionRegionKind::MdocSynopsisSection, "Sh"),
+                (ExecutionRegionKind::MdocSynopsisItem, "Nm"),
+                (ExecutionRegionKind::MdocSynopsisItem, "Op"),
+                (ExecutionRegionKind::MdocSynopsisItem, "Fl"),
+                (ExecutionRegionKind::MdocSynopsisItem, "Ar"),
+                (ExecutionRegionKind::MdocDisplayFilled, "Bd"),
+                (ExecutionRegionKind::MdocDisplayUnfilled, "Bd"),
+                (ExecutionRegionKind::MdocDisplayLiteral, "Bd"),
+                (ExecutionRegionKind::MdocDisplayRagged, "Bd"),
+                (ExecutionRegionKind::MdocDisplayCentered, "Bd"),
+                (ExecutionRegionKind::MdocDisplayOneLine, "D1"),
+                (ExecutionRegionKind::MdocDisplayOneLineLiteral, "Dl"),
+                (ExecutionRegionKind::CenteredLines, "ce"),
+                (ExecutionRegionKind::RightJustifiedLines, "rj"),
+            ],
+        ),
+    ] {
+        let report = execute(name, format, source);
+        let regions = report
+            .execution
+            .wrappers()
+            .iter()
+            .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::Region)
+            .collect::<Vec<_>>();
+        assert_eq!(regions.len(), expected.len(), "{name}");
+        for (region, (kind, macro_name)) in regions.iter().zip(expected) {
+            assert_eq!(region.region_kind, Some(kind), "{name}");
+            let node = region.node.expect("region node");
+            assert_eq!(
+                report.execution.nodes()[node.0 as usize]
+                    .macro_name
+                    .as_deref(),
+                Some(macro_name),
+                "{name}"
+            );
+            assert!(region.enter_sequence < region.leave_sequence, "{name}");
+            let parent = &report.execution.wrappers()[region.parent.unwrap() as usize];
+            assert_eq!(parent.kind, ExecutionWrapperKind::Node, "{name}");
+            assert_eq!(parent.node, Some(node), "{name}");
+            assert!(parent.enter_sequence < region.enter_sequence, "{name}");
+            assert!(region.leave_sequence < parent.leave_sequence, "{name}");
+
+            if matches!(
+                kind,
+                ExecutionRegionKind::CenteredLines | ExecutionRegionKind::RightJustifiedLines
+            ) {
+                let controls = report
+                    .execution
+                    .controls()
+                    .iter()
+                    .filter(|control| control.wrapper == region.key)
+                    .collect::<Vec<_>>();
+                assert!(controls.iter().any(|control| {
+                    report.execution.nodes()[control.node.0 as usize]
+                        .macro_name
+                        .as_deref()
+                        == Some(macro_name)
+                }));
+            }
+        }
+    }
+}
+
+#[test]
+fn overlapping_synopsis_and_captured_control_regions_remain_nested() {
+    // The exact source was rendered with the pinned CVS lint, tree, and UTF-8
+    // devices before this assertion was added.  roff.c marks ce/rj elements
+    // NODE_SYNPRETTY while mdoc_state.c keeps the SYNOPSIS state; the same
+    // node then enters its ce/rj handler through roff_term.c.
+    let report = execute(
+        "display-control-mdoc-synopsis-overlap.1",
+        InputFormat::Mdoc,
+        DISPLAY_CONTROL_MDOC_SYNOPSIS_OVERLAP,
+    );
+    let regions = report
+        .execution
+        .wrappers()
+        .iter()
+        .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::Region)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        regions
+            .iter()
+            .map(|wrapper| wrapper.region_kind.unwrap())
+            .collect::<Vec<_>>(),
+        [
+            ExecutionRegionKind::MdocSynopsisSection,
+            ExecutionRegionKind::MdocSynopsisItem,
+            ExecutionRegionKind::CenteredLines,
+            ExecutionRegionKind::MdocSynopsisItem,
+            ExecutionRegionKind::RightJustifiedLines,
+            ExecutionRegionKind::MdocSynopsisItem,
+            ExecutionRegionKind::MdocSynopsisItem,
+            ExecutionRegionKind::MdocSynopsisItem,
+        ]
+    );
+    for pair in [regions[1..3].as_ref(), regions[3..5].as_ref()] {
+        assert_eq!(pair[0].node, pair[1].node);
+        assert_eq!(pair[1].parent, Some(pair[0].key));
+        assert!(pair[0].enter_sequence < pair[1].enter_sequence);
+        assert!(pair[1].leave_sequence < pair[0].leave_sequence);
+    }
+    let item_region = regions
+        .iter()
+        .find(|region| {
+            region.region_kind == Some(ExecutionRegionKind::MdocSynopsisItem)
+                && region.node.is_some_and(|node| {
+                    report.execution.nodes()[node.0 as usize]
+                        .macro_name
+                        .as_deref()
+                        == Some("It")
+                })
+        })
+        .expect("synopsis list item region");
+    assert_eq!(
+        report.execution.wrappers()[item_region.parent.unwrap() as usize].kind,
+        ExecutionWrapperKind::MdocListItem
+    );
 }
 
 #[test]

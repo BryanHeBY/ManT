@@ -1,0 +1,34 @@
+.Dd September 19, 2026
+.Dt K16-MDOC 1
+.Os
+.Sh NAME
+.Nm k16-mdoc
+.Nd native display and control role probe
+.Sh SYNOPSIS
+.Nm probe
+.Op Fl f Ar file
+.Sh DESCRIPTION
+.Bd -filled -offset left
+filled alpha
+.Ed
+.Bd -unfilled -offset indent
+unfilled alpha
+unfilled beta
+.Ed
+.Bd -literal -offset indent-two
+.Tg literal-display-target
+literal alpha
+literal beta
+.Ed
+.Bd -ragged -offset 2n
+ragged alpha
+.Ed
+.Bd -centered
+centered alpha
+.Ed
+.D1 one line filled
+.Dl one line literal
+.ce 1
+center request
+.rj 1
+right request

@@ -24,6 +24,12 @@ impl ExecutionNodeFlags {
     /// The parser generated this node while executing source syntax; it was
     /// not directly authored as a source node at the reported location.
     pub const GENERATED: u32 = 1 << 0;
+    /// The node executes in no-fill mode.
+    pub const NO_FILL: u32 = 1 << 3;
+    /// The node starts an authored source line.
+    pub const LINE_START: u32 = 1 << 6;
+    /// The node executes with mdoc synopsis formatting.
+    pub const SYNOPSIS_PRETTY: u32 = 1 << 9;
 
     /// Return whether a stable flag is present.
     #[must_use]
@@ -333,6 +339,8 @@ pub enum ExecutionWrapperKind {
     MdocListItem,
     /// Native man(7) block execution interval.
     ManBlock,
+    /// Native display, synopsis, literal, or captured-control region.
+    Region,
 }
 
 /// Native lifecycle used to execute one section heading.
@@ -397,6 +405,41 @@ pub enum ExecutionManBlockKind {
     ParagraphP,
     /// Paragraph `.LP`.
     ParagraphLp,
+}
+
+/// Exact native display, synopsis, literal, or captured-control lifecycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionRegionKind {
+    /// man(7) `SYNOPSIS` section.
+    ManSynopsisSection,
+    /// man(7) `.SY` command declaration.
+    ManSynopsisCommand,
+    /// man(7) `.EX` literal-mode transition.
+    ManLiteralBegin,
+    /// man(7) `.EE` literal-mode transition.
+    ManLiteralEnd,
+    /// mdoc(7) `SYNOPSIS` section.
+    MdocSynopsisSection,
+    /// One mdoc(7) node executed with `NODE_SYNPRETTY`.
+    MdocSynopsisItem,
+    /// mdoc(7) `.Bd -filled` display.
+    MdocDisplayFilled,
+    /// mdoc(7) `.Bd -unfilled` display.
+    MdocDisplayUnfilled,
+    /// mdoc(7) `.Bd -literal` display.
+    MdocDisplayLiteral,
+    /// mdoc(7) `.Bd -ragged` display.
+    MdocDisplayRagged,
+    /// mdoc(7) `.Bd -centered` display.
+    MdocDisplayCentered,
+    /// mdoc(7) `.D1` one-line display.
+    MdocDisplayOneLine,
+    /// mdoc(7) `.Dl` one-line literal display.
+    MdocDisplayOneLineLiteral,
+    /// roff `.ce` captured-line group.
+    CenteredLines,
+    /// roff `.rj` captured-line group.
+    RightJustifiedLines,
 }
 
 /// Semantic destination kind observed at the native macro handler.
@@ -869,6 +912,8 @@ pub struct ExecutionWrapper {
     pub mdoc_list_kind: Option<ExecutionMdocListKind>,
     /// Exact man block lifecycle when this is a man block wrapper.
     pub man_block_kind: Option<ExecutionManBlockKind>,
+    /// Exact native region lifecycle when this is a region wrapper.
+    pub region_kind: Option<ExecutionRegionKind>,
     /// Stable wrapper flags.
     pub flags: u32,
     /// Effective state before and after state transitions.

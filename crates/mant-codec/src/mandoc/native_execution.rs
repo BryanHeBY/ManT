@@ -8,12 +8,13 @@ use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryEffect, Document as NativeDocument,
     ExecutionAffinity, ExecutionBoundary, ExecutionControl, ExecutionFlush, ExecutionFont,
     ExecutionFragment, ExecutionHeadingKind, ExecutionManBlockKind, ExecutionMdocListKind,
-    ExecutionNodeKey, ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableCell,
-    ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey,
-    ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey, ExecutionWrapperKind,
-    FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport, Node as NativeNode,
-    NodeKind, TableAlignment as NativeTableAlignment, TableCellKind as NativeTableCellKind,
-    TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
+    ExecutionNodeKey, ExecutionReferenceKind, ExecutionRegionKind, ExecutionTableAlignment,
+    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
+    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
+    ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport,
+    Node as NativeNode, NodeKind, TableAlignment as NativeTableAlignment,
+    TableCellKind as NativeTableCellKind, TableRowKind as NativeTableRowKind,
+    TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
@@ -225,6 +226,32 @@ pub(super) struct NativeManBlock {
     pub(super) anchors: Vec<u32>,
 }
 
+/// One exact display, synopsis, literal, or captured-control lifecycle from
+/// the fixed-CVS terminal executor.
+///
+/// Region ownership is projected from the native wrapper stack.  This keeps
+/// captured control operands, emitted runs, flushes, and anchors in one
+/// transaction instead of reconstructing their relationship from source
+/// coordinates after execution.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeRegion {
+    pub(super) owner: ExecutionNodeKey,
+    pub(super) wrapper: u32,
+    pub(super) kind: ExecutionRegionKind,
+    pub(super) source: PathBuf,
+    pub(super) line: u32,
+    pub(super) column: u32,
+    pub(super) state_before: u32,
+    pub(super) state_after: u32,
+    pub(super) atoms: Range<u32>,
+    pub(super) runs: Vec<NativeTextRun>,
+    pub(super) flushes: Vec<ExecutionFlush>,
+    pub(super) boundaries: Vec<ExecutionBoundary>,
+    pub(super) controls: Vec<ExecutionControl>,
+    pub(super) anchors: Vec<u32>,
+}
+
 /// One native `term_fill()`/`term_field()` decision together with the atom
 /// fates that make its accepted and discarded ranges observable to a
 /// projection consumer.
@@ -326,6 +353,7 @@ pub(super) struct NativeProjection {
     pub(super) fields: Vec<NativeFieldFact>,
     pub(super) controls: Vec<NativeControlFact>,
     pub(super) headings: Vec<NativeHeadingFact>,
+    pub(super) regions: Vec<NativeRegion>,
     pub(super) tables: Vec<NativeTable>,
 }
 
@@ -1078,6 +1106,80 @@ fn man_block_facts(
     blocks
 }
 
+fn region_facts(report: &NativeExecutionReport, runs: &[NativeTextRun]) -> Vec<NativeRegion> {
+    let mut regions = Vec::<NativeRegion>::new();
+    let mut direct_regions = vec![None; report.wrappers().len()];
+    for wrapper in report
+        .wrappers()
+        .iter()
+        .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::Region)
+    {
+        let owner = wrapper.node.expect("native region node");
+        let origin = &report.nodes()[owner.0 as usize];
+        let index = regions.len();
+        direct_regions[wrapper.key as usize] = Some(index);
+        regions.push(NativeRegion {
+            owner,
+            wrapper: wrapper.key,
+            kind: wrapper.region_kind.expect("typed native execution region"),
+            source: report.sources()[origin.source as usize].path.clone(),
+            line: origin.line,
+            column: origin.column,
+            state_before: wrapper.state_before,
+            state_after: wrapper.state_after,
+            atoms: wrapper.enter_atom..wrapper.leave_atom,
+            runs: Vec::new(),
+            flushes: Vec::new(),
+            boundaries: Vec::new(),
+            controls: Vec::new(),
+            anchors: Vec::new(),
+        });
+    }
+
+    let regions_by_wrapper = propagate_wrapper_ownership(report, &direct_regions);
+    for run in runs {
+        let Some(wrapper) = run.wrapper.map(|key| key as usize) else {
+            continue;
+        };
+        for &region in &regions_by_wrapper[wrapper] {
+            regions[region].runs.push(run.clone());
+        }
+    }
+
+    let flush_wrappers =
+        active_wrappers_at_sequences(report, report.flushes().iter().map(|flush| flush.sequence));
+    for (flush, wrapper) in report.flushes().iter().zip(flush_wrappers) {
+        let Some(wrapper) = wrapper else { continue };
+        for &region in &regions_by_wrapper[wrapper] {
+            regions[region].flushes.push(flush.clone());
+        }
+    }
+    for boundary in report.boundaries() {
+        let Some(wrapper) = boundary.wrapper.map(|key| key as usize) else {
+            continue;
+        };
+        for &region in &regions_by_wrapper[wrapper] {
+            regions[region].boundaries.push(boundary.clone());
+        }
+    }
+    for control in report.controls() {
+        for &region in &regions_by_wrapper[control.wrapper as usize] {
+            regions[region].controls.push(control.clone());
+        }
+    }
+    let anchor_wrappers = active_wrappers_at_sequences(
+        report,
+        report.anchors().iter().map(|anchor| anchor.sequence),
+    );
+    for (anchor, wrapper) in report.anchors().iter().zip(anchor_wrappers) {
+        let Some(wrapper) = wrapper else { continue };
+        for &region in &regions_by_wrapper[wrapper] {
+            regions[region].anchors.push(anchor.key);
+        }
+    }
+    regions
+}
+
 fn atom_reference_owners(report: &NativeExecutionReport) -> Vec<Option<u32>> {
     let mut atom_references = vec![None; report.atoms().len()];
     let mut reference_events = report
@@ -1815,6 +1917,7 @@ pub(super) fn project(
     let (runs, visible_lines) = text_projection(report);
     let mdoc_lists = mdoc_list_facts(document, report, &runs);
     let man_blocks = man_block_facts(document, report, &runs);
+    let regions = region_facts(report, &runs);
     NativeProjection {
         origins: origin_facts(report),
         words: report
@@ -1836,6 +1939,7 @@ pub(super) fn project(
             })
             .collect(),
         headings: heading_facts(document, report, &runs),
+        regions,
         runs,
         visible_lines,
         implicit_spaces: report
@@ -2383,6 +2487,134 @@ mod tests {
         );
     }
 
+    fn is_output_region(kind: ExecutionRegionKind) -> bool {
+        matches!(
+            kind,
+            ExecutionRegionKind::ManLiteralBegin
+                | ExecutionRegionKind::ManLiteralEnd
+                | ExecutionRegionKind::MdocDisplayFilled
+                | ExecutionRegionKind::MdocDisplayUnfilled
+                | ExecutionRegionKind::MdocDisplayLiteral
+                | ExecutionRegionKind::MdocDisplayRagged
+                | ExecutionRegionKind::MdocDisplayCentered
+                | ExecutionRegionKind::MdocDisplayOneLine
+                | ExecutionRegionKind::MdocDisplayOneLineLiteral
+                | ExecutionRegionKind::CenteredLines
+                | ExecutionRegionKind::RightJustifiedLines
+        )
+    }
+
+    fn restores_terminal_flags(kind: ExecutionRegionKind) -> bool {
+        matches!(
+            kind,
+            ExecutionRegionKind::MdocDisplayFilled
+                | ExecutionRegionKind::MdocDisplayUnfilled
+                | ExecutionRegionKind::MdocDisplayLiteral
+                | ExecutionRegionKind::MdocDisplayRagged
+                | ExecutionRegionKind::MdocDisplayCentered
+                | ExecutionRegionKind::MdocDisplayOneLine
+                | ExecutionRegionKind::MdocDisplayOneLineLiteral
+                | ExecutionRegionKind::CenteredLines
+                | ExecutionRegionKind::RightJustifiedLines
+        )
+    }
+
+    fn assert_native_region_facts(
+        report: &NativeExecutionReport,
+        projection: &NativeProjection,
+        path: &str,
+    ) {
+        for region in &projection.regions {
+            let wrapper = &report.wrappers()[region.wrapper as usize];
+            assert_eq!(wrapper.node, Some(region.owner), "{path}");
+            assert_eq!(
+                wrapper.enter_atom..wrapper.leave_atom,
+                region.atoms,
+                "{path}"
+            );
+            assert!(
+                region.runs.iter().all(|run| region.atoms.start
+                    <= *run.atoms.first().unwrap_or(&region.atoms.start)
+                    && run.atoms.last().is_none_or(|atom| *atom < region.atoms.end)),
+                "{path}: {:?}",
+                region.kind
+            );
+            if restores_terminal_flags(region.kind) {
+                assert_eq!(
+                    region.state_before, region.state_after,
+                    "{path}: {:?} must restore its terminal flags",
+                    region.kind
+                );
+            }
+            if is_output_region(region.kind) {
+                assert!(
+                    !region.flushes.is_empty() || !region.boundaries.is_empty(),
+                    "{path}: {:?} must retain its native output boundary",
+                    region.kind
+                );
+            }
+            if matches!(
+                region.kind,
+                ExecutionRegionKind::MdocDisplayUnfilled | ExecutionRegionKind::MdocDisplayLiteral
+            ) {
+                assert!(region.runs.iter().any(|run| {
+                    report.nodes()[run.node.0 as usize]
+                        .flags
+                        .contains(libmandoc_rs::ExecutionNodeFlags::NO_FILL)
+                }));
+            }
+        }
+    }
+
+    fn assert_captured_control_facts(
+        report: &NativeExecutionReport,
+        projection: &NativeProjection,
+        path: &str,
+    ) {
+        for region in projection.regions.iter().filter(|region| {
+            matches!(
+                region.kind,
+                ExecutionRegionKind::CenteredLines | ExecutionRegionKind::RightJustifiedLines
+            )
+        }) {
+            let macro_name = match region.kind {
+                ExecutionRegionKind::CenteredLines => "ce",
+                ExecutionRegionKind::RightJustifiedLines => "rj",
+                _ => unreachable!(),
+            };
+            assert!(
+                region.controls.iter().any(|control| {
+                    report.nodes()[control.node.0 as usize]
+                        .macro_name
+                        .as_deref()
+                        == Some(macro_name)
+                }),
+                "{path}: {:?}",
+                region.kind
+            );
+            assert!(!region.runs.is_empty(), "{path}: {:?}", region.kind);
+        }
+    }
+
+    fn assert_literal_display_target(
+        report: &NativeExecutionReport,
+        projection: &NativeProjection,
+    ) {
+        let target = report
+            .anchors()
+            .iter()
+            .find(|anchor| {
+                report.pool_bytes(anchor.target) == Some(b"literal-display-target".as_slice())
+            })
+            .expect("literal display target");
+        let literal = projection
+            .regions
+            .iter()
+            .find(|region| region.kind == ExecutionRegionKind::MdocDisplayLiteral)
+            .expect("literal display region");
+        assert!(literal.anchors.contains(&target.key));
+    }
+
     #[test]
     fn projects_exact_native_mdoc_list_roles() {
         // Expected list lifecycles and target ownership were established with
@@ -2487,6 +2719,172 @@ mod tests {
                 .count(),
             6
         );
+    }
+
+    #[test]
+    fn projects_native_display_synopsis_literal_and_capture_regions() {
+        // These exact fixtures were first checked with the pinned CVS
+        // `-Tlint`, `-Ttree`, and `-Tutf8` renderers.  The region boundaries
+        // come from fixed CVS handler entry/exit in man_term.c, mdoc_term.c,
+        // and roff_term.c; the projection only transfers their inclusive
+        // native ownership to an immutable Rust fact graph.
+        for (path, format, source, expected) in [
+            (
+                "display-control-man.1",
+                InputFormat::Man,
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/display-control-man.1"
+                )
+                .as_slice(),
+                vec![
+                    ExecutionRegionKind::ManSynopsisSection,
+                    ExecutionRegionKind::ManSynopsisCommand,
+                    ExecutionRegionKind::ManLiteralBegin,
+                    ExecutionRegionKind::ManLiteralEnd,
+                    ExecutionRegionKind::CenteredLines,
+                    ExecutionRegionKind::RightJustifiedLines,
+                ],
+            ),
+            (
+                "display-control-mdoc.1",
+                InputFormat::Mdoc,
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/display-control-mdoc.1"
+                )
+                .as_slice(),
+                vec![
+                    ExecutionRegionKind::MdocSynopsisSection,
+                    ExecutionRegionKind::MdocSynopsisItem,
+                    ExecutionRegionKind::MdocSynopsisItem,
+                    ExecutionRegionKind::MdocSynopsisItem,
+                    ExecutionRegionKind::MdocSynopsisItem,
+                    ExecutionRegionKind::MdocDisplayFilled,
+                    ExecutionRegionKind::MdocDisplayUnfilled,
+                    ExecutionRegionKind::MdocDisplayLiteral,
+                    ExecutionRegionKind::MdocDisplayRagged,
+                    ExecutionRegionKind::MdocDisplayCentered,
+                    ExecutionRegionKind::MdocDisplayOneLine,
+                    ExecutionRegionKind::MdocDisplayOneLineLiteral,
+                    ExecutionRegionKind::CenteredLines,
+                    ExecutionRegionKind::RightJustifiedLines,
+                ],
+            ),
+        ] {
+            let report = Parser::new(ParseOptions::default())
+                .with_input_format(format)
+                .with_mdoc_operating_system("ManT")
+                .unwrap()
+                .execute_bytes(path, source, ExecutionLimits::default())
+                .unwrap();
+            let projection = project(&report.document, &report.execution);
+            assert_eq!(
+                projection
+                    .regions
+                    .iter()
+                    .map(|region| region.kind)
+                    .collect::<Vec<_>>(),
+                expected,
+                "{path}"
+            );
+            assert_native_region_facts(&report.execution, &projection, path);
+            assert_captured_control_facts(&report.execution, &projection, path);
+
+            if format == InputFormat::Mdoc {
+                assert_literal_display_target(&report.execution, &projection);
+            }
+        }
+    }
+
+    #[test]
+    fn projects_overlapping_regions_with_inclusive_native_ownership() {
+        // The exact source was checked with pinned CVS lint/tree/UTF-8 before
+        // this assertion.  A ce/rj node allocated while mdoc_state.c keeps
+        // SYNOPSIS is both one synopsis item and one captured-control region.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "display-control-mdoc-synopsis-overlap.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/display-control-mdoc-synopsis-overlap.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        assert_eq!(
+            projection
+                .regions
+                .iter()
+                .map(|region| region.kind)
+                .collect::<Vec<_>>(),
+            [
+                ExecutionRegionKind::MdocSynopsisSection,
+                ExecutionRegionKind::MdocSynopsisItem,
+                ExecutionRegionKind::CenteredLines,
+                ExecutionRegionKind::MdocSynopsisItem,
+                ExecutionRegionKind::RightJustifiedLines,
+                ExecutionRegionKind::MdocSynopsisItem,
+                ExecutionRegionKind::MdocSynopsisItem,
+                ExecutionRegionKind::MdocSynopsisItem,
+            ]
+        );
+        for pair in [
+            projection.regions[1..3].as_ref(),
+            projection.regions[3..5].as_ref(),
+        ] {
+            let item = &pair[0];
+            let capture = &pair[1];
+            assert_eq!(item.owner, capture.owner);
+            assert!(capture.runs.iter().all(|run| item.runs.contains(run)));
+            assert!(
+                capture
+                    .flushes
+                    .iter()
+                    .all(|flush| item.flushes.contains(flush))
+            );
+            assert!(
+                capture
+                    .boundaries
+                    .iter()
+                    .all(|boundary| item.boundaries.contains(boundary))
+            );
+            assert!(
+                capture
+                    .controls
+                    .iter()
+                    .all(|control| item.controls.contains(control))
+            );
+            assert!(!capture.runs.is_empty());
+            assert!(!capture.flushes.is_empty());
+            assert!(!capture.boundaries.is_empty());
+            assert!(!capture.controls.is_empty());
+        }
+        let section = &projection.regions[0];
+        assert!(
+            projection.regions[1..]
+                .iter()
+                .flat_map(|region| &region.runs)
+                .all(|run| section.runs.contains(run))
+        );
+        let item_region = projection
+            .regions
+            .iter()
+            .find(|region| {
+                region.kind == ExecutionRegionKind::MdocSynopsisItem
+                    && report.execution.nodes()[region.owner.0 as usize]
+                        .macro_name
+                        .as_deref()
+                        == Some("It")
+            })
+            .expect("synopsis list item region");
+        let parent = report.execution.wrappers()[report.execution.wrappers()
+            [item_region.wrapper as usize]
+            .parent
+            .unwrap() as usize]
+            .kind;
+        assert_eq!(parent, ExecutionWrapperKind::MdocListItem);
     }
 
     #[test]

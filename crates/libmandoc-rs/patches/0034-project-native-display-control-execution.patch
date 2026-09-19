@@ -1,0 +1,213 @@
+diff --git a/man_term.c b/man_term.c
+index f04cb11b..0af08038 100644
+--- a/man_term.c
++++ b/man_term.c
+@@ -955,7 +955,7 @@ static void
+ print_man_node(DECL_ARGS)
+ {
+ 	const struct roff_node *previous;
+-	int heading, man_block;
++	int heading, man_block, region;
+ 
+ 	if (term_exec_failed(p))
+ 		return;
+@@ -966,6 +966,19 @@ print_man_node(DECL_ARGS)
+ 	    n->type == ROFFT_HEAD && n->tok == MAN_SS ?
+ 	    TERM_EXEC_HEADING_MAN_SS : -1;
+ 	man_block = -1;
++	region = -1;
++	if (n->type == ROFFT_BLOCK && n->tok == MAN_SH &&
++	    n->child != NULL && n->child->type == ROFFT_HEAD &&
++	    n->child->child != NULL && n->child->child->type == ROFFT_TEXT &&
++	    n->child->child->next == NULL &&
++	    strcmp(n->child->child->string, "SYNOPSIS") == 0)
++		region = TERM_EXEC_REGION_MAN_SYNOPSIS_SECTION;
++	else if (n->type == ROFFT_BLOCK && n->tok == MAN_SY)
++		region = TERM_EXEC_REGION_MAN_SYNOPSIS_COMMAND;
++	else if (n->type == ROFFT_ELEM && n->tok == MAN_EX)
++		region = TERM_EXEC_REGION_MAN_LITERAL_BEGIN;
++	else if (n->type == ROFFT_ELEM && n->tok == MAN_EE)
++		region = TERM_EXEC_REGION_MAN_LITERAL_END;
+ 	if (n->type == ROFFT_BLOCK) {
+ 		switch (n->tok) {
+ 		case MAN_IP:
+@@ -999,8 +1012,11 @@ print_man_node(DECL_ARGS)
+ 	if (term_exec_node(p, n, 1)) {
+ 		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
+ 		    (man_block == -1 ||
+-		     term_exec_man_block(p, n, man_block, 1))) {
++		     term_exec_man_block(p, n, man_block, 1)) &&
++		    (region == -1 || term_exec_region(p, n, region, 1))) {
+ 			print_man_node_inner(p, mt, n, meta);
++			if (region != -1)
++				term_exec_region(p, n, region, 0);
+ 			if (man_block != -1)
+ 				term_exec_man_block(p, n, man_block, 0);
+ 			if (heading != -1)
+diff --git a/mdoc_term.c b/mdoc_term.c
+index 2f9701ae..b6fda9ce 100644
+--- a/mdoc_term.c
++++ b/mdoc_term.c
+@@ -305,7 +305,7 @@ static void
+ print_mdoc_node(DECL_ARGS)
+ {
+ 	const struct roff_node *list, *previous;
+-	int heading, list_item;
++	int heading, list_item, region;
+ 
+ 	if (term_exec_failed(p))
+ 		return;
+@@ -316,6 +316,38 @@ print_mdoc_node(DECL_ARGS)
+ 	    n->type == ROFFT_HEAD && n->tok == MDOC_Ss ?
+ 	    TERM_EXEC_HEADING_MDOC_SS : -1;
+ 	list_item = -1;
++	region = -1;
++	if (n->type == ROFFT_BLOCK && n->tok == MDOC_Sh &&
++	    n->sec == SEC_SYNOPSIS)
++		region = TERM_EXEC_REGION_MDOC_SYNOPSIS_SECTION;
++	else if (n->type == ROFFT_BLOCK && n->tok == MDOC_Bd &&
++	    n->norm != NULL) {
++		switch (n->norm->Bd.type) {
++		case DISP_filled:
++			region = TERM_EXEC_REGION_MDOC_DISPLAY_FILLED;
++			break;
++		case DISP_unfilled:
++			region = TERM_EXEC_REGION_MDOC_DISPLAY_UNFILLED;
++			break;
++		case DISP_literal:
++			region = TERM_EXEC_REGION_MDOC_DISPLAY_LITERAL;
++			break;
++		case DISP_ragged:
++			region = TERM_EXEC_REGION_MDOC_DISPLAY_RAGGED;
++			break;
++		case DISP_centered:
++			region = TERM_EXEC_REGION_MDOC_DISPLAY_CENTERED;
++			break;
++		case DISP__NONE:
++			break;
++		}
++	} else if (n->type == ROFFT_BLOCK && n->tok == MDOC_D1)
++		region = TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE;
++	else if (n->type == ROFFT_BLOCK && n->tok == MDOC_Dl)
++		region = TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL;
++	else if ((n->type == ROFFT_BLOCK || n->type == ROFFT_ELEM) &&
++	    n->tok != MDOC_Sh && n->flags & NODE_SYNPRETTY)
++		region = TERM_EXEC_REGION_MDOC_SYNOPSIS_ITEM;
+ 	list = NULL;
+ 	if (n->type == ROFFT_BLOCK && n->tok == MDOC_It &&
+ 	    n->parent != NULL && n->parent->parent != NULL &&
+@@ -365,8 +397,11 @@ print_mdoc_node(DECL_ARGS)
+ 		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
+ 		    (list_item == -1 ||
+ 		     term_exec_mdoc_list_item(p, n, list_item,
+-		     list->norm->Bl.comp, 1))) {
++		     list->norm->Bl.comp, 1)) &&
++		    (region == -1 || term_exec_region(p, n, region, 1))) {
+ 			print_mdoc_node_inner(p, pair, meta, n);
++			if (region != -1)
++				term_exec_region(p, n, region, 0);
+ 			if (list_item != -1)
+ 				term_exec_mdoc_list_item(p, n, list_item,
+ 				    list->norm->Bl.comp, 0);
+diff --git a/roff_term.c b/roff_term.c
+index 1b9334d4..5dace547 100644
+--- a/roff_term.c
++++ b/roff_term.c
+@@ -63,11 +63,19 @@ static	const roff_term_pre_fp roff_term_pre_acts[ROFF_MAX] = {
+ void
+ roff_term_pre(struct termp *p, const struct roff_node *n)
+ {
++	int region;
++
+ 	assert(n->tok < ROFF_MAX);
++	region = n->tok == ROFF_ce ? TERM_EXEC_REGION_CENTERED_LINES :
++	    n->tok == ROFF_rj ? TERM_EXEC_REGION_RIGHT_JUSTIFIED_LINES : -1;
++	if (region != -1 && !term_exec_region(p, n, region, 1))
++		return;
+ 	if (!term_exec_control(p, n, 1))
+ 		return;
+ 	(*roff_term_pre_acts[n->tok])(p, n);
+ 	term_exec_control(p, n, 0);
++	if (region != -1)
++		term_exec_region(p, n, region, 0);
+ }
+ 
+ static void
+diff --git a/term.c b/term.c
+index b95719b0..c7b53179 100644
+--- a/term.c
++++ b/term.c
+@@ -174,6 +174,23 @@ term_exec_man_block(struct termp *p, const struct roff_node *node,
+ 	return !p->exec_failed;
+ }
+ 
++int
++term_exec_region(struct termp *p, const struct roff_node *node,
++    int kind, int entering)
++{
++	if (p->exec_failed || p->exec_ops == NULL)
++		return !p->exec_failed;
++	if (entering) {
++		if (p->exec_ops->region_begin == NULL)
++			return 1;
++		if (!p->exec_ops->region_begin(p->exec_arg, p, node, kind))
++			p->exec_failed = 1;
++	} else if (p->exec_ops->region_end != NULL &&
++	    !p->exec_ops->region_end(p->exec_arg, p, node, kind))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
+ int
+ term_exec_reference_node_begin(struct termp *p, int kind,
+     const struct roff_node *owner, const struct roff_node *target_node,
+diff --git a/term.h b/term.h
+index b93d4f5c..b7d357c5 100644
+--- a/term.h
++++ b/term.h
+@@ -102,6 +102,25 @@ enum term_exec_man_block_kind {
+ 	TERM_EXEC_MAN_BLOCK_LP
+ };
+ 
++/* Stable observer-side spellings of display and control execution regions. */
++enum term_exec_region_kind {
++	TERM_EXEC_REGION_MAN_SYNOPSIS_SECTION,
++	TERM_EXEC_REGION_MAN_SYNOPSIS_COMMAND,
++	TERM_EXEC_REGION_MAN_LITERAL_BEGIN,
++	TERM_EXEC_REGION_MAN_LITERAL_END,
++	TERM_EXEC_REGION_MDOC_SYNOPSIS_SECTION,
++	TERM_EXEC_REGION_MDOC_SYNOPSIS_ITEM,
++	TERM_EXEC_REGION_MDOC_DISPLAY_FILLED,
++	TERM_EXEC_REGION_MDOC_DISPLAY_UNFILLED,
++	TERM_EXEC_REGION_MDOC_DISPLAY_LITERAL,
++	TERM_EXEC_REGION_MDOC_DISPLAY_RAGGED,
++	TERM_EXEC_REGION_MDOC_DISPLAY_CENTERED,
++	TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE,
++	TERM_EXEC_REGION_MDOC_DISPLAY_ONE_LINE_LITERAL,
++	TERM_EXEC_REGION_CENTERED_LINES,
++	TERM_EXEC_REGION_RIGHT_JUSTIFIED_LINES
++};
++
+ struct term_exec_ops {
+ 	int (*work)(void *, const struct termp *,
+ 	    const struct roff_node *, size_t);
+@@ -123,6 +142,10 @@ struct term_exec_ops {
+ 	    const struct roff_node *, int);
+ 	int (*man_block_end)(void *, const struct termp *,
+ 	    const struct roff_node *, int);
++	int (*region_begin)(void *, const struct termp *,
++	    const struct roff_node *, int);
++	int (*region_end)(void *, const struct termp *,
++	    const struct roff_node *, int);
+ 	int (*word_begin)(void *, const struct termp *,
+ 	    const struct roff_node *, const char *, size_t, int *);
+ 	int (*word_end)(void *, const struct termp *,
+@@ -336,6 +359,8 @@ int		  term_exec_mdoc_list_item(struct termp *,
+ 			const struct roff_node *, int, int, int);
+ int		  term_exec_man_block(struct termp *, const struct roff_node *,
+ 			int, int);
++int		  term_exec_region(struct termp *, const struct roff_node *,
++			int, int);
+ int		  term_exec_word(struct termp *, const char *, size_t, int);
+ int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
+ int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);

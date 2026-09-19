@@ -265,7 +265,10 @@ const fn list_kind_name(value: NormalizedListKind) -> &'static str {
 const fn display_kind_name(value: DisplayKind) -> &'static str {
     match value {
         DisplayKind::Literal => "literal",
+        DisplayKind::Unfilled => "unfilled",
         DisplayKind::Filled => "filled",
+        DisplayKind::Ragged => "ragged",
+        DisplayKind::Centered => "centered",
     }
 }
 

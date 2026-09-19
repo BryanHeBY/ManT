@@ -63,11 +63,19 @@ static	const roff_term_pre_fp roff_term_pre_acts[ROFF_MAX] = {
 void
 roff_term_pre(struct termp *p, const struct roff_node *n)
 {
+	int region;
+
 	assert(n->tok < ROFF_MAX);
+	region = n->tok == ROFF_ce ? TERM_EXEC_REGION_CENTERED_LINES :
+	    n->tok == ROFF_rj ? TERM_EXEC_REGION_RIGHT_JUSTIFIED_LINES : -1;
+	if (region != -1 && !term_exec_region(p, n, region, 1))
+		return;
 	if (!term_exec_control(p, n, 1))
 		return;
 	(*roff_term_pre_acts[n->tok])(p, n);
 	term_exec_control(p, n, 0);
+	if (region != -1)
+		term_exec_region(p, n, region, 0);
 }
 
 static void

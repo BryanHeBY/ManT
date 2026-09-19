@@ -86,8 +86,14 @@ pub enum DefinitionListStyle {
 pub enum DisplayKind {
     /// Preserve input line breaks and horizontal whitespace.
     Literal,
+    /// Preserve input line breaks without literal tab semantics.
+    Unfilled,
     /// Reflow content as filled prose.
     Filled,
+    /// Reflow content without right-margin adjustment.
+    Ragged,
+    /// Center each output line.
+    Centered,
 }
 
 /// Normalized font selected by an mdoc `Bf` block.

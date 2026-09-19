@@ -1549,11 +1549,17 @@ snapshot_normalized_data(struct mant_mandoc_node_view *view,
 		view->offset = source->norm->Bd.offs;
 		switch (source->norm->Bd.type) {
 		case DISP_unfilled:
+			view->display_kind = MANT_MANDOC_DISPLAY_UNFILLED;
+			break;
 		case DISP_literal:
 			view->display_kind = MANT_MANDOC_DISPLAY_LITERAL;
 			break;
-		case DISP_centered:
 		case DISP_ragged:
+			view->display_kind = MANT_MANDOC_DISPLAY_RAGGED;
+			break;
+		case DISP_centered:
+			view->display_kind = MANT_MANDOC_DISPLAY_CENTERED;
+			break;
 		case DISP_filled:
 			view->display_kind = MANT_MANDOC_DISPLAY_FILLED;
 			break;
