@@ -7,11 +7,11 @@
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryEffect, Document as NativeDocument,
     ExecutionAffinity, ExecutionBoundary, ExecutionControl, ExecutionFlush, ExecutionFont,
-    ExecutionFragment, ExecutionHeadingKind, ExecutionNodeKey, ExecutionReferenceKind,
-    ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
-    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
-    ExecutionTableRowKey, ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind,
-    NativeExecutionReport, Node as NativeNode, NodeKind, NormalizedListKind,
+    ExecutionFragment, ExecutionHeadingKind, ExecutionMdocListKind, ExecutionNodeKey,
+    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags,
+    ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind,
+    ExecutionTableRow, ExecutionTableRowKey, ExecutionWrapperKind, FragmentRole, GeometryKind,
+    GeometryOriginKind, NativeExecutionReport, Node as NativeNode, NodeKind,
     TableAlignment as NativeTableAlignment, TableCellKind as NativeTableCellKind,
     TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
 };
@@ -133,6 +133,60 @@ pub(super) struct NativeDefinitionFact {
     pub(super) body_flushes: Vec<ExecutionFlush>,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum NativeMdocListRole {
+    Head,
+    Body,
+}
+
+/// One native head/body execution interval inside an mdoc `.It` lifecycle.
+///
+/// A column item may own multiple body segments.  Keeping each native body
+/// distinct avoids recovering column ownership from canonical device lines.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeMdocListSegment {
+    pub(super) node: ExecutionNodeKey,
+    pub(super) role: NativeMdocListRole,
+    pub(super) ordinal: u32,
+    pub(super) atoms: Range<u32>,
+    pub(super) flushes: Vec<ExecutionFlush>,
+    pub(super) boundaries: Vec<ExecutionBoundary>,
+    pub(super) runs: Vec<NativeTextRun>,
+    pub(super) anchors: Vec<u32>,
+}
+
+/// One exact fixed-CVS `.It` pre/children/post execution lifecycle.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeMdocListItem {
+    pub(super) owner: ExecutionNodeKey,
+    pub(super) list: ExecutionNodeKey,
+    pub(super) wrapper: u32,
+    pub(super) kind: ExecutionMdocListKind,
+    pub(super) compact: bool,
+    pub(super) state_before: u32,
+    pub(super) state_after: u32,
+    pub(super) atoms: Range<u32>,
+    pub(super) head: NativeMdocListSegment,
+    pub(super) bodies: Vec<NativeMdocListSegment>,
+    pub(super) flushes: Vec<ExecutionFlush>,
+    pub(super) boundaries: Vec<ExecutionBoundary>,
+    pub(super) runs: Vec<NativeTextRun>,
+    pub(super) anchors: Vec<u32>,
+}
+
+/// Items grouped by their parser-owned mdoc `Bl` block.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeMdocList {
+    pub(super) owner: ExecutionNodeKey,
+    pub(super) kind: ExecutionMdocListKind,
+    pub(super) compact: bool,
+    pub(super) items: Vec<NativeMdocListItem>,
+}
+
 /// One native `term_fill()`/`term_field()` decision together with the atom
 /// fates that make its accepted and discarded ranges observable to a
 /// projection consumer.
@@ -229,6 +283,7 @@ pub(super) struct NativeProjection {
     pub(super) references: Vec<NativeReference>,
     pub(super) anchors: Vec<NativeAnchor>,
     pub(super) definitions: Vec<NativeDefinitionFact>,
+    pub(super) mdoc_lists: Vec<NativeMdocList>,
     pub(super) fields: Vec<NativeFieldFact>,
     pub(super) controls: Vec<NativeControlFact>,
     pub(super) headings: Vec<NativeHeadingFact>,
@@ -345,31 +400,9 @@ fn field_facts(report: &NativeExecutionReport) -> Vec<NativeFieldFact> {
         .collect()
 }
 
-fn mark_definition_items(
-    node: &NativeNode,
-    inherited_list_kind: Option<NormalizedListKind>,
-    definitions: &mut [bool],
-) {
-    let list_kind = if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bl") {
-        node.list_kind
-    } else {
-        inherited_list_kind
-    };
-    if node.kind == NodeKind::Block
-        && node.macro_name.as_deref() == Some("It")
-        && list_kind == Some(NormalizedListKind::Definition)
-        && let Some(key) = node.execution_node_key
-    {
-        definitions[key as usize] = true;
-    }
-    for child in &node.children {
-        mark_definition_items(child, list_kind, definitions);
-    }
-}
-
 fn definition_facts(
-    document: &NativeDocument,
     report: &NativeExecutionReport,
+    mdoc_lists: &[NativeMdocList],
 ) -> Vec<NativeDefinitionFact> {
     #[derive(Default)]
     struct PendingDefinition {
@@ -381,16 +414,12 @@ fn definition_facts(
         body_flushes: Vec<ExecutionFlush>,
     }
 
-    let mut definition_items = vec![false; report.nodes().len()];
-    mark_definition_items(&document.root, None, &mut definition_items);
     let mut owner_definition = vec![None; report.nodes().len()];
     let mut definitions = Vec::new();
     for node in report.nodes() {
         let is_man_definition =
             matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "TQ" | "HP"));
-        let is_mdoc_definition =
-            node.macro_name.as_deref() == Some("It") && definition_items[node.key.0 as usize];
-        if node.kind == NodeKind::Block && (is_man_definition || is_mdoc_definition) {
+        if node.kind == NodeKind::Block && is_man_definition {
             owner_definition[node.key.0 as usize] = Some(definitions.len());
             definitions.push(PendingDefinition {
                 owner: Some(node.key),
@@ -399,7 +428,6 @@ fn definition_facts(
             });
         }
     }
-
     let mut direct_content_definition = vec![None; report.nodes().len()];
     for node in report.nodes() {
         let Some(parent) = node.parent else {
@@ -443,7 +471,7 @@ fn definition_facts(
         }
     }
 
-    definitions
+    let mut facts = definitions
         .into_iter()
         .filter_map(|definition| {
             Some(NativeDefinitionFact {
@@ -455,7 +483,396 @@ fn definition_facts(
                 body_flushes: definition.body_flushes,
             })
         })
+        .collect::<Vec<_>>();
+
+    facts.extend(mdoc_definition_facts(report, mdoc_lists));
+    facts.sort_by_key(|definition| definition.owner);
+    facts
+}
+
+fn is_mdoc_definition_kind(kind: ExecutionMdocListKind) -> bool {
+    matches!(
+        kind,
+        ExecutionMdocListKind::Hang
+            | ExecutionMdocListKind::Overhang
+            | ExecutionMdocListKind::Inset
+            | ExecutionMdocListKind::Diagnostic
+            | ExecutionMdocListKind::Tag
+    )
+}
+
+fn mdoc_definition_facts(
+    report: &NativeExecutionReport,
+    mdoc_lists: &[NativeMdocList],
+) -> Vec<NativeDefinitionFact> {
+    struct Pending<'a> {
+        item: &'a NativeMdocListItem,
+        head_flushes: Vec<ExecutionFlush>,
+        body_flushes: Vec<ExecutionFlush>,
+    }
+
+    let mut pending = mdoc_lists
+        .iter()
+        .filter(|list| is_mdoc_definition_kind(list.kind))
+        .flat_map(|list| &list.items)
+        .map(|item| Pending {
+            item,
+            head_flushes: Vec::new(),
+            body_flushes: Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    let mut wrapper_depths = Vec::with_capacity(report.wrappers().len());
+    for wrapper in report.wrappers() {
+        let depth = wrapper
+            .parent
+            .map_or(0, |parent| wrapper_depths[parent as usize] + 1);
+        wrapper_depths.push(depth);
+    }
+    let mut owners = vec![None::<(u32, usize, bool)>; report.flushes().len()];
+    for (definition, value) in pending.iter().enumerate() {
+        let depth = wrapper_depths[value.item.wrapper as usize];
+        for flush in &value.item.head.flushes {
+            let owner = &mut owners[flush.key as usize];
+            if owner.is_none_or(|current| current.0 < depth) {
+                *owner = Some((depth, definition, true));
+            }
+        }
+        for body in &value.item.bodies {
+            for flush in &body.flushes {
+                let owner = &mut owners[flush.key as usize];
+                if owner.is_none_or(|current| current.0 < depth) {
+                    *owner = Some((depth, definition, false));
+                }
+            }
+        }
+    }
+    for (flush, owner) in report.flushes().iter().zip(owners) {
+        let Some((_, definition, is_head)) = owner else {
+            continue;
+        };
+        if is_head {
+            pending[definition].head_flushes.push(flush.clone());
+        } else {
+            pending[definition].body_flushes.push(flush.clone());
+        }
+    }
+    pending
+        .into_iter()
+        .filter_map(|value| {
+            Some(NativeDefinitionFact {
+                owner: value.item.owner,
+                macro_name: "It".to_owned(),
+                head: value.item.head.node,
+                body: value.item.bodies.first()?.node,
+                head_flushes: value.head_flushes,
+                body_flushes: value.body_flushes,
+            })
+        })
         .collect()
+}
+
+#[derive(Clone, Copy)]
+enum MdocSegmentSlot {
+    Head,
+    Body(usize),
+}
+
+fn mdoc_segment_mut(
+    items: &mut [NativeMdocListItem],
+    owner: (usize, MdocSegmentSlot),
+) -> &mut NativeMdocListSegment {
+    match owner.1 {
+        MdocSegmentSlot::Head => &mut items[owner.0].head,
+        MdocSegmentSlot::Body(body) => &mut items[owner.0].bodies[body],
+    }
+}
+
+fn native_node_wrapper_index(report: &NativeExecutionReport) -> Vec<Option<usize>> {
+    let mut by_node = vec![None; report.nodes().len()];
+    for (index, wrapper) in report
+        .wrappers()
+        .iter()
+        .enumerate()
+        .filter(|(_, wrapper)| wrapper.kind == ExecutionWrapperKind::Node)
+    {
+        let node = wrapper.node.expect("validated native node wrapper key");
+        assert!(
+            by_node[node.0 as usize].replace(index).is_none(),
+            "one native wrapper per execution node"
+        );
+    }
+    by_node
+}
+
+fn empty_mdoc_segment(
+    report: &NativeExecutionReport,
+    node_wrappers: &[Option<usize>],
+    node: ExecutionNodeKey,
+    role: NativeMdocListRole,
+    ordinal: u32,
+) -> NativeMdocListSegment {
+    let wrapper =
+        &report.wrappers()[node_wrappers[node.0 as usize].expect("validated native node wrapper")];
+    NativeMdocListSegment {
+        node,
+        role,
+        ordinal,
+        atoms: wrapper.enter_atom..wrapper.leave_atom,
+        flushes: Vec::new(),
+        boundaries: Vec::new(),
+        runs: Vec::new(),
+        anchors: Vec::new(),
+    }
+}
+
+type MdocListDirectOwnership = (
+    Vec<NativeMdocListItem>,
+    Vec<Option<usize>>,
+    Vec<Option<(usize, MdocSegmentSlot)>>,
+);
+type MdocListInclusiveOwnership = (Vec<Vec<usize>>, Vec<Vec<(usize, MdocSegmentSlot)>>);
+
+fn collect_mdoc_list_items(
+    document: &NativeDocument,
+    report: &NativeExecutionReport,
+) -> MdocListDirectOwnership {
+    let ast_nodes = native_nodes_by_execution_key(document, report.nodes().len());
+    let node_wrappers = native_node_wrapper_index(report);
+    let mut items = Vec::<NativeMdocListItem>::new();
+    let mut direct_items = vec![None; report.wrappers().len()];
+    let mut direct_segments = vec![None; report.wrappers().len()];
+
+    for wrapper in report
+        .wrappers()
+        .iter()
+        .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::MdocListItem)
+    {
+        let owner = wrapper.node.expect("validated mdoc list item node");
+        let ast_item = ast_nodes[owner.0 as usize];
+        let list_body = report.nodes()[owner.0 as usize]
+            .parent
+            .expect("validated mdoc list body");
+        let list = report.nodes()[list_body.0 as usize]
+            .parent
+            .expect("validated mdoc list block");
+        let mut head = None;
+        let mut bodies = Vec::new();
+        for child in &ast_item.children {
+            let key = ExecutionNodeKey(
+                child
+                    .execution_node_key
+                    .expect("executed mdoc list child key"),
+            );
+            match child.kind {
+                NodeKind::Head => {
+                    assert!(head.is_none(), "one native mdoc item head");
+                    head = Some(empty_mdoc_segment(
+                        report,
+                        &node_wrappers,
+                        key,
+                        NativeMdocListRole::Head,
+                        0,
+                    ));
+                }
+                NodeKind::Body => {
+                    bodies.push(empty_mdoc_segment(
+                        report,
+                        &node_wrappers,
+                        key,
+                        NativeMdocListRole::Body,
+                        u32::try_from(bodies.len()).expect("bounded mdoc list body count"),
+                    ));
+                }
+                _ => panic!("validated mdoc It child role"),
+            }
+        }
+        let item_index = items.len();
+        direct_items[wrapper.key as usize] = Some(item_index);
+        let head = head.expect("validated mdoc item head");
+        let head_wrapper =
+            node_wrappers[head.node.0 as usize].expect("validated native mdoc head wrapper");
+        direct_segments[head_wrapper] = Some((item_index, MdocSegmentSlot::Head));
+        for (body, segment) in bodies.iter().enumerate() {
+            let body_wrapper =
+                node_wrappers[segment.node.0 as usize].expect("validated native mdoc body wrapper");
+            direct_segments[body_wrapper] = Some((item_index, MdocSegmentSlot::Body(body)));
+        }
+        items.push(NativeMdocListItem {
+            owner,
+            list,
+            wrapper: wrapper.key,
+            kind: wrapper.mdoc_list_kind.expect("typed mdoc list kind"),
+            compact: wrapper.mdoc_list_compact(),
+            state_before: wrapper.state_before,
+            state_after: wrapper.state_after,
+            atoms: wrapper.enter_atom..wrapper.leave_atom,
+            head,
+            bodies,
+            flushes: Vec::new(),
+            boundaries: Vec::new(),
+            runs: Vec::new(),
+            anchors: Vec::new(),
+        });
+    }
+
+    (items, direct_items, direct_segments)
+}
+
+fn propagate_mdoc_list_ownership(
+    report: &NativeExecutionReport,
+    direct_items: &[Option<usize>],
+    direct_segments: &[Option<(usize, MdocSegmentSlot)>],
+) -> MdocListInclusiveOwnership {
+    let mut items_by_wrapper: Vec<Vec<usize>> = Vec::with_capacity(report.wrappers().len());
+    let mut segments_by_wrapper: Vec<Vec<(usize, MdocSegmentSlot)>> =
+        Vec::with_capacity(report.wrappers().len());
+    for wrapper in report.wrappers() {
+        assert_eq!(wrapper.key as usize, items_by_wrapper.len());
+        let mut inherited_items = wrapper
+            .parent
+            .map_or_else(Vec::new, |parent| items_by_wrapper[parent as usize].clone());
+        let mut inherited_segments = wrapper.parent.map_or_else(Vec::new, |parent| {
+            segments_by_wrapper[parent as usize].clone()
+        });
+        if let Some(item) = direct_items[wrapper.key as usize] {
+            inherited_items.push(item);
+        }
+        if let Some(segment) = direct_segments[wrapper.key as usize] {
+            inherited_segments.push(segment);
+        }
+        items_by_wrapper.push(inherited_items);
+        segments_by_wrapper.push(inherited_segments);
+    }
+    (items_by_wrapper, segments_by_wrapper)
+}
+
+fn active_wrappers_at_sequences(
+    report: &NativeExecutionReport,
+    sequences: impl IntoIterator<Item = u64>,
+) -> Vec<Option<usize>> {
+    let sequences = sequences.into_iter().collect::<Vec<_>>();
+    let mut queries = sequences.iter().copied().enumerate().collect::<Vec<_>>();
+    queries.sort_unstable_by_key(|(_, sequence)| *sequence);
+    let mut wrappers = (0..report.wrappers().len()).collect::<Vec<_>>();
+    wrappers.sort_unstable_by_key(|index| report.wrappers()[*index].enter_sequence);
+
+    let mut active = Vec::<usize>::new();
+    let mut wrapper_cursor = 0;
+    let mut result = vec![None; sequences.len()];
+    for (query, sequence) in queries {
+        while wrappers
+            .get(wrapper_cursor)
+            .is_some_and(|index| report.wrappers()[*index].enter_sequence < sequence)
+        {
+            let wrapper = wrappers[wrapper_cursor];
+            let enter = report.wrappers()[wrapper].enter_sequence;
+            while active
+                .last()
+                .is_some_and(|index| report.wrappers()[*index].leave_sequence <= enter)
+            {
+                active.pop();
+            }
+            assert_eq!(
+                report.wrappers()[wrapper].parent.map(|key| key as usize),
+                active.last().copied(),
+                "validated native wrapper nesting"
+            );
+            active.push(wrapper);
+            wrapper_cursor += 1;
+        }
+        while active
+            .last()
+            .is_some_and(|index| report.wrappers()[*index].leave_sequence <= sequence)
+        {
+            active.pop();
+        }
+        result[query] = active.last().copied();
+    }
+    result
+}
+
+fn mdoc_list_facts(
+    document: &NativeDocument,
+    report: &NativeExecutionReport,
+    runs: &[NativeTextRun],
+) -> Vec<NativeMdocList> {
+    let (mut items, direct_items, direct_segments) = collect_mdoc_list_items(document, report);
+    let (items_by_wrapper, segments_by_wrapper) =
+        propagate_mdoc_list_ownership(report, &direct_items, &direct_segments);
+
+    for run in runs {
+        let Some(wrapper) = run.wrapper.map(|key| key as usize) else {
+            continue;
+        };
+        for &item in &items_by_wrapper[wrapper] {
+            items[item].runs.push(run.clone());
+        }
+        for &owner in &segments_by_wrapper[wrapper] {
+            mdoc_segment_mut(&mut items, owner).runs.push(run.clone());
+        }
+    }
+    let flush_wrappers =
+        active_wrappers_at_sequences(report, report.flushes().iter().map(|flush| flush.sequence));
+    for (flush, wrapper) in report.flushes().iter().zip(flush_wrappers) {
+        let Some(wrapper) = wrapper else {
+            continue;
+        };
+        for &item in &items_by_wrapper[wrapper] {
+            items[item].flushes.push(flush.clone());
+        }
+        for &owner in &segments_by_wrapper[wrapper] {
+            mdoc_segment_mut(&mut items, owner)
+                .flushes
+                .push(flush.clone());
+        }
+    }
+    for boundary in report.boundaries() {
+        let Some(wrapper) = boundary.wrapper.map(|key| key as usize) else {
+            continue;
+        };
+        for &item in &items_by_wrapper[wrapper] {
+            items[item].boundaries.push(boundary.clone());
+        }
+        for &owner in &segments_by_wrapper[wrapper] {
+            mdoc_segment_mut(&mut items, owner)
+                .boundaries
+                .push(boundary.clone());
+        }
+    }
+    let anchor_wrappers = active_wrappers_at_sequences(
+        report,
+        report.anchors().iter().map(|anchor| anchor.sequence),
+    );
+    for (anchor, wrapper) in report.anchors().iter().zip(anchor_wrappers) {
+        let Some(wrapper) = wrapper else {
+            continue;
+        };
+        for &item in &items_by_wrapper[wrapper] {
+            items[item].anchors.push(anchor.key);
+        }
+        for &owner in &segments_by_wrapper[wrapper] {
+            mdoc_segment_mut(&mut items, owner).anchors.push(anchor.key);
+        }
+    }
+
+    let mut list_indexes = BTreeMap::<ExecutionNodeKey, usize>::new();
+    let mut lists = Vec::<NativeMdocList>::new();
+    for item in items {
+        let list_index = *list_indexes.entry(item.list).or_insert_with(|| {
+            let index = lists.len();
+            lists.push(NativeMdocList {
+                owner: item.list,
+                kind: item.kind,
+                compact: item.compact,
+                items: Vec::new(),
+            });
+            index
+        });
+        assert_eq!(lists[list_index].kind, item.kind);
+        assert_eq!(lists[list_index].compact, item.compact);
+        lists[list_index].items.push(item);
+    }
+    lists
 }
 
 fn atom_reference_owners(report: &NativeExecutionReport) -> Vec<Option<u32>> {
@@ -1177,7 +1594,7 @@ pub(super) fn project(
     report: &NativeExecutionReport,
 ) -> NativeProjection {
     let (runs, visible_lines) = text_projection(report);
-    let headings = heading_facts(document, report, &runs);
+    let mdoc_lists = mdoc_list_facts(document, report, &runs);
     NativeProjection {
         origins: report
             .nodes()
@@ -1210,6 +1627,7 @@ pub(super) fn project(
                 leave_sequence: word.leave_sequence,
             })
             .collect(),
+        headings: heading_facts(document, report, &runs),
         runs,
         visible_lines,
         implicit_spaces: report
@@ -1269,10 +1687,10 @@ pub(super) fn project(
                 affinity: anchor.affinity,
             })
             .collect(),
-        definitions: definition_facts(document, report),
+        definitions: definition_facts(report, &mdoc_lists),
+        mdoc_lists,
         fields: field_facts(report),
         controls: control_facts(report),
-        headings,
         tables: table_projection(document, report),
     }
 }
@@ -1587,6 +2005,308 @@ mod tests {
                 assert_eq!(report.execution.nodes()[emphasized.node.0 as usize].line, 9);
             }
         }
+    }
+
+    fn assert_mdoc_list_topology(report: &NativeExecutionReport, projection: &NativeProjection) {
+        assert_eq!(
+            projection
+                .mdoc_lists
+                .iter()
+                .map(|list| (list.kind, list.compact, list.items.len()))
+                .collect::<Vec<_>>(),
+            [
+                (ExecutionMdocListKind::Bullet, true, 2),
+                (ExecutionMdocListKind::Dash, false, 1),
+                (ExecutionMdocListKind::Hyphen, false, 1),
+                (ExecutionMdocListKind::Enum, false, 2),
+                (ExecutionMdocListKind::Item, false, 1),
+                (ExecutionMdocListKind::Tag, false, 2),
+                (ExecutionMdocListKind::Hang, false, 1),
+                (ExecutionMdocListKind::Overhang, false, 1),
+                (ExecutionMdocListKind::Inset, false, 1),
+                (ExecutionMdocListKind::Diagnostic, false, 1),
+                (ExecutionMdocListKind::Column, false, 2),
+            ]
+        );
+
+        assert!(projection.mdoc_lists.iter().all(|list| {
+            list.items.iter().all(|item| {
+                item.list == list.owner
+                    && item.kind == list.kind
+                    && item.compact == list.compact
+                    && item.head.role == NativeMdocListRole::Head
+                    && item.bodies.iter().enumerate().all(|(ordinal, body)| {
+                        body.role == NativeMdocListRole::Body
+                            && body.ordinal == u32::try_from(ordinal).expect("bounded body ordinal")
+                    })
+            })
+        }));
+        for item in projection.mdoc_lists.iter().flat_map(|list| &list.items) {
+            let wrapper = &report.wrappers()[item.wrapper as usize];
+            let head_wrapper = report
+                .wrappers()
+                .iter()
+                .find(|candidate| {
+                    candidate.kind == ExecutionWrapperKind::Node
+                        && candidate.node == Some(item.head.node)
+                })
+                .expect("native mdoc head wrapper");
+            assert!(item.boundaries.iter().any(|boundary| {
+                boundary.request == libmandoc_rs::BoundaryRequest::Newline
+                    && wrapper.enter_sequence < boundary.enter_sequence
+                    && boundary.leave_sequence < head_wrapper.enter_sequence
+            }));
+            assert!(item.boundaries.iter().all(|boundary| {
+                wrapper.enter_sequence < boundary.enter_sequence
+                    && boundary.leave_sequence < wrapper.leave_sequence
+            }));
+            assert!(item.flushes.iter().all(|flush| {
+                wrapper.enter_sequence < flush.sequence
+                    && flush.outcome_sequence < wrapper.leave_sequence
+            }));
+            assert!(item.runs.iter().flat_map(|run| &run.atoms).all(|atom| {
+                let sequence = report.atoms()[*atom as usize].sequence;
+                wrapper.enter_sequence < sequence && sequence < wrapper.leave_sequence
+            }));
+        }
+
+        let column = projection
+            .mdoc_lists
+            .iter()
+            .find(|list| list.kind == ExecutionMdocListKind::Column)
+            .unwrap();
+        assert_eq!(column.items[0].bodies.len(), 2);
+        assert_eq!(column.items[1].bodies.len(), 2);
+        assert!(
+            column.items[1]
+                .bodies
+                .iter()
+                .all(|body| body.runs.is_empty())
+        );
+
+        let tag = projection
+            .mdoc_lists
+            .iter()
+            .find(|list| list.kind == ExecutionMdocListKind::Tag)
+            .unwrap();
+        assert_eq!(
+            tag.items[0]
+                .head
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            "-avalue"
+        );
+    }
+
+    fn assert_mdoc_list_targets(report: &NativeExecutionReport, projection: &NativeProjection) {
+        let target = |key: u32| {
+            std::str::from_utf8(
+                report
+                    .pool_bytes(report.anchors()[key as usize].target)
+                    .unwrap(),
+            )
+            .unwrap()
+        };
+        let item_targets = projection
+            .mdoc_lists
+            .iter()
+            .flat_map(|list| &list.items)
+            .map(|item| {
+                item.anchors
+                    .iter()
+                    .map(|key| target(*key))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(item_targets[0], ["bullet-first", "bullet-empty"]);
+        assert_eq!(item_targets[7], ["tag-target", "a"]);
+        assert_eq!(
+            item_targets,
+            [
+                vec!["bullet-first", "bullet-empty"],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec!["tag-target", "a"],
+                vec!["empty"],
+                vec!["hang"],
+                vec!["over"],
+                vec!["inset"],
+                vec![],
+                vec!["left", "right"],
+                vec![],
+            ]
+        );
+        assert!(projection.anchors.iter().any(|anchor| {
+            anchor.target == b"before-bullet"
+                && !item_targets
+                    .iter()
+                    .flatten()
+                    .any(|target| target.as_bytes() == anchor.target)
+        }));
+        assert!(projection.anchors.iter().any(|anchor| {
+            anchor.target == b"after-lists"
+                && !item_targets
+                    .iter()
+                    .flatten()
+                    .any(|target| target.as_bytes() == anchor.target)
+        }));
+    }
+
+    fn assert_mdoc_segment_includes(outer: &NativeMdocListSegment, inner: &NativeMdocListSegment) {
+        assert!(inner.runs.iter().all(|run| outer.runs.contains(run)));
+        assert!(
+            inner
+                .flushes
+                .iter()
+                .all(|flush| outer.flushes.contains(flush))
+        );
+        assert!(
+            inner
+                .anchors
+                .iter()
+                .all(|anchor| outer.anchors.contains(anchor))
+        );
+    }
+
+    #[test]
+    fn projects_exact_native_mdoc_list_roles() {
+        // Expected list lifecycles and target ownership were established with
+        // the pinned CVS `print_mdoc_node()`/`termp_it_pre()`/`termp_it_post()`
+        // execution path before this assertion was added.  In particular,
+        // Xo/Xc remains part of the It head, column rows retain every BODY,
+        // and targets are owned by their actual AST location rather than a
+        // rendered device line.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "mdoc-list-lifecycle.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/mdoc-list-lifecycle.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        assert_mdoc_list_topology(&report.execution, &projection);
+        assert_mdoc_list_targets(&report.execution, &projection);
+    }
+
+    #[test]
+    fn projects_nested_mdoc_list_intervals_without_changing_definition_ownership() {
+        // The pinned CVS `print_mdoc_node()` recursion keeps both nested Bl
+        // blocks inside the outer It BODY lifecycle.  Consequently native
+        // list intervals are inclusive, while the definition consumer keeps
+        // using the closest definition owner for each executed node.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "mdoc-list-nested.1",
+                include_bytes!("../../../libmandoc-rs/tests/fixtures/execution/mdoc-list-nested.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let item_named = |name: &str| {
+            projection
+                .mdoc_lists
+                .iter()
+                .flat_map(|list| &list.items)
+                .find(|item| {
+                    item.head
+                        .runs
+                        .iter()
+                        .map(|run| run.text.as_str())
+                        .collect::<String>()
+                        == name
+                })
+                .expect("named native list item")
+        };
+        let outer = item_named("outer");
+        let inner = item_named("inner");
+        let bullet = projection
+            .mdoc_lists
+            .iter()
+            .find(|list| list.kind == ExecutionMdocListKind::Bullet)
+            .and_then(|list| list.items.first())
+            .expect("nested bullet item");
+        let outer_body = outer.bodies.first().expect("outer tag body");
+        let inner_body = inner.bodies.first().expect("inner tag body");
+        let bullet_body = bullet.bodies.first().expect("nested bullet body");
+
+        assert_mdoc_segment_includes(outer_body, bullet_body);
+        assert_mdoc_segment_includes(outer_body, inner_body);
+
+        let outer_definition = projection
+            .definitions
+            .iter()
+            .find(|definition| definition.owner == outer.owner)
+            .expect("outer native definition");
+        let inner_definition = projection
+            .definitions
+            .iter()
+            .find(|definition| definition.owner == inner.owner)
+            .expect("inner native definition");
+        assert!(
+            bullet_body
+                .flushes
+                .iter()
+                .all(|flush| outer_definition.body_flushes.contains(flush))
+        );
+        assert!(
+            inner_body
+                .flushes
+                .iter()
+                .all(|flush| inner_definition.body_flushes.contains(flush))
+        );
+        assert!(
+            inner_body
+                .flushes
+                .iter()
+                .all(|flush| !outer_definition.body_flushes.contains(flush))
+        );
+    }
+
+    #[test]
+    fn projects_large_mdoc_lists_without_scanning_wrappers_per_item() {
+        // The repeated It grammar was first checked with the pinned CVS
+        // reference.  This scale regression protects the pre-indexed
+        // node-wrapper lookup used by native list projection.
+        const ITEM_COUNT: usize = 4_096;
+        let mut source =
+            String::from(".Dd September 19, 2026\n.Dt K14S 1\n.Os\n.Sh LISTS\n.Bl -bullet\n");
+        for item in 0..ITEM_COUNT {
+            source.push_str(".It\nitem-");
+            source.push_str(&item.to_string());
+            source.push('\n');
+        }
+        source.push_str(".El\n");
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "mdoc-list-scale.1",
+                source.as_bytes(),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let list = projection
+            .mdoc_lists
+            .iter()
+            .find(|list| list.kind == ExecutionMdocListKind::Bullet)
+            .expect("native bullet list");
+        assert_eq!(list.items.len(), ITEM_COUNT);
     }
 
     fn assert_control_origin_matrix(

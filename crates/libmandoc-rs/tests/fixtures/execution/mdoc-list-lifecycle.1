@@ -1,0 +1,65 @@
+.Dd September 19, 2026
+.Dt K14 1
+.Os
+.Sh NAME
+.Nm k14
+.Nd native mdoc list role probe
+.Sh LISTS
+.Tg before-bullet
+.Bl -bullet -compact
+.Tg bullet-first
+.It
+Bullet body.
+.Tg bullet-empty
+.It
+.El
+.Bl -dash
+.It
+Dash body.
+.El
+.Bl -hyphen
+.It
+Hyphen body.
+.El
+.Bl -enum
+.It
+First body.
+.It
+Second body.
+.El
+.Bl -item
+.It
+Plain body.
+.El
+.Bl -tag -width 8n
+.Tg tag-target
+.It Xo
+.Fl a
+.Ar value
+.Xc
+Tag body.
+.It Fl empty
+.El
+.Bl -hang -width 8n
+.It Cm hang
+Hang body.
+.El
+.Bl -ohang
+.It Cm over
+Overhang body.
+.El
+.Bl -inset
+.It Cm inset
+Inset body.
+.El
+.Bl -diag
+.It diagnostic
+Diagnostic body.
+.El
+.Bl -column 8n 8n
+.It Cm left Ta Cm right
+.It Ta
+.El
+.Tg after-lists
+.Pp
+Done.

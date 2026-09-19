@@ -71,6 +71,25 @@ enum term_exec_heading_kind {
 	TERM_EXEC_HEADING_MDOC_SS
 };
 
+/*
+ * Stable observer-side spellings of enum mdoc_list.  These values belong to
+ * the private execution observer and deliberately do not expose roff.h enum
+ * ordinals across the shim boundary.
+ */
+enum term_exec_mdoc_list_kind {
+	TERM_EXEC_MDOC_LIST_BULLET,
+	TERM_EXEC_MDOC_LIST_DASH,
+	TERM_EXEC_MDOC_LIST_ENUM,
+	TERM_EXEC_MDOC_LIST_HANG,
+	TERM_EXEC_MDOC_LIST_HYPHEN,
+	TERM_EXEC_MDOC_LIST_ITEM,
+	TERM_EXEC_MDOC_LIST_OHANG,
+	TERM_EXEC_MDOC_LIST_INSET,
+	TERM_EXEC_MDOC_LIST_DIAG,
+	TERM_EXEC_MDOC_LIST_TAG,
+	TERM_EXEC_MDOC_LIST_COLUMN
+};
+
 struct term_exec_ops {
 	int (*work)(void *, const struct termp *,
 	    const struct roff_node *, size_t);
@@ -83,6 +102,10 @@ struct term_exec_ops {
 	int (*heading_begin)(void *, const struct termp *,
 	    const struct roff_node *, int, const char *, size_t);
 	int (*heading_end)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*mdoc_list_item_begin)(void *, const struct termp *,
+	    const struct roff_node *, int, int);
+	int (*mdoc_list_item_end)(void *, const struct termp *,
 	    const struct roff_node *, int);
 	int (*word_begin)(void *, const struct termp *,
 	    const struct roff_node *, const char *, size_t, int *);
@@ -293,6 +316,8 @@ int		  term_exec_work(struct termp *, size_t);
 int		  term_exec_node(struct termp *, const struct roff_node *, int);
 int		  term_exec_heading(struct termp *, const struct roff_node *,
 			int, int);
+int		  term_exec_mdoc_list_item(struct termp *,
+			const struct roff_node *, int, int, int);
 int		  term_exec_word(struct termp *, const char *, size_t, int);
 int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
 int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);

@@ -3,9 +3,10 @@
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryRequest, ExecutionCancellation,
     ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
-    ExecutionLimits, ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableDataKind,
-    ExecutionTableLayoutKind, ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome,
-    FragmentRole, InputFormat, NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
+    ExecutionLimits, ExecutionMdocListKind, ExecutionReferenceKind, ExecutionTableAlignment,
+    ExecutionTableDataKind, ExecutionTableLayoutKind, ExecutionTableRowKind, ExecutionWrapperKind,
+    FlushOutcome, FragmentRole, InputFormat, NativeExecutionReport, Node, NodeKind, ParseOptions,
+    Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -60,6 +61,7 @@ const HEADING_EXECUTION_MAN: &[u8] = include_bytes!("fixtures/execution/heading-
 const INLINE_ANNOTATIONS_MDOC: &[u8] =
     include_bytes!("fixtures/execution/inline-annotations-mdoc.1");
 const INLINE_ANNOTATIONS_MAN: &[u8] = include_bytes!("fixtures/execution/inline-annotations-man.1");
+const MDOC_LIST_LIFECYCLE: &[u8] = include_bytes!("fixtures/execution/mdoc-list-lifecycle.1");
 
 fn execute(name: &str, input_format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
@@ -1323,6 +1325,117 @@ fn heading_authored_phrases_obey_report_budgets_and_cancellation() {
             .iter()
             .any(|wrapper| wrapper.kind == ExecutionWrapperKind::Heading)
     );
+}
+
+#[test]
+fn reports_exact_mdoc_list_item_lifecycles() {
+    // Before these assertions were written, the complete fixture was run with
+    // the pinned CVS terminal, tree, and lint renderers.  In
+    // mdoc_term.c::termp_it_pre/post(), one formatter lifecycle surrounds the
+    // It block's head, every column body, and its final post-handler cleanup;
+    // Xo/Xc only changes the syntax nesting inside that lifecycle.
+    let report = execute(
+        "mdoc-list-lifecycle.1",
+        InputFormat::Mdoc,
+        MDOC_LIST_LIFECYCLE,
+    );
+    let execution = &report.execution;
+    let items = execution
+        .wrappers()
+        .iter()
+        .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::MdocListItem)
+        .collect::<Vec<_>>();
+    let expected = [
+        ExecutionMdocListKind::Bullet,
+        ExecutionMdocListKind::Bullet,
+        ExecutionMdocListKind::Dash,
+        ExecutionMdocListKind::Hyphen,
+        ExecutionMdocListKind::Enum,
+        ExecutionMdocListKind::Enum,
+        ExecutionMdocListKind::Item,
+        ExecutionMdocListKind::Tag,
+        ExecutionMdocListKind::Tag,
+        ExecutionMdocListKind::Hang,
+        ExecutionMdocListKind::Overhang,
+        ExecutionMdocListKind::Inset,
+        ExecutionMdocListKind::Diagnostic,
+        ExecutionMdocListKind::Column,
+        ExecutionMdocListKind::Column,
+    ];
+    assert_eq!(items.len(), expected.len());
+    for (index, (item, expected_kind)) in items.iter().zip(expected).enumerate() {
+        assert_eq!(item.mdoc_list_kind, Some(expected_kind), "item {index}");
+        assert_eq!(item.mdoc_list_compact(), index < 2, "item {index}");
+        assert!(item.enter_sequence < item.leave_sequence, "item {index}");
+        assert!(item.enter_atom <= item.leave_atom, "item {index}");
+        let node = item.node.expect("list item node");
+        let origin = &execution.nodes()[node.0 as usize];
+        assert_eq!(origin.kind, NodeKind::Block);
+        assert_eq!(origin.macro_name.as_deref(), Some("It"));
+        let parent = &execution.wrappers()[item.parent.unwrap() as usize];
+        assert_eq!(parent.kind, ExecutionWrapperKind::Node);
+        assert_eq!(parent.node, Some(node));
+        assert!(parent.enter_sequence < item.enter_sequence);
+        assert!(parent.leave_sequence > item.leave_sequence);
+
+        let child_nodes = execution
+            .nodes()
+            .iter()
+            .filter(|candidate| candidate.parent == Some(node))
+            .collect::<Vec<_>>();
+        assert!(child_nodes.iter().any(|child| child.kind == NodeKind::Head));
+        assert!(child_nodes.iter().any(|child| child.kind == NodeKind::Body));
+        assert!(child_nodes.iter().all(|child| {
+            execution.wrappers().iter().any(|wrapper| {
+                wrapper.kind == ExecutionWrapperKind::Node
+                    && wrapper.node == Some(child.key)
+                    && wrapper.enter_sequence > item.enter_sequence
+                    && wrapper.leave_sequence < item.leave_sequence
+            })
+        }));
+    }
+
+    for item in items.iter().filter(|item| {
+        matches!(
+            item.mdoc_list_kind,
+            Some(
+                ExecutionMdocListKind::Bullet
+                    | ExecutionMdocListKind::Dash
+                    | ExecutionMdocListKind::Hyphen
+                    | ExecutionMdocListKind::Enum
+            )
+        )
+    }) {
+        assert!(
+            execution.atoms()[item.enter_atom as usize..item.leave_atom as usize]
+                .iter()
+                .any(|atom| atom.role == AtomRole::MacroGenerated),
+            "fixed CVS termp_it_pre() must own each generated marker"
+        );
+    }
+
+    let anchor_owner = |target: &[u8]| {
+        let anchor = execution
+            .anchors()
+            .iter()
+            .find(|anchor| pool(execution, anchor.target) == target)
+            .expect("fixture anchor");
+        items.iter().position(|item| {
+            item.enter_sequence < anchor.sequence && anchor.sequence < item.leave_sequence
+        })
+    };
+    assert_eq!(anchor_owner(b"before-bullet"), None);
+    assert_eq!(anchor_owner(b"bullet-first"), Some(0));
+    assert_eq!(anchor_owner(b"bullet-empty"), Some(0));
+    assert_eq!(anchor_owner(b"tag-target"), Some(7));
+    assert_eq!(anchor_owner(b"after-lists"), None);
+
+    let empty_column = items
+        .iter()
+        .rev()
+        .find(|item| item.mdoc_list_kind == Some(ExecutionMdocListKind::Column))
+        .expect("empty final column row");
+    assert_eq!(empty_column.enter_atom, empty_column.leave_atom);
 }
 
 #[test]

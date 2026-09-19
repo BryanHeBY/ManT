@@ -1,0 +1,151 @@
+--- a/mdoc_term.c
++++ b/mdoc_term.c
+@@ -304,8 +304,8 @@
+ static void
+ print_mdoc_node(DECL_ARGS)
+ {
+-	const struct roff_node *previous;
+-	int heading;
++	const struct roff_node *list, *previous;
++	int heading, list_item;
+ 
+ 	if (term_exec_failed(p))
+ 		return;
+@@ -315,9 +315,61 @@
+ 	    TERM_EXEC_HEADING_MDOC_SH :
+ 	    n->type == ROFFT_HEAD && n->tok == MDOC_Ss ?
+ 	    TERM_EXEC_HEADING_MDOC_SS : -1;
++	list_item = -1;
++	list = NULL;
++	if (n->type == ROFFT_BLOCK && n->tok == MDOC_It &&
++	    n->parent != NULL && n->parent->parent != NULL &&
++	    n->parent->parent->tok == MDOC_Bl &&
++	    n->parent->parent->norm != NULL) {
++		list = n->parent->parent;
++		switch (list->norm->Bl.type) {
++		case LIST_bullet:
++			list_item = TERM_EXEC_MDOC_LIST_BULLET;
++			break;
++		case LIST_dash:
++			list_item = TERM_EXEC_MDOC_LIST_DASH;
++			break;
++		case LIST_enum:
++			list_item = TERM_EXEC_MDOC_LIST_ENUM;
++			break;
++		case LIST_hang:
++			list_item = TERM_EXEC_MDOC_LIST_HANG;
++			break;
++		case LIST_hyphen:
++			list_item = TERM_EXEC_MDOC_LIST_HYPHEN;
++			break;
++		case LIST_item:
++			list_item = TERM_EXEC_MDOC_LIST_ITEM;
++			break;
++		case LIST_ohang:
++			list_item = TERM_EXEC_MDOC_LIST_OHANG;
++			break;
++		case LIST_inset:
++			list_item = TERM_EXEC_MDOC_LIST_INSET;
++			break;
++		case LIST_diag:
++			list_item = TERM_EXEC_MDOC_LIST_DIAG;
++			break;
++		case LIST_tag:
++			list_item = TERM_EXEC_MDOC_LIST_TAG;
++			break;
++		case LIST_column:
++			list_item = TERM_EXEC_MDOC_LIST_COLUMN;
++			break;
++		case LIST__NONE:
++		case LIST_MAX:
++			break;
++		}
++	}
+ 	if (term_exec_node(p, n, 1)) {
+-		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
++		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
++		    (list_item == -1 ||
++		     term_exec_mdoc_list_item(p, n, list_item,
++		     list->norm->Bl.comp, 1))) {
+ 			print_mdoc_node_inner(p, pair, meta, n);
++			if (list_item != -1)
++				term_exec_mdoc_list_item(p, n, list_item,
++				    list->norm->Bl.comp, 0);
+ 			if (heading != -1)
+ 				term_exec_heading(p, n, heading, 0);
+ 		}
+--- a/term.c
++++ b/term.c
+@@ -140,6 +140,24 @@
+ }
+ 
+ int
++term_exec_mdoc_list_item(struct termp *p, const struct roff_node *node,
++    int kind, int compact, int entering)
++{
++	if (p->exec_failed || p->exec_ops == NULL)
++		return !p->exec_failed;
++	if (entering) {
++		if (p->exec_ops->mdoc_list_item_begin == NULL)
++			return 1;
++		if (!p->exec_ops->mdoc_list_item_begin(p->exec_arg, p, node,
++		    kind, compact))
++			p->exec_failed = 1;
++	} else if (p->exec_ops->mdoc_list_item_end != NULL &&
++	    !p->exec_ops->mdoc_list_item_end(p->exec_arg, p, node, kind))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
++int
+ term_exec_reference_node_begin(struct termp *p, int kind,
+     const struct roff_node *owner, const struct roff_node *target_node,
+     int affinity, int *opened)
+--- a/term.h
++++ b/term.h
+@@ -71,6 +71,25 @@
+ 	TERM_EXEC_HEADING_MDOC_SS
+ };
+ 
++/*
++ * Stable observer-side spellings of enum mdoc_list.  These values belong to
++ * the private execution observer and deliberately do not expose roff.h enum
++ * ordinals across the shim boundary.
++ */
++enum term_exec_mdoc_list_kind {
++	TERM_EXEC_MDOC_LIST_BULLET,
++	TERM_EXEC_MDOC_LIST_DASH,
++	TERM_EXEC_MDOC_LIST_ENUM,
++	TERM_EXEC_MDOC_LIST_HANG,
++	TERM_EXEC_MDOC_LIST_HYPHEN,
++	TERM_EXEC_MDOC_LIST_ITEM,
++	TERM_EXEC_MDOC_LIST_OHANG,
++	TERM_EXEC_MDOC_LIST_INSET,
++	TERM_EXEC_MDOC_LIST_DIAG,
++	TERM_EXEC_MDOC_LIST_TAG,
++	TERM_EXEC_MDOC_LIST_COLUMN
++};
++
+ struct term_exec_ops {
+ 	int (*work)(void *, const struct termp *,
+ 	    const struct roff_node *, size_t);
+@@ -84,6 +103,10 @@
+ 	    const struct roff_node *, int, const char *, size_t);
+ 	int (*heading_end)(void *, const struct termp *,
+ 	    const struct roff_node *, int);
++	int (*mdoc_list_item_begin)(void *, const struct termp *,
++	    const struct roff_node *, int, int);
++	int (*mdoc_list_item_end)(void *, const struct termp *,
++	    const struct roff_node *, int);
+ 	int (*word_begin)(void *, const struct termp *,
+ 	    const struct roff_node *, const char *, size_t, int *);
+ 	int (*word_end)(void *, const struct termp *,
+@@ -293,6 +316,8 @@
+ int		  term_exec_node(struct termp *, const struct roff_node *, int);
+ int		  term_exec_heading(struct termp *, const struct roff_node *,
+ 			int, int);
++int		  term_exec_mdoc_list_item(struct termp *,
++			const struct roff_node *, int, int, int);
+ int		  term_exec_word(struct termp *, const char *, size_t, int);
+ int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
+ int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);

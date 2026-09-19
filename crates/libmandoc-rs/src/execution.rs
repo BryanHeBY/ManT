@@ -329,6 +329,8 @@ pub enum ExecutionWrapperKind {
     Font,
     /// Native section-heading execution interval.
     Heading,
+    /// Native mdoc(7) list-item execution interval.
+    MdocListItem,
 }
 
 /// Native lifecycle used to execute one section heading.
@@ -342,6 +344,36 @@ pub enum ExecutionHeadingKind {
     MdocSection,
     /// mdoc(7) `.Ss` heading.
     MdocSubsection,
+}
+
+/// Exact mdoc(7) list style executing one `.It` block.
+///
+/// This remains more precise than [`crate::NormalizedListKind`] because fixed
+/// CVS gives each presentation style its own formatter lifecycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionMdocListKind {
+    /// `Bl -bullet`.
+    Bullet,
+    /// `Bl -dash`.
+    Dash,
+    /// `Bl -enum`.
+    Enum,
+    /// `Bl -hang`.
+    Hang,
+    /// `Bl -hyphen`.
+    Hyphen,
+    /// `Bl -item`.
+    Item,
+    /// `Bl -ohang`.
+    Overhang,
+    /// `Bl -inset`.
+    Inset,
+    /// `Bl -diag`.
+    Diagnostic,
+    /// `Bl -tag`.
+    Tag,
+    /// `Bl -column`.
+    Column,
 }
 
 /// Semantic destination kind observed at the native macro handler.
@@ -810,6 +842,8 @@ pub struct ExecutionWrapper {
     pub leave_atom: u32,
     /// Native heading lifecycle when this is a heading wrapper.
     pub heading_kind: Option<ExecutionHeadingKind>,
+    /// Exact mdoc list style when this is a list-item wrapper.
+    pub mdoc_list_kind: Option<ExecutionMdocListKind>,
     /// Stable wrapper flags.
     pub flags: u32,
     /// Effective state before and after state transitions.
@@ -824,6 +858,14 @@ pub struct ExecutionWrapper {
     pub enter_sequence: u64,
     /// Total execution order on leave.
     pub leave_sequence: u64,
+}
+
+impl ExecutionWrapper {
+    /// Return whether the owning mdoc list requested compact spacing.
+    #[must_use]
+    pub fn mdoc_list_compact(&self) -> bool {
+        self.kind == ExecutionWrapperKind::MdocListItem && self.flags & 1 != 0
+    }
 }
 
 /// One semantic reference and the exact formatter-atom interval used as its

@@ -1,0 +1,22 @@
+.Dd September 19, 2026
+.Dt K14N 1
+.Os
+.Sh NAME
+.Nm k14n
+.Nd nested native mdoc list role probe
+.Sh LISTS
+.Bl -tag -width 8n
+.It Cm outer
+Outer before.
+.Bl -bullet
+.Tg inner-bullet
+.It
+Nested bullet.
+.El
+.Bl -tag -width 8n
+.It Cm inner
+.Tg inner-definition
+Nested definition.
+.El
+Outer after.
+.El

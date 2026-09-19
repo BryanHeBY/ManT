@@ -304,8 +304,8 @@ print_mdoc_nodelist(DECL_ARGS)
 static void
 print_mdoc_node(DECL_ARGS)
 {
-	const struct roff_node *previous;
-	int heading;
+	const struct roff_node *list, *previous;
+	int heading, list_item;
 
 	if (term_exec_failed(p))
 		return;
@@ -315,9 +315,61 @@ print_mdoc_node(DECL_ARGS)
 	    TERM_EXEC_HEADING_MDOC_SH :
 	    n->type == ROFFT_HEAD && n->tok == MDOC_Ss ?
 	    TERM_EXEC_HEADING_MDOC_SS : -1;
+	list_item = -1;
+	list = NULL;
+	if (n->type == ROFFT_BLOCK && n->tok == MDOC_It &&
+	    n->parent != NULL && n->parent->parent != NULL &&
+	    n->parent->parent->tok == MDOC_Bl &&
+	    n->parent->parent->norm != NULL) {
+		list = n->parent->parent;
+		switch (list->norm->Bl.type) {
+		case LIST_bullet:
+			list_item = TERM_EXEC_MDOC_LIST_BULLET;
+			break;
+		case LIST_dash:
+			list_item = TERM_EXEC_MDOC_LIST_DASH;
+			break;
+		case LIST_enum:
+			list_item = TERM_EXEC_MDOC_LIST_ENUM;
+			break;
+		case LIST_hang:
+			list_item = TERM_EXEC_MDOC_LIST_HANG;
+			break;
+		case LIST_hyphen:
+			list_item = TERM_EXEC_MDOC_LIST_HYPHEN;
+			break;
+		case LIST_item:
+			list_item = TERM_EXEC_MDOC_LIST_ITEM;
+			break;
+		case LIST_ohang:
+			list_item = TERM_EXEC_MDOC_LIST_OHANG;
+			break;
+		case LIST_inset:
+			list_item = TERM_EXEC_MDOC_LIST_INSET;
+			break;
+		case LIST_diag:
+			list_item = TERM_EXEC_MDOC_LIST_DIAG;
+			break;
+		case LIST_tag:
+			list_item = TERM_EXEC_MDOC_LIST_TAG;
+			break;
+		case LIST_column:
+			list_item = TERM_EXEC_MDOC_LIST_COLUMN;
+			break;
+		case LIST__NONE:
+		case LIST_MAX:
+			break;
+		}
+	}
 	if (term_exec_node(p, n, 1)) {
-		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
+		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
+		    (list_item == -1 ||
+		     term_exec_mdoc_list_item(p, n, list_item,
+		     list->norm->Bl.comp, 1))) {
 			print_mdoc_node_inner(p, pair, meta, n);
+			if (list_item != -1)
+				term_exec_mdoc_list_item(p, n, list_item,
+				    list->norm->Bl.comp, 0);
 			if (heading != -1)
 				term_exec_heading(p, n, heading, 0);
 		}

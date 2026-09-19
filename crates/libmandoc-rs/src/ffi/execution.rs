@@ -10,13 +10,14 @@ use crate::{
     BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
     ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest, ExecutionDiagnostic,
     ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
-    ExecutionHeadingKind, ExecutionLimits, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey,
-    ExecutionReference, ExecutionReferenceKind, ExecutionSource, ExecutionTable,
-    ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
-    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
-    ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper,
-    ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
-    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
+    ExecutionHeadingKind, ExecutionLimits, ExecutionMdocListKind, ExecutionNode,
+    ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference, ExecutionReferenceKind,
+    ExecutionSource, ExecutionTable, ExecutionTableAlignment, ExecutionTableCell,
+    ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey,
+    ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey, ExecutionTableRowKind,
+    ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind, FlushOutcome,
+    FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
+    NativeExecutionReport, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -1564,8 +1565,24 @@ fn validate_active_wrapper_owners(
 fn is_structural_wrapper(kind: ExecutionWrapperKind) -> bool {
     matches!(
         kind,
-        ExecutionWrapperKind::Node | ExecutionWrapperKind::Heading
+        ExecutionWrapperKind::Node
+            | ExecutionWrapperKind::Heading
+            | ExecutionWrapperKind::MdocListItem
     )
+}
+
+fn is_mdoc_list_item(nodes: &[ExecutionNode], node: ExecutionNodeKey) -> bool {
+    let item = &nodes[node.0 as usize];
+    item.kind == crate::NodeKind::Block
+        && item.macro_name.as_deref() == Some("It")
+        && item.parent.is_some_and(|body| {
+            let body = &nodes[body.0 as usize];
+            body.kind == crate::NodeKind::Body
+                && body.parent.is_some_and(|list| {
+                    let list = &nodes[list.0 as usize];
+                    list.kind == crate::NodeKind::Block && list.macro_name.as_deref() == Some("Bl")
+                })
+        })
 }
 
 fn expected_heading_kind(node: &ExecutionNode) -> Option<ExecutionHeadingKind> {
@@ -2584,7 +2601,7 @@ fn convert_report(
         }
         if let Some(wrapper) = wrapper {
             let wrapper = &wrapper_records[wrapper as usize];
-            if !matches!(wrapper.kind, 1 | 3)
+            if !matches!(wrapper.kind, 1 | 3 | 4)
                 || wrapper.node != value.node
                 || wrapper.enter_sequence >= value.enter_sequence
                 || wrapper.leave_sequence <= value.leave_sequence
@@ -2760,7 +2777,7 @@ fn convert_report(
             .atom_start
             .checked_add(value.atom_length)
             .ok_or_else(|| "invalid execution control atom range".to_owned())?;
-        if !matches!(wrapper_record.kind, 1 | 3)
+        if !matches!(wrapper_record.kind, 1 | 3 | 4)
             || !node_is_within(
                 &nodes,
                 node,
@@ -3151,6 +3168,8 @@ fn convert_report(
     }
     let mut wrappers: Vec<ExecutionWrapper> = reserved_vec(wrapper_count, "wrapper")?;
     let mut heading_nodes = reserved_filled_vec(false, node_count, "heading node ownership")?;
+    let mut mdoc_list_item_nodes =
+        reserved_filled_vec(false, node_count, "mdoc list item ownership")?;
     let mut last_wrapper_child_leave =
         reserved_filled_vec(None::<u64>, wrapper_count, "wrapper sibling order")?;
     let mut last_root_wrapper_leave = None;
@@ -3168,6 +3187,7 @@ fn convert_report(
             1 => ExecutionWrapperKind::Node,
             2 => ExecutionWrapperKind::Font,
             3 => ExecutionWrapperKind::Heading,
+            4 => ExecutionWrapperKind::MdocListItem,
             _ => return Err("unknown execution wrapper kind".to_owned()),
         };
         let heading_kind = match (kind, value.detail) {
@@ -3178,11 +3198,27 @@ fn convert_report(
             (ExecutionWrapperKind::Heading, _) => {
                 return Err("invalid execution heading kind".to_owned());
             }
-            (_, 0) => None,
+            (ExecutionWrapperKind::MdocListItem, _) | (_, 0) => None,
             _ => return Err("unexpected execution wrapper heading kind".to_owned()),
         };
-        if value.flags != 0
-            || value.enter_atom as usize > atom_count
+        let mdoc_list_kind = match (kind, value.detail) {
+            (ExecutionWrapperKind::MdocListItem, 1) => Some(ExecutionMdocListKind::Bullet),
+            (ExecutionWrapperKind::MdocListItem, 2) => Some(ExecutionMdocListKind::Dash),
+            (ExecutionWrapperKind::MdocListItem, 3) => Some(ExecutionMdocListKind::Enum),
+            (ExecutionWrapperKind::MdocListItem, 4) => Some(ExecutionMdocListKind::Hang),
+            (ExecutionWrapperKind::MdocListItem, 5) => Some(ExecutionMdocListKind::Hyphen),
+            (ExecutionWrapperKind::MdocListItem, 6) => Some(ExecutionMdocListKind::Item),
+            (ExecutionWrapperKind::MdocListItem, 7) => Some(ExecutionMdocListKind::Overhang),
+            (ExecutionWrapperKind::MdocListItem, 8) => Some(ExecutionMdocListKind::Inset),
+            (ExecutionWrapperKind::MdocListItem, 9) => Some(ExecutionMdocListKind::Diagnostic),
+            (ExecutionWrapperKind::MdocListItem, 10) => Some(ExecutionMdocListKind::Tag),
+            (ExecutionWrapperKind::MdocListItem, 11) => Some(ExecutionMdocListKind::Column),
+            (ExecutionWrapperKind::MdocListItem, _) => {
+                return Err("invalid execution mdoc list kind".to_owned());
+            }
+            (_, _) => None,
+        };
+        if value.enter_atom as usize > atom_count
             || value.leave_atom == NONE
             || value.leave_atom as usize > atom_count
             || value.enter_atom > value.leave_atom
@@ -3192,6 +3228,7 @@ fn convert_report(
         match kind {
             ExecutionWrapperKind::Node
                 if node.is_none()
+                    || value.flags != 0
                     || value.target_start != NONE
                     || value.target_length != 0
                     || value.state_before != 0
@@ -3203,7 +3240,8 @@ fn convert_report(
                 return Err("invalid execution node wrapper".to_owned());
             }
             ExecutionWrapperKind::Font
-                if value.target_start != NONE
+                if value.flags != 0
+                    || value.target_start != NONE
                     || value.target_length != 0
                     || value.enter_atom != value.leave_atom
                     || value.enter_sequence != value.leave_sequence
@@ -3218,6 +3256,7 @@ fn convert_report(
             }
             ExecutionWrapperKind::Heading
                 if node.is_none()
+                    || value.flags != 0
                     || value.state_before != 0
                     || value.state_after != 0
                     || value.depth_before != 0
@@ -3230,6 +3269,21 @@ fn convert_report(
             {
                 return Err("invalid execution heading wrapper".to_owned());
             }
+            ExecutionWrapperKind::MdocListItem
+                if node.is_none()
+                    || value.flags & !1 != 0
+                    || value.target_start != NONE
+                    || value.target_length != 0
+                    || value.state_before >= 1 << 23
+                    || value.state_after >= 1 << 23
+                    || value.depth_before != 0
+                    || value.depth_after != 0
+                    || value.enter_sequence >= value.leave_sequence
+                    || parent.is_none()
+                    || node.is_none_or(|key| !is_mdoc_list_item(&nodes, key)) =>
+            {
+                return Err("invalid execution mdoc list item wrapper".to_owned());
+            }
             _ => {}
         }
         let last_sibling_leave = if let Some(parent) = parent {
@@ -3241,9 +3295,11 @@ fn convert_report(
             {
                 return Err("execution wrapper is outside its parent".to_owned());
             }
-            if kind == ExecutionWrapperKind::Heading
-                && (parent_wrapper.kind != ExecutionWrapperKind::Node
-                    || parent_wrapper.node != node)
+            if matches!(
+                kind,
+                ExecutionWrapperKind::Heading | ExecutionWrapperKind::MdocListItem
+            ) && (parent_wrapper.kind != ExecutionWrapperKind::Node
+                || parent_wrapper.node != node)
             {
                 return Err("execution heading is not nested in its head node".to_owned());
             }
@@ -3261,6 +3317,12 @@ fn convert_report(
                 return Err("duplicate execution heading wrapper".to_owned());
             }
             heading_nodes[node] = true;
+        } else if kind == ExecutionWrapperKind::MdocListItem {
+            let node = node.expect("validated mdoc list item node").0 as usize;
+            if mdoc_list_item_nodes[node] {
+                return Err("duplicate execution mdoc list item wrapper".to_owned());
+            }
+            mdoc_list_item_nodes[node] = true;
         }
         wrappers.push(ExecutionWrapper {
             key: value.key,
@@ -3276,6 +3338,7 @@ fn convert_report(
             enter_atom: value.enter_atom,
             leave_atom: value.leave_atom,
             heading_kind,
+            mdoc_list_kind,
             flags: value.flags,
             state_before: value.state_before,
             state_after: value.state_after,
@@ -3291,6 +3354,13 @@ fn convert_report(
         .any(|(index, node)| expected_heading_kind(node).is_some() != heading_nodes[index])
     {
         return Err("missing execution heading wrapper".to_owned());
+    }
+    if nodes
+        .iter()
+        .enumerate()
+        .any(|(index, node)| is_mdoc_list_item(&nodes, node.key) != mdoc_list_item_nodes[index])
+    {
+        return Err("missing execution mdoc list item wrapper".to_owned());
     }
     validate_active_wrapper_owners(&wrappers, &boundaries, &controls)?;
     // Upstream roff_term_pre_mc() stores an authored margin character and a
@@ -4760,6 +4830,59 @@ body
         }
     }
 
+    fn records_with_mdoc_list_item_wrapper() -> (Vec<u8>, RawRecords) {
+        let pool = b"xBlIt".to_vec();
+        let mut records = raw_records();
+        records.nodes.extend([
+            CNodeRecord {
+                key: 0,
+                kind: 1,
+                macro_start: 1,
+                macro_length: 2,
+                ..node()
+            },
+            CNodeRecord {
+                key: 1,
+                parent: 0,
+                kind: 3,
+                ..node()
+            },
+            CNodeRecord {
+                key: 2,
+                parent: 1,
+                kind: 1,
+                macro_start: 3,
+                macro_length: 2,
+                ..node()
+            },
+        ]);
+        let node_wrapper = |key, parent, node, enter_sequence, leave_sequence| CWrapperRecord {
+            key,
+            parent,
+            node,
+            kind: 1,
+            enter_sequence,
+            leave_sequence,
+            ..wrapper()
+        };
+        records.wrappers.extend([
+            node_wrapper(0, NONE, 0, 1, 8),
+            node_wrapper(1, 0, 1, 2, 7),
+            node_wrapper(2, 1, 2, 3, 6),
+            CWrapperRecord {
+                key: 3,
+                parent: 2,
+                node: 2,
+                kind: 4,
+                detail: 1,
+                enter_sequence: 4,
+                leave_sequence: 5,
+                ..wrapper()
+            },
+        ]);
+        (pool, records)
+    }
+
     fn assert_heading_cardinality_rejected(
         head: CNodeRecord,
         parent: CWrapperRecord,
@@ -5423,6 +5546,52 @@ body
                 "invalid execution wrapper atom range" | "invalid execution font transition"
             ));
         }
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_mdoc_list_item_wrappers() {
+        let (pool, records) = records_with_mdoc_list_item_wrapper();
+        let count = record_count(&records);
+        let report = convert_report(pool, 0, count, 2, records).unwrap();
+        assert_eq!(
+            report.wrappers[3].mdoc_list_kind,
+            Some(ExecutionMdocListKind::Bullet)
+        );
+
+        let (pool, mut records) = records_with_mdoc_list_item_wrapper();
+        records.wrappers[3].detail = 12;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "invalid execution mdoc list kind"
+        );
+
+        let (pool, mut records) = records_with_mdoc_list_item_wrapper();
+        records.wrappers.pop();
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "missing execution mdoc list item wrapper"
+        );
+
+        let (pool, mut records) = records_with_mdoc_list_item_wrapper();
+        records.buffer_generations[0].close_sequence = 20;
+        records.wrappers[2].leave_sequence = 10;
+        records.wrappers[1].leave_sequence = 11;
+        records.wrappers[0].leave_sequence = 12;
+        records.wrappers[3].leave_sequence = 5;
+        records.wrappers.push(CWrapperRecord {
+            key: 4,
+            parent: 2,
+            node: 2,
+            kind: 4,
+            detail: 1,
+            enter_sequence: 6,
+            leave_sequence: 7,
+            ..wrapper()
+        });
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "duplicate execution mdoc list item wrapper"
+        );
     }
 
     #[test]
