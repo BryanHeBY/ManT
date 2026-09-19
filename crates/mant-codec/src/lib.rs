@@ -17,6 +17,9 @@ pub use mant_ir::ResolvedContent;
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use tldr::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 
+#[cfg(feature = "staged-native-audit")]
+#[doc(hidden)]
+pub use mandoc::lower_staged_semantic_document;
 #[cfg(feature = "roff")]
 pub use mandoc::{
     RedirectSyntaxError, lower_mandoc_document, parse_plain_manual as parse_roff_bytes,

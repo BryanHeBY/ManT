@@ -3,6 +3,8 @@
 
 mod entry_presentation;
 mod explanation;
+#[cfg(test)]
+mod native_semantic_contract_tests;
 mod projection;
 #[cfg(test)]
 mod query_fixture;

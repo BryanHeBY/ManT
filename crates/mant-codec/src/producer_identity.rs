@@ -27,6 +27,32 @@ pub(crate) fn is_reserved_selector(value: &str) -> bool {
         .any(|prefix| value.starts_with(prefix))
 }
 
+#[cfg_attr(not(feature = "roff"), allow(dead_code))]
+pub(crate) fn section_id_base(title: &str) -> String {
+    let slug = title
+        .chars()
+        .flat_map(char::to_lowercase)
+        .map(|character| {
+            if character.is_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if slug.is_empty() {
+        "section".to_owned()
+    } else if is_reserved_selector(&slug) {
+        format!("{slug}-section")
+    } else {
+        slug
+    }
+}
+
 struct IdentityLocation {
     path: OutlinePath,
     source: Option<SourceSpan>,

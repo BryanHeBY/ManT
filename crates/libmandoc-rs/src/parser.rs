@@ -354,11 +354,11 @@ impl Parser {
             kind,
             message,
         })?;
-        Ok(ExecutionReport {
-            document: raw.document,
-            diagnostics: diagnostics::parse_diagnostics(&raw.diagnostics),
+        Ok(ExecutionReport::new(
+            raw.document,
+            diagnostics::parse_diagnostics(&raw.diagnostics),
             execution,
-        })
+        ))
     }
 
     /// Parse one root from a bounded, read-only virtual source tree.

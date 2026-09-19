@@ -6,6 +6,8 @@ mod context;
 #[cfg(feature = "roff")]
 mod diagnostics;
 mod evidence;
+#[cfg(feature = "roff")]
+mod exact_native;
 mod groups;
 mod identity;
 mod normalize;
@@ -19,6 +21,10 @@ use context::DefinitionContext;
 #[cfg(feature = "roff")]
 pub(crate) use diagnostics::manual_discovery_diagnostics;
 pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
+#[cfg(feature = "roff")]
+pub(crate) use exact_native::{
+    ExactNativeDefinitionEvidence, ExactNativeNameEvidence, identify_exact_native_definitions,
+};
 #[cfg(feature = "roff")]
 pub(crate) use groups::mark_native_definition_owner;
 pub(crate) use groups::{

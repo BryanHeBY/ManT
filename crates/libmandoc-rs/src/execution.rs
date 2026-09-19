@@ -1461,15 +1461,101 @@ impl ExecutionCancellation {
     }
 }
 
-/// A document and the facts produced by its single native execution.
+/// Read-only contents of one atomic parse and native execution.
+///
+/// This type is exposed only as the immutable dereference target of
+/// [`ExecutionReport`].  Constructing a value of this type does not allow it
+/// to be converted back into an `ExecutionReport`; only the parser can create
+/// that atomic owner.
+#[doc(hidden)]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExecutionReport {
+pub struct ExecutionReportContents {
     /// Fully owned parsed syntax tree.
     pub document: crate::Document,
     /// Non-fatal parser diagnostics.
     pub diagnostics: Vec<crate::Diagnostic>,
     /// Fully owned native execution facts.
     pub execution: NativeExecutionReport,
+}
+
+/// A document and the facts produced by its single native execution.
+///
+/// The contents are intentionally not independently replaceable.  In
+/// particular, safe callers cannot combine a syntax tree from one parser
+/// session with execution facts from another session.  Immutable field access
+/// remains available through [`Deref`](std::ops::Deref), and callers that need
+/// ownership can consume the report with [`ExecutionReport::into_parts`].
+///
+/// ```compile_fail
+/// use libmandoc_rs::ExecutionReport;
+///
+/// // Atomic reports cannot be assembled from independently obtained parts.
+/// let _mismatched = ExecutionReport {
+///     contents: todo!(),
+/// };
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionReport {
+    contents: ExecutionReportContents,
+}
+
+impl ExecutionReport {
+    pub(crate) fn new(
+        document: crate::Document,
+        diagnostics: Vec<crate::Diagnostic>,
+        execution: NativeExecutionReport,
+    ) -> Self {
+        Self {
+            contents: ExecutionReportContents {
+                document,
+                diagnostics,
+                execution,
+            },
+        }
+    }
+
+    /// Borrow the parsed syntax tree paired with this execution.
+    #[must_use]
+    pub fn document(&self) -> &crate::Document {
+        &self.contents.document
+    }
+
+    /// Borrow the parser diagnostics paired with this execution.
+    #[must_use]
+    pub fn diagnostics(&self) -> &[crate::Diagnostic] {
+        &self.contents.diagnostics
+    }
+
+    /// Borrow the native facts paired with this syntax tree.
+    #[must_use]
+    pub fn execution(&self) -> &NativeExecutionReport {
+        &self.contents.execution
+    }
+
+    /// Consume the atomic owner and return all three matching parts.
+    #[must_use]
+    pub fn into_parts(
+        self,
+    ) -> (
+        crate::Document,
+        Vec<crate::Diagnostic>,
+        NativeExecutionReport,
+    ) {
+        let ExecutionReportContents {
+            document,
+            diagnostics,
+            execution,
+        } = self.contents;
+        (document, diagnostics, execution)
+    }
+}
+
+impl std::ops::Deref for ExecutionReport {
+    type Target = ExecutionReportContents;
+
+    fn deref(&self) -> &Self::Target {
+        &self.contents
+    }
 }
 
 /// Stable failure category for the combined parse/execute boundary.

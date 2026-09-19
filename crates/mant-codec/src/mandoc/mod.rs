@@ -10,6 +10,9 @@ mod formatter;
 pub(crate) mod inline;
 mod layout;
 mod native_execution;
+#[cfg(feature = "staged-native-audit")]
+#[doc(hidden)]
+pub use native_execution::lower_staged_semantic_document;
 mod navigation;
 mod redirect;
 mod reference;

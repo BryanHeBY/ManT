@@ -12,13 +12,14 @@ use libmandoc_rs::{
     ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
     ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
     ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport,
-    Node as NativeNode, NodeKind, TableAlignment as NativeTableAlignment,
+    Node as NativeNode, NodeKind, NormalizedListKind, TableAlignment as NativeTableAlignment,
     TableCellKind as NativeTableCellKind, TableRowKind as NativeTableRowKind,
     TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 mod layout;
+mod semantics;
 
 use layout::{
     NativeDefinitionKind, ResponsiveDefinitionLayout, project_definition_layout, project_term_tabs,
@@ -69,6 +70,7 @@ pub(super) struct NativeHeadingFact {
     pub(super) head: ExecutionNodeKey,
     pub(super) body: ExecutionNodeKey,
     pub(super) authored_phrase: Option<String>,
+    pub(super) authored_fragment: Option<String>,
     pub(super) atoms: Range<u32>,
     pub(super) boundaries: Vec<ExecutionBoundary>,
     pub(super) runs: Vec<NativeTextRun>,
@@ -193,6 +195,7 @@ pub(super) struct NativeMdocListSegment {
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeMdocListItem {
     pub(super) owner: ExecutionNodeKey,
+    pub(super) flow_epoch: usize,
     pub(super) list: ExecutionNodeKey,
     pub(super) wrapper: u32,
     pub(super) kind: ExecutionMdocListKind,
@@ -243,6 +246,7 @@ pub(super) struct NativeManBlockSegment {
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeManBlock {
     pub(super) owner: ExecutionNodeKey,
+    pub(super) flow_epoch: usize,
     pub(super) wrapper: u32,
     pub(super) kind: ExecutionManBlockKind,
     pub(super) state_before: u32,
@@ -922,6 +926,7 @@ fn collect_mdoc_list_items(
         }
         items.push(NativeMdocListItem {
             owner,
+            flow_epoch: ast_item.flow_epoch,
             list,
             wrapper: wrapper.key,
             kind: wrapper.mdoc_list_kind.expect("typed mdoc list kind"),
@@ -1096,7 +1101,50 @@ fn mdoc_list_facts(
         assert_eq!(lists[list_index].compact, item.compact);
         lists[list_index].items.push(item);
     }
+    append_empty_mdoc_lists(&document.root, &list_indexes, &mut lists);
+    lists.sort_by_key(|list| list.owner);
     lists
+}
+
+fn append_empty_mdoc_lists(
+    node: &NativeNode,
+    populated: &BTreeMap<ExecutionNodeKey, usize>,
+    lists: &mut Vec<NativeMdocList>,
+) {
+    if node.kind == NodeKind::Block
+        && node.macro_name.as_deref() == Some("Bl")
+        && let Some(owner) = node.execution_node_key.map(ExecutionNodeKey)
+        && !populated.contains_key(&owner)
+        && let Some(kind) = empty_mdoc_list_kind(node)
+    {
+        lists.push(NativeMdocList {
+            owner,
+            kind,
+            compact: node.compact,
+            items: Vec::new(),
+        });
+    }
+    for child in &node.children {
+        append_empty_mdoc_lists(child, populated, lists);
+    }
+}
+
+fn empty_mdoc_list_kind(node: &NativeNode) -> Option<ExecutionMdocListKind> {
+    match node.list_kind? {
+        NormalizedListKind::Bullet => Some(ExecutionMdocListKind::Bullet),
+        NormalizedListKind::Ordered => Some(ExecutionMdocListKind::Enum),
+        NormalizedListKind::Column => Some(ExecutionMdocListKind::Column),
+        NormalizedListKind::Plain => Some(ExecutionMdocListKind::Item),
+        NormalizedListKind::Definition => match node.definition_list_style? {
+            libmandoc_rs::DefinitionListStyle::Tag => Some(ExecutionMdocListKind::Tag),
+            libmandoc_rs::DefinitionListStyle::Diagnostic => {
+                Some(ExecutionMdocListKind::Diagnostic)
+            }
+            libmandoc_rs::DefinitionListStyle::Hang => Some(ExecutionMdocListKind::Hang),
+            libmandoc_rs::DefinitionListStyle::Inset => Some(ExecutionMdocListKind::Inset),
+            libmandoc_rs::DefinitionListStyle::Overhang => Some(ExecutionMdocListKind::Overhang),
+        },
+    }
 }
 
 fn empty_man_block_segment(
@@ -1181,6 +1229,7 @@ fn collect_man_blocks(
             Some((index, NativeManBlockRole::Body));
         blocks.push(NativeManBlock {
             owner,
+            flow_epoch: ast_block.flow_epoch,
             wrapper: wrapper.key,
             kind: wrapper.man_block_kind.expect("typed man block kind"),
             state_before: wrapper.state_before,
@@ -1486,6 +1535,19 @@ fn heading_kind(kind: ExecutionHeadingKind) -> NativeHeadingKind {
     }
 }
 
+pub(super) fn heading_fragment(authored: &str) -> String {
+    authored
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"!$&'()*+,-./:;=?@_".contains(&byte) {
+                char::from(byte)
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 fn heading_display_lines(runs: &[NativeTextRun]) -> Vec<String> {
     let mut lines = BTreeMap::<u32, Vec<&NativeTextRun>>::new();
     for run in runs {
@@ -1548,6 +1610,11 @@ impl HeadingCollector<'_> {
         );
         let head = child_key(NodeKind::Head, "native section block has an executed head");
         let body = child_key(NodeKind::Body, "native section block has an executed body");
+        let head_node = node
+            .children
+            .iter()
+            .find(|child| child.kind == NodeKind::Head)
+            .expect("validated native section head");
         let wrapper_index =
             self.wrapper_by_node[head.0 as usize].expect("validated native heading wrapper");
         let wrapper = &self.report.wrappers()[wrapper_index];
@@ -1564,19 +1631,30 @@ impl HeadingCollector<'_> {
                 .is_none(),
             "one native fact per heading wrapper"
         );
+        let authored_phrase = wrapper.target.map(|range| {
+            String::from_utf8_lossy(
+                self.report
+                    .pool_bytes(range)
+                    .expect("validated native heading phrase"),
+            )
+            .into_owned()
+        });
+        let authored_fragment = head_node
+            .tag
+            .clone()
+            .or_else(|| node.tag.clone())
+            .or_else(|| {
+                (head_node.flags.deep_link_target || node.flags.deep_link_target)
+                    .then_some(())
+                    .and_then(|()| authored_phrase.as_deref().map(heading_fragment))
+            });
         self.headings.push(NativeHeadingFact {
             kind: heading_kind(wrapper.heading_kind.expect("typed native heading kind")),
             section,
             head,
             body,
-            authored_phrase: wrapper.target.map(|range| {
-                String::from_utf8_lossy(
-                    self.report
-                        .pool_bytes(range)
-                        .expect("validated native heading phrase"),
-                )
-                .into_owned()
-            }),
+            authored_phrase,
+            authored_fragment,
             atoms: wrapper.enter_atom..wrapper.leave_atom,
             boundaries: Vec::new(),
             runs: Vec::new(),
@@ -2164,6 +2242,36 @@ pub(super) fn project(
         controls: control_facts(report),
         tables: table_projection(document, report),
     }
+}
+
+/// Build the staged source-neutral semantic document without changing the
+/// lower-level execution-fact projection used by K03--K18.
+#[allow(dead_code)]
+pub(super) fn project_semantic_document(
+    document: &NativeDocument,
+    report: &NativeExecutionReport,
+) -> semantics::NativeSemanticProjection {
+    let projection = project(document, report);
+    semantics::project_semantics(
+        report.sources().first().map_or_else(
+            || std::path::Path::new("manual"),
+            |source| source.path.as_path(),
+        ),
+        document,
+        report,
+        &projection,
+    )
+}
+
+/// Materialize the staged native semantic projection for development audits.
+///
+/// This is intentionally hidden from the stable documentation surface until
+/// the K19--K24 migration switches the production roff path.
+#[doc(hidden)]
+#[must_use]
+#[cfg(feature = "staged-native-audit")]
+pub fn lower_staged_semantic_document(report: &libmandoc_rs::ExecutionReport) -> mant_ir::Document {
+    project_semantic_document(&report.document, &report.execution).document
 }
 
 #[cfg(test)]
@@ -5202,5 +5310,20 @@ mod tests {
         );
         assert!(continuation.content.is_empty());
         assert!(table_rows(table)[1].cells[0].blocks.is_empty());
+    }
+
+    #[cfg(feature = "staged-native-audit")]
+    #[test]
+    fn staged_audit_accepts_only_one_atomic_execution_result() {
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "staged-pair-first.1",
+                b".TH FIRST 1\n.SH NAME\nfirst \\- probe\n",
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let document = lower_staged_semantic_document(&report);
+        assert_eq!(document.meta.title.as_deref(), Some("FIRST"));
     }
 }

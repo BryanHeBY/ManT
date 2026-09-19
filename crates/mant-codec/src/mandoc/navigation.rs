@@ -419,28 +419,7 @@ impl LoweringContext<'_> {
         (id, fragment_aliases)
     }
     pub(super) fn section_id(&mut self, title: &str) -> String {
-        let slug: String = title
-            .chars()
-            .flat_map(char::to_lowercase)
-            .map(|character| {
-                if character.is_alphanumeric() {
-                    character
-                } else {
-                    '-'
-                }
-            })
-            .collect::<String>()
-            .split('-')
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join("-");
-        let base = if slug.is_empty() {
-            "section".to_owned()
-        } else if crate::producer_identity::is_reserved_selector(&slug) {
-            format!("{slug}-section")
-        } else {
-            slug
-        };
+        let base = crate::producer_identity::section_id_base(title);
         let count = self.section_ids.entry(base.clone()).or_default();
         loop {
             *count += 1;

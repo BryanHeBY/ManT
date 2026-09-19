@@ -1,0 +1,121 @@
+{
+  "parser": { "name": "libmandoc-native-staged", "version": "cvs-20260911" },
+  "source": { "format": "mdoc", "path": "reference-mdoc.1" },
+  "meta": {
+    "title": "PROBE",
+    "manualSection": "1",
+    "date": "September 19, 2026",
+    "volume": "General Commands Manual",
+    "os": "ManT",
+    "names": ["probe"]
+  },
+  "sections": [
+    {
+      "id": "section-name",
+      "fragmentAliases": ["NAME"],
+      "heading": {
+        "content": [{ "type": "text", "value": "NAME" }],
+        "source": { "line": 4, "column": 2 }
+      },
+      "blocks": [],
+      "children": [],
+      "source": { "line": 4, "column": 2 }
+    },
+    {
+      "id": "section-commands",
+      "fragmentAliases": ["COMMANDS"],
+      "heading": {
+        "content": [{ "type": "text", "value": "COMMANDS" }],
+        "source": { "line": 7, "column": 2 }
+      },
+      "blocks": [
+        {
+          "type": "definition-list",
+          "items": [
+            {
+              "source": { "line": 9, "column": 2 },
+              "entry": {
+                "nameBindings": [
+                  {
+                    "name": 0,
+                    "occurrences": [
+                      {
+                        "parts": [
+                          {
+                            "root": { "kind": "term", "index": 0 },
+                            "path": [2, 0],
+                            "bytes": { "start": 0, "end": 7 }
+                          }
+                        ]
+                      }
+                    ],
+                    "evidence": "native-markup"
+                  }
+                ],
+                "forms": [
+                  {
+                    "parts": [
+                      { "root": { "kind": "term", "index": 0 }, "path": [] }
+                    ]
+                  }
+                ],
+                "id": "command-git-add",
+                "kind": { "kind": "command" },
+                "case": "sensitive",
+                "names": ["git-add"]
+              },
+              "terms": [
+                [
+                  { "type": "anchor", "id": "command-git-add" },
+                  {
+                    "type": "anchor",
+                    "id": "target-git-add",
+                    "fragmentAliases": ["git-add"],
+                    "ownerSource": { "line": 9, "column": 2 }
+                  },
+                  {
+                    "type": "strong",
+                    "children": [{ "type": "text", "value": "git-add" }]
+                  },
+                  { "type": "text", "value": ", " },
+                  {
+                    "type": "link",
+                    "target": {
+                      "kind": "manual",
+                      "name": "git-add",
+                      "manualSection": "1"
+                    },
+                    "children": [{ "type": "text", "value": "git-add(1)" }]
+                  }
+                ]
+              ],
+              "description": [
+                {
+                  "type": "paragraph",
+                  "children": [{ "type": "text", "value": "BODY." }],
+                  "source": { "line": 9, "column": 2 }
+                }
+              ],
+              "layout": {
+                "placement": "fit",
+                "bodyIndentColumns": 8,
+                "minTermGapColumns": 2,
+                "termContinuationIndentColumns": 8,
+                "fitConstraint": {
+                  "fitContentBasicUnits": 456,
+                  "fieldBasicUnits": 192,
+                  "originPhaseBasicUnits": 0,
+                  "cellBasicUnits": 24,
+                  "forcedSeparation": false
+                }
+              }
+            }
+          ],
+          "source": { "line": 8, "column": 2 }
+        }
+      ],
+      "children": [],
+      "source": { "line": 7, "column": 2 }
+    }
+  ]
+}

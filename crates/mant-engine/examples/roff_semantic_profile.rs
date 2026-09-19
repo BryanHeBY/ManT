@@ -4,10 +4,15 @@
 //! reports the final semantic entries plus high-confidence classification
 //! anomalies that target and visible-content audits cannot observe.
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
-use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
-use mant_codec::lower_mandoc_document;
+use flate2::read::GzDecoder;
+use libmandoc_rs::{Compression, ExecutionLimits, IncludePolicy, Node, ParseOptions, Parser};
+use mant_codec::{lower_mandoc_document, lower_staged_semantic_document};
 use mant_ir::{
     Block, Document, EntryKind, Inline, ParameterKind, Section, SemanticEntry, SemanticIndex,
     ValueDomain,
@@ -94,9 +99,21 @@ fn profile_request(line: &str) -> Result<Value, String> {
         .get("mode")
         .and_then(Value::as_str)
         .unwrap_or("production");
-    let (document, report) = match mode {
-        "production" => mant_loader::parse_manual_source_with_report(&path)
-            .map_err(|error| error.to_string())?,
+    let (document, native_root, parser_diagnostics) = match mode {
+        "production" => {
+            let (document, report) = mant_loader::parse_manual_source_with_report(&path)
+                .map_err(|error| error.to_string())?;
+            (document, report.document.root, report.diagnostics.len())
+        }
+        "native-semantic-staged" => {
+            let source = read_staged_source(&path)?;
+            let report = Parser::new(ParseOptions::default())
+                .execute_bytes(&path, &source, ExecutionLimits::default())
+                .map_err(|error| error.to_string())?;
+            let document = lower_staged_semantic_document(&report);
+            let (native_document, diagnostics, _) = report.into_parts();
+            (document, native_document.root, diagnostics.len())
+        }
         "confined-include-parser-audit" => {
             let report = Parser::new(ParseOptions {
                 includes: IncludePolicy::Root(path_field(&request, "root")?),
@@ -104,16 +121,12 @@ fn profile_request(line: &str) -> Result<Value, String> {
             })
             .parse_file(&path)
             .map_err(|error| error.to_string())?;
-            (lower_mandoc_document(&path, &report), report)
+            let document = lower_mandoc_document(&path, &report);
+            (document, report.document.root, report.diagnostics.len())
         }
         _ => return Err(format!("unknown profile mode {mode:?}")),
     };
-    let mut profile = profile_document(
-        id,
-        &report.document.root,
-        &document,
-        report.diagnostics.len(),
-    );
+    let mut profile = profile_document(id, &native_root, &document, parser_diagnostics);
     profile["mode"] = mode.into();
     if let Some(queries) = request.get("queries") {
         let queries = queries.as_array().ok_or("queries must be an array")?;
@@ -123,14 +136,32 @@ fn profile_request(line: &str) -> Result<Value, String> {
             document: Some(document),
             tldr: None,
         };
-        profile["queryProfiles"] = serde_json::to_value(queries::profile(
-            Some(&report.document.root),
-            &content,
-            queries,
-        )?)
-        .map_err(|error| error.to_string())?;
+        profile["queryProfiles"] =
+            serde_json::to_value(queries::profile(Some(&native_root), &content, queries)?)
+                .map_err(|error| error.to_string())?;
     }
     Ok(profile)
+}
+
+fn read_staged_source(path: &Path) -> Result<Vec<u8>, String> {
+    let source = std::fs::read(path).map_err(|error| error.to_string())?;
+    let extension = path.extension().and_then(|extension| extension.to_str());
+    if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("gz")) {
+        let mut output = Vec::new();
+        GzDecoder::new(source.as_slice())
+            .read_to_end(&mut output)
+            .map_err(|error| error.to_string())?;
+        return Ok(output);
+    }
+    if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("zst")) {
+        let mut output = Vec::new();
+        zstd::stream::read::Decoder::new(source.as_slice())
+            .map_err(|error| error.to_string())?
+            .read_to_end(&mut output)
+            .map_err(|error| error.to_string())?;
+        return Ok(output);
+    }
+    Ok(source)
 }
 
 fn profile_document(
@@ -586,6 +617,62 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn staged_native_mode_preserves_real_ls_definition_owners_and_queries() {
+        // Checked first with the pinned CVS HTML renderer.  man_term.c's
+        // pre_TP()/post_TP() path keeps `-a, --all` at source line 15 and
+        // `--color[=WHEN]` at line 43 as independent tagged definitions.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/roff/real/archlinux/ls.1.gz");
+        let profile = super::profile_request(
+            &serde_json::json!({
+                "id": "ls",
+                "path": path,
+                "mode": "native-semantic-staged",
+                "queries": ["-a", "--all", "--color"]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert_eq!(profile["mode"], "native-semantic-staged");
+        assert_eq!(profile["semanticViolations"], serde_json::json!([]));
+        assert_eq!(profile["entryCounts"]["option"], 59);
+        for (index, (query, line, names)) in [
+            ("-a", 15, serde_json::json!(["-a", "--all"])),
+            ("--all", 15, serde_json::json!(["-a", "--all"])),
+            ("--color", 43, serde_json::json!(["--color"])),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let result = &profile["queryProfiles"][index];
+            assert_eq!(result["query"], query);
+            assert_eq!(result["explanation"]["counts"]["directEntry"]["total"], 1);
+            let direct = result["explanation"]["evidence"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|evidence| evidence["class"] == "direct-entry")
+                .unwrap();
+            assert_eq!(direct["source"]["line"], line);
+            assert_eq!(direct["entry"]["names"], names);
+        }
+    }
+
+    #[test]
+    fn profiler_rejects_unknown_modes_instead_of_silently_using_production() {
+        let error = super::profile_request(
+            &serde_json::json!({
+                "id": "probe",
+                "path": "probe.1",
+                "mode": "native-semantic"
+            })
+            .to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(error, "unknown profile mode \"native-semantic\"");
+    }
+
     #[test]
     fn production_profiler_file_and_stdin_api_share_input_preparation_and_queries() {
         use std::io::Write;

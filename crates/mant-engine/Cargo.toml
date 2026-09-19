@@ -18,6 +18,7 @@ include = [
   "/tests/definition_normalization_layout.rs",
   "/tests/query_report_boundary.rs",
   "/tests/report_composition.rs", "/tests/report_composition/**",
+  "/examples/roff_semantic_profile.rs", "/examples/roff_semantic_profile/**",
 ]
 
 [package.metadata.docs.rs]
@@ -26,6 +27,11 @@ all-features = true
 [features]
 default = ["roff"]
 roff = ["mant-loader/roff"]
+native-semantic-audit = ["roff", "mant-codec/staged-native-audit"]
+
+[[example]]
+name = "roff_semantic_profile"
+required-features = ["native-semantic-audit"]
 
 [dependencies]
 mant-ir = { path = "../mant-ir", version = "^0.12.0" }

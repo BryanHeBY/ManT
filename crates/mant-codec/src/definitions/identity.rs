@@ -50,6 +50,142 @@ pub(super) struct IdentityPlan {
     pub(super) preferred: String,
 }
 
+impl IdentityPlan {
+    #[cfg(feature = "roff")]
+    pub(super) fn retain_names_with_native_origin(
+        &mut self,
+        role: Option<super::NativeHeadRole>,
+        evidence: &[super::ExactNativeNameEvidence],
+    ) {
+        if role.is_none() || evidence.is_empty() {
+            return;
+        }
+        let supported = self
+            .names
+            .iter()
+            .filter(|name| {
+                self.occurrences
+                    .iter()
+                    .enumerate()
+                    .any(|(term_index, candidates)| {
+                        candidates.iter().any(|candidate| {
+                            candidate.name == name.as_str()
+                                && candidate.parts.iter().any(|part| {
+                                    evidence.iter().any(|markup| {
+                                        markup.term_index == term_index
+                                            && markup.parts.iter().any(|range| {
+                                                range.start < part.end && part.start < range.end
+                                            })
+                                    })
+                                })
+                        })
+                    })
+            })
+            .cloned()
+            .collect::<HashSet<_>>();
+        self.names.retain(|name| supported.contains(name));
+        for candidates in &mut self.occurrences {
+            candidates.retain(|candidate| supported.contains(&candidate.name));
+        }
+        let name = self.names.first().map_or("entry", String::as_str);
+        self.preferred = format!(
+            "{}-{}",
+            role_id_prefix(self.kind),
+            role_name_slug(self.kind, name),
+        );
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn add_native_environment_arguments(
+        &mut self,
+        item: &DefinitionItem,
+        role: Option<super::NativeHeadRole>,
+        arguments: &[super::ExactNativeNameEvidence],
+    ) {
+        if role != Some(super::NativeHeadRole::Environment) {
+            return;
+        }
+        for argument in arguments {
+            let Some(text) = item
+                .terms
+                .get(argument.term_index)
+                .map(|term| plain_text(term))
+            else {
+                continue;
+            };
+            for range in &argument.parts {
+                let Some(value) = text.get(range.clone()) else {
+                    continue;
+                };
+                let leading = value.len() - value.trim_start().len();
+                let value = value.trim();
+                let start = range.start + leading;
+                let end = start + value.len();
+                let before = text[..start].chars().next_back();
+                let after = text[end..].chars().next();
+                let separated_before = before.is_none_or(|character| {
+                    character.is_whitespace() || matches!(character, ',' | '|')
+                });
+                let separated_after = after.is_none_or(|character| {
+                    character.is_whitespace() || matches!(character, ',' | '|' | '=')
+                });
+                let Some(name) = (separated_before && separated_after)
+                    .then(|| super::syntax::environment_variable_alias(value))
+                    .flatten()
+                else {
+                    continue;
+                };
+                let occurrence = super::RecognizedName::contiguous(&name, start);
+                let term = &mut self.occurrences[argument.term_index];
+                if !term.iter().any(|candidate| {
+                    candidate.name == occurrence.name && candidate.parts == occurrence.parts
+                }) {
+                    term.push(occurrence);
+                }
+                if !self.names.contains(&name) {
+                    self.names.push(name);
+                }
+            }
+        }
+        let name = self.names.first().map_or("entry", String::as_str);
+        self.preferred = format!(
+            "{}-{}",
+            role_id_prefix(self.kind),
+            role_name_slug(self.kind, name),
+        );
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn names_with_native_markup(
+        &self,
+        evidence: &[super::ExactNativeNameEvidence],
+    ) -> HashSet<String> {
+        self.names
+            .iter()
+            .filter(|name| {
+                self.occurrences
+                    .iter()
+                    .enumerate()
+                    .any(|(term_index, candidates)| {
+                        candidates.iter().any(|candidate| {
+                            candidate.name == name.as_str()
+                                && !candidate.parts.is_empty()
+                                && candidate.parts.iter().all(|part| {
+                                    evidence.iter().any(|markup| {
+                                        markup.term_index == term_index
+                                            && markup.parts.iter().any(|range| {
+                                                range.start <= part.start && range.end >= part.end
+                                            })
+                                    })
+                                })
+                        })
+                    })
+            })
+            .cloned()
+            .collect()
+    }
+}
+
 pub(super) fn identity_plan(
     item: &DefinitionItem,
     context: DefinitionContext,
@@ -218,19 +354,24 @@ pub(super) fn identify_item(
         return EntryKind::Term;
     }
 
+    let initially_owns_preferred_anchor = anchors.iter().any(|anchor| anchor == &preferred);
     if preferred_counts
         .get(&preferred)
         .copied()
         .unwrap_or_default()
         > 1
-        || reserved.contains(&preferred)
+        || reserved.contains(&preferred) && !initially_owns_preferred_anchor
     {
         preferred = format!(
             "{preferred}-{}",
             semantic_fingerprint(EntryOwner::Definition(item), kind, case, &names)
         );
     }
-    let id = unique_id(&preferred, used, reserved);
+    let id = if anchors.iter().any(|anchor| anchor == &preferred) {
+        preferred
+    } else {
+        unique_id(&preferred, used, reserved)
+    };
     if !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
     {

@@ -5222,30 +5222,30 @@ probe \- test
 .SH DESCRIPTION
 body
 ";
-        let mut report = crate::Parser::new(crate::ParseOptions::default())
+        let report = crate::Parser::new(crate::ParseOptions::default())
             .with_input_format(crate::InputFormat::Man)
             .execute_bytes("probe.1", source, ExecutionLimits::default())
             .unwrap();
-        let root = &report.document.root;
-        validate_execution_ast_bindings(root, &report.execution).unwrap();
+        let (document, _, mut execution) = report.into_parts();
+        let root = &document.root;
+        validate_execution_ast_bindings(root, &execution).unwrap();
 
-        let original = report.execution.nodes[0].line;
-        report.execution.nodes[0].line = original.saturating_add(1);
+        let original = execution.nodes[0].line;
+        execution.nodes[0].line = original.saturating_add(1);
         assert_eq!(
-            validate_execution_ast_bindings(root, &report.execution).unwrap_err(),
+            validate_execution_ast_bindings(root, &execution).unwrap_err(),
             "owned syntax node does not match its execution origin"
         );
-        report.execution.nodes[0].line = original;
+        execution.nodes[0].line = original;
 
-        let section = report
-            .execution
+        let section = execution
             .nodes
             .iter()
             .position(|node| node.macro_name.as_deref() == Some("SH"))
             .expect("section node");
-        report.execution.nodes[section].parent = None;
+        execution.nodes[section].parent = None;
         assert_eq!(
-            validate_execution_ast_bindings(root, &report.execution).unwrap_err(),
+            validate_execution_ast_bindings(root, &execution).unwrap_err(),
             "owned syntax node does not match its execution origin"
         );
     }
@@ -6465,25 +6465,25 @@ body
     #[test]
     fn ast_binding_requires_each_exact_native_region() {
         let source = include_bytes!("../../tests/fixtures/execution/display-control-mdoc.1");
-        let mut report = crate::Parser::new(crate::ParseOptions::default())
+        let report = crate::Parser::new(crate::ParseOptions::default())
             .with_input_format(crate::InputFormat::Mdoc)
             .with_mdoc_operating_system("ManT")
             .unwrap()
             .execute_bytes("display-control-mdoc.1", source, ExecutionLimits::default())
             .unwrap();
-        let root = &report.document.root;
-        validate_execution_ast_bindings(root, &report.execution).unwrap();
-        let region = report
-            .execution
+        let (document, _, mut execution) = report.into_parts();
+        let root = &document.root;
+        validate_execution_ast_bindings(root, &execution).unwrap();
+        let region = execution
             .wrappers
             .iter()
             .position(|wrapper| {
                 wrapper.region_kind == Some(ExecutionRegionKind::MdocDisplayOneLine)
             })
             .expect("D1 region");
-        report.execution.wrappers.remove(region);
+        execution.wrappers.remove(region);
         assert!(
-            validate_execution_ast_bindings(root, &report.execution)
+            validate_execution_ast_bindings(root, &execution)
                 .unwrap_err()
                 .starts_with("execution region kind does not match the owned AST")
         );
