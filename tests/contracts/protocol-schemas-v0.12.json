@@ -1097,6 +1097,48 @@
           "endItem"
         ]
       },
+      "DefinitionFitConstraint": {
+        "description": "Native fixed-device operands for a responsive `Fit` decision.\n\nThe comparison deliberately remains in native basic units: fixed CVS adds\nhalf a cell of tolerance, and `.ta` can make trailing tab width unrelated\nto any reader-side tab cycle. All five fields are required whenever this\nobject is present; absence means that no native constraint was supplied.",
+        "type": "object",
+        "properties": {
+          "cellBasicUnits": {
+            "description": "Width of one canonical formatter cell.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 1
+          },
+          "fieldBasicUnits": {
+            "description": "Native term field width at the fill decision.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "fitContentBasicUnits": {
+            "description": "Complete logical width used by the native fit comparison, including\nsignificant trailing whitespace when `BRTRSP` is active.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "forcedSeparation": {
+            "description": "Native execution forced the label and body onto separate rows. This\nincludes an executed word-end break and an effective hard boundary in\nthe definition head.",
+            "type": "boolean"
+          },
+          "originPhaseBasicUnits": {
+            "description": "Native label-origin phase within one formatter cell. Integer-cell\ntranslations preserve it, so readers can clip the BU field without\nassuming that the source origin was cell-aligned.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fitContentBasicUnits",
+          "fieldBasicUnits",
+          "originPhaseBasicUnits",
+          "cellBasicUnits",
+          "forcedSeparation"
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -1160,6 +1202,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "fitConstraint": {
+            "description": "Exact fixed-CVS field-fit operands for [`DefinitionPlacement::Fit`],\nwhen the producer obtained them from native execution. Generic `Fit`\nproducers omit this and use the source-neutral column geometry above.",
+            "$ref": "#/$defs/DefinitionFitConstraint"
+          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
@@ -1180,9 +1226,33 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "termContinuationIndentColumns": {
+            "description": "Continuation origin for wrapped term rows, relative to the label\norigin. This is independent of the description origin: native tag and\nhang fields continue at the body edge, while other definitions keep\nterm continuations at the label edge.",
+            "type": "integer",
+            "format": "int32"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "fitConstraint"
+              ]
+            },
+            "then": {
+              "properties": {
+                "placement": {
+                  "const": "fit"
+                }
+              },
+              "required": [
+                "placement"
+              ]
+            }
+          }
+        ]
       },
       "DefinitionPlacement": {
         "description": "Source-neutral placement policy for a definition label and its body.",
@@ -3845,6 +3915,48 @@
           "endItem"
         ]
       },
+      "DefinitionFitConstraint": {
+        "description": "Native fixed-device operands for a responsive `Fit` decision.\n\nThe comparison deliberately remains in native basic units: fixed CVS adds\nhalf a cell of tolerance, and `.ta` can make trailing tab width unrelated\nto any reader-side tab cycle. All five fields are required whenever this\nobject is present; absence means that no native constraint was supplied.",
+        "type": "object",
+        "properties": {
+          "cellBasicUnits": {
+            "description": "Width of one canonical formatter cell.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 1
+          },
+          "fieldBasicUnits": {
+            "description": "Native term field width at the fill decision.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "fitContentBasicUnits": {
+            "description": "Complete logical width used by the native fit comparison, including\nsignificant trailing whitespace when `BRTRSP` is active.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "forcedSeparation": {
+            "description": "Native execution forced the label and body onto separate rows. This\nincludes an executed word-end break and an effective hard boundary in\nthe definition head.",
+            "type": "boolean"
+          },
+          "originPhaseBasicUnits": {
+            "description": "Native label-origin phase within one formatter cell. Integer-cell\ntranslations preserve it, so readers can clip the BU field without\nassuming that the source origin was cell-aligned.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fitContentBasicUnits",
+          "fieldBasicUnits",
+          "originPhaseBasicUnits",
+          "cellBasicUnits",
+          "forcedSeparation"
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -3908,6 +4020,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "fitConstraint": {
+            "description": "Exact fixed-CVS field-fit operands for [`DefinitionPlacement::Fit`],\nwhen the producer obtained them from native execution. Generic `Fit`\nproducers omit this and use the source-neutral column geometry above.",
+            "$ref": "#/$defs/DefinitionFitConstraint"
+          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
@@ -3928,9 +4044,33 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "termContinuationIndentColumns": {
+            "description": "Continuation origin for wrapped term rows, relative to the label\norigin. This is independent of the description origin: native tag and\nhang fields continue at the body edge, while other definitions keep\nterm continuations at the label edge.",
+            "type": "integer",
+            "format": "int32"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "fitConstraint"
+              ]
+            },
+            "then": {
+              "properties": {
+                "placement": {
+                  "const": "fit"
+                }
+              },
+              "required": [
+                "placement"
+              ]
+            }
+          }
+        ]
       },
       "DefinitionPlacement": {
         "description": "Source-neutral placement policy for a definition label and its body.",
@@ -9470,6 +9610,48 @@
           "endItem"
         ]
       },
+      "DefinitionFitConstraint": {
+        "description": "Native fixed-device operands for a responsive `Fit` decision.\n\nThe comparison deliberately remains in native basic units: fixed CVS adds\nhalf a cell of tolerance, and `.ta` can make trailing tab width unrelated\nto any reader-side tab cycle. All five fields are required whenever this\nobject is present; absence means that no native constraint was supplied.",
+        "type": "object",
+        "properties": {
+          "cellBasicUnits": {
+            "description": "Width of one canonical formatter cell.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 1
+          },
+          "fieldBasicUnits": {
+            "description": "Native term field width at the fill decision.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "fitContentBasicUnits": {
+            "description": "Complete logical width used by the native fit comparison, including\nsignificant trailing whitespace when `BRTRSP` is active.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "forcedSeparation": {
+            "description": "Native execution forced the label and body onto separate rows. This\nincludes an executed word-end break and an effective hard boundary in\nthe definition head.",
+            "type": "boolean"
+          },
+          "originPhaseBasicUnits": {
+            "description": "Native label-origin phase within one formatter cell. Integer-cell\ntranslations preserve it, so readers can clip the BU field without\nassuming that the source origin was cell-aligned.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fitContentBasicUnits",
+          "fieldBasicUnits",
+          "originPhaseBasicUnits",
+          "cellBasicUnits",
+          "forcedSeparation"
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -9533,6 +9715,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "fitConstraint": {
+            "description": "Exact fixed-CVS field-fit operands for [`DefinitionPlacement::Fit`],\nwhen the producer obtained them from native execution. Generic `Fit`\nproducers omit this and use the source-neutral column geometry above.",
+            "$ref": "#/$defs/DefinitionFitConstraint"
+          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
@@ -9553,9 +9739,33 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "termContinuationIndentColumns": {
+            "description": "Continuation origin for wrapped term rows, relative to the label\norigin. This is independent of the description origin: native tag and\nhang fields continue at the body edge, while other definitions keep\nterm continuations at the label edge.",
+            "type": "integer",
+            "format": "int32"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "fitConstraint"
+              ]
+            },
+            "then": {
+              "properties": {
+                "placement": {
+                  "const": "fit"
+                }
+              },
+              "required": [
+                "placement"
+              ]
+            }
+          }
+        ]
       },
       "DefinitionPlacement": {
         "description": "Source-neutral placement policy for a definition label and its body.",
@@ -12625,6 +12835,48 @@
           "endItem"
         ]
       },
+      "DefinitionFitConstraint": {
+        "description": "Native fixed-device operands for a responsive `Fit` decision.\n\nThe comparison deliberately remains in native basic units: fixed CVS adds\nhalf a cell of tolerance, and `.ta` can make trailing tab width unrelated\nto any reader-side tab cycle. All five fields are required whenever this\nobject is present; absence means that no native constraint was supplied.",
+        "type": "object",
+        "properties": {
+          "cellBasicUnits": {
+            "description": "Width of one canonical formatter cell.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 1
+          },
+          "fieldBasicUnits": {
+            "description": "Native term field width at the fill decision.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "fitContentBasicUnits": {
+            "description": "Complete logical width used by the native fit comparison, including\nsignificant trailing whitespace when `BRTRSP` is active.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "forcedSeparation": {
+            "description": "Native execution forced the label and body onto separate rows. This\nincludes an executed word-end break and an effective hard boundary in\nthe definition head.",
+            "type": "boolean"
+          },
+          "originPhaseBasicUnits": {
+            "description": "Native label-origin phase within one formatter cell. Integer-cell\ntranslations preserve it, so readers can clip the BU field without\nassuming that the source origin was cell-aligned.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fitContentBasicUnits",
+          "fieldBasicUnits",
+          "originPhaseBasicUnits",
+          "cellBasicUnits",
+          "forcedSeparation"
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -12688,6 +12940,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "fitConstraint": {
+            "description": "Exact fixed-CVS field-fit operands for [`DefinitionPlacement::Fit`],\nwhen the producer obtained them from native execution. Generic `Fit`\nproducers omit this and use the source-neutral column geometry above.",
+            "$ref": "#/$defs/DefinitionFitConstraint"
+          },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.",
             "type": "integer",
@@ -12708,9 +12964,33 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "termContinuationIndentColumns": {
+            "description": "Continuation origin for wrapped term rows, relative to the label\norigin. This is independent of the description origin: native tag and\nhang fields continue at the body edge, while other definitions keep\nterm continuations at the label edge.",
+            "type": "integer",
+            "format": "int32"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "fitConstraint"
+              ]
+            },
+            "then": {
+              "properties": {
+                "placement": {
+                  "const": "fit"
+                }
+              },
+              "required": [
+                "placement"
+              ]
+            }
+          }
+        ]
       },
       "DefinitionPlacement": {
         "description": "Source-neutral placement policy for a definition label and its body.",

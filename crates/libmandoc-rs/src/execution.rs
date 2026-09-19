@@ -663,14 +663,53 @@ pub struct ExecutionFlush {
     pub boundary: Option<u32>,
     /// Actual fixed-CVS branch taken after this fill decision.
     pub outcome: FlushOutcome,
+    /// Literal tabs in the complete logical field, grouped by executed
+    /// word-end-break row and measured relative to that row's origin.
+    /// These come from the same native scanner as `logical_content_bu` and
+    /// therefore preserve active `.ta` stops and tab-reference offsets.
+    pub logical_tabs: Vec<ExecutionLogicalTab>,
     /// Leading space in basic units.
     pub leading_bu: i64,
     /// Accepted content width in basic units.
     pub content_bu: i64,
+    /// Intrinsic width of the complete open field before fixed-device wraps.
+    /// Native tab settings and `BRTRSP` trailing-space semantics are already
+    /// applied, but handler `trailspace` remains a separate contract fact.
+    pub logical_content_bu: i64,
+    /// Complete logical width used by the native field-fit comparison after
+    /// applying `BRTRSP`; unlike `logical_content_bu`, this can include
+    /// trailing whitespace that is never displayed.
+    pub logical_fit_content_bu: i64,
+    /// Field capacity at the beginning of the complete logical flush, before
+    /// fixed-device wrapping changes the continuation origin.
+    pub logical_field_bu: i64,
+    /// Effective left edge of the complete logical field after NOPAD,
+    /// minimum-blank and page-offset processing.
+    pub logical_origin_bu: i64,
+    /// Effective content width after the native trailing-whitespace scan.
+    /// This is the exact `vbr` used by the fixed-CVS field-fit branch and can
+    /// therefore include significant trailing spaces or tabs.
+    pub effective_content_bu: i64,
+    /// Whether an executed `\p` requested a word-end break in this complete
+    /// logical field. Unlike a fixed-device wrap, this remains a hard
+    /// responsive placement constraint.
+    pub logical_forced_break: bool,
     /// Field width in basic units.
     pub field_bu: i64,
     /// Target width in basic units.
     pub target_bu: i64,
+    /// Native field left edge at the fill decision, in basic units.
+    pub offset_bu: i64,
+    /// Native field right edge at the fill decision, in basic units.
+    pub rmargin_bu: i64,
+    /// Native device right edge at the fill decision, in basic units.
+    pub maxrmargin_bu: i64,
+    /// Width of one formatter cell for this execution profile, in basic units.
+    pub cell_bu: i64,
+    /// Minimum blank-cell debt before this field.
+    pub minimum_blank_cells: u64,
+    /// Blank-cell request retained for the following field.
+    pub trailing_blank_cells: u64,
     /// Tab offset before the segment.
     pub taboff_before: i64,
     /// Tab offset at the segment outcome checkpoint.
@@ -684,6 +723,16 @@ pub struct ExecutionFlush {
     pub sequence: u64,
     /// Execution point at which the branch outcome became known.
     pub outcome_sequence: u64,
+}
+
+/// One literal tab observed while scanning a complete logical field.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ExecutionLogicalTab {
+    /// Zero-based logical row incremented whenever an executed `\p` reaches
+    /// its following word boundary.
+    pub row_epoch: u32,
+    /// Tab destination relative to the logical row origin, in basic units.
+    pub destination_bu: i64,
 }
 
 /// Actual branch taken by one native `term_flushln()` fill segment.
@@ -924,10 +973,56 @@ pub struct ExecutionWrapper {
     pub depth_before: u32,
     /// Stack depth after the transition.
     pub depth_after: u32,
+    /// Width-independent native definition-field contract, when this wrapper
+    /// owns a man or mdoc term-and-description lifecycle.
+    pub definition: Option<ExecutionDefinitionContract>,
     /// Total execution order on entry and leave.
     pub enter_sequence: u64,
     /// Total execution order on leave.
     pub leave_sequence: u64,
+}
+
+/// One handler-computed definition field before any device-width wrapping.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ExecutionDefinitionField {
+    /// Syntax node executing this HEAD or BODY phase.
+    pub node: ExecutionNodeKey,
+    /// Left field edge in native basic units.
+    pub offset_bu: i64,
+    /// Right field edge in native basic units.
+    pub rmargin_bu: i64,
+    /// Device right edge when this phase was established, in basic units.
+    pub maxrmargin_bu: i64,
+    /// Total execution point at which the handler established the field.
+    pub sequence: u64,
+}
+
+/// Objective native facts governing one definition head/body lifecycle.
+///
+/// These facts deliberately do not contain IR placement policy.  The codec
+/// maps the typed man/mdoc owner and this formatter contract to responsive
+/// `DefinitionLayout`; native execution never emits `Stacked`, `RunIn`, or
+/// `Fit`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+// These are independent upstream TERMP_* facts, not mutually exclusive states.
+#[allow(clippy::struct_excessive_bools)]
+pub struct ExecutionDefinitionContract {
+    /// Handler-computed term field.
+    pub head: ExecutionDefinitionField,
+    /// Handler-computed description field.
+    pub body: ExecutionDefinitionField,
+    /// Width of one formatter cell, in basic units.
+    pub cell_bu: i64,
+    /// Requested blank cells following the head field.
+    pub trailing_blank_cells: u64,
+    /// The native handler keeps the head field open unconditionally.
+    pub head_stays_open_unconditionally: bool,
+    /// The native handler keeps the head field open when it fits.
+    pub head_may_stay_open_if_field_fits: bool,
+    /// Trailing authored blanks participate in the native fit test.
+    pub count_trailing_space: bool,
+    /// A wrapped head continues from the head field end.
+    pub wrapped_continuation_uses_field_end: bool,
 }
 
 impl ExecutionWrapper {

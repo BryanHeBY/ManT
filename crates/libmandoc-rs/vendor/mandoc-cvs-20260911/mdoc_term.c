@@ -1007,6 +1007,16 @@ termp_it_pre(DECL_ARGS)
 	}
 
 	/*
+	 * Preserve the handler-computed field contract even when the phase
+	 * produces no terminal buffer content.  The observer records objective
+	 * formatter state only; responsive placement remains a consumer policy.
+	 */
+	if ((type == LIST_hang || type == LIST_ohang ||
+	     type == LIST_inset || type == LIST_diag || type == LIST_tag) &&
+	    !term_exec_definition_phase(p, n->type == ROFFT_HEAD ? 0 : 1))
+		return 0;
+
+	/*
 	 * The dash, hyphen, bullet and enum lists all have a special
 	 * HEAD character (temporarily bold, in some cases).
 	 */

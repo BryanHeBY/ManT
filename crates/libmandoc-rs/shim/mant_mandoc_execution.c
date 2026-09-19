@@ -77,6 +77,7 @@ struct mant_mandoc_execution_report {
 	RECORD_STORAGE(atoms, mant_mandoc_atom_record);
 	RECORD_STORAGE(fragments, mant_mandoc_fragment_record);
 	RECORD_STORAGE(fragment_atoms, mant_mandoc_fragment_atom_record);
+	RECORD_STORAGE(logical_tabs, mant_mandoc_logical_tab_record);
 	RECORD_STORAGE(flushes, mant_mandoc_flush_record);
 	RECORD_STORAGE(boundaries, mant_mandoc_boundary_record);
 	RECORD_STORAGE(controls, mant_mandoc_control_record);
@@ -146,6 +147,8 @@ static int execution_man_block_begin(void *, const struct termp *,
     const struct roff_node *, int);
 static int execution_man_block_end(void *, const struct termp *,
     const struct roff_node *, int);
+static int execution_definition_phase(void *, const struct termp *,
+    const struct roff_node *, int);
 static int execution_region_begin(void *, const struct termp *,
     const struct roff_node *, int);
 static int execution_region_end(void *, const struct termp *,
@@ -168,10 +171,13 @@ static int execution_flush_begin(void *, const struct termp *,
     const struct roff_node *);
 static int execution_fill_scan(void *, const struct termp *,
     const struct roff_node *, size_t);
+static int execution_logical_tab(void *, const struct termp *,
+	const struct roff_node *, size_t, size_t);
 static int execution_fill_decision(void *, const struct termp *,
-    const struct roff_node *, size_t, size_t, size_t, size_t);
+    const struct roff_node *, size_t, size_t, size_t, size_t, size_t,
+    size_t);
 static int execution_fill_outcome(void *, const struct termp *,
-    const struct roff_node *, int);
+	const struct roff_node *, int, size_t);
 static int execution_field_begin(void *, const struct termp *,
     const struct roff_node *, size_t, size_t, size_t);
 static int execution_field_atom(void *, const struct termp *,
@@ -233,6 +239,7 @@ static const struct term_exec_ops execution_ops = {
 	execution_mdoc_list_item_end,
 	execution_man_block_begin,
 	execution_man_block_end,
+	execution_definition_phase,
 	execution_region_begin,
 	execution_region_end,
 	execution_word_begin,
@@ -244,6 +251,7 @@ static const struct term_exec_ops execution_ops = {
 	execution_buffer_reset,
 	execution_flush_begin,
 	execution_fill_scan,
+	execution_logical_tab,
 	execution_fill_decision,
 	execution_fill_outcome,
 	execution_field_begin,
@@ -288,6 +296,7 @@ static int tree_supported(struct mant_mandoc_execution_report *,
 static int finish_execution_run(struct mant_mandoc_execution_report *);
 static int seal_report(struct mant_mandoc_execution_report *);
 static int validate_report_storage(struct mant_mandoc_execution_report *);
+static int valid_record_range(size_t, uint32_t, uint32_t);
 static int validate_sealed_report(struct mant_mandoc_execution_report *);
 static int validate_table_records(struct mant_mandoc_execution_report *);
 static int valid_pool_range(const struct mant_mandoc_execution_report *,
@@ -384,6 +393,7 @@ DEFINE_RESERVE(words, mant_mandoc_word_record)
 DEFINE_RESERVE(atoms, mant_mandoc_atom_record)
 DEFINE_RESERVE(fragments, mant_mandoc_fragment_record)
 DEFINE_RESERVE(fragment_atoms, mant_mandoc_fragment_atom_record)
+DEFINE_RESERVE(logical_tabs, mant_mandoc_logical_tab_record)
 DEFINE_RESERVE(flushes, mant_mandoc_flush_record)
 DEFINE_RESERVE(boundaries, mant_mandoc_boundary_record)
 DEFINE_RESERVE(controls, mant_mandoc_control_record)
@@ -593,6 +603,7 @@ mant_mandoc_execution_free(struct mant_mandoc_execution_report *report)
 	free(report->atoms);
 	free(report->fragments);
 	free(report->fragment_atoms);
+	free(report->logical_tabs);
 	free(report->flushes);
 	free(report->boundaries);
 	free(report->controls);
@@ -1332,6 +1343,10 @@ execution_mdoc_list_item_begin(void *arg, const struct termp *p,
 	record->flags = compact ?
 	    MANT_MANDOC_WRAPPER_MDOC_LIST_COMPACT : 0;
 	record->state_before = stable_term_flags(p->flags);
+	record->definition_head_node = MANT_MANDOC_EXEC_NONE;
+	record->definition_body_node = MANT_MANDOC_EXEC_NONE;
+	record->definition_head_sequence = UINT64_MAX;
+	record->definition_body_sequence = UINT64_MAX;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
 	report->current_wrapper = record->key;
@@ -1397,6 +1412,10 @@ execution_man_block_begin(void *arg, const struct termp *p,
 	record->leave_atom = MANT_MANDOC_EXEC_NONE;
 	record->detail = stable_kind;
 	record->state_before = stable_term_flags(p->flags);
+	record->definition_head_node = MANT_MANDOC_EXEC_NONE;
+	record->definition_body_node = MANT_MANDOC_EXEC_NONE;
+	record->definition_head_sequence = UINT64_MAX;
+	record->definition_body_sequence = UINT64_MAX;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
 	report->current_wrapper = record->key;
@@ -1427,6 +1446,75 @@ execution_man_block_end(void *arg, const struct termp *p,
 	record->leave_atom = (uint32_t)report->atoms_count;
 	record->leave_sequence = report->sequence++;
 	report->current_wrapper = record->parent;
+	return 1;
+}
+
+static int
+execution_definition_phase(void *arg, const struct termp *p,
+    const struct roff_node *node, int phase)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_wrapper_record *record;
+	uint32_t wrapper, node_key, flags;
+	int64_t offset_bu, rmargin_bu, maxrmargin_bu, cell_bu;
+
+	if (phase != 0 && phase != 1)
+		return 0;
+	wrapper = report->current_wrapper;
+	while (wrapper != MANT_MANDOC_EXEC_NONE &&
+	    wrapper < report->wrappers_count) {
+		record = &report->wrappers[wrapper];
+		if (record->kind == MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM ||
+		    record->kind == MANT_MANDOC_WRAPPER_MAN_BLOCK)
+			break;
+		wrapper = record->parent;
+	}
+	if (wrapper == MANT_MANDOC_EXEC_NONE ||
+	    wrapper >= report->wrappers_count ||
+	    p->tcol == NULL || !charge_work(report, 1) ||
+	    !size_to_report_i64(report, p->tcol->offset, &offset_bu) ||
+	    !size_to_report_i64(report, p->tcol->rmargin, &rmargin_bu) ||
+	    !size_to_report_i64(report, p->maxrmargin, &maxrmargin_bu) ||
+	    !size_to_report_i64(report, term_len(p, 1), &cell_bu))
+		return 0;
+	record = &report->wrappers[wrapper];
+	node_key = lookup_node(report, node);
+	if (node_key == MANT_MANDOC_EXEC_NONE || cell_bu <= 0)
+		return 0;
+	if (record->definition_flags == 0) {
+		record->definition_cell_bu = cell_bu;
+	} else if (record->definition_cell_bu != cell_bu)
+		return 0;
+	if (phase == 0) {
+		if (record->definition_flags & MANT_MANDOC_DEFINITION_HAS_HEAD)
+			return 0;
+		flags = MANT_MANDOC_DEFINITION_HAS_HEAD;
+		if (p->flags & TERMP_HANG)
+			flags |= MANT_MANDOC_DEFINITION_HEAD_UNCONDITIONAL;
+		if (p->flags & TERMP_NOBREAK)
+			flags |= MANT_MANDOC_DEFINITION_HEAD_CONDITIONAL;
+		if (p->flags & TERMP_BRTRSP)
+			flags |= MANT_MANDOC_DEFINITION_COUNT_TRAILING;
+		if (p->flags & TERMP_BRIND)
+			flags |= MANT_MANDOC_DEFINITION_WRAP_AT_FIELD_END;
+		record->definition_flags |= flags;
+		record->definition_head_node = node_key;
+		record->definition_head_offset_bu = offset_bu;
+		record->definition_head_rmargin_bu = rmargin_bu;
+		record->definition_head_maxrmargin_bu = maxrmargin_bu;
+		record->definition_trailing_blank_cells = p->trailspace;
+		record->definition_head_sequence = report->sequence++;
+	} else {
+		if ((record->definition_flags & MANT_MANDOC_DEFINITION_HAS_HEAD) == 0 ||
+		    record->definition_flags & MANT_MANDOC_DEFINITION_HAS_BODY)
+			return 0;
+		record->definition_flags |= MANT_MANDOC_DEFINITION_HAS_BODY;
+		record->definition_body_node = node_key;
+		record->definition_body_offset_bu = offset_bu;
+		record->definition_body_rmargin_bu = rmargin_bu;
+		record->definition_body_maxrmargin_bu = maxrmargin_bu;
+		record->definition_body_sequence = report->sequence++;
+	}
 	return 1;
 }
 
@@ -1794,17 +1882,59 @@ execution_fill_scan(void *arg, const struct termp *p,
 }
 
 static int
+execution_logical_tab(void *arg, const struct termp *p,
+    const struct roff_node *node, size_t row_epoch, size_t destination)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_logical_tab_record *record;
+	int64_t destination_bu;
+
+	(void)p;
+	(void)node;
+	if (row_epoch > UINT32_MAX ||
+	    !size_to_report_i64(report, destination, &destination_bu) ||
+	    !charge_record(report) ||
+	    !reserve_logical_tabs(report, report->logical_tabs_count + 1))
+		return 0;
+	record = &report->logical_tabs[report->logical_tabs_count++];
+	record->row_epoch = (uint32_t)row_epoch;
+	record->reserved = 0;
+	record->destination_bu = destination_bu;
+	return 1;
+}
+
+static int
 execution_fill_decision(void *arg, const struct termp *p,
     const struct roff_node *node, size_t scan_end, size_t accepted,
-    size_t content_width, size_t target_width)
+    size_t content_width, size_t target_width, size_t leading,
+    size_t field_width)
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
 	size_t buffer_key;
-	int64_t content_bu, target_bu, taboff_bu, visual_bu;
+	int64_t content_bu, logical_content_bu, logical_fit_content_bu;
+	int64_t logical_field_bu;
+	int64_t logical_origin_bu;
+	int64_t target_bu, leading_bu, field_bu;
+	int64_t offset_bu, rmargin_bu, maxrmargin_bu, cell_bu;
+	int64_t taboff_bu, visual_bu;
 
 	if (!size_to_report_i64(report, content_width, &content_bu) ||
+	    !size_to_report_i64(report, p->exec_logical_content,
+	    &logical_content_bu) ||
+	    !size_to_report_i64(report, p->exec_logical_fit_content,
+	    &logical_fit_content_bu) ||
+	    !size_to_report_i64(report, p->exec_logical_field,
+	    &logical_field_bu) ||
+	    !size_to_report_i64(report, p->exec_logical_origin,
+	    &logical_origin_bu) ||
 	    !size_to_report_i64(report, target_width, &target_bu) ||
+	    !size_to_report_i64(report, leading, &leading_bu) ||
+	    !size_to_report_i64(report, field_width, &field_bu) ||
+	    !size_to_report_i64(report, p->tcol->offset, &offset_bu) ||
+	    !size_to_report_i64(report, p->tcol->rmargin, &rmargin_bu) ||
+	    !size_to_report_i64(report, p->maxrmargin, &maxrmargin_bu) ||
+	    !size_to_report_i64(report, term_len(p, 1), &cell_bu) ||
 	    !size_to_report_i64(report, p->tcol->taboff, &taboff_bu) ||
 	    !size_to_report_i64(report, p->viscol, &visual_bu) ||
 	    !charge_record(report) ||
@@ -1838,8 +1968,31 @@ execution_fill_decision(void *arg, const struct termp *p,
 	record->flags_before = stable_term_flags(p->flags);
 	record->flags_after = record->flags_before;
 	record->boundary = report->current_boundary;
+	if (p->exec_logical_tab_count > report->logical_tabs_count ||
+	    p->exec_logical_tab_count > UINT32_MAX ||
+	    report->logical_tabs_count - p->exec_logical_tab_count > UINT32_MAX) {
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+		    "native execution logical-tab range overflowed");
+		return 0;
+	}
+	record->logical_tab_start = (uint32_t)(report->logical_tabs_count -
+	    p->exec_logical_tab_count);
+	record->logical_tab_length = (uint32_t)p->exec_logical_tab_count;
+	record->leading_bu = leading_bu;
 	record->content_bu = content_bu;
+	record->logical_content_bu = logical_content_bu;
+	record->logical_fit_content_bu = logical_fit_content_bu;
+	record->logical_field_bu = logical_field_bu;
+	record->logical_origin_bu = logical_origin_bu;
+	record->logical_forced_break = p->exec_logical_forced_break != 0;
+	record->field_bu = field_bu;
 	record->target_bu = target_bu;
+	record->offset_bu = offset_bu;
+	record->rmargin_bu = rmargin_bu;
+	record->maxrmargin_bu = maxrmargin_bu;
+	record->cell_bu = cell_bu;
+	record->minimum_blank_cells = p->minbl;
+	record->trailing_blank_cells = p->trailspace;
 	record->taboff_before = taboff_bu;
 	record->taboff_after = taboff_bu;
 	record->visual_before = visual_bu;
@@ -1852,15 +2005,16 @@ execution_fill_decision(void *arg, const struct termp *p,
 
 static int
 execution_fill_outcome(void *arg, const struct termp *p,
-    const struct roff_node *node, int outcome)
+	const struct roff_node *node, int outcome, size_t content_width)
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
-	int64_t taboff_bu, visual_bu;
+	int64_t effective_content_bu, taboff_bu, visual_bu;
 
 	(void)p;
 	(void)node;
-	if (!size_to_report_i64(report, p->tcol->taboff, &taboff_bu) ||
+	if (!size_to_report_i64(report, content_width, &effective_content_bu) ||
+	    !size_to_report_i64(report, p->tcol->taboff, &taboff_bu) ||
 	    !size_to_report_i64(report, p->viscol, &visual_bu) ||
 	    !charge_work(report, 1) ||
 	    report->current_flush == MANT_MANDOC_EXEC_NONE ||
@@ -1875,6 +2029,7 @@ execution_fill_outcome(void *arg, const struct termp *p,
 		return 0;
 	}
 	record->outcome = (uint32_t)outcome;
+	record->effective_content_bu = effective_content_bu;
 	record->tail_discarded_start = record->accepted_end;
 	if (outcome == MANT_MANDOC_FLUSH_NO_CONTENT ||
 	    outcome == MANT_MANDOC_FLUSH_EXHAUSTED) {
@@ -1898,23 +2053,20 @@ execution_field_begin(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_flush_record *record;
-	size_t available;
-	int64_t field_bu, leading_bu, visual_bu;
+	int64_t leading_bu, visual_bu;
 
 	(void)node;
-	available = p->tcol->rmargin > visual ?
-	    p->tcol->rmargin - visual : 0;
-	available = available > leading ? available - leading : 0;
 	if (!size_to_report_i64(report, leading, &leading_bu) ||
-	    !size_to_report_i64(report, available, &field_bu) ||
 	    !size_to_report_i64(report, visual, &visual_bu) ||
 	    !charge_work(report, 1) ||
 	    report->current_flush == MANT_MANDOC_EXEC_NONE ||
 	    report->current_flush >= report->flushes_count)
 		return 0;
 	record = &report->flushes[report->current_flush];
+	/* CENTER and RIGHT adjust the emitted leading width after the fill
+	 * decision.  Preserve the handler field width captured there, but retain
+	 * the actual device leading width at field entry. */
 	record->leading_bu = leading_bu;
-	record->field_bu = field_bu;
 	record->accepted_end = (uint32_t)accepted;
 	record->fragment_start = (uint32_t)report->fragments_count;
 	record->visual_before = visual_bu;
@@ -3440,6 +3592,7 @@ seal_report(struct mant_mandoc_execution_report *report)
 	ADD_RECORD_COUNT(atoms);
 	ADD_RECORD_COUNT(fragments);
 	ADD_RECORD_COUNT(fragment_atoms);
+	ADD_RECORD_COUNT(logical_tabs);
 	ADD_RECORD_COUNT(flushes);
 	ADD_RECORD_COUNT(boundaries);
 	ADD_RECORD_COUNT(controls);
@@ -3511,6 +3664,7 @@ validate_report_storage(struct mant_mandoc_execution_report *report)
 	VALIDATE_RECORD_STORAGE(atoms);
 	VALIDATE_RECORD_STORAGE(fragments);
 	VALIDATE_RECORD_STORAGE(fragment_atoms);
+	VALIDATE_RECORD_STORAGE(logical_tabs);
 	VALIDATE_RECORD_STORAGE(flushes);
 	VALIDATE_RECORD_STORAGE(boundaries);
 	VALIDATE_RECORD_STORAGE(controls);
@@ -3524,6 +3678,12 @@ validate_report_storage(struct mant_mandoc_execution_report *report)
 	VALIDATE_RECORD_STORAGE(diagnostics);
 #undef VALIDATE_RECORD_STORAGE
 	return 1;
+}
+
+static int
+valid_record_range(size_t count, uint32_t start, uint32_t length)
+{
+	return start <= count && length <= count - start;
 }
 
 static int
@@ -3590,6 +3750,7 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	struct mant_mandoc_atom_record *atom;
 	struct mant_mandoc_fragment_record *fragment;
 	struct mant_mandoc_fragment_atom_record *reference;
+	struct mant_mandoc_logical_tab_record *logical_tab;
 	struct mant_mandoc_flush_record *flush, *next_flush;
 	struct mant_mandoc_boundary_record *boundary;
 	struct mant_mandoc_control_record *control;
@@ -4074,7 +4235,14 @@ invalid_fragment:
 		    flush->sequence <= generation->open_sequence ||
 		    flush->outcome_sequence >= generation->close_sequence ||
 		    flush->leading_bu < 0 || flush->content_bu < 0 ||
+		    flush->logical_content_bu < 0 ||
+		    flush->logical_fit_content_bu < flush->logical_content_bu ||
+		    flush->logical_field_bu < 0 ||
+		    flush->logical_origin_bu < 0 ||
+		    flush->effective_content_bu < flush->content_bu ||
 		    flush->field_bu < 0 || flush->target_bu < 0 ||
+		    flush->offset_bu < 0 || flush->rmargin_bu < 0 ||
+		    flush->maxrmargin_bu < 0 || flush->cell_bu <= 0 ||
 		    flush->taboff_before < 0 || flush->taboff_after < 0 ||
 		    flush->visual_before < 0 || flush->visual_after < 0 ||
 		    flush->scan_start != flush->accepted_start ||
@@ -4091,8 +4259,22 @@ invalid_fragment:
 		    flush->remaining_end > generation->extent ||
 		    flush->fragment_start > report->fragments_count ||
 		    flush->fragment_length > report->fragments_count -
-		    flush->fragment_start)
+		    flush->fragment_start ||
+		    !valid_record_range(report->logical_tabs_count,
+		    flush->logical_tab_start, flush->logical_tab_length))
 			goto invalid_flush;
+		end = flush->logical_tab_start + flush->logical_tab_length;
+		for (inner = flush->logical_tab_start; inner < end; inner++) {
+			logical_tab = &report->logical_tabs[inner];
+			if (logical_tab->reserved != 0 ||
+			    logical_tab->destination_bu < 0 ||
+			    (inner > flush->logical_tab_start &&
+			    report->logical_tabs[inner - 1].row_epoch >
+			    logical_tab->row_epoch) ||
+			    (!flush->logical_forced_break &&
+			    logical_tab->row_epoch != 0))
+				goto invalid_flush;
+		}
 		end = flush->fragment_start + flush->fragment_length;
 		for (inner = flush->fragment_start; inner < end; inner++) {
 			fragment = &report->fragments[inner];
@@ -4656,8 +4838,19 @@ invalid_geometry:
 	active_wrapper = MANT_MANDOC_EXEC_NONE;
 	for (index = 0; index < report->wrappers_count; index++) {
 		uint64_t *last_sibling_leave;
+		int definition_expected;
 
 		wrapper = &report->wrappers[index];
+		definition_expected =
+		    (wrapper->kind == MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM &&
+		    (wrapper->detail == MANT_MANDOC_MDOC_LIST_HANG ||
+		     wrapper->detail == MANT_MANDOC_MDOC_LIST_OHANG ||
+		     wrapper->detail == MANT_MANDOC_MDOC_LIST_INSET ||
+		     wrapper->detail == MANT_MANDOC_MDOC_LIST_DIAG ||
+		     wrapper->detail == MANT_MANDOC_MDOC_LIST_TAG)) ||
+		    (wrapper->kind == MANT_MANDOC_WRAPPER_MAN_BLOCK &&
+		    wrapper->detail >= MANT_MANDOC_MAN_BLOCK_IP &&
+		    wrapper->detail <= MANT_MANDOC_MAN_BLOCK_TQ);
 		if (wrapper->key != index ||
 		    (index != 0 && report->wrappers[index - 1].enter_sequence >=
 		    wrapper->enter_sequence) ||
@@ -4666,6 +4859,73 @@ invalid_geometry:
 		    wrapper->enter_atom > report->atoms_count ||
 		    wrapper->leave_atom > report->atoms_count ||
 		    wrapper->enter_atom > wrapper->leave_atom)
+			goto invalid_wrapper;
+		if (wrapper->definition_reserved != 0)
+			goto invalid_wrapper;
+		if (definition_expected) {
+			if ((wrapper->definition_flags &
+			    (MANT_MANDOC_DEFINITION_HAS_HEAD |
+			     MANT_MANDOC_DEFINITION_HAS_BODY)) !=
+			    (MANT_MANDOC_DEFINITION_HAS_HEAD |
+			     MANT_MANDOC_DEFINITION_HAS_BODY) ||
+			    wrapper->definition_flags &
+			    ~(MANT_MANDOC_DEFINITION_HAS_HEAD |
+			      MANT_MANDOC_DEFINITION_HAS_BODY |
+			      MANT_MANDOC_DEFINITION_HEAD_UNCONDITIONAL |
+			      MANT_MANDOC_DEFINITION_HEAD_CONDITIONAL |
+			      MANT_MANDOC_DEFINITION_COUNT_TRAILING |
+			      MANT_MANDOC_DEFINITION_WRAP_AT_FIELD_END) ||
+			    wrapper->definition_head_node >= report->nodes_count ||
+			    wrapper->definition_body_node >= report->nodes_count ||
+			    report->nodes[wrapper->definition_head_node].parent !=
+			    wrapper->node ||
+			    report->nodes[wrapper->definition_body_node].parent !=
+			    wrapper->node ||
+			    report->nodes[wrapper->definition_head_node].kind != 2 ||
+			    report->nodes[wrapper->definition_body_node].kind != 3 ||
+			    wrapper->definition_head_offset_bu < 0 ||
+			    wrapper->definition_head_rmargin_bu < 0 ||
+			    wrapper->definition_body_offset_bu < 0 ||
+			    wrapper->definition_body_rmargin_bu < 0 ||
+			    wrapper->definition_head_maxrmargin_bu < 0 ||
+			    wrapper->definition_body_maxrmargin_bu < 0 ||
+			    wrapper->definition_cell_bu <= 0 ||
+			    wrapper->definition_head_sequence <=
+			    wrapper->enter_sequence ||
+			    wrapper->definition_head_sequence >=
+			    wrapper->definition_body_sequence ||
+			    wrapper->definition_body_sequence >=
+			    wrapper->leave_sequence)
+				goto invalid_wrapper;
+		} else if (wrapper->kind == MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM ||
+		    wrapper->kind == MANT_MANDOC_WRAPPER_MAN_BLOCK) {
+			if (wrapper->definition_head_node != MANT_MANDOC_EXEC_NONE ||
+			    wrapper->definition_body_node != MANT_MANDOC_EXEC_NONE ||
+			    wrapper->definition_flags != 0 ||
+			    wrapper->definition_head_offset_bu != 0 ||
+			    wrapper->definition_head_rmargin_bu != 0 ||
+			    wrapper->definition_head_maxrmargin_bu != 0 ||
+			    wrapper->definition_body_offset_bu != 0 ||
+			    wrapper->definition_body_rmargin_bu != 0 ||
+			    wrapper->definition_body_maxrmargin_bu != 0 ||
+			    wrapper->definition_cell_bu != 0 ||
+			    wrapper->definition_trailing_blank_cells != 0 ||
+			    wrapper->definition_head_sequence != UINT64_MAX ||
+			    wrapper->definition_body_sequence != UINT64_MAX)
+				goto invalid_wrapper;
+		} else if (wrapper->definition_head_node != 0 ||
+		    wrapper->definition_body_node != 0 ||
+		    wrapper->definition_flags != 0 ||
+		    wrapper->definition_head_offset_bu != 0 ||
+		    wrapper->definition_head_rmargin_bu != 0 ||
+		    wrapper->definition_head_maxrmargin_bu != 0 ||
+		    wrapper->definition_body_offset_bu != 0 ||
+		    wrapper->definition_body_rmargin_bu != 0 ||
+		    wrapper->definition_body_maxrmargin_bu != 0 ||
+		    wrapper->definition_cell_bu != 0 ||
+		    wrapper->definition_trailing_blank_cells != 0 ||
+		    wrapper->definition_head_sequence != 0 ||
+		    wrapper->definition_body_sequence != 0)
 			goto invalid_wrapper;
 		while (active_wrapper != MANT_MANDOC_EXEC_NONE &&
 		    report->wrappers[active_wrapper].leave_sequence <=
@@ -5818,6 +6078,10 @@ mant_mandoc_execution_validation_selftest(void)
 	    MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE ||
 	    table_data_kind((enum tbl_datt)-1) != MANT_MANDOC_EXEC_NONE)
 		failures |= 1U << 9;
+	if (!valid_record_range(1, 0, 1) ||
+	    valid_record_range(1, 1, 1) ||
+	    valid_record_range(1, UINT32_MAX, 1))
+		failures |= 1U << 16;
 
 	free(report->error);
 	report->error = NULL;
@@ -6063,6 +6327,11 @@ static const size_t fragment_atom_offsets[] = {
 	OFF(mant_mandoc_fragment_atom_record, fragment),
 	OFF(mant_mandoc_fragment_atom_record, atom)
 };
+static const size_t logical_tab_offsets[] = {
+	OFF(mant_mandoc_logical_tab_record, row_epoch),
+	OFF(mant_mandoc_logical_tab_record, reserved),
+	OFF(mant_mandoc_logical_tab_record, destination_bu)
+};
 static const size_t flush_offsets[] = {
 	OFF(mant_mandoc_flush_record, key),
 	OFF(mant_mandoc_flush_record, node), OFF(mant_mandoc_flush_record, buffer),
@@ -6078,9 +6347,27 @@ static const size_t flush_offsets[] = {
 	OFF(mant_mandoc_flush_record, remaining_end), OFF(mant_mandoc_flush_record, fragment_start),
 	OFF(mant_mandoc_flush_record, fragment_length), OFF(mant_mandoc_flush_record, flags_before),
 	OFF(mant_mandoc_flush_record, flags_after), OFF(mant_mandoc_flush_record, boundary),
-	OFF(mant_mandoc_flush_record, outcome), OFF(mant_mandoc_flush_record, leading_bu),
-	OFF(mant_mandoc_flush_record, content_bu), OFF(mant_mandoc_flush_record, field_bu),
-	OFF(mant_mandoc_flush_record, target_bu), OFF(mant_mandoc_flush_record, taboff_before),
+	OFF(mant_mandoc_flush_record, outcome),
+	OFF(mant_mandoc_flush_record, logical_tab_start),
+	OFF(mant_mandoc_flush_record, logical_tab_length),
+	OFF(mant_mandoc_flush_record, leading_bu),
+	OFF(mant_mandoc_flush_record, content_bu),
+	OFF(mant_mandoc_flush_record, logical_content_bu),
+	OFF(mant_mandoc_flush_record, logical_fit_content_bu),
+	OFF(mant_mandoc_flush_record, logical_field_bu),
+	OFF(mant_mandoc_flush_record, logical_origin_bu),
+	OFF(mant_mandoc_flush_record, effective_content_bu),
+	OFF(mant_mandoc_flush_record, logical_forced_break),
+	OFF(mant_mandoc_flush_record, reserved_fit),
+	OFF(mant_mandoc_flush_record, field_bu),
+	OFF(mant_mandoc_flush_record, target_bu),
+	OFF(mant_mandoc_flush_record, offset_bu),
+	OFF(mant_mandoc_flush_record, rmargin_bu),
+	OFF(mant_mandoc_flush_record, maxrmargin_bu),
+	OFF(mant_mandoc_flush_record, cell_bu),
+	OFF(mant_mandoc_flush_record, minimum_blank_cells),
+	OFF(mant_mandoc_flush_record, trailing_blank_cells),
+	OFF(mant_mandoc_flush_record, taboff_before),
 	OFF(mant_mandoc_flush_record, taboff_after), OFF(mant_mandoc_flush_record, visual_before),
 	OFF(mant_mandoc_flush_record, visual_after),
 	OFF(mant_mandoc_flush_record, sequence),
@@ -6166,6 +6453,20 @@ static const size_t wrapper_offsets[] = {
 	OFF(mant_mandoc_wrapper_record, detail), OFF(mant_mandoc_wrapper_record, flags),
 	OFF(mant_mandoc_wrapper_record, state_before), OFF(mant_mandoc_wrapper_record, state_after),
 	OFF(mant_mandoc_wrapper_record, depth_before), OFF(mant_mandoc_wrapper_record, depth_after),
+	OFF(mant_mandoc_wrapper_record, definition_head_node),
+	OFF(mant_mandoc_wrapper_record, definition_body_node),
+	OFF(mant_mandoc_wrapper_record, definition_flags),
+	OFF(mant_mandoc_wrapper_record, definition_reserved),
+	OFF(mant_mandoc_wrapper_record, definition_head_offset_bu),
+	OFF(mant_mandoc_wrapper_record, definition_head_rmargin_bu),
+	OFF(mant_mandoc_wrapper_record, definition_head_maxrmargin_bu),
+	OFF(mant_mandoc_wrapper_record, definition_body_offset_bu),
+	OFF(mant_mandoc_wrapper_record, definition_body_rmargin_bu),
+	OFF(mant_mandoc_wrapper_record, definition_body_maxrmargin_bu),
+	OFF(mant_mandoc_wrapper_record, definition_cell_bu),
+	OFF(mant_mandoc_wrapper_record, definition_trailing_blank_cells),
+	OFF(mant_mandoc_wrapper_record, definition_head_sequence),
+	OFF(mant_mandoc_wrapper_record, definition_body_sequence),
 	OFF(mant_mandoc_wrapper_record, enter_sequence), OFF(mant_mandoc_wrapper_record, leave_sequence)
 };
 static const size_t reference_offsets[] = {
@@ -6275,6 +6576,8 @@ DEFINE_RECORD_API(word, words, mant_mandoc_word_record, word_offsets)
 DEFINE_RECORD_API(atom, atoms, mant_mandoc_atom_record, atom_offsets)
 DEFINE_RECORD_API(fragment, fragments, mant_mandoc_fragment_record, fragment_offsets)
 DEFINE_RECORD_API(fragment_atom, fragment_atoms, mant_mandoc_fragment_atom_record, fragment_atom_offsets)
+DEFINE_RECORD_API(logical_tab, logical_tabs, mant_mandoc_logical_tab_record,
+    logical_tab_offsets)
 DEFINE_RECORD_API(flush, flushes, mant_mandoc_flush_record, flush_offsets)
 DEFINE_RECORD_API(boundary, boundaries, mant_mandoc_boundary_record, boundary_offsets)
 DEFINE_RECORD_API(control, controls, mant_mandoc_control_record, control_offsets)

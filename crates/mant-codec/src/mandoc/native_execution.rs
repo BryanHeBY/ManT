@@ -18,6 +18,12 @@ use libmandoc_rs::{
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
+mod layout;
+
+use layout::{
+    NativeDefinitionKind, ResponsiveDefinitionLayout, project_definition_layout, project_term_tabs,
+};
+
 #[allow(dead_code)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct NativeTextRun {
@@ -130,8 +136,32 @@ pub(super) struct NativeDefinitionFact {
     pub(super) macro_name: String,
     pub(super) head: ExecutionNodeKey,
     pub(super) body: ExecutionNodeKey,
+    pub(super) kind: NativeDefinitionKind,
+    pub(super) responsive: ResponsiveDefinitionLayout,
     pub(super) head_flushes: Vec<ExecutionFlush>,
     pub(super) body_flushes: Vec<ExecutionFlush>,
+}
+
+impl NativeDefinitionFact {
+    /// Apply native final-row tab destinations when this fact is materialized
+    /// by the production native backend in K23.  The caller must supply the
+    /// exact native logical-field identity retained while materializing its
+    /// atoms; public IR terms intentionally do not expose this provenance.
+    #[allow(dead_code)]
+    pub(super) fn project_field_term(
+        &self,
+        buffer_generation: u32,
+        term: &[mant_ir::Inline],
+    ) -> Vec<mant_ir::Inline> {
+        self.responsive
+            .term_tab_fields
+            .iter()
+            .find(|field| field.buffer_generation == buffer_generation)
+            .map_or_else(
+                || term.to_vec(),
+                |field| project_term_tabs(term, &field.rows),
+            )
+    }
 }
 
 #[allow(dead_code)]
@@ -467,6 +497,34 @@ fn field_facts(report: &NativeExecutionReport) -> Vec<NativeFieldFact> {
         .collect()
 }
 
+fn definition_fit_constraint(
+    contract: libmandoc_rs::ExecutionDefinitionContract,
+    head_flushes: &[ExecutionFlush],
+) -> Option<mant_ir::DefinitionFitConstraint> {
+    if !contract.head_may_stay_open_if_field_fits {
+        return None;
+    }
+    let flush = head_flushes
+        .iter()
+        .rev()
+        .find(|flush| flush.outcome == libmandoc_rs::FlushOutcome::Exhausted)?;
+    Some(mant_ir::DefinitionFitConstraint {
+        fit_content_basic_units: u64::try_from(flush.logical_fit_content_bu)
+            .expect("validated native logical fit width"),
+        field_basic_units: u64::try_from(flush.logical_field_bu)
+            .expect("validated native logical field capacity"),
+        origin_phase_basic_units: u64::try_from(
+            flush.logical_origin_bu.rem_euclid(contract.cell_bu),
+        )
+        .expect("validated native origin phase"),
+        cell_basic_units: std::num::NonZeroU64::new(
+            u64::try_from(contract.cell_bu).expect("validated native cell width"),
+        )
+        .expect("positive validated native cell width"),
+        forced_separation: flush.logical_forced_break,
+    })
+}
+
 fn definition_facts(
     report: &NativeExecutionReport,
     man_blocks: &[NativeManBlock],
@@ -484,10 +542,12 @@ fn is_man_definition_kind(kind: ExecutionManBlockKind) -> bool {
         ExecutionManBlockKind::IndentedParagraph
             | ExecutionManBlockKind::TaggedParagraph
             | ExecutionManBlockKind::AdditionalTag
-            | ExecutionManBlockKind::HangingParagraph
     )
 }
 
+// Keep collection, closest-wrapper ownership, and projection together so the
+// HEAD/BODY lifecycle remains visibly symmetric with the native handler.
+#[allow(clippy::too_many_lines)]
 fn man_definition_facts(
     report: &NativeExecutionReport,
     man_blocks: &[NativeManBlock],
@@ -496,6 +556,8 @@ fn man_definition_facts(
         block: &'a NativeManBlock,
         head_flushes: Vec<ExecutionFlush>,
         body_flushes: Vec<ExecutionFlush>,
+        head_boundaries: Vec<ExecutionBoundary>,
+        body_boundaries: Vec<ExecutionBoundary>,
     }
     let mut pending = man_blocks
         .iter()
@@ -504,6 +566,8 @@ fn man_definition_facts(
             block,
             head_flushes: Vec::new(),
             body_flushes: Vec::new(),
+            head_boundaries: Vec::new(),
+            body_boundaries: Vec::new(),
         })
         .collect::<Vec<_>>();
     let mut wrapper_depths = Vec::with_capacity(report.wrappers().len());
@@ -539,18 +603,61 @@ fn man_definition_facts(
             pending[definition].body_flushes.push(flush.clone());
         }
     }
+    let mut owners = vec![None::<(u32, usize, bool)>; report.boundaries().len()];
+    for (definition, value) in pending.iter().enumerate() {
+        let depth = wrapper_depths[value.block.wrapper as usize];
+        for (is_head, boundaries) in [
+            (true, &value.block.head.boundaries),
+            (false, &value.block.body.boundaries),
+        ] {
+            for boundary in boundaries {
+                let owner = &mut owners[boundary.key as usize];
+                if owner.is_none_or(|current| current.0 < depth) {
+                    *owner = Some((depth, definition, is_head));
+                }
+            }
+        }
+    }
+    for (boundary, owner) in report.boundaries().iter().zip(owners) {
+        let Some((_, definition, is_head)) = owner else {
+            continue;
+        };
+        if is_head {
+            pending[definition].head_boundaries.push(boundary.clone());
+        } else {
+            pending[definition].body_boundaries.push(boundary.clone());
+        }
+    }
     pending
         .into_iter()
-        .map(|value| NativeDefinitionFact {
-            owner: value.block.owner,
-            macro_name: report.nodes()[value.block.owner.0 as usize]
-                .macro_name
-                .clone()
-                .expect("typed man block macro"),
-            head: value.block.head.node,
-            body: value.block.body.node,
-            head_flushes: value.head_flushes,
-            body_flushes: value.body_flushes,
+        .map(|value| {
+            let contract = report.wrappers()[value.block.wrapper as usize]
+                .definition
+                .expect("validated native man definition contract");
+            let kind = NativeDefinitionKind::Man(value.block.kind);
+            let fit_constraint = definition_fit_constraint(contract, &value.head_flushes);
+            let responsive = project_definition_layout(
+                kind,
+                contract,
+                fit_constraint,
+                value.head_flushes.iter().cloned(),
+                value.body_flushes.iter().cloned(),
+                value.head_boundaries.iter().cloned(),
+                value.body_boundaries.iter().cloned(),
+            );
+            NativeDefinitionFact {
+                owner: value.block.owner,
+                macro_name: report.nodes()[value.block.owner.0 as usize]
+                    .macro_name
+                    .clone()
+                    .expect("typed man block macro"),
+                head: value.block.head.node,
+                body: value.block.body.node,
+                kind,
+                responsive,
+                head_flushes: value.head_flushes,
+                body_flushes: value.body_flushes,
+            }
         })
         .collect()
 }
@@ -566,6 +673,9 @@ fn is_mdoc_definition_kind(kind: ExecutionMdocListKind) -> bool {
     )
 }
 
+// Keep collection, closest-wrapper ownership, and projection together so the
+// HEAD/BODY lifecycle remains visibly symmetric with the native handler.
+#[allow(clippy::too_many_lines)]
 fn mdoc_definition_facts(
     report: &NativeExecutionReport,
     mdoc_lists: &[NativeMdocList],
@@ -574,6 +684,8 @@ fn mdoc_definition_facts(
         item: &'a NativeMdocListItem,
         head_flushes: Vec<ExecutionFlush>,
         body_flushes: Vec<ExecutionFlush>,
+        head_boundaries: Vec<ExecutionBoundary>,
+        body_boundaries: Vec<ExecutionBoundary>,
     }
 
     let mut pending = mdoc_lists
@@ -584,6 +696,8 @@ fn mdoc_definition_facts(
             item,
             head_flushes: Vec::new(),
             body_flushes: Vec::new(),
+            head_boundaries: Vec::new(),
+            body_boundaries: Vec::new(),
         })
         .collect::<Vec<_>>();
     let mut wrapper_depths = Vec::with_capacity(report.wrappers().len());
@@ -621,14 +735,58 @@ fn mdoc_definition_facts(
             pending[definition].body_flushes.push(flush.clone());
         }
     }
+    let mut owners = vec![None::<(u32, usize, bool)>; report.boundaries().len()];
+    for (definition, value) in pending.iter().enumerate() {
+        let depth = wrapper_depths[value.item.wrapper as usize];
+        for boundary in &value.item.head.boundaries {
+            let owner = &mut owners[boundary.key as usize];
+            if owner.is_none_or(|current| current.0 < depth) {
+                *owner = Some((depth, definition, true));
+            }
+        }
+        for body in &value.item.bodies {
+            for boundary in &body.boundaries {
+                let owner = &mut owners[boundary.key as usize];
+                if owner.is_none_or(|current| current.0 < depth) {
+                    *owner = Some((depth, definition, false));
+                }
+            }
+        }
+    }
+    for (boundary, owner) in report.boundaries().iter().zip(owners) {
+        let Some((_, definition, is_head)) = owner else {
+            continue;
+        };
+        if is_head {
+            pending[definition].head_boundaries.push(boundary.clone());
+        } else {
+            pending[definition].body_boundaries.push(boundary.clone());
+        }
+    }
     pending
         .into_iter()
         .filter_map(|value| {
+            let contract = report.wrappers()[value.item.wrapper as usize]
+                .definition
+                .expect("validated native mdoc definition contract");
+            let kind = NativeDefinitionKind::Mdoc(value.item.kind);
+            let fit_constraint = definition_fit_constraint(contract, &value.head_flushes);
+            let responsive = project_definition_layout(
+                kind,
+                contract,
+                fit_constraint,
+                value.head_flushes.iter().cloned(),
+                value.body_flushes.iter().cloned(),
+                value.head_boundaries.iter().cloned(),
+                value.body_boundaries.iter().cloned(),
+            );
             Some(NativeDefinitionFact {
                 owner: value.item.owner,
                 macro_name: "It".to_owned(),
                 head: value.item.head.node,
                 body: value.item.bodies.first()?.node,
+                kind,
+                responsive,
                 head_flushes: value.head_flushes,
                 body_flushes: value.body_flushes,
             })
@@ -2011,7 +2169,7 @@ pub(super) fn project(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use libmandoc_rs::{ExecutionLimits, InputFormat, ParseOptions, Parser};
+    use libmandoc_rs::{ExecutionLimits, FlushOutcome, InputFormat, ParseOptions, Parser};
 
     fn table_rows(table: &NativeTable) -> &[mant_ir::TableRow] {
         let mant_ir::Block::Table { rows, .. } = &table.block else {
@@ -2718,6 +2876,35 @@ mod tests {
                 .filter(|definition| matches!(definition.macro_name.as_str(), "TP" | "TQ"))
                 .count(),
             6
+        );
+        assert_eq!(projection.definitions.len(), 7);
+        assert!(projection.definitions.iter().all(|definition| {
+            definition.responsive.layout.placement == mant_ir::DefinitionPlacement::Fit
+                && definition.responsive.layout.min_term_gap_columns == 1
+        }));
+        let numbered = projection
+            .definitions
+            .iter()
+            .find(|definition| {
+                definition.kind
+                    == NativeDefinitionKind::Man(ExecutionManBlockKind::IndentedParagraph)
+            })
+            .expect("native IP definition");
+        assert_eq!(numbered.responsive.layout.body_indent_columns, 4);
+        assert!(
+            projection
+                .definitions
+                .iter()
+                .filter(|definition| {
+                    matches!(
+                        definition.kind,
+                        NativeDefinitionKind::Man(
+                            ExecutionManBlockKind::TaggedParagraph
+                                | ExecutionManBlockKind::AdditionalTag
+                        )
+                    )
+                })
+                .all(|definition| definition.responsive.layout.body_indent_columns == 7)
         );
     }
 
@@ -3465,6 +3652,1000 @@ mod tests {
                 .iter()
                 .any(|line| line.contains("Bullet body."))
         );
+    }
+
+    fn responsive_definition_item(layout: mant_ir::DefinitionLayout) -> mant_ir::DefinitionItem {
+        mant_ir::DefinitionItem {
+            source: None,
+            entry: None,
+            terms: vec![vec![mant_ir::Inline::Text {
+                value: "alpha".to_owned(),
+            }]],
+            description: vec![mant_ir::Block::Paragraph {
+                children: vec![mant_ir::Inline::Text {
+                    value: "description".to_owned(),
+                }],
+                layout: mant_ir::LayoutHint::default(),
+                source: None,
+            }],
+            layout,
+        }
+    }
+
+    fn is_within(
+        report: &NativeExecutionReport,
+        mut node: ExecutionNodeKey,
+        ancestor: ExecutionNodeKey,
+    ) -> bool {
+        loop {
+            if node == ancestor {
+                return true;
+            }
+            let Some(parent) = report.nodes()[node.0 as usize].parent else {
+                return false;
+            };
+            node = parent;
+        }
+    }
+
+    #[test]
+    fn projects_native_definition_contracts_into_responsive_ir_policy() {
+        // The exact fixture was rendered with the pinned CVS terminal at
+        // 32/78/120 columns before this assertion was written.  Fixed CVS
+        // `termp_it_pre()` supplies field origins and continuation flags;
+        // only this codec layer maps typed list styles to IR placement.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "mdoc-list-lifecycle.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/mdoc-list-lifecycle.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let definition = |kind| {
+            projection
+                .definitions
+                .iter()
+                .find(|definition| definition.kind == NativeDefinitionKind::Mdoc(kind))
+                .expect("responsive mdoc definition")
+        };
+        let tag = definition(ExecutionMdocListKind::Tag);
+        assert_eq!(
+            tag.responsive.layout.placement,
+            mant_ir::DefinitionPlacement::Fit
+        );
+        assert_eq!(tag.responsive.layout.body_indent_columns, 10);
+        assert_eq!(tag.responsive.layout.min_term_gap_columns, 2);
+        assert_eq!(
+            definition(ExecutionMdocListKind::Hang)
+                .responsive
+                .layout
+                .placement,
+            mant_ir::DefinitionPlacement::RunIn
+        );
+        assert_eq!(
+            definition(ExecutionMdocListKind::Overhang)
+                .responsive
+                .layout,
+            mant_ir::DefinitionLayout {
+                placement: mant_ir::DefinitionPlacement::Stacked,
+                body_indent_columns: 0,
+                min_term_gap_columns: 0,
+                term_continuation_indent_columns: 0,
+                fit_constraint: None,
+                spacing_before_lines: None,
+            }
+        );
+        assert_eq!(
+            definition(ExecutionMdocListKind::Inset)
+                .responsive
+                .layout
+                .min_term_gap_columns,
+            1
+        );
+        assert_eq!(
+            definition(ExecutionMdocListKind::Diagnostic)
+                .responsive
+                .layout
+                .min_term_gap_columns,
+            2
+        );
+
+        let item = responsive_definition_item(tag.responsive.layout);
+        let plan = mant_ir::geometry::definition_placement_plan(&item, 0);
+        let narrow = plan.resolve(Some(6));
+        let wide = plan.resolve(Some(40));
+        assert!(!narrow.run_in);
+        assert!(wide.run_in);
+        assert_eq!(wide.body_origin_columns, 10);
+        let translated = plan.translated(7).resolve(Some(40));
+        assert!(translated.run_in);
+        assert_eq!(translated.body_origin_columns, wide.body_origin_columns + 7);
+        assert_eq!(
+            translated.first_description_origin_columns,
+            wide.first_description_origin_columns + 7
+        );
+    }
+
+    #[test]
+    fn projects_fractional_absolute_origins_before_computing_relative_indent() {
+        // This exact fixture was rendered with the pinned CVS `-Tutf8` and
+        // `-Tlint` frontends before this assertion was written.  Fixed CVS
+        // `ascii_advance()` rounds the absolute 132-BU and 192-BU destinations
+        // to columns 5 and 8; rounding their 60-BU delta would incorrectly
+        // produce only two columns.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-responsive-fractional.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-responsive-fractional.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one fractional responsive definition");
+        };
+        assert_eq!(definition.responsive.label_origin_columns, 5);
+        assert_eq!(definition.responsive.layout.body_indent_columns, 3);
+        assert_eq!(
+            definition
+                .responsive
+                .layout
+                .fit_constraint
+                .expect("tie-phase fit constraint")
+                .origin_phase_basic_units,
+            12
+        );
+
+        let mut item = responsive_definition_item(definition.responsive.layout);
+        item.terms = vec![vec![mant_ir::Inline::Text {
+            value: "A".to_owned(),
+        }]];
+        let plan = mant_ir::geometry::definition_placement_plan(&item, 0);
+        let wide = plan.resolve(Some(40));
+        assert!(wide.run_in);
+        assert_eq!(wide.body_origin_columns, 3);
+        let translated = plan.translated(7).resolve(Some(40));
+        assert_eq!(translated.body_origin_columns, 10);
+        assert_eq!(translated.first_description_origin_columns, 10);
+
+        let above_half = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-fractional-fit-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-fractional-fit-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&above_half.document, &above_half.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one above-half responsive definition");
+        };
+        assert_eq!(
+            definition
+                .responsive
+                .layout
+                .fit_constraint
+                .expect("above-half fit constraint")
+                .origin_phase_basic_units,
+            13
+        );
+    }
+
+    #[test]
+    fn projects_the_executed_head_field_after_a_line_length_change() {
+        // The pristine pinned CVS reference ran this exact fixture before the
+        // assertion was written. `roff_term_pre_ll()` updates maxrmargin, but
+        // `term_flushln()` still observes the tag handler's ten-cell field at
+        // its five-cell origin; projection must use that executed flush rather
+        // than reconstructing either value from the phase-entry snapshot.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-head-line-length-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-head-line-length-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one line-length definition");
+        };
+        let constraint = definition
+            .responsive
+            .layout
+            .fit_constraint
+            .expect("executed head fit constraint");
+        assert_eq!(constraint.field_basic_units, 10 * 24);
+        assert_eq!(constraint.origin_phase_basic_units, 0);
+        assert_eq!(constraint.cell_basic_units.get(), 24);
+    }
+
+    #[test]
+    fn projects_native_term_continuations_and_fit_only_trailing_space() {
+        // Both exact fixtures were rendered with pinned CVS `-Tutf8` at the
+        // asserted widths and `-Tlint` before this test was written.  In
+        // fixed CVS `term_flushln()`, BRIND restarts wrapped tag text at the
+        // field end, while BRTRSP counts discarded authored tail whitespace
+        // only for the Fit decision.
+        let boundaries = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-responsive-boundaries.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-responsive-boundaries.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&boundaries.document, &boundaries.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one responsive definition");
+        };
+        assert_eq!(
+            definition
+                .responsive
+                .layout
+                .term_continuation_indent_columns,
+            definition.responsive.layout.body_indent_columns
+        );
+
+        let trailing = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-trailing-fit-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-trailing-fit-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&trailing.document, &trailing.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one trailing-fit definition");
+        };
+        let constraint = definition
+            .responsive
+            .layout
+            .fit_constraint
+            .expect("native Fit constraint");
+        assert_eq!(constraint.fit_content_basic_units, 9 * 24);
+        assert_eq!(constraint.field_basic_units, 10 * 24);
+        assert_eq!(constraint.cell_basic_units.get(), 24);
+        let mut with_tail = responsive_definition_item(definition.responsive.layout);
+        with_tail.terms = vec![vec![mant_ir::Inline::Text {
+            value: "12345678".to_owned(),
+        }]];
+        let mut without_tail = with_tail.clone();
+        without_tail.layout.fit_constraint = Some(mant_ir::DefinitionFitConstraint {
+            fit_content_basic_units: 8 * 24,
+            ..constraint
+        });
+        assert!(!mant_ir::geometry::definition_placement(&with_tail, 5, Some(15)).run_in);
+        assert!(mant_ir::geometry::definition_placement(&without_tail, 5, Some(15)).run_in);
+    }
+
+    #[test]
+    fn materializes_custom_native_tabs_before_portable_geometry() {
+        // This exact fixture was rendered with the pristine pinned CVS
+        // reference at width 30 before the assertion was written.  Its active
+        // `.ta 4n T 4n` stop renders `12345<TAB>X` as `12345   X`, while a
+        // generic absolute eight-column reader would place the tab differently
+        // because the label itself begins at column five.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-custom-tab-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-custom-tab-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one custom-tab definition");
+        };
+        let [field] = definition.responsive.term_tab_fields.as_slice() else {
+            panic!("one native tab field");
+        };
+        assert_eq!(
+            field.rows,
+            [layout::NativeTermTabRow {
+                row_epoch: 0,
+                destinations_columns: vec![8],
+            }]
+        );
+
+        let term = vec![mant_ir::Inline::Text {
+            value: "12345\tX".to_owned(),
+        }];
+        let projected = definition.project_field_term(field.buffer_generation, &term);
+        assert_eq!(
+            projected,
+            vec![mant_ir::Inline::Text {
+                value: "12345   X".to_owned(),
+            }]
+        );
+        let mut item = responsive_definition_item(definition.responsive.layout);
+        item.terms = vec![projected];
+        let resolved = mant_ir::geometry::definition_placement(&item, 0, Some(30));
+        assert!(resolved.run_in);
+        assert_eq!(resolved.final_label_width_columns, Some(9));
+    }
+
+    #[test]
+    fn materializes_tabs_on_their_executed_word_end_break_rows() {
+        // Both exact fixtures were rendered with the pristine pinned CVS
+        // reference at width 30 and checked with `-Tlint` before these
+        // assertions were written.  `term_flushln()` advances the carried tab
+        // offset after each `\p` row (term.c:692-696), so the first continuation
+        // reaches column five and the second reaches column three relative to
+        // their respective logical row origins. Style, link and anchor splits
+        // do not create formatter rows or new tab identities.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "logical-tabs-multi-row-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/logical-tabs-multi-row-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one multi-row tab definition");
+        };
+        let [field] = definition.responsive.term_tab_fields.as_slice() else {
+            panic!("one native tab field");
+        };
+        let rows = field
+            .rows
+            .iter()
+            .map(|row| (row.row_epoch, row.destinations_columns.as_slice()))
+            .collect::<Vec<_>>();
+        assert_eq!(rows, [(1, &[5][..]), (2, &[3][..])]);
+
+        let target = mant_ir::LinkTarget::External {
+            uri: "https://example.invalid/".to_owned(),
+        };
+        let term = vec![
+            mant_ir::Inline::Text {
+                value: "A".to_owned(),
+            },
+            mant_ir::Inline::LineBreak,
+            mant_ir::Inline::Strong {
+                children: vec![mant_ir::Inline::Text {
+                    value: "B".to_owned(),
+                }],
+            },
+            mant_ir::Inline::Anchor {
+                id: "row-one".into(),
+                fragment_aliases: Vec::new(),
+                owner_source: None,
+            },
+            mant_ir::Inline::Emphasis {
+                children: vec![mant_ir::Inline::Text {
+                    value: "\tC".to_owned(),
+                }],
+            },
+            mant_ir::Inline::LineBreak,
+            mant_ir::Inline::Link {
+                target: target.clone(),
+                title: None,
+                children: vec![mant_ir::Inline::Text {
+                    value: "D\tE".to_owned(),
+                }],
+            },
+        ];
+        let projected = definition.project_field_term(field.buffer_generation, &term);
+        assert_eq!(
+            projected,
+            vec![
+                mant_ir::Inline::Text {
+                    value: "A".to_owned(),
+                },
+                mant_ir::Inline::LineBreak,
+                mant_ir::Inline::Strong {
+                    children: vec![mant_ir::Inline::Text {
+                        value: "B".to_owned(),
+                    }],
+                },
+                mant_ir::Inline::Anchor {
+                    id: "row-one".into(),
+                    fragment_aliases: Vec::new(),
+                    owner_source: None,
+                },
+                mant_ir::Inline::Emphasis {
+                    children: vec![mant_ir::Inline::Text {
+                        value: "    C".to_owned(),
+                    }],
+                },
+                mant_ir::Inline::LineBreak,
+                mant_ir::Inline::Link {
+                    target,
+                    title: None,
+                    children: vec![mant_ir::Inline::Text {
+                        value: "D  E".to_owned(),
+                    }],
+                },
+            ]
+        );
+
+        let mut mismatched = term.clone();
+        mismatched.push(mant_ir::Inline::Text {
+            value: "\textra".to_owned(),
+        });
+        assert_eq!(
+            definition.project_field_term(field.buffer_generation, &mismatched),
+            mismatched
+        );
+    }
+
+    #[test]
+    fn binds_tabs_to_each_native_logical_field_before_materialization() {
+        // The pristine pinned CVS reference rendered this exact fixture at
+        // width 40 before this assertion was written.  Its `.sp` executes a
+        // real field boundary: the two `term_flushln()` invocations therefore
+        // own distinct buffer generations and independently render
+        // `12345   X` and `B   C` (term.c:589-821).  Public IR terms do not
+        // retain that execution identity, so the projection API requires the
+        // materializer to present the matching generation explicitly.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "logical-tabs-hard-fields-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/logical-tabs-hard-fields-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one hard-boundary definition");
+        };
+        let [first, second] = definition.responsive.term_tab_fields.as_slice() else {
+            panic!("two independently identified native tab fields");
+        };
+        assert_ne!(first.buffer_generation, second.buffer_generation);
+        assert_eq!(
+            first.rows,
+            [layout::NativeTermTabRow {
+                row_epoch: 0,
+                destinations_columns: vec![8],
+            }]
+        );
+        assert_eq!(
+            second.rows,
+            [layout::NativeTermTabRow {
+                row_epoch: 0,
+                destinations_columns: vec![4],
+            }]
+        );
+        assert_eq!(
+            definition.project_field_term(
+                first.buffer_generation,
+                &[mant_ir::Inline::Text {
+                    value: "12345\tX".to_owned(),
+                }],
+            ),
+            [mant_ir::Inline::Text {
+                value: "12345   X".to_owned(),
+            }]
+        );
+        assert_eq!(
+            definition.project_field_term(
+                second.buffer_generation,
+                &[mant_ir::Inline::Text {
+                    value: "B\tC".to_owned(),
+                }],
+            ),
+            [mant_ir::Inline::Text {
+                value: "B   C".to_owned(),
+            }]
+        );
+        assert_eq!(
+            definition.project_field_term(
+                u32::MAX,
+                &[mant_ir::Inline::Text {
+                    value: "B\tC".to_owned(),
+                }],
+            ),
+            [mant_ir::Inline::Text {
+                value: "B\tC".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn rounds_hard_row_tabs_at_their_fractional_continuation_origin() {
+        // The pristine pinned CVS reference was run before this assertion.
+        // Native execution reports origin 133 BU, BRIND continuation origin
+        // 361 BU, tab destination 60 BU and cell width 24 BU. The fixed CVS
+        // half-down conversion must therefore use the continuation origin:
+        // round(361 + 60) - round(361) = 18 - 15 = 3 columns. Reusing the
+        // first-row origin would incorrectly produce two columns.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "logical-tabs-fractional-row-origin-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/logical-tabs-fractional-row-origin-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one fractional-row tab definition");
+        };
+        let [field] = definition.responsive.term_tab_fields.as_slice() else {
+            panic!("one native tab field");
+        };
+        assert_eq!(
+            field.rows,
+            [layout::NativeTermTabRow {
+                row_epoch: 1,
+                destinations_columns: vec![3],
+            }]
+        );
+        assert_eq!(
+            definition.project_field_term(
+                field.buffer_generation,
+                &[
+                    mant_ir::Inline::Text {
+                        value: "A".to_owned(),
+                    },
+                    mant_ir::Inline::LineBreak,
+                    mant_ir::Inline::Text {
+                        value: "B\tC".to_owned(),
+                    },
+                ]
+            ),
+            vec![
+                mant_ir::Inline::Text {
+                    value: "A".to_owned(),
+                },
+                mant_ir::Inline::LineBreak,
+                mant_ir::Inline::Text {
+                    value: "B  C".to_owned(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn responsive_resolution_preserves_native_source_anchor_and_link_identity() {
+        // This exact fixture was rendered with pinned CVS `-Ttree`, `-Tlint`,
+        // and `-Tutf8` at 32/78/120 columns before this assertion was written.
+        // The `.Tg` stays attached to the It head and the `.Lk` stays attached
+        // to its body; changing reader width is therefore only geometry.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-responsive-metadata.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-responsive-metadata.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one metadata definition");
+        };
+        let owner = projection
+            .origins
+            .iter()
+            .find(|origin| origin.key == definition.owner)
+            .expect("definition source origin");
+        assert_eq!(owner.line, 10);
+        assert_eq!(
+            owner.source,
+            std::path::Path::new("definition-responsive-metadata.1")
+        );
+
+        let anchor = projection
+            .anchors
+            .iter()
+            .find(|anchor| anchor.target == b"term-anchor")
+            .expect("term anchor");
+        assert!(is_within(&report.execution, anchor.node, definition.head));
+        let link = projection
+            .references
+            .iter()
+            .find(|reference| reference.kind == ExecutionReferenceKind::ExternalUri)
+            .expect("body URI reference");
+        assert_eq!(link.primary, b"https://example.org");
+        assert!(is_within(
+            &report.execution,
+            link.owner_node,
+            definition.body
+        ));
+
+        let source = mant_ir::SourceSpan {
+            byte_range: None,
+            line: owner.line,
+            column: owner.column,
+            end_line: None,
+            end_column: None,
+        };
+        let item = mant_ir::DefinitionItem {
+            source: Some(source),
+            entry: None,
+            terms: vec![vec![
+                mant_ir::Inline::anchor_at("term-anchor", Some(source)),
+                mant_ir::Inline::Text {
+                    value: "-alpha".to_owned(),
+                },
+            ]],
+            description: vec![mant_ir::Block::Paragraph {
+                children: vec![mant_ir::Inline::Link {
+                    target: mant_ir::LinkTarget::External {
+                        uri: String::from_utf8(link.primary.clone()).unwrap(),
+                    },
+                    title: None,
+                    children: vec![mant_ir::Inline::Text {
+                        value: "label".to_owned(),
+                    }],
+                }],
+                layout: mant_ir::LayoutHint::default(),
+                source: Some(source),
+            }],
+            layout: definition.responsive.layout,
+        };
+        let original = item.clone();
+        let plan = mant_ir::geometry::definition_placement_plan(
+            &item,
+            definition.responsive.label_origin_columns,
+        );
+        let narrow = plan.resolve(Some(6));
+        let wide = plan.resolve(Some(40));
+        let translated = plan.translated(7).resolve(Some(40));
+        assert!(!narrow.run_in);
+        assert!(wide.run_in);
+        assert_eq!(translated.body_origin_columns, wide.body_origin_columns + 7);
+        assert_eq!(item, original);
+    }
+
+    #[test]
+    fn target_only_empty_definition_keeps_its_anchor_without_inventing_a_visible_row() {
+        // Pinned CVS `-Ttree` retains `target-only` on the empty It head and
+        // `-Tutf8` emits no definition row. `-Tlint` reports the expected
+        // empty-head warning. The native handler still owns a field contract,
+        // but an empty IR item must remain ineligible for run-in placement.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-target-only-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-target-only-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one empty native definition lifecycle");
+        };
+        assert!(
+            projection
+                .anchors
+                .iter()
+                .any(|anchor| anchor.target == b"target-only")
+        );
+        let empty = mant_ir::DefinitionItem {
+            source: None,
+            entry: None,
+            terms: Vec::new(),
+            description: Vec::new(),
+            layout: definition.responsive.layout,
+        };
+        let resolved = mant_ir::geometry::definition_placement(
+            &empty,
+            definition.responsive.label_origin_columns,
+            Some(120),
+        );
+        assert!(!resolved.run_in);
+        assert_eq!(resolved.final_label_width_columns, None);
+    }
+
+    #[test]
+    fn whitespace_only_native_head_does_not_invent_a_visible_term_row() {
+        // The pristine pinned CVS reference renders this exact all-space HEAD
+        // as no term row and starts BODY at the definition body origin.
+        // `term.c::term_fill()` leaves ordinary spaces pending and returns an
+        // empty field, while tabs and NBSP remain graph atoms.
+        let document = crate::mandoc::parse_plain_manual(
+            std::path::Path::new("definition-whitespace-head-mdoc.1"),
+            include_bytes!(
+                "../../../libmandoc-rs/tests/fixtures/execution/definition-whitespace-head-mdoc.1"
+            ),
+        )
+        .unwrap();
+        let item = document
+            .sections
+            .iter()
+            .flat_map(|section| &section.blocks)
+            .find_map(|block| match block {
+                mant_ir::Block::DefinitionList { items, .. } => items.first(),
+                _ => None,
+            })
+            .expect("whitespace definition item");
+        assert_eq!(
+            mant_ir::geometry::definition_run_in_width(&item.terms),
+            None
+        );
+        assert!(item.terms.iter().flatten().all(|inline| {
+            !matches!(inline, mant_ir::Inline::Text { value } if value.chars().all(|character| character == ' '))
+        }));
+    }
+
+    #[test]
+    fn keeps_native_wraps_soft_and_effective_control_breaks_hard() {
+        // This exact source was first run with the pinned CVS `-Tutf8` and
+        // `-Tlint` frontends.  `term_flushln()` may wrap the long head at the
+        // fixed reference width, while the body `.br` owns an ended-line
+        // boundary.  Only the latter is an IR hard boundary.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-responsive-boundaries.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-responsive-boundaries.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one projected responsive definition");
+        };
+        assert!(!definition.responsive.soft_flushes.is_empty());
+        assert!(!definition.responsive.hard_boundaries.is_empty());
+        assert!(definition.responsive.soft_flushes.iter().all(|key| {
+            matches!(
+                report.execution.flushes()[*key as usize].outcome,
+                FlushOutcome::Wrapped | FlushOutcome::DeferredColumn
+            )
+        }));
+        assert!(definition.responsive.hard_boundaries.iter().all(|key| {
+            let boundary = &report.execution.boundaries()[*key as usize];
+            matches!(
+                boundary.effect,
+                BoundaryEffect::EndedLine | BoundaryEffect::AddedVerticalSpace
+            ) && boundary.control.is_some()
+        }));
+        let hard_macros = definition
+            .responsive
+            .hard_boundaries
+            .iter()
+            .map(|key| {
+                let boundary = &report.execution.boundaries()[*key as usize];
+                let control = &report.execution.controls()[boundary.control.unwrap() as usize];
+                report.execution.nodes()[control.node.0 as usize]
+                    .macro_name
+                    .as_deref()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert!(!hard_macros.is_empty());
+        assert!(hard_macros.iter().all(|macro_name| *macro_name == "br"));
+    }
+
+    #[test]
+    fn keeps_structural_hard_boundaries_and_assigns_nested_breaks_once() {
+        // These exact fixtures were rendered with pinned CVS `-Tutf8` and
+        // `-Tlint` before this assertion was written.  `termp_pp_pre()` owns
+        // its `term_vspace()` directly (without a raw control wrapper), while
+        // a nested `.br` belongs only to the closest definition lifecycle.
+        let pp = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-pp-head-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-pp-head-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&pp.document, &pp.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one Pp definition");
+        };
+        assert!(definition.responsive.hard_boundaries.iter().any(|key| {
+            let boundary = &pp.execution.boundaries()[*key as usize];
+            boundary.control.is_none()
+                && boundary.request == libmandoc_rs::BoundaryRequest::VerticalSpace
+                && boundary.effect == BoundaryEffect::AddedVerticalSpace
+                && boundary.node.is_some_and(|node| {
+                    pp.execution.nodes()[node.0 as usize].macro_name.as_deref() == Some("Pp")
+                })
+        }));
+        let mut item = responsive_definition_item(definition.responsive.layout);
+        item.terms = vec![vec![mant_ir::Inline::Text {
+            value: "beta".to_owned(),
+        }]];
+        assert!(
+            mant_ir::geometry::definition_placement(&item, 0, Some(120)).run_in,
+            "an earlier Pp closes alpha, but must not close the final beta field"
+        );
+
+        let nested = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-nested-boundary-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-nested-boundary-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&nested.document, &nested.execution);
+        let br_control = nested
+            .execution
+            .controls()
+            .iter()
+            .find(|control| {
+                nested.execution.nodes()[control.node.0 as usize]
+                    .macro_name
+                    .as_deref()
+                    == Some("br")
+            })
+            .expect("nested br control");
+        let br_boundary = nested
+            .execution
+            .boundaries()
+            .iter()
+            .find(|boundary| boundary.control == Some(br_control.key))
+            .expect("nested br boundary")
+            .key;
+        let owners = projection
+            .definitions
+            .iter()
+            .filter(|definition| definition.responsive.hard_boundaries.contains(&br_boundary))
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 1);
+        assert_eq!(
+            nested.execution.nodes()[owners[0].owner.0 as usize].line,
+            11
+        );
+    }
+
+    #[test]
+    fn excludes_native_definition_phase_finalization_from_hard_boundaries() {
+        // Pinned CVS `termp_it_post()` unconditionally calls `term_newln()`
+        // for this ordinary short `Bl -tag` item.  The exact fixture was run
+        // through the fixed reference `-Tutf8` and `-Tlint`: it has no
+        // authored content break, so responsive IR must not preserve that
+        // fixed-device HEAD/BODY finalization as a hard boundary.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-responsive-metadata.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-responsive-metadata.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one ordinary native definition lifecycle");
+        };
+        assert!(definition.responsive.hard_boundaries.is_empty());
+    }
+
+    #[test]
+    fn keeps_head_finalization_hard_after_control_clears_native_nobreak() {
+        // This exact fixture was rendered with pinned CVS `-Tascii -O
+        // width=30` and `-Tlint` before this assertion was written.  In
+        // `roff_term.c::roff_term_pre_mc()`, `.mc` flushes buffered text and
+        // clears NOBREAK; the later `mdoc_term.c::termp_it_post()` newline
+        // therefore structurally separates BODY instead of merely finalizing
+        // the handler's ordinary conditional tag field.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "definition-margin-control-mdoc.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/definition-margin-control-mdoc.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [definition] = projection.definitions.as_slice() else {
+            panic!("one margin-control definition");
+        };
+        assert!(!definition.responsive.hard_boundaries.is_empty());
+        let constraint = definition
+            .responsive
+            .layout
+            .fit_constraint
+            .expect("native fit constraint");
+        assert!(constraint.forced_separation);
+
+        let mut item = responsive_definition_item(definition.responsive.layout);
+        item.terms = vec![vec![mant_ir::Inline::Text {
+            value: "A B".to_owned(),
+        }]];
+        assert!(
+            !mant_ir::geometry::definition_placement(&item, 0, Some(120)).run_in,
+            "a wide reader must not erase the executed HEAD boundary"
+        );
+    }
+
+    #[test]
+    fn excludes_man_hanging_paragraphs_from_definition_layout() {
+        // The pinned CVS `man_term.c` reference establishes `.HP` as a
+        // hanging paragraph, not a label/body definition lifecycle.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "man-definition-lifecycle.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/man-definition-lifecycle.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        assert!(projection.definitions.iter().all(|definition| {
+            definition.kind != NativeDefinitionKind::Man(ExecutionManBlockKind::HangingParagraph)
+        }));
+        assert!(projection.man_blocks.iter().any(|block| {
+            block.kind == ExecutionManBlockKind::HangingParagraph
+                && report.execution.wrappers()[block.wrapper as usize]
+                    .definition
+                    .is_none()
+        }));
     }
 
     #[test]

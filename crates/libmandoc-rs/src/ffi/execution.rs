@@ -8,16 +8,17 @@ use super::{
 use crate::{
     AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
     BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
-    ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest, ExecutionDiagnostic,
-    ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
-    ExecutionHeadingKind, ExecutionLimits, ExecutionManBlockKind, ExecutionMdocListKind,
+    ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest,
+    ExecutionDefinitionContract, ExecutionDefinitionField, ExecutionDiagnostic, ExecutionErrorKind,
+    ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry, ExecutionHeadingKind,
+    ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind, ExecutionMdocListKind,
     ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
     ExecutionReferenceKind, ExecutionRegionKind, ExecutionSource, ExecutionTable,
     ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
     ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
     ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper,
     ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
-    GeometryOriginKind, GeometryUnit, NativeExecutionReport, PoolRange, RawDocument,
+    GeometryOriginKind, GeometryUnit, NativeExecutionReport, NodeKind, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -135,6 +136,13 @@ struct CFragmentAtomRecord {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+struct CLogicalTabRecord {
+    row_epoch: u32,
+    reserved: u32,
+    destination_bu: i64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 struct CFlushRecord {
     key: u32,
     node: u32,
@@ -157,10 +165,25 @@ struct CFlushRecord {
     flags_after: u32,
     boundary: u32,
     outcome: u32,
+    logical_tab_start: u32,
+    logical_tab_length: u32,
     leading_bu: i64,
     content_bu: i64,
+    logical_content_bu: i64,
+    logical_fit_content_bu: i64,
+    logical_field_bu: i64,
+    logical_origin_bu: i64,
+    effective_content_bu: i64,
+    logical_forced_break: u32,
+    reserved_fit: u32,
     field_bu: i64,
     target_bu: i64,
+    offset_bu: i64,
+    rmargin_bu: i64,
+    maxrmargin_bu: i64,
+    cell_bu: i64,
+    minimum_blank_cells: u64,
+    trailing_blank_cells: u64,
     taboff_before: i64,
     taboff_after: i64,
     visual_before: i64,
@@ -275,6 +298,20 @@ struct CWrapperRecord {
     state_after: u32,
     depth_before: u32,
     depth_after: u32,
+    definition_head_node: u32,
+    definition_body_node: u32,
+    definition_flags: u32,
+    definition_reserved: u32,
+    definition_head_offset_bu: i64,
+    definition_head_rmargin_bu: i64,
+    definition_head_maxrmargin_bu: i64,
+    definition_body_offset_bu: i64,
+    definition_body_rmargin_bu: i64,
+    definition_body_maxrmargin_bu: i64,
+    definition_cell_bu: i64,
+    definition_trailing_blank_cells: u64,
+    definition_head_sequence: u64,
+    definition_body_sequence: u64,
     enter_sequence: u64,
     leave_sequence: u64,
 }
@@ -490,6 +527,14 @@ declare_record_api!(
     mant_mandoc_execution_fragment_atom_field_count,
     mant_mandoc_execution_fragment_atom_offset,
     mant_mandoc_execution_copy_fragment_atoms
+);
+declare_record_api!(
+    mant_mandoc_execution_logical_tab_count,
+    mant_mandoc_execution_logical_tab_size,
+    mant_mandoc_execution_logical_tab_align,
+    mant_mandoc_execution_logical_tab_field_count,
+    mant_mandoc_execution_logical_tab_offset,
+    mant_mandoc_execution_copy_logical_tabs
 );
 declare_record_api!(
     mant_mandoc_execution_flush_count,
@@ -1027,6 +1072,7 @@ struct RawRecords {
     atoms: Vec<CAtomRecord>,
     fragments: Vec<CFragmentRecord>,
     fragment_atoms: Vec<CFragmentAtomRecord>,
+    logical_tabs: Vec<CLogicalTabRecord>,
     flushes: Vec<CFlushRecord>,
     boundaries: Vec<CBoundaryRecord>,
     controls: Vec<CControlRecord>,
@@ -1141,6 +1187,18 @@ copy_record_table!(
     mant_mandoc_execution_fragment_atom_field_count,
     mant_mandoc_execution_fragment_atom_offset,
     mant_mandoc_execution_copy_fragment_atoms
+);
+copy_record_table!(
+    copy_logical_tabs,
+    CLogicalTabRecord,
+    logical_tab_offsets,
+    "logical-tab",
+    mant_mandoc_execution_logical_tab_count,
+    mant_mandoc_execution_logical_tab_size,
+    mant_mandoc_execution_logical_tab_align,
+    mant_mandoc_execution_logical_tab_field_count,
+    mant_mandoc_execution_logical_tab_offset,
+    mant_mandoc_execution_copy_logical_tabs
 );
 copy_record_table!(
     copy_flushes,
@@ -1288,6 +1346,7 @@ unsafe fn copy_raw_records(
         atoms: unsafe { copy_atoms(report, &mut remaining) }?,
         fragments: unsafe { copy_fragments(report, &mut remaining) }?,
         fragment_atoms: unsafe { copy_fragment_atoms(report, &mut remaining) }?,
+        logical_tabs: unsafe { copy_logical_tabs(report, &mut remaining) }?,
         flushes: unsafe { copy_flushes(report, &mut remaining) }?,
         boundaries: unsafe { copy_boundaries(report, &mut remaining) }?,
         controls: unsafe { copy_controls(report, &mut remaining) }?,
@@ -1830,6 +1889,7 @@ fn convert_report(
         atoms: atom_records,
         fragments: fragment_records,
         fragment_atoms: fragment_atom_records,
+        logical_tabs: logical_tab_records,
         flushes: flush_records,
         boundaries: boundary_records,
         controls: control_records,
@@ -1861,6 +1921,7 @@ fn convert_report(
         atom_count,
         fragment_count,
         fragment_atom_records.len(),
+        logical_tab_records.len(),
         flush_records.len(),
         boundary_records.len(),
         control_records.len(),
@@ -2463,6 +2524,8 @@ fn convert_report(
         buffer_generations.len(),
         "pending flush continuation",
     )?;
+    let mut covered_logical_tabs =
+        reserved_filled_vec(false, logical_tab_records.len(), "logical-tab coverage")?;
     let mut terminal_flushes =
         reserved_filled_vec(false, buffer_generations.len(), "terminal flush state")?;
     for (index, value) in flush_records.iter().copied().enumerate() {
@@ -2484,6 +2547,40 @@ fn convert_report(
         let flush_fragments = fragments
             .get(fragment_start..fragment_end)
             .ok_or_else(|| "invalid flush fragment range".to_owned())?;
+        let logical_tab_start = usize::try_from(value.logical_tab_start)
+            .map_err(|_| "flush logical-tab range overflow".to_owned())?;
+        let logical_tab_end = logical_tab_start
+            .checked_add(
+                usize::try_from(value.logical_tab_length)
+                    .map_err(|_| "flush logical-tab range overflow".to_owned())?,
+            )
+            .ok_or_else(|| "flush logical-tab range overflow".to_owned())?;
+        let logical_tab_records = logical_tab_records
+            .get(logical_tab_start..logical_tab_end)
+            .ok_or_else(|| "invalid flush logical-tab range".to_owned())?;
+        if logical_tab_records.iter().any(|tab| tab.reserved != 0) {
+            return Err("invalid execution logical-tab reserved value".to_owned());
+        }
+        if logical_tab_records.iter().any(|tab| tab.destination_bu < 0) {
+            return Err("negative execution logical-tab destination".to_owned());
+        }
+        if logical_tab_records
+            .windows(2)
+            .any(|tabs| tabs[0].row_epoch > tabs[1].row_epoch)
+        {
+            return Err("execution logical-tab rows are out of order".to_owned());
+        }
+        if value.logical_forced_break == 0
+            && logical_tab_records.iter().any(|tab| tab.row_epoch != 0)
+        {
+            return Err("logical-tab row requires an executed word-end break".to_owned());
+        }
+        covered_logical_tabs[logical_tab_start..logical_tab_end].fill(true);
+        let mut logical_tabs = reserved_vec(logical_tab_records.len(), "flush logical tabs")?;
+        logical_tabs.extend(logical_tab_records.iter().map(|tab| ExecutionLogicalTab {
+            row_epoch: tab.row_epoch,
+            destination_bu: tab.destination_bu,
+        }));
         if fragment_flush_outcomes[fragment_start..fragment_end]
             .iter()
             .any(Option::is_some)
@@ -2541,8 +2638,20 @@ fn convert_report(
         }
         if value.leading_bu < 0
             || value.content_bu < 0
+            || value.logical_content_bu < 0
+            || value.logical_fit_content_bu < value.logical_content_bu
+            || value.logical_field_bu < 0
+            || value.logical_origin_bu < 0
+            || value.effective_content_bu < 0
+            || value.effective_content_bu < value.content_bu
+            || value.logical_forced_break > 1
+            || value.reserved_fit != 0
             || value.field_bu < 0
             || value.target_bu < 0
+            || value.offset_bu < 0
+            || value.rmargin_bu < 0
+            || value.maxrmargin_bu < 0
+            || value.cell_bu <= 0
             || value.taboff_before < 0
             || value.taboff_after < 0
             || value.visual_before < 0
@@ -2715,10 +2824,23 @@ fn convert_report(
             flags_after: value.flags_after,
             boundary,
             outcome,
+            logical_tabs,
             leading_bu: value.leading_bu,
             content_bu: value.content_bu,
+            logical_content_bu: value.logical_content_bu,
+            logical_fit_content_bu: value.logical_fit_content_bu,
+            logical_field_bu: value.logical_field_bu,
+            logical_origin_bu: value.logical_origin_bu,
+            effective_content_bu: value.effective_content_bu,
+            logical_forced_break: value.logical_forced_break != 0,
             field_bu: value.field_bu,
             target_bu: value.target_bu,
+            offset_bu: value.offset_bu,
+            rmargin_bu: value.rmargin_bu,
+            maxrmargin_bu: value.maxrmargin_bu,
+            cell_bu: value.cell_bu,
+            minimum_blank_cells: value.minimum_blank_cells,
+            trailing_blank_cells: value.trailing_blank_cells,
             taboff_before: value.taboff_before,
             taboff_after: value.taboff_after,
             visual_before: value.visual_before,
@@ -2726,6 +2848,9 @@ fn convert_report(
             sequence: value.sequence,
             outcome_sequence: value.outcome_sequence,
         });
+    }
+    if covered_logical_tabs.iter().any(|covered| !covered) {
+        return Err("unclaimed execution logical-tab record".to_owned());
     }
     if pending_flushes.iter().any(Option::is_some) {
         return Err("execution flush continuation is incomplete".to_owned());
@@ -3422,6 +3547,116 @@ fn convert_report(
             }
             (_, _) => None,
         };
+        let definition_expected = matches!(
+            mdoc_list_kind,
+            Some(
+                ExecutionMdocListKind::Hang
+                    | ExecutionMdocListKind::Overhang
+                    | ExecutionMdocListKind::Inset
+                    | ExecutionMdocListKind::Diagnostic
+                    | ExecutionMdocListKind::Tag
+            )
+        ) || matches!(
+            man_block_kind,
+            Some(
+                ExecutionManBlockKind::IndentedParagraph
+                    | ExecutionManBlockKind::TaggedParagraph
+                    | ExecutionManBlockKind::AdditionalTag
+            )
+        );
+        if value.definition_reserved != 0 {
+            return Err("non-zero reserved execution definition field".to_owned());
+        }
+        let definition = if definition_expected {
+            const HAS_HEAD: u32 = 1 << 0;
+            const HAS_BODY: u32 = 1 << 1;
+            const HEAD_UNCONDITIONAL: u32 = 1 << 2;
+            const HEAD_CONDITIONAL: u32 = 1 << 3;
+            const COUNT_TRAILING: u32 = 1 << 4;
+            const WRAP_AT_FIELD_END: u32 = 1 << 5;
+            const KNOWN: u32 = HAS_HEAD
+                | HAS_BODY
+                | HEAD_UNCONDITIONAL
+                | HEAD_CONDITIONAL
+                | COUNT_TRAILING
+                | WRAP_AT_FIELD_END;
+            let owner = node.ok_or_else(|| "definition wrapper has no owner".to_owned())?;
+            let head = node_key(value.definition_head_node, node_count, "definition head")?;
+            let body = node_key(value.definition_body_node, node_count, "definition body")?;
+            if value.definition_flags & (HAS_HEAD | HAS_BODY) != (HAS_HEAD | HAS_BODY)
+                || value.definition_flags & !KNOWN != 0
+                || nodes[head.0 as usize].parent != Some(owner)
+                || nodes[body.0 as usize].parent != Some(owner)
+                || nodes[head.0 as usize].kind != NodeKind::Head
+                || nodes[body.0 as usize].kind != NodeKind::Body
+                || value.definition_head_offset_bu < 0
+                || value.definition_head_rmargin_bu < 0
+                || value.definition_head_maxrmargin_bu < 0
+                || value.definition_body_offset_bu < 0
+                || value.definition_body_rmargin_bu < 0
+                || value.definition_body_maxrmargin_bu < 0
+                || value.definition_cell_bu <= 0
+                || value.definition_head_sequence <= value.enter_sequence
+                || value.definition_head_sequence >= value.definition_body_sequence
+                || value.definition_body_sequence >= value.leave_sequence
+            {
+                return Err("invalid execution definition contract".to_owned());
+            }
+            Some(ExecutionDefinitionContract {
+                head: ExecutionDefinitionField {
+                    node: head,
+                    offset_bu: value.definition_head_offset_bu,
+                    rmargin_bu: value.definition_head_rmargin_bu,
+                    maxrmargin_bu: value.definition_head_maxrmargin_bu,
+                    sequence: value.definition_head_sequence,
+                },
+                body: ExecutionDefinitionField {
+                    node: body,
+                    offset_bu: value.definition_body_offset_bu,
+                    rmargin_bu: value.definition_body_rmargin_bu,
+                    maxrmargin_bu: value.definition_body_maxrmargin_bu,
+                    sequence: value.definition_body_sequence,
+                },
+                cell_bu: value.definition_cell_bu,
+                trailing_blank_cells: value.definition_trailing_blank_cells,
+                head_stays_open_unconditionally: value.definition_flags & HEAD_UNCONDITIONAL != 0,
+                head_may_stay_open_if_field_fits: value.definition_flags & HEAD_CONDITIONAL != 0,
+                count_trailing_space: value.definition_flags & COUNT_TRAILING != 0,
+                wrapped_continuation_uses_field_end: value.definition_flags & WRAP_AT_FIELD_END
+                    != 0,
+            })
+        } else {
+            let definition_capable = matches!(
+                kind,
+                ExecutionWrapperKind::MdocListItem | ExecutionWrapperKind::ManBlock
+            );
+            let absent_nodes = if definition_capable {
+                value.definition_head_node == NONE && value.definition_body_node == NONE
+            } else {
+                value.definition_head_node == 0 && value.definition_body_node == 0
+            };
+            let absent_sequences = if definition_capable {
+                value.definition_head_sequence == u64::MAX
+                    && value.definition_body_sequence == u64::MAX
+            } else {
+                value.definition_head_sequence == 0 && value.definition_body_sequence == 0
+            };
+            if !absent_nodes
+                || !absent_sequences
+                || value.definition_flags != 0
+                || value.definition_head_offset_bu != 0
+                || value.definition_head_rmargin_bu != 0
+                || value.definition_head_maxrmargin_bu != 0
+                || value.definition_body_offset_bu != 0
+                || value.definition_body_rmargin_bu != 0
+                || value.definition_body_maxrmargin_bu != 0
+                || value.definition_cell_bu != 0
+                || value.definition_trailing_blank_cells != 0
+            {
+                return Err("unexpected execution definition contract".to_owned());
+            }
+            None
+        };
         let region_kind = match (kind, value.detail) {
             (ExecutionWrapperKind::Region, 1) => Some(ExecutionRegionKind::ManSynopsisSection),
             (ExecutionWrapperKind::Region, 2) => Some(ExecutionRegionKind::ManSynopsisCommand),
@@ -3630,6 +3865,7 @@ fn convert_report(
             state_after: value.state_after,
             depth_before: value.depth_before,
             depth_after: value.depth_after,
+            definition,
             enter_sequence: value.enter_sequence,
             leave_sequence: value.leave_sequence,
         });
@@ -4634,7 +4870,14 @@ fn fragment_atom_offsets() -> [usize; 2] {
         offset_of!(CFragmentAtomRecord, atom),
     ]
 }
-fn flush_offsets() -> [usize; 31] {
+fn logical_tab_offsets() -> [usize; 3] {
+    [
+        offset_of!(CLogicalTabRecord, row_epoch),
+        offset_of!(CLogicalTabRecord, reserved),
+        offset_of!(CLogicalTabRecord, destination_bu),
+    ]
+}
+fn flush_offsets() -> [usize; 46] {
     [
         offset_of!(CFlushRecord, key),
         offset_of!(CFlushRecord, node),
@@ -4657,10 +4900,25 @@ fn flush_offsets() -> [usize; 31] {
         offset_of!(CFlushRecord, flags_after),
         offset_of!(CFlushRecord, boundary),
         offset_of!(CFlushRecord, outcome),
+        offset_of!(CFlushRecord, logical_tab_start),
+        offset_of!(CFlushRecord, logical_tab_length),
         offset_of!(CFlushRecord, leading_bu),
         offset_of!(CFlushRecord, content_bu),
+        offset_of!(CFlushRecord, logical_content_bu),
+        offset_of!(CFlushRecord, logical_fit_content_bu),
+        offset_of!(CFlushRecord, logical_field_bu),
+        offset_of!(CFlushRecord, logical_origin_bu),
+        offset_of!(CFlushRecord, effective_content_bu),
+        offset_of!(CFlushRecord, logical_forced_break),
+        offset_of!(CFlushRecord, reserved_fit),
         offset_of!(CFlushRecord, field_bu),
         offset_of!(CFlushRecord, target_bu),
+        offset_of!(CFlushRecord, offset_bu),
+        offset_of!(CFlushRecord, rmargin_bu),
+        offset_of!(CFlushRecord, maxrmargin_bu),
+        offset_of!(CFlushRecord, cell_bu),
+        offset_of!(CFlushRecord, minimum_blank_cells),
+        offset_of!(CFlushRecord, trailing_blank_cells),
         offset_of!(CFlushRecord, taboff_before),
         offset_of!(CFlushRecord, taboff_after),
         offset_of!(CFlushRecord, visual_before),
@@ -4759,7 +5017,7 @@ fn geometry_offsets() -> [usize; 13] {
         offset_of!(CGeometryRecord, sequence),
     ]
 }
-fn wrapper_offsets() -> [usize; 16] {
+fn wrapper_offsets() -> [usize; 30] {
     [
         offset_of!(CWrapperRecord, key),
         offset_of!(CWrapperRecord, parent),
@@ -4775,6 +5033,20 @@ fn wrapper_offsets() -> [usize; 16] {
         offset_of!(CWrapperRecord, state_after),
         offset_of!(CWrapperRecord, depth_before),
         offset_of!(CWrapperRecord, depth_after),
+        offset_of!(CWrapperRecord, definition_head_node),
+        offset_of!(CWrapperRecord, definition_body_node),
+        offset_of!(CWrapperRecord, definition_flags),
+        offset_of!(CWrapperRecord, definition_reserved),
+        offset_of!(CWrapperRecord, definition_head_offset_bu),
+        offset_of!(CWrapperRecord, definition_head_rmargin_bu),
+        offset_of!(CWrapperRecord, definition_head_maxrmargin_bu),
+        offset_of!(CWrapperRecord, definition_body_offset_bu),
+        offset_of!(CWrapperRecord, definition_body_rmargin_bu),
+        offset_of!(CWrapperRecord, definition_body_maxrmargin_bu),
+        offset_of!(CWrapperRecord, definition_cell_bu),
+        offset_of!(CWrapperRecord, definition_trailing_blank_cells),
+        offset_of!(CWrapperRecord, definition_head_sequence),
+        offset_of!(CWrapperRecord, definition_body_sequence),
         offset_of!(CWrapperRecord, enter_sequence),
         offset_of!(CWrapperRecord, leave_sequence),
     ]
@@ -5008,6 +5280,7 @@ body
             atoms: Vec::new(),
             fragments: Vec::new(),
             fragment_atoms: Vec::new(),
+            logical_tabs: Vec::new(),
             flushes: Vec::new(),
             boundaries: Vec::new(),
             controls: Vec::new(),
@@ -5118,6 +5391,20 @@ body
             state_after: 0,
             depth_before: 0,
             depth_after: 0,
+            definition_head_node: 0,
+            definition_body_node: 0,
+            definition_flags: 0,
+            definition_reserved: 0,
+            definition_head_offset_bu: 0,
+            definition_head_rmargin_bu: 0,
+            definition_head_maxrmargin_bu: 0,
+            definition_body_offset_bu: 0,
+            definition_body_rmargin_bu: 0,
+            definition_body_maxrmargin_bu: 0,
+            definition_cell_bu: 0,
+            definition_trailing_blank_cells: 0,
+            definition_head_sequence: 0,
+            definition_body_sequence: 0,
             enter_sequence: 1,
             leave_sequence: 1,
         }
@@ -5168,6 +5455,10 @@ body
                 node: 2,
                 kind: 4,
                 detail: 1,
+                definition_head_node: NONE,
+                definition_body_node: NONE,
+                definition_head_sequence: u64::MAX,
+                definition_body_sequence: u64::MAX,
                 enter_sequence: 4,
                 leave_sequence: 5,
                 ..wrapper()
@@ -5179,13 +5470,27 @@ body
     fn records_with_man_block_wrapper() -> (Vec<u8>, RawRecords) {
         let pool = b"xTP".to_vec();
         let mut records = raw_records();
-        records.nodes.push(CNodeRecord {
-            key: 0,
-            kind: 1,
-            macro_start: 1,
-            macro_length: 2,
-            ..node()
-        });
+        records.nodes.extend([
+            CNodeRecord {
+                key: 0,
+                kind: 1,
+                macro_start: 1,
+                macro_length: 2,
+                ..node()
+            },
+            CNodeRecord {
+                key: 1,
+                parent: 0,
+                kind: 2,
+                ..node()
+            },
+            CNodeRecord {
+                key: 2,
+                parent: 0,
+                kind: 3,
+                ..node()
+            },
+        ]);
         records.wrappers.extend([
             CWrapperRecord {
                 key: 0,
@@ -5193,7 +5498,7 @@ body
                 node: 0,
                 kind: 1,
                 enter_sequence: 1,
-                leave_sequence: 4,
+                leave_sequence: 12,
                 ..wrapper()
             },
             CWrapperRecord {
@@ -5203,7 +5508,38 @@ body
                 kind: 5,
                 detail: 2,
                 enter_sequence: 2,
-                leave_sequence: 3,
+                leave_sequence: 11,
+                definition_head_node: 1,
+                definition_body_node: 2,
+                definition_flags: 1 | 2 | 8 | 16,
+                definition_head_offset_bu: 120,
+                definition_head_rmargin_bu: 312,
+                definition_head_maxrmargin_bu: 1752,
+                definition_body_offset_bu: 312,
+                definition_body_rmargin_bu: 1752,
+                definition_body_maxrmargin_bu: 1752,
+                definition_cell_bu: 24,
+                definition_trailing_blank_cells: 1,
+                definition_head_sequence: 4,
+                definition_body_sequence: 8,
+                ..wrapper()
+            },
+            CWrapperRecord {
+                key: 2,
+                parent: 1,
+                node: 1,
+                kind: 1,
+                enter_sequence: 3,
+                leave_sequence: 5,
+                ..wrapper()
+            },
+            CWrapperRecord {
+                key: 3,
+                parent: 1,
+                node: 2,
+                kind: 1,
+                enter_sequence: 7,
+                leave_sequence: 9,
                 ..wrapper()
             },
         ]);
@@ -5438,10 +5774,25 @@ body
             flags_after: 0,
             boundary: NONE,
             outcome: 2,
+            logical_tab_start: 0,
+            logical_tab_length: 0,
             leading_bu: 0,
             content_bu: 48,
+            logical_content_bu: 48,
+            logical_fit_content_bu: 48,
+            logical_field_bu: 192,
+            logical_origin_bu: 120,
+            effective_content_bu: 48,
+            logical_forced_break: 0,
+            reserved_fit: 0,
             field_bu: 48,
             target_bu: 48,
+            offset_bu: 0,
+            rmargin_bu: 48,
+            maxrmargin_bu: 48,
+            cell_bu: 24,
+            minimum_blank_cells: 0,
+            trailing_blank_cells: 0,
             taboff_before: 0,
             taboff_after: 0,
             visual_before: 0,
@@ -5616,6 +5967,7 @@ body
             records.atoms.len(),
             records.fragments.len(),
             records.fragment_atoms.len(),
+            records.logical_tabs.len(),
             records.flushes.len(),
             records.boundaries.len(),
             records.controls.len(),
@@ -5945,6 +6297,10 @@ body
             node: 2,
             kind: 4,
             detail: 1,
+            definition_head_node: NONE,
+            definition_body_node: NONE,
+            definition_head_sequence: u64::MAX,
+            definition_body_sequence: u64::MAX,
             enter_sequence: 6,
             leave_sequence: 7,
             ..wrapper()
@@ -5973,29 +6329,87 @@ body
         );
 
         let (pool, mut records) = records_with_man_block_wrapper();
-        records.wrappers.pop();
+        records.wrappers.truncate(1);
         assert_eq!(
             rejection_with_pool(pool, records),
             "missing execution man block wrapper"
         );
 
         let (pool, mut records) = records_with_man_block_wrapper();
-        records.buffer_generations[0].close_sequence = 10;
-        records.wrappers[0].leave_sequence = 6;
-        records.wrappers[1].leave_sequence = 3;
+        records.buffer_generations[0].close_sequence = 25;
+        records.wrappers[0].leave_sequence = 20;
+        let mut duplicate = records.wrappers[1];
+        duplicate.key = 4;
+        duplicate.enter_sequence = 12;
+        duplicate.definition_head_sequence = 13;
+        duplicate.definition_body_sequence = 15;
+        duplicate.leave_sequence = 17;
+        records.wrappers.push(duplicate);
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "duplicate execution man block wrapper"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_definition_contracts() {
+        for mutate in [
+            |value: &mut CWrapperRecord| value.definition_flags = 0,
+            |value: &mut CWrapperRecord| value.definition_cell_bu = 0,
+            |value: &mut CWrapperRecord| value.definition_head_node = 0,
+            |value: &mut CWrapperRecord| value.definition_body_sequence = 4,
+            |value: &mut CWrapperRecord| value.definition_head_offset_bu = -1,
+            |value: &mut CWrapperRecord| value.definition_head_maxrmargin_bu = -1,
+            |value: &mut CWrapperRecord| value.definition_body_maxrmargin_bu = -1,
+        ] {
+            let (pool, mut records) = records_with_man_block_wrapper();
+            mutate(&mut records.wrappers[1]);
+            assert_eq!(
+                rejection_with_pool(pool, records),
+                "invalid execution definition contract"
+            );
+        }
+
+        let (pool, mut records) = records_with_man_block_wrapper();
+        records.wrappers[1].detail = 4;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "unexpected execution definition contract"
+        );
+
+        let (pool, mut records) = records_with_man_block_wrapper();
+        records.wrappers[1].definition_reserved = 1;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "non-zero reserved execution definition field"
+        );
+
+        let (pool, mut records) = records_with_mdoc_list_item_wrapper();
+        records.wrappers[3].definition_head_node = 0;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "unexpected execution definition contract"
+        );
+
+        let (pool, mut records) = records_with_mdoc_list_item_wrapper();
+        records.wrappers[3].definition_head_sequence = 0;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "unexpected execution definition contract"
+        );
+
+        let pool = b"x".to_vec();
+        let mut records = raw_records();
+        records.nodes.push(node());
         records.wrappers.push(CWrapperRecord {
-            key: 2,
-            parent: 0,
             node: 0,
-            kind: 5,
-            detail: 2,
-            enter_sequence: 4,
-            leave_sequence: 5,
+            definition_head_node: NONE,
+            definition_body_node: NONE,
             ..wrapper()
         });
         assert_eq!(
             rejection_with_pool(pool, records),
-            "duplicate execution man block wrapper"
+            "unexpected execution definition contract"
         );
     }
 
@@ -6105,6 +6519,7 @@ body
             depth_after: 0,
             enter_sequence: 2,
             leave_sequence: 3,
+            ..wrapper()
         };
         records.wrappers.extend([parent, heading]);
         let count = record_count(&records);
@@ -6722,10 +7137,93 @@ body
     }
 
     #[test]
+    fn convert_report_validates_logical_tab_facts() {
+        let tab = |row_epoch, reserved, destination_bu| CLogicalTabRecord {
+            row_epoch,
+            reserved,
+            destination_bu,
+        };
+
+        let mut records = records_with_emitted_fragment();
+        records.logical_tabs.push(tab(0, 0, 72));
+        records.flushes[0].logical_tab_length = 1;
+        let count = record_count(&records);
+        let report = convert_report(b"x".to_vec(), 0, count, 2, records).unwrap();
+        assert_eq!(
+            report.flushes[0].logical_tabs,
+            [ExecutionLogicalTab {
+                row_epoch: 0,
+                destination_bu: 72,
+            }]
+        );
+
+        let mut records = records_with_emitted_fragment();
+        records.logical_tabs.push(tab(0, 0, 72));
+        records.flushes[0].logical_tab_start = 1;
+        records.flushes[0].logical_tab_length = 1;
+        assert_eq!(rejection(records), "invalid flush logical-tab range");
+
+        let mut records = records_with_emitted_fragment();
+        records.logical_tabs.push(tab(0, 0, -1));
+        records.flushes[0].logical_tab_length = 1;
+        assert_eq!(
+            rejection(records),
+            "negative execution logical-tab destination"
+        );
+
+        let mut records = records_with_emitted_fragment();
+        records.logical_tabs.push(tab(0, 0, 72));
+        assert_eq!(rejection(records), "unclaimed execution logical-tab record");
+
+        let mut records = records_with_emitted_fragment();
+        records.logical_tabs.push(tab(0, 1, 72));
+        records.flushes[0].logical_tab_length = 1;
+        assert_eq!(
+            rejection(records),
+            "invalid execution logical-tab reserved value"
+        );
+
+        let mut records = records_with_emitted_fragment();
+        records.logical_tabs.extend([tab(1, 0, 72), tab(0, 0, 96)]);
+        records.flushes[0].logical_tab_length = 2;
+        records.flushes[0].logical_forced_break = 1;
+        assert_eq!(
+            rejection(records),
+            "execution logical-tab rows are out of order"
+        );
+
+        let mut records = records_with_emitted_fragment();
+        records.logical_tabs.push(tab(1, 0, 72));
+        records.flushes[0].logical_tab_length = 1;
+        assert_eq!(
+            rejection(records),
+            "logical-tab row requires an executed word-end break"
+        );
+    }
+
+    #[test]
     fn convert_report_rejects_invalid_field_ranges_and_geometry() {
         let mut records = raw_records();
         let mut value = flush();
         value.field_bu = -1;
+        records.flushes.push(value);
+        assert_eq!(rejection(records), "negative execution flush geometry");
+
+        let mut records = raw_records();
+        let mut value = flush();
+        value.effective_content_bu = value.content_bu - 1;
+        records.flushes.push(value);
+        assert_eq!(rejection(records), "negative execution flush geometry");
+
+        let mut records = raw_records();
+        let mut value = flush();
+        value.cell_bu = 0;
+        records.flushes.push(value);
+        assert_eq!(rejection(records), "negative execution flush geometry");
+
+        let mut records = raw_records();
+        let mut value = flush();
+        value.offset_bu = -1;
         records.flushes.push(value);
         assert_eq!(rejection(records), "negative execution flush geometry");
 

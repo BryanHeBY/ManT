@@ -29,6 +29,8 @@ impl DefinitionGeometry {
                 placement: self.placement,
                 body_indent_columns,
                 min_term_gap_columns: self.gap,
+                term_continuation_indent_columns: 0,
+                fit_constraint: None,
                 spacing_before_lines: None,
             },
             body_origin.content_origin(),

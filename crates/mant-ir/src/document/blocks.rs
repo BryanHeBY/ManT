@@ -1,8 +1,9 @@
 //! Block, item and table models with resolved source layout facts.
 use super::{Inline, SourceSpan, is_zero_u16};
 use crate::EntryFacts;
-use schemars::JsonSchema;
+use schemars::{JsonSchema, Schema};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::num::NonZeroU64;
 
 /// Presentation hints retained from roff but optional for semantic outputs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -167,7 +168,7 @@ pub enum ListKind {
 
 // Empty struct variants enforce closure even for bullet/plain during real
 // Serde decoding. Unit variants alone can discard unknown tagged fields.
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum ClosedListKind {
     Bullet {},
@@ -274,7 +275,12 @@ pub struct DefinitionItem {
 /// Definition-item presentation. Missing spacing inherits list compactness;
 /// explicit zero spacing is a distinct, preserved source request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+    rename_all = "camelCase",
+    deny_unknown_fields,
+    try_from = "DefinitionLayoutWire"
+)]
+#[schemars(transform = definition_layout_schema)]
 pub struct DefinitionLayout {
     /// Conditional placement of the final open term and first description
     /// paragraph. Readers resolve `Fit` with the shared geometry contract at
@@ -296,10 +302,78 @@ pub struct DefinitionLayout {
         skip_serializing_if = "is_default_term_gap"
     )]
     pub min_term_gap_columns: u16,
+    /// Continuation origin for wrapped term rows, relative to the label
+    /// origin. This is independent of the description origin: native tag and
+    /// hang fields continue at the body edge, while other definitions keep
+    /// term continuations at the label edge.
+    #[serde(default, skip_serializing_if = "is_zero_i32")]
+    pub term_continuation_indent_columns: i32,
+    /// Exact fixed-CVS field-fit operands for [`DefinitionPlacement::Fit`],
+    /// when the producer obtained them from native execution. Generic `Fit`
+    /// producers omit this and use the source-neutral column geometry above.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_fit_constraint",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schemars(with = "DefinitionFitConstraint")]
+    pub fit_constraint: Option<DefinitionFitConstraint>,
     /// Terminal rows requested before this item when man(7) changes `.PD`.
     /// `None` inherits the containing list's compactness policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spacing_before_lines: Option<u16>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DefinitionLayoutWire {
+    #[serde(default)]
+    placement: DefinitionPlacement,
+    #[serde(default = "default_definition_indent")]
+    body_indent_columns: i32,
+    #[serde(default = "default_term_gap")]
+    min_term_gap_columns: u16,
+    #[serde(default)]
+    term_continuation_indent_columns: i32,
+    #[serde(default, deserialize_with = "deserialize_present_fit_constraint")]
+    #[schemars(with = "DefinitionFitConstraint")]
+    fit_constraint: Option<DefinitionFitConstraint>,
+    spacing_before_lines: Option<u16>,
+}
+
+impl TryFrom<DefinitionLayoutWire> for DefinitionLayout {
+    type Error = &'static str;
+
+    fn try_from(value: DefinitionLayoutWire) -> Result<Self, Self::Error> {
+        if value.fit_constraint.is_some() && value.placement != DefinitionPlacement::Fit {
+            return Err("definition fit constraint requires fit placement");
+        }
+        Ok(Self {
+            placement: value.placement,
+            body_indent_columns: value.body_indent_columns,
+            min_term_gap_columns: value.min_term_gap_columns,
+            term_continuation_indent_columns: value.term_continuation_indent_columns,
+            fit_constraint: value.fit_constraint,
+            spacing_before_lines: value.spacing_before_lines,
+        })
+    }
+}
+
+fn definition_layout_schema(schema: &mut Schema) {
+    schema.insert(
+        "allOf".to_owned(),
+        schemars::json_schema!({
+            "allOf": [{
+                "if": { "required": ["fitConstraint"] },
+                "then": {
+                    "required": ["placement"],
+                    "properties": { "placement": { "const": "fit" } }
+                }
+            }]
+        })
+        .remove("allOf")
+        .expect("literal allOf array"),
+    );
 }
 
 /// Source-neutral placement policy for a definition label and its body.
@@ -330,6 +404,8 @@ impl DefinitionLayout {
             && self.spacing_before_lines.is_none()
             && self.body_indent_columns == default_definition_indent()
             && self.min_term_gap_columns == default_term_gap()
+            && self.term_continuation_indent_columns == 0
+            && self.fit_constraint.is_none()
     }
 }
 
@@ -339,6 +415,8 @@ impl Default for DefinitionLayout {
             placement: DefinitionPlacement::Stacked,
             body_indent_columns: default_definition_indent(),
             min_term_gap_columns: default_term_gap(),
+            term_continuation_indent_columns: 0,
+            fit_constraint: None,
             spacing_before_lines: None,
         }
     }
@@ -349,6 +427,75 @@ const fn default_definition_indent() -> i32 {
 }
 const fn default_term_gap() -> u16 {
     1
+}
+
+/// Native fixed-device operands for a responsive `Fit` decision.
+///
+/// The comparison deliberately remains in native basic units: fixed CVS adds
+/// half a cell of tolerance, and `.ta` can make trailing tab width unrelated
+/// to any reader-side tab cycle. All five fields are required whenever this
+/// object is present; absence means that no native constraint was supplied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename_all = "camelCase",
+    deny_unknown_fields,
+    try_from = "DefinitionFitConstraintWire"
+)]
+pub struct DefinitionFitConstraint {
+    /// Complete logical width used by the native fit comparison, including
+    /// significant trailing whitespace when `BRTRSP` is active.
+    pub fit_content_basic_units: u64,
+    /// Native term field width at the fill decision.
+    pub field_basic_units: u64,
+    /// Native label-origin phase within one formatter cell. Integer-cell
+    /// translations preserve it, so readers can clip the BU field without
+    /// assuming that the source origin was cell-aligned.
+    pub origin_phase_basic_units: u64,
+    /// Width of one canonical formatter cell.
+    pub cell_basic_units: NonZeroU64,
+    /// Native execution forced the label and body onto separate rows. This
+    /// includes an executed word-end break and an effective hard boundary in
+    /// the definition head.
+    pub forced_separation: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DefinitionFitConstraintWire {
+    fit_content_basic_units: u64,
+    field_basic_units: u64,
+    origin_phase_basic_units: u64,
+    #[schemars(range(min = 1))]
+    cell_basic_units: u64,
+    forced_separation: bool,
+}
+
+impl TryFrom<DefinitionFitConstraintWire> for DefinitionFitConstraint {
+    type Error = &'static str;
+
+    fn try_from(value: DefinitionFitConstraintWire) -> Result<Self, Self::Error> {
+        let cell_basic_units = NonZeroU64::new(value.cell_basic_units)
+            .ok_or("definition fit cell width must be positive")?;
+        if value.origin_phase_basic_units >= cell_basic_units.get() {
+            return Err("definition fit origin phase must be below one cell");
+        }
+        Ok(Self {
+            fit_content_basic_units: value.fit_content_basic_units,
+            field_basic_units: value.field_basic_units,
+            origin_phase_basic_units: value.origin_phase_basic_units,
+            cell_basic_units,
+            forced_separation: value.forced_separation,
+        })
+    }
+}
+
+fn deserialize_present_fit_constraint<'de, D>(
+    deserializer: D,
+) -> Result<Option<DefinitionFitConstraint>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    DefinitionFitConstraint::deserialize(deserializer).map(Some)
 }
 #[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
 const fn is_default_definition_indent(value: &i32) -> bool {

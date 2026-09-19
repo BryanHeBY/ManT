@@ -560,12 +560,16 @@ pre_IP(DECL_ARGS)
 	case ROFFT_HEAD:
 		p->tcol->offset = mt->offset;
 		p->tcol->rmargin = mt->offset + len;
+		if (!term_exec_definition_phase(p, 0))
+			return 0;
 		if (n->child != NULL)
 			print_man_node(p, mt, n->child, meta);
 		return 0;
 	case ROFFT_BODY:
 		p->tcol->offset = mt->offset + len;
 		p->tcol->rmargin = p->maxrmargin;
+		if (!term_exec_definition_phase(p, 1))
+			return 0;
 		break;
 	default:
 		abort();
@@ -635,6 +639,8 @@ pre_TP(DECL_ARGS)
 	case ROFFT_HEAD:
 		p->tcol->offset = mt->offset;
 		p->tcol->rmargin = mt->offset + len;
+		if (!term_exec_definition_phase(p, 0))
+			return 0;
 
 		/* Don't print same-line elements. */
 		nn = n->child;
@@ -651,6 +657,8 @@ pre_TP(DECL_ARGS)
 		p->tcol->rmargin = p->maxrmargin;
 		p->trailspace = 0;
 		p->flags &= ~(TERMP_NOBREAK | TERMP_BRTRSP);
+		if (!term_exec_definition_phase(p, 1))
+			return 0;
 		break;
 	default:
 		abort();

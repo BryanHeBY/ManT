@@ -65,6 +65,12 @@ pub(super) struct LogicalLine {
     pub(super) geometry_offset: usize,
     pub(super) indent: usize,
     pub(super) continuation_indent: usize,
+    /// Optional scalar boundary after which wrapped rows use a second origin.
+    ///
+    /// Responsive definitions need the native term continuation while a row
+    /// still starts inside the term, then the paragraph continuation once a
+    /// wrapped row starts in the run-in description.
+    pub(super) continuation_switch: Option<ContinuationSwitch>,
     pub(super) spans: Vec<Span<'static>>,
     pub(super) surface: LineSurface,
     pub(super) wrap_mode: WrapMode,
@@ -76,6 +82,12 @@ pub(super) struct LogicalLine {
     /// Anchors inside a logical row, before tabs and wrapping are resolved.
     pub(super) positioned_anchors: Vec<PositionedAnchor>,
     pub(super) conditional_definition: Option<Box<ConditionalDefinitionLine>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ContinuationSwitch {
+    pub(super) scalar_offset: usize,
+    pub(super) indent: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -218,6 +230,7 @@ impl LogicalLine {
             indent: 0,
             geometry_offset: 0,
             continuation_indent: 0,
+            continuation_switch: None,
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -235,6 +248,7 @@ impl LogicalLine {
             indent,
             geometry_offset: 0,
             continuation_indent: indent,
+            continuation_switch: None,
             spans: vec![Span::styled(value.into(), style)],
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -309,7 +323,7 @@ impl LogicalLine {
         let mut term = conditional.term.clone();
         term.geometry_offset = geometry_offset;
         term.indent = self.indent;
-        term.continuation_indent = self.indent;
+        term.continuation_indent = local(resolution.term_continuation_origin_columns);
         let mut description = conditional.description.clone();
         for line in &mut description {
             line.geometry_offset = geometry_offset;
@@ -323,6 +337,10 @@ impl LogicalLine {
                     .saturating_sub(absolute_term_origin.saturating_add(term_width));
                 term.spans.push(Span::raw(" ".repeat(gap)));
                 let scalar_offset = spans_scalars(&term.spans);
+                term.continuation_switch = Some(ContinuationSwitch {
+                    scalar_offset,
+                    indent: local(resolution.continuation_origin_columns),
+                });
                 term.links
                     .extend(shifted_links(first.links.clone(), scalar_offset));
                 term.reference_marks.extend(shifted_reference_marks(
@@ -342,7 +360,6 @@ impl LogicalLine {
                         anchor
                     }));
                 term.spans.extend(first.spans.clone());
-                term.continuation_indent = local(resolution.continuation_origin_columns);
             }
             for line in description.iter_mut().skip(1) {
                 line.indent = local(resolution.continuation_origin_columns);
@@ -369,6 +386,9 @@ impl LogicalLine {
     pub(super) fn shift_origin(&mut self, delta: usize) {
         self.indent = self.indent.saturating_add(delta);
         self.continuation_indent = self.continuation_indent.saturating_add(delta);
+        if let Some(switch) = &mut self.continuation_switch {
+            switch.indent = switch.indent.saturating_add(delta);
+        }
         if let Some(conditional) = &mut self.conditional_definition {
             conditional.plan = conditional
                 .plan
@@ -393,6 +413,7 @@ impl LogicalLine {
             geometry_offset: 0,
             indent,
             continuation_indent,
+            continuation_switch: None,
             spans,
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -414,6 +435,7 @@ impl LogicalLine {
             geometry_offset: 0,
             indent,
             continuation_indent: indent,
+            continuation_switch: None,
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -439,6 +461,7 @@ impl LogicalLine {
             geometry_offset: 0,
             indent,
             continuation_indent: indent,
+            continuation_switch: None,
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,

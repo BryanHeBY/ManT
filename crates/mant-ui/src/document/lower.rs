@@ -131,6 +131,7 @@ impl DocumentBuilder<'_> {
                 geometry_offset: 0,
                 indent: line.indent,
                 continuation_indent: line.indent,
+                continuation_switch: None,
                 spans: line
                     .spans
                     .into_iter()
@@ -404,6 +405,7 @@ impl DocumentBuilder<'_> {
                 geometry_offset: 0,
                 indent: padding(indent),
                 continuation_indent: padding(indent),
+                continuation_switch: None,
                 spans: line.spans,
                 surface,
                 wrap_mode: if surface == LineSurface::Code {

@@ -44,6 +44,8 @@ fn responsive_definition(placement: mant_ir::DefinitionPlacement) -> Block {
                 placement,
                 body_indent_columns: 12,
                 min_term_gap_columns: 1,
+                term_continuation_indent_columns: 0,
+                fit_constraint: None,
                 spacing_before_lines: None,
             },
         }],
@@ -191,6 +193,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                     entry: None,
                     layout: mant_ir::DefinitionLayout {
                         placement,
+                        term_continuation_indent_columns: 6,
                         ..Default::default()
                     },
                     terms: vec![vec![
@@ -253,6 +256,104 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                 .any(|line| line.anchors.contains(&"next-body".into()))
         );
     }
+}
+
+#[test]
+fn definition_term_soft_wraps_use_the_independent_native_continuation_origin() {
+    let mut builder = DocumentBuilder::new("term-wrap".into(), None);
+    builder.blocks(
+        &[Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            compact: true,
+            items: vec![DefinitionItem {
+                source: None,
+                entry: None,
+                terms: vec![vec![Inline::Text {
+                    value: "ABCDEFGHIJKLMNOPQRSTUVWXYZ".into(),
+                }]],
+                description: vec![paragraph("BODY")],
+                layout: mant_ir::DefinitionLayout {
+                    placement: mant_ir::DefinitionPlacement::Stacked,
+                    body_indent_columns: 4,
+                    term_continuation_indent_columns: 6,
+                    ..Default::default()
+                },
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        0,
+    );
+    let resolved = builder.lines[0].resolved_lines(20);
+    assert_eq!(resolved[0].continuation_indent, 6);
+    let rows = wrap_line(&resolved[0], 20);
+    assert!(rows.len() > 1);
+    for row in rows.iter().skip(1) {
+        assert!(
+            row.to_string().starts_with(&" ".repeat(6)),
+            "rows: {rows:?}"
+        );
+    }
+}
+
+#[test]
+fn run_in_definition_switches_from_term_to_paragraph_continuation_origin() {
+    let mut builder = DocumentBuilder::new("dual-continuation".into(), None);
+    builder.blocks(
+        &[Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            compact: true,
+            items: vec![DefinitionItem {
+                source: None,
+                entry: None,
+                terms: vec![vec![Inline::Text {
+                    value: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".into(),
+                }]],
+                description: vec![Block::Paragraph {
+                    children: vec![Inline::Text {
+                        value: "description words that continue beyond the terminal row".into(),
+                    }],
+                    layout: LayoutHint {
+                        continuation_indent_columns: 3,
+                        ..Default::default()
+                    },
+                    source: None,
+                }],
+                layout: mant_ir::DefinitionLayout {
+                    placement: mant_ir::DefinitionPlacement::RunIn,
+                    body_indent_columns: 12,
+                    min_term_gap_columns: 1,
+                    term_continuation_indent_columns: 6,
+                    ..Default::default()
+                },
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        0,
+    );
+
+    let resolved = builder.lines[0].resolved_lines(40);
+    let line = &resolved[0];
+    assert_eq!(line.continuation_indent, 6);
+    let switch = line
+        .continuation_switch
+        .expect("run-in description continuation switch");
+    assert_eq!(switch.indent, 15);
+
+    let rows = wrap_line(line, 40);
+    assert!(
+        rows.iter()
+            .skip(1)
+            .any(|row| row.to_string().starts_with(&" ".repeat(6))),
+        "term continuation missing: {rows:?}"
+    );
+    assert!(
+        rows.iter()
+            .skip(1)
+            .any(|row| row.to_string().starts_with(&" ".repeat(15))),
+        "description continuation missing: {rows:?}"
+    );
 }
 
 #[test]

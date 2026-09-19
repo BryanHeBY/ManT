@@ -18,8 +18,9 @@ pub use gaps::has_bounded_gap;
 
 mod terms;
 pub use terms::{
-    DefinitionPlacementPlan, DefinitionPlacementResolution, definition_placement,
-    definition_placement_plan, definition_run_in_width, definition_run_in_width_at,
+    DEFINITION_TAB_STOP_COLUMNS, DefinitionPlacementPlan, DefinitionPlacementResolution,
+    definition_placement, definition_placement_plan, definition_run_in_width,
+    definition_run_in_width_at,
 };
 
 mod blocks;

@@ -47,6 +47,8 @@ static	void		 endline(struct termp *);
 static	void		 term_field(struct termp *, size_t, size_t);
 static	void		 term_fill(struct termp *, size_t *, size_t *,
 			    size_t *, size_t);
+static	void		 term_fill_mode(struct termp *, size_t *, size_t *,
+			    size_t *, size_t, int, size_t *, int *);
 
 void
 term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
@@ -57,6 +59,12 @@ term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
 	p->exec_write_role = 4;
 	p->exec_fragment_role = TERM_EXEC_FRAGMENT_CONTENT;
 	p->exec_table_cell_payload = 0;
+	p->exec_logical_content = 0;
+	p->exec_logical_fit_content = 0;
+	p->exec_logical_field = 0;
+	p->exec_logical_origin = 0;
+	p->exec_logical_tab_count = 0;
+	p->exec_logical_forced_break = 0;
 }
 
 int
@@ -388,17 +396,35 @@ term_exec_fill_scan(struct termp *p, size_t slot)
 }
 
 int
-term_exec_fill_decision(struct termp *p, size_t scan_end, size_t accepted,
-    size_t content_width, size_t target_width)
+term_exec_logical_tab(struct termp *p, size_t row_epoch,
+    size_t destination)
 {
-	TERM_EXEC_CALL(p, fill_decision, scan_end, accepted,
-	    content_width, target_width);
+	if (p->exec_logical_tab_count == SIZE_MAX) {
+		term_exec_abort(p);
+		return 0;
+	}
+	TERM_EXEC_CALL(p, logical_tab, row_epoch, destination);
 }
 
 int
-term_exec_fill_outcome(struct termp *p, int outcome)
+term_exec_definition_phase(struct termp *p, int phase)
 {
-	TERM_EXEC_CALL(p, fill_outcome, outcome);
+	TERM_EXEC_CALL(p, definition_phase, phase);
+}
+
+int
+term_exec_fill_decision(struct termp *p, size_t scan_end, size_t accepted,
+    size_t content_width, size_t target_width, size_t leading,
+    size_t field_width)
+{
+	TERM_EXEC_CALL(p, fill_decision, scan_end, accepted,
+	    content_width, target_width, leading, field_width);
+}
+
+int
+term_exec_fill_outcome(struct termp *p, int outcome, size_t content_width)
+{
+	TERM_EXEC_CALL(p, fill_outcome, outcome, content_width);
 }
 
 int
@@ -548,6 +574,17 @@ term_end(struct termp *p)
  * output line at the end of the chunk.  There are many flags modifying
  * this behaviour, see the comments in the body of the function.
  */
+static int
+term_measure_logical_field(struct termp *p, size_t *width,
+    size_t *fit_width, int *forced_break)
+{
+	size_t nbr, scan_end;
+
+	term_fill_mode(p, &nbr, width, &scan_end, SIZE_MAX / 2, 1, fit_width,
+	    forced_break);
+	return !term_exec_failed(p);
+}
+
 void
 term_flushln(struct termp *p)
 {
@@ -561,12 +598,27 @@ term_flushln(struct termp *p)
 	size_t	 ic;       /* Byte index in the input buffer. */
 	size_t	 nbr;      /* Number of bytes to print in this field. */
 	size_t	 scan_end; /* One past the last inspected buffer slot. */
+	int	 first_segment;
 
 	/*
 	 * Normally, start writing at the left margin, but with the
 	 * NOPAD flag, start writing at the current position instead.
 	 */
 
+	if (p->exec_ops != NULL) {
+		p->exec_logical_tab_count = 0;
+		if (!term_measure_logical_field(p, &p->exec_logical_content,
+		    &p->exec_logical_fit_content,
+		    &p->exec_logical_forced_break))
+			return;
+	} else {
+		p->exec_logical_content = 0;
+		p->exec_logical_fit_content = 0;
+		p->exec_logical_field = 0;
+		p->exec_logical_origin = 0;
+		p->exec_logical_tab_count = 0;
+		p->exec_logical_forced_break = 0;
+	}
 	if (!term_exec_flush(p, 1))
 		return;
 	vbl = (p->flags & TERMP_NOPAD) || p->tcol->offset < p->viscol ?
@@ -576,12 +628,18 @@ term_flushln(struct termp *p)
 
 	if ((p->flags & TERMP_MULTICOL) == 0)
 		p->tcol->col = 0;
+	first_segment = 1;
 
 	/* Loop over output lines. */
 
 	for (;;) {
 		vfield = p->tcol->rmargin > p->viscol + vbl ?
 		    p->tcol->rmargin - p->viscol - vbl : 0;
+		if (p->exec_ops != NULL && first_segment) {
+			p->exec_logical_field = vfield;
+			p->exec_logical_origin = p->viscol + vbl;
+			first_segment = 0;
+		}
 
 		/*
 		 * Normally, break the line at the the right margin
@@ -604,9 +662,10 @@ term_flushln(struct termp *p)
 		if (term_exec_failed(p))
 			return;
 		term_exec_fill_decision(p, scan_end,
-		    nbr == 0 ? p->tcol->col : nbr, vbr, vtarget);
+		    nbr == 0 ? p->tcol->col : nbr, vbr, vtarget,
+		    vbl, vfield);
 		if (nbr == 0) {
-			term_exec_fill_outcome(p, 1);
+			term_exec_fill_outcome(p, 1, vbr);
 			break;
 		}
 
@@ -668,7 +727,7 @@ term_flushln(struct termp *p)
 			break;
 		}
 		if (ic == p->tcol->lastcol) {
-			term_exec_fill_outcome(p, 2);
+			term_exec_fill_outcome(p, 2, vbr);
 			break;
 		}
 
@@ -694,12 +753,12 @@ term_flushln(struct termp *p)
 		 */
 
 		if (p->flags & TERMP_MULTICOL) {
-			term_exec_fill_outcome(p, 4);
+			term_exec_fill_outcome(p, 4, vbr);
 			term_exec_flush(p, 0);
 			return;
 		}
 
-		term_exec_fill_outcome(p, 3);
+		term_exec_fill_outcome(p, 3, vbr);
 		endline(p);
 
 		/*
@@ -750,23 +809,53 @@ static void
 term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
     size_t vtarget)
 {
+	term_fill_mode(p, nbr, vbr, scan_end, vtarget, 0, NULL, NULL);
+}
+
+/*
+ * Run the one native field scanner either for the real target-width decision
+ * or, for the execution observer only, with an unbounded target to measure
+ * the complete logical field.  Measurement never rewrites the buffer, but it
+ * uses the same atom classification, tab state, work budget, and backspace
+ * rules as execution.  Word-end breaks remain explicit facts rather than
+ * being mistaken for fixed-device wrapping.
+ */
+static void
+term_fill_mode(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
+	    size_t vtarget, int measure, size_t *fit_width, int *forced_break)
+{
 	/* Widths in basic units. */
 	size_t	 vis;       /* Visual position of the current character. */
 	size_t	 vn;        /* Visual position of the next character. */
+	size_t	 tabvis;    /* Visual position on the logical tab row. */
+	size_t	 tabvbr;    /* Last graph end on the logical tab row. */
+	size_t	 tabbase;   /* Persistent tab offset between logical rows. */
 	size_t	 enw;       /* Width of an EN unit. */
 	int	 taboff;    /* Temporary offset for literal tabs. */
+	int	 tabrowoff; /* Tab offset on the logical tab row. */
+	uint32_t tabrow;    /* Logical row containing a literal tab. */
 
 	size_t	 ic;        /* Byte index in the input buffer. */
 	int	 breakline; /* Break at the end of this word. */
 	int	 graph;     /* Last character was non-blank. */
+	int	 tabgraph;  /* Last row-local character was non-blank. */
+	int	 rowbreak;  /* Word-end break realized on this byte. */
 
-	*nbr = *vbr = vis = 0;
+	*nbr = *vbr = vis = tabvis = tabvbr = 0;
+	if (fit_width != NULL)
+		*fit_width = 0;
 	*scan_end = p->tcol->col;
-	breakline = graph = 0;
+	breakline = graph = tabgraph = 0;
+	if (forced_break != NULL)
+		*forced_break = 0;
 	taboff = p->tcol->taboff;
+	tabbase = p->tcol->taboff;
+	tabrowoff = tabbase;
+	tabrow = 0;
 	enw = (*p->getwidth)(p, ' ');
 	vtarget += enw / 2;
 	for (ic = p->tcol->col; ic < p->tcol->lastcol; ic++) {
+		rowbreak = 0;
 		if (!term_exec_fill_scan(p, ic))
 			return;
 		*scan_end = ic + 1;
@@ -774,6 +863,9 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 		case '\b':  /* Escape \o (overstrike) or backspace markup. */
 			assert(ic > 0);
 			vis -= (*p->getwidth)(p, p->tcol->buf[ic - 1]);
+			if (measure)
+				tabvis -= (*p->getwidth)(p,
+				    p->tcol->buf[ic - 1]);
 			continue;
 
 		case ' ':
@@ -782,7 +874,31 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 			if (p->tcol->buf[ic] == ' ')
 				vn += enw;
 			/* Can break at the end of a word. */
-			if (breakline || vn > vtarget)
+			if (measure && breakline) {
+				*forced_break = 1;
+				breakline = 0;
+				if (tabrow == UINT32_MAX) {
+					term_exec_abort(p);
+					return;
+				}
+				if (tabgraph) {
+					tabvbr = tabvis;
+					tabgraph = 0;
+				}
+				if (tabvbr > SIZE_MAX - enw ||
+				    tabbase > SIZE_MAX - tabvbr - enw) {
+					term_exec_abort(p);
+					return;
+				}
+				tabbase += tabvbr + enw;
+				tabrow++;
+				tabvis = tabvbr = 0;
+				tabrowoff = tabbase;
+				tabgraph = 0;
+				rowbreak = 1;
+			} else if (!measure && breakline)
+				break;
+			if (vn > vtarget)
 				break;
 			if (graph) {
 				*nbr = ic;
@@ -790,6 +906,14 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 				graph = 0;
 			}
 			vis = vn;
+			if (measure && !rowbreak) {
+				if (tabgraph) {
+					tabvbr = tabvis;
+					tabgraph = 0;
+				}
+				if (p->tcol->buf[ic] == ' ')
+					tabvis += enw;
+			}
 			continue;
 
 		case '\n':  /* Escape \p (break at the end of the word). */
@@ -804,10 +928,16 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 			 * to be marked as breakable.  Put back a real
 			 * hyphen such that we get the correct width.
 			 */
-			p->tcol->buf[ic] = '-';
-			if (!term_exec_buffer_rewrite(p, ic, '-'))
-				return;
+			if (!measure) {
+				p->tcol->buf[ic] = '-';
+				if (!term_exec_buffer_rewrite(p, ic, '-'))
+					return;
+			}
 			vis += (*p->getwidth)(p, '-');
+			if (measure)
+				tabvis += (*p->getwidth)(p, '-');
+			if (measure)
+				tabgraph = 1;
 			if (vis > vtarget) {
 				ic++;
 				break;
@@ -818,6 +948,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 
 		case ASCII_TABREF:
 			taboff = -vis - enw;
+			if (measure)
+				tabrowoff = -tabvis - enw;
 			continue;
 
 		default:
@@ -831,16 +963,43 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 				if (term_exec_failed(p))
 					return;
 				vis -= taboff;
+				if (measure) {
+					if (tabrowoff < 0 &&
+					    (size_t)-tabrowoff > tabvis)
+						tabvis = 0;
+					else
+						tabvis += tabrowoff;
+					tabvis = term_tab_next(p, tabvis);
+					if (term_exec_failed(p))
+						return;
+					tabvis -= tabrowoff;
+					if (!term_exec_logical_tab(p, tabrow,
+					    tabvis))
+						return;
+					p->exec_logical_tab_count++;
+					tabgraph = 1;
+				}
 				break;
 			case ASCII_NBRZW:  /* Non-breakable zero-width. */
 				break;
 			case ASCII_NBRSP:  /* Non-breakable space. */
+				if (measure) {
+					vis += (*p->getwidth)(p, ' ');
+					tabvis += (*p->getwidth)(p, ' ');
+					tabgraph = 1;
+					break;
+				}
 				p->tcol->buf[ic] = ' ';
 				if (!term_exec_buffer_rewrite(p, ic, ' '))
 					return;
 				/* FALLTHROUGH */
 			default:  /* Printable character. */
 				vis += (*p->getwidth)(p, p->tcol->buf[ic]);
+				if (measure)
+					tabvis += (*p->getwidth)(p,
+					    p->tcol->buf[ic]);
+				if (measure)
+					tabgraph = 1;
 				break;
 			}
 			graph = 1;
@@ -861,6 +1020,10 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t *scan_end,
 		*nbr = ic;
 		*vbr = vis;
 	}
+	if (measure && tabgraph)
+		tabvbr = tabvis;
+	if (fit_width != NULL)
+		*fit_width = p->flags & TERMP_BRTRSP ? vis : *vbr;
 }
 
 /*

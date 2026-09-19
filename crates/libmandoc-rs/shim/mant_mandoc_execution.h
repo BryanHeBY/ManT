@@ -185,6 +185,13 @@ enum mant_mandoc_execution_region_kind {
 
 #define MANT_MANDOC_WRAPPER_MDOC_LIST_COMPACT (1U << 0)
 
+#define MANT_MANDOC_DEFINITION_HAS_HEAD (1U << 0)
+#define MANT_MANDOC_DEFINITION_HAS_BODY (1U << 1)
+#define MANT_MANDOC_DEFINITION_HEAD_UNCONDITIONAL (1U << 2)
+#define MANT_MANDOC_DEFINITION_HEAD_CONDITIONAL (1U << 3)
+#define MANT_MANDOC_DEFINITION_COUNT_TRAILING (1U << 4)
+#define MANT_MANDOC_DEFINITION_WRAP_AT_FIELD_END (1U << 5)
+
 enum mant_mandoc_execution_heading_kind {
 	MANT_MANDOC_HEADING_MAN_SECTION = 1,
 	MANT_MANDOC_HEADING_MAN_SUBSECTION,
@@ -360,6 +367,12 @@ struct mant_mandoc_fragment_atom_record {
 	uint32_t atom;
 };
 
+struct mant_mandoc_logical_tab_record {
+	uint32_t row_epoch;
+	uint32_t reserved;
+	int64_t destination_bu;
+};
+
 struct mant_mandoc_flush_record {
 	uint32_t key;
 	uint32_t node;
@@ -382,10 +395,25 @@ struct mant_mandoc_flush_record {
 	uint32_t flags_after;
 	uint32_t boundary;
 	uint32_t outcome;
+	uint32_t logical_tab_start;
+	uint32_t logical_tab_length;
 	int64_t leading_bu;
 	int64_t content_bu;
+	int64_t logical_content_bu;
+	int64_t logical_fit_content_bu;
+	int64_t logical_field_bu;
+	int64_t logical_origin_bu;
+	int64_t effective_content_bu;
+	uint32_t logical_forced_break;
+	uint32_t reserved_fit;
 	int64_t field_bu;
 	int64_t target_bu;
+	int64_t offset_bu;
+	int64_t rmargin_bu;
+	int64_t maxrmargin_bu;
+	int64_t cell_bu;
+	uint64_t minimum_blank_cells;
+	uint64_t trailing_blank_cells;
 	int64_t taboff_before;
 	int64_t taboff_after;
 	int64_t visual_before;
@@ -496,6 +524,20 @@ struct mant_mandoc_wrapper_record {
 	uint32_t state_after;
 	uint32_t depth_before;
 	uint32_t depth_after;
+	uint32_t definition_head_node;
+	uint32_t definition_body_node;
+	uint32_t definition_flags;
+	uint32_t definition_reserved;
+	int64_t definition_head_offset_bu;
+	int64_t definition_head_rmargin_bu;
+	int64_t definition_head_maxrmargin_bu;
+	int64_t definition_body_offset_bu;
+	int64_t definition_body_rmargin_bu;
+	int64_t definition_body_maxrmargin_bu;
+	int64_t definition_cell_bu;
+	uint64_t definition_trailing_blank_cells;
+	uint64_t definition_head_sequence;
+	uint64_t definition_body_sequence;
 	uint64_t enter_sequence;
 	uint64_t leave_sequence;
 };
@@ -651,6 +693,7 @@ MANT_DECLARE_RECORD_API(word, words);
 MANT_DECLARE_RECORD_API(atom, atoms);
 MANT_DECLARE_RECORD_API(fragment, fragments);
 MANT_DECLARE_RECORD_API(fragment_atom, fragment_atoms);
+MANT_DECLARE_RECORD_API(logical_tab, logical_tabs);
 MANT_DECLARE_RECORD_API(flush, flushes);
 MANT_DECLARE_RECORD_API(boundary, boundaries);
 MANT_DECLARE_RECORD_API(control, controls);

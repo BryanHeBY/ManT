@@ -24,7 +24,47 @@ fn assert_definition_placement_schema(query: &Value) {
     let definition_layout = &query["$defs"]["DefinitionLayout"];
     assert_eq!(definition_layout["additionalProperties"], false);
     assert!(definition_layout["required"].is_null());
+    assert_eq!(
+        definition_layout["allOf"],
+        serde_json::json!([{
+            "if": { "required": ["fitConstraint"] },
+            "then": {
+                "required": ["placement"],
+                "properties": { "placement": { "const": "fit" } }
+            }
+        }])
+    );
     assert!(definition_layout["properties"].get("inlineTerm").is_none());
+    assert_eq!(
+        definition_layout["properties"]["termContinuationIndentColumns"]["type"],
+        "integer"
+    );
+    assert_eq!(
+        definition_layout["properties"]["fitConstraint"]["$ref"],
+        "#/$defs/DefinitionFitConstraint"
+    );
+    let fit = &query["$defs"]["DefinitionFitConstraint"];
+    assert_eq!(fit["additionalProperties"], false);
+    assert_eq!(
+        required(fit),
+        [
+            "fitContentBasicUnits",
+            "fieldBasicUnits",
+            "originPhaseBasicUnits",
+            "cellBasicUnits",
+            "forcedSeparation"
+        ]
+    );
+    assert_eq!(fit["properties"]["fitContentBasicUnits"]["type"], "integer");
+    assert_eq!(fit["properties"]["fitContentBasicUnits"]["minimum"], 0);
+    assert_eq!(fit["properties"]["fieldBasicUnits"]["type"], "integer");
+    assert_eq!(
+        fit["properties"]["originPhaseBasicUnits"]["type"],
+        "integer"
+    );
+    assert_eq!(fit["properties"]["cellBasicUnits"]["type"], "integer");
+    assert_eq!(fit["properties"]["cellBasicUnits"]["minimum"], 1);
+    assert_eq!(fit["properties"]["forcedSeparation"]["type"], "boolean");
     assert_eq!(
         definition_layout["properties"]["placement"]["$ref"],
         "#/$defs/DefinitionPlacement"

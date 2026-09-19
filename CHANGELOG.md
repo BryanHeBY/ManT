@@ -64,6 +64,14 @@ that crate was not published for that change.
   field validation and projection follow the newest occupant of a reused slot.
   Slot histories also reject replacement edges across clear epochs and atoms
   created only after the first flush began.
+- Extend `ExecutionFlush` with its handler field origin, margins, cell scale,
+  blank-cell state, complete logical content/fit widths, active logical-tab
+  destinations grouped by executed word-end-break row, and word-end-break
+  evidence, and add an optional
+  `ExecutionDefinitionContract` to typed man/mdoc definition wrappers. The
+  contract records exact HEAD/BODY owners and pre-wrap geometry; it deliberately
+  contains no ManT placement policy. Malformed layouts, kinds, relationships,
+  tab records, and sequences are rejected during owned transfer.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
@@ -90,6 +98,18 @@ that crate was not published for that change.
   reparsing or moving semantic and navigation ownership. The old field is
   rejected in v0.12 rather than accepted as an alias; published v0.8–v0.11
   snapshots remain unchanged.
+- Map native man IP/TP/TQ and mdoc tag/hang/ohang/inset/diag execution facts to
+  that responsive definition contract inside `mant-codec`. Fixed-device wraps
+  remain soft observations, effective handler/control breaks remain hard, and
+  one projected item resolves at different viewport widths or translated
+  parent origins without rerunning native execution. Wrapped term origins and
+  non-displayed, fit-only trailing field cells remain separate from the visible
+  term/body gap. Executed hard HEAD boundaries force separation, while exact
+  native logical tabs are retained under their executed field identity and
+  materialized before portable readers measure that field's label. The
+  projection never guesses field ownership from finalized IR text or source
+  coordinates, and preserves non-whitespace content, links, anchors and source
+  ownership without storing any fixed-device soft wrap as content.
 
 - Adopt `libmandoc-rs ^0.12.0` through the roff loading path. Paragraph font
   resets cover the newly preserved `P` and `LP` tokens. Standalone `soquiet`

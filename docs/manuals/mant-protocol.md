@@ -987,9 +987,12 @@ eligible first paragraph; `fit` asks each reader to apply the shared final-label
 geometry at its effective width. Missing/empty layout defaults to `stacked`;
 null layout or placement is rejected. `layout.spacingBeforeLines` missing/null
 inherits list compactness; explicit zero is retained. The item-level hints are
-distinct from block-level indentation and spacing. A responsive reader resolves
-the same immutable `fit` item again after a resize; it does not rerun parsing or
-rewrite anchors, links, source content, or semantic facts.
+distinct from block-level indentation and spacing. The optional
+`layout.fitConstraint` is valid only with `placement: "fit"`; it carries the
+producer's objective field geometry and hard-separation result. A generic
+producer may still emit `fit` without this native constraint. A responsive
+reader resolves the same immutable `fit` item again after a resize; it does not
+rerun parsing or rewrite anchors, links, source content, or semantic facts.
 
 Rejected pre-convergence shapes: item `identity`, facts' flat `role` or semantic
 `aliases`, and item-level `inlineTerm` / `spacingBeforeLines`. The former nested

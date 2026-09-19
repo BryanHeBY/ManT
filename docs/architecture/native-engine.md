@@ -417,14 +417,19 @@ The implemented source-to-interface chain is:
 | --- | --- | --- |
 | `roff.h` and the finalized syntax tree | node identity, parentage, source coordinates and normalized roles | `ExecutionNode` keys paired with the owned `Document` |
 | `term.c` | formatter words (including zero-output operands), buffer generations, atoms, partial flush ranges, boundaries, fixed-device geometry and state wrappers | typed vectors, exact atom intervals and checked `PoolRange` values in `NativeExecutionReport` |
-| `man_term.c` and `mdoc_term.c` | definition head/body ownership, fonts, references and target attachment | codec-owned visible runs, definitions, references and anchors |
+| `man_term.c` and `mdoc_term.c` | definition head/body ownership, pre-wrap field origins and continuation flags, fonts, references and target attachment | codec-owned visible runs, responsive definition policy, references and anchors |
 | `tbl_term.c` | table/row/cell topology, data ownership and interleaved cell flushes | bounded execution table records and private `mant-ir::Block::Table` projection |
 | private shim and `ffi::execution` | C discriminants, slice counts, ranges and report status | validated Rust enums/vectors; no borrowed pointer escapes the call |
 
-Current coverage is deliberately finite: ordinary man/mdoc prose, tag/hang
-definitions, partial flushes, font changes, nested manual/URI references,
-zero-width target attachment, and representative multi-column tables have
-end-to-end fixtures. Table rules, empty cells, spans, cell-local hard breaks,
+Current coverage is deliberately finite: ordinary man/mdoc prose, typed
+heading/list/man-block/display lifecycles, responsive IP/TP/TQ and mdoc
+tag/hang/ohang/inset/diag definitions, partial flushes, font changes, nested
+manual/URI references, zero-width target attachment, and representative
+multi-column tables have end-to-end fixtures. The responsive definition
+projection keeps handler-computed geometry objective in native code, maps
+policy only in the codec, and lets shared IR geometry resolve the same item at
+multiple widths and translated parent origins without re-execution. Table
+rules, empty cells, spans, cell-local hard breaks,
 and the explicit data spelling `\^` have focused transfer or projection checks.
 `T&` and the layout `^` spelling currently have AST coverage only and remain
 execution/projection work. This is not yet the complete production table
@@ -432,15 +437,15 @@ lowering. Include-enabled sessions, executed `.so` requests, and equations
 return `Unsupported`; a false conditional branch containing `.so` does not
 execute the request and therefore does not trip that rejection. Later stages
 must add include and equation provenance and cleanup contracts before enabling
-them. General macro, escape, list, synopsis, display, table, and equation
-coverage, responsive IR constraints, consumer migration, legacy-executor
+them. General macro, escape, table, and equation coverage, production consumer
+migration, legacy-executor
 deletion, and corpus audits remain work rather than implicit support.
 
 The checkpoint applies the six migration decisions as follows:
 
 | Decision | S1 status |
 | --- | --- |
-| D01 deterministic device | Native execution uses the pinned locale-independent UTF-8 terminal at 78 columns and default indent 5. Reference fixtures were also inspected at 32 and 120 columns; responsive readers still need the later source-neutral layout work and never re-execute roff on resize. |
+| D01 deterministic device | Native execution uses the pinned locale-independent UTF-8 terminal with an initial width of 78 columns and default indent 5. Executed `.ll`, `.po`, and `.ta` requests still change its margins, origins, and tab stops. Automatic device wraps remain soft observations. Handler-computed pre-wrap definition fields are converted to source-neutral IR constraints, so readers resolve at 32/78/120 columns or after resize without re-executing roff. |
 | D02 execution protocol | Native handlers produce bounded typed records and one byte pool; Rust validates and owns them before codec projection. Native code does not manufacture ManT layout constraints. |
 | D03 native route | Observation hooks run inside the existing CVS traversal and `termp` implementation. No Rust formatter or parsed terminal-text route is added to this staged path. |
 | D04 atomic migration | K03-K05 are private checkpoints. Production remains wholly on the old path until the planned one-time switch. |
@@ -463,8 +468,9 @@ reproducible memory evidence is limited to report counts, pool length, charged
 buffer cells, configured ceilings, and the copy topology above; a measured
 parse/execute/transfer/release/projection baseline remains an explicit
 pre-switch performance task. The fixed reference binary used for behavioral
-expectations has SHA-256
-`f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59`.
+expectations is built directly from the pinned upstream archive, without ManT
+observer patches, and has SHA-256
+`3468a220866e1b3ea77bd0d25775700b5066762471952be9891dcec0482e93c6`.
 Representative fixture hashes are:
 
 | Fixture | SHA-256 |

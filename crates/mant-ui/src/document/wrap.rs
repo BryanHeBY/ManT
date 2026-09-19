@@ -29,7 +29,12 @@ use table::render_table_row_with_links;
 /// Reduce both origins by the same displacement whenever indentation would
 /// leave less than 16 cells (half the available width on a narrow viewport).
 /// The one/two-cell fallback necessarily reserves the entire content area.
-fn readable_origins(first: usize, continuation: usize, available: usize) -> (usize, usize) {
+fn readable_origins_with_switch(
+    first: usize,
+    continuation: usize,
+    switched: Option<usize>,
+    available: usize,
+) -> (usize, usize, Option<usize>) {
     let content = if available <= 2 {
         available
     } else {
@@ -37,11 +42,19 @@ fn readable_origins(first: usize, continuation: usize, available: usize) -> (usi
     };
     let reduction = first
         .max(continuation)
+        .max(switched.unwrap_or_default())
         .saturating_sub(available.saturating_sub(content));
     (
         first.saturating_sub(reduction),
         continuation.saturating_sub(reduction),
+        switched.map(|origin| origin.saturating_sub(reduction)),
     )
+}
+
+fn readable_origins(first: usize, continuation: usize, available: usize) -> (usize, usize) {
+    let (first, continuation, _) =
+        readable_origins_with_switch(first, continuation, None, available);
+    (first, continuation)
 }
 
 pub(super) struct WrappedLine {
@@ -181,11 +194,13 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     }
 
     let decoration_width = tldr_decoration_width(line, width);
-    let (first_indent, continuation_indent) = readable_origins(
-        line.indent,
-        line.continuation_indent,
-        width.saturating_sub(decoration_width),
-    );
+    let (first_indent, continuation_indent, switched_continuation_indent) =
+        readable_origins_with_switch(
+            line.indent,
+            line.continuation_indent,
+            line.continuation_switch.map(|switch| switch.indent),
+            width.saturating_sub(decoration_width),
+        );
     let mut cells = styled_cells(line);
 
     if cells.is_empty() {
@@ -198,6 +213,13 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     while !cells.is_empty() {
         let indent = if first_row {
             first_indent
+        } else if let (Some(switch), Some(switched)) =
+            (line.continuation_switch, switched_continuation_indent)
+            && cells
+                .first()
+                .is_some_and(|cell| cell.source_index >= switch.scalar_offset)
+        {
+            switched
         } else {
             continuation_indent
         };

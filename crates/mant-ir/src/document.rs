@@ -8,9 +8,9 @@ mod diagnostic;
 mod inline;
 mod source;
 pub use blocks::{
-    Block, DefinitionItem, DefinitionLayout, DefinitionPlacement, LayoutHint, ListItem,
-    ListItemLayout, ListKind, TableAlignment, TableCell, TableCellKind, TableRow, TableRowKind,
-    TableRuleCellKind,
+    Block, DefinitionFitConstraint, DefinitionItem, DefinitionLayout, DefinitionPlacement,
+    LayoutHint, ListItem, ListItemLayout, ListKind, TableAlignment, TableCell, TableCellKind,
+    TableRow, TableRowKind, TableRuleCellKind,
 };
 pub use diagnostic::{Diagnostic, DiagnosticImpact, DiagnosticLevel, semantics_complete};
 pub use inline::{Inline, LinkTarget};

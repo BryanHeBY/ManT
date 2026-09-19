@@ -142,6 +142,8 @@ struct term_exec_ops {
 	    const struct roff_node *, int);
 	int (*man_block_end)(void *, const struct termp *,
 	    const struct roff_node *, int);
+	int (*definition_phase)(void *, const struct termp *,
+	    const struct roff_node *, int);
 	int (*region_begin)(void *, const struct termp *,
 	    const struct roff_node *, int);
 	int (*region_end)(void *, const struct termp *,
@@ -164,10 +166,13 @@ struct term_exec_ops {
 	    const struct roff_node *);
 	int (*fill_scan)(void *, const struct termp *,
 	    const struct roff_node *, size_t);
+	int (*logical_tab)(void *, const struct termp *,
+	    const struct roff_node *, size_t, size_t);
 	int (*fill_decision)(void *, const struct termp *,
-	    const struct roff_node *, size_t, size_t, size_t, size_t);
+	    const struct roff_node *, size_t, size_t, size_t, size_t,
+	    size_t, size_t);
 	int (*fill_outcome)(void *, const struct termp *,
-	    const struct roff_node *, int);
+	    const struct roff_node *, int, size_t);
 	int (*field_begin)(void *, const struct termp *,
 	    const struct roff_node *, size_t, size_t, size_t);
 	int (*field_atom)(void *, const struct termp *,
@@ -311,6 +316,12 @@ struct	termp {
 	int		  exec_write_role;
 	int		  exec_fragment_role;
 	int		  exec_table_cell_payload;
+	size_t		  exec_logical_content;
+	size_t		  exec_logical_fit_content;
+	size_t		  exec_logical_field;
+	size_t		  exec_logical_origin;
+	size_t		  exec_logical_tab_count;
+	int		  exec_logical_forced_break;
 };
 
 
@@ -359,6 +370,7 @@ int		  term_exec_mdoc_list_item(struct termp *,
 			const struct roff_node *, int, int, int);
 int		  term_exec_man_block(struct termp *, const struct roff_node *,
 			int, int);
+int		  term_exec_definition_phase(struct termp *, int);
 int		  term_exec_region(struct termp *, const struct roff_node *,
 			int, int);
 int		  term_exec_word(struct termp *, const char *, size_t, int);
@@ -369,9 +381,10 @@ int		  term_exec_buffer_discard(struct termp *, size_t, size_t, int);
 int		  term_exec_buffer_reset(struct termp *);
 int		  term_exec_flush(struct termp *, int);
 int		  term_exec_fill_scan(struct termp *, size_t);
+int		  term_exec_logical_tab(struct termp *, size_t, size_t);
 int		  term_exec_fill_decision(struct termp *, size_t, size_t,
-			size_t, size_t);
-int		  term_exec_fill_outcome(struct termp *, int);
+		    size_t, size_t, size_t, size_t);
+int		  term_exec_fill_outcome(struct termp *, int, size_t);
 int		  term_exec_field(struct termp *, int, size_t, size_t, size_t);
 int		  term_exec_field_atom(struct termp *, size_t, int);
 int		  term_exec_boundary(struct termp *, int, int);

@@ -48,11 +48,23 @@ AST and execution facts returned by one `libmandoc-rs::Parser::execute_bytes`
 call, performs no second parse or source replay, and cannot be selected as a
 per-page fallback by public entry points.
 
-At the S1 checkpoint that private seam projects ordinary man/mdoc visible
-lines, definition head/body ownership and partial flushes, font runs, nested
-manual/URI references, exact target attachments, and a bounded native table
-matrix. Its table projection keeps authored cell payload and topology while
-discarding device padding, border glyphs, and alternating column flush order.
+The staged seam now projects ordinary man/mdoc visible lines, typed heading,
+list, definition, display and control lifecycles, definition HEAD/BODY
+ownership and partial flushes, font runs, nested manual/URI references, exact
+target attachments, and a bounded native table matrix. For definitions it is
+the sole layer that maps native field facts and typed macro roles to portable
+`DefinitionLayout`: man IP/TP/TQ and mdoc tag use `fit`, hang/inset/diag use
+their documented run-in policy, and ohang stacks. Fixed-device wraps remain
+soft observations; effective explicit control breaks remain hard boundaries.
+Active native tab destinations stay keyed by their executed buffer generation
+until the matching logical field is materialized, then apply per executed row;
+style/link fragments and fixed-device soft wraps create neither field nor row
+identities. Public IR terms are never matched back to native fields by text,
+source coordinates, or ordinal guesses.
+The resulting IR resolves again at each reader width and parent origin without
+rerunning native execution. Its table projection keeps authored cell payload
+and topology while discarding device padding, border glyphs, and alternating
+column flush order.
 Include-enabled sessions, executed `.so` requests, and equations remain
 explicit unsupported execution inputs, and the general macro/tbl/eqn
 production migration remains unfinished. The following boundaries describe

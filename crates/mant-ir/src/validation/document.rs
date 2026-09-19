@@ -337,6 +337,14 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
+        if item.layout.fit_constraint.is_some()
+            && item.layout.placement != crate::DefinitionPlacement::Fit
+        {
+            self.diagnostics.push(invariant(
+                "ir.invalid-definition-fit-constraint",
+                "definition fit constraints require fit placement".to_owned(),
+            ));
+        }
         self.validate_entry(crate::EntryOwner::Definition(item));
         visit::walk_definition_item(self, item);
     }
@@ -882,6 +890,44 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(codes.contains(&"ir.invalid-semantic-document-reference"));
         assert!(codes.contains(&"ir.duplicate-entry-value-kind"));
+    }
+
+    #[test]
+    fn reports_fit_constraints_on_non_fit_definitions() {
+        let item = DefinitionItem {
+            source: None,
+            entry: None,
+            terms: vec![vec![Inline::Text {
+                value: "term".to_owned(),
+            }]],
+            description: Vec::new(),
+            layout: crate::DefinitionLayout {
+                placement: crate::DefinitionPlacement::RunIn,
+                fit_constraint: Some(crate::DefinitionFitConstraint {
+                    fit_content_basic_units: 24,
+                    field_basic_units: 48,
+                    origin_phase_basic_units: 0,
+                    cell_basic_units: std::num::NonZeroU64::new(24).unwrap(),
+                    forced_separation: false,
+                }),
+                ..Default::default()
+            },
+        };
+        let diagnostics = validate_document(&document(
+            Vec::new(),
+            vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
+                items: vec![item],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+        ));
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].code.as_deref(),
+            Some("ir.invalid-definition-fit-constraint")
+        );
     }
 
     #[test]

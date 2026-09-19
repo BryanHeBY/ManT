@@ -74,24 +74,31 @@ Paragraph `continuationIndentColumns` is an additional signed displacement from 
 
 Block `spacingBeforeLines` is already resolved by the producer: zero means a tight boundary, including when omitted from JSON. It is not an invitation for a frontend to supply paragraph spacing. Independent `VerticalSpace` requests add to that boundary, including repeated equal requests; one source request must have only one IR consumption point. Empty anchors and transparent containers do not reset the boundary. Presentation bounds each accumulated gap at 4096 rows, independently of literal blank lines inside text. Native lowering reports `manual.vertical-spacing-limit` when this loses requested spacing. Definition-item optional spacing is different: absence inherits list compactness, while explicit zero suppresses that default.
 
-A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::run_in_description()` identifies the first paragraph that is structurally eligible to share the term's line: explicit leading spacing or a non-paragraph block prevents that presentation. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses ownership through its own block syntax rather than terminal-column geometry. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
+A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). Soft-wrapped term rows independently use `termContinuationIndentColumns`, also relative to the label origin. Native producers may attach a closed `fitConstraint` containing the complete logical fit width and field width in formatter basic units, the label-origin phase and cell scale, and whether an executed hard HEAD boundary forced separation. These operands preserve fractional origins, custom tab stops, significant trailing whitespace, and boundaries such as a word-end break or margin-control flush without turning them into visible or searchable text. Generic producers omit the object and readers use portable term geometry. `DefinitionItem::run_in_description()` identifies the first paragraph that is structurally eligible to share the term's line: explicit leading spacing or a non-paragraph block prevents that presentation. The first description line clears the displayed label; its hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses ownership through its own block syntax rather than terminal-column geometry. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
 
 `DefinitionItem.layout: DefinitionLayout` groups these item-level choices:
 `placement` is the closed `stacked | run-in | fit` policy and defaults to
 `stacked`; optional `spacingBeforeLines` defaults to inheriting list
 compactness. `stacked` always starts the description on another row, `run-in`
 joins an eligible first paragraph, and `fit` defers that choice until the reader
-knows its allocated width. Explicit zero spacing is preserved and does not mean
+knows its allocated width. `termContinuationIndentColumns` defaults to zero.
+`fitConstraint` is valid only with `placement: fit`; generic `fit` producers
+may omit it and use portable term geometry. When present all five operands are required,
+`cellBasicUnits` is positive, and `originPhaseBasicUnits` is smaller than one
+cell; explicit `null`, partial, or unknown data is rejected. Explicit zero spacing is preserved and does not mean
 inheritance. Missing layout and `{}` have the same default; `layout:null`,
 unknown fields, `placement:null`, and the removed `inlineTerm` field are
 rejected. Canonical output omits empty layout but retains
 `"layout":{"spacingBeforeLines":0}`. Semantic annotation never changes layout.
 
-All readers use the shared geometry resolver. It measures only the final open
-term row, expands tabs at absolute eight-column stops, composes the parent and
-body origins once, and requires the minimum term gap. A bounded reader clips
-the declared body field to its allocated width; plain text and Markdown have no
-viewport but still respect the declared field endpoint. Consequently one `fit`
+All readers use the shared geometry resolver. Portable terms measure only the
+final open row and expand tabs at absolute eight-column stops. A native
+`fitConstraint` instead compares retained basic-unit operands with the native
+half-cell tolerance, clips the native field to a bounded viewport using the
+retained origin phase, and rejects run-in placement after an executed hard HEAD
+separation. Both paths compose parent/body origins once and require the minimum term
+gap; plain text and Markdown have no viewport but still respect the declared
+field endpoint. Consequently one `fit`
 IR item may be run in at a wide TUI width and stacked after a resize without
 rerunning a parser or changing its anchors, links, source text, or semantic
 facts.

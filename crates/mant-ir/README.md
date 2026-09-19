@@ -129,10 +129,19 @@ new row, `RunIn` joins an eligible first paragraph, and `Fit` lets each reader
 decide with `geometry::definition_placement_plan` at its allocated width. The
 shared resolver measures only the final open label row, uses absolute
 eight-column tab stops, composes the parent and body origins once, and treats
-zero-width anchors as navigation rather than label width. Text and Markdown use
-the declared definition field without a viewport; an interactive reader can
-resolve the same immutable IR again after a resize. Semantic annotations never
-change this geometry.
+zero-width anchors as navigation rather than label width.
+`term_continuation_indent_columns` independently retains the origin of wrapped
+label rows. Only `Fit` placement can carry a closed `fit_constraint`; generic
+`Fit` producers may omit it. Native producers can attach that constraint with the
+complete logical fit width, field width, origin phase, cell scale, and executed
+hard-separation fact in formatter basic units. It retains fractional origins,
+custom tabs, non-displayed trailing field cells, and executed HEAD boundaries
+such as a word-end break or margin-control flush without making them visible
+padding or searchable text; generic producers omit it and use portable term
+geometry. Text and Markdown use the declared definition field without a
+viewport; an interactive reader can
+resolve the same immutable IR again after a resize. Semantic annotations,
+links, anchors and source spans never change this geometry.
 
 `geometry::block_layout`, `block_layout_mut` and `block_source` provide exhaustive
 access to the optional fields on block variants. `geometry::rebase_roots` moves

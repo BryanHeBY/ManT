@@ -1,5 +1,5 @@
 //! Measure the open final label row, independently of preceding label rows.
-use crate::{DefinitionItem, DefinitionPlacement, Inline};
+use crate::{DefinitionFitConstraint, DefinitionItem, DefinitionPlacement, Inline};
 
 /// Shared tab stop used by resolved definition geometry.
 pub const DEFINITION_TAB_STOP_COLUMNS: usize = 8;
@@ -13,6 +13,8 @@ pub struct DefinitionPlacementResolution {
     pub final_label_width_columns: Option<usize>,
     /// Absolute, padded body origin.
     pub body_origin_columns: usize,
+    /// Absolute continuation origin for wrapped rows of the term.
+    pub term_continuation_origin_columns: usize,
     /// Absolute first-description origin after applying placement and paragraph layout.
     pub first_description_origin_columns: usize,
     /// Absolute first-description origin before any run-in label displacement.
@@ -32,6 +34,8 @@ pub struct DefinitionPlacementPlan {
     first_description_indent_columns: i32,
     continuation_indent_columns: i32,
     min_gap_columns: usize,
+    term_continuation_indent_columns: i32,
+    fit_constraint: Option<DefinitionFitConstraint>,
     candidate: bool,
 }
 
@@ -60,15 +64,24 @@ impl DefinitionPlacementPlan {
                 DefinitionPlacement::Stacked => false,
                 DefinitionPlacement::RunIn => true,
                 DefinitionPlacement::Fit => {
-                    let field_end = available_width_columns.map_or(body_origin_columns, |width| {
-                        body_origin_columns.min(label_origin.saturating_add(width))
-                    });
-                    final_label_width_columns.is_some_and(|width| {
-                        label_origin
-                            .saturating_add(width)
-                            .saturating_add(self.min_gap_columns)
-                            <= field_end
-                    })
+                    if let Some(constraint) = self.fit_constraint {
+                        native_fit_constraint_holds(
+                            constraint,
+                            self.min_gap_columns,
+                            available_width_columns,
+                        )
+                    } else {
+                        let field_end = available_width_columns
+                            .map_or(body_origin_columns, |width| {
+                                body_origin_columns.min(label_origin.saturating_add(width))
+                            });
+                        final_label_width_columns.is_some_and(|width| {
+                            label_origin
+                                .saturating_add(width)
+                                .saturating_add(self.min_gap_columns)
+                                <= field_end
+                        })
+                    }
                 }
             };
         let first = super::padding(super::compose_origin(
@@ -92,6 +105,10 @@ impl DefinitionPlacementPlan {
             run_in,
             final_label_width_columns,
             body_origin_columns,
+            term_continuation_origin_columns: super::padding(super::compose_origin(
+                self.parent_origin_columns,
+                self.term_continuation_indent_columns,
+            )),
             first_description_origin_columns: first,
             stacked_description_origin_columns: super::padding(super::compose_origin(
                 body_origin,
@@ -121,8 +138,40 @@ pub fn definition_placement_plan(
         first_description_indent_columns,
         continuation_indent_columns,
         min_gap_columns: usize::from(item.layout.min_term_gap_columns),
+        term_continuation_indent_columns: item.layout.term_continuation_indent_columns,
+        fit_constraint: item.layout.fit_constraint,
         candidate: description.is_some() && final_label_width_by_tab_origin.is_some(),
     }
+}
+
+fn native_fit_constraint_holds(
+    constraint: DefinitionFitConstraint,
+    min_gap_columns: usize,
+    available_width_columns: Option<usize>,
+) -> bool {
+    if constraint.forced_separation {
+        return false;
+    }
+    let cell = u128::from(constraint.cell_basic_units.get());
+    let required = u128::from(constraint.fit_content_basic_units)
+        .saturating_add((min_gap_columns as u128).saturating_mul(cell));
+    let field = u128::from(constraint.field_basic_units);
+    let effective_field = available_width_columns.map_or(field, |width| {
+        let phase = u128::from(constraint.origin_phase_basic_units);
+        let rounded_phase = if phase.saturating_mul(2) > cell {
+            cell
+        } else {
+            0
+        };
+        let aligned_width = (width as u128).saturating_mul(cell);
+        let viewport = if rounded_phase >= phase {
+            aligned_width.saturating_add(rounded_phase - phase)
+        } else {
+            aligned_width.saturating_sub(phase - rounded_phase)
+        };
+        field.min(viewport)
+    });
+    required <= effective_field.saturating_add(cell / 2)
 }
 
 /// Resolve one definition's conditional placement for an effective viewport.
@@ -194,7 +243,10 @@ fn append(nodes: &[Inline], row: &mut String, present: &mut bool) {
     for node in nodes {
         match node {
             Inline::Text { value } | Inline::Code { value } => {
-                *present |= !value.is_empty();
+                // Pinned CVS `term_fill()` keeps plain ASCII spaces pending
+                // and reports an all-space field as empty (`nbr == 0`). Tabs
+                // and non-breaking spaces remain real formatter atoms.
+                *present |= value.chars().any(|character| character != ' ');
                 if let Some((_, tail)) = value.rsplit_once('\n') {
                     row.clear();
                     row.push_str(tail);
@@ -244,6 +296,8 @@ mod tests {
                 placement,
                 body_indent_columns,
                 min_term_gap_columns: gap,
+                term_continuation_indent_columns: 0,
+                fit_constraint: None,
                 spacing_before_lines: None,
             },
         }
@@ -264,6 +318,9 @@ mod tests {
             Some(10)
         );
         assert_eq!(definition_run_in_width(&[vec![text("  -b ")]]), Some(5));
+        assert_eq!(definition_run_in_width(&[vec![text("    ")]]), None);
+        assert_eq!(definition_run_in_width(&[vec![text("\t")]]), Some(8));
+        assert_eq!(definition_run_in_width(&[vec![text("\u{00a0}")]]), Some(1));
     }
 
     #[test]
@@ -330,6 +387,74 @@ mod tests {
         assert!(definition_placement(&definition, 0, Some(1)).run_in);
         definition.layout.placement = DefinitionPlacement::Stacked;
         assert!(!definition_placement(&definition, 0, None).run_in);
+    }
+
+    #[test]
+    fn fit_only_tail_and_term_continuation_remain_independent_of_visible_gap() {
+        // Fixed CVS `term_flushln()` uses BRTRSP tail whitespace only in its
+        // fit comparison and BRIND only after a term wraps. Neither changes
+        // the visible run-in gap.
+        let mut definition = item(vec![text("12345678")], DefinitionPlacement::Fit, 10, 2);
+        definition.layout.term_continuation_indent_columns = 10;
+        definition.layout.fit_constraint = Some(DefinitionFitConstraint {
+            fit_content_basic_units: 9 * 24,
+            field_basic_units: 10 * 24,
+            origin_phase_basic_units: 0,
+            cell_basic_units: std::num::NonZeroU64::new(24).unwrap(),
+            forced_separation: false,
+        });
+        let with_tail = definition_placement(&definition, 5, Some(15));
+        assert!(!with_tail.run_in);
+        assert_eq!(with_tail.term_continuation_origin_columns, 15);
+
+        definition.layout.fit_constraint = Some(DefinitionFitConstraint {
+            fit_content_basic_units: 8 * 24,
+            ..definition.layout.fit_constraint.unwrap()
+        });
+        let without_tail = definition_placement(&definition, 5, Some(15));
+        assert!(without_tail.run_in);
+        assert_eq!(without_tail.first_description_origin_columns, 15);
+        assert_eq!(without_tail.term_continuation_origin_columns, 15);
+
+        let translated = definition_placement_plan(&definition, 5)
+            .translated(7)
+            .resolve(Some(15));
+        assert_eq!(translated.term_continuation_origin_columns, 22);
+    }
+
+    #[test]
+    fn native_fit_uses_the_cvs_strict_half_cell_origin_rounding() {
+        // Pinned CVS `term_ascii.c::ascii_advance()` advances while
+        // `viscol + sz / 2 < dst`: an exact half cell rounds down, while the
+        // next basic unit rounds up.  At a ten-column viewport these phases
+        // expose 228 BU and 251 BU respectively before the native half-cell
+        // fit tolerance is applied.
+        let mut definition = item(vec![text("A")], DefinitionPlacement::Fit, 10, 0);
+        definition.layout.fit_constraint = Some(DefinitionFitConstraint {
+            fit_content_basic_units: 241,
+            field_basic_units: 1_000,
+            origin_phase_basic_units: 12,
+            cell_basic_units: std::num::NonZeroU64::new(24).unwrap(),
+            forced_separation: false,
+        });
+        let half = definition_placement_plan(&definition, 0);
+        assert!(!half.resolve(Some(10)).run_in);
+
+        definition.layout.fit_constraint = Some(DefinitionFitConstraint {
+            origin_phase_basic_units: 13,
+            ..definition.layout.fit_constraint.unwrap()
+        });
+        let above_half = definition_placement_plan(&definition, 0);
+        assert!(above_half.resolve(Some(10)).run_in);
+
+        assert_eq!(
+            half.translated(7).resolve(Some(10)).run_in,
+            half.resolve(Some(10)).run_in
+        );
+        assert_eq!(
+            above_half.translated(7).resolve(Some(10)).run_in,
+            above_half.resolve(Some(10)).run_in
+        );
     }
 
     #[test]

@@ -30,8 +30,11 @@ to depend on libmandoc's private C structures or parser lifetime.
 The default crate remains a parser layer only. It intentionally does not
 locate system manual pages, interpret application-specific section models, or
 run a pager. `Parser::execute_bytes` parses and traverses one caller-owned root
-buffer in the same native session at a fixed 78-column terminal profile, then
-returns matching owned AST and sealed execution facts. This first execution
+buffer in the same native session at a canonical 78-column initial terminal
+profile, then returns matching owned AST and sealed execution facts. Executed
+`.ll`, `.po`, and `.ta` requests still change native margins, origins, and tab
+stops exactly as in pinned CVS; reader resize alone does not re-execute roff.
+This first execution
 boundary rejects includes and equations before terminal traversal rather than
 returning a partial report. It accepts bounded native tables and reports their
 typed topology and cell-local execution. `ExecutionCancellation` provides a
@@ -509,6 +512,22 @@ The remaining patches implement the synchronous embedding boundary:
   authored identity separate from terminal display atoms without adding work
   to ordinary rendering. Each macro set retains its native font, spacing,
   author, and section-reference behavior.
+- `0032-project-native-mdoc-list-execution.patch` and
+  `0033-project-native-man-block-execution.patch` retain typed list-item and
+  man block lifecycles, including their exact HEAD/BODY owners, without
+  inferring structure from device lines.
+- `0034-project-native-display-control-execution.patch` brackets native
+  display, synopsis, literal, and captured-control regions.
+- `0035-report-native-definition-fields.patch` reports the handler-computed
+  HEAD/BODY field origins, right margins, cell scale, gap request, and
+  continuation flags before fixed-device wrapping. Each flush also carries the
+  complete logical content and fit widths, initial logical field/origin,
+  exact active-tab destinations grouped by realized word-end-break row and
+  retained under each logical field's native buffer-generation identity, and
+  executed word-end-break result from the same fixed-profile scanner. Tab rows
+  inherit the same native offset settlement as `term_flushln()`, rather than
+  restarting a second tab model. These are objective native facts: the C layer
+  never emits `ManT`'s `stacked`, `run-in`, or `fit` policy.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

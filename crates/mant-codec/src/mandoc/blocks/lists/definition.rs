@@ -389,7 +389,10 @@ pub(super) fn definition_item(
     if let Some(id) = definition_head_anchor(node) {
         term.insert(0, Inline::anchor_at(id, source_span(node)));
     }
-    let terms = split_definition_terms(term);
+    let mut terms = split_definition_terms(term);
+    for term in &mut terms {
+        suppress_formatter_empty_term(term);
+    }
     if flow.head.generated_cells().is_some() {
         // The native generated cells execute inside the shared stream below.
         // Their surviving projection is carried by the description itself;
@@ -455,6 +458,42 @@ pub(super) fn definition_item(
         context.native_heads.borrow_mut().record(&item, role);
     }
     item
+}
+
+fn suppress_formatter_empty_term(term: &mut Vec<Inline>) {
+    if has_formatter_graph(term) {
+        return;
+    }
+    retain_term_structure(term);
+}
+
+fn has_formatter_graph(inlines: &[Inline]) -> bool {
+    inlines.iter().any(|inline| match inline {
+        // Pinned CVS `term_fill()` does not commit pending plain spaces when
+        // the field contains no graph. Tabs and NBSP are formatter atoms and
+        // deliberately remain visible execution content.
+        Inline::Text { value } | Inline::Code { value } => {
+            value.chars().any(|character| character != ' ')
+        }
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => has_formatter_graph(children),
+        Inline::LineBreak => true,
+        Inline::Anchor { .. } => false,
+    })
+}
+
+fn retain_term_structure(inlines: &mut Vec<Inline>) {
+    inlines.retain_mut(|inline| match inline {
+        Inline::Text { value } | Inline::Code { value } => !value.chars().all(|value| value == ' '),
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => {
+            retain_term_structure(children);
+            !children.is_empty()
+        }
+        Inline::LineBreak | Inline::Anchor { .. } => true,
+    });
 }
 
 fn lower_definition_head(

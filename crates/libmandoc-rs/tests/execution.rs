@@ -3,10 +3,10 @@
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryRequest, ExecutionCancellation,
     ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
-    ExecutionLimits, ExecutionManBlockKind, ExecutionMdocListKind, ExecutionReferenceKind,
-    ExecutionRegionKind, ExecutionTableAlignment, ExecutionTableDataKind, ExecutionTableLayoutKind,
-    ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome, FragmentRole, InputFormat,
-    NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
+    ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind, ExecutionMdocListKind,
+    ExecutionReferenceKind, ExecutionRegionKind, ExecutionTableAlignment, ExecutionTableDataKind,
+    ExecutionTableLayoutKind, ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome,
+    FragmentRole, InputFormat, NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -64,6 +64,36 @@ const INLINE_ANNOTATIONS_MAN: &[u8] = include_bytes!("fixtures/execution/inline-
 const MDOC_LIST_LIFECYCLE: &[u8] = include_bytes!("fixtures/execution/mdoc-list-lifecycle.1");
 const MAN_DEFINITION_LIFECYCLE: &[u8] =
     include_bytes!("fixtures/execution/man-definition-lifecycle.1");
+const DEFINITION_WIDE_MDOC: &[u8] = include_bytes!("fixtures/execution/definition-wide-mdoc.1");
+const DEFINITION_WIDE_MAN: &[u8] = include_bytes!("fixtures/execution/definition-wide-man.1");
+const DEFINITION_FRACTIONAL_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-responsive-fractional.1");
+const DEFINITION_PHASE_MARGIN_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-phase-margin-mdoc.1");
+const DEFINITION_HEAD_LINE_LENGTH_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-head-line-length-mdoc.1");
+const DEFINITION_FIT_FRACTIONAL_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-fractional-fit-mdoc.1");
+const DEFINITION_FIT_TRAILING_TAB_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-trailing-tab-mdoc.1");
+const DEFINITION_FIT_CUSTOM_TAB_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-custom-tab-mdoc.1");
+const DEFINITION_LOGICAL_TABS_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/logical-tabs-mdoc.1");
+const DEFINITION_LOGICAL_TABS_WORD_END_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/logical-tabs-word-end-mdoc.1");
+const DEFINITION_LOGICAL_TABS_MULTI_ROW_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/logical-tabs-multi-row-mdoc.1");
+const LOGICAL_TABS_INHERITED_OFFSET_MAN: &[u8] =
+    include_bytes!("fixtures/execution/logical-tabs-inherited-offset-man.1");
+const LOGICAL_TABS_FRACTIONAL_ROW_ORIGIN_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/logical-tabs-fractional-row-origin-mdoc.1");
+const DEFINITION_FIT_LONG_LOGICAL_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-long-logical-fit-mdoc.1");
+const DEFINITION_FIT_WORD_END_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-word-end-fit-mdoc.1");
+const DEFINITION_FIT_NBSP_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/definition-nbsp-fit-mdoc.1");
 const DISPLAY_CONTROL_MAN: &[u8] = include_bytes!("fixtures/execution/display-control-man.1");
 const DISPLAY_CONTROL_MDOC: &[u8] = include_bytes!("fixtures/execution/display-control-mdoc.1");
 const DISPLAY_CONTROL_MDOC_SYNOPSIS_OVERLAP: &[u8] =
@@ -1334,6 +1364,7 @@ fn heading_authored_phrases_obey_report_budgets_and_cancellation() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One matrix asserts the complete native It lifecycle.
 fn reports_exact_mdoc_list_item_lifecycles() {
     // Before these assertions were written, the complete fixture was run with
     // the pinned CVS terminal, tree, and lint renderers.  In
@@ -1442,9 +1473,69 @@ fn reports_exact_mdoc_list_item_lifecycles() {
         .find(|item| item.mdoc_list_kind == Some(ExecutionMdocListKind::Column))
         .expect("empty final column row");
     assert_eq!(empty_column.enter_atom, empty_column.leave_atom);
+
+    for item in &items {
+        let is_definition = matches!(
+            item.mdoc_list_kind,
+            Some(
+                ExecutionMdocListKind::Tag
+                    | ExecutionMdocListKind::Hang
+                    | ExecutionMdocListKind::Overhang
+                    | ExecutionMdocListKind::Inset
+                    | ExecutionMdocListKind::Diagnostic
+            )
+        );
+        assert_eq!(item.definition.is_some(), is_definition);
+        let Some(definition) = item.definition else {
+            continue;
+        };
+        let owner = item.node.expect("definition item owner");
+        assert_eq!(
+            execution.nodes()[definition.head.node.0 as usize].parent,
+            Some(owner)
+        );
+        assert_eq!(
+            execution.nodes()[definition.body.node.0 as usize].parent,
+            Some(owner)
+        );
+        assert_eq!(
+            execution.nodes()[definition.head.node.0 as usize].kind,
+            NodeKind::Head
+        );
+        assert_eq!(
+            execution.nodes()[definition.body.node.0 as usize].kind,
+            NodeKind::Body
+        );
+        assert!(definition.cell_bu > 0);
+        assert!(definition.head.maxrmargin_bu > definition.head.offset_bu);
+        assert!(definition.body.maxrmargin_bu > definition.body.offset_bu);
+        assert!(definition.head.sequence < definition.body.sequence);
+        match item.mdoc_list_kind.unwrap() {
+            ExecutionMdocListKind::Tag => {
+                assert!(definition.head_may_stay_open_if_field_fits);
+                assert!(definition.count_trailing_space);
+                assert!(definition.wrapped_continuation_uses_field_end);
+            }
+            ExecutionMdocListKind::Hang => {
+                assert!(definition.head_stays_open_unconditionally);
+                assert!(definition.head_may_stay_open_if_field_fits);
+            }
+            ExecutionMdocListKind::Overhang | ExecutionMdocListKind::Inset => {
+                assert!(!definition.head_stays_open_unconditionally);
+                assert!(!definition.head_may_stay_open_if_field_fits);
+            }
+            ExecutionMdocListKind::Diagnostic => {
+                assert!(!definition.head_stays_open_unconditionally);
+                assert!(definition.head_may_stay_open_if_field_fits);
+                assert!(definition.wrapped_continuation_uses_field_end);
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One matrix asserts the complete native man block lifecycle.
 fn reports_exact_man_block_lifecycles() {
     // Before these assertions were written, this exact fixture was run with
     // the pinned CVS `-Tlint`, `-Tutf8`, and `-Ttree` renderers.  Fixed
@@ -1505,6 +1596,46 @@ fn reports_exact_man_block_lifecycles() {
                         && child.leave_sequence < block.leave_sequence
                 })
         );
+
+        let is_definition = matches!(
+            expected_kind,
+            ExecutionManBlockKind::IndentedParagraph
+                | ExecutionManBlockKind::TaggedParagraph
+                | ExecutionManBlockKind::AdditionalTag
+        );
+        assert_eq!(block.definition.is_some(), is_definition, "block {index}");
+        if let Some(definition) = block.definition {
+            assert_eq!(
+                execution.nodes()[definition.head.node.0 as usize].parent,
+                Some(node)
+            );
+            assert_eq!(
+                execution.nodes()[definition.body.node.0 as usize].parent,
+                Some(node)
+            );
+            assert_eq!(
+                execution.nodes()[definition.head.node.0 as usize].kind,
+                NodeKind::Head
+            );
+            assert_eq!(
+                execution.nodes()[definition.body.node.0 as usize].kind,
+                NodeKind::Body
+            );
+            assert!(definition.cell_bu > 0);
+            assert!(definition.head.maxrmargin_bu > definition.head.offset_bu);
+            assert!(definition.body.maxrmargin_bu > definition.body.offset_bu);
+            assert!(definition.head.sequence < definition.body.sequence);
+            assert!(!definition.head_stays_open_unconditionally);
+            assert!(definition.head_may_stay_open_if_field_fits);
+            assert_eq!(
+                definition.count_trailing_space,
+                matches!(
+                    expected_kind,
+                    ExecutionManBlockKind::TaggedParagraph | ExecutionManBlockKind::AdditionalTag
+                )
+            );
+            assert!(!definition.wrapped_continuation_uses_field_end);
+        }
     }
 
     let relative = blocks
@@ -1521,6 +1652,507 @@ fn reports_exact_man_block_lifecycles() {
         .expect("TP nested inside RS execution scope");
     assert!(nested.enter_atom >= relative.enter_atom);
     assert!(nested.leave_atom <= relative.leave_atom);
+}
+
+#[test]
+fn accepts_native_definition_fields_beyond_the_device_margin() {
+    // Both exact inputs were rendered with the pinned CVS `-Tutf8` and
+    // `-Tlint` frontends before this assertion was written.  Fixed CVS
+    // `termp_it_pre()` and `pre_TP()` allow a declared field right margin to
+    // exceed `maxrmargin`; `term_flushln()` still uses `maxrmargin` as the
+    // NOBREAK wrap target rather than treating it as a geometry invariant.
+    for (name, format, source) in [
+        (
+            "definition-wide-mdoc.1",
+            InputFormat::Mdoc,
+            DEFINITION_WIDE_MDOC,
+        ),
+        (
+            "definition-wide-man.1",
+            InputFormat::Man,
+            DEFINITION_WIDE_MAN,
+        ),
+    ] {
+        let report = execute(name, format, source);
+        let definition = report
+            .execution
+            .wrappers()
+            .iter()
+            .find_map(|wrapper| wrapper.definition)
+            .expect("wide definition contract");
+        assert!(definition.head.rmargin_bu > definition.head.maxrmargin_bu);
+        assert!(definition.body.offset_bu > definition.body.maxrmargin_bu);
+    }
+}
+
+#[test]
+fn preserves_fractional_native_definition_origins() {
+    // This exact input was rendered with the pinned CVS `-Tutf8` and `-Tlint`
+    // frontends before this assertion was written.  `ascii_advance()` rounds
+    // each absolute device destination independently, so consumers need both
+    // raw origins rather than a pre-rounded relative delta.
+    let report = execute(
+        "definition-responsive-fractional.1",
+        InputFormat::Mdoc,
+        DEFINITION_FRACTIONAL_MDOC,
+    );
+    let definition = report
+        .execution
+        .wrappers()
+        .iter()
+        .find_map(|wrapper| {
+            let definition = wrapper.definition?;
+            let owner = wrapper.node?;
+            let node = ast_node_by_execution_key(&report.document.root, owner.0)?;
+            (node.macro_name.as_deref() == Some("It") && node.line == 9).then_some(definition)
+        })
+        .expect("fractional It definition contract");
+    assert_ne!(definition.head.offset_bu % definition.cell_bu, 0);
+    assert_eq!(definition.body.offset_bu % definition.cell_bu, 0);
+    assert_eq!(definition.head.offset_bu, 132);
+    assert_eq!(definition.body.offset_bu, 192);
+    assert_eq!(definition.cell_bu, 24);
+    assert_eq!(definition.head.offset_bu / definition.cell_bu, 5);
+    assert_eq!(definition.body.offset_bu / definition.cell_bu, 8);
+    assert_eq!(
+        (definition.body.offset_bu - definition.head.offset_bu) / definition.cell_bu,
+        2
+    );
+}
+
+#[test]
+fn preserves_phase_local_definition_device_margins() {
+    // This exact input was rendered with pinned CVS `-Ttree`, `-Tutf8`, and
+    // `-Tlint` before this assertion was written.  `roff_term_pre_ll()` calls
+    // `term_setwidth()` while executing the It HEAD, so the BODY phase must
+    // carry the changed device margin instead of being rejected or conflated
+    // with the earlier HEAD snapshot.
+    let report = execute(
+        "definition-phase-margin-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_PHASE_MARGIN_MDOC,
+    );
+    let definition = report
+        .execution
+        .wrappers()
+        .iter()
+        .find_map(|wrapper| wrapper.definition)
+        .expect("phase-local definition contract");
+    assert_eq!(definition.head.maxrmargin_bu, 78 * definition.cell_bu);
+    assert_eq!(definition.body.maxrmargin_bu, 20 * definition.cell_bu);
+}
+
+fn definition_head_flush(
+    report: &libmandoc_rs::ExecutionReport,
+) -> (
+    libmandoc_rs::ExecutionDefinitionContract,
+    &libmandoc_rs::ExecutionFlush,
+) {
+    let definition = report
+        .execution
+        .wrappers()
+        .iter()
+        .find_map(|wrapper| wrapper.definition)
+        .expect("definition execution contract");
+    let flush = report
+        .execution
+        .flushes()
+        .iter()
+        .rev()
+        .find(|flush| {
+            flush.node == Some(definition.head.node) && flush.outcome == FlushOutcome::Exhausted
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "exhausted definition head flush; definition={definition:?}; candidates={:?}",
+                report
+                    .execution
+                    .flushes()
+                    .iter()
+                    .map(|flush| (
+                        flush.sequence,
+                        flush.node,
+                        flush.outcome,
+                        flush.logical_content_bu,
+                        flush.logical_field_bu,
+                        flush.logical_origin_bu,
+                    ))
+                    .collect::<Vec<_>>()
+            )
+        });
+    (definition, flush)
+}
+
+#[test]
+fn measures_definition_head_after_executed_line_length_change() {
+    // The exact fixture was checked with pinned CVS `-Tlint` and `-Tutf8`
+    // before this assertion was written.  `roff_term_pre_ll()` calls
+    // `term_setwidth()` immediately, then `termp_it_post()` reaches the HEAD
+    // `term_flushln()`: the exact HEAD flush therefore uses the changed
+    // device margin while preserving the field origin computed by the list
+    // handler.
+    let report = execute(
+        "definition-head-line-length-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_HEAD_LINE_LENGTH_MDOC,
+    );
+    let (definition, flush) = definition_head_flush(&report);
+    assert_eq!(flush.node, Some(definition.head.node));
+    assert_eq!(flush.logical_field_bu, 10 * definition.cell_bu);
+    assert_eq!(flush.logical_origin_bu, 5 * definition.cell_bu);
+    assert_eq!(flush.maxrmargin_bu, 34 * definition.cell_bu);
+}
+
+#[test]
+fn measures_definition_fit_in_native_basic_units_without_rewriting_input() {
+    // Each exact fixture was rendered with the pinned CVS `-Tutf8` and
+    // `-Tlint` before these assertions were written.  The observer reuses the
+    // scanner in `term.c::term_fill()` and `term_tab_next()`: fractional field
+    // widths and configured tabs must remain in BU instead of being rounded
+    // into an invented reader-side tab cycle.
+    let fractional = execute(
+        "definition-fractional-fit-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_FIT_FRACTIONAL_MDOC,
+    );
+    let (definition, flush) = definition_head_flush(&fractional);
+    assert_eq!(definition.cell_bu, 24);
+    assert_eq!(flush.logical_content_bu, 24);
+    assert_eq!(definition.head.rmargin_bu - definition.head.offset_bu, 60);
+
+    let trailing = execute(
+        "definition-trailing-tab-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_FIT_TRAILING_TAB_MDOC,
+    );
+    let (_, flush) = definition_head_flush(&trailing);
+    assert_eq!(flush.logical_content_bu, 10 * 24);
+
+    let custom = execute(
+        "definition-custom-tab-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_FIT_CUSTOM_TAB_MDOC,
+    );
+    let (_, flush) = definition_head_flush(&custom);
+    assert_eq!(flush.logical_content_bu, 9 * 24);
+    assert_eq!(
+        flush.logical_tabs,
+        [ExecutionLogicalTab {
+            row_epoch: 0,
+            destination_bu: 8 * 24,
+        }]
+    );
+
+    // The exact multi-tab fixture was checked with pinned CVS `-Tlint`,
+    // `-Ttree`, and `-Tutf8` before this assertion was written.  In
+    // `term.c::term_fill_mode()`, each literal tab passes its current BU
+    // position through `term_tab_next()` using the `.ta 3n 7n 12n` list, so
+    // the observer must retain both destinations rather than only the final
+    // aggregate width.
+    let multiple = execute(
+        "logical-tabs-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_LOGICAL_TABS_MDOC,
+    );
+    let (_, flush) = definition_head_flush(&multiple);
+    assert_eq!(
+        flush.logical_tabs,
+        [
+            ExecutionLogicalTab {
+                row_epoch: 0,
+                destination_bu: 3 * 24,
+            },
+            ExecutionLogicalTab {
+                row_epoch: 0,
+                destination_bu: 7 * 24,
+            },
+        ]
+    );
+    assert_eq!(flush.logical_content_bu, 8 * 24);
+    let non_breaking = execute(
+        "definition-nbsp-fit-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_FIT_NBSP_MDOC,
+    );
+    let (_, flush) = definition_head_flush(&non_breaking);
+    assert_eq!(flush.logical_content_bu, 10 * 24);
+    assert!(!flush.logical_forced_break);
+}
+
+#[test]
+fn logical_tab_records_obey_budgets_and_release_on_failure() {
+    let initial = execute(
+        "logical-tabs-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_LOGICAL_TABS_MDOC,
+    );
+    let exact_records = initial.execution.record_count();
+    Parser::default()
+        .with_input_format(InputFormat::Mdoc)
+        .with_mdoc_operating_system("ManT")
+        .unwrap()
+        .execute_bytes(
+            "logical-tabs-mdoc.1",
+            DEFINITION_LOGICAL_TABS_MDOC,
+            ExecutionLimits {
+                max_records: exact_records,
+                ..ExecutionLimits::default()
+            },
+        )
+        .expect("logical-tab records fit the exact sealed-record budget");
+    let error = Parser::default()
+        .with_input_format(InputFormat::Mdoc)
+        .with_mdoc_operating_system("ManT")
+        .unwrap()
+        .execute_bytes(
+            "logical-tabs-mdoc.1",
+            DEFINITION_LOGICAL_TABS_MDOC,
+            ExecutionLimits {
+                max_records: exact_records - 1,
+                ..ExecutionLimits::default()
+            },
+        )
+        .unwrap_err();
+    assert_eq!(error.kind, ExecutionErrorKind::Budget);
+
+    let recovered = execute(
+        "logical-tabs-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_LOGICAL_TABS_MDOC,
+    );
+    assert_eq!(
+        definition_head_flush(&recovered).1.logical_tabs,
+        [
+            ExecutionLogicalTab {
+                row_epoch: 0,
+                destination_bu: 3 * 24,
+            },
+            ExecutionLogicalTab {
+                row_epoch: 0,
+                destination_bu: 7 * 24,
+            },
+        ]
+    );
+}
+
+#[test]
+fn tracks_logical_tab_rows_across_executed_word_end_breaks() {
+    // The pure pinned-CVS renderer (SHA-256 `3468a220...`) renders the first
+    // fixture as an `A` row followed by `B    C`, then BODY.  In
+    // `term_fill_mode()`, the word-end break is realized at the following
+    // space; only the observer's row-local tab position resets, while the
+    // fit-width `vis` continues over the complete logical field.
+    let word_end = execute(
+        "logical-tabs-word-end-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_LOGICAL_TABS_WORD_END_MDOC,
+    );
+    let (_, flush) = definition_head_flush(&word_end);
+    assert!(flush.logical_forced_break);
+    assert_eq!(
+        flush.logical_tabs,
+        [ExecutionLogicalTab {
+            row_epoch: 1,
+            destination_bu: 5 * 24,
+        }]
+    );
+
+    // The matching two-break oracle renders three rows: `A`, `B    C`, and
+    // `D     E`.  Responsive consumers need row epochs rather than one
+    // cumulative destination list. Each row-local visual position starts from
+    // zero while the native inter-row tab offset follows `term_flushln()`'s
+    // `vbr + one cell` settlement before applying the active `.ta` stops.
+    let multi_row = execute(
+        "logical-tabs-multi-row-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_LOGICAL_TABS_MULTI_ROW_MDOC,
+    );
+    let (_, flush) = definition_head_flush(&multi_row);
+    assert!(flush.logical_forced_break);
+    assert_eq!(
+        flush.logical_tabs,
+        [
+            ExecutionLogicalTab {
+                row_epoch: 1,
+                destination_bu: 5 * 24,
+            },
+            ExecutionLogicalTab {
+                row_epoch: 2,
+                destination_bu: 3 * 24,
+            },
+        ]
+    );
+}
+
+#[test]
+fn logical_tabs_follow_inherited_native_tab_offsets() {
+    // The pure pinned-CVS renderer (SHA-256 `3468a220...`) renders the first
+    // tbl column as four five-cell physical rows: `AAAA`, `AAAA`, `AAAA`,
+    // then `AAAAB`.  Each `TERMP_MULTICOL` yield re-enters
+    // `term_flushln()` with the preceding segment's `tcol->taboff`; the
+    // logical scan must use that inherited offset instead of restarting the
+    // active `.ta 3n 7n 12n` list at zero.
+    let report = execute(
+        "logical-tabs-inherited-offset-man.1",
+        InputFormat::Man,
+        LOGICAL_TABS_INHERITED_OFFSET_MAN,
+    );
+    let observed = report
+        .execution
+        .flushes()
+        .iter()
+        .filter(|flush| !flush.logical_tabs.is_empty())
+        .map(|flush| {
+            (
+                flush.outcome,
+                flush.taboff_before,
+                flush.logical_tabs.as_slice(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        observed,
+        [
+            (
+                FlushOutcome::DeferredColumn,
+                0,
+                &[ExecutionLogicalTab {
+                    row_epoch: 0,
+                    destination_bu: 19 * 24,
+                }][..],
+            ),
+            (
+                FlushOutcome::DeferredColumn,
+                5 * 24,
+                &[ExecutionLogicalTab {
+                    row_epoch: 0,
+                    destination_bu: 14 * 24,
+                }][..],
+            ),
+            (
+                FlushOutcome::DeferredColumn,
+                10 * 24,
+                &[ExecutionLogicalTab {
+                    row_epoch: 0,
+                    destination_bu: 9 * 24,
+                }][..],
+            ),
+            (
+                FlushOutcome::Exhausted,
+                15 * 24,
+                &[ExecutionLogicalTab {
+                    row_epoch: 0,
+                    destination_bu: 4 * 24,
+                }][..],
+            ),
+        ]
+    );
+}
+
+#[test]
+fn logical_tabs_retain_fractional_hard_row_geometry() {
+    // The pure pinned-CVS renderer (SHA-256 `3468a220...`) was run before
+    // these assertions.  `termp_it_pre()` establishes a 0.55n head origin
+    // and a 7.5n width; `term_flushln()` keeps epoch zero at the logical
+    // origin, then uses the BRIND right margin as the continuation origin.
+    // The `.ta 4.5n T 4n` stop yields a 60-BU row-relative destination, so
+    // consumers must round the absolute 421-BU endpoint before subtracting
+    // the rounded 361-BU origin. Both physical fill segments describe the
+    // same complete logical field.
+    let report = execute(
+        "logical-tabs-fractional-row-origin-mdoc.1",
+        InputFormat::Mdoc,
+        LOGICAL_TABS_FRACTIONAL_ROW_ORIGIN_MDOC,
+    );
+    let definition = report
+        .execution
+        .wrappers()
+        .iter()
+        .find_map(|wrapper| wrapper.definition)
+        .expect("fractional definition contract");
+    assert_eq!(definition.head.offset_bu, 133);
+    assert_eq!(definition.head.rmargin_bu, 361);
+    assert!(definition.wrapped_continuation_uses_field_end);
+
+    let head_flushes = report
+        .execution
+        .flushes()
+        .iter()
+        .filter(|flush| flush.node == Some(definition.head.node))
+        .collect::<Vec<_>>();
+    assert_eq!(head_flushes.len(), 2);
+    assert_eq!(head_flushes[0].outcome, FlushOutcome::Wrapped);
+    assert_eq!(head_flushes[1].outcome, FlushOutcome::Exhausted);
+    assert_eq!(
+        head_flushes[0].buffer_generation,
+        head_flushes[1].buffer_generation
+    );
+    for flush in head_flushes {
+        assert_eq!(flush.logical_origin_bu, 133);
+        assert!(flush.logical_forced_break);
+        assert_eq!(
+            flush.logical_tabs,
+            [ExecutionLogicalTab {
+                row_epoch: 1,
+                destination_bu: 60,
+            }]
+        );
+    }
+}
+
+#[test]
+fn distinguishes_device_wraps_from_executed_word_end_breaks() {
+    // The exact inputs were checked with the pinned CVS renderer before this
+    // test was written.  Its `term_fill()` retains the entire long logical
+    // field despite fixed-device segments, while `\\p` becomes a hard fact
+    // only when `breakline` is actually consumed by a later word boundary.
+    let long = execute(
+        "definition-long-logical-fit-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_FIT_LONG_LOGICAL_MDOC,
+    );
+    let (_, flush) = definition_head_flush(&long);
+    assert!(flush.logical_content_bu > flush.field_bu);
+    assert!(flush.logical_content_bu > flush.effective_content_bu);
+    assert!(!flush.logical_forced_break);
+
+    let forced = execute(
+        "definition-word-end-fit-mdoc.1",
+        InputFormat::Mdoc,
+        DEFINITION_FIT_WORD_END_MDOC,
+    );
+    let definition = forced
+        .execution
+        .wrappers()
+        .iter()
+        .find_map(|wrapper| wrapper.definition)
+        .expect("definition execution contract");
+    let flush = forced
+        .execution
+        .flushes()
+        .iter()
+        .find(|flush| flush.node == Some(definition.head.node) && flush.logical_forced_break)
+        .expect("executed word-end break flush");
+    assert!(flush.logical_forced_break);
+
+    for (name, term) in [
+        ("word-end-at-tail.1", "A\\p"),
+        ("word-end-before-glyph.1", "A\\pB"),
+    ] {
+        let source = format!(
+            ".Dd September 19, 2026\n.Dt K18BREAK 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It Xo\n.No \\\"{term}\\\"\n.Xc\nBODY\n.El\n"
+        );
+        let report = execute(name, InputFormat::Mdoc, source.as_bytes());
+        assert!(
+            report
+                .execution
+                .flushes()
+                .iter()
+                .all(|flush| !flush.logical_forced_break),
+            "{name}: {:?}",
+            report.execution.flushes()
+        );
+    }
 }
 
 #[test]

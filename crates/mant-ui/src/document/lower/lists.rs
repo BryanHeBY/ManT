@@ -140,6 +140,10 @@ impl DocumentBuilder<'_> {
     fn definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
         let (mut head_lines, head_targets) = self.definition_head(item);
         let block_origin = compose_origin(indent, item.layout.body_indent_columns);
+        let term_continuation = padding(compose_origin(
+            indent,
+            item.layout.term_continuation_indent_columns,
+        ));
         if head_lines.is_empty() {
             self.defer_anchors(head_targets.into_iter().map(|(id, _)| id));
             self.blocks(&item.description, block_origin);
@@ -155,25 +159,26 @@ impl DocumentBuilder<'_> {
         let last = head_lines.pop().unwrap_or_default();
         for line in head_lines {
             self.push(
-                LogicalLine::hanging(padding(indent), padding(indent), line.spans)
+                LogicalLine::hanging(padding(indent), term_continuation, line.spans)
                     .with_links(line.links)
                     .with_reference_marks(line.reference_marks),
             );
         }
         if has_candidate && let Some((children, _)) = item.run_in_description() {
-            let carrier = self.definition_placement_carrier(
+            let carrier = self.definition_placement_carrier(DefinitionCarrierInput {
                 item,
                 indent,
+                term_continuation,
                 last,
-                &head_targets,
+                head_targets: &head_targets,
                 final_head_row,
                 children,
-            );
+            });
             self.push(carrier);
             self.blocks(&item.description[1..], block_origin);
         } else {
             self.push(
-                LogicalLine::hanging(padding(indent), padding(indent), last.spans)
+                LogicalLine::hanging(padding(indent), term_continuation, last.spans)
                     .with_links(last.links)
                     .with_reference_marks(last.reference_marks)
                     .with_anchors(
@@ -188,28 +193,25 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    fn definition_placement_carrier(
-        &self,
-        item: &mant_ir::DefinitionItem,
-        indent: i32,
-        last: StyledInlineLine,
-        head_targets: &[(String, usize)],
-        final_head_row: usize,
-        children: &[mant_ir::Inline],
-    ) -> LogicalLine {
-        let plan = mant_ir::geometry::definition_placement_plan(item, indent);
-        let final_head_anchors = head_targets
+    fn definition_placement_carrier(&self, input: DefinitionCarrierInput<'_>) -> LogicalLine {
+        let plan = mant_ir::geometry::definition_placement_plan(input.item, input.indent);
+        let final_head_anchors = input
+            .head_targets
             .iter()
-            .filter(|(_, row)| *row >= final_head_row)
+            .filter(|(_, row)| *row >= input.final_head_row)
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
-        let description_anchors = inline_anchor_rows(children);
-        let term = LogicalLine::hanging(padding(indent), padding(indent), last.spans)
-            .with_links(last.links)
-            .with_reference_marks(last.reference_marks)
-            .with_anchors(final_head_anchors);
+        let description_anchors = inline_anchor_rows(input.children);
+        let term = LogicalLine::hanging(
+            padding(input.indent),
+            input.term_continuation,
+            input.last.spans,
+        )
+        .with_links(input.last.links)
+        .with_reference_marks(input.last.reference_marks)
+        .with_anchors(final_head_anchors);
         let description = self
-            .styled_inlines(children, Style::default().fg(theme::TEXT))
+            .styled_inlines(input.children, Style::default().fg(theme::TEXT))
             .into_iter()
             .enumerate()
             .map(|(row, line)| {
@@ -221,6 +223,16 @@ impl DocumentBuilder<'_> {
             .collect();
         LogicalLine::conditional_definition(plan, term, description)
     }
+}
+
+struct DefinitionCarrierInput<'a> {
+    item: &'a mant_ir::DefinitionItem,
+    indent: i32,
+    term_continuation: usize,
+    last: StyledInlineLine,
+    head_targets: &'a [(String, usize)],
+    final_head_row: usize,
+    children: &'a [mant_ir::Inline],
 }
 
 fn anchors_at(anchors: &[(String, usize)], row: usize) -> Vec<String> {
