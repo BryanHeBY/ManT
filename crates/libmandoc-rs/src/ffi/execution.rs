@@ -9,10 +9,14 @@ use crate::{
     AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
     BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
     ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest,
-    ExecutionDefinitionContract, ExecutionDefinitionField, ExecutionDiagnostic, ExecutionErrorKind,
-    ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry, ExecutionHeadingKind,
-    ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind, ExecutionMdocListKind,
-    ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
+    ExecutionDefinitionContract, ExecutionDefinitionField, ExecutionDiagnostic, ExecutionEquation,
+    ExecutionEquationBox, ExecutionEquationBoxKey, ExecutionEquationBoxKind,
+    ExecutionEquationFlags, ExecutionEquationFont, ExecutionEquationInvocation,
+    ExecutionEquationInvocationKey, ExecutionEquationKey, ExecutionEquationPart,
+    ExecutionEquationPartKey, ExecutionEquationPartKind, ExecutionEquationPosition,
+    ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
+    ExecutionHeadingKind, ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind,
+    ExecutionMdocListKind, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
     ExecutionReferenceKind, ExecutionRegionKind, ExecutionSource, ExecutionTable,
     ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
     ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
@@ -419,6 +423,86 @@ struct CTableCellRecord {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+struct CEquationRecord {
+    key: u32,
+    node: u32,
+    root_box: u32,
+    box_start: u32,
+    box_length: u32,
+    execution_start: u32,
+    execution_length: u32,
+    part_start: u32,
+    part_length: u32,
+    flags: u32,
+    enter_atom: u32,
+    leave_atom: u32,
+    reserved0: u32,
+    reserved1: u32,
+    enter_sequence: u64,
+    leave_sequence: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CEquationBoxRecord {
+    key: u32,
+    equation: u32,
+    parent: u32,
+    first_child: u32,
+    next_sibling: u32,
+    subtree_end: u32,
+    ordinal: u32,
+    kind: u32,
+    font: u32,
+    position: u32,
+    size: i32,
+    expected_args: u64,
+    actual_args: u64,
+    text_start: u32,
+    text_length: u32,
+    left_start: u32,
+    left_length: u32,
+    right_start: u32,
+    right_length: u32,
+    top_start: u32,
+    top_length: u32,
+    bottom_start: u32,
+    bottom_length: u32,
+    reserved: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CEquationBoxExecutionRecord {
+    key: u32,
+    equation: u32,
+    box_key: u32,
+    parent_execution: u32,
+    part_start: u32,
+    part_length: u32,
+    enter_atom: u32,
+    leave_atom: u32,
+    reserved0: u32,
+    reserved1: u32,
+    enter_sequence: u64,
+    leave_sequence: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CEquationPartRecord {
+    key: u32,
+    equation: u32,
+    box_key: u32,
+    execution: u32,
+    kind: u32,
+    word_start: u32,
+    word_length: u32,
+    atom_start: u32,
+    atom_length: u32,
+    reserved: u32,
+    enter_sequence: u64,
+    leave_sequence: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 struct CDiagnosticRecord {
     code: u32,
     node: u32,
@@ -617,6 +701,38 @@ declare_record_api!(
     mant_mandoc_execution_copy_table_cells
 );
 declare_record_api!(
+    mant_mandoc_execution_equation_count,
+    mant_mandoc_execution_equation_size,
+    mant_mandoc_execution_equation_align,
+    mant_mandoc_execution_equation_field_count,
+    mant_mandoc_execution_equation_offset,
+    mant_mandoc_execution_copy_equations
+);
+declare_record_api!(
+    mant_mandoc_execution_equation_box_count,
+    mant_mandoc_execution_equation_box_size,
+    mant_mandoc_execution_equation_box_align,
+    mant_mandoc_execution_equation_box_field_count,
+    mant_mandoc_execution_equation_box_offset,
+    mant_mandoc_execution_copy_equation_boxes
+);
+declare_record_api!(
+    mant_mandoc_execution_equation_box_execution_count,
+    mant_mandoc_execution_equation_box_execution_size,
+    mant_mandoc_execution_equation_box_execution_align,
+    mant_mandoc_execution_equation_box_execution_field_count,
+    mant_mandoc_execution_equation_box_execution_offset,
+    mant_mandoc_execution_copy_equation_box_executions
+);
+declare_record_api!(
+    mant_mandoc_execution_equation_part_count,
+    mant_mandoc_execution_equation_part_size,
+    mant_mandoc_execution_equation_part_align,
+    mant_mandoc_execution_equation_part_field_count,
+    mant_mandoc_execution_equation_part_offset,
+    mant_mandoc_execution_copy_equation_parts
+);
+declare_record_api!(
     mant_mandoc_execution_diagnostic_count,
     mant_mandoc_execution_diagnostic_size,
     mant_mandoc_execution_diagnostic_align,
@@ -745,7 +861,179 @@ fn validate_execution_ast_bindings(
 ) -> Result<(), String> {
     let ast_nodes = collect_execution_ast_nodes(root, report)?;
     validate_execution_region_ast_bindings(&ast_nodes, report)?;
-    validate_execution_table_ast_bindings(&ast_nodes, report)
+    validate_execution_table_ast_bindings(&ast_nodes, report)?;
+    validate_execution_equation_ast_bindings(&ast_nodes, report)
+}
+
+#[derive(Clone, Copy)]
+struct AstEquationBox<'a> {
+    value: &'a crate::EquationBox,
+    parent: Option<u32>,
+    first_child: Option<u32>,
+    next_sibling: Option<u32>,
+    subtree_end: u32,
+    ordinal: u32,
+}
+
+fn flatten_ast_equation_box<'a>(
+    value: &'a crate::EquationBox,
+    parent: Option<u32>,
+    ordinal: u32,
+    output: &mut Vec<AstEquationBox<'a>>,
+) -> Result<u32, String> {
+    let key = u32::try_from(output.len())
+        .map_err(|_| "owned equation box count exceeds u32".to_owned())?;
+    output.push(AstEquationBox {
+        value,
+        parent,
+        first_child: None,
+        next_sibling: None,
+        subtree_end: 0,
+        ordinal,
+    });
+    let mut previous = None;
+    for (child_ordinal, child) in value.children.iter().enumerate() {
+        let child_key = flatten_ast_equation_box(
+            child,
+            Some(key),
+            u32::try_from(child_ordinal)
+                .map_err(|_| "owned equation child count exceeds u32".to_owned())?,
+            output,
+        )?;
+        if let Some(previous) = previous {
+            output[previous as usize].next_sibling = Some(child_key);
+        } else {
+            output[key as usize].first_child = Some(child_key);
+        }
+        previous = Some(child_key);
+    }
+    output[key as usize].subtree_end = u32::try_from(output.len())
+        .map_err(|_| "owned equation box count exceeds u32".to_owned())?;
+    Ok(key)
+}
+
+const fn ast_equation_box_kind(kind: crate::EquationBoxKind) -> ExecutionEquationBoxKind {
+    match kind {
+        crate::EquationBoxKind::Text => ExecutionEquationBoxKind::Text,
+        crate::EquationBoxKind::Subexpression => ExecutionEquationBoxKind::Subexpression,
+        crate::EquationBoxKind::List => ExecutionEquationBoxKind::List,
+        crate::EquationBoxKind::Pile => ExecutionEquationBoxKind::Pile,
+        crate::EquationBoxKind::Matrix => ExecutionEquationBoxKind::Matrix,
+    }
+}
+
+const fn ast_equation_font(font: crate::EquationFont) -> ExecutionEquationFont {
+    match font {
+        crate::EquationFont::None => ExecutionEquationFont::None,
+        crate::EquationFont::Roman => ExecutionEquationFont::Roman,
+        crate::EquationFont::Bold => ExecutionEquationFont::Bold,
+        crate::EquationFont::Fat => ExecutionEquationFont::Fat,
+        crate::EquationFont::Italic => ExecutionEquationFont::Italic,
+    }
+}
+
+const fn ast_equation_position(position: crate::EquationPosition) -> ExecutionEquationPosition {
+    match position {
+        crate::EquationPosition::None => ExecutionEquationPosition::None,
+        crate::EquationPosition::Superscript => ExecutionEquationPosition::Superscript,
+        crate::EquationPosition::SubscriptSuperscript => {
+            ExecutionEquationPosition::SubscriptSuperscript
+        }
+        crate::EquationPosition::Subscript => ExecutionEquationPosition::Subscript,
+        crate::EquationPosition::To => ExecutionEquationPosition::To,
+        crate::EquationPosition::From => ExecutionEquationPosition::From,
+        crate::EquationPosition::FromTo => ExecutionEquationPosition::FromTo,
+        crate::EquationPosition::Over => ExecutionEquationPosition::Over,
+        crate::EquationPosition::SquareRoot => ExecutionEquationPosition::SquareRoot,
+    }
+}
+
+fn equation_pool_text_matches(
+    report: &NativeExecutionReport,
+    actual: Option<PoolRange>,
+    expected: Option<&str>,
+) -> bool {
+    match (actual, expected) {
+        (None, None) => true,
+        (Some(range), Some(expected)) => report
+            .pool_bytes(range)
+            .is_some_and(|actual| actual == expected.as_bytes()),
+        _ => false,
+    }
+}
+
+fn validate_execution_equation_ast_bindings(
+    ast_nodes: &[&crate::Node],
+    report: &NativeExecutionReport,
+) -> Result<(), String> {
+    let mut equation_index = 0_usize;
+    for (node_index, node) in ast_nodes.iter().enumerate() {
+        let Some(ast_equation) = node.equation.as_deref() else {
+            continue;
+        };
+        let equation = report
+            .equations
+            .get(equation_index)
+            .ok_or_else(|| "owned equation has no execution record".to_owned())?;
+        if equation.node.0 as usize != node_index {
+            return Err("owned equation does not match its execution node".to_owned());
+        }
+
+        let mut ast_boxes = Vec::new();
+        flatten_ast_equation_box(&ast_equation.root, None, 0, &mut ast_boxes)?;
+        let start = equation.boxes.start as usize;
+        let end = equation.boxes.end as usize;
+        let native_boxes = report
+            .equation_boxes
+            .get(start..end)
+            .ok_or_else(|| "execution equation box range is out of bounds".to_owned())?;
+        if native_boxes.len() != ast_boxes.len() {
+            return Err("owned equation and execution box counts differ".to_owned());
+        }
+        for (local_key, (expected, actual)) in ast_boxes.iter().zip(native_boxes).enumerate() {
+            let global = equation.boxes.start
+                + u32::try_from(local_key)
+                    .map_err(|_| "owned equation box count exceeds u32".to_owned())?;
+            let map_key = |key: Option<u32>| key.map(|key| equation.boxes.start + key);
+            if actual.key.0 != global
+                || actual.equation != equation.key
+                || actual.parent.map(|key| key.0) != map_key(expected.parent)
+                || actual.first_child.map(|key| key.0) != map_key(expected.first_child)
+                || actual.next_sibling.map(|key| key.0) != map_key(expected.next_sibling)
+                || actual.subtree_end != equation.boxes.start + expected.subtree_end
+                || actual.ordinal != expected.ordinal
+                || actual.kind != ast_equation_box_kind(expected.value.kind)
+                || actual.font != ast_equation_font(expected.value.font)
+                || actual.position != ast_equation_position(expected.value.position)
+                || actual.size != expected.value.size
+                || actual.expected_args != expected.value.expected_args
+                || actual.actual_args != expected.value.actual_args
+                || !equation_pool_text_matches(report, actual.text, expected.value.text.as_deref())
+                || !equation_pool_text_matches(report, actual.left, expected.value.left.as_deref())
+                || !equation_pool_text_matches(
+                    report,
+                    actual.right,
+                    expected.value.right.as_deref(),
+                )
+                || !equation_pool_text_matches(report, actual.top, expected.value.top.as_deref())
+                || !equation_pool_text_matches(
+                    report,
+                    actual.bottom,
+                    expected.value.bottom.as_deref(),
+                )
+            {
+                return Err("owned equation box does not match its execution record".to_owned());
+            }
+        }
+        if equation.root_box.0 != equation.boxes.start {
+            return Err("execution equation root does not match the owned AST".to_owned());
+        }
+        equation_index += 1;
+    }
+    if equation_index != report.equations.len() {
+        return Err("execution report has an equation absent from the owned AST".to_owned());
+    }
+    Ok(())
 }
 
 fn ast_heading_phrase(node: &crate::Node) -> String {
@@ -1109,6 +1397,10 @@ struct RawRecords {
     tables: Vec<CTableRecord>,
     table_rows: Vec<CTableRowRecord>,
     table_cells: Vec<CTableCellRecord>,
+    equations: Vec<CEquationRecord>,
+    equation_boxes: Vec<CEquationBoxRecord>,
+    equation_box_executions: Vec<CEquationBoxExecutionRecord>,
+    equation_parts: Vec<CEquationPartRecord>,
     diagnostics: Vec<CDiagnosticRecord>,
 }
 
@@ -1347,6 +1639,54 @@ copy_record_table!(
     mant_mandoc_execution_copy_table_cells
 );
 copy_record_table!(
+    copy_equations,
+    CEquationRecord,
+    equation_offsets,
+    "equation",
+    mant_mandoc_execution_equation_count,
+    mant_mandoc_execution_equation_size,
+    mant_mandoc_execution_equation_align,
+    mant_mandoc_execution_equation_field_count,
+    mant_mandoc_execution_equation_offset,
+    mant_mandoc_execution_copy_equations
+);
+copy_record_table!(
+    copy_equation_boxes,
+    CEquationBoxRecord,
+    equation_box_offsets,
+    "equation-box",
+    mant_mandoc_execution_equation_box_count,
+    mant_mandoc_execution_equation_box_size,
+    mant_mandoc_execution_equation_box_align,
+    mant_mandoc_execution_equation_box_field_count,
+    mant_mandoc_execution_equation_box_offset,
+    mant_mandoc_execution_copy_equation_boxes
+);
+copy_record_table!(
+    copy_equation_box_executions,
+    CEquationBoxExecutionRecord,
+    equation_box_execution_offsets,
+    "equation-box-execution",
+    mant_mandoc_execution_equation_box_execution_count,
+    mant_mandoc_execution_equation_box_execution_size,
+    mant_mandoc_execution_equation_box_execution_align,
+    mant_mandoc_execution_equation_box_execution_field_count,
+    mant_mandoc_execution_equation_box_execution_offset,
+    mant_mandoc_execution_copy_equation_box_executions
+);
+copy_record_table!(
+    copy_equation_parts,
+    CEquationPartRecord,
+    equation_part_offsets,
+    "equation-part",
+    mant_mandoc_execution_equation_part_count,
+    mant_mandoc_execution_equation_part_size,
+    mant_mandoc_execution_equation_part_align,
+    mant_mandoc_execution_equation_part_field_count,
+    mant_mandoc_execution_equation_part_offset,
+    mant_mandoc_execution_copy_equation_parts
+);
+copy_record_table!(
     copy_diagnostics,
     CDiagnosticRecord,
     diagnostic_offsets,
@@ -1383,6 +1723,10 @@ unsafe fn copy_raw_records(
         tables: unsafe { copy_tables(report, &mut remaining) }?,
         table_rows: unsafe { copy_table_rows(report, &mut remaining) }?,
         table_cells: unsafe { copy_table_cells(report, &mut remaining) }?,
+        equations: unsafe { copy_equations(report, &mut remaining) }?,
+        equation_boxes: unsafe { copy_equation_boxes(report, &mut remaining) }?,
+        equation_box_executions: unsafe { copy_equation_box_executions(report, &mut remaining) }?,
+        equation_parts: unsafe { copy_equation_parts(report, &mut remaining) }?,
         diagnostics: unsafe { copy_diagnostics(report, &mut remaining) }?,
     };
     if remaining != 0 {
@@ -1926,6 +2270,10 @@ fn convert_report(
         tables: table_records,
         table_rows: table_row_records,
         table_cells: table_cell_records,
+        equations: equation_records,
+        equation_boxes: equation_box_records,
+        equation_box_executions: equation_box_execution_records,
+        equation_parts: equation_part_records,
         diagnostics: diagnostic_records,
     } = records;
     let node_count = node_records.len();
@@ -1939,6 +2287,9 @@ fn convert_report(
     let table_count = table_records.len();
     let table_row_count = table_row_records.len();
     let table_cell_count = table_cell_records.len();
+    let equation_count = equation_records.len();
+    let equation_box_count = equation_box_records.len();
+    let equation_invocation_count = equation_box_execution_records.len();
     let expected_records = [
         source_count,
         node_count,
@@ -1958,6 +2309,10 @@ fn convert_report(
         table_count,
         table_row_count,
         table_cell_count,
+        equation_count,
+        equation_box_count,
+        equation_invocation_count,
+        equation_part_records.len(),
         diagnostic_records.len(),
     ]
     .into_iter()
@@ -2150,6 +2505,7 @@ fn convert_report(
             4 => AtomRole::MacroGenerated,
             5 => AtomRole::DeviceGenerated,
             6 => AtomRole::TableCellPayload,
+            7 => AtomRole::EquationContent,
             _ => return Err("unknown execution word role".to_owned()),
         };
         if node.is_some_and(|node| {
@@ -2223,6 +2579,7 @@ fn convert_report(
             4 => AtomRole::MacroGenerated,
             5 => AtomRole::DeviceGenerated,
             6 => AtomRole::TableCellPayload,
+            7 => AtomRole::EquationContent,
             _ => return Err("unknown execution atom role".to_owned()),
         };
         let font = match value.font {
@@ -4583,6 +4940,436 @@ fn convert_report(
         }
     }
 
+    let mut equations = reserved_vec(equation_count, "equation")?;
+    let mut expected_box_start = 0_u32;
+    let mut expected_invocation_start = 0_u32;
+    let mut expected_part_start = 0_u32;
+    let equation_nodes = nodes
+        .iter()
+        .filter(|node| node.kind == NodeKind::Equation)
+        .map(|node| node.key)
+        .collect::<Vec<_>>();
+    if equation_nodes.len() != equation_count {
+        return Err("execution equation count does not match the syntax tree".to_owned());
+    }
+    for (index, value) in equation_records.into_iter().enumerate() {
+        dense(value.key, index, "equation")?;
+        let node = node_key(value.node, node_count, "equation node")?;
+        let boxes = range(
+            value.box_start,
+            value
+                .box_start
+                .checked_add(value.box_length)
+                .ok_or_else(|| "execution equation box range overflow".to_owned())?,
+            "equation boxes",
+        )?;
+        let invocations = range(
+            value.execution_start,
+            value
+                .execution_start
+                .checked_add(value.execution_length)
+                .ok_or_else(|| "execution equation invocation range overflow".to_owned())?,
+            "equation invocations",
+        )?;
+        let equation_atoms = range(value.enter_atom, value.leave_atom, "equation atoms")?;
+        let parts = range(
+            value.part_start,
+            value
+                .part_start
+                .checked_add(value.part_length)
+                .ok_or_else(|| "execution equation part range overflow".to_owned())?,
+            "equation parts",
+        )?;
+        let flags = ExecutionEquationFlags(value.flags);
+        if node != equation_nodes[index]
+            || value.root_box != value.box_start
+            || value.box_length == 0
+            || value.execution_length == 0
+            || boxes.start != expected_box_start
+            || usize::try_from(boxes.end).is_err()
+            || boxes.end as usize > equation_box_count
+            || invocations.start != expected_invocation_start
+            || usize::try_from(invocations.end).is_err()
+            || invocations.end as usize > equation_invocation_count
+            || parts.start != expected_part_start
+            || parts.end as usize > equation_part_records.len()
+            || value.flags & !0x7 != 0
+            || flags.contains(ExecutionEquationFlags::INLINE)
+                == flags.contains(ExecutionEquationFlags::DISPLAY)
+            || nodes[node.0 as usize]
+                .flags
+                .contains(ExecutionNodeFlags::LINE_START)
+                != flags.contains(ExecutionEquationFlags::DISPLAY)
+            || equation_atoms.end as usize > atom_count
+            || value.reserved0 != 0
+            || value.reserved1 != 0
+            || value.enter_sequence >= value.leave_sequence
+            || !exact_sequence_range(
+                &atoms,
+                &equation_atoms,
+                value.enter_sequence,
+                value.leave_sequence,
+                |atom| atom.sequence,
+            )
+        {
+            return Err("invalid execution equation relationship".to_owned());
+        }
+        expected_box_start = boxes.end;
+        expected_invocation_start = invocations.end;
+        expected_part_start = parts.end;
+        equations.push(ExecutionEquation {
+            key: ExecutionEquationKey(value.key),
+            node,
+            root_box: ExecutionEquationBoxKey(value.root_box),
+            boxes,
+            invocations,
+            parts,
+            flags,
+            atoms: equation_atoms,
+            enter_sequence: value.enter_sequence,
+            leave_sequence: value.leave_sequence,
+        });
+    }
+    if expected_box_start as usize != equation_box_count
+        || expected_invocation_start as usize != equation_invocation_count
+        || expected_part_start as usize != equation_part_records.len()
+    {
+        return Err("execution equations do not cover their owned record tables".to_owned());
+    }
+
+    let mut equation_boxes = reserved_vec(equation_box_count, "equation box")?;
+    for (index, value) in equation_box_records.into_iter().enumerate() {
+        dense(value.key, index, "equation box")?;
+        let equation_index = usize::try_from(value.equation)
+            .ok()
+            .filter(|key| *key < equation_count)
+            .ok_or_else(|| "invalid execution equation-box parent".to_owned())?;
+        let equation = &equations[equation_index];
+        let kind = match value.kind {
+            1 => ExecutionEquationBoxKind::Text,
+            2 => ExecutionEquationBoxKind::Subexpression,
+            3 => ExecutionEquationBoxKind::List,
+            4 => ExecutionEquationBoxKind::Pile,
+            5 => ExecutionEquationBoxKind::Matrix,
+            _ => return Err("unknown execution equation-box kind".to_owned()),
+        };
+        let font = match value.font {
+            0 => ExecutionEquationFont::None,
+            1 => ExecutionEquationFont::Roman,
+            2 => ExecutionEquationFont::Bold,
+            3 => ExecutionEquationFont::Fat,
+            4 => ExecutionEquationFont::Italic,
+            _ => return Err("unknown execution equation-box font".to_owned()),
+        };
+        let position = match value.position {
+            0 => ExecutionEquationPosition::None,
+            1 => ExecutionEquationPosition::Superscript,
+            2 => ExecutionEquationPosition::SubscriptSuperscript,
+            3 => ExecutionEquationPosition::Subscript,
+            4 => ExecutionEquationPosition::To,
+            5 => ExecutionEquationPosition::From,
+            6 => ExecutionEquationPosition::FromTo,
+            7 => ExecutionEquationPosition::Over,
+            8 => ExecutionEquationPosition::SquareRoot,
+            _ => return Err("unknown execution equation-box position".to_owned()),
+        };
+        let parent = option(value.parent).map(ExecutionEquationBoxKey);
+        let first_child = option(value.first_child).map(ExecutionEquationBoxKey);
+        let next_sibling = option(value.next_sibling).map(ExecutionEquationBoxKey);
+        let is_root = value.key == equation.root_box.0;
+        if value.key < equation.boxes.start
+            || value.key >= equation.boxes.end
+            || value.subtree_end <= value.key
+            || value.subtree_end > equation.boxes.end
+            || value.reserved != 0
+            || is_root != parent.is_none()
+            || (is_root && (next_sibling.is_some() || value.ordinal != 0))
+            || parent.is_some_and(|parent| parent.0 < equation.boxes.start || parent.0 >= value.key)
+        {
+            return Err("invalid execution equation-box relationship".to_owned());
+        }
+        equation_boxes.push(ExecutionEquationBox {
+            key: ExecutionEquationBoxKey(value.key),
+            equation: ExecutionEquationKey(value.equation),
+            parent,
+            first_child,
+            next_sibling,
+            subtree_end: value.subtree_end,
+            ordinal: value.ordinal,
+            kind,
+            font,
+            position,
+            size: value.size,
+            expected_args: value.expected_args,
+            actual_args: value.actual_args,
+            text: optional_pool(value.text_start, value.text_length, &pool, "equation text")?,
+            left: optional_pool(value.left_start, value.left_length, &pool, "equation left")?,
+            right: optional_pool(
+                value.right_start,
+                value.right_length,
+                &pool,
+                "equation right",
+            )?,
+            top: optional_pool(value.top_start, value.top_length, &pool, "equation top")?,
+            bottom: optional_pool(
+                value.bottom_start,
+                value.bottom_length,
+                &pool,
+                "equation bottom",
+            )?,
+        });
+    }
+    let mut claimed_boxes = reserved_filled_vec(false, equation_box_count, "equation child")?;
+    for value in &equation_boxes {
+        let equation = &equations[value.equation.0 as usize];
+        if let Some(parent_key) = value.parent {
+            let parent = &equation_boxes[parent_key.0 as usize];
+            if parent.equation != value.equation || value.key.0 >= parent.subtree_end {
+                return Err("equation box escapes its structural parent".to_owned());
+            }
+        }
+        let mut next = value.first_child;
+        let mut ordinal = 0_u32;
+        let mut last_end = value.key.0 + 1;
+        while let Some(child_key) = next {
+            let child_index = child_key.0 as usize;
+            let child = equation_boxes
+                .get(child_index)
+                .ok_or_else(|| "invalid equation child key".to_owned())?;
+            if child.parent != Some(value.key)
+                || child.ordinal != ordinal
+                || (ordinal == 0 && child.key.0 != value.key.0 + 1)
+                || child.key.0 >= value.subtree_end
+                || claimed_boxes[child_index]
+                || child
+                    .next_sibling
+                    .is_some_and(|sibling| sibling.0 != child.subtree_end)
+            {
+                return Err("invalid execution equation child chain".to_owned());
+            }
+            claimed_boxes[child_index] = true;
+            ordinal = ordinal
+                .checked_add(1)
+                .ok_or_else(|| "execution equation child count overflow".to_owned())?;
+            last_end = child.subtree_end;
+            next = child.next_sibling;
+        }
+        if u64::from(ordinal) != value.actual_args || last_end != value.subtree_end {
+            return Err("execution equation arguments do not match children".to_owned());
+        }
+        if value.key != equation.root_box && !claimed_boxes[value.key.0 as usize] {
+            return Err("unclaimed execution equation box".to_owned());
+        }
+    }
+    for equation in &equations {
+        let root = &equation_boxes[equation.root_box.0 as usize];
+        let no_content = root.first_child.is_none()
+            && root.text.is_none()
+            && root.left.is_none()
+            && root.right.is_none()
+            && root.top.is_none()
+            && root.bottom.is_none();
+        if no_content != equation.flags.contains(ExecutionEquationFlags::NO_CONTENT) {
+            return Err("execution equation no-content flag disagrees with its root".to_owned());
+        }
+    }
+
+    let mut equation_invocations: Vec<ExecutionEquationInvocation> =
+        reserved_vec(equation_invocation_count, "equation invocation")?;
+    let mut executed_boxes =
+        reserved_filled_vec(false, equation_box_count, "executed equation box")?;
+    for (index, value) in equation_box_execution_records.into_iter().enumerate() {
+        dense(value.key, index, "equation invocation")?;
+        let equation_index = usize::try_from(value.equation)
+            .ok()
+            .filter(|key| *key < equation_count)
+            .ok_or_else(|| "invalid equation invocation parent".to_owned())?;
+        let equation = &equations[equation_index];
+        let box_index = usize::try_from(value.box_key)
+            .ok()
+            .filter(|key| *key < equation_box_count)
+            .ok_or_else(|| "invalid equation invocation box".to_owned())?;
+        let parent = option(value.parent_execution).map(ExecutionEquationInvocationKey);
+        let parts = range(
+            value.part_start,
+            value
+                .part_start
+                .checked_add(value.part_length)
+                .ok_or_else(|| "equation invocation part range overflow".to_owned())?,
+            "equation invocation parts",
+        )?;
+        let invocation_atoms = range(
+            value.enter_atom,
+            value.leave_atom,
+            "equation invocation atoms",
+        )?;
+        if value.key < equation.invocations.start
+            || value.key >= equation.invocations.end
+            || equation_boxes[box_index].equation != equation.key
+            || executed_boxes[box_index]
+            || invocation_atoms.start < equation.atoms.start
+            || invocation_atoms.end > equation.atoms.end
+            || parts.start < equation.parts.start
+            || parts.end > equation.parts.end
+            || value.reserved0 != 0
+            || value.reserved1 != 0
+            || value.enter_sequence <= equation.enter_sequence
+            || value.leave_sequence >= equation.leave_sequence
+            || value.enter_sequence >= value.leave_sequence
+            || parent.is_none() != (value.key == equation.invocations.start)
+            || (parent.is_none()
+                && (value.box_key != equation.root_box.0
+                    || invocation_atoms != equation.atoms
+                    || parts != equation.parts))
+            || parent.is_some_and(|parent| {
+                parent.0 < equation.invocations.start || parent.0 >= value.key
+            })
+            || !exact_sequence_range(
+                &atoms,
+                &invocation_atoms,
+                value.enter_sequence,
+                value.leave_sequence,
+                |atom| atom.sequence,
+            )
+        {
+            return Err("invalid execution equation invocation".to_owned());
+        }
+        if let Some(parent_key) = parent {
+            let parent_invocation = &equation_invocations[parent_key.0 as usize];
+            let parent_box = &equation_boxes[parent_invocation.box_key.0 as usize];
+            if parent_invocation.equation != equation.key
+                || value.box_key <= parent_box.key.0
+                || value.box_key >= parent_box.subtree_end
+                || invocation_atoms.start < parent_invocation.atoms.start
+                || invocation_atoms.end > parent_invocation.atoms.end
+                || parts.start < parent_invocation.parts.start
+                || parts.end > parent_invocation.parts.end
+                || value.leave_sequence >= parent_invocation.leave_sequence
+            {
+                return Err("equation invocation escapes its renderer parent".to_owned());
+            }
+        }
+        executed_boxes[box_index] = true;
+        equation_invocations.push(ExecutionEquationInvocation {
+            key: ExecutionEquationInvocationKey(value.key),
+            equation: equation.key,
+            box_key: ExecutionEquationBoxKey(value.box_key),
+            parent,
+            parts,
+            atoms: invocation_atoms,
+            enter_sequence: value.enter_sequence,
+            leave_sequence: value.leave_sequence,
+        });
+    }
+
+    let mut equation_parts = reserved_vec(equation_part_records.len(), "equation part")?;
+    let mut owned_equation_atoms = reserved_filled_vec(false, atom_count, "equation atom owner")?;
+    let mut owned_equation_words = reserved_filled_vec(false, word_count, "equation word owner")?;
+    for (index, value) in equation_part_records.into_iter().enumerate() {
+        dense(value.key, index, "equation part")?;
+        let equation_index = usize::try_from(value.equation)
+            .ok()
+            .filter(|key| *key < equation_count)
+            .ok_or_else(|| "invalid equation part parent".to_owned())?;
+        let box_index = usize::try_from(value.box_key)
+            .ok()
+            .filter(|key| *key < equation_box_count)
+            .ok_or_else(|| "invalid equation part box".to_owned())?;
+        let invocation_index = usize::try_from(value.execution)
+            .ok()
+            .filter(|key| *key < equation_invocation_count)
+            .ok_or_else(|| "invalid equation part invocation".to_owned())?;
+        let equation = &equations[equation_index];
+        let box_value = &equation_boxes[box_index];
+        let invocation = &equation_invocations[invocation_index];
+        let kind = match value.kind {
+            1 => ExecutionEquationPartKind::Text,
+            2 => ExecutionEquationPartKind::LeftFence,
+            3 => ExecutionEquationPartKind::RightFence,
+            4 => ExecutionEquationPartKind::Operator,
+            5 => ExecutionEquationPartKind::SquareRoot,
+            6 => ExecutionEquationPartKind::TopDecorator,
+            7 => ExecutionEquationPartKind::BottomDecorator,
+            _ => return Err("unknown execution equation-part kind".to_owned()),
+        };
+        let part_atoms = range(
+            value.atom_start,
+            value
+                .atom_start
+                .checked_add(value.atom_length)
+                .ok_or_else(|| "equation part atom range overflow".to_owned())?,
+            "equation part atoms",
+        )?;
+        if value.word_length != 1 {
+            return Err("equation part must own exactly one formatter word".to_owned());
+        }
+        let word_index = usize::try_from(value.word_start)
+            .ok()
+            .filter(|key| *key < word_count)
+            .ok_or_else(|| "invalid equation part word".to_owned())?;
+        let word = &words[word_index];
+        if value.reserved != 0
+            || value.key < equation.parts.start
+            || value.key >= equation.parts.end
+            || box_value.equation != equation.key
+            || invocation.equation != equation.key
+            || invocation.box_key != box_value.key
+            || value.key < invocation.parts.start
+            || value.key >= invocation.parts.end
+            || part_atoms.start < invocation.atoms.start
+            || part_atoms.end > invocation.atoms.end
+            || value.enter_sequence <= invocation.enter_sequence
+            || value.leave_sequence >= invocation.leave_sequence
+            || value.enter_sequence >= value.leave_sequence
+            || word.node != Some(equation.node)
+            || word.role != AtomRole::EquationContent
+            || word.atoms != part_atoms
+            || word.enter_sequence <= value.enter_sequence
+            || word.leave_sequence >= value.leave_sequence
+            || owned_equation_words[word_index]
+            || !exact_sequence_range(
+                &atoms,
+                &part_atoms,
+                value.enter_sequence,
+                value.leave_sequence,
+                |atom| atom.sequence,
+            )
+        {
+            return Err("invalid equation part relationship".to_owned());
+        }
+        owned_equation_words[word_index] = true;
+        for atom_index in part_atoms.clone() {
+            let atom_index = atom_index as usize;
+            if owned_equation_atoms[atom_index] || atoms[atom_index].node != Some(equation.node) {
+                return Err("invalid equation part atom ownership".to_owned());
+            }
+            owned_equation_atoms[atom_index] = true;
+        }
+        equation_parts.push(ExecutionEquationPart {
+            key: ExecutionEquationPartKey(value.key),
+            equation: equation.key,
+            box_key: box_value.key,
+            invocation: invocation.key,
+            kind,
+            word: ExecutionWordKey(value.word_start),
+            atoms: part_atoms,
+            enter_sequence: value.enter_sequence,
+            leave_sequence: value.leave_sequence,
+        });
+    }
+    for equation in &equations {
+        if (equation.atoms.start..equation.atoms.end)
+            .any(|atom| !owned_equation_atoms[atom as usize])
+        {
+            return Err("equation atom has no direct box ownership".to_owned());
+        }
+    }
+    for (index, word) in words.iter().enumerate() {
+        if (word.role == AtomRole::EquationContent) != owned_equation_words[index] {
+            return Err("equation formatter word has no unique part owner".to_owned());
+        }
+    }
+
     let mut diagnostics = reserved_vec(diagnostic_records.len(), "diagnostic")?;
     for value in diagnostic_records {
         diagnostics.push(ExecutionDiagnostic {
@@ -4614,6 +5401,9 @@ fn convert_report(
         &tables,
         &table_rows,
         &table_cells,
+        &equations,
+        &equation_invocations,
+        &equation_parts,
         &diagnostics,
     )?;
     Ok(NativeExecutionReport {
@@ -4638,6 +5428,10 @@ fn convert_report(
         tables,
         table_rows,
         table_cells,
+        equations,
+        equation_boxes,
+        equation_invocations,
+        equation_parts,
         diagnostics,
     })
 }
@@ -4658,6 +5452,9 @@ fn validate_event_sequences(
     tables: &[ExecutionTable],
     table_rows: &[ExecutionTableRow],
     table_cells: &[ExecutionTableCell],
+    equations: &[ExecutionEquation],
+    equation_invocations: &[ExecutionEquationInvocation],
+    equation_parts: &[ExecutionEquationPart],
     diagnostics: &[ExecutionDiagnostic],
 ) -> Result<(), String> {
     let generation_sequences = buffer_generations
@@ -4692,6 +5489,18 @@ fn validate_event_sequences(
         .len()
         .checked_mul(2)
         .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
+    let equation_sequences = equations
+        .len()
+        .checked_mul(2)
+        .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
+    let equation_invocation_sequences = equation_invocations
+        .len()
+        .checked_mul(2)
+        .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
+    let equation_part_sequences = equation_parts
+        .len()
+        .checked_mul(2)
+        .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
     let sequence_count = [
         words
             .len()
@@ -4713,6 +5522,9 @@ fn validate_event_sequences(
         table_sequences,
         table_row_sequences,
         table_cell_sequences,
+        equation_sequences,
+        equation_invocation_sequences,
+        equation_part_sequences,
         diagnostics.len(),
     ]
     .into_iter()
@@ -4786,6 +5598,18 @@ fn validate_event_sequences(
     for cell in table_cells {
         seen.push(cell.enter_sequence);
         seen.push(cell.leave_sequence);
+    }
+    for equation in equations {
+        seen.push(equation.enter_sequence);
+        seen.push(equation.leave_sequence);
+    }
+    for invocation in equation_invocations {
+        seen.push(invocation.enter_sequence);
+        seen.push(invocation.leave_sequence);
+    }
+    for part in equation_parts {
+        seen.push(part.enter_sequence);
+        seen.push(part.leave_sequence);
     }
     for diagnostic in diagnostics {
         seen.push(diagnostic.sequence);
@@ -5179,6 +6003,86 @@ fn table_cell_offsets() -> [usize; 24] {
         offset_of!(CTableCellRecord, leave_sequence),
     ]
 }
+fn equation_offsets() -> [usize; 16] {
+    [
+        offset_of!(CEquationRecord, key),
+        offset_of!(CEquationRecord, node),
+        offset_of!(CEquationRecord, root_box),
+        offset_of!(CEquationRecord, box_start),
+        offset_of!(CEquationRecord, box_length),
+        offset_of!(CEquationRecord, execution_start),
+        offset_of!(CEquationRecord, execution_length),
+        offset_of!(CEquationRecord, part_start),
+        offset_of!(CEquationRecord, part_length),
+        offset_of!(CEquationRecord, flags),
+        offset_of!(CEquationRecord, enter_atom),
+        offset_of!(CEquationRecord, leave_atom),
+        offset_of!(CEquationRecord, reserved0),
+        offset_of!(CEquationRecord, reserved1),
+        offset_of!(CEquationRecord, enter_sequence),
+        offset_of!(CEquationRecord, leave_sequence),
+    ]
+}
+fn equation_box_offsets() -> [usize; 24] {
+    [
+        offset_of!(CEquationBoxRecord, key),
+        offset_of!(CEquationBoxRecord, equation),
+        offset_of!(CEquationBoxRecord, parent),
+        offset_of!(CEquationBoxRecord, first_child),
+        offset_of!(CEquationBoxRecord, next_sibling),
+        offset_of!(CEquationBoxRecord, subtree_end),
+        offset_of!(CEquationBoxRecord, ordinal),
+        offset_of!(CEquationBoxRecord, kind),
+        offset_of!(CEquationBoxRecord, font),
+        offset_of!(CEquationBoxRecord, position),
+        offset_of!(CEquationBoxRecord, size),
+        offset_of!(CEquationBoxRecord, expected_args),
+        offset_of!(CEquationBoxRecord, actual_args),
+        offset_of!(CEquationBoxRecord, text_start),
+        offset_of!(CEquationBoxRecord, text_length),
+        offset_of!(CEquationBoxRecord, left_start),
+        offset_of!(CEquationBoxRecord, left_length),
+        offset_of!(CEquationBoxRecord, right_start),
+        offset_of!(CEquationBoxRecord, right_length),
+        offset_of!(CEquationBoxRecord, top_start),
+        offset_of!(CEquationBoxRecord, top_length),
+        offset_of!(CEquationBoxRecord, bottom_start),
+        offset_of!(CEquationBoxRecord, bottom_length),
+        offset_of!(CEquationBoxRecord, reserved),
+    ]
+}
+fn equation_box_execution_offsets() -> [usize; 12] {
+    [
+        offset_of!(CEquationBoxExecutionRecord, key),
+        offset_of!(CEquationBoxExecutionRecord, equation),
+        offset_of!(CEquationBoxExecutionRecord, box_key),
+        offset_of!(CEquationBoxExecutionRecord, parent_execution),
+        offset_of!(CEquationBoxExecutionRecord, part_start),
+        offset_of!(CEquationBoxExecutionRecord, part_length),
+        offset_of!(CEquationBoxExecutionRecord, enter_atom),
+        offset_of!(CEquationBoxExecutionRecord, leave_atom),
+        offset_of!(CEquationBoxExecutionRecord, reserved0),
+        offset_of!(CEquationBoxExecutionRecord, reserved1),
+        offset_of!(CEquationBoxExecutionRecord, enter_sequence),
+        offset_of!(CEquationBoxExecutionRecord, leave_sequence),
+    ]
+}
+fn equation_part_offsets() -> [usize; 12] {
+    [
+        offset_of!(CEquationPartRecord, key),
+        offset_of!(CEquationPartRecord, equation),
+        offset_of!(CEquationPartRecord, box_key),
+        offset_of!(CEquationPartRecord, execution),
+        offset_of!(CEquationPartRecord, kind),
+        offset_of!(CEquationPartRecord, word_start),
+        offset_of!(CEquationPartRecord, word_length),
+        offset_of!(CEquationPartRecord, atom_start),
+        offset_of!(CEquationPartRecord, atom_length),
+        offset_of!(CEquationPartRecord, reserved),
+        offset_of!(CEquationPartRecord, enter_sequence),
+        offset_of!(CEquationPartRecord, leave_sequence),
+    ]
+}
 fn diagnostic_offsets() -> [usize; 5] {
     [
         offset_of!(CDiagnosticRecord, code),
@@ -5276,6 +6180,32 @@ body
         );
     }
 
+    #[test]
+    fn ast_binding_rejects_equation_structure_from_a_different_tree() {
+        // The fixture was checked with the fixed CVS `-Ttree` and `-Tascii`
+        // before its structural assertions were introduced.  This test then
+        // corrupts only the transferred execution-side box kind to prove that
+        // two independently valid-looking views cannot be paired silently.
+        let source = include_bytes!("../../tests/fixtures/execution/equation-structure.1");
+        let report = crate::Parser::new(crate::ParseOptions::default())
+            .with_input_format(crate::InputFormat::Man)
+            .execute_bytes("equation-structure.1", source, ExecutionLimits::default())
+            .unwrap();
+        let (document, _, mut execution) = report.into_parts();
+        validate_execution_ast_bindings(&document.root, &execution).unwrap();
+
+        let box_value = execution
+            .equation_boxes
+            .iter_mut()
+            .find(|box_value| box_value.kind == ExecutionEquationBoxKind::Pile)
+            .expect("fixture has a structural pile");
+        box_value.kind = ExecutionEquationBoxKind::Matrix;
+        assert_eq!(
+            validate_execution_ast_bindings(&document.root, &execution).unwrap_err(),
+            "owned equation box does not match its execution record"
+        );
+    }
+
     fn root_source() -> CSourceRecord {
         CSourceRecord {
             key: 0,
@@ -5317,6 +6247,10 @@ body
             tables: Vec::new(),
             table_rows: Vec::new(),
             table_cells: Vec::new(),
+            equations: Vec::new(),
+            equation_boxes: Vec::new(),
+            equation_box_executions: Vec::new(),
+            equation_parts: Vec::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -6004,6 +6938,10 @@ body
             records.tables.len(),
             records.table_rows.len(),
             records.table_cells.len(),
+            records.equations.len(),
+            records.equation_boxes.len(),
+            records.equation_box_executions.len(),
+            records.equation_parts.len(),
             records.diagnostics.len(),
         ]
         .into_iter()

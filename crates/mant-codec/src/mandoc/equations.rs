@@ -24,9 +24,10 @@ impl EquationDelimiterDirective {
     }
 }
 
-fn first_equation(node: &Node) -> Option<&str> {
+fn first_equation(node: &Node) -> Option<String> {
     node.equation
         .as_deref()
+        .map(libmandoc_rs::Equation::normalized_text)
         .or_else(|| node.children.iter().find_map(first_equation))
 }
 
@@ -111,7 +112,9 @@ impl LoweringContext<'_> {
         let normalized = Parser::default()
             .parse_bytes(Path::new("mant-inline-eqn.7"), synthetic.as_bytes())
             .ok()
-            .and_then(|report| first_equation(&report.document.root).map(visible_text))
+            .and_then(|report| {
+                first_equation(&report.document.root).map(|value| visible_text(&value))
+            })
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| visible_text(source));
         self.normalized_equations

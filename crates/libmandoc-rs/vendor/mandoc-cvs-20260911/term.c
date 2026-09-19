@@ -130,6 +130,54 @@ term_exec_node(struct termp *p, const struct roff_node *node, int entering)
 }
 
 int
+term_exec_equation(struct termp *p, const struct eqn_box *box, int entering)
+{
+	if (p->exec_failed || p->exec_ops == NULL)
+		return !p->exec_failed;
+	if (entering && p->exec_ops->equation_begin != NULL &&
+	    !p->exec_ops->equation_begin(p->exec_arg, p, p->exec_node, box))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->equation_end != NULL &&
+	    !p->exec_ops->equation_end(p->exec_arg, p, p->exec_node, box))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_equation_box(struct termp *p, const struct eqn_box *box,
+    int entering)
+{
+	if (p->exec_failed || p->exec_ops == NULL)
+		return !p->exec_failed;
+	if (entering && p->exec_ops->equation_box_begin != NULL &&
+	    !p->exec_ops->equation_box_begin(p->exec_arg, p,
+	    p->exec_node, box))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->equation_box_end != NULL &&
+	    !p->exec_ops->equation_box_end(p->exec_arg, p,
+	    p->exec_node, box))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_equation_part(struct termp *p, const struct eqn_box *box,
+    int kind, int entering)
+{
+	if (p->exec_failed || p->exec_ops == NULL)
+		return !p->exec_failed;
+	if (entering && p->exec_ops->equation_part_begin != NULL &&
+	    !p->exec_ops->equation_part_begin(p->exec_arg, p,
+	    p->exec_node, box, kind))
+		p->exec_failed = 1;
+	else if (!entering && p->exec_ops->equation_part_end != NULL &&
+	    !p->exec_ops->equation_part_end(p->exec_arg, p,
+	    p->exec_node, box, kind))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
 term_exec_heading(struct termp *p, const struct roff_node *node,
     int kind, int entering)
 {

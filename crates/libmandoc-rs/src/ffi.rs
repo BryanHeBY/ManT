@@ -159,7 +159,10 @@ emphasis
             + node.tag.as_ref().map_or(0, String::len)
             + node.offset.as_ref().map_or(0, String::len)
             + node.width.as_ref().map_or(0, String::len)
-            + node.equation.as_ref().map_or(0, String::len)
+            + node
+                .equation
+                .as_ref()
+                .map_or(0, |equation| equation.normalized_text().len())
             + node.enclosure.as_ref().map_or(0, |enclosure| {
                 enclosure.opening.len() + enclosure.closing.as_ref().map_or(0, String::len)
             })

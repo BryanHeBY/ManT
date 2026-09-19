@@ -329,7 +329,11 @@ fn equation_block(node: &Node, indent_columns: crate::mandoc::layout::SourceInde
         // roff text, but they bypass inline-node lowering. Decode them here so
         // values such as `\[*p]` and `\[mi]` cannot leak into every output
         // projection.
-        value: visible_text(node.equation.as_deref().unwrap_or_default()),
+        value: node
+            .equation
+            .as_deref()
+            .map(libmandoc_rs::Equation::normalized_text)
+            .map_or_else(String::new, |value| visible_text(&value)),
         display: true,
         layout: layout(indent_columns),
         source: source_span(node),

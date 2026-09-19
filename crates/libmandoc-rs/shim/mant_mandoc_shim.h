@@ -11,6 +11,7 @@ extern "C" {
 
 struct mant_mandoc_document;
 struct mant_mandoc_node;
+struct mant_mandoc_equation_box;
 struct mant_mandoc_table_cell;
 struct mparse;
 #ifdef MANT_MANDOC_EXECUTE
@@ -54,11 +55,56 @@ struct mant_mandoc_node_view {
 	const char		*width;
 	const char		*enclosure_open;
 	const char		*enclosure_close;
-	const char		*equation;
+	const struct mant_mandoc_equation_box *equation;
 	const struct mant_mandoc_table_cell *table_cells;
 	const struct mant_mandoc_table_rule_cell *table_rule_cells;
 	const struct mant_mandoc_node *child;
 	const struct mant_mandoc_node *next;
+};
+
+/* Borrowed projection of one live eqn(7) structural box. */
+struct mant_mandoc_equation_box_view {
+	int32_t		 type;
+	int32_t		 font;
+	int32_t		 position;
+	int32_t		 size;
+	uint64_t	 expected_args;
+	uint64_t	 actual_args;
+	const char	*text;
+	const char	*left;
+	const char	*right;
+	const char	*top;
+	const char	*bottom;
+	const struct mant_mandoc_equation_box *first;
+	const struct mant_mandoc_equation_box *next;
+};
+
+enum mant_mandoc_equation_box_type {
+	MANT_MANDOC_EQN_TEXT = 0,
+	MANT_MANDOC_EQN_SUBEXPR,
+	MANT_MANDOC_EQN_LIST,
+	MANT_MANDOC_EQN_PILE,
+	MANT_MANDOC_EQN_MATRIX
+};
+
+enum mant_mandoc_equation_font {
+	MANT_MANDOC_EQN_FONT_NONE = 0,
+	MANT_MANDOC_EQN_FONT_ROMAN,
+	MANT_MANDOC_EQN_FONT_BOLD,
+	MANT_MANDOC_EQN_FONT_FAT,
+	MANT_MANDOC_EQN_FONT_ITALIC
+};
+
+enum mant_mandoc_equation_position {
+	MANT_MANDOC_EQN_POS_NONE = 0,
+	MANT_MANDOC_EQN_POS_SUP,
+	MANT_MANDOC_EQN_POS_SUBSUP,
+	MANT_MANDOC_EQN_POS_SUB,
+	MANT_MANDOC_EQN_POS_TO,
+	MANT_MANDOC_EQN_POS_FROM,
+	MANT_MANDOC_EQN_POS_FROMTO,
+	MANT_MANDOC_EQN_POS_OVER,
+	MANT_MANDOC_EQN_POS_SQRT
 };
 
 /* Borrowed projection of one live tbl(7) data cell. */
@@ -212,8 +258,6 @@ const char *mant_mandoc_document_name(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_date(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document *);
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
-int mant_mandoc_document_equation_truncated(
-    const struct mant_mandoc_document *);
 int mant_mandoc_is_native_roff_request(const char *, size_t);
 size_t mant_mandoc_node_view_size(void);
 size_t mant_mandoc_node_view_align(void);
@@ -227,6 +271,10 @@ size_t mant_mandoc_table_rule_cell_view_size(void);
 size_t mant_mandoc_table_rule_cell_view_align(void);
 uint32_t mant_mandoc_table_rule_cell_view_field_count(void);
 size_t mant_mandoc_table_rule_cell_view_offset(unsigned int);
+size_t mant_mandoc_equation_box_view_size(void);
+size_t mant_mandoc_equation_box_view_align(void);
+uint32_t mant_mandoc_equation_box_view_field_count(void);
+size_t mant_mandoc_equation_box_view_offset(unsigned int);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
 int mant_mandoc_node_snapshot(struct mant_mandoc_document *,
@@ -237,6 +285,9 @@ int mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *,
 int mant_mandoc_table_rule_cell_snapshot(const struct mant_mandoc_document *,
     const struct mant_mandoc_table_rule_cell *,
     struct mant_mandoc_table_rule_cell_view *, size_t);
+int mant_mandoc_equation_box_snapshot(const struct mant_mandoc_document *,
+    const struct mant_mandoc_equation_box *,
+    struct mant_mandoc_equation_box_view *, size_t);
 #ifdef MANT_MANDOC_RENDER
 const unsigned char *mant_mandoc_document_output(
     const struct mant_mandoc_document *);

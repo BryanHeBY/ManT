@@ -5,9 +5,9 @@
 use crate::Diagnostic;
 use crate::{
     AuthorMode, Compression, DefinitionListStyle, DiagnosticCode, DiagnosticLevel, DisplayKind,
-    Document, IncludePolicy, InputFormat, MacroSet, Node, NodeKind, NormalizedFont,
-    NormalizedListKind, ParseError, ParseOptions, Parser, SourceBundle, TableAlignment,
-    TableRowKind, TableRuleCellKind,
+    Document, Equation, EquationBoxKind, EquationFont, EquationPosition, IncludePolicy,
+    InputFormat, MacroSet, Node, NodeKind, NormalizedFont, NormalizedListKind, ParseError,
+    ParseOptions, Parser, SourceBundle, TableAlignment, TableRowKind, TableRuleCellKind,
 };
 use std::{
     fs, process,

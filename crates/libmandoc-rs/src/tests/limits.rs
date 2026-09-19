@@ -211,11 +211,9 @@ fn deeply_nested_input_is_bounded_instead_of_overflowing_the_stack() {
 
 #[test]
 fn deeply_nested_equation_is_bounded_instead_of_overflowing_the_stack() {
-    // Braces nest eqn boxes, a recursive walk the node-copy cap never
-    // enters: copy_equation descends box->first without limit, so a
-    // pathologically nested equation overflows the stack while flattening
-    // it. Each `sqrt` level emits text, so an unbounded render would grow
-    // the string with the input depth; a bounded one plateaus at the cap.
+    // Braces nest eqn boxes.  The typed copier must enforce its own depth
+    // bound while preserving the box tree, so hostile nesting is rejected
+    // without growing the Rust stack without limit.
     let depth = 5_000;
     let mut equation = String::new();
     for _ in 0..depth {
@@ -232,7 +230,11 @@ fn deeply_nested_equation_is_bounded_instead_of_overflowing_the_stack() {
         .expect("deeply nested equation parses");
 
     let node = find_kind(&report.document.root, NodeKind::Equation).expect("equation node");
-    let rendered = node.equation.as_deref().expect("equation text");
+    let rendered = node
+        .equation
+        .as_ref()
+        .expect("equation tree")
+        .normalized_text();
     // The render stopped at the cap: the flattened text is far shorter than
     // the ~30k chars all 5000 `sqrt` levels would emit, proving it did not
     // recurse through every box (and so could not overflow the stack).

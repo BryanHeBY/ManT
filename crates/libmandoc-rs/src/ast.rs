@@ -44,6 +44,172 @@ pub enum NodeKind {
     Equation,
 }
 
+/// Native structural kind of an eqn(7) box.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EquationBoxKind {
+    /// Text, number, variable, symbol, or operator payload.
+    Text,
+    /// A positional or fractional subexpression.
+    Subexpression,
+    /// An ordered expression list, including braced expressions.
+    List,
+    /// A vertical pile.
+    Pile,
+    /// A matrix whose structural children are columns.
+    Matrix,
+}
+
+/// Font retained on an eqn(7) structural box.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EquationFont {
+    /// Inherit the surrounding equation font.
+    None,
+    /// Upright roman text.
+    Roman,
+    /// Bold text.
+    Bold,
+    /// Extra-heavy text, retained separately from bold.
+    Fat,
+    /// Italic text.
+    Italic,
+}
+
+/// Positional relation retained on an eqn(7) structural box.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EquationPosition {
+    /// No positional operator.
+    None,
+    /// Superscript relation.
+    Superscript,
+    /// Combined subscript and superscript relation.
+    SubscriptSuperscript,
+    /// Subscript relation.
+    Subscript,
+    /// Upper-limit relation.
+    To,
+    /// Lower-limit relation.
+    From,
+    /// Combined lower- and upper-limit relation.
+    FromTo,
+    /// Fraction relation.
+    Over,
+    /// Square-root relation.
+    SquareRoot,
+}
+
+/// One fully owned box in the native eqn(7) syntax tree.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EquationBox {
+    /// Structural box kind.
+    pub kind: EquationBoxKind,
+    /// Native font declaration.
+    pub font: EquationFont,
+    /// Native positional relation.
+    pub position: EquationPosition,
+    /// Native font size; `i32::MIN` retains the upstream default sentinel.
+    pub size: i32,
+    /// Maximum argument count; upstream uses `u32::MAX` for an open-ended box.
+    pub expected_args: u64,
+    /// Actual direct-child count reported by the native parser.
+    pub actual_args: u64,
+    /// Optional box text payload.
+    pub text: Option<String>,
+    /// Optional explicit left fence.
+    pub left: Option<String>,
+    /// Optional explicit right fence.
+    pub right: Option<String>,
+    /// Optional decoration rendered above the box.
+    pub top: Option<String>,
+    /// Optional decoration rendered below the box.
+    pub bottom: Option<String>,
+    /// Direct children in native order.
+    pub children: Vec<Self>,
+}
+
+/// Fully owned native eqn(7) structure carried by an equation node.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Equation {
+    /// Artificial root box retained even for configuration-only and empty equations.
+    pub root: EquationBox,
+}
+
+impl Equation {
+    /// Derive the legacy renderer-neutral text projection from the retained tree.
+    ///
+    /// The tree remains authoritative; this one-way view exists for consumers
+    /// that do not need mathematical structure.
+    #[must_use]
+    pub fn normalized_text(&self) -> String {
+        let mut output = String::new();
+        append_normalized_equation_box(&self.root, &mut output);
+        output
+    }
+}
+
+fn append_normalized_equation_box(box_value: &EquationBox, output: &mut String) {
+    if box_value.position == EquationPosition::SquareRoot {
+        output.push_str("sqrt(");
+    }
+    if let Some(left) = &box_value.left {
+        output.push_str(left);
+    }
+    if let Some(text) = &box_value.text {
+        output.push_str(if text == "ldots" { "..." } else { text });
+    }
+    let mut children = box_value.children.iter();
+    if box_value.position == EquationPosition::SquareRoot {
+        if let Some(child) = children.next() {
+            append_normalized_equation_box(child, output);
+        }
+    } else if box_value.kind == EquationBoxKind::Subexpression
+        && box_value.position != EquationPosition::None
+    {
+        if let Some(child) = children.next() {
+            append_normalized_equation_box(child, output);
+            output.push_str(match box_value.position {
+                EquationPosition::Over => " / ",
+                EquationPosition::Superscript | EquationPosition::To => " ^ ",
+                _ => " _ ",
+            });
+        }
+        if let Some(child) = children.next() {
+            append_normalized_equation_box(child, output);
+        }
+        if matches!(
+            box_value.position,
+            EquationPosition::FromTo | EquationPosition::SubscriptSuperscript
+        ) && let Some(child) = children.next()
+        {
+            output.push_str(" ^ ");
+            append_normalized_equation_box(child, output);
+        }
+    } else {
+        for (index, child) in box_value.children.iter().enumerate() {
+            if index != 0 {
+                output.push(' ');
+            }
+            append_normalized_equation_box(child, output);
+        }
+    }
+    if let Some(top) = &box_value.top {
+        output.push_str(top);
+    }
+    if box_value.bottom.is_some() {
+        output.push('_');
+    }
+    if let Some(right) = &box_value.right {
+        output.push_str(right);
+    }
+    if box_value.position == EquationPosition::SquareRoot {
+        output.push(')');
+    }
+}
+
 /// Normalized mdoc list behavior copied independently of upstream enum values.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -383,8 +549,8 @@ pub struct Node {
     pub width: Option<String>,
     /// Cells copied from a tbl(7) row represented by this node.
     pub table_cells: Vec<TableCell>,
-    /// Normalized eqn(7) expression carried by this node.
-    pub equation: Option<String>,
+    /// Native eqn(7) structure carried by this node.
+    pub equation: Option<Box<Equation>>,
     /// Child nodes in source order.
     pub children: Vec<Self>,
 }

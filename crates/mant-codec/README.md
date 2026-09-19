@@ -65,10 +65,12 @@ The resulting IR resolves again at each reader width and parent origin without
 rerunning native execution. Its table projection keeps authored cell payload
 and topology while discarding device padding, border glyphs, and alternating
 column flush order.
-Include-enabled sessions, executed `.so` requests, and equations remain
-explicit unsupported execution inputs, and the general macro/tbl/eqn
-production migration remains unfinished. The following boundaries describe
-the current production implementation until that switch:
+Include-enabled sessions and executed `.so` requests remain explicit
+unsupported execution inputs. Equation execution retains the native parser
+tree, actual renderer invocations, and generated parts in the staged
+projection, while the general macro/tbl/eqn production migration remains
+unfinished. The following boundaries describe the current production
+implementation until that switch:
 
 | Responsibility | Owner and lifetime |
 | --- | --- |

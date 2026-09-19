@@ -2,7 +2,8 @@
 
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryRequest, ExecutionCancellation,
-    ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
+    ExecutionControlRequest, ExecutionEquationBoxKind, ExecutionEquationFlags,
+    ExecutionEquationPartKind, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
     ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind, ExecutionMdocListKind,
     ExecutionReferenceKind, ExecutionRegionKind, ExecutionTableAlignment, ExecutionTableDataKind,
     ExecutionTableLayoutKind, ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome,
@@ -47,6 +48,9 @@ left alpha
 .I words
 "#;
 const EQUATION: &[u8] = include_bytes!("fixtures/execution/unsupported-equation.1");
+const EQUATION_STRUCTURE: &[u8] = include_bytes!("fixtures/execution/equation-structure.1");
+const EQUATION_INLINE_CONFIG: &[u8] = include_bytes!("fixtures/execution/equation-inline-config.1");
+const EQUATION_EMPTY: &[u8] = include_bytes!("fixtures/execution/equation-empty.1");
 const EXECUTED_SO: &[u8] = include_bytes!("fixtures/execution/executed-so.1");
 const INACTIVE_SO: &[u8] = include_bytes!("fixtures/execution/inactive-so.1");
 const DEVICE_ROLES: &[u8] = include_bytes!("fixtures/execution/device-roles.1");
@@ -2884,12 +2888,19 @@ fn table_payload_role_does_not_overwrite_implicit_spacing_provenance() {
 }
 
 #[test]
-fn unsupported_execution_shapes_fail_before_returning_a_partial_report() {
-    let error = Parser::default()
+fn equations_execute_as_complete_typed_reports_while_other_unsupported_shapes_fail() {
+    // Checked before writing these assertions with the fixed reference:
+    // `mandoc -Ttree/-Tascii tests/fixtures/execution/unsupported-equation.1`.
+    // The artificial root owns `x + { width over 2 }`, including the nested
+    // list/fraction structure, while terminal execution emits the same words.
+    let report = Parser::default()
         .with_input_format(InputFormat::Man)
         .execute_bytes("equation.1", EQUATION, ExecutionLimits::default())
-        .unwrap_err();
-    assert_eq!(error.kind, ExecutionErrorKind::Unsupported);
+        .expect("execute a bounded native equation");
+    assert_eq!(report.execution.equations().len(), 1);
+    assert!(report.execution.equation_boxes().len() >= 6);
+    assert!(!report.execution.equation_invocations().is_empty());
+    assert!(!report.execution.equation_parts().is_empty());
 
     let parser = Parser::new(ParseOptions {
         includes: libmandoc_rs::IncludePolicy::SourceTree,
@@ -2910,4 +2921,212 @@ fn unsupported_execution_shapes_fail_before_returning_a_partial_report() {
         .execute_bytes("inactive-so.1", INACTIVE_SO, ExecutionLimits::default())
         .unwrap();
     assert!(!inactive.execution.fragments().is_empty());
+}
+
+#[test]
+fn equation_execution_separates_structure_invocations_and_generated_parts() {
+    // Fixed-CVS `-Ttree` and `-Tascii` were run on this exact fixture before
+    // these assertions.  `eqn_term.c::eqn_box()` skips pile/matrix wrappers
+    // while its real `term_word()` calls generate fences, operators, square
+    // roots, and top/bottom decorators.
+    let report = execute("equation-structure.1", InputFormat::Man, EQUATION_STRUCTURE);
+    assert_eq!(report.execution.equations().len(), 4);
+    assert!(
+        report
+            .execution
+            .equation_boxes()
+            .iter()
+            .any(|box_value| box_value.kind == ExecutionEquationBoxKind::Pile)
+    );
+    assert!(
+        report
+            .execution
+            .equation_boxes()
+            .iter()
+            .any(|box_value| box_value.kind == ExecutionEquationBoxKind::Matrix)
+    );
+    assert!(
+        report.execution.equation_invocations().len() < report.execution.equation_boxes().len(),
+        "pile and matrix wrappers are structural but not all become renderer invocations"
+    );
+
+    let kinds = report
+        .execution
+        .equation_parts()
+        .iter()
+        .map(|part| part.kind)
+        .collect::<Vec<_>>();
+    for kind in [
+        ExecutionEquationPartKind::Text,
+        ExecutionEquationPartKind::LeftFence,
+        ExecutionEquationPartKind::RightFence,
+        ExecutionEquationPartKind::Operator,
+        ExecutionEquationPartKind::SquareRoot,
+        ExecutionEquationPartKind::TopDecorator,
+        ExecutionEquationPartKind::BottomDecorator,
+    ] {
+        assert!(
+            kinds.contains(&kind),
+            "missing native equation part {kind:?}"
+        );
+    }
+    for part in report.execution.equation_parts() {
+        let word = &report.execution.words()[part.word.0 as usize];
+        assert_eq!(word.role, AtomRole::EquationContent);
+        assert_eq!(word.atoms, part.atoms);
+        assert!(part.enter_sequence < word.enter_sequence);
+        assert!(word.leave_sequence < part.leave_sequence);
+    }
+}
+
+#[test]
+fn equation_execution_retains_inline_display_and_configuration_only_roots() {
+    // Fixed-CVS `-Ttree`/`-Tascii` on this exact fixture establishes two empty
+    // display roots around one real inline subscript equation.
+    let report = execute(
+        "equation-inline-config.1",
+        InputFormat::Man,
+        EQUATION_INLINE_CONFIG,
+    );
+    let equations = report.execution.equations();
+    assert_eq!(equations.len(), 3);
+    assert!(equations[0].flags.contains(ExecutionEquationFlags::DISPLAY));
+    assert!(
+        equations[0]
+            .flags
+            .contains(ExecutionEquationFlags::NO_CONTENT)
+    );
+    assert!(equations[1].flags.contains(ExecutionEquationFlags::INLINE));
+    assert!(
+        !equations[1]
+            .flags
+            .contains(ExecutionEquationFlags::NO_CONTENT)
+    );
+    assert!(equations[2].flags.contains(ExecutionEquationFlags::DISPLAY));
+    assert!(
+        equations[2]
+            .flags
+            .contains(ExecutionEquationFlags::NO_CONTENT)
+    );
+    for equation in [&equations[0], &equations[2]] {
+        assert!(equation.atoms.is_empty());
+        assert!(equation.parts.is_empty());
+        assert_eq!(equation.boxes.end - equation.boxes.start, 1);
+        assert_eq!(equation.invocations.end - equation.invocations.start, 1);
+    }
+}
+
+#[test]
+fn empty_equation_retains_its_artificial_native_root() {
+    // Fixed-CVS `-Ttree` and `-Tascii` were run on this exact fixture before
+    // the assertion: eqn_parse() returns without adding a child when data is
+    // absent, but the parser-owned artificial root remains attached to EQ.
+    let report = execute("equation-empty.1", InputFormat::Man, EQUATION_EMPTY);
+    let equation = &report.execution.equations()[0];
+    assert!(equation.flags.contains(ExecutionEquationFlags::DISPLAY));
+    assert!(
+        equation.flags.contains(ExecutionEquationFlags::NO_CONTENT),
+        "the execution contract groups all root-only equations as no-content"
+    );
+    assert_eq!(equation.boxes.end - equation.boxes.start, 1);
+    assert_eq!(equation.invocations.end - equation.invocations.start, 1);
+    assert!(equation.parts.is_empty());
+    assert!(equation.atoms.is_empty());
+}
+
+#[test]
+fn equation_execution_is_atomic_under_each_report_budget_and_cancellation() {
+    // The exact equation source was checked with fixed-CVS `-Ttree` and
+    // `-Tascii` before this resource-bound regression was added.  The wrapper
+    // budgets constrain transfer of that same native structure; exhausting a
+    // budget must never expose only a prefix of its boxes or generated parts.
+    let baseline = execute("equation-structure.1", InputFormat::Man, EQUATION_STRUCTURE);
+    for (budget, limits) in [
+        (
+            "structural nodes",
+            ExecutionLimits {
+                // Syntax nodes alone fit, but native equation boxes share
+                // this structural budget and make the execution fail.
+                max_nodes: baseline.execution.nodes().len() as u64,
+                ..ExecutionLimits::default()
+            },
+        ),
+        (
+            "depth",
+            ExecutionLimits {
+                max_depth: 8,
+                ..ExecutionLimits::default()
+            },
+        ),
+        (
+            "work",
+            ExecutionLimits {
+                max_work: baseline.execution.work_units() - 1,
+                ..ExecutionLimits::default()
+            },
+        ),
+        (
+            "records",
+            ExecutionLimits {
+                max_records: baseline.execution.record_count() - 1,
+                ..ExecutionLimits::default()
+            },
+        ),
+        (
+            "report bytes",
+            ExecutionLimits {
+                max_report_bytes: baseline.execution.record_bytes() - 1,
+                ..ExecutionLimits::default()
+            },
+        ),
+        (
+            "pool bytes",
+            ExecutionLimits {
+                max_pool_bytes: baseline.execution.pool_len() as u64 - 1,
+                ..ExecutionLimits::default()
+            },
+        ),
+        (
+            "buffer cells",
+            ExecutionLimits {
+                max_buffer_cells: baseline.execution.buffer_cells() - 1,
+                ..ExecutionLimits::default()
+            },
+        ),
+    ] {
+        let error = Parser::default()
+            .with_input_format(InputFormat::Man)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes("equation-structure.1", EQUATION_STRUCTURE, limits)
+            .err()
+            .unwrap_or_else(|| panic!("{budget} budget unexpectedly admitted the equation"));
+        assert_eq!(error.kind, ExecutionErrorKind::Budget);
+
+        let next = execute("equation-structure.1", InputFormat::Man, EQUATION_STRUCTURE);
+        assert_eq!(next.execution.equations().len(), 4);
+        assert!(!next.execution.equation_parts().is_empty());
+    }
+
+    let cancellation = ExecutionCancellation::new();
+    cancellation.cancel();
+    let error = Parser::default()
+        .with_input_format(InputFormat::Man)
+        .with_mdoc_operating_system("ManT")
+        .unwrap()
+        .execute_bytes_with_cancellation(
+            "equation-cancelled.1",
+            EQUATION_STRUCTURE,
+            ExecutionLimits::default(),
+            &cancellation,
+        )
+        .unwrap_err();
+    assert_eq!(error.kind, ExecutionErrorKind::Cancelled);
+    assert_eq!(
+        execute("equation-structure.1", InputFormat::Man, EQUATION_STRUCTURE,)
+            .execution
+            .equations()
+            .len(),
+        4
+    );
 }

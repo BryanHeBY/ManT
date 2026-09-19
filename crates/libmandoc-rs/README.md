@@ -8,7 +8,8 @@ to depend on libmandoc's private C structures or parser lifetime.
 ## What this crate provides
 
 - A fully owned AST with source locations, macro roles, display/list metadata,
-  resolved stateful enclosures, table cells, equations, and validated
+  resolved stateful enclosures, table cells, complete native equation-box
+  trees, and validated
   same-document tags.
 - A `Parser` API whose caller-controlled `.so` policy defaults to denial.
 - Explicit `man`/`mdoc` input selection without changing the compatible
@@ -23,7 +24,10 @@ to depend on libmandoc's private C structures or parser lifetime.
   zero-output operands), buffer generations, atoms, fragments, flushes,
   boundaries, geometry, wrappers, anchors, and findings.
   Typed table, row, and cell records retain authored payload ownership apart
-  from device-generated padding and rules.
+  from device-generated padding and rules. Equation records independently
+  retain parser structure, actual renderer invocations, and generated equation
+  parts, so consumers never need to reconstruct `eqn_term.c` from terminal
+  text.
 - An optional `render` feature exposing bounded upstream ASCII, deterministic
   UTF-8, and HTML reference output without writing to process standard output.
 
@@ -34,10 +38,9 @@ buffer in the same native session at a canonical 78-column initial terminal
 profile, then returns matching owned AST and sealed execution facts. Executed
 `.ll`, `.po`, and `.ta` requests still change native margins, origins, and tab
 stops exactly as in pinned CVS; reader resize alone does not re-execute roff.
-This first execution
-boundary rejects includes and equations before terminal traversal rather than
-returning a partial report. It accepts bounded native tables and reports their
-typed topology and cell-local execution. `ExecutionCancellation` provides a
+This execution boundary rejects includes before terminal traversal rather than
+returning a partial report. It accepts bounded native tables and equations and
+reports their typed topology and local execution. `ExecutionCancellation` provides a
 cloneable cooperative cancellation flag: native work checkpoints turn it into
 a typed all-or-error cancellation without unwinding across C. The optional reference renderers
 likewise format the native tree in the same call that parses it. Neither
@@ -65,8 +68,9 @@ Rust transport and policy ──> private C shim ──> libmandoc cvs-20260911
 ```
 
 The returned tree describes validated roff syntax: macro names, node roles,
-fonts, lists, displays, stateful enclosure delimiters, tables, equations,
-locations, and tags. It is not
+fonts, lists, displays, stateful enclosure delimiters, tables, complete
+equation-box trees, locations, and tags. `Equation::normalized_text()` is a
+one-way compatibility projection; the retained tree remains authoritative. It is not
 `ManT`'s source-neutral document IR. Consumers that want normalized sections,
 semantic entries, or typed links should use `mant-codec` and `mant-ir` instead.
 `mant-render` formats that IR; `mant-engine` composes local loading and queries.
@@ -243,6 +247,9 @@ warnings return `DiagnosticCode::SyntaxTreeDepthLimit` or
 libmandoc findings retain their severity and message but do not invent a
 machine code. The additive method keeps the existing public diagnostic fields
 and optional Serde shape unchanged for compatible patch upgrades.
+Equation copying also caps the total retained box count at 1,000,000; unlike
+depth truncation, exhausting that width budget rejects the transfer rather
+than returning a misleading partial sibling set.
 
 A separate native construction guard stops input dispatch after a syntax
 node exceeds 512 parent levels, before end-of-document validation. Such input
@@ -268,9 +275,11 @@ write to the process's `stdout`. `render_file`, `render_bytes`, and
 Reference output follows the pinned CVS formatter: its default terminal body
 indent is five columns, and HTML uses semantic section containers and
 accessible document structure. These native reference bytes are distinct from
-`ManT`'s source-neutral text and TUI layout. The owned public AST shape and the
-source, include, output-budget, and session-isolation contracts are unchanged
-by the baseline selection. `LIBMANDOC_VERSION` reports `cvs-20260911`.
+`ManT`'s source-neutral text and TUI layout. The source, include, output-budget,
+and session-isolation contracts are unchanged by the baseline selection.
+The unpublished 0.12 API deliberately replaces the former equation string
+field with the typed tree described above. `LIBMANDOC_VERSION` reports
+`cvs-20260911`.
 
 ```rust,no_run
 # #[cfg(feature = "render")]
@@ -550,9 +559,9 @@ private synchronous FFI call. In addition to the upstream tree,
 libmandoc but unavailable through a public C API:
 
 - normalized mdoc enclosures, list/display/font/author roles, source flags,
-  table cells and spans, equations, and validated tags;
-- normalized eqn operators plus the common GNU `ldots` macro, which the
-  pinned parser otherwise retains as an unexpanded identifier;
+  table cells and spans, complete equation trees, and validated tags;
+- a one-way normalized equation-text view, including the common GNU `ldots`
+  spelling which the pinned parser retains as an unexpanded identifier;
 - tbl multiline-cell and vertical-continuation flags, including both tbl(7)
   spellings of vertical continuation;
 - effective cell and row rule kinds plus first-data-row table boundaries,

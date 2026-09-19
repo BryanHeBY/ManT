@@ -18,6 +18,7 @@
 
 #include "mandoc.h"
 #include "mdoc.h"
+#include "eqn.h"
 #include "roff.h"
 #include "out.h"
 #include "tbl.h"
@@ -35,6 +36,11 @@ struct node_index {
 
 struct word_index {
 	const char *word;
+	uint32_t key;
+};
+
+struct equation_box_index {
+	const struct eqn_box *box;
 	uint32_t key;
 };
 
@@ -69,6 +75,7 @@ struct mant_mandoc_execution_report {
 	char *error;
 	struct node_index *node_index;
 	struct word_index *word_index;
+	struct equation_box_index *equation_box_index;
 	struct buffer_origin *buffers;
 	RECORD_STORAGE(sources, mant_mandoc_source_record);
 	RECORD_STORAGE(nodes, mant_mandoc_node_record);
@@ -88,6 +95,11 @@ struct mant_mandoc_execution_report {
 	RECORD_STORAGE(tables, mant_mandoc_table_record);
 	RECORD_STORAGE(table_rows, mant_mandoc_table_row_record);
 	RECORD_STORAGE(table_cells, mant_mandoc_table_cell_record);
+	RECORD_STORAGE(equations, mant_mandoc_equation_record);
+	RECORD_STORAGE(equation_boxes, mant_mandoc_equation_box_record);
+	RECORD_STORAGE(equation_box_executions,
+	    mant_mandoc_equation_box_execution_record);
+	RECORD_STORAGE(equation_parts, mant_mandoc_equation_part_record);
 	RECORD_STORAGE(diagnostics, mant_mandoc_execution_diagnostic_record);
 	size_t pool_length;
 	size_t pool_capacity;
@@ -95,6 +107,7 @@ struct mant_mandoc_execution_report {
 	uint64_t work_count;
 	size_t node_count;
 	size_t word_count;
+	size_t equation_box_count;
 	size_t buffer_count;
 	uint64_t buffer_cells;
 	uint64_t allocated_record_bytes;
@@ -110,6 +123,9 @@ struct mant_mandoc_execution_report {
 	uint32_t current_table;
 	uint32_t current_table_row;
 	uint32_t current_table_cell;
+	uint32_t current_equation;
+	uint32_t current_equation_box_execution;
+	uint32_t current_equation_part;
 	const struct roff_node *current_table_cell_node;
 	const struct tbl_span *current_table_cell_span;
 	const struct tbl_cell *current_table_cell_layout;
@@ -227,6 +243,18 @@ static int execution_table_cell_begin(void *, const struct termp *,
 static int execution_table_cell_end(void *, const struct termp *,
     const struct roff_node *, const struct tbl_span *, const struct tbl_cell *,
     const struct tbl_dat *, size_t, size_t, size_t, size_t);
+static int execution_equation_begin(void *, const struct termp *,
+    const struct roff_node *, const struct eqn_box *);
+static int execution_equation_end(void *, const struct termp *,
+    const struct roff_node *, const struct eqn_box *);
+static int execution_equation_box_begin(void *, const struct termp *,
+    const struct roff_node *, const struct eqn_box *);
+static int execution_equation_box_end(void *, const struct termp *,
+    const struct roff_node *, const struct eqn_box *);
+static int execution_equation_part_begin(void *, const struct termp *,
+    const struct roff_node *, const struct eqn_box *, int);
+static int execution_equation_part_end(void *, const struct termp *,
+    const struct roff_node *, const struct eqn_box *, int);
 
 static const struct term_exec_ops execution_ops = {
 	execution_work,
@@ -275,7 +303,13 @@ static const struct term_exec_ops execution_ops = {
 	execution_table_row_begin,
 	execution_table_row_end,
 	execution_table_cell_begin,
-	execution_table_cell_end
+	execution_table_cell_end,
+	execution_equation_begin,
+	execution_equation_end,
+	execution_equation_box_begin,
+	execution_equation_box_end,
+	execution_equation_part_begin,
+	execution_equation_part_end
 };
 
 struct live_atom_location {
@@ -292,13 +326,16 @@ static int charge_record(struct mant_mandoc_execution_report *);
 static int append_pool(struct mant_mandoc_execution_report *, const void *,
     size_t, uint32_t *);
 static int tree_supported(struct mant_mandoc_execution_report *,
-    const struct roff_node *, uint64_t, uint64_t *);
+    const struct roff_node *, uint64_t, uint64_t *, uint64_t *);
+static int equation_supported(struct mant_mandoc_execution_report *,
+    const struct eqn_box *, uint64_t, uint64_t *);
 static int finish_execution_run(struct mant_mandoc_execution_report *);
 static int seal_report(struct mant_mandoc_execution_report *);
 static int validate_report_storage(struct mant_mandoc_execution_report *);
 static int valid_record_range(size_t, uint32_t, uint32_t);
 static int validate_sealed_report(struct mant_mandoc_execution_report *);
 static int validate_table_records(struct mant_mandoc_execution_report *);
+static int validate_equation_records(struct mant_mandoc_execution_report *);
 static int valid_pool_range(const struct mant_mandoc_execution_report *,
     uint32_t, uint32_t, int);
 static int valid_scalar(uint32_t);
@@ -309,8 +346,14 @@ static int size_delta_to_report_i64(struct mant_mandoc_execution_report *,
     size_t, size_t, int64_t *);
 static int collect_nodes(struct mant_mandoc_execution_report *,
     const struct roff_node *, uint32_t, uint64_t);
+static int collect_equations(struct mant_mandoc_execution_report *,
+    const struct roff_node *, uint64_t);
+static int collect_equation_box(struct mant_mandoc_execution_report *,
+    const struct eqn_box *, uint32_t, uint32_t, uint32_t, uint64_t,
+    uint32_t *);
 static int compare_node_index(const void *, const void *);
 static int compare_word_index(const void *, const void *);
+static int compare_equation_box_index(const void *, const void *);
 static int compare_live_atom_location(const void *, const void *);
 static int compare_generation_checkpoint(const void *, const void *);
 static size_t lower_bound_live_atom(const struct live_atom_location *,
@@ -319,6 +362,10 @@ static uint32_t lookup_node(const struct mant_mandoc_execution_report *,
     const struct roff_node *);
 static uint32_t lookup_word_node(const struct mant_mandoc_execution_report *,
     const char *);
+static uint32_t lookup_equation(const struct mant_mandoc_execution_report *,
+    uint32_t);
+static uint32_t lookup_equation_box(
+    const struct mant_mandoc_execution_report *, const struct eqn_box *);
 static uint32_t stable_node_kind(enum roff_type);
 static uint32_t stable_node_flags(const struct roff_node *);
 static uint32_t stable_term_flags(int);
@@ -328,6 +375,10 @@ static uint32_t stable_font(int);
 static uint32_t atom_kind(int);
 static uint32_t table_layout_kind(enum tbl_cellt);
 static uint32_t table_data_kind(enum tbl_datt);
+static uint32_t equation_box_kind(enum eqn_boxt);
+static uint32_t equation_font(enum eqn_fontt);
+static uint32_t equation_position(enum eqn_post);
+static uint32_t equation_part_kind(int);
 static int ensure_buffer(struct mant_mandoc_execution_report *, size_t,
     size_t);
 static int note_buffer_extent(struct mant_mandoc_execution_report *, size_t,
@@ -404,6 +455,11 @@ DEFINE_RESERVE(anchors, mant_mandoc_anchor_record)
 DEFINE_RESERVE(tables, mant_mandoc_table_record)
 DEFINE_RESERVE(table_rows, mant_mandoc_table_row_record)
 DEFINE_RESERVE(table_cells, mant_mandoc_table_cell_record)
+DEFINE_RESERVE(equations, mant_mandoc_equation_record)
+DEFINE_RESERVE(equation_boxes, mant_mandoc_equation_box_record)
+DEFINE_RESERVE(equation_box_executions,
+    mant_mandoc_equation_box_execution_record)
+DEFINE_RESERVE(equation_parts, mant_mandoc_equation_part_record)
 DEFINE_RESERVE(diagnostics, mant_mandoc_execution_diagnostic_record)
 #undef DEFINE_RESERVE
 
@@ -442,6 +498,9 @@ mant_mandoc_execution_alloc(const char *source_path,
 	report->current_table = MANT_MANDOC_EXEC_NONE;
 	report->current_table_row = MANT_MANDOC_EXEC_NONE;
 	report->current_table_cell = MANT_MANDOC_EXEC_NONE;
+	report->current_equation = MANT_MANDOC_EXEC_NONE;
+	report->current_equation_box_execution = MANT_MANDOC_EXEC_NONE;
+	report->current_equation_part = MANT_MANDOC_EXEC_NONE;
 	report->current_word_node = MANT_MANDOC_EXEC_NONE;
 	report->current_word = MANT_MANDOC_EXEC_NONE;
 	if (!append_pool(report, source_path, strlen(source_path), &path_start) ||
@@ -506,7 +565,7 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 {
 	struct manoutput options;
 	struct termp *termp;
-	uint64_t node_count;
+	uint64_t node_count, equation_box_count;
 
 	if (report == NULL || meta == NULL || meta->first == NULL ||
 	    report->status != MANT_MANDOC_EXECUTION_BUILDING) {
@@ -521,20 +580,27 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 		    "native execution rejects executed .so and .soquiet requests");
 		return finish_execution_run(report);
 	}
-	node_count = 0;
-	if (!tree_supported(report, meta->first, 0, &node_count))
+	node_count = equation_box_count = 0;
+	if (!tree_supported(report, meta->first, 0, &node_count,
+	    &equation_box_count))
 		return finish_execution_run(report);
-	if (node_count > report->limits.max_nodes) {
+	if (node_count > report->limits.max_nodes ||
+	    equation_box_count > report->limits.max_nodes - node_count) {
 		fail_report(report, MANT_MANDOC_EXECUTION_BUDGET,
-		    "native execution node limit exceeded");
+		    "native execution structural node limit exceeded");
 		return finish_execution_run(report);
 	}
 	report->node_count = (size_t)node_count;
+	report->equation_box_count = (size_t)equation_box_count;
 	report->node_index = calloc(report->node_count,
 	    sizeof(*report->node_index));
 	report->word_index = calloc(report->node_count,
 	    sizeof(*report->word_index));
+	report->equation_box_index = equation_box_count == 0 ? NULL :
+	    calloc((size_t)equation_box_count,
+	    sizeof(*report->equation_box_index));
 	if (report->node_index == NULL || report->word_index == NULL ||
+	    (equation_box_count != 0 && report->equation_box_index == NULL) ||
 	    !collect_nodes(report, meta->first, MANT_MANDOC_EXEC_NONE, 0)) {
 		if (report->status == MANT_MANDOC_EXECUTION_BUILDING)
 			fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
@@ -548,6 +614,15 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 	    sizeof(*report->node_index), compare_node_index);
 	qsort(report->word_index, report->word_count,
 	    sizeof(*report->word_index), compare_word_index);
+	if (!collect_equations(report, meta->first, 0) ||
+	    report->equation_boxes_count != report->equation_box_count)
+		return finish_execution_run(report);
+	if (!charge_sort_work(report, report->equation_box_count))
+		return finish_execution_run(report);
+	if (report->equation_box_count > 1)
+		qsort(report->equation_box_index, report->equation_box_count,
+		    sizeof(*report->equation_box_index),
+		    compare_equation_box_index);
 
 	memset(&options, 0, sizeof(options));
 	options.width = 78;
@@ -614,11 +689,16 @@ mant_mandoc_execution_free(struct mant_mandoc_execution_report *report)
 	free(report->tables);
 	free(report->table_rows);
 	free(report->table_cells);
+	free(report->equations);
+	free(report->equation_boxes);
+	free(report->equation_box_executions);
+	free(report->equation_parts);
 	free(report->diagnostics);
 	free(report->pool);
 	free(report->error);
 	free(report->node_index);
 	free(report->word_index);
+	free(report->equation_box_index);
 	free(report);
 }
 
@@ -1594,7 +1674,8 @@ execution_word_begin(void *arg, const struct termp *p,
 	if (role == NULL)
 		return 0;
 	source_node = lookup_word_node(report, word);
-	*role = p->exec_table_cell_payload ?
+	*role = report->current_equation != MANT_MANDOC_EXEC_NONE ?
+	    MANT_MANDOC_ATOM_EQUATION_CONTENT : p->exec_table_cell_payload ?
 	    MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD :
 	    source_node != MANT_MANDOC_EXEC_NONE &&
 	    (report->nodes[source_node].flags &
@@ -1672,7 +1753,7 @@ execution_buffer_write(void *arg, const struct termp *p,
 	    !charge_work(report, 1))
 		return 0;
 	if (role < MANT_MANDOC_ATOM_AUTHORED ||
-	    role > MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD) {
+	    role > MANT_MANDOC_ATOM_EQUATION_CONTENT) {
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 		    "native execution reported an unknown atom role");
 		return 0;
@@ -2784,6 +2865,77 @@ table_data_kind(enum tbl_datt kind)
 }
 
 static uint32_t
+equation_box_kind(enum eqn_boxt kind)
+{
+	switch (kind) {
+	case EQN_TEXT: return MANT_MANDOC_EXEC_EQUATION_TEXT;
+	case EQN_SUBEXPR: return MANT_MANDOC_EXEC_EQUATION_SUBEXPRESSION;
+	case EQN_LIST: return MANT_MANDOC_EXEC_EQUATION_LIST;
+	case EQN_PILE: return MANT_MANDOC_EXEC_EQUATION_PILE;
+	case EQN_MATRIX: return MANT_MANDOC_EXEC_EQUATION_MATRIX;
+	default: return MANT_MANDOC_EXEC_NONE;
+	}
+}
+
+static uint32_t
+equation_font(enum eqn_fontt font)
+{
+	switch (font) {
+	case EQNFONT_NONE: return MANT_MANDOC_EXEC_EQUATION_FONT_NONE;
+	case EQNFONT_ROMAN: return MANT_MANDOC_EXEC_EQUATION_FONT_ROMAN;
+	case EQNFONT_BOLD: return MANT_MANDOC_EXEC_EQUATION_FONT_BOLD;
+	case EQNFONT_FAT: return MANT_MANDOC_EXEC_EQUATION_FONT_FAT;
+	case EQNFONT_ITALIC: return MANT_MANDOC_EXEC_EQUATION_FONT_ITALIC;
+	default: return MANT_MANDOC_EXEC_NONE;
+	}
+}
+
+static uint32_t
+equation_position(enum eqn_post position)
+{
+	switch (position) {
+	case EQNPOS_NONE: return MANT_MANDOC_EXEC_EQUATION_POSITION_NONE;
+	case EQNPOS_SUP:
+		return MANT_MANDOC_EXEC_EQUATION_POSITION_SUPERSCRIPT;
+	case EQNPOS_SUBSUP:
+		return MANT_MANDOC_EXEC_EQUATION_POSITION_SUBSUPERSCRIPT;
+	case EQNPOS_SUB:
+		return MANT_MANDOC_EXEC_EQUATION_POSITION_SUBSCRIPT;
+	case EQNPOS_TO: return MANT_MANDOC_EXEC_EQUATION_POSITION_TO;
+	case EQNPOS_FROM: return MANT_MANDOC_EXEC_EQUATION_POSITION_FROM;
+	case EQNPOS_FROMTO:
+		return MANT_MANDOC_EXEC_EQUATION_POSITION_FROMTO;
+	case EQNPOS_OVER: return MANT_MANDOC_EXEC_EQUATION_POSITION_OVER;
+	case EQNPOS_SQRT:
+		return MANT_MANDOC_EXEC_EQUATION_POSITION_SQUARE_ROOT;
+	default: return MANT_MANDOC_EXEC_NONE;
+	}
+}
+
+static uint32_t
+equation_part_kind(int kind)
+{
+	switch (kind) {
+	case TERM_EXEC_EQUATION_TEXT:
+		return MANT_MANDOC_EXEC_EQUATION_PART_TEXT;
+	case TERM_EXEC_EQUATION_LEFT_FENCE:
+		return MANT_MANDOC_EXEC_EQUATION_PART_LEFT_FENCE;
+	case TERM_EXEC_EQUATION_RIGHT_FENCE:
+		return MANT_MANDOC_EXEC_EQUATION_PART_RIGHT_FENCE;
+	case TERM_EXEC_EQUATION_OPERATOR:
+		return MANT_MANDOC_EXEC_EQUATION_PART_OPERATOR;
+	case TERM_EXEC_EQUATION_SQUARE_ROOT:
+		return MANT_MANDOC_EXEC_EQUATION_PART_SQUARE_ROOT;
+	case TERM_EXEC_EQUATION_TOP_DECORATOR:
+		return MANT_MANDOC_EXEC_EQUATION_PART_TOP_DECORATOR;
+	case TERM_EXEC_EQUATION_BOTTOM_DECORATOR:
+		return MANT_MANDOC_EXEC_EQUATION_PART_BOTTOM_DECORATOR;
+	default:
+		return MANT_MANDOC_EXEC_NONE;
+	}
+}
+
+static uint32_t
 table_alignment(enum tbl_cellt kind)
 {
 	switch (kind) {
@@ -2931,6 +3083,245 @@ execution_table_cell_end(void *arg, const struct termp *p,
 	report->current_table_cell_span = NULL;
 	report->current_table_cell_layout = NULL;
 	report->current_table_cell_data = NULL;
+	return 1;
+}
+
+static int
+execution_equation_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct eqn_box *box)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_equation_record *record;
+	uint32_t node_key, equation, box_key;
+
+	(void)p;
+	node_key = lookup_node(report, node);
+	equation = lookup_equation(report, node_key);
+	box_key = lookup_equation_box(report, box);
+	if (node_key == MANT_MANDOC_EXEC_NONE ||
+	    equation == MANT_MANDOC_EXEC_NONE ||
+	    box_key == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation != MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation_box_execution != MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation_part != MANT_MANDOC_EXEC_NONE ||
+	    report->word_active ||
+	    report->atoms_count > UINT32_MAX ||
+	    report->equation_parts_count > UINT32_MAX ||
+	    report->equation_box_executions_count > UINT32_MAX ||
+	    !charge_work(report, 1))
+		return 0;
+	record = &report->equations[equation];
+	if (record->node != node_key || record->root_box != box_key ||
+	    record->execution_start != MANT_MANDOC_EXEC_NONE ||
+	    record->enter_atom != MANT_MANDOC_EXEC_NONE ||
+	    record->enter_sequence != UINT64_MAX)
+		return 0;
+	record->execution_start =
+	    (uint32_t)report->equation_box_executions_count;
+	record->part_start = (uint32_t)report->equation_parts_count;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->enter_sequence = report->sequence++;
+	report->current_equation = equation;
+	return 1;
+}
+
+static int
+execution_equation_end(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct eqn_box *box)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_equation_record *record;
+	uint32_t node_key, box_key;
+
+	(void)p;
+	node_key = lookup_node(report, node);
+	box_key = lookup_equation_box(report, box);
+	if (report->current_equation == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation >= report->equations_count ||
+	    report->current_equation_box_execution != MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation_part != MANT_MANDOC_EXEC_NONE ||
+	    report->word_active ||
+	    report->atoms_count > UINT32_MAX ||
+	    report->equation_parts_count > UINT32_MAX ||
+	    report->equation_box_executions_count > UINT32_MAX ||
+	    !charge_work(report, 1))
+		return 0;
+	record = &report->equations[report->current_equation];
+	if (record->node != node_key || record->root_box != box_key ||
+	    record->execution_start == MANT_MANDOC_EXEC_NONE ||
+	    record->execution_start > report->equation_box_executions_count ||
+	    record->leave_atom != MANT_MANDOC_EXEC_NONE ||
+	    record->leave_sequence != UINT64_MAX)
+		return 0;
+	record->execution_length =
+	    (uint32_t)report->equation_box_executions_count -
+	    record->execution_start;
+	record->part_length = (uint32_t)report->equation_parts_count -
+	    record->part_start;
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->leave_sequence = report->sequence++;
+	report->current_equation = MANT_MANDOC_EXEC_NONE;
+	return 1;
+}
+
+static int
+execution_equation_box_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct eqn_box *box)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_equation_box_execution_record *record;
+	uint32_t box_key, node_key;
+
+	(void)p;
+	node_key = lookup_node(report, node);
+	box_key = lookup_equation_box(report, box);
+	if (report->current_equation == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation >= report->equations_count ||
+	    box_key == MANT_MANDOC_EXEC_NONE ||
+	    report->atoms_count > UINT32_MAX ||
+	    report->equation_box_executions_count > UINT32_MAX ||
+	    report->equation_parts_count > UINT32_MAX ||
+	    report->current_equation_part != MANT_MANDOC_EXEC_NONE ||
+	    report->word_active ||
+	    report->equations[report->current_equation].node != node_key ||
+	    report->equation_boxes[box_key].equation !=
+	    report->current_equation || !charge_work(report, 1) ||
+	    !charge_record(report) || !reserve_equation_box_executions(report,
+	    report->equation_box_executions_count + 1))
+		return 0;
+	record = &report->equation_box_executions[
+	    report->equation_box_executions_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->equation_box_executions_count++;
+	record->equation = report->current_equation;
+	record->box = box_key;
+	record->parent_execution = report->current_equation_box_execution;
+	record->part_start = (uint32_t)report->equation_parts_count;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_equation_box_execution = record->key;
+	return 1;
+}
+
+static int
+execution_equation_box_end(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct eqn_box *box)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_equation_box_execution_record *record;
+	uint32_t box_key, node_key;
+
+	(void)p;
+	node_key = lookup_node(report, node);
+	box_key = lookup_equation_box(report, box);
+	if (report->current_equation == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation >= report->equations_count ||
+	    report->current_equation_box_execution == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation_box_execution >=
+	    report->equation_box_executions_count ||
+	    report->current_equation_part != MANT_MANDOC_EXEC_NONE ||
+	    report->word_active ||
+	    report->atoms_count > UINT32_MAX ||
+	    report->equation_parts_count > UINT32_MAX || !charge_work(report, 1))
+		return 0;
+	record = &report->equation_box_executions[
+	    report->current_equation_box_execution];
+	if (record->equation != report->current_equation ||
+	    report->equations[record->equation].node != node_key ||
+	    record->box != box_key || record->leave_atom != MANT_MANDOC_EXEC_NONE ||
+	    record->leave_sequence != UINT64_MAX)
+		return 0;
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->part_length = (uint32_t)report->equation_parts_count -
+	    record->part_start;
+	record->leave_sequence = report->sequence++;
+	report->current_equation_box_execution = record->parent_execution;
+	return 1;
+}
+
+static int
+execution_equation_part_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct eqn_box *box, int kind)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_equation_part_record *record;
+	struct mant_mandoc_equation_box_execution_record *execution;
+	uint32_t stable_kind, node_key, box_key;
+
+	(void)p;
+	stable_kind = equation_part_kind(kind);
+	node_key = lookup_node(report, node);
+	box_key = lookup_equation_box(report, box);
+	if (stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation >= report->equations_count ||
+	    report->current_equation_box_execution == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation_box_execution >=
+	    report->equation_box_executions_count ||
+	    report->current_equation_part != MANT_MANDOC_EXEC_NONE ||
+	    report->word_active ||
+	    report->words_count > UINT32_MAX || report->atoms_count > UINT32_MAX ||
+	    report->equation_parts_count > UINT32_MAX ||
+	    report->equations[report->current_equation].node != node_key ||
+	    !charge_work(report, 1) || !charge_record(report) ||
+	    !reserve_equation_parts(report, report->equation_parts_count + 1))
+		return 0;
+	execution = &report->equation_box_executions[
+	    report->current_equation_box_execution];
+	if (execution->equation != report->current_equation ||
+	    execution->box != box_key)
+		return 0;
+	record = &report->equation_parts[report->equation_parts_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->equation_parts_count++;
+	record->equation = report->current_equation;
+	record->box = box_key;
+	record->execution = execution->key;
+	record->kind = stable_kind;
+	record->word_start = (uint32_t)report->words_count;
+	record->atom_start = (uint32_t)report->atoms_count;
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_equation_part = record->key;
+	return 1;
+}
+
+static int
+execution_equation_part_end(void *arg, const struct termp *p,
+    const struct roff_node *node, const struct eqn_box *box, int kind)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_equation_part_record *record;
+	uint32_t stable_kind, node_key, box_key;
+
+	(void)p;
+	stable_kind = equation_part_kind(kind);
+	node_key = lookup_node(report, node);
+	box_key = lookup_equation_box(report, box);
+	if (report->current_equation == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation >= report->equations_count ||
+	    report->current_equation_part == MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation_part >= report->equation_parts_count ||
+	    report->word_active ||
+	    report->words_count > UINT32_MAX || report->atoms_count > UINT32_MAX ||
+	    !charge_work(report, 1))
+		return 0;
+	record = &report->equation_parts[report->current_equation_part];
+	if (stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    record->equation != report->current_equation ||
+	    report->equations[record->equation].node != node_key ||
+	    record->box != box_key || record->kind != stable_kind ||
+	    record->execution != report->current_equation_box_execution ||
+	    record->leave_sequence != UINT64_MAX ||
+	    record->word_start > report->words_count ||
+	    record->atom_start > report->atoms_count)
+		return 0;
+	record->word_length = (uint32_t)report->words_count - record->word_start;
+	record->atom_length = (uint32_t)report->atoms_count - record->atom_start;
+	record->leave_sequence = report->sequence++;
+	report->current_equation_part = MANT_MANDOC_EXEC_NONE;
 	return 1;
 }
 
@@ -3203,6 +3594,335 @@ invalid:
 	free(generation_cell);
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution table relationship is inconsistent");
+	return 0;
+}
+
+static int
+validate_equation_records(struct mant_mandoc_execution_report *report)
+{
+	struct mant_mandoc_equation_record *equation;
+	struct mant_mandoc_equation_box_record *box, *child, *parent;
+	struct mant_mandoc_equation_box_execution_record *execution;
+	struct mant_mandoc_equation_box_execution_record *parent_execution;
+	struct mant_mandoc_equation_part_record *part;
+	struct mant_mandoc_word_record *word;
+	struct mant_mandoc_atom_record *atom;
+	unsigned char *claimed_boxes, *executed_boxes, *owned_words, *owned_atoms;
+	uint32_t *execution_stack;
+	size_t equation_index, box_index, execution_index, part_index, inner;
+	size_t box_cursor, execution_cursor, part_cursor, node_cursor;
+	size_t child_count, depth;
+	uint32_t child_key, expected_ordinal, expected_parent;
+	uint32_t flags, last_child_end;
+	int configuration_only;
+
+	claimed_boxes = report->equation_boxes_count == 0 ? NULL :
+	    calloc(report->equation_boxes_count, 1);
+	executed_boxes = report->equation_boxes_count == 0 ? NULL :
+	    calloc(report->equation_boxes_count, 1);
+	owned_atoms = report->atoms_count == 0 ? NULL :
+	    calloc(report->atoms_count, 1);
+	owned_words = report->words_count == 0 ? NULL :
+	    calloc(report->words_count, 1);
+	if (report->equation_box_executions_count >
+	    SIZE_MAX / sizeof(*execution_stack)) {
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+		    "native equation validation stack size overflowed");
+		goto fail;
+	}
+	execution_stack = report->equation_box_executions_count == 0 ? NULL :
+	    malloc(report->equation_box_executions_count *
+	    sizeof(*execution_stack));
+	if ((report->equation_boxes_count != 0 &&
+	    (claimed_boxes == NULL || executed_boxes == NULL)) ||
+	    (report->atoms_count != 0 && owned_atoms == NULL) ||
+	    (report->words_count != 0 && owned_words == NULL) ||
+	    (report->equation_box_executions_count != 0 &&
+	    execution_stack == NULL)) {
+		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
+		    "could not validate native equation relationships");
+		goto fail;
+	}
+
+	box_cursor = execution_cursor = part_cursor = node_cursor = 0;
+	for (equation_index = 0; equation_index < report->equations_count;
+	    equation_index++) {
+		equation = &report->equations[equation_index];
+		while (node_cursor < report->nodes_count &&
+		    report->nodes[node_cursor].kind != 9)
+			node_cursor++;
+		flags = equation->flags;
+		if (equation->key != equation_index ||
+		    node_cursor >= report->nodes_count ||
+		    equation->node != node_cursor ||
+		    equation->box_start != box_cursor ||
+		    equation->box_length == 0 ||
+		    !valid_record_range(report->equation_boxes_count,
+		    equation->box_start, equation->box_length) ||
+		    equation->root_box != equation->box_start ||
+		    equation->execution_start != execution_cursor ||
+		    equation->execution_length == 0 ||
+		    !valid_record_range(report->equation_box_executions_count,
+		    equation->execution_start, equation->execution_length) ||
+		    equation->part_start != part_cursor ||
+		    !valid_record_range(report->equation_parts_count,
+		    equation->part_start, equation->part_length) ||
+		    ((flags & (MANT_MANDOC_EXEC_EQUATION_INLINE |
+		    MANT_MANDOC_EXEC_EQUATION_DISPLAY)) !=
+		    MANT_MANDOC_EXEC_EQUATION_INLINE &&
+		    (flags & (MANT_MANDOC_EXEC_EQUATION_INLINE |
+		    MANT_MANDOC_EXEC_EQUATION_DISPLAY)) !=
+		    MANT_MANDOC_EXEC_EQUATION_DISPLAY) ||
+		    flags & ~(MANT_MANDOC_EXEC_EQUATION_INLINE |
+		    MANT_MANDOC_EXEC_EQUATION_DISPLAY |
+		    MANT_MANDOC_EXEC_EQUATION_NO_CONTENT) ||
+		    ((report->nodes[equation->node].flags & (1U << 6)) != 0) !=
+		    ((flags & MANT_MANDOC_EXEC_EQUATION_DISPLAY) != 0) ||
+		    equation->enter_atom > equation->leave_atom ||
+		    equation->leave_atom > report->atoms_count ||
+		    equation->reserved0 != 0 || equation->reserved1 != 0 ||
+		    equation->enter_sequence >= equation->leave_sequence)
+			goto invalid;
+
+		box = &report->equation_boxes[equation->root_box];
+		configuration_only = box->first_child == MANT_MANDOC_EXEC_NONE &&
+		    box->text_start == MANT_MANDOC_EXEC_NONE &&
+		    box->left_start == MANT_MANDOC_EXEC_NONE &&
+		    box->right_start == MANT_MANDOC_EXEC_NONE &&
+		    box->top_start == MANT_MANDOC_EXEC_NONE &&
+		    box->bottom_start == MANT_MANDOC_EXEC_NONE;
+		if (((flags & MANT_MANDOC_EXEC_EQUATION_NO_CONTENT) != 0) !=
+		    configuration_only || (configuration_only &&
+		    (equation->part_length != 0 ||
+		    equation->enter_atom != equation->leave_atom)))
+			goto invalid;
+
+		for (box_index = equation->box_start;
+		    box_index < equation->box_start + equation->box_length;
+		    box_index++) {
+			box = &report->equation_boxes[box_index];
+			if (box->key != box_index || box->equation != equation->key ||
+			    box->kind < MANT_MANDOC_EXEC_EQUATION_TEXT ||
+			    box->kind > MANT_MANDOC_EXEC_EQUATION_MATRIX ||
+			    box->font > MANT_MANDOC_EXEC_EQUATION_FONT_ITALIC ||
+			    box->position >
+			    MANT_MANDOC_EXEC_EQUATION_POSITION_SQUARE_ROOT ||
+			    box->subtree_end <= box->key ||
+			    box->subtree_end >
+			    equation->box_start + equation->box_length ||
+			    box->reserved != 0 ||
+			    !valid_pool_range(report, box->text_start,
+			    box->text_length, 1) ||
+			    !valid_pool_range(report, box->left_start,
+			    box->left_length, 1) ||
+			    !valid_pool_range(report, box->right_start,
+			    box->right_length, 1) ||
+			    !valid_pool_range(report, box->top_start,
+			    box->top_length, 1) ||
+			    !valid_pool_range(report, box->bottom_start,
+			    box->bottom_length, 1))
+				goto invalid;
+			if (box_index == equation->root_box) {
+				if (box->parent != MANT_MANDOC_EXEC_NONE ||
+				    box->next_sibling != MANT_MANDOC_EXEC_NONE ||
+				    box->ordinal != 0)
+					goto invalid;
+			} else {
+				if (box->parent < equation->box_start ||
+				    box->parent >= box->key)
+					goto invalid;
+				parent = &report->equation_boxes[box->parent];
+				if (parent->equation != equation->key ||
+				    box->key >= parent->subtree_end)
+					goto invalid;
+			}
+			child_count = 0;
+			expected_ordinal = 0;
+			last_child_end = box->key + 1;
+			child_key = box->first_child;
+			while (child_key != MANT_MANDOC_EXEC_NONE) {
+				if (child_count >= equation->box_length ||
+				    child_key <= box->key ||
+				    child_key >= box->subtree_end ||
+				    claimed_boxes[child_key])
+					goto invalid;
+				child = &report->equation_boxes[child_key];
+				if (child->parent != box->key ||
+				    child->ordinal != expected_ordinal ||
+				    (expected_ordinal == 0 && child_key != box->key + 1) ||
+				    (child->next_sibling != MANT_MANDOC_EXEC_NONE &&
+				    child->next_sibling != child->subtree_end))
+					goto invalid;
+				claimed_boxes[child_key] = 1;
+				child_count++;
+				expected_ordinal++;
+				last_child_end = child->subtree_end;
+				child_key = child->next_sibling;
+			}
+			if (box->actual_args != child_count ||
+			    last_child_end != box->subtree_end)
+				goto invalid;
+		}
+		for (box_index = equation->box_start + 1;
+		    box_index < equation->box_start + equation->box_length;
+		    box_index++)
+			if (!claimed_boxes[box_index])
+				goto invalid;
+
+		depth = 0;
+		for (execution_index = equation->execution_start;
+		    execution_index < equation->execution_start +
+		    equation->execution_length; execution_index++) {
+			execution = &report->equation_box_executions[execution_index];
+			while (depth != 0 &&
+			    report->equation_box_executions[execution_stack[depth - 1]].
+			    leave_sequence < execution->enter_sequence)
+				depth--;
+			expected_parent = depth == 0 ? MANT_MANDOC_EXEC_NONE :
+			    execution_stack[depth - 1];
+			if (execution->key != execution_index ||
+			    execution->equation != equation->key ||
+			    execution->box < equation->box_start ||
+			    execution->box >= equation->box_start +
+			    equation->box_length ||
+			    execution->parent_execution != expected_parent ||
+			    executed_boxes[execution->box] ||
+			    !valid_record_range(report->equation_parts_count,
+			    execution->part_start, execution->part_length) ||
+			    execution->part_start < equation->part_start ||
+			    execution->part_start + execution->part_length >
+			    equation->part_start + equation->part_length ||
+			    execution->enter_atom > execution->leave_atom ||
+			    execution->enter_atom < equation->enter_atom ||
+			    execution->leave_atom > equation->leave_atom ||
+			    execution->reserved0 != 0 || execution->reserved1 != 0 ||
+			    execution->enter_sequence <= equation->enter_sequence ||
+			    execution->leave_sequence >= equation->leave_sequence ||
+			    execution->enter_sequence >= execution->leave_sequence)
+				goto invalid;
+			if (expected_parent == MANT_MANDOC_EXEC_NONE) {
+				if (execution_index != equation->execution_start ||
+				    execution->box != equation->root_box ||
+				    execution->part_start != equation->part_start ||
+				    execution->part_length != equation->part_length ||
+				    execution->enter_atom != equation->enter_atom ||
+				    execution->leave_atom != equation->leave_atom)
+					goto invalid;
+			} else {
+				parent_execution = &report->equation_box_executions[
+				    expected_parent];
+				parent = &report->equation_boxes[parent_execution->box];
+				if (execution->box <= parent->key ||
+				    execution->box >= parent->subtree_end ||
+				    execution->part_start < parent_execution->part_start ||
+				    execution->part_start + execution->part_length >
+				    parent_execution->part_start +
+				    parent_execution->part_length ||
+				    execution->enter_atom < parent_execution->enter_atom ||
+				    execution->leave_atom > parent_execution->leave_atom ||
+				    execution->leave_sequence >=
+				    parent_execution->leave_sequence)
+					goto invalid;
+			}
+			executed_boxes[execution->box] = 1;
+			execution_stack[depth++] = (uint32_t)execution_index;
+		}
+		box_cursor = equation->box_start + equation->box_length;
+		execution_cursor = equation->execution_start +
+		    equation->execution_length;
+		part_cursor = equation->part_start + equation->part_length;
+		node_cursor++;
+	}
+	while (node_cursor < report->nodes_count &&
+	    report->nodes[node_cursor].kind != 9)
+		node_cursor++;
+	if (box_cursor != report->equation_boxes_count ||
+	    execution_cursor != report->equation_box_executions_count ||
+	    part_cursor != report->equation_parts_count ||
+	    node_cursor != report->nodes_count)
+		goto invalid;
+
+	for (part_index = 0; part_index < report->equation_parts_count;
+	    part_index++) {
+		part = &report->equation_parts[part_index];
+		if (part->key != part_index ||
+		    part->equation >= report->equations_count ||
+		    part->box >= report->equation_boxes_count ||
+		    part->execution >= report->equation_box_executions_count ||
+		    part->kind < MANT_MANDOC_EXEC_EQUATION_PART_TEXT ||
+		    part->kind > MANT_MANDOC_EXEC_EQUATION_PART_BOTTOM_DECORATOR ||
+		    part->word_length != 1 ||
+		    !valid_record_range(report->words_count,
+		    part->word_start, part->word_length) ||
+		    !valid_record_range(report->atoms_count,
+		    part->atom_start, part->atom_length) ||
+		    part->reserved != 0 ||
+		    part->enter_sequence >= part->leave_sequence)
+			goto invalid;
+		equation = &report->equations[part->equation];
+		box = &report->equation_boxes[part->box];
+		execution = &report->equation_box_executions[part->execution];
+		word = &report->words[part->word_start];
+		if (part->key < equation->part_start ||
+		    part->key >= equation->part_start + equation->part_length ||
+		    box->equation != equation->key ||
+		    execution->equation != equation->key ||
+		    execution->box != box->key ||
+		    part->key < execution->part_start ||
+		    part->key >= execution->part_start + execution->part_length ||
+		    part->atom_start < execution->enter_atom ||
+		    part->atom_start + part->atom_length > execution->leave_atom ||
+		    part->enter_sequence <= execution->enter_sequence ||
+		    part->leave_sequence >= execution->leave_sequence ||
+		    word->node != equation->node ||
+		    word->role != MANT_MANDOC_ATOM_EQUATION_CONTENT ||
+		    word->enter_atom != part->atom_start ||
+		    word->leave_atom != part->atom_start + part->atom_length ||
+		    word->enter_sequence <= part->enter_sequence ||
+		    word->leave_sequence >= part->leave_sequence ||
+		    owned_words[part->word_start])
+			goto invalid;
+		owned_words[part->word_start] = 1;
+		for (inner = part->atom_start;
+		    inner < part->atom_start + part->atom_length; inner++) {
+			atom = &report->atoms[inner];
+			if (owned_atoms[inner] || atom->node != equation->node ||
+			    atom->sequence <= part->enter_sequence ||
+			    atom->sequence >= part->leave_sequence)
+				goto invalid;
+			owned_atoms[inner] = 1;
+		}
+	}
+	for (equation_index = 0; equation_index < report->equations_count;
+	    equation_index++) {
+		equation = &report->equations[equation_index];
+		for (box_index = equation->enter_atom;
+		    box_index < equation->leave_atom; box_index++)
+			if (!owned_atoms[box_index])
+				goto invalid;
+	}
+	for (part_index = 0; part_index < report->words_count; part_index++)
+		if ((report->words[part_index].role ==
+		    MANT_MANDOC_ATOM_EQUATION_CONTENT) !=
+		    (owned_words[part_index] != 0))
+			goto invalid;
+
+	free(claimed_boxes);
+	free(executed_boxes);
+	free(owned_words);
+	free(owned_atoms);
+	free(execution_stack);
+	return 1;
+
+invalid:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution equation relationship is inconsistent");
+fail:
+	free(claimed_boxes);
+	free(executed_boxes);
+	free(owned_words);
+	free(owned_atoms);
+	free(execution_stack);
 	return 0;
 }
 
@@ -3564,6 +4284,8 @@ seal_report(struct mant_mandoc_execution_report *report)
 	    report->current_table != MANT_MANDOC_EXEC_NONE ||
 	    report->current_table_row != MANT_MANDOC_EXEC_NONE ||
 	    report->current_table_cell != MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation != MANT_MANDOC_EXEC_NONE ||
+	    report->current_equation_box_execution != MANT_MANDOC_EXEC_NONE ||
 	    report->word_active) {
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 		    "native execution ended with an active scope");
@@ -3603,6 +4325,10 @@ seal_report(struct mant_mandoc_execution_report *report)
 	ADD_RECORD_COUNT(tables);
 	ADD_RECORD_COUNT(table_rows);
 	ADD_RECORD_COUNT(table_cells);
+	ADD_RECORD_COUNT(equations);
+	ADD_RECORD_COUNT(equation_boxes);
+	ADD_RECORD_COUNT(equation_box_executions);
+	ADD_RECORD_COUNT(equation_parts);
 	ADD_RECORD_COUNT(diagnostics);
 #undef ADD_RECORD_COUNT
 	if (expected != report->record_count) {
@@ -3631,7 +4357,9 @@ seal_report(struct mant_mandoc_execution_report *report)
 		    "native execution left a semantic reference open");
 		return 0;
 	}
-	if (!validate_table_records(report) || !validate_sealed_report(report))
+	if (!validate_table_records(report) ||
+	    !validate_equation_records(report) ||
+	    !validate_sealed_report(report))
 		return 0;
 	report->status = MANT_MANDOC_EXECUTION_COMPLETE;
 	return 1;
@@ -3675,6 +4403,10 @@ validate_report_storage(struct mant_mandoc_execution_report *report)
 	VALIDATE_RECORD_STORAGE(tables);
 	VALIDATE_RECORD_STORAGE(table_rows);
 	VALIDATE_RECORD_STORAGE(table_cells);
+	VALIDATE_RECORD_STORAGE(equations);
+	VALIDATE_RECORD_STORAGE(equation_boxes);
+	VALIDATE_RECORD_STORAGE(equation_box_executions);
+	VALIDATE_RECORD_STORAGE(equation_parts);
 	VALIDATE_RECORD_STORAGE(diagnostics);
 #undef VALIDATE_RECORD_STORAGE
 	return 1;
@@ -3975,7 +4707,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    (word->role != MANT_MANDOC_ATOM_AUTHORED &&
 		    word->role != MANT_MANDOC_ATOM_MACRO_GENERATED &&
 		    word->role != MANT_MANDOC_ATOM_DEVICE_GENERATED &&
-		    word->role != MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD) ||
+		    word->role != MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD &&
+		    word->role != MANT_MANDOC_ATOM_EQUATION_CONTENT) ||
 		    word->enter_atom > word->leave_atom ||
 		    word->leave_atom > report->atoms_count ||
 		    word->reserved != 0 ||
@@ -4019,7 +4752,7 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    atom->kind < MANT_MANDOC_ATOM_GLYPH ||
 		    atom->kind > MANT_MANDOC_ATOM_BREAK_POINT ||
 		    atom->role < MANT_MANDOC_ATOM_AUTHORED ||
-		    atom->role > MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD ||
+		    atom->role > MANT_MANDOC_ATOM_EQUATION_CONTENT ||
 		    atom->font > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
 		    atom->disposition < MANT_MANDOC_ATOM_EMITTED ||
 		    atom->disposition > MANT_MANDOC_ATOM_TRAILING_DISCARD ||
@@ -5447,8 +6180,61 @@ fail:
 }
 
 static int
+equation_supported(struct mant_mandoc_execution_report *report,
+    const struct eqn_box *box, uint64_t depth, uint64_t *count)
+{
+	const struct eqn_box *child, *previous;
+	size_t children;
+
+	for (; box != NULL; box = box->next) {
+		if (!charge_work(report, 1))
+			return 0;
+		/* eqn_term.c is recursive even when the roff tree is shallow. */
+		if (depth >= report->limits.max_depth || depth >= 256) {
+			fail_report(report, MANT_MANDOC_EXECUTION_BUDGET,
+			    "native equation execution depth limit exceeded");
+			return 0;
+		}
+		if (*count == UINT32_MAX) {
+			fail_report(report, MANT_MANDOC_EXECUTION_BUDGET,
+			    "native equation box identity limit exceeded");
+			return 0;
+		}
+		(*count)++;
+		if (equation_box_kind(box->type) == MANT_MANDOC_EXEC_NONE ||
+		    equation_font(box->font) == MANT_MANDOC_EXEC_NONE ||
+		    equation_position(box->pos) == MANT_MANDOC_EXEC_NONE) {
+			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+			    "native equation contains an unknown box discriminant");
+			return 0;
+		}
+		children = 0;
+		previous = NULL;
+		for (child = box->first; child != NULL; child = child->next) {
+			if (child->parent != box || child->prev != previous ||
+			    children == SIZE_MAX) {
+				fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+				    "native equation box relationships are inconsistent");
+				return 0;
+			}
+			previous = child;
+			children++;
+		}
+		if (box->last != previous || box->args != children) {
+			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+			    "native equation child accounting is inconsistent");
+			return 0;
+		}
+		if (!equation_supported(report, box->first, depth + 1, count))
+			return 0;
+	}
+	return 1;
+}
+
+static int
 tree_supported(struct mant_mandoc_execution_report *report,
-    const struct roff_node *node, uint64_t depth, uint64_t *count)
+    const struct roff_node *node, uint64_t depth, uint64_t *count,
+    uint64_t *equation_box_count)
 {
 	for (; node != NULL; node = node->next) {
 		if (!charge_work(report, 1))
@@ -5463,13 +6249,19 @@ tree_supported(struct mant_mandoc_execution_report *report,
 			    "native execution node identity limit exceeded");
 			return 0;
 		}
-		if (node->type == ROFFT_EQN) {
-			fail_report(report, MANT_MANDOC_EXECUTION_UNSUPPORTED,
-			    "native execution does not yet support eqn");
+		if (node->type == ROFFT_EQN &&
+		    (node->eqn == NULL || node->eqn->parent != NULL ||
+		    node->eqn->prev != NULL || node->eqn->next != NULL ||
+		    !equation_supported(report, node->eqn, 0,
+		    equation_box_count))) {
+			if (report->status == MANT_MANDOC_EXECUTION_BUILDING)
+				fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+				    "native equation root is invalid");
 			return 0;
 		}
 		(*count)++;
-		if (!tree_supported(report, node->child, depth + 1, count))
+		if (!tree_supported(report, node->child, depth + 1, count,
+		    equation_box_count))
 			return 0;
 	}
 	return 1;
@@ -5529,6 +6321,168 @@ collect_nodes(struct mant_mandoc_execution_report *report,
 }
 
 static int
+append_equation_string(struct mant_mandoc_execution_report *report,
+    const char *text, uint32_t *start, uint32_t *length)
+{
+	size_t bytes;
+
+	if (text == NULL) {
+		*start = MANT_MANDOC_EXEC_NONE;
+		*length = 0;
+		return 1;
+	}
+	bytes = strlen(text);
+	if (bytes > UINT32_MAX || !charge_work(report, bytes + 1) ||
+	    !append_pool(report, text, bytes, start))
+		return 0;
+	*length = (uint32_t)bytes;
+	return 1;
+}
+
+static int
+collect_equation_box(struct mant_mandoc_execution_report *report,
+    const struct eqn_box *box, uint32_t equation, uint32_t parent,
+    uint32_t ordinal, uint64_t depth, uint32_t *key_out)
+{
+	struct mant_mandoc_equation_box_record *record;
+	const struct eqn_box *child;
+	uint32_t key, child_key, previous_child;
+	uint32_t kind, font, position;
+	uint32_t text_start, text_length, left_start, left_length;
+	uint32_t right_start, right_length, top_start, top_length;
+	uint32_t bottom_start, bottom_length;
+	uint32_t child_ordinal;
+
+	if (box == NULL || key_out == NULL ||
+	    depth >= report->limits.max_depth || depth >= 256 ||
+	    report->equation_boxes_count >= report->equation_box_count ||
+	    report->equation_boxes_count > UINT32_MAX ||
+	    !charge_work(report, 1) || !charge_record(report) ||
+	    !reserve_equation_boxes(report, report->equation_boxes_count + 1))
+		return 0;
+	kind = equation_box_kind(box->type);
+	font = equation_font(box->font);
+	position = equation_position(box->pos);
+	if (kind == MANT_MANDOC_EXEC_NONE || font == MANT_MANDOC_EXEC_NONE ||
+	    position == MANT_MANDOC_EXEC_NONE ||
+	    !append_equation_string(report, box->text, &text_start,
+	    &text_length) ||
+	    !append_equation_string(report, box->left, &left_start,
+	    &left_length) ||
+	    !append_equation_string(report, box->right, &right_start,
+	    &right_length) ||
+	    !append_equation_string(report, box->top, &top_start,
+	    &top_length) ||
+	    !append_equation_string(report, box->bottom, &bottom_start,
+	    &bottom_length))
+		return 0;
+	key = (uint32_t)report->equation_boxes_count;
+	report->equation_box_index[key].box = box;
+	report->equation_box_index[key].key = key;
+	record = &report->equation_boxes[report->equation_boxes_count++];
+	memset(record, 0, sizeof(*record));
+	record->key = key;
+	record->equation = equation;
+	record->parent = parent;
+	record->first_child = MANT_MANDOC_EXEC_NONE;
+	record->next_sibling = MANT_MANDOC_EXEC_NONE;
+	record->subtree_end = MANT_MANDOC_EXEC_NONE;
+	record->ordinal = ordinal;
+	record->kind = kind;
+	record->font = font;
+	record->position = position;
+	record->size = box->size;
+	record->expected_args = box->expectargs;
+	record->actual_args = box->args;
+	record->text_start = text_start;
+	record->text_length = text_length;
+	record->left_start = left_start;
+	record->left_length = left_length;
+	record->right_start = right_start;
+	record->right_length = right_length;
+	record->top_start = top_start;
+	record->top_length = top_length;
+	record->bottom_start = bottom_start;
+	record->bottom_length = bottom_length;
+
+	previous_child = MANT_MANDOC_EXEC_NONE;
+	child_ordinal = 0;
+	for (child = box->first; child != NULL; child = child->next) {
+		if (child_ordinal == UINT32_MAX ||
+		    !collect_equation_box(report, child, equation, key,
+		    child_ordinal, depth + 1, &child_key))
+			return 0;
+		if (report->equation_boxes[key].first_child ==
+		    MANT_MANDOC_EXEC_NONE)
+			report->equation_boxes[key].first_child = child_key;
+		if (previous_child != MANT_MANDOC_EXEC_NONE)
+			report->equation_boxes[previous_child].next_sibling = child_key;
+		previous_child = child_key;
+		child_ordinal++;
+	}
+	if (report->equation_boxes_count > UINT32_MAX)
+		return 0;
+	report->equation_boxes[key].subtree_end =
+	    (uint32_t)report->equation_boxes_count;
+	*key_out = key;
+	return 1;
+}
+
+static int
+collect_equations(struct mant_mandoc_execution_report *report,
+    const struct roff_node *node, uint64_t depth)
+{
+	struct mant_mandoc_equation_record *record;
+	uint32_t equation, node_key, root_box;
+	uint32_t flags;
+
+	if (node != NULL && depth >= report->limits.max_depth)
+		return 0;
+	for (; node != NULL; node = node->next) {
+		if (!charge_work(report, 1))
+			return 0;
+		if (node->type == ROFFT_EQN) {
+			if (report->equations_count > UINT32_MAX ||
+			    report->equation_boxes_count > UINT32_MAX ||
+			    !charge_record(report) ||
+			    !reserve_equations(report, report->equations_count + 1))
+				return 0;
+			equation = (uint32_t)report->equations_count;
+			node_key = lookup_node(report, node);
+			if (node_key == MANT_MANDOC_EXEC_NONE)
+				return 0;
+			record = &report->equations[report->equations_count++];
+			memset(record, 0, sizeof(*record));
+			record->key = equation;
+			record->node = node_key;
+			record->box_start = (uint32_t)report->equation_boxes_count;
+			record->execution_start = MANT_MANDOC_EXEC_NONE;
+			record->enter_atom = MANT_MANDOC_EXEC_NONE;
+			record->leave_atom = MANT_MANDOC_EXEC_NONE;
+			record->enter_sequence = UINT64_MAX;
+			record->leave_sequence = UINT64_MAX;
+			flags = node->flags & NODE_LINE ?
+			    MANT_MANDOC_EXEC_EQUATION_DISPLAY :
+			    MANT_MANDOC_EXEC_EQUATION_INLINE;
+			if (node->eqn->first == NULL && node->eqn->text == NULL &&
+			    node->eqn->left == NULL && node->eqn->right == NULL &&
+			    node->eqn->top == NULL && node->eqn->bottom == NULL)
+				flags |= MANT_MANDOC_EXEC_EQUATION_NO_CONTENT;
+			record->flags = flags;
+			if (!collect_equation_box(report, node->eqn, equation,
+			    MANT_MANDOC_EXEC_NONE, 0, 0, &root_box))
+				return 0;
+			record->root_box = root_box;
+			record->box_length = (uint32_t)report->equation_boxes_count -
+			    record->box_start;
+		}
+		if (!collect_equations(report, node->child, depth + 1))
+			return 0;
+	}
+	return 1;
+}
+
+static int
 compare_node_index(const void *left, const void *right)
 {
 	const struct node_index *a = left;
@@ -5546,6 +6500,17 @@ compare_word_index(const void *left, const void *right)
 	const struct word_index *b = right;
 	uintptr_t ap = (uintptr_t)a->word;
 	uintptr_t bp = (uintptr_t)b->word;
+
+	return ap < bp ? -1 : ap > bp;
+}
+
+static int
+compare_equation_box_index(const void *left, const void *right)
+{
+	const struct equation_box_index *a = left;
+	const struct equation_box_index *b = right;
+	uintptr_t ap = (uintptr_t)a->box;
+	uintptr_t bp = (uintptr_t)b->box;
 
 	return ap < bp ? -1 : ap > bp;
 }
@@ -5631,6 +6596,44 @@ lookup_word_node(const struct mant_mandoc_execution_report *report,
 	     report->word_index[index + 1].word == word))
 		return MANT_MANDOC_EXEC_NONE;
 	return found->key;
+}
+
+static uint32_t
+lookup_equation(const struct mant_mandoc_execution_report *report,
+    uint32_t node)
+{
+	size_t first, length, half, middle;
+
+	first = 0;
+	length = report->equations_count;
+	while (length != 0) {
+		half = length / 2;
+		middle = first + half;
+		if (report->equations[middle].node < node) {
+			first = middle + 1;
+			length -= half + 1;
+		} else
+			length = half;
+	}
+	return first < report->equations_count &&
+	    report->equations[first].node == node ?
+	    report->equations[first].key : MANT_MANDOC_EXEC_NONE;
+}
+
+static uint32_t
+lookup_equation_box(const struct mant_mandoc_execution_report *report,
+    const struct eqn_box *box)
+{
+	struct equation_box_index needle, *found;
+
+	if (box == NULL || report->equation_box_index == NULL)
+		return MANT_MANDOC_EXEC_NONE;
+	needle.box = box;
+	needle.key = 0;
+	found = bsearch(&needle, report->equation_box_index,
+	    report->equation_box_count, sizeof(*report->equation_box_index),
+	    compare_equation_box_index);
+	return found == NULL ? MANT_MANDOC_EXEC_NONE : found->key;
 }
 
 static uint32_t
@@ -5896,6 +6899,11 @@ mant_mandoc_execution_validation_selftest(void)
 	struct mant_mandoc_boundary_record *boundary;
 	struct mant_mandoc_geometry_record *geometry;
 	struct mant_mandoc_wrapper_record *wrapper;
+	struct mant_mandoc_equation_record *equation;
+	struct mant_mandoc_equation_box_record *equation_box;
+	struct mant_mandoc_equation_box_execution_record *equation_execution;
+	struct mant_mandoc_equation_part_record *equation_part;
+	struct mant_mandoc_word_record *equation_word;
 	struct mant_mandoc_execution_diagnostic_record *diagnostic;
 	struct mant_mandoc_node_record *node_storage;
 	struct roff_node native_node;
@@ -6078,6 +7086,20 @@ mant_mandoc_execution_validation_selftest(void)
 	    MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE ||
 	    table_data_kind((enum tbl_datt)-1) != MANT_MANDOC_EXEC_NONE)
 		failures |= 1U << 9;
+	if (equation_box_kind(EQN_TEXT) != MANT_MANDOC_EXEC_EQUATION_TEXT ||
+	    equation_box_kind(EQN_MATRIX) != MANT_MANDOC_EXEC_EQUATION_MATRIX ||
+	    equation_box_kind((enum eqn_boxt)-1) != MANT_MANDOC_EXEC_NONE ||
+	    equation_font(EQNFONT_FAT) != MANT_MANDOC_EXEC_EQUATION_FONT_FAT ||
+	    equation_font((enum eqn_fontt)-1) != MANT_MANDOC_EXEC_NONE ||
+	    equation_position(EQNPOS_FROMTO) !=
+	    MANT_MANDOC_EXEC_EQUATION_POSITION_FROMTO ||
+	    equation_position((enum eqn_post)-1) != MANT_MANDOC_EXEC_NONE ||
+	    equation_part_kind(TERM_EXEC_EQUATION_TEXT) !=
+	    MANT_MANDOC_EXEC_EQUATION_PART_TEXT ||
+	    equation_part_kind(TERM_EXEC_EQUATION_BOTTOM_DECORATOR) !=
+	    MANT_MANDOC_EXEC_EQUATION_PART_BOTTOM_DECORATOR ||
+	    equation_part_kind(-1) != MANT_MANDOC_EXEC_NONE)
+		failures |= 1U << 19;
 	if (!valid_record_range(1, 0, 1) ||
 	    valid_record_range(1, 1, 1) ||
 	    valid_record_range(1, UINT32_MAX, 1))
@@ -6191,6 +7213,83 @@ mant_mandoc_execution_validation_selftest(void)
 	if (validate_sealed_report(report))
 		failures |= 1U << 14;
 	report->wrappers_count = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	report->current_table_row = MANT_MANDOC_EXEC_NONE;
+	node->kind = 9;
+	node->flags = 0;
+	node->macro_start = MANT_MANDOC_EXEC_NONE;
+	node->macro_length = 0;
+	if (!reserve_equations(report, 1) ||
+	    !reserve_equation_boxes(report, 1) ||
+	    !reserve_equation_box_executions(report, 1) ||
+	    !reserve_equation_parts(report, 1) || !reserve_words(report, 1)) {
+		failures |= 1U << 17;
+		goto out;
+	}
+	report->equations_count = 1;
+	equation = &report->equations[0];
+	memset(equation, 0, sizeof(*equation));
+	equation->root_box = 0;
+	equation->box_length = 1;
+	equation->execution_length = 1;
+	equation->part_length = 1;
+	equation->flags = MANT_MANDOC_EXEC_EQUATION_INLINE;
+	equation->enter_sequence = 1;
+	equation->leave_sequence = 8;
+	report->equation_boxes_count = 1;
+	equation_box = &report->equation_boxes[0];
+	memset(equation_box, 0, sizeof(*equation_box));
+	equation_box->parent = MANT_MANDOC_EXEC_NONE;
+	equation_box->first_child = MANT_MANDOC_EXEC_NONE;
+	equation_box->next_sibling = MANT_MANDOC_EXEC_NONE;
+	equation_box->subtree_end = 1;
+	equation_box->kind = MANT_MANDOC_EXEC_EQUATION_LIST;
+	equation_box->font = MANT_MANDOC_EXEC_EQUATION_FONT_NONE;
+	equation_box->position = MANT_MANDOC_EXEC_EQUATION_POSITION_NONE;
+	equation_box->text_start = 0;
+	equation_box->text_length = 1;
+	equation_box->left_start = MANT_MANDOC_EXEC_NONE;
+	equation_box->right_start = MANT_MANDOC_EXEC_NONE;
+	equation_box->top_start = MANT_MANDOC_EXEC_NONE;
+	equation_box->bottom_start = MANT_MANDOC_EXEC_NONE;
+	report->equation_box_executions_count = 1;
+	equation_execution = &report->equation_box_executions[0];
+	memset(equation_execution, 0, sizeof(*equation_execution));
+	equation_execution->parent_execution = MANT_MANDOC_EXEC_NONE;
+	equation_execution->enter_sequence = 2;
+	equation_execution->part_length = 1;
+	equation_execution->leave_sequence = 7;
+	report->equation_parts_count = 1;
+	equation_part = &report->equation_parts[0];
+	memset(equation_part, 0, sizeof(*equation_part));
+	equation_part->kind = MANT_MANDOC_EXEC_EQUATION_PART_TEXT;
+	equation_part->word_length = 1;
+	equation_part->enter_sequence = 3;
+	equation_part->leave_sequence = 6;
+	report->words_count = 1;
+	equation_word = &report->words[0];
+	memset(equation_word, 0, sizeof(*equation_word));
+	equation_word->role = MANT_MANDOC_ATOM_EQUATION_CONTENT;
+	equation_word->wrapper = MANT_MANDOC_EXEC_NONE;
+	equation_word->enter_sequence = 4;
+	equation_word->leave_sequence = 5;
+	if (!validate_equation_records(report))
+		failures |= 1U << 17;
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	equation_box->actual_args = 1;
+	if (validate_equation_records(report))
+		failures |= 1U << 18;
+	equation_box->actual_args = 0;
+	report->equations_count = 0;
+	report->equation_boxes_count = 0;
+	report->equation_box_executions_count = 0;
+	report->equation_parts_count = 0;
+	report->words_count = 0;
 
 out:
 	mant_mandoc_execution_free(report);
@@ -6560,6 +7659,78 @@ static const size_t table_cell_offsets[] = {
 	OFF(mant_mandoc_table_cell_record, enter_sequence),
 	OFF(mant_mandoc_table_cell_record, leave_sequence)
 };
+static const size_t equation_offsets[] = {
+	OFF(mant_mandoc_equation_record, key),
+	OFF(mant_mandoc_equation_record, node),
+	OFF(mant_mandoc_equation_record, root_box),
+	OFF(mant_mandoc_equation_record, box_start),
+	OFF(mant_mandoc_equation_record, box_length),
+	OFF(mant_mandoc_equation_record, execution_start),
+	OFF(mant_mandoc_equation_record, execution_length),
+	OFF(mant_mandoc_equation_record, part_start),
+	OFF(mant_mandoc_equation_record, part_length),
+	OFF(mant_mandoc_equation_record, flags),
+	OFF(mant_mandoc_equation_record, enter_atom),
+	OFF(mant_mandoc_equation_record, leave_atom),
+	OFF(mant_mandoc_equation_record, reserved0),
+	OFF(mant_mandoc_equation_record, reserved1),
+	OFF(mant_mandoc_equation_record, enter_sequence),
+	OFF(mant_mandoc_equation_record, leave_sequence)
+};
+static const size_t equation_box_offsets[] = {
+	OFF(mant_mandoc_equation_box_record, key),
+	OFF(mant_mandoc_equation_box_record, equation),
+	OFF(mant_mandoc_equation_box_record, parent),
+	OFF(mant_mandoc_equation_box_record, first_child),
+	OFF(mant_mandoc_equation_box_record, next_sibling),
+	OFF(mant_mandoc_equation_box_record, subtree_end),
+	OFF(mant_mandoc_equation_box_record, ordinal),
+	OFF(mant_mandoc_equation_box_record, kind),
+	OFF(mant_mandoc_equation_box_record, font),
+	OFF(mant_mandoc_equation_box_record, position),
+	OFF(mant_mandoc_equation_box_record, size),
+	OFF(mant_mandoc_equation_box_record, expected_args),
+	OFF(mant_mandoc_equation_box_record, actual_args),
+	OFF(mant_mandoc_equation_box_record, text_start),
+	OFF(mant_mandoc_equation_box_record, text_length),
+	OFF(mant_mandoc_equation_box_record, left_start),
+	OFF(mant_mandoc_equation_box_record, left_length),
+	OFF(mant_mandoc_equation_box_record, right_start),
+	OFF(mant_mandoc_equation_box_record, right_length),
+	OFF(mant_mandoc_equation_box_record, top_start),
+	OFF(mant_mandoc_equation_box_record, top_length),
+	OFF(mant_mandoc_equation_box_record, bottom_start),
+	OFF(mant_mandoc_equation_box_record, bottom_length),
+	OFF(mant_mandoc_equation_box_record, reserved)
+};
+static const size_t equation_box_execution_offsets[] = {
+	OFF(mant_mandoc_equation_box_execution_record, key),
+	OFF(mant_mandoc_equation_box_execution_record, equation),
+	OFF(mant_mandoc_equation_box_execution_record, box),
+	OFF(mant_mandoc_equation_box_execution_record, parent_execution),
+	OFF(mant_mandoc_equation_box_execution_record, part_start),
+	OFF(mant_mandoc_equation_box_execution_record, part_length),
+	OFF(mant_mandoc_equation_box_execution_record, enter_atom),
+	OFF(mant_mandoc_equation_box_execution_record, leave_atom),
+	OFF(mant_mandoc_equation_box_execution_record, reserved0),
+	OFF(mant_mandoc_equation_box_execution_record, reserved1),
+	OFF(mant_mandoc_equation_box_execution_record, enter_sequence),
+	OFF(mant_mandoc_equation_box_execution_record, leave_sequence)
+};
+static const size_t equation_part_offsets[] = {
+	OFF(mant_mandoc_equation_part_record, key),
+	OFF(mant_mandoc_equation_part_record, equation),
+	OFF(mant_mandoc_equation_part_record, box),
+	OFF(mant_mandoc_equation_part_record, execution),
+	OFF(mant_mandoc_equation_part_record, kind),
+	OFF(mant_mandoc_equation_part_record, word_start),
+	OFF(mant_mandoc_equation_part_record, word_length),
+	OFF(mant_mandoc_equation_part_record, atom_start),
+	OFF(mant_mandoc_equation_part_record, atom_length),
+	OFF(mant_mandoc_equation_part_record, reserved),
+	OFF(mant_mandoc_equation_part_record, enter_sequence),
+	OFF(mant_mandoc_equation_part_record, leave_sequence)
+};
 static const size_t diagnostic_offsets[] = {
 	OFF(mant_mandoc_execution_diagnostic_record, code),
 	OFF(mant_mandoc_execution_diagnostic_record, node),
@@ -6588,6 +7759,15 @@ DEFINE_RECORD_API(anchor, anchors, mant_mandoc_anchor_record, anchor_offsets)
 DEFINE_RECORD_API(table, tables, mant_mandoc_table_record, table_offsets)
 DEFINE_RECORD_API(table_row, table_rows, mant_mandoc_table_row_record, table_row_offsets)
 DEFINE_RECORD_API(table_cell, table_cells, mant_mandoc_table_cell_record, table_cell_offsets)
+DEFINE_RECORD_API(equation, equations, mant_mandoc_equation_record,
+    equation_offsets)
+DEFINE_RECORD_API(equation_box, equation_boxes,
+    mant_mandoc_equation_box_record, equation_box_offsets)
+DEFINE_RECORD_API(equation_box_execution, equation_box_executions,
+    mant_mandoc_equation_box_execution_record,
+    equation_box_execution_offsets)
+DEFINE_RECORD_API(equation_part, equation_parts,
+    mant_mandoc_equation_part_record, equation_part_offsets)
 DEFINE_RECORD_API(diagnostic, diagnostics, mant_mandoc_execution_diagnostic_record, diagnostic_offsets)
 
 #undef OFF

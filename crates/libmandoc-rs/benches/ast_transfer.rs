@@ -118,12 +118,14 @@ fn measure_node(node: &Node, root: bool, size: &mut AstSize) {
         node.tag.as_ref(),
         node.offset.as_ref(),
         node.width.as_ref(),
-        node.equation.as_ref(),
     ]
     .into_iter()
     .flatten()
     {
         size.string_storage += value.capacity();
+    }
+    if let Some(equation) = &node.equation {
+        measure_equation_box(&equation.root, size);
     }
     if let Some(enclosure) = &node.enclosure {
         size.string_storage += enclosure.opening.capacity();
@@ -134,6 +136,25 @@ fn measure_node(node: &Node, root: bool, size: &mut AstSize) {
     }
     for child in &node.children {
         measure_node(child, false, size);
+    }
+}
+
+fn measure_equation_box(box_value: &libmandoc_rs::EquationBox, size: &mut AstSize) {
+    size.child_storage += box_value.children.capacity() * size_of::<libmandoc_rs::EquationBox>();
+    for value in [
+        box_value.text.as_ref(),
+        box_value.left.as_ref(),
+        box_value.right.as_ref(),
+        box_value.top.as_ref(),
+        box_value.bottom.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        size.string_storage += value.capacity();
+    }
+    for child in &box_value.children {
+        measure_equation_box(child, size);
     }
 }
 

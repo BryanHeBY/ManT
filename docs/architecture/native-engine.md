@@ -433,11 +433,12 @@ rules, empty cells, spans, cell-local hard breaks,
 and the explicit data spelling `\^` have focused transfer or projection checks.
 `T&` and the layout `^` spelling currently have AST coverage only and remain
 execution/projection work. This is not yet the complete production table
-lowering. Include-enabled sessions, executed `.so` requests, and equations
-return `Unsupported`; a false conditional branch containing `.so` does not
-execute the request and therefore does not trip that rejection. Later stages
-must add include and equation provenance and cleanup contracts before enabling
-them. General macro, escape, table, and equation coverage, production consumer
+lowering. Include-enabled sessions and executed `.so` requests return
+`Unsupported`; a false conditional branch containing `.so` does not execute
+the request and therefore does not trip that rejection. Equation execution is
+bounded and retains the parser tree, actual renderer invocations, and generated
+parts, but the general production lowering has not switched to that staged
+projection yet. General macro, escape, table, and equation coverage, production consumer
 migration, legacy-executor
 deletion, and corpus audits remain work rather than implicit support.
 

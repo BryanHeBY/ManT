@@ -17,11 +17,23 @@ that crate was not published for that change.
 - Replace the 1.14.6 native baseline with the official CVS tree pinned at
   2026-09-11 08:00:00 UTC. `LIBMANDOC_VERSION` is `cvs-20260911`; the source
   inventory records every upstream revision and SHA-256. Builds remain offline.
-- Preserve the owned Rust AST shape, memory-only input, strict include roots,
+- Preserve the memory-only input, strict include roots,
   bounded parsing and per-thread session isolation. Native tokens and generated
   syntax now follow the pinned upstream, including distinct `P`/`LP` paragraphs,
   `soquiet`, and updated SYNOPSIS declarations. Consumers matching private
   upstream syntax should recheck their lowering rather than assume 1.14.6 trees.
+- Replace the lossy `Node::equation: Option<String>` snapshot with an owned
+  `Equation`/`EquationBox` tree that preserves native box kind, font, position,
+  size, argument counts, fences, decorations, and ordered children, including
+  the artificial root of empty and configuration-only equations.
+  `Equation::normalized_text()` provides the former scalar projection without
+  making it a second authority. This is a source-breaking public AST and serde
+  shape change for exhaustive consumers.
+- Extend native execution reports with equation, structural-box, actual
+  renderer-invocation, and generated-part records. Structural and execution
+  parentage remain separate for pile and matrix rendering; bounded transfer
+  rejects partial, unknown, or inconsistent relationships instead of asking
+  downstream code to replay the pinned `eqn_term.c` algorithm.
 - The optional reference renderer follows the new upstream basic-unit layout:
   its default body indent is five columns and its HTML structure has changed.
   Output capture, UTF-8 width, limits and concurrent isolation remain supported.

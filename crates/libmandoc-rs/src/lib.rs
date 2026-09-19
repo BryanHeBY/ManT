@@ -20,8 +20,9 @@ mod special_character;
 mod transport;
 
 pub use ast::{
-    AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
-    NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
+    AuthorMode, DefinitionListStyle, DisplayKind, Document, Equation, EquationBox, EquationBoxKind,
+    EquationFont, EquationPosition, MacroSet, Metadata, Node, NodeFlags, NodeKind,
+    NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
     TableCellDataKind, TableCellKind, TableCellLayoutKind, TableRowKind, TableRuleCellKind,
 };
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
@@ -31,7 +32,11 @@ pub use execution::{
     AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
     BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
     ExecutionBufferGeneration, ExecutionCancellation, ExecutionControl, ExecutionControlRequest,
-    ExecutionDefinitionContract, ExecutionDefinitionField, ExecutionDiagnostic, ExecutionError,
+    ExecutionDefinitionContract, ExecutionDefinitionField, ExecutionDiagnostic, ExecutionEquation,
+    ExecutionEquationBox, ExecutionEquationBoxKey, ExecutionEquationBoxKind,
+    ExecutionEquationFlags, ExecutionEquationFont, ExecutionEquationInvocation,
+    ExecutionEquationInvocationKey, ExecutionEquationKey, ExecutionEquationPart,
+    ExecutionEquationPartKey, ExecutionEquationPartKind, ExecutionEquationPosition, ExecutionError,
     ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
     ExecutionHeadingKind, ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind,
     ExecutionMdocListKind, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,

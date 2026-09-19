@@ -49,8 +49,6 @@ struct mant_mandoc_document {
 	char			*diagnostics;
 	struct mparse		*parser;
 	const struct roff_meta	*meta;
-	char			*equation;
-	int			 equation_truncated;
 #ifdef MANT_MANDOC_RENDER
 	struct mant_mandoc_output *output;
 	int			 render_status;
@@ -156,11 +154,8 @@ set_mant_progname(void)
  * deep enough to overflow the stack when it is copied, lowered, or dropped.
  * Rust caps its borrowed node walk so the resulting owned tree stays finite.
  *
- * It does not, however, bound sub-structures that hang off a node and are
- * walked from their own source tree: the eqn box tree is copied by descending
- * eqn_box->first independently of node depth, so copy_equation applies this
- * same cap itself. Any future payload with its own nested source structure
- * must do likewise -- one cap on the node walk is not automatically enough.
+ * It does not, however, automatically bound sub-structures hanging off a
+ * node.  The Rust transfer separately bounds its borrowed eqn_box walk.
  *
  * These transfer caps do not protect native construction or rendering.
  * The vendor construction guard rejects syntax parent chains beyond 512
@@ -207,7 +202,6 @@ static int is_safe_relative_path(const char *);
 #endif
 static void snapshot_normalized_data(struct mant_mandoc_node_view *,
     const struct roff_node *);
-static char *copy_equation(const struct eqn_box *, int *);
 #ifdef MANT_MANDOC_RENDER
 static int render_document(struct mant_mandoc_document *,
     const struct roff_meta *, int, size_t, int, size_t);
@@ -1130,7 +1124,6 @@ mant_mandoc_document_free(struct mant_mandoc_document *document)
 		return;
 	free(document->error);
 	free(document->diagnostics);
-	free(document->equation);
 	if (document->parser != NULL)
 		mparse_free(document->parser);
 #ifdef MANT_MANDOC_RENDER
@@ -1364,132 +1357,6 @@ snapshot_node_flags(const struct roff_node *source)
 	return flags;
 }
 
-struct text_buffer {
-	char	*data;
-	size_t	 length;
-	size_t	 capacity;
-};
-
-static int append_text(struct text_buffer *, const char *);
-static int append_equation(struct text_buffer *, const struct eqn_box *, int,
-    int *);
-
-static char *
-copy_equation(const struct eqn_box *box, int *truncated)
-{
-	struct text_buffer	buffer;
-
-	memset(&buffer, 0, sizeof(buffer));
-	if (!append_equation(&buffer, box, 0, truncated)) {
-		free(buffer.data);
-		return NULL;
-	}
-	return buffer.data;
-}
-
-static int
-append_equation(struct text_buffer *buffer, const struct eqn_box *box,
-    int depth, int *truncated)
-{
-	const struct eqn_box	*child;
-	const char		*operator;
-
-	if (box == NULL)
-		return append_text(buffer, "");
-	/*
-	 * The eqn box tree is a recursive walk the node-copy cap never reaches:
-	 * copy_equation enters it once, then braces nest boxes without bound, so
-	 * `{{{...}}}` overflows the stack here. Stop rendering past the same cap
-	 * and keep the text gathered so far; deeper eqn content is dropped, not
-	 * a whole-page failure. Real equations nest only a handful of levels.
-	 */
-	if (depth >= MANT_MANDOC_MAX_COPY_DEPTH) {
-		*truncated = 1;
-		return 1;
-	}
-	if (box->pos == EQNPOS_SQRT && !append_text(buffer, "sqrt("))
-		return 0;
-	if (!append_text(buffer, box->left) ||
-	    !append_text(buffer, box->text != NULL &&
-	    strcmp(box->text, "ldots") == 0 ? "..." : box->text))
-		return 0;
-	child = box->first;
-	if (box->pos == EQNPOS_SQRT) {
-		if (child != NULL &&
-		    !append_equation(buffer, child, depth + 1, truncated))
-			return 0;
-	} else if (box->type == EQN_SUBEXPR && child != NULL &&
-	    box->pos != EQNPOS_NONE) {
-		if (!append_equation(buffer, child, depth + 1, truncated))
-			return 0;
-		operator = box->pos == EQNPOS_OVER ? " / " :
-		    box->pos == EQNPOS_SUP || box->pos == EQNPOS_TO ? " ^ " : " _ ";
-		if (!append_text(buffer, operator))
-			return 0;
-		child = child->next;
-		if (child != NULL &&
-		    !append_equation(buffer, child, depth + 1, truncated))
-			return 0;
-		if (child != NULL &&
-		    (box->pos == EQNPOS_FROMTO || box->pos == EQNPOS_SUBSUP)) {
-			child = child->next;
-			if (child != NULL &&
-			    (!append_text(buffer, " ^ ") ||
-			     !append_equation(buffer, child, depth + 1,
-			     truncated)))
-				return 0;
-		}
-	} else {
-		for (; child != NULL; child = child->next) {
-			if (child != box->first && !append_text(buffer, " "))
-				return 0;
-			if (!append_equation(buffer, child, depth + 1,
-			    truncated))
-				return 0;
-		}
-	}
-	/*
-	 * eqn.c stores decorators on the enclosing list box rather than in its
-	 * children.  Keep the parser's resolved spelling in the owned snapshot:
-	 * term_eqn() emits top after the base and writes a literal underscore for
-	 * every bottom decoration.  Dropping these fields loses the meaning of
-	 * `dot`, `bar`, `vec`, `dyad`, and `under` before Rust can lower it.
-	 * Decorations precede a closing fence, matching eqn_term.c.
-	 */
-	if (!append_text(buffer, box->top) ||
-	    (box->bottom != NULL && !append_text(buffer, "_")) ||
-	    !append_text(buffer, box->right))
-		return 0;
-	if (box->pos == EQNPOS_SQRT)
-		return append_text(buffer, ")");
-	return 1;
-}
-
-static int
-append_text(struct text_buffer *buffer, const char *text)
-{
-	size_t	length, capacity;
-	char	*data;
-
-	if (text == NULL)
-		return 1;
-	length = strlen(text);
-	if (buffer->length + length + 1 > buffer->capacity) {
-		capacity = buffer->capacity == 0 ? 64 : buffer->capacity;
-		while (capacity < buffer->length + length + 1)
-			capacity *= 2;
-		data = realloc(buffer->data, capacity);
-		if (data == NULL)
-			return 0;
-		buffer->data = data;
-		buffer->capacity = capacity;
-	}
-	memcpy(buffer->data + buffer->length, text, length);
-	buffer->length += length;
-	buffer->data[buffer->length] = '\0';
-	return 1;
-}
-
 static void
 snapshot_normalized_data(struct mant_mandoc_node_view *view,
     const struct roff_node *source)
@@ -1666,13 +1533,6 @@ mant_mandoc_document_has_body(const struct mant_mandoc_document *document)
 	return document == NULL ? 0 : document_has_body(document->meta);
 }
 
-int
-mant_mandoc_document_equation_truncated(
-    const struct mant_mandoc_document *document)
-{
-	return document == NULL ? 0 : document->equation_truncated;
-}
-
 size_t
 mant_mandoc_node_view_size(void)
 {
@@ -1806,6 +1666,47 @@ mant_mandoc_table_rule_cell_view_offset(unsigned int field)
 	}
 }
 
+size_t
+mant_mandoc_equation_box_view_size(void)
+{
+	return sizeof(struct mant_mandoc_equation_box_view);
+}
+
+size_t
+mant_mandoc_equation_box_view_align(void)
+{
+	return MANT_ALIGNOF(struct mant_mandoc_equation_box_view);
+}
+
+uint32_t
+mant_mandoc_equation_box_view_field_count(void)
+{
+	return 13;
+}
+
+size_t
+mant_mandoc_equation_box_view_offset(unsigned int field)
+{
+	switch (field) {
+	MANT_VIEW_OFFSET_CASE(0, struct mant_mandoc_equation_box_view, type);
+	MANT_VIEW_OFFSET_CASE(1, struct mant_mandoc_equation_box_view, font);
+	MANT_VIEW_OFFSET_CASE(2, struct mant_mandoc_equation_box_view, position);
+	MANT_VIEW_OFFSET_CASE(3, struct mant_mandoc_equation_box_view, size);
+	MANT_VIEW_OFFSET_CASE(4, struct mant_mandoc_equation_box_view,
+	    expected_args);
+	MANT_VIEW_OFFSET_CASE(5, struct mant_mandoc_equation_box_view,
+	    actual_args);
+	MANT_VIEW_OFFSET_CASE(6, struct mant_mandoc_equation_box_view, text);
+	MANT_VIEW_OFFSET_CASE(7, struct mant_mandoc_equation_box_view, left);
+	MANT_VIEW_OFFSET_CASE(8, struct mant_mandoc_equation_box_view, right);
+	MANT_VIEW_OFFSET_CASE(9, struct mant_mandoc_equation_box_view, top);
+	MANT_VIEW_OFFSET_CASE(10, struct mant_mandoc_equation_box_view, bottom);
+	MANT_VIEW_OFFSET_CASE(11, struct mant_mandoc_equation_box_view, first);
+	MANT_VIEW_OFFSET_CASE(12, struct mant_mandoc_equation_box_view, next);
+	default: return (size_t)-1;
+	}
+}
+
 #undef MANT_VIEW_OFFSET_CASE
 #undef MANT_ALIGNOF
 
@@ -1907,14 +1808,9 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	    view->table_row_kind == MANT_MANDOC_TABLE_ROW_DATA)
 		view->table_cells =
 		    (const struct mant_mandoc_table_cell *)source->span->first;
-	else if (source->type == ROFFT_EQN) {
-		/* The returned equation pointer is borrowed only until the next
-		 * node snapshot on this document replaces the shared buffer. */
-		free(document->equation);
-		document->equation = copy_equation(source->eqn,
-		    &document->equation_truncated);
-		view->equation = document->equation;
-	}
+	else if (source->type == ROFFT_EQN)
+		view->equation = (const struct mant_mandoc_equation_box *)
+		    source->eqn;
 	view->child = (const struct mant_mandoc_node *)source->child;
 	view->next = (const struct mant_mandoc_node *)source->next;
 	return 1;
@@ -2010,6 +1906,59 @@ mant_mandoc_table_rule_cell_snapshot(
 	else
 		return 0;
 	view->next = (const struct mant_mandoc_table_rule_cell *)source->next;
+	return 1;
+}
+
+int
+mant_mandoc_equation_box_snapshot(const struct mant_mandoc_document *document,
+    const struct mant_mandoc_equation_box *box,
+    struct mant_mandoc_equation_box_view *view, size_t view_size)
+{
+	const struct eqn_box *source;
+
+	if (document == NULL || document->parser == NULL || box == NULL ||
+	    view == NULL || view_size != sizeof(*view))
+		return 0;
+	source = (const struct eqn_box *)box;
+	memset(view, 0, sizeof(*view));
+	switch (source->type) {
+	case EQN_TEXT: view->type = MANT_MANDOC_EQN_TEXT; break;
+	case EQN_SUBEXPR: view->type = MANT_MANDOC_EQN_SUBEXPR; break;
+	case EQN_LIST: view->type = MANT_MANDOC_EQN_LIST; break;
+	case EQN_PILE: view->type = MANT_MANDOC_EQN_PILE; break;
+	case EQN_MATRIX: view->type = MANT_MANDOC_EQN_MATRIX; break;
+	default: return 0;
+	}
+	switch (source->font) {
+	case EQNFONT_NONE: view->font = MANT_MANDOC_EQN_FONT_NONE; break;
+	case EQNFONT_ROMAN: view->font = MANT_MANDOC_EQN_FONT_ROMAN; break;
+	case EQNFONT_BOLD: view->font = MANT_MANDOC_EQN_FONT_BOLD; break;
+	case EQNFONT_FAT: view->font = MANT_MANDOC_EQN_FONT_FAT; break;
+	case EQNFONT_ITALIC: view->font = MANT_MANDOC_EQN_FONT_ITALIC; break;
+	default: return 0;
+	}
+	switch (source->pos) {
+	case EQNPOS_NONE: view->position = MANT_MANDOC_EQN_POS_NONE; break;
+	case EQNPOS_SUP: view->position = MANT_MANDOC_EQN_POS_SUP; break;
+	case EQNPOS_SUBSUP: view->position = MANT_MANDOC_EQN_POS_SUBSUP; break;
+	case EQNPOS_SUB: view->position = MANT_MANDOC_EQN_POS_SUB; break;
+	case EQNPOS_TO: view->position = MANT_MANDOC_EQN_POS_TO; break;
+	case EQNPOS_FROM: view->position = MANT_MANDOC_EQN_POS_FROM; break;
+	case EQNPOS_FROMTO: view->position = MANT_MANDOC_EQN_POS_FROMTO; break;
+	case EQNPOS_OVER: view->position = MANT_MANDOC_EQN_POS_OVER; break;
+	case EQNPOS_SQRT: view->position = MANT_MANDOC_EQN_POS_SQRT; break;
+	default: return 0;
+	}
+	view->size = source->size;
+	view->expected_args = (uint64_t)source->expectargs;
+	view->actual_args = (uint64_t)source->args;
+	view->text = source->text;
+	view->left = source->left;
+	view->right = source->right;
+	view->top = source->top;
+	view->bottom = source->bottom;
+	view->first = (const struct mant_mandoc_equation_box *)source->first;
+	view->next = (const struct mant_mandoc_equation_box *)source->next;
 	return 1;
 }
 

@@ -44,8 +44,8 @@ pub(super) fn is_inline_equation(node: &Node) -> bool {
         && !node.flags.line_start
         && node
             .equation
-            .as_deref()
-            .is_some_and(|value| !value.trim().is_empty())
+            .as_ref()
+            .is_some_and(|value| !value.normalized_text().trim().is_empty())
 }
 
 /// libmandoc terminates a quoted man-macro argument containing inline eqn by

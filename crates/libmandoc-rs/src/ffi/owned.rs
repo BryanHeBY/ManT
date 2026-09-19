@@ -1,20 +1,21 @@
 //! Immediate borrowed snapshot to owned Rust AST transfer.
 use super::{
     raw::{
-        self, CDocument, CNode, CNodeView, CTableCell, CTableCellView, CTableRuleCell,
-        CTableRuleCellView,
+        self, CDocument, CEquationBox, CEquationBoxView, CNode, CNodeView, CTableCell,
+        CTableCellView, CTableRuleCell, CTableRuleCellView,
     },
     session::DocumentHandle,
 };
 use crate::{
-    AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
-    NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
+    AuthorMode, DefinitionListStyle, DisplayKind, Document, Equation, EquationBox, EquationBoxKind,
+    EquationFont, EquationPosition, MacroSet, Metadata, Node, NodeFlags, NodeKind,
+    NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
     TableCell, TableCellDataKind, TableCellKind, TableCellLayoutKind, TableRowKind,
     TableRuleCellKind,
 };
 use std::{
     ffi::CStr,
-    mem::{align_of, offset_of, size_of},
+    mem::{MaybeUninit, align_of, offset_of, size_of},
     os::raw::c_char,
     ptr::NonNull,
     sync::OnceLock,
@@ -42,6 +43,7 @@ const KNOWN_NODE_FLAGS: u32 = NODE_GENERATED
     | NODE_SYNOPSIS_PRETTY
     | NODE_TABLE_START;
 const MAX_OWNED_NODE_DEPTH: usize = 256;
+const MAX_OWNED_EQUATION_BOXES: usize = 1_000_000;
 static SNAPSHOT_LAYOUT_VALIDATION: OnceLock<Result<(), String>> = OnceLock::new();
 
 #[derive(Clone, Copy)]
@@ -82,12 +84,16 @@ pub(super) fn copy_document_from_handle(
     }
 
     let mut node_truncated = false;
+    let mut equation_truncated = false;
+    let mut equation_box_count = 0_usize;
     let root = unsafe {
         copy_node(
             document,
             root,
             0,
             &mut node_truncated,
+            &mut equation_truncated,
+            &mut equation_box_count,
             &mut execution_node_keys,
         )
     }?
@@ -117,10 +123,7 @@ pub(super) fn copy_document_from_handle(
             optional_string(raw::mant_mandoc_document_diagnostics(document)).unwrap_or_default()
         },
         node_truncated,
-        equation_truncated: native_bool(
-            unsafe { raw::mant_mandoc_document_equation_truncated(document) },
-            "document equation-truncated",
-        )?,
+        equation_truncated,
     })
 }
 
@@ -131,52 +134,10 @@ pub(super) fn validate_snapshot_layouts() -> Result<(), String> {
 }
 
 fn compute_snapshot_layout_validation() -> Result<(), String> {
-    let node_offsets = [
-        offset_of!(CNodeView, kind),
-        offset_of!(CNodeView, execution_node_key),
-        offset_of!(CNodeView, macro_name),
-        offset_of!(CNodeView, text),
-        offset_of!(CNodeView, tag),
-        offset_of!(CNodeView, line),
-        offset_of!(CNodeView, column),
-        offset_of!(CNodeView, flow_epoch),
-        offset_of!(CNodeView, table_escape),
-        offset_of!(CNodeView, table_source_recovery_safe),
-        offset_of!(CNodeView, table_row_kind),
-        offset_of!(CNodeView, flags),
-        offset_of!(CNodeView, list_kind),
-        offset_of!(CNodeView, definition_list_style),
-        offset_of!(CNodeView, display_kind),
-        offset_of!(CNodeView, font_kind),
-        offset_of!(CNodeView, author_mode),
-        offset_of!(CNodeView, compact),
-        offset_of!(CNodeView, offset),
-        offset_of!(CNodeView, width),
-        offset_of!(CNodeView, enclosure_open),
-        offset_of!(CNodeView, enclosure_close),
-        offset_of!(CNodeView, equation),
-        offset_of!(CNodeView, table_cells),
-        offset_of!(CNodeView, table_rule_cells),
-        offset_of!(CNodeView, child),
-        offset_of!(CNodeView, next),
-    ];
-    let table_cell_offsets = [
-        offset_of!(CTableCellView, text),
-        offset_of!(CTableCellView, kind),
-        offset_of!(CTableCellView, layout_kind),
-        offset_of!(CTableCellView, data_kind),
-        offset_of!(CTableCellView, text_block),
-        offset_of!(CTableCellView, source_recovery_safe),
-        offset_of!(CTableCellView, vertical_continuation),
-        offset_of!(CTableCellView, column_span),
-        offset_of!(CTableCellView, row_span),
-        offset_of!(CTableCellView, alignment),
-        offset_of!(CTableCellView, next),
-    ];
-    let table_rule_cell_offsets = [
-        offset_of!(CTableRuleCellView, kind),
-        offset_of!(CTableRuleCellView, next),
-    ];
+    let node_offsets = node_view_offsets();
+    let table_cell_offsets = table_cell_view_offsets();
+    let table_rule_cell_offsets = table_rule_cell_view_offsets();
+    let equation_box_offsets = equation_box_view_offsets();
 
     validate_layout(
         "node view",
@@ -213,7 +174,92 @@ fn compute_snapshot_layout_validation() -> Result<(), String> {
             field_count: unsafe { raw::mant_mandoc_table_rule_cell_view_field_count() },
             offset: raw::mant_mandoc_table_rule_cell_view_offset,
         },
+    )?;
+    validate_layout(
+        "equation box view",
+        size_of::<CEquationBoxView>(),
+        align_of::<CEquationBoxView>(),
+        &equation_box_offsets,
+        NativeLayout {
+            size: unsafe { raw::mant_mandoc_equation_box_view_size() },
+            align: unsafe { raw::mant_mandoc_equation_box_view_align() },
+            field_count: unsafe { raw::mant_mandoc_equation_box_view_field_count() },
+            offset: raw::mant_mandoc_equation_box_view_offset,
+        },
     )
+}
+
+fn node_view_offsets() -> [usize; 27] {
+    [
+        offset_of!(CNodeView, kind),
+        offset_of!(CNodeView, execution_node_key),
+        offset_of!(CNodeView, macro_name),
+        offset_of!(CNodeView, text),
+        offset_of!(CNodeView, tag),
+        offset_of!(CNodeView, line),
+        offset_of!(CNodeView, column),
+        offset_of!(CNodeView, flow_epoch),
+        offset_of!(CNodeView, table_escape),
+        offset_of!(CNodeView, table_source_recovery_safe),
+        offset_of!(CNodeView, table_row_kind),
+        offset_of!(CNodeView, flags),
+        offset_of!(CNodeView, list_kind),
+        offset_of!(CNodeView, definition_list_style),
+        offset_of!(CNodeView, display_kind),
+        offset_of!(CNodeView, font_kind),
+        offset_of!(CNodeView, author_mode),
+        offset_of!(CNodeView, compact),
+        offset_of!(CNodeView, offset),
+        offset_of!(CNodeView, width),
+        offset_of!(CNodeView, enclosure_open),
+        offset_of!(CNodeView, enclosure_close),
+        offset_of!(CNodeView, equation),
+        offset_of!(CNodeView, table_cells),
+        offset_of!(CNodeView, table_rule_cells),
+        offset_of!(CNodeView, child),
+        offset_of!(CNodeView, next),
+    ]
+}
+
+fn table_cell_view_offsets() -> [usize; 11] {
+    [
+        offset_of!(CTableCellView, text),
+        offset_of!(CTableCellView, kind),
+        offset_of!(CTableCellView, layout_kind),
+        offset_of!(CTableCellView, data_kind),
+        offset_of!(CTableCellView, text_block),
+        offset_of!(CTableCellView, source_recovery_safe),
+        offset_of!(CTableCellView, vertical_continuation),
+        offset_of!(CTableCellView, column_span),
+        offset_of!(CTableCellView, row_span),
+        offset_of!(CTableCellView, alignment),
+        offset_of!(CTableCellView, next),
+    ]
+}
+
+fn table_rule_cell_view_offsets() -> [usize; 2] {
+    [
+        offset_of!(CTableRuleCellView, kind),
+        offset_of!(CTableRuleCellView, next),
+    ]
+}
+
+fn equation_box_view_offsets() -> [usize; 13] {
+    [
+        offset_of!(CEquationBoxView, kind),
+        offset_of!(CEquationBoxView, font),
+        offset_of!(CEquationBoxView, position),
+        offset_of!(CEquationBoxView, size),
+        offset_of!(CEquationBoxView, expected_args),
+        offset_of!(CEquationBoxView, actual_args),
+        offset_of!(CEquationBoxView, text),
+        offset_of!(CEquationBoxView, left),
+        offset_of!(CEquationBoxView, right),
+        offset_of!(CEquationBoxView, top),
+        offset_of!(CEquationBoxView, bottom),
+        offset_of!(CEquationBoxView, first),
+        offset_of!(CEquationBoxView, next),
+    ]
 }
 
 fn validate_layout(
@@ -393,34 +439,17 @@ fn table_row_kind(
     }
 }
 
-unsafe fn copy_node(
+unsafe fn node_from_view(
     document: *mut CDocument,
-    pointer: *const CNode,
-    depth: usize,
-    truncated: &mut bool,
-    execution_node_keys: &mut Option<&mut Vec<u32>>,
-) -> Result<(Node, *const CNode), String> {
-    let mut view = std::mem::MaybeUninit::<CNodeView>::uninit();
-    if unsafe {
-        raw::mant_mandoc_node_snapshot(document, pointer, view.as_mut_ptr(), size_of::<CNodeView>())
-    } != 1
-    {
-        return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
-    }
-    let view = unsafe { view.assume_init() };
-    if let Some(keys) = execution_node_keys.as_deref_mut() {
-        keys.try_reserve(1)
-            .map_err(|_| "could not allocate execution AST node-key transfer".to_owned())?;
-        keys.push(view.execution_node_key);
-    }
-    if view.flags & !KNOWN_NODE_FLAGS != 0 {
-        return Err("libmandoc returned unknown syntax node flags".to_owned());
-    }
+    view: &CNodeView,
+    equation_truncated: &mut bool,
+    equation_box_count: &mut usize,
+) -> Result<Node, String> {
     let text = unsafe { visible_string(view.text) };
     let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
     let enclosure_open = unsafe { optional_string(view.enclosure_open) };
     let enclosure_close = unsafe { optional_string(view.enclosure_close) };
-    let mut node = Node {
+    Ok(Node {
         execution_node_key: (view.execution_node_key != u32::MAX)
             .then_some(view.execution_node_key),
         kind: node_kind(view.kind)?,
@@ -481,17 +510,68 @@ unsafe fn copy_node(
         offset: unsafe { optional_string(view.offset) },
         width: unsafe { optional_string(view.width) },
         table_cells: unsafe { copy_table_cells(document, view.table_cells) }?,
-        // The shim reuses this equation buffer on the next node snapshot, so
-        // copy it before descending into children or taking another snapshot.
-        equation: unsafe { visible_string(view.equation) },
+        equation: if view.equation.is_null() {
+            None
+        } else {
+            Some(Box::new(Equation {
+                root: unsafe {
+                    copy_equation_box(
+                        document,
+                        view.equation,
+                        0,
+                        equation_truncated,
+                        equation_box_count,
+                    )
+                }?
+                .0,
+            }))
+        },
         children: Vec::new(),
-    };
+    })
+}
+
+unsafe fn copy_node(
+    document: *mut CDocument,
+    pointer: *const CNode,
+    depth: usize,
+    truncated: &mut bool,
+    equation_truncated: &mut bool,
+    equation_box_count: &mut usize,
+    execution_node_keys: &mut Option<&mut Vec<u32>>,
+) -> Result<(Node, *const CNode), String> {
+    let mut view = std::mem::MaybeUninit::<CNodeView>::uninit();
+    if unsafe {
+        raw::mant_mandoc_node_snapshot(document, pointer, view.as_mut_ptr(), size_of::<CNodeView>())
+    } != 1
+    {
+        return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
+    }
+    let view = unsafe { view.assume_init() };
+    if let Some(keys) = execution_node_keys.as_deref_mut() {
+        keys.try_reserve(1)
+            .map_err(|_| "could not allocate execution AST node-key transfer".to_owned())?;
+        keys.push(view.execution_node_key);
+    }
+    if view.flags & !KNOWN_NODE_FLAGS != 0 {
+        return Err("libmandoc returned unknown syntax node flags".to_owned());
+    }
+    let mut node =
+        unsafe { node_from_view(document, &view, equation_truncated, equation_box_count) }?;
 
     if depth + 1 < MAX_OWNED_NODE_DEPTH {
         let mut child = view.child;
         while !child.is_null() {
-            let (owned, next) =
-                unsafe { copy_node(document, child, depth + 1, truncated, execution_node_keys) }?;
+            let (owned, next) = unsafe {
+                copy_node(
+                    document,
+                    child,
+                    depth + 1,
+                    truncated,
+                    equation_truncated,
+                    equation_box_count,
+                    execution_node_keys,
+                )
+            }?;
             node.children.push(owned);
             child = next;
         }
@@ -516,6 +596,88 @@ fn ends_with_no_space_escape(text: &str) -> bool {
         .count()
         % 2
         == 0
+}
+
+unsafe fn copy_equation_box(
+    document: *const CDocument,
+    pointer: *const CEquationBox,
+    depth: usize,
+    truncated: &mut bool,
+    box_count: &mut usize,
+) -> Result<(EquationBox, *const CEquationBox), String> {
+    if *box_count >= MAX_OWNED_EQUATION_BOXES {
+        *truncated = true;
+        return Err("libmandoc equation tree exceeds the owned transfer limit".to_owned());
+    }
+    *box_count += 1;
+    let mut view = MaybeUninit::<CEquationBoxView>::uninit();
+    if unsafe {
+        raw::mant_mandoc_equation_box_snapshot(
+            document,
+            pointer,
+            view.as_mut_ptr(),
+            size_of::<CEquationBoxView>(),
+        )
+    } != 1
+    {
+        return Err("libmandoc returned an invalid borrowed equation box".to_owned());
+    }
+    let view = unsafe { view.assume_init() };
+    let mut children = Vec::new();
+    if depth + 1 < MAX_OWNED_NODE_DEPTH {
+        let mut child = view.first;
+        while !child.is_null() {
+            let (owned, next) =
+                unsafe { copy_equation_box(document, child, depth + 1, truncated, box_count) }?;
+            children.push(owned);
+            child = next;
+        }
+        if u64::try_from(children.len()).ok() != Some(view.actual_args) {
+            return Err("libmandoc returned inconsistent equation child counts".to_owned());
+        }
+    } else if !view.first.is_null() {
+        *truncated = true;
+    }
+    let box_value = EquationBox {
+        kind: match view.kind {
+            0 => EquationBoxKind::Text,
+            1 => EquationBoxKind::Subexpression,
+            2 => EquationBoxKind::List,
+            3 => EquationBoxKind::Pile,
+            4 => EquationBoxKind::Matrix,
+            _ => return Err("libmandoc returned an unknown equation box kind".to_owned()),
+        },
+        font: match view.font {
+            0 => EquationFont::None,
+            1 => EquationFont::Roman,
+            2 => EquationFont::Bold,
+            3 => EquationFont::Fat,
+            4 => EquationFont::Italic,
+            _ => return Err("libmandoc returned an unknown equation font".to_owned()),
+        },
+        position: match view.position {
+            0 => EquationPosition::None,
+            1 => EquationPosition::Superscript,
+            2 => EquationPosition::SubscriptSuperscript,
+            3 => EquationPosition::Subscript,
+            4 => EquationPosition::To,
+            5 => EquationPosition::From,
+            6 => EquationPosition::FromTo,
+            7 => EquationPosition::Over,
+            8 => EquationPosition::SquareRoot,
+            _ => return Err("libmandoc returned an unknown equation position".to_owned()),
+        },
+        size: view.size,
+        expected_args: view.expected_args,
+        actual_args: view.actual_args,
+        text: unsafe { optional_string(view.text) },
+        left: unsafe { optional_string(view.left) },
+        right: unsafe { optional_string(view.right) },
+        top: unsafe { optional_string(view.top) },
+        bottom: unsafe { optional_string(view.bottom) },
+        children,
+    };
+    Ok((box_value, view.next))
 }
 
 unsafe fn copy_table_cells(

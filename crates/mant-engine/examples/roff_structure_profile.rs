@@ -396,7 +396,8 @@ fn collect_ast_structure(
             .count();
     }
     if node.kind == NodeKind::Equation {
-        match node.equation.as_deref().map(str::trim) {
+        let equation = node.equation.as_ref().map(|value| value.normalized_text());
+        match equation.as_deref().map(str::trim) {
             None | Some("") => profile.equation_configurations += 1,
             Some(_) if inside_table => profile.table_equations += 1,
             Some(_) if node.flags.line_start => profile.display_equations += 1,
@@ -733,7 +734,8 @@ fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
 
 fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopology) {
     if node.kind == NodeKind::Equation
-        && let Some(value) = node.equation.as_deref().map(str::trim)
+        && let Some(value) = node.equation.as_ref().map(|value| value.normalized_text())
+        && let value = value.trim()
         && !value.is_empty()
     {
         topology.equations.push(AstEquationTopology {
@@ -1435,16 +1437,16 @@ fn normalize_equation_fragment(source: &str) -> Result<String, String> {
     .parse_bytes("audit-equation.7", synthetic.as_bytes())
     .map_err(|error| error.to_string())?;
     find_equation(&report.document.root)
-        .map(equation_visible_text)
+        .map(|value| equation_visible_text(&value))
         .ok_or_else(|| format!("could not normalize table equation {source:?}"))
 }
 
-fn find_equation(node: &Node) -> Option<&str> {
+fn find_equation(node: &Node) -> Option<String> {
     if node.kind == NodeKind::Equation
-        && let Some(value) = node.equation.as_deref()
+        && let Some(value) = node.equation.as_ref().map(|value| value.normalized_text())
         && !value.trim().is_empty()
     {
-        return Some(value.trim());
+        return Some(value.trim().to_owned());
     }
     node.children.iter().find_map(find_equation)
 }

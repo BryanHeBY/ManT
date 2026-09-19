@@ -38,14 +38,31 @@ static	const enum termfont fontmap[EQNFONT__MAX] = {
 };
 
 static void	eqn_box(struct termp *, const struct eqn_box *);
+static void	eqn_word(struct termp *, const struct eqn_box *, int,
+		const char *);
 
 
 void
 term_eqn(struct termp *p, const struct eqn_box *bp)
 {
-
+	if (!term_exec_equation(p, bp, 1))
+		return;
 	eqn_box(p, bp);
+	if (term_exec_failed(p))
+		return;
 	p->flags &= ~TERMP_NOSPACE;
+	(void)term_exec_equation(p, bp, 0);
+}
+
+static void
+eqn_word(struct termp *p, const struct eqn_box *bp, int kind,
+    const char *word)
+{
+	if (!term_exec_equation_part(p, bp, kind, 1))
+		return;
+	term_word(p, word);
+	if (!term_exec_failed(p))
+		(void)term_exec_equation_part(p, bp, kind, 0);
 }
 
 static void
@@ -54,6 +71,9 @@ eqn_box(struct termp *p, const struct eqn_box *bp)
 	const struct eqn_box *child;
 	const char *cp;
 	int delim;
+
+	if (bp == NULL || !term_exec_equation_box(p, bp, 1))
+		return;
 
 	/* Delimiters around this box? */
 
@@ -80,7 +100,8 @@ eqn_box(struct termp *p, const struct eqn_box *bp)
 		       (*bp->prev->text == '\\' ||
 		        isalpha((unsigned char)*bp->prev->text))))))
 			p->flags |= TERMP_NOSPACE;
-		term_word(p, bp->left != NULL ? bp->left : "(");
+		eqn_word(p, bp, TERM_EXEC_EQUATION_LEFT_FENCE,
+		    bp->left != NULL ? bp->left : "(");
 		p->flags |= TERMP_NOSPACE;
 		delim = 1;
 	} else
@@ -94,7 +115,7 @@ eqn_box(struct termp *p, const struct eqn_box *bp)
 	if (bp->text != NULL) {
 		if (strchr("!\"'),.:;?]}", *bp->text) != NULL)
 			p->flags |= TERMP_NOSPACE;
-		term_word(p, bp->text);
+		eqn_word(p, bp, TERM_EXEC_EQUATION_TEXT, bp->text);
 		if ((cp = strchr(bp->text, '\0')) > bp->text &&
 		    (strchr("\"'([{", cp[-1]) != NULL ||
 		     (bp->prev == NULL && (cp[-1] == '-' ||
@@ -106,7 +127,7 @@ eqn_box(struct termp *p, const struct eqn_box *bp)
 	/* Special box types. */
 
 	if (bp->pos == EQNPOS_SQRT) {
-		term_word(p, "\\(sr");
+		eqn_word(p, bp, TERM_EXEC_EQUATION_SQUARE_ROOT, "\\(sr");
 		if (bp->first != NULL) {
 			p->flags |= TERMP_NOSPACE;
 			eqn_box(p, bp->first);
@@ -115,7 +136,8 @@ eqn_box(struct termp *p, const struct eqn_box *bp)
 		child = bp->first;
 		eqn_box(p, child);
 		p->flags |= TERMP_NOSPACE;
-		term_word(p, bp->pos == EQNPOS_OVER ? "/" :
+		eqn_word(p, bp, TERM_EXEC_EQUATION_OPERATOR,
+		    bp->pos == EQNPOS_OVER ? "/" :
 		    (bp->pos == EQNPOS_SUP ||
 		     bp->pos == EQNPOS_TO) ? "^" : "_");
 		child = child->next;
@@ -125,7 +147,7 @@ eqn_box(struct termp *p, const struct eqn_box *bp)
 			if (bp->pos == EQNPOS_FROMTO ||
 			    bp->pos == EQNPOS_SUBSUP) {
 				p->flags |= TERMP_NOSPACE;
-				term_word(p, "^");
+				eqn_word(p, bp, TERM_EXEC_EQUATION_OPERATOR, "^");
 				p->flags |= TERMP_NOSPACE;
 				child = child->next;
 				if (child != NULL)
@@ -156,19 +178,22 @@ eqn_box(struct termp *p, const struct eqn_box *bp)
 		term_fontpop(p);
 	if (bp->top != NULL) {
 		p->flags |= TERMP_NOSPACE;
-		term_word(p, bp->top);
+		eqn_word(p, bp, TERM_EXEC_EQUATION_TOP_DECORATOR, bp->top);
 	}
 	if (bp->bottom != NULL) {
 		p->flags |= TERMP_NOSPACE;
-		term_word(p, "_");
+		eqn_word(p, bp, TERM_EXEC_EQUATION_BOTTOM_DECORATOR, "_");
 	}
 
 	/* Right delimiter after this box? */
 
 	if (delim) {
 		p->flags |= TERMP_NOSPACE;
-		term_word(p, bp->right != NULL ? bp->right : ")");
+		eqn_word(p, bp, TERM_EXEC_EQUATION_RIGHT_FENCE,
+		    bp->right != NULL ? bp->right : ")");
 		if (bp->parent->type == EQN_SUBEXPR && bp->next != NULL)
 			p->flags |= TERMP_NOSPACE;
 	}
+	if (!term_exec_failed(p))
+		(void)term_exec_equation_box(p, bp, 0);
 }

@@ -42,7 +42,8 @@ enum mant_mandoc_execution_atom_role {
 	MANT_MANDOC_ATOM_FONT_DECORATION,
 	MANT_MANDOC_ATOM_MACRO_GENERATED,
 	MANT_MANDOC_ATOM_DEVICE_GENERATED,
-	MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD
+	MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD,
+	MANT_MANDOC_ATOM_EQUATION_CONTENT
 };
 
 #define MANT_MANDOC_EXEC_NODE_GENERATED (1U << 0)
@@ -246,6 +247,48 @@ enum mant_mandoc_execution_table_alignment {
 	MANT_MANDOC_EXEC_TABLE_ALIGN_NUMERIC,
 	MANT_MANDOC_EXEC_TABLE_ALIGN_LONG
 };
+
+enum mant_mandoc_execution_equation_box_kind {
+	MANT_MANDOC_EXEC_EQUATION_TEXT = 1,
+	MANT_MANDOC_EXEC_EQUATION_SUBEXPRESSION,
+	MANT_MANDOC_EXEC_EQUATION_LIST,
+	MANT_MANDOC_EXEC_EQUATION_PILE,
+	MANT_MANDOC_EXEC_EQUATION_MATRIX
+};
+
+enum mant_mandoc_execution_equation_font {
+	MANT_MANDOC_EXEC_EQUATION_FONT_NONE = 0,
+	MANT_MANDOC_EXEC_EQUATION_FONT_ROMAN,
+	MANT_MANDOC_EXEC_EQUATION_FONT_BOLD,
+	MANT_MANDOC_EXEC_EQUATION_FONT_FAT,
+	MANT_MANDOC_EXEC_EQUATION_FONT_ITALIC
+};
+
+enum mant_mandoc_execution_equation_position {
+	MANT_MANDOC_EXEC_EQUATION_POSITION_NONE = 0,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_SUPERSCRIPT,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_SUBSUPERSCRIPT,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_SUBSCRIPT,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_TO,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_FROM,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_FROMTO,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_OVER,
+	MANT_MANDOC_EXEC_EQUATION_POSITION_SQUARE_ROOT
+};
+
+enum mant_mandoc_execution_equation_part_kind {
+	MANT_MANDOC_EXEC_EQUATION_PART_TEXT = 1,
+	MANT_MANDOC_EXEC_EQUATION_PART_LEFT_FENCE,
+	MANT_MANDOC_EXEC_EQUATION_PART_RIGHT_FENCE,
+	MANT_MANDOC_EXEC_EQUATION_PART_OPERATOR,
+	MANT_MANDOC_EXEC_EQUATION_PART_SQUARE_ROOT,
+	MANT_MANDOC_EXEC_EQUATION_PART_TOP_DECORATOR,
+	MANT_MANDOC_EXEC_EQUATION_PART_BOTTOM_DECORATOR
+};
+
+#define MANT_MANDOC_EXEC_EQUATION_INLINE (1U << 0)
+#define MANT_MANDOC_EXEC_EQUATION_DISPLAY (1U << 1)
+#define MANT_MANDOC_EXEC_EQUATION_NO_CONTENT (1U << 2)
 
 #define MANT_MANDOC_EXEC_TABLE_CELL_TOP_ALIGN (1U << 0)
 #define MANT_MANDOC_EXEC_TABLE_CELL_UP (1U << 1)
@@ -639,6 +682,86 @@ struct mant_mandoc_table_cell_record {
 	uint64_t leave_sequence;
 };
 
+/* One final-tree ROFFT_EQN node and its owned structural/execution ranges. */
+struct mant_mandoc_equation_record {
+	uint32_t key;
+	uint32_t node;
+	uint32_t root_box;
+	uint32_t box_start;
+	uint32_t box_length;
+	uint32_t execution_start;
+	uint32_t execution_length;
+	uint32_t part_start;
+	uint32_t part_length;
+	uint32_t flags;
+	uint32_t enter_atom;
+	uint32_t leave_atom;
+	uint32_t reserved0;
+	uint32_t reserved1;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
+/* Pointer-free preorder snapshot of one pinned eqn_box. */
+struct mant_mandoc_equation_box_record {
+	uint32_t key;
+	uint32_t equation;
+	uint32_t parent;
+	uint32_t first_child;
+	uint32_t next_sibling;
+	uint32_t subtree_end;
+	uint32_t ordinal;
+	uint32_t kind;
+	uint32_t font;
+	uint32_t position;
+	int32_t size;
+	uint64_t expected_args;
+	uint64_t actual_args;
+	uint32_t text_start;
+	uint32_t text_length;
+	uint32_t left_start;
+	uint32_t left_length;
+	uint32_t right_start;
+	uint32_t right_length;
+	uint32_t top_start;
+	uint32_t top_length;
+	uint32_t bottom_start;
+	uint32_t bottom_length;
+	uint32_t reserved;
+};
+
+/* One actual recursive eqn_box() invocation; structural wrappers may be skipped. */
+struct mant_mandoc_equation_box_execution_record {
+	uint32_t key;
+	uint32_t equation;
+	uint32_t box;
+	uint32_t parent_execution;
+	uint32_t part_start;
+	uint32_t part_length;
+	uint32_t enter_atom;
+	uint32_t leave_atom;
+	uint32_t reserved0;
+	uint32_t reserved1;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
+/* One eqn_term.c generated formatter word and its exact native owner. */
+struct mant_mandoc_equation_part_record {
+	uint32_t key;
+	uint32_t equation;
+	uint32_t box;
+	uint32_t execution;
+	uint32_t kind;
+	uint32_t word_start;
+	uint32_t word_length;
+	uint32_t atom_start;
+	uint32_t atom_length;
+	uint32_t reserved;
+	uint64_t enter_sequence;
+	uint64_t leave_sequence;
+};
+
 struct mant_mandoc_execution_diagnostic_record {
 	uint32_t code;
 	uint32_t node;
@@ -704,6 +827,10 @@ MANT_DECLARE_RECORD_API(anchor, anchors);
 MANT_DECLARE_RECORD_API(table, tables);
 MANT_DECLARE_RECORD_API(table_row, table_rows);
 MANT_DECLARE_RECORD_API(table_cell, table_cells);
+MANT_DECLARE_RECORD_API(equation, equations);
+MANT_DECLARE_RECORD_API(equation_box, equation_boxes);
+MANT_DECLARE_RECORD_API(equation_box_execution, equation_box_executions);
+MANT_DECLARE_RECORD_API(equation_part, equation_parts);
 MANT_DECLARE_RECORD_API(diagnostic, diagnostics);
 
 #undef MANT_DECLARE_RECORD_API

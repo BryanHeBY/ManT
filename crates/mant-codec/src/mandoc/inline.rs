@@ -419,7 +419,8 @@ pub(super) fn append_inline_nodes(
 fn lower_equation_node(node: &Node) -> Vec<Inline> {
     node.equation
         .as_deref()
-        .map(visible_text)
+        .map(libmandoc_rs::Equation::normalized_text)
+        .map(|value| visible_text(&value))
         .filter(|value| !value.trim().is_empty())
         .map(|value| vec![Inline::Code { value }])
         .unwrap_or_default()

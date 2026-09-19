@@ -11,8 +11,9 @@ fn parser_preserves_infix_eqn_operators() {
         )
         .expect("parse infix eqn operators");
     let equation = find_kind(&report.document.root, NodeKind::Equation)
-        .and_then(|node| node.equation.as_deref())
-        .expect("normalized equation");
+        .and_then(|node| node.equation.as_ref())
+        .expect("native equation")
+        .normalized_text();
 
     assert!(equation.contains("width / 2"), "{equation}");
     assert!(equation.contains("y _ 1 ^ 2"), "{equation}");
@@ -27,8 +28,9 @@ fn parser_normalizes_the_common_gnu_ldots_equation_macro() {
         )
         .expect("parse GNU ldots equation macro");
     let equation = find_kind(&report.document.root, NodeKind::Equation)
-        .and_then(|node| node.equation.as_deref())
-        .expect("normalized equation");
+        .and_then(|node| node.equation.as_ref())
+        .expect("native equation")
+        .normalized_text();
 
     assert_eq!(equation, "x _ 1 ... x _ n");
 }
@@ -42,8 +44,9 @@ fn parser_preserves_eqn_decorations_from_native_boxes() {
         )
         .expect("parse decorated equations");
     let equations = find_kind(&report.document.root, NodeKind::Equation)
-        .and_then(|node| node.equation.as_deref())
-        .expect("normalized equation");
+        .and_then(|node| node.equation.as_ref())
+        .expect("native equation")
+        .normalized_text();
 
     // CVS eqn.c records these on eqn_box::top/bottom, not as children.
     // Keep their resolved native spellings in the owned AST so downstream
@@ -52,6 +55,58 @@ fn parser_preserves_eqn_decorations_from_native_boxes() {
         assert!(equations.contains(decorator), "{decorator}: {equations}");
     }
     assert!(equations.contains("n_"), "{equations}");
+}
+
+#[test]
+fn parser_preserves_native_equation_structure_and_empty_roots() {
+    // Fixed CVS `eqn.h` retains artificial roots, native box kinds, fonts,
+    // positions, fences, and decorations independently of terminal output.
+    // Oracle checked first with:
+    // target/mandoc-migration/reference/mandoc -Ttree
+    // target/k21-oracles/exact-typed-tree.1
+    let report = Parser::default()
+        .parse_bytes(
+            "equation-structure.1",
+            b".TH EQN 1\n.SH BODY\n.EQ\nleft ( bold x sub 1 sup 2 over sqrt { italic y } right )\n.EN\n.EQ\nx dot under\n.EN\n.EQ\ndelim $$\n.EN\n",
+        )
+        .expect("parse structured equations");
+    let mut equations = Vec::new();
+    collect_equations(&report.document.root, &mut equations);
+    assert_eq!(equations.len(), 3);
+
+    let expression = &equations[0].root.children[0];
+    assert_eq!(expression.kind, EquationBoxKind::List);
+    assert_eq!(expression.left.as_deref(), Some("("));
+    assert_eq!(expression.right.as_deref(), Some(")"));
+    let fraction = &expression.children[0];
+    assert_eq!(fraction.position, EquationPosition::Over);
+    assert_eq!(
+        fraction.children[0].position,
+        EquationPosition::SubscriptSuperscript
+    );
+    assert_eq!(fraction.children[0].children[0].font, EquationFont::Bold);
+    assert_eq!(fraction.children[1].position, EquationPosition::SquareRoot);
+    assert_eq!(
+        fraction.children[1].children[0].children[0].font,
+        EquationFont::Italic
+    );
+
+    let decorated = &equations[1].root.children[0];
+    assert_eq!(decorated.bottom.as_deref(), Some(r"\[ul]"));
+    assert_eq!(decorated.children[0].top.as_deref(), Some(r"\[a.]"));
+
+    let configuration = &equations[2].root;
+    assert!(configuration.children.is_empty());
+    assert_eq!(configuration.actual_args, 0);
+}
+
+fn collect_equations<'a>(node: &'a Node, output: &mut Vec<&'a Equation>) {
+    if let Some(equation) = &node.equation {
+        output.push(equation);
+    }
+    for child in &node.children {
+        collect_equations(child, output);
+    }
 }
 
 #[test]
@@ -176,8 +231,8 @@ fn parser_copies_table_cells_and_equation_text() {
     assert!(
         equation
             .equation
-            .as_deref()
-            .is_some_and(|value| value.contains('x'))
+            .as_ref()
+            .is_some_and(|value| value.normalized_text().contains('x'))
     );
 }
 
