@@ -9,7 +9,8 @@ use super::{
 use crate::{
     AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
     NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
-    TableCell, TableCellKind, TableRowKind, TableRuleCellKind,
+    TableCell, TableCellDataKind, TableCellKind, TableCellLayoutKind, TableRowKind,
+    TableRuleCellKind,
 };
 use std::{
     ffi::CStr,
@@ -162,6 +163,8 @@ fn compute_snapshot_layout_validation() -> Result<(), String> {
     let table_cell_offsets = [
         offset_of!(CTableCellView, text),
         offset_of!(CTableCellView, kind),
+        offset_of!(CTableCellView, layout_kind),
+        offset_of!(CTableCellView, data_kind),
         offset_of!(CTableCellView, text_block),
         offset_of!(CTableCellView, source_recovery_safe),
         offset_of!(CTableCellView, vertical_continuation),
@@ -543,6 +546,27 @@ unsafe fn copy_table_cells(
                 4 => TableCellKind::IsolatedHorizontalRule,
                 5 => TableCellKind::IsolatedDoubleHorizontalRule,
                 _ => return Err("libmandoc returned an unknown table cell kind".to_owned()),
+            },
+            layout_kind: match view.layout_kind {
+                1 => TableCellLayoutKind::Center,
+                2 => TableCellLayoutKind::Right,
+                3 => TableCellLayoutKind::Left,
+                4 => TableCellLayoutKind::Numeric,
+                5 => TableCellLayoutKind::Span,
+                6 => TableCellLayoutKind::Long,
+                7 => TableCellLayoutKind::Down,
+                8 => TableCellLayoutKind::HorizontalRule,
+                9 => TableCellLayoutKind::DoubleHorizontalRule,
+                _ => return Err("libmandoc returned an unknown table layout kind".to_owned()),
+            },
+            data_kind: match view.data_kind {
+                1 => TableCellDataKind::Empty,
+                2 => TableCellDataKind::Text,
+                3 => TableCellDataKind::HorizontalRule,
+                4 => TableCellDataKind::DoubleHorizontalRule,
+                5 => TableCellDataKind::IsolatedHorizontalRule,
+                6 => TableCellDataKind::IsolatedDoubleHorizontalRule,
+                _ => return Err("libmandoc returned an unknown table data kind".to_owned()),
             },
             text: unsafe { visible_string(view.text) },
             text_block: native_bool(view.text_block, "table text-block")?,

@@ -65,6 +65,8 @@ struct mant_mandoc_node_view {
 struct mant_mandoc_table_cell_view {
 	const char		*text;
 	int32_t			 kind;
+	int32_t			 layout_kind;
+	int32_t			 data_kind;
 	int32_t			 text_block;
 	int32_t			 source_recovery_safe;
 	int32_t			 vertical_continuation;

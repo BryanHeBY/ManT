@@ -1,5 +1,8 @@
 //! Native tbl metadata must distinguish printable payload from layout controls.
-use libmandoc_rs::{Node, Parser, TableCell, TableCellKind, TableRowKind, TableRuleCellKind};
+use libmandoc_rs::{
+    Node, Parser, TableCell, TableCellDataKind, TableCellKind, TableCellLayoutKind, TableRowKind,
+    TableRuleCellKind,
+};
 
 fn cells(node: &Node) -> Vec<&TableCell> {
     node.table_cells
@@ -87,14 +90,59 @@ fn layout_only_rule_rows_retain_per_column_strength() {
 
 #[test]
 fn layout_rules_override_payload_and_data_rules_retain_their_kind() {
-    for (layout, payload, expected) in [
-        ("_", "HIDDEN", TableCellKind::HorizontalRule),
-        ("=", "HIDDEN", TableCellKind::DoubleHorizontalRule),
-        ("l", "_", TableCellKind::HorizontalRule),
-        ("l", "=", TableCellKind::DoubleHorizontalRule),
-        ("l", r"\_", TableCellKind::IsolatedHorizontalRule),
-        ("l", r"\=", TableCellKind::IsolatedDoubleHorizontalRule),
-        ("l", r"\&_", TableCellKind::Text),
+    // Verified with pinned CVS `-Ttree` and `-Tutf8`: tbl_data.c retains
+    // `tbl_cell::pos` and `tbl_dat::pos` independently even when a layout rule
+    // suppresses otherwise printable data.
+    for (layout, payload, expected, expected_layout, expected_data) in [
+        (
+            "_",
+            "HIDDEN",
+            TableCellKind::HorizontalRule,
+            TableCellLayoutKind::HorizontalRule,
+            TableCellDataKind::Text,
+        ),
+        (
+            "=",
+            "HIDDEN",
+            TableCellKind::DoubleHorizontalRule,
+            TableCellLayoutKind::DoubleHorizontalRule,
+            TableCellDataKind::Text,
+        ),
+        (
+            "l",
+            "_",
+            TableCellKind::HorizontalRule,
+            TableCellLayoutKind::Left,
+            TableCellDataKind::HorizontalRule,
+        ),
+        (
+            "l",
+            "=",
+            TableCellKind::DoubleHorizontalRule,
+            TableCellLayoutKind::Left,
+            TableCellDataKind::DoubleHorizontalRule,
+        ),
+        (
+            "l",
+            r"\_",
+            TableCellKind::IsolatedHorizontalRule,
+            TableCellLayoutKind::Left,
+            TableCellDataKind::IsolatedHorizontalRule,
+        ),
+        (
+            "l",
+            r"\=",
+            TableCellKind::IsolatedDoubleHorizontalRule,
+            TableCellLayoutKind::Left,
+            TableCellDataKind::IsolatedDoubleHorizontalRule,
+        ),
+        (
+            "l",
+            r"\&_",
+            TableCellKind::Text,
+            TableCellLayoutKind::Left,
+            TableCellDataKind::Text,
+        ),
     ] {
         let source = format!(
             ".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl {layout} l.\nLEFT\t{payload}\tRIGHT\n.TE\n"
@@ -105,6 +153,8 @@ fn layout_rules_override_payload_and_data_rules_retain_their_kind() {
         let cells = cells(&parsed.document.root);
         assert_eq!(cells.len(), 3, "{source}");
         assert_eq!(cells[1].kind, expected, "{source}");
+        assert_eq!(cells[1].layout_kind, expected_layout, "{source}");
+        assert_eq!(cells[1].data_kind, expected_data, "{source}");
         assert_eq!(cells[0].kind, TableCellKind::Text);
         assert_eq!(cells[2].kind, TableCellKind::Text);
     }

@@ -12,9 +12,8 @@ use libmandoc_rs::{
     ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
     ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
     ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport,
-    Node as NativeNode, NodeKind, NormalizedListKind, TableAlignment as NativeTableAlignment,
-    TableCellKind as NativeTableCellKind, TableRowKind as NativeTableRowKind,
-    TableRuleCellKind as NativeTableRuleCellKind,
+    Node as NativeNode, NodeKind, NormalizedListKind, TableCellKind as NativeTableCellKind,
+    TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
@@ -339,6 +338,8 @@ pub(super) struct NativeTableCell {
     pub(super) alignment: ExecutionTableAlignment,
     pub(super) font: ExecutionFont,
     pub(super) flags: ExecutionTableCellFlags,
+    /// Source-neutral cell kind after native layout and data controls agree.
+    pub(super) kind: mant_ir::TableCellKind,
     pub(super) buffer_generation: Option<u32>,
     pub(super) atoms: Range<u32>,
     pub(super) fragments: Vec<ExecutionFragment>,
@@ -365,8 +366,134 @@ pub(super) struct NativeTable {
     pub(super) key: ExecutionTableKey,
     pub(super) source: PathBuf,
     pub(super) logical_columns: u32,
+    /// Explicit native targets whose attachment cursor is the table entry.
+    pub(super) leading_anchors: Vec<u32>,
     pub(super) rows: Vec<NativeTableRow>,
-    pub(super) block: mant_ir::Block,
+}
+
+impl NativeTable {
+    /// Materialize the source-neutral grid from the already validated native
+    /// topology and per-cell execution payload.
+    ///
+    /// Upstream: `tbl_data.c::getdata()` owns cells and spans, while
+    /// `tbl_term.c::term_tbl()` executes their payload.  This projection does
+    /// not infer either fact from device rows or source delimiters.
+    #[allow(dead_code)]
+    fn to_ir_block(&self) -> mant_ir::Block {
+        let [block] = self
+            .to_ir_blocks(Vec::new())
+            .try_into()
+            .unwrap_or_else(|_| {
+                unreachable!("a table without leading targets materializes one block")
+            });
+        block
+    }
+
+    /// Materialize the table and attach already allocated leading targets at
+    /// the first addressable cell.  Rule-only tables retain the zero-width
+    /// targets in a preceding anchor-only paragraph because table blocks do
+    /// not own identities in the source-neutral IR.
+    #[allow(dead_code)]
+    fn to_ir_blocks(&self, leading: Vec<mant_ir::Inline>) -> Vec<mant_ir::Block> {
+        let mut table = mant_ir::Block::Table {
+            rows: self
+                .rows
+                .iter()
+                .map(|row| mant_ir::TableRow {
+                    kind: row.kind.clone(),
+                    cells: row
+                        .cells
+                        .iter()
+                        .map(|cell| {
+                            let blocks = if cell
+                                .flags
+                                .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION)
+                                || cell.kind != mant_ir::TableCellKind::Text
+                                || cell.content.is_empty()
+                            {
+                                Vec::new()
+                            } else {
+                                vec![mant_ir::Block::Paragraph {
+                                    children: cell.content.clone(),
+                                    layout: mant_ir::LayoutHint::default(),
+                                    source: (cell.line > 0).then_some(mant_ir::SourceSpan {
+                                        byte_range: None,
+                                        line: cell.line,
+                                        column: cell.column.max(1),
+                                        end_line: None,
+                                        end_column: None,
+                                    }),
+                                }]
+                            };
+                            mant_ir::TableCell {
+                                kind: cell.kind,
+                                blocks,
+                                column_span: u16::try_from(cell.column_span)
+                                    .expect("validated native table column span"),
+                                row_span: u16::try_from(cell.row_span)
+                                    .expect("validated native table row span"),
+                                alignment: Some(match cell.alignment {
+                                    ExecutionTableAlignment::None
+                                    | ExecutionTableAlignment::Left
+                                    | ExecutionTableAlignment::Long => {
+                                        mant_ir::TableAlignment::Left
+                                    }
+                                    ExecutionTableAlignment::Center => {
+                                        mant_ir::TableAlignment::Center
+                                    }
+                                    ExecutionTableAlignment::Right
+                                    | ExecutionTableAlignment::Numeric => {
+                                        mant_ir::TableAlignment::Right
+                                    }
+                                }),
+                            }
+                        })
+                        .collect(),
+                })
+                .collect(),
+            layout: mant_ir::LayoutHint::default(),
+            source: self.rows.first().and_then(|row| {
+                (row.line > 0).then_some(mant_ir::SourceSpan {
+                    byte_range: None,
+                    line: row.line,
+                    column: row.column.max(1),
+                    end_line: None,
+                    end_column: None,
+                })
+            }),
+        };
+        if leading.is_empty() {
+            return vec![table];
+        }
+        let mant_ir::Block::Table { rows, .. } = &mut table else {
+            unreachable!()
+        };
+        if let Some(cell) = rows
+            .iter_mut()
+            .flat_map(|row| &mut row.cells)
+            .find(|cell| cell.kind == mant_ir::TableCellKind::Text)
+        {
+            if let Some(mant_ir::Block::Paragraph { children, .. }) = cell.blocks.first_mut() {
+                children.splice(0..0, leading);
+            } else {
+                cell.blocks.push(mant_ir::Block::Paragraph {
+                    children: leading,
+                    layout: mant_ir::LayoutHint::default(),
+                    source: None,
+                });
+            }
+            vec![table]
+        } else {
+            vec![
+                mant_ir::Block::Paragraph {
+                    children: leading,
+                    layout: mant_ir::LayoutHint::default(),
+                    source: None,
+                },
+                table,
+            ]
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -1792,8 +1919,26 @@ const fn table_cell_kind(kind: NativeTableCellKind) -> mant_ir::TableCellKind {
     }
 }
 
-const fn execution_table_cell_kind(kind: ExecutionTableDataKind) -> mant_ir::TableCellKind {
-    match kind {
+const fn execution_table_cell_kind(
+    layout: ExecutionTableLayoutKind,
+    data: ExecutionTableDataKind,
+) -> mant_ir::TableCellKind {
+    match layout {
+        ExecutionTableLayoutKind::HorizontalRule => {
+            return mant_ir::TableCellKind::HorizontalRule;
+        }
+        ExecutionTableLayoutKind::DoubleHorizontalRule => {
+            return mant_ir::TableCellKind::DoubleHorizontalRule;
+        }
+        ExecutionTableLayoutKind::Center
+        | ExecutionTableLayoutKind::Right
+        | ExecutionTableLayoutKind::Left
+        | ExecutionTableLayoutKind::Numeric
+        | ExecutionTableLayoutKind::Span
+        | ExecutionTableLayoutKind::Long
+        | ExecutionTableLayoutKind::Down => {}
+    }
+    match data {
         ExecutionTableDataKind::None | ExecutionTableDataKind::Text => mant_ir::TableCellKind::Text,
         ExecutionTableDataKind::HorizontalRule => mant_ir::TableCellKind::HorizontalRule,
         ExecutionTableDataKind::DoubleHorizontalRule => {
@@ -1805,14 +1950,6 @@ const fn execution_table_cell_kind(kind: ExecutionTableDataKind) -> mant_ir::Tab
         ExecutionTableDataKind::IsolatedDoubleHorizontalRule => {
             mant_ir::TableCellKind::IsolatedDoubleHorizontalRule
         }
-    }
-}
-
-const fn table_alignment(alignment: NativeTableAlignment) -> mant_ir::TableAlignment {
-    match alignment {
-        NativeTableAlignment::Left => mant_ir::TableAlignment::Left,
-        NativeTableAlignment::Center => mant_ir::TableAlignment::Center,
-        NativeTableAlignment::Right => mant_ir::TableAlignment::Right,
     }
 }
 
@@ -1930,6 +2067,7 @@ fn project_execution_table_cell(
     source: &std::path::Path,
     fragments_by_generation: &[Vec<ExecutionFragment>],
     flushes_by_generation: &[Vec<ExecutionFlush>],
+    kind: mant_ir::TableCellKind,
 ) -> NativeTableCell {
     let fragments = cell.buffer_generation.map_or_else(Vec::new, |generation| {
         fragments_by_generation[generation as usize].clone()
@@ -1953,6 +2091,7 @@ fn project_execution_table_cell(
         alignment: cell.alignment,
         font: cell.font,
         flags: cell.flags,
+        kind,
         buffer_generation: cell.buffer_generation,
         atoms: cell.atoms.clone(),
         fragments,
@@ -1961,13 +2100,12 @@ fn project_execution_table_cell(
     }
 }
 
-fn project_ir_table_cells(
+fn validate_projected_table_cells(
     ast_row: &NativeNode,
     row: &ExecutionTableRow,
     projected_cells: &[NativeTableCell],
     data_cells: Vec<Option<usize>>,
-) -> Vec<mant_ir::TableCell> {
-    let source = super::source_span(ast_row);
+) {
     ast_row
         .table_cells
         .iter()
@@ -1980,7 +2118,10 @@ fn project_ir_table_cells(
             assert_eq!(projected.logical_column, *logical_column);
             assert_eq!(projected.column_span, u32::from(ast_cell.column_span));
             assert_eq!(projected.row_span, u32::from(ast_cell.row_span));
-            assert_eq!(execution_table_cell_kind(projected.data_kind), kind);
+            assert_eq!(
+                execution_table_cell_kind(projected.layout_kind, projected.data_kind),
+                kind
+            );
             assert_eq!(
                 projected
                     .flags
@@ -1990,27 +2131,10 @@ fn project_ir_table_cells(
             *logical_column = logical_column
                 .checked_add(u32::from(ast_cell.column_span))
                 .expect("validated table logical width");
-            let blocks = if ast_cell.vertical_continuation
-                || kind != mant_ir::TableCellKind::Text
-                || projected.content.is_empty()
-            {
-                Vec::new()
-            } else {
-                vec![mant_ir::Block::Paragraph {
-                    children: projected.content.clone(),
-                    layout: mant_ir::LayoutHint::default(),
-                    source,
-                }]
-            };
-            Some(mant_ir::TableCell {
-                kind,
-                blocks,
-                column_span: ast_cell.column_span,
-                row_span: ast_cell.row_span,
-                alignment: Some(table_alignment(ast_cell.alignment)),
-            })
+            assert_eq!(projected.kind, kind);
+            Some(())
         })
-        .collect()
+        .for_each(drop);
 }
 
 fn project_table_row(
@@ -2019,7 +2143,7 @@ fn project_table_row(
     row: &ExecutionTableRow,
     fragments_by_generation: &[Vec<ExecutionFragment>],
     flushes_by_generation: &[Vec<ExecutionFlush>],
-) -> (NativeTableRow, mant_ir::TableRow) {
+) -> NativeTableRow {
     let ast_row = ast_nodes[row.node.0 as usize];
     assert_eq!(ast_row.kind, NodeKind::Table, "table row AST kind");
     let kind = table_row_kind(
@@ -2043,6 +2167,10 @@ fn project_table_row(
                     .expect("validated table data ordinal");
                 assert!(slot.replace(cell.ordinal as usize).is_none());
             }
+            let ast_cell = ast_row
+                .table_cells
+                .get(cell.data_ordinal as usize)
+                .expect("validated table data ordinal");
             project_execution_table_cell(
                 report,
                 cell,
@@ -2050,31 +2178,68 @@ fn project_table_row(
                 &source,
                 fragments_by_generation,
                 flushes_by_generation,
+                table_cell_kind(ast_cell.kind),
             )
         })
         .collect::<Vec<_>>();
-    let ir_cells = if matches!(&kind, mant_ir::TableRowKind::Data) {
-        project_ir_table_cells(ast_row, row, &projected_cells, data_cells)
-    } else {
-        Vec::new()
-    };
-    let ir_row = mant_ir::TableRow {
-        kind: kind.clone(),
-        cells: ir_cells,
-    };
-    (
-        NativeTableRow {
-            key: row.key,
-            node: row.node,
-            source,
-            line: origin.line,
-            column: origin.column,
-            kind,
-            logical_columns: row.logical_columns,
-            cells: projected_cells,
-        },
-        ir_row,
-    )
+    if matches!(&kind, mant_ir::TableRowKind::Data) {
+        validate_projected_table_cells(ast_row, row, &projected_cells, data_cells);
+    }
+    NativeTableRow {
+        key: row.key,
+        node: row.node,
+        source,
+        line: origin.line,
+        column: origin.column,
+        kind,
+        logical_columns: row.logical_columns,
+        cells: projected_cells,
+    }
+}
+
+/// Bind zero-width `.Tg` siblings to exactly the native table they precede.
+///
+/// CVS `mdoc_validate.c::post_tg()` keeps a target before an unsupported
+/// target kind such as `ROFF_TBL` on its own `.Tg` node. Consequently, the
+/// structural contract is a contiguous run of `.Tg` siblings immediately
+/// before the first table row. Atom cursors alone are insufficient because
+/// consecutive rule-only tables execute without emitting atoms and therefore
+/// share the same cursor.
+fn leading_table_anchors(
+    ast_nodes: &[&NativeNode],
+    report: &NativeExecutionReport,
+    table: &libmandoc_rs::ExecutionTable,
+) -> Vec<u32> {
+    let first_row = table.first_row_node;
+    let parent = report.nodes()[first_row.0 as usize]
+        .parent
+        .expect("native table row has a structural parent");
+    let siblings = &ast_nodes[parent.0 as usize].children;
+    let first_row_index = siblings
+        .iter()
+        .position(|node| node.execution_node_key == Some(first_row.0))
+        .expect("native table first row remains in its parent's child order");
+    let mut target_nodes = siblings[..first_row_index]
+        .iter()
+        .rev()
+        .take_while(|node| node.macro_name.as_deref() == Some("Tg"))
+        .filter_map(|node| node.execution_node_key)
+        .collect::<Vec<_>>();
+    target_nodes.reverse();
+    target_nodes
+        .into_iter()
+        .flat_map(|node| {
+            report
+                .anchors()
+                .iter()
+                .filter(move |anchor| {
+                    anchor.node.0 == node
+                        && anchor.sequence < table.enter_sequence
+                        && anchor.atom_cursor == table.atoms.start
+                })
+                .map(|anchor| anchor.key)
+        })
+        .collect()
 }
 
 fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -> Vec<NativeTable> {
@@ -2102,9 +2267,8 @@ fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -
             let row_start = table.rows.start as usize;
             let row_end = table.rows.end as usize;
             let mut rows = Vec::with_capacity(row_end - row_start);
-            let mut ir_rows = Vec::with_capacity(row_end - row_start);
             for row in &report.table_rows()[row_start..row_end] {
-                let (projected, ir_row) = project_table_row(
+                let projected = project_table_row(
                     &ast_nodes,
                     report,
                     row,
@@ -2112,18 +2276,13 @@ fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -
                     &flushes_by_generation,
                 );
                 rows.push(projected);
-                ir_rows.push(ir_row);
             }
             NativeTable {
                 key: table.key,
                 source,
                 logical_columns: table.logical_columns,
+                leading_anchors: leading_table_anchors(&ast_nodes, report, table),
                 rows,
-                block: mant_ir::Block::Table {
-                    rows: ir_rows,
-                    layout: mant_ir::LayoutHint::default(),
-                    source: super::source_span(ast_nodes[table.first_row_node.0 as usize]),
-                },
             }
         })
         .collect()
@@ -2279,8 +2438,9 @@ mod tests {
     use super::*;
     use libmandoc_rs::{ExecutionLimits, FlushOutcome, InputFormat, ParseOptions, Parser};
 
-    fn table_rows(table: &NativeTable) -> &[mant_ir::TableRow] {
-        let mant_ir::Block::Table { rows, .. } = &table.block else {
+    fn table_rows(table: &NativeTable) -> Vec<mant_ir::TableRow> {
+        let block = table.to_ir_block();
+        let mant_ir::Block::Table { rows, .. } = block else {
             unreachable!("native table projection always constructs a table block");
         };
         rows
@@ -2508,7 +2668,7 @@ mod tests {
             ],
             "authored word-end break is the only semantic line break"
         );
-        let grid = mant_ir::TableGrid::new(rows);
+        let grid = mant_ir::TableGrid::new(&rows);
         assert_eq!(grid.column_count, 3);
         assert_eq!(grid.rows[1][0].column, 0);
         assert_eq!(grid.rows[1][1].column, 2);
@@ -5184,10 +5344,192 @@ mod tests {
             heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: vec![table.block.clone()],
+            blocks: vec![table.to_ir_block()],
             sections: Vec::new(),
         };
         assert!(mant_ir::validate_document(&document).is_empty());
+    }
+
+    #[test]
+    fn table_projection_covers_native_layout_restarts_rules_and_source_flags() {
+        // Verified before this assertion with the pinned CVS `mandoc` using
+        // `-Tlint`, `-Ttree`, and `-Tutf8 -O width=78`.  `tbl_data.c::getdata()`
+        // owns T&, spans, empty cells, rule kinds, T{} blocks, and vertical
+        // continuations; `tbl_term.c::term_tbl()` then executes only their
+        // printable payload.  The diagnostic for HIDDEN is expected because
+        // native tbl discards data authored in a layout-rule cell.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "native-execution-table-complete.1",
+                include_bytes!("fixtures/native-execution-table-complete.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        drop(report);
+
+        let [main, layout_rule, hidden_payload, vertical] = projection.tables.as_slice() else {
+            panic!("four complete native tables")
+        };
+
+        assert_eq!(main.logical_columns, 3);
+        assert_eq!(main.rows.len(), 6, "T& continues the same native table");
+        assert_eq!(main.rows[0].cells[0].font, ExecutionFont::Bold);
+        assert_eq!(main.rows[1].cells[0].column_span, 2);
+        assert!(main.rows[2].cells[1].content.is_empty());
+        assert!(matches!(
+            main.rows[3].kind,
+            mant_ir::TableRowKind::HorizontalRule
+        ));
+        assert!(
+            main.rows[4].cells[0]
+                .flags
+                .contains(ExecutionTableCellFlags::TEXT_BLOCK)
+        );
+        assert!(
+            main.rows[4].cells[0]
+                .flags
+                .contains(ExecutionTableCellFlags::SOURCE_RECOVERY_SAFE)
+        );
+        assert_eq!(
+            main.rows[5]
+                .cells
+                .iter()
+                .map(|cell| cell.alignment)
+                .collect::<Vec<_>>(),
+            [
+                ExecutionTableAlignment::Center,
+                ExecutionTableAlignment::Left,
+                ExecutionTableAlignment::Left,
+            ]
+        );
+
+        assert!(matches!(
+            layout_rule.rows[0].kind,
+            mant_ir::TableRowKind::LayoutRule { ref cells }
+                if cells == &[
+                    mant_ir::TableRuleCellKind::Horizontal,
+                    mant_ir::TableRuleCellKind::DoubleHorizontal,
+                ]
+        ));
+        assert_eq!(table_rows(layout_rule)[0].cells.len(), 0);
+
+        let hidden = &hidden_payload.rows[0].cells[1];
+        assert_eq!(hidden.kind, mant_ir::TableCellKind::HorizontalRule);
+        assert!(
+            hidden.content.is_empty(),
+            "layout controls hide source payload"
+        );
+        assert!(table_rows(hidden_payload)[0].cells[1].blocks.is_empty());
+
+        assert_eq!(vertical.rows.len(), 2);
+        assert_eq!(vertical.rows[0].cells[0].row_span, 2);
+        assert!(
+            vertical.rows[1].cells[0]
+                .flags
+                .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION)
+        );
+        for table in &projection.tables {
+            let document = mant_ir::Document {
+                parser: None,
+                source: mant_ir::DocumentSource {
+                    format: mant_ir::SourceFormat::Man,
+                    path: Some(table.source.to_string_lossy().into_owned()),
+                },
+                meta: mant_ir::DocumentMeta::default(),
+                heading: None,
+                fragment_aliases: Vec::new(),
+                diagnostics: Vec::new(),
+                blocks: vec![table.to_ir_block()],
+                sections: Vec::new(),
+            };
+            assert!(mant_ir::validate_document(&document).is_empty());
+        }
+    }
+
+    #[test]
+    fn table_projection_binds_only_the_native_target_at_its_entry_cursor() {
+        // Pinned CVS HTML places `before-table` immediately before the table,
+        // while the later `.Tg after-table` becomes the NEXT section ID.  The
+        // execution report records these at the table's enter and leave atom
+        // cursors respectively, so source line proximity is neither needed
+        // nor sufficient for ownership.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .execute_bytes(
+                "native-execution-table-target.1",
+                include_bytes!("fixtures/native-execution-table-target.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [table] = projection.tables.as_slice() else {
+            panic!("one native table")
+        };
+        let [anchor] = table.leading_anchors.as_slice() else {
+            panic!("only the explicit target at table entry belongs to the table")
+        };
+        assert_eq!(projection.anchors[*anchor as usize].target, b"before-table");
+        assert!(
+            projection
+                .anchors
+                .iter()
+                .any(|candidate| candidate.target == b"after-table")
+        );
+        let blocks = table.to_ir_blocks(vec![mant_ir::Inline::anchor("before-table")]);
+        let [mant_ir::Block::Table { rows, .. }] = blocks.as_slice() else {
+            panic!("a data table carries its leading target in the first cell")
+        };
+        let [mant_ir::Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice()
+        else {
+            panic!("first table cell paragraph")
+        };
+        assert!(matches!(
+            children.first(),
+            Some(mant_ir::Inline::Anchor { id, .. }) if id == "before-table"
+        ));
+    }
+
+    #[test]
+    fn zero_output_tables_claim_only_their_immediately_preceding_targets() {
+        // Pinned CVS `mdoc_validate.c::post_tg()` leaves both targets on their
+        // own `.Tg` siblings, and `-Thtml` places each mark immediately before
+        // its corresponding rule-only table. Both tables share one atom
+        // cursor because `tbl_term.c` emits no cell payload, so ownership must
+        // come from the native sibling structure rather than cursor equality.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .execute_bytes(
+                "native-execution-table-zero-output-targets.1",
+                include_bytes!("fixtures/native-execution-table-zero-output-targets.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [first, second] = projection.tables.as_slice() else {
+            panic!("two native rule-only tables")
+        };
+        let first_targets = first
+            .leading_anchors
+            .iter()
+            .map(|key| projection.anchors[*key as usize].target.as_slice())
+            .collect::<Vec<_>>();
+        let second_targets = second
+            .leading_anchors
+            .iter()
+            .map(|key| projection.anchors[*key as usize].target.as_slice())
+            .collect::<Vec<_>>();
+        assert_eq!(first_targets, [b"first-table".as_slice()]);
+        assert_eq!(second_targets, [b"second-table".as_slice()]);
+        assert_eq!(
+            first.rows.iter().map(|row| row.cells.len()).sum::<usize>(),
+            0
+        );
+        assert_eq!(
+            second.rows.iter().map(|row| row.cells.len()).sum::<usize>(),
+            0
+        );
     }
 
     #[test]

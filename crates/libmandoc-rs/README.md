@@ -136,10 +136,12 @@ invalidating previously returned reports. Raw declarations and the Windows
 root callback remain private to the FFI boundary; none of these internal
 modules is a consumer-facing API.
 
-Table cells expose their effective `TableCellKind`: layout rules override data,
-and connecting/isolated single/double rules remain distinguishable. A rule may
-retain a native text payload for inspection; consumers must not print it or
-recover discarded source content as though it were a text cell.
+Table cells expose their effective `TableCellKind` plus the independent
+`TableCellLayoutKind` and `TableCellDataKind` facts retained by CVS in
+`tbl_cell::pos` and `tbl_dat::pos`. Layout rules override data, and
+connecting/isolated single/double rules remain distinguishable. A rule may
+retain an ordinary native text payload for inspection; consumers must not
+print it or recover discarded source content as though it were a text cell.
 `TableRowKind` independently distinguishes an empty data span from whole-row
 `_`/`=` rules and per-column layout rules (including mixed strengths)
 whole-row rules; all three legitimately carry zero cells in the native tree.

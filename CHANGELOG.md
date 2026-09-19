@@ -88,6 +88,11 @@ that crate was not published for that change.
   initialize the new fields. Text and TUI renderers now preserve empty table
   rows and distinguish whole-row, per-column, single, double, connecting, and
   isolated rules instead of inferring them from cell contents.
+- Preserve native tbl layout and data kinds independently in `libmandoc-rs`
+  and validate both against the matching execution cell. This keeps layout
+  rules from making an otherwise correct ordinary payload look like a corrupt
+  execution report, while the effective cell kind still prevents hidden
+  payload from entering source-neutral IR.
 - Replace `DefinitionLayout.inline_term: bool` and its `inlineTerm` wire field
   with the closed `DefinitionPlacement::{Stacked, RunIn, Fit}` contract.
   `Fit` retains a width-dependent native definition field until each reader

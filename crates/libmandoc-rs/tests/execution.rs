@@ -2740,6 +2740,47 @@ fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
 }
 
 #[test]
+fn table_execution_preserves_layout_and_data_kinds_independently() {
+    // Pinned CVS `tbl_data.c::getdata()` retains ordinary `TBL_DATA_DATA`
+    // even when a `TBL_CELL_HORIZ` layout suppresses it; `-Ttree` reports
+    // `1-[HIDDEN]` and `-Tutf8` renders only the rule.  Owned transfer must
+    // validate both native facts rather than compare data kind to the
+    // effective AST presentation kind.
+    let report = execute(
+        "table-layout-data.1",
+        InputFormat::Man,
+        b".TH PROBE 1\n.SH TABLE\n.TS\ntab(:);\nl _ l.\nleft:HIDDEN:right\n.TE\n",
+    );
+    let [row] = report.execution.table_rows() else {
+        panic!("one native table row")
+    };
+    let cells = &report.execution.table_cells()[row.cells.start as usize..row.cells.end as usize];
+    assert_eq!(cells.len(), 3);
+    assert_eq!(
+        cells[1].layout_kind,
+        libmandoc_rs::ExecutionTableLayoutKind::HorizontalRule
+    );
+    assert_eq!(
+        cells[1].data_kind,
+        libmandoc_rs::ExecutionTableDataKind::Text
+    );
+    let ast = ast_node_by_execution_key(&report.document.root, cells[1].node.0)
+        .expect("table row remains bound to the same native AST");
+    assert_eq!(
+        ast.table_cells[1].layout_kind,
+        libmandoc_rs::TableCellLayoutKind::HorizontalRule
+    );
+    assert_eq!(
+        ast.table_cells[1].data_kind,
+        libmandoc_rs::TableCellDataKind::Text
+    );
+    assert_eq!(
+        ast.table_cells[1].kind,
+        libmandoc_rs::TableCellKind::HorizontalRule
+    );
+}
+
+#[test]
 fn table_execution_budget_failure_is_atomic_and_reentrant() {
     let baseline = execute("table.1", InputFormat::Man, TABLE);
     for limits in [

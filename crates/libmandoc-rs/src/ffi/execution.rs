@@ -901,6 +901,58 @@ fn collect_execution_ast_nodes<'a>(
     Ok(ast_nodes)
 }
 
+const fn ast_table_layout_kind(kind: crate::TableCellLayoutKind) -> ExecutionTableLayoutKind {
+    match kind {
+        crate::TableCellLayoutKind::Center => ExecutionTableLayoutKind::Center,
+        crate::TableCellLayoutKind::Right => ExecutionTableLayoutKind::Right,
+        crate::TableCellLayoutKind::Left => ExecutionTableLayoutKind::Left,
+        crate::TableCellLayoutKind::Numeric => ExecutionTableLayoutKind::Numeric,
+        crate::TableCellLayoutKind::Span => ExecutionTableLayoutKind::Span,
+        crate::TableCellLayoutKind::Long => ExecutionTableLayoutKind::Long,
+        crate::TableCellLayoutKind::Down => ExecutionTableLayoutKind::Down,
+        crate::TableCellLayoutKind::HorizontalRule => ExecutionTableLayoutKind::HorizontalRule,
+        crate::TableCellLayoutKind::DoubleHorizontalRule => {
+            ExecutionTableLayoutKind::DoubleHorizontalRule
+        }
+    }
+}
+
+const fn ast_table_data_kind(kind: crate::TableCellDataKind) -> ExecutionTableDataKind {
+    match kind {
+        crate::TableCellDataKind::Empty => ExecutionTableDataKind::None,
+        crate::TableCellDataKind::Text => ExecutionTableDataKind::Text,
+        crate::TableCellDataKind::HorizontalRule => ExecutionTableDataKind::HorizontalRule,
+        crate::TableCellDataKind::DoubleHorizontalRule => {
+            ExecutionTableDataKind::DoubleHorizontalRule
+        }
+        crate::TableCellDataKind::IsolatedHorizontalRule => {
+            ExecutionTableDataKind::IsolatedHorizontalRule
+        }
+        crate::TableCellDataKind::IsolatedDoubleHorizontalRule => {
+            ExecutionTableDataKind::IsolatedDoubleHorizontalRule
+        }
+    }
+}
+
+fn table_alignment_matches(
+    expected: crate::TableAlignment,
+    actual: ExecutionTableAlignment,
+) -> bool {
+    match expected {
+        crate::TableAlignment::Left => matches!(
+            actual,
+            ExecutionTableAlignment::None
+                | ExecutionTableAlignment::Left
+                | ExecutionTableAlignment::Long
+        ),
+        crate::TableAlignment::Center => actual == ExecutionTableAlignment::Center,
+        crate::TableAlignment::Right => matches!(
+            actual,
+            ExecutionTableAlignment::Right | ExecutionTableAlignment::Numeric
+        ),
+    }
+}
+
 fn validate_execution_table_ast_bindings(
     ast_nodes: &[&crate::Node],
     report: &NativeExecutionReport,
@@ -934,40 +986,14 @@ fn validate_execution_table_ast_bindings(
         for (expected_data_ordinal, (cell, ast_cell)) in
             cells.iter().zip(&ast_row.table_cells).enumerate()
         {
-            let expected_kind = match ast_cell.kind {
-                crate::TableCellKind::Text => ExecutionTableDataKind::Text,
-                crate::TableCellKind::Empty => ExecutionTableDataKind::None,
-                crate::TableCellKind::HorizontalRule => ExecutionTableDataKind::HorizontalRule,
-                crate::TableCellKind::DoubleHorizontalRule => {
-                    ExecutionTableDataKind::DoubleHorizontalRule
-                }
-                crate::TableCellKind::IsolatedHorizontalRule => {
-                    ExecutionTableDataKind::IsolatedHorizontalRule
-                }
-                crate::TableCellKind::IsolatedDoubleHorizontalRule => {
-                    ExecutionTableDataKind::IsolatedDoubleHorizontalRule
-                }
-            };
-            let expected_alignment = match ast_cell.alignment {
-                crate::TableAlignment::Left => matches!(
-                    cell.alignment,
-                    ExecutionTableAlignment::None
-                        | ExecutionTableAlignment::Left
-                        | ExecutionTableAlignment::Long
-                ),
-                crate::TableAlignment::Center => cell.alignment == ExecutionTableAlignment::Center,
-                crate::TableAlignment::Right => matches!(
-                    cell.alignment,
-                    ExecutionTableAlignment::Right | ExecutionTableAlignment::Numeric
-                ),
-            };
             if usize::try_from(cell.data_ordinal).ok() != Some(expected_data_ordinal)
                 || cell.node != row.node
                 || cell.logical_column != logical_column
                 || cell.column_span != u32::from(ast_cell.column_span)
                 || cell.row_span != u32::from(ast_cell.row_span)
-                || cell.data_kind != expected_kind
-                || !expected_alignment
+                || cell.layout_kind != ast_table_layout_kind(ast_cell.layout_kind)
+                || cell.data_kind != ast_table_data_kind(ast_cell.data_kind)
+                || !table_alignment_matches(ast_cell.alignment, cell.alignment)
                 || cell.flags.contains(ExecutionTableCellFlags::TEXT_BLOCK) != ast_cell.text_block
                 || cell
                     .flags

@@ -1,0 +1,34 @@
+.TH K20-TABLE-COMPLETE 1 "September 20, 2026"
+.SH TABLE
+.TS
+box tab(:);
+lb n r,
+l s r,
+l l r.
+alpha:12.34:omega
+span left:tail
+empty::right
+_
+T{
+block one\p block two
+T}:center:final
+.T&
+c l l.
+restart:left:right
+.TE
+.TS
+tab(:);
+_ =
+l l.
+left:right
+.TE
+.TS
+tab(:);
+l _ l.
+left:HIDDEN:right
+.TE
+.TS
+l.
+first
+\^
+.TE

@@ -1754,7 +1754,7 @@ mant_mandoc_table_cell_view_align(void)
 uint32_t
 mant_mandoc_table_cell_view_field_count(void)
 {
-	return 9;
+	return 11;
 }
 
 size_t
@@ -1763,15 +1763,17 @@ mant_mandoc_table_cell_view_offset(unsigned int field)
 	switch (field) {
 	MANT_VIEW_OFFSET_CASE(0, struct mant_mandoc_table_cell_view, text);
 	MANT_VIEW_OFFSET_CASE(1, struct mant_mandoc_table_cell_view, kind);
-	MANT_VIEW_OFFSET_CASE(2, struct mant_mandoc_table_cell_view, text_block);
-	MANT_VIEW_OFFSET_CASE(3, struct mant_mandoc_table_cell_view,
+	MANT_VIEW_OFFSET_CASE(2, struct mant_mandoc_table_cell_view, layout_kind);
+	MANT_VIEW_OFFSET_CASE(3, struct mant_mandoc_table_cell_view, data_kind);
+	MANT_VIEW_OFFSET_CASE(4, struct mant_mandoc_table_cell_view, text_block);
+	MANT_VIEW_OFFSET_CASE(5, struct mant_mandoc_table_cell_view,
 	    source_recovery_safe);
-	MANT_VIEW_OFFSET_CASE(4, struct mant_mandoc_table_cell_view,
+	MANT_VIEW_OFFSET_CASE(6, struct mant_mandoc_table_cell_view,
 	    vertical_continuation);
-	MANT_VIEW_OFFSET_CASE(5, struct mant_mandoc_table_cell_view, column_span);
-	MANT_VIEW_OFFSET_CASE(6, struct mant_mandoc_table_cell_view, row_span);
-	MANT_VIEW_OFFSET_CASE(7, struct mant_mandoc_table_cell_view, alignment);
-	MANT_VIEW_OFFSET_CASE(8, struct mant_mandoc_table_cell_view, next);
+	MANT_VIEW_OFFSET_CASE(7, struct mant_mandoc_table_cell_view, column_span);
+	MANT_VIEW_OFFSET_CASE(8, struct mant_mandoc_table_cell_view, row_span);
+	MANT_VIEW_OFFSET_CASE(9, struct mant_mandoc_table_cell_view, alignment);
+	MANT_VIEW_OFFSET_CASE(10, struct mant_mandoc_table_cell_view, next);
 	default: return (size_t)-1;
 	}
 }
@@ -1931,6 +1933,29 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 	source = (const struct tbl_dat *)cell;
 	memset(view, 0, sizeof(*view));
 	view->text = source->string;
+	if (source->layout == NULL)
+		return 0;
+	switch (source->layout->pos) {
+	case TBL_CELL_CENTRE: view->layout_kind = 1; break;
+	case TBL_CELL_RIGHT: view->layout_kind = 2; break;
+	case TBL_CELL_LEFT: view->layout_kind = 3; break;
+	case TBL_CELL_NUMBER: view->layout_kind = 4; break;
+	case TBL_CELL_SPAN: view->layout_kind = 5; break;
+	case TBL_CELL_LONG: view->layout_kind = 6; break;
+	case TBL_CELL_DOWN: view->layout_kind = 7; break;
+	case TBL_CELL_HORIZ: view->layout_kind = 8; break;
+	case TBL_CELL_DHORIZ: view->layout_kind = 9; break;
+	default: return 0;
+	}
+	switch (source->pos) {
+	case TBL_DATA_NONE: view->data_kind = 1; break;
+	case TBL_DATA_DATA: view->data_kind = 2; break;
+	case TBL_DATA_HORIZ: view->data_kind = 3; break;
+	case TBL_DATA_DHORIZ: view->data_kind = 4; break;
+	case TBL_DATA_NHORIZ: view->data_kind = 5; break;
+	case TBL_DATA_NDHORIZ: view->data_kind = 6; break;
+	default: return 0;
+	}
 	/* Layout rules override data, including otherwise printable strings. */
 	if (source->layout != NULL && source->layout->pos == TBL_CELL_HORIZ)
 		view->kind = 2;

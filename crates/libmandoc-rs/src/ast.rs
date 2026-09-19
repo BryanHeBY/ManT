@@ -162,6 +162,52 @@ pub enum TableCellKind {
     IsolatedDoubleHorizontalRule,
 }
 
+/// Native tbl(7) layout role before data precedence is applied.
+///
+/// CVS keeps this fact in `tbl_cell::pos` independently from the payload kind
+/// in `tbl_dat::pos`.  Consumers must retain both: a layout rule can suppress
+/// an otherwise ordinary text payload without changing that payload's kind.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableCellLayoutKind {
+    /// Centered data column.
+    Center,
+    /// Right-aligned data column.
+    Right,
+    /// Left-aligned data column.
+    Left,
+    /// Numeric alignment around a decimal point.
+    Numeric,
+    /// Horizontal continuation of the preceding cell.
+    Span,
+    /// Long-cell indentation.
+    Long,
+    /// Vertical continuation of a preceding cell.
+    Down,
+    /// Single horizontal layout rule.
+    HorizontalRule,
+    /// Double horizontal layout rule.
+    DoubleHorizontalRule,
+}
+
+/// Native tbl(7) data role before layout precedence is applied.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableCellDataKind {
+    /// No initialized payload.
+    Empty,
+    /// Ordinary text payload.
+    Text,
+    /// Connecting single horizontal rule.
+    HorizontalRule,
+    /// Connecting double horizontal rule.
+    DoubleHorizontalRule,
+    /// Isolated single horizontal rule.
+    IsolatedHorizontalRule,
+    /// Isolated double horizontal rule.
+    IsolatedDoubleHorizontalRule,
+}
+
 /// Native kind of one tbl(7) row.
 ///
 /// Empty data rows and whole-row rules both contain no cells, so consumers
@@ -200,6 +246,10 @@ pub enum TableRuleCellKind {
 pub struct TableCell {
     /// Native content kind; rule cells suppress even a nonempty text payload.
     pub kind: TableCellKind,
+    /// Original layout role from `tbl_cell::pos`.
+    pub layout_kind: TableCellLayoutKind,
+    /// Original payload role from `tbl_dat::pos`.
+    pub data_kind: TableCellDataKind,
     /// Native cell payload, or `None` for a spanning/empty cell.
     /// Only printable when [`Self::kind`] is [`TableCellKind::Text`] and the
     /// cell is not a vertical continuation.
