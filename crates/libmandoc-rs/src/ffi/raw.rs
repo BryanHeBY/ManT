@@ -82,6 +82,12 @@ pub(super) struct CNodeView {
 #[repr(C)]
 pub(super) struct CTableCellView {
     pub(super) text: *const c_char,
+    pub(super) source: *const c_char,
+    pub(super) source_line: i32,
+    pub(super) source_column: i32,
+    pub(super) source_end_line: i32,
+    pub(super) source_end_column: i32,
+    pub(super) source_escape: i32,
     pub(super) kind: i32,
     pub(super) layout_kind: i32,
     pub(super) data_kind: i32,

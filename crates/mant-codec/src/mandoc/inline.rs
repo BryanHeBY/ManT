@@ -22,13 +22,16 @@ use font::lower_man_font_scope;
 use font::parse_roff_text_with_font;
 pub(super) use font::{
     FormatterWordPart, ZeroAdvanceState, parse_formatter_word_parts_with_zero_advance,
-    parse_roff_text_with_state, parse_roff_text_with_zero_advance,
+    parse_roff_text_with_zero_advance,
 };
 pub(super) use font::{
     NoFillInlineState, lower_inline_nodes_with_font_state, lower_no_fill_line_with_font_state,
     parse_roff_text,
 };
-pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
+pub(in crate::mandoc) use source_fragment::{
+    FragmentEnhancement, PreparedFragmentSource, control_line_parts, control_line_request,
+    enhance_source_fragment, inline_request, prepare_fragment_source,
+};
 
 pub(super) use source::roff_macro_arguments;
 

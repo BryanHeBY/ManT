@@ -110,6 +110,12 @@ enum mant_mandoc_equation_position {
 /* Borrowed projection of one live tbl(7) data cell. */
 struct mant_mandoc_table_cell_view {
 	const char		*text;
+	const char		*source;
+	int32_t			 source_line;
+	int32_t			 source_column;
+	int32_t			 source_end_line;
+	int32_t			 source_end_column;
+	int32_t			 source_escape;
 	int32_t			 kind;
 	int32_t			 layout_kind;
 	int32_t			 data_kind;

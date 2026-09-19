@@ -221,9 +221,15 @@ fn node_view_offsets() -> [usize; 27] {
     ]
 }
 
-fn table_cell_view_offsets() -> [usize; 11] {
+fn table_cell_view_offsets() -> [usize; 17] {
     [
         offset_of!(CTableCellView, text),
+        offset_of!(CTableCellView, source),
+        offset_of!(CTableCellView, source_line),
+        offset_of!(CTableCellView, source_column),
+        offset_of!(CTableCellView, source_end_line),
+        offset_of!(CTableCellView, source_end_column),
+        offset_of!(CTableCellView, source_escape),
         offset_of!(CTableCellView, kind),
         offset_of!(CTableCellView, layout_kind),
         offset_of!(CTableCellView, data_kind),
@@ -301,6 +307,67 @@ fn native_bool(value: i32, field: &str) -> Result<bool, String> {
         1 => Ok(true),
         _ => Err(format!("libmandoc returned an invalid {field} flag")),
     }
+}
+
+fn optional_source_coordinate(value: i32, field: &str) -> Result<Option<u32>, String> {
+    match value {
+        -1 => Ok(None),
+        value if value >= 0 => value
+            .try_into()
+            .map(Some)
+            .map_err(|_| format!("libmandoc returned an oversized {field}")),
+        _ => Err(format!("libmandoc returned an invalid {field}")),
+    }
+}
+
+struct TableSourceEvidence {
+    source: Option<String>,
+    line: Option<u32>,
+    column: Option<u32>,
+    end_line: Option<u32>,
+    end_column: Option<u32>,
+    escape: Option<u8>,
+}
+
+unsafe fn copy_table_source(view: &CTableCellView) -> Result<TableSourceEvidence, String> {
+    let source = unsafe { optional_string(view.source) };
+    let line = optional_source_coordinate(view.source_line, "table source line")?;
+    let column = optional_source_coordinate(view.source_column, "table source column")?;
+    let end_line = optional_source_coordinate(view.source_end_line, "table source end line")?;
+    let end_column = optional_source_coordinate(view.source_end_column, "table source end column")?;
+    let escape = match view.source_escape {
+        -1 => None,
+        value => Some(
+            value
+                .try_into()
+                .map_err(|_| "libmandoc returned an invalid table source escape".to_owned())?,
+        ),
+    };
+    let coordinate_facts = [
+        line.is_some(),
+        column.is_some(),
+        end_line.is_some(),
+        end_column.is_some(),
+        escape.is_some(),
+    ];
+    if coordinate_facts
+        .iter()
+        .any(|present| *present != source.is_some())
+        || line.zip(column) > end_line.zip(end_column)
+    {
+        return Err(format!(
+            "libmandoc returned inconsistent table source evidence: source={}, start={line:?}:{column:?}, end={end_line:?}:{end_column:?}, escape={escape:?}",
+            source.is_some()
+        ));
+    }
+    Ok(TableSourceEvidence {
+        source,
+        line,
+        column,
+        end_line,
+        end_column,
+        escape,
+    })
 }
 
 pub(super) unsafe fn optional_string(pointer: *const c_char) -> Option<String> {
@@ -699,6 +766,7 @@ unsafe fn copy_table_cells(
             return Err("libmandoc returned an invalid borrowed table cell".to_owned());
         }
         let view = unsafe { view.assume_init() };
+        let source = unsafe { copy_table_source(&view) }?;
         cells.push(TableCell {
             kind: match view.kind {
                 0 => TableCellKind::Text,
@@ -731,6 +799,12 @@ unsafe fn copy_table_cells(
                 _ => return Err("libmandoc returned an unknown table data kind".to_owned()),
             },
             text: unsafe { visible_string(view.text) },
+            source: source.source,
+            source_line: source.line,
+            source_column: source.column,
+            source_end_line: source.end_line,
+            source_end_column: source.end_column,
+            source_escape: source.escape,
             text_block: native_bool(view.text_block, "table text-block")?,
             source_recovery_safe: native_bool(
                 view.source_recovery_safe,

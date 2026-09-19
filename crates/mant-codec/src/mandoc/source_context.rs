@@ -21,7 +21,6 @@ pub(super) struct LoweringContext<'a> {
     pub(super) source_lines: Option<SourceLineIndex<'a>>,
     pub(super) equation_delimiters: Vec<EquationDelimiterChange>,
     pub(super) normalized_equations: RefCell<BTreeMap<String, String>>,
-    native_table_requests: RefCell<HashMap<String, bool>>,
     pub(super) section_ids: HashMap<String, usize>,
     pub(super) assigned_section_ids: HashSet<String>,
     pub(super) authored_section_targets: HashMap<String, Option<String>>,
@@ -112,7 +111,6 @@ impl<'a> LoweringContext<'a> {
             source_lines: source.map(SourceLineIndex::new),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
-            native_table_requests: RefCell::new(HashMap::new()),
             section_ids: HashMap::new(),
             assigned_section_ids: HashSet::new(),
             authored_section_targets: HashMap::new(),
@@ -286,22 +284,6 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn table_execution_source(source: &str, escape: Option<u8>) -> String {
         table_execution_source(source, escape)
-    }
-
-    /// Query libmandoc's pinned roff registry once per distinct table request.
-    ///
-    /// `tbl_read()` receives raw operands only for unknown or high-level
-    /// man/mdoc macros. Native roff requests have already been handled by the
-    /// parser and must not leak their operands into recovered cell text.
-    pub(super) fn is_native_table_request(&self, name: &str) -> bool {
-        if let Some(native) = self.native_table_requests.borrow().get(name) {
-            return *native;
-        }
-        let native = libmandoc_rs::is_native_roff_request(name);
-        self.native_table_requests
-            .borrow_mut()
-            .insert(name.to_owned(), native);
-        native
     }
 
     pub(super) fn table_text_blocks(

@@ -6,11 +6,22 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-cargo build --locked --package libmandoc-rs --all-features
-TARGET_DIR=$(cargo metadata --format-version=1 --no-deps \
-  | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')
-ARCHIVE=$(find "$TARGET_DIR/debug/build" -type f -name libmant_mandoc.a \
-  -exec ls -t {} + | sed -n '1p')
+LIBMANDOC_PACKAGE_ID=$(cargo metadata --format-version=1 --no-deps \
+  | python3 -c 'import json, sys; print(next(package["id"] for package in json.load(sys.stdin)["packages"] if package["name"] == "libmandoc-rs"))')
+ARCHIVE=$(cargo build --locked --package libmandoc-rs --all-features \
+  --message-format=json \
+  | python3 -c '
+import json
+from pathlib import Path
+import sys
+
+package_id = sys.argv[1]
+for line in sys.stdin:
+    record = json.loads(line)
+    if (record.get("reason") == "build-script-executed"
+            and record.get("package_id") == package_id):
+        print(Path(record["out_dir"]) / "libmant_mandoc.a")
+' "$LIBMANDOC_PACKAGE_ID")
 [[ -n $ARCHIVE ]] || {
   printf 'libmandoc symbol audit failed: native archive not found\n' >&2
   exit 1

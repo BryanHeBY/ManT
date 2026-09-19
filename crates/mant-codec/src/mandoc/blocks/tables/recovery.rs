@@ -2,7 +2,7 @@
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
     inline::{
-        FilledBoundary, InlineBuilder, lower_source_fragment_with_formatter_state, plain_text,
+        FilledBoundary, FragmentEnhancement, InlineBuilder, enhance_source_fragment, plain_text,
     },
 };
 use libmandoc_rs::{Node, NodeKind};
@@ -66,28 +66,28 @@ struct CellCandidate {
     diagnostics: Vec<mant_ir::Diagnostic>,
 }
 
-impl CellCandidate {
+struct NativeCellEvidence<'a> {
+    cell: &'a libmandoc_rs::TableCell,
+    position: CellPosition<'a>,
+    source_operands: &'a str,
+}
+
+impl NativeCellEvidence<'_> {
     /// An empty normalized cell can shift source-block association. Accept
     /// styles only when the candidate agrees with this cell or is not proven
     /// to belong to another one; a control-only empty cell still commits state.
-    fn belongs_to(
-        &self,
-        cell: &libmandoc_rs::TableCell,
-        position: CellPosition<'_>,
-        source_operands: &str,
-        source_recovery_safe: bool,
-    ) -> bool {
+    fn authorizes(&self, candidate: &CellCandidate) -> bool {
         // A complete synthetic parse has no authority on its own.  The
         // parser records this row as safe only when tbl received the original
         // source rather than a user-macro expansion or renamed request.
-        if !source_recovery_safe {
+        if !self.cell.source_recovery_safe {
             return false;
         }
-        let native = cell.text.as_deref().filter(|text| !text.is_empty());
-        if self.inlines.is_empty() {
+        let native = self.cell.text.as_deref().filter(|text| !text.is_empty());
+        if candidate.inlines.is_empty() {
             return native.is_none();
         }
-        let text = plain_text(&self.inlines);
+        let text = plain_text(&candidate.inlines);
         // CVS mandoc invokes roff_expand() before tbl_read(). Strings,
         // registers, and macro arguments therefore need the original
         // session's tbl payload. Source recovery may fill an empty native
@@ -100,17 +100,24 @@ impl CellCandidate {
             // (`.Fl Fl help` -> `--help`, `.MR printf 3` -> a typed
             // reference), so its display text is not evidence. The original
             // direct operand stream must match native text exactly.
-            return table_text_agrees(source_operands, native);
+            return table_text_agrees(self.source_operands, native);
         }
-        !position.row.iter().enumerate().any(|(index, candidate)| {
-            index != position.index
-                && candidate
-                    .text
-                    .as_deref()
-                    .is_some_and(|native| table_text_agrees(&text, native))
-        })
+        !self
+            .position
+            .row
+            .iter()
+            .enumerate()
+            .any(|(index, competing_cell)| {
+                index != self.position.index
+                    && competing_cell
+                        .text
+                        .as_deref()
+                        .is_some_and(|native| table_text_agrees(&text, native))
+            })
     }
+}
 
+impl CellCandidate {
     fn commit(
         self,
         context: &LoweringContext<'_>,
@@ -119,6 +126,51 @@ impl CellCandidate {
         *formatter = self.formatter;
         context.diagnostics.borrow_mut().extend(self.diagnostics);
         self.inlines
+    }
+}
+
+enum TableEnhancement {
+    Accepted(CellCandidate),
+    Rejected,
+    Exhausted,
+}
+
+struct TableEnhancementRequest<'a> {
+    source: &'a str,
+    escape: Option<u8>,
+    dialect: libmandoc_rs::MacroSet,
+    default_name: Option<&'a str>,
+    synopsis: bool,
+    formatter: crate::mandoc::formatter::FormatterState,
+    evidence: NativeCellEvidence<'a>,
+}
+
+fn plan_table_enhancement(request: &TableEnhancementRequest<'_>) -> TableEnhancement {
+    if contains_native_table_request(request.source) {
+        return TableEnhancement::Rejected;
+    }
+    match enhance_source_fragment(
+        request.source,
+        request.escape,
+        request.dialect,
+        request.default_name,
+        request.synopsis,
+        request.formatter,
+    ) {
+        FragmentEnhancement::Accepted(recovered) => {
+            let candidate = CellCandidate {
+                inlines: recovered.inlines,
+                formatter: recovered.formatter,
+                diagnostics: Vec::new(),
+            };
+            if request.evidence.authorizes(&candidate) {
+                TableEnhancement::Accepted(candidate)
+            } else {
+                TableEnhancement::Rejected
+            }
+        }
+        FragmentEnhancement::Rejected => TableEnhancement::Rejected,
+        FragmentEnhancement::Exhausted => TableEnhancement::Exhausted,
     }
 }
 
@@ -136,8 +188,7 @@ pub(super) fn lower_table_cell(
         let initial_state = *formatter;
         let diagnostic_start = context.diagnostics.borrow().len();
         let source = LoweringContext::table_execution_source(&text_block.source, text_block.escape);
-        let source_operands = table_source_operands(context, &source);
-        let source_recovery_allowed = !contains_native_table_request(context, &source);
+        let source_operands = table_source_operands(&source);
         // CVS mandoc passes high-level macro operands into tbl, while GNU
         // tbl expands the same inline macro language. A `T{}` source block
         // may enrich its already-associated native cell, but an isolated
@@ -147,51 +198,58 @@ pub(super) fn lower_table_cell(
         // native payload. This keeps unrelated document-local macros from
         // disabling recovery without allowing a synthetic parser to replace
         // what the native execution actually produced.
-        if source_recovery_allowed
-            && let Some(recovered) = lower_source_fragment_with_formatter_state(
-                &source,
-                text_block.escape,
-                context.macro_set,
-                context.default_name,
-                node.flags.synopsis_pretty,
-                initial_state,
-            )
-            && recovered.complete
-        {
-            let candidate = CellCandidate {
-                inlines: recovered.inlines,
-                formatter: recovered.formatter,
-                diagnostics: Vec::new(),
-            };
-            if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
+        let enhancement = plan_table_enhancement(&TableEnhancementRequest {
+            source: &source,
+            escape: text_block.escape,
+            dialect: context.macro_set,
+            default_name: context.default_name,
+            synopsis: node.flags.synopsis_pretty,
+            formatter: initial_state,
+            evidence: NativeCellEvidence {
+                cell,
+                position,
+                source_operands: &source_operands,
+            },
+        });
+        let allow_raw_fallback = match enhancement {
+            TableEnhancement::Accepted(mut candidate) => {
+                candidate.diagnostics =
+                    context.diagnostics.borrow_mut().split_off(diagnostic_start);
                 return Some(candidate.commit(context, formatter));
             }
-        }
+            TableEnhancement::Rejected => true,
+            TableEnhancement::Exhausted => false,
+        };
 
-        // The raw fallback is deliberately weaker than semantic recovery: it
-        // never replays requests or macro meaning, only the complete operand
-        // stream that native tbl would have received.  This remains safe when
-        // a native request such as `.br` made the isolated semantic parse
-        // ineligible, and prevents an unavailable native payload from turning
-        // into silent content loss.
-        if cell.text.as_deref().is_none_or(str::is_empty) {
-            let mut candidate_state = initial_state;
-            let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
-            // Recovery remains transactional: it can replace native text only
-            // when a raw candidate agrees with this exact cell. A declined
-            // semantic fragment therefore cannot replace a complete native cell
-            // with a partial subset of its source.
-            let candidate_diagnostics =
-                context.diagnostics.borrow_mut().split_off(diagnostic_start);
-            let candidate = CellCandidate {
-                inlines: recovered,
-                formatter: candidate_state,
-                diagnostics: candidate_diagnostics,
-            };
-            if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
-                return Some(candidate.commit(context, formatter));
+        if allow_raw_fallback {
+            // The raw fallback is deliberately weaker than semantic recovery:
+            // it never replays requests or macro meaning, only the complete
+            // operand stream that native tbl would have received. It is not
+            // attempted after enhancement exhaustion: a failed bounded
+            // transaction cannot silently enter a less constrained path.
+            if cell.text.as_deref().is_none_or(str::is_empty) {
+                let mut candidate_state = initial_state;
+                let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
+                let candidate_diagnostics =
+                    context.diagnostics.borrow_mut().split_off(diagnostic_start);
+                // Recovery remains transactional: it can replace native text
+                // only when a raw candidate agrees with this exact cell.
+                let candidate = CellCandidate {
+                    inlines: recovered,
+                    formatter: candidate_state,
+                    diagnostics: candidate_diagnostics,
+                };
+                let evidence = NativeCellEvidence {
+                    cell,
+                    position,
+                    source_operands: &source_operands,
+                };
+                if evidence.authorizes(&candidate) {
+                    return Some(candidate.commit(context, formatter));
+                }
             }
         }
+        context.diagnostics.borrow_mut().truncate(diagnostic_start);
         *formatter = initial_state;
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
@@ -222,10 +280,10 @@ fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
 /// hands to tbl for this bounded text block. It is intentionally evidence,
 /// not a second parser: requests are reduced only to the operands native tbl
 /// itself receives, and the owned `TableCell` must corroborate the result.
-fn table_source_operands(context: &LoweringContext<'_>, source: &str) -> String {
+fn table_source_operands(source: &str) -> String {
     source
         .lines()
-        .filter_map(|line| table_cell_content_line(context, line))
+        .filter_map(table_cell_content_line)
         .map(|line| line.trim().to_owned())
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
@@ -286,7 +344,7 @@ fn lower_raw_table_text_block(
     // blank inside this one word.
     let operands = source
         .lines()
-        .filter_map(|line| table_cell_content_line(context, line))
+        .filter_map(table_cell_content_line)
         .map(|line| {
             let line = line.trim();
             if line.starts_with(['.', '\'']) {
@@ -316,13 +374,12 @@ fn lower_raw_table_text_block(
 /// Native roff requests execute before tbl sees a high-level macro operand.
 /// Do not feed a cell containing one to the isolated inline parser: it has no
 /// document-session request state and must not reinterpret that boundary.
-fn contains_native_table_request(context: &LoweringContext<'_>, source: &str) -> bool {
+fn contains_native_table_request(source: &str) -> bool {
     source.lines().any(|line| {
-        let Some(request) = line.trim_start().strip_prefix(['.', '\'']) else {
+        let Some(name) = crate::mandoc::inline::control_line_request(line) else {
             return false;
         };
-        let name = request.split_whitespace().next().unwrap_or_default();
-        context.is_native_table_request(name)
+        libmandoc_rs::is_native_roff_request(name)
     })
 }
 
@@ -334,18 +391,11 @@ fn contains_native_table_request(context: &LoweringContext<'_>, source: &str) ->
 /// accepted in that table branch (`br`, `ce`, `rj`, and `sp`) is ignored. The
 /// source-context service already executes `ec` and `eo` for lexical escape
 /// state, so they likewise have no visible table payload here.
-fn table_cell_content_line<'a>(context: &LoweringContext<'_>, line: &'a str) -> Option<&'a str> {
-    let trimmed = line.trim_start();
-    let Some(request) = trimmed
-        .strip_prefix('.')
-        .or_else(|| trimmed.strip_prefix('\''))
-    else {
-        return Some(trimmed);
+fn table_cell_content_line(line: &str) -> Option<&str> {
+    let Some((name, operands)) = crate::mandoc::inline::control_line_parts(line) else {
+        return Some(line);
     };
-    let request_end = request.find(' ').unwrap_or(request.len());
-    let name = &request[..request_end];
-    let operands = request[request_end..].trim_start_matches(' ');
-    (!context.is_native_table_request(name)).then_some(operands)
+    (!libmandoc_rs::is_native_roff_request(name)).then_some(operands)
 }
 
 #[cfg(test)]
@@ -509,21 +559,69 @@ mod tests {
     }
 
     #[test]
-    fn table_dispatch_preserves_raw_high_level_operands_and_hides_roff_requests() {
-        let mut context = crate::mandoc::LoweringContext::new(None, None);
-        context.macro_set = libmandoc_rs::MacroSet::Mdoc;
+    fn exhausted_semantic_enhancement_never_enters_raw_fallback() {
+        fn table_node(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+            if node.kind == libmandoc_rs::NodeKind::Table {
+                return Some(node);
+            }
+            node.children.iter().find_map(table_node)
+        }
+        let report = libmandoc_rs::Parser::new(libmandoc_rs::ParseOptions::default())
+            .parse_bytes(
+                "exhausted.1",
+                b".TH EXHAUSTED 1\n.SH DESCRIPTION\n.TS\nl.\nplaceholder\n.TE\n",
+            )
+            .unwrap();
+        let mut node = table_node(&report.document.root).unwrap().clone();
+        node.table_source_recovery_safe = true;
+        let mut cell = node.table_cells[0].clone();
+        cell.text = None;
+        cell.text_block = true;
+        cell.source_recovery_safe = true;
+        let block = super::TableTextBlock {
+            source: "x".repeat(65_537),
+            escape: Some(b'\\'),
+        };
+        let context = crate::mandoc::LoweringContext::new(None, None);
+        let mut state = crate::mandoc::formatter::FormatterState::default();
+        let before = state;
+
+        // This is a ManT resource-policy assertion. Fixed CVS remains the
+        // native-content authority; exhausting the optional overlay must not
+        // authorize a second, less constrained interpretation of its source.
         assert_eq!(
-            super::table_cell_content_line(&context, ".BR git (1)"),
+            super::lower_table_cell(
+                &cell,
+                super::CellPosition {
+                    index: 0,
+                    row: std::slice::from_ref(&cell),
+                },
+                &node,
+                &context,
+                Some(&block),
+                &mut state,
+            ),
+            None
+        );
+        assert_eq!(state, before);
+        assert!(context.diagnostics.borrow().is_empty());
+    }
+
+    #[test]
+    fn table_dispatch_preserves_raw_high_level_operands_and_hides_roff_requests() {
+        assert_eq!(
+            super::table_cell_content_line(".BR git (1)"),
             Some("git (1)")
         );
         assert_eq!(
-            super::table_cell_content_line(&context, ".Sm off"),
-            Some("off")
+            super::table_cell_content_line(r"\.BR linked (3)"),
+            Some("linked (3)")
         );
-        assert_eq!(super::table_cell_content_line(&context, ".ll 50n"), None);
-        assert_eq!(super::table_cell_content_line(&context, ".po 0n"), None);
+        assert_eq!(super::table_cell_content_line(".Sm off"), Some("off"));
+        assert_eq!(super::table_cell_content_line(".ll 50n"), None);
+        assert_eq!(super::table_cell_content_line(".po 0n"), None);
         assert_eq!(
-            super::table_cell_content_line(&context, "plain table payload"),
+            super::table_cell_content_line("plain table payload"),
             Some("plain table payload")
         );
     }
@@ -543,22 +641,9 @@ mod tests {
 
     #[test]
     fn native_requests_keep_table_cells_on_the_raw_recovery_path() {
-        let context = crate::mandoc::LoweringContext::new(None, None);
-        assert!(super::contains_native_table_request(
-            &context,
-            ".br\nvisible"
-        ));
-        assert!(super::contains_native_table_request(
-            &context,
-            ".ll 80n\nvisible"
-        ));
-        assert!(!super::contains_native_table_request(
-            &context,
-            ".No a Ns No b"
-        ));
-        assert!(!super::contains_native_table_request(
-            &context,
-            ".BR git (1)"
-        ));
+        assert!(super::contains_native_table_request(".br\nvisible"));
+        assert!(super::contains_native_table_request(".ll 80n\nvisible"));
+        assert!(!super::contains_native_table_request(".No a Ns No b"));
+        assert!(!super::contains_native_table_request(".BR git (1)"));
     }
 }

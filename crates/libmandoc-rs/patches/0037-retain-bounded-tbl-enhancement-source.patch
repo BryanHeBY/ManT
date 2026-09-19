@@ -1,0 +1,187 @@
+Subject: retain direct tbl source for bounded semantic enhancement
+Upstream-Status: Local embedding (not submitted)
+
+Keep the direct post-comment, pre-expansion source owned by each continued
+data cell.  The executed tbl operand remains authoritative; this additional
+cell-local fact only permits a bounded consumer to add semantic presentation
+without scanning source lines or guessing ownership from visible text.
+
+--- a/roff.c
++++ b/roff.c
+@@ -1944,6 +1944,15 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
+ 		return e;
+ 	assert(e == ROFF_CONT);
+ 
++	/*
++	 * Preserve the direct cell source before roff_expand() changes it.
++	 * tbl still owns the executed operand and remains authoritative.
++	 */
++	if (r->tbl != NULL)
++		tbl_capture_source(r->tbl, ln, buf->buf, ppos,
++		    (unsigned char)r->escape,
++		    r->mstackpos < 0 && r->control == '\0');
++
+	e = roff_expand(r, buf, ln, pos, r->escape);
+	if ((e & ROFF_MASK) == ROFF_IGN)
+		return e;
+@@ -2015,11 +2024,13 @@ static int
+ roff_req_or_macro(ROFF_ARGS) {
+ 
+ 	/*
+-	 * tbl input is normally direct high-level macro operands. A user macro
+-	 * may consume the whole invocation and produce no tbl input, so record
+-	 * that execution fact on an active T{...T} cell before expansion.
++	 * tbl input is normally direct high-level macro operands. A user macro or
++	 * conditional scope may consume or rerun the invocation before tbl sees
++	 * it, so record that fact on the active T{...T} cell before expansion.
+ 	 */
+-	if (r->tbl != NULL && (tok == ROFF_USERDEF || tok == ROFF_RENAMED))
++	if (r->tbl != NULL && (tok == ROFF_USERDEF || tok == ROFF_RENAMED ||
++	    tok == ROFF_if || tok == ROFF_ie || tok == ROFF_el ||
++	    tok == ROFF_while))
+ 		tbl_mark_source_unsafe(r->tbl);
+ 
+ 	/* For now, tables ignore most macros and some request. */
+--- a/tbl.c
++++ b/tbl.c
+@@ -110,6 +110,89 @@ tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
+ }
+ 
+ /*
++ * Retain only direct, post-comment and pre-expansion source belonging to an
++ * active continued-data cell.  This is evidence for an optional embedding
++ * enhancement, never a replacement for tbl's executed string.  Macro and
++ * conditional input is marked unsafe even when it produces no tbl payload.
++ */
++void
++tbl_capture_source(struct tbl_node *tbl, int line, const char *p, int pos,
++    unsigned char escape, int direct)
++{
++	struct tbl_dat	*dat;
++	const size_t	 max_source = 65536;
++	size_t		 linesz, nextlen, newsz, separator;
++
++	if (tbl->part != TBL_PART_CDATA || tbl->last_span == NULL ||
++	    (dat = tbl->last_span->last) == NULL)
++		return;
++	if ( ! direct) {
++		dat->source_safe = 0;
++		return;
++	}
++	if (dat->source_safe == 0)
++		return;
++
++	/* A standalone T} closes the source interval and is not its content. */
++	if (p[pos] == 'T' && p[pos + 1] == '}') {
++		int end = pos + 2;
++		if (tbl->opts.opts & TBL_OPT_NOSPACE)
++			while (p[end] == ' ')
++				end++;
++		if (p[end] == '\0' || p[end] == tbl->opts.tab) {
++			if (dat->source == NULL) {
++				dat->source = mandoc_strdup("");
++				dat->source_line = line;
++				dat->source_pos = pos;
++				dat->source_escape = escape;
++			}
++			dat->source_end_line = line;
++			dat->source_end_pos = pos + 2;
++			return;
++		}
++	}
++
++	linesz = strlen(p + pos);
++	separator = dat->source != NULL;
++	if (dat->source_len > max_source ||
++	    separator > max_source - dat->source_len) {
++		free(dat->source);
++		dat->source = NULL;
++		dat->source_len = 0;
++		dat->source_line = dat->source_pos = -1;
++		dat->source_end_line = dat->source_end_pos = -1;
++		dat->source_safe = 0;
++		return;
++	}
++	nextlen = dat->source_len + separator;
++	if (linesz > max_source - nextlen) {
++		free(dat->source);
++		dat->source = NULL;
++		dat->source_len = 0;
++		dat->source_line = dat->source_pos = -1;
++		dat->source_end_line = dat->source_end_pos = -1;
++		dat->source_safe = 0;
++		return;
++	}
++	nextlen += linesz;
++	newsz = nextlen + 1;
++	if (dat->source == NULL) {
++		dat->source = mandoc_strdup(p + pos);
++		dat->source_line = line;
++		dat->source_pos = pos;
++		dat->source_escape = escape;
++	} else {
++		dat->source = mandoc_realloc(dat->source, newsz);
++		dat->source[dat->source_len] = '\n';
++		(void)memcpy(dat->source + dat->source_len + 1,
++		    p + pos, linesz + 1);
++	}
++	dat->source_len = nextlen;
++	dat->source_end_line = line;
++	dat->source_end_pos = (int)strlen(p);
++}
++
++/*
+  * A user-defined or renamed macro can be called from a continued-data cell
+  * without producing tbl input at all.  In that case, tbl_data.c never gets a
+  * chance to observe r->mstackpos.  Mark the active cell directly so clients
+@@ -149,6 +232,7 @@ tbl_free(struct tbl_node *tbl)
+ 				dp = sp->first;
+ 				sp->first = dp->next;
+ 				free(dp->string);
++				free(dp->source);
+ 				free(dp);
+ 			}
+ 			free(sp);
+--- a/tbl.h
++++ b/tbl.h
+@@ -94,6 +94,13 @@ struct	tbl_dat {
+ 	struct tbl_dat	 *next;    /* Data cell to the right. */
+ 	struct tbl_cell	 *layout;  /* Associated layout cell. */
+ 	char		 *string;  /* Data, or NULL if not TBL_DATA_DATA. */
++	char		 *source;  /* Direct source admitted for enhancement. */
++	size_t		  source_len; /* Bytes retained in source. */
++	int		  source_line; /* First direct source line, or -1. */
++	int		  source_pos;  /* First direct source column, or -1. */
++	int		  source_end_line; /* Last direct source line, or -1. */
++	int		  source_end_pos;  /* End column on the last line. */
++	unsigned char	  source_escape; /* Escape state at source entry. */
+ 	int		  hspans;  /* How many horizontal spans follow. */
+ 	int		  vspans;  /* How many vertical spans follow. */
+ 	int		  block;   /* T{ text block T} */
+--- a/tbl_data.c
++++ b/tbl_data.c
+@@ -97,6 +97,13 @@ getdata(struct tbl_node *tbl, struct tbl_span *dp,
+ 	dat->layout = cp;
+ 	dat->next = NULL;
+ 	dat->string = NULL;
++	dat->source = NULL;
++	dat->source_len = 0;
++	dat->source_line = -1;
++	dat->source_pos = -1;
++	dat->source_end_line = -1;
++	dat->source_end_pos = -1;
++	dat->source_escape = '\\';
+ 	dat->hspans = 0;
+ 	dat->vspans = 0;
+ 	dat->block = 0;
+--- a/tbl_parse.h
++++ b/tbl_parse.h
+@@ -27,6 +27,8 @@ int		 tbl_end(struct tbl_node *, int, int);
+ void		 tbl_free(struct tbl_node *);
+ void		 tbl_read(struct tbl_node *, int, const char *, int);
+ void		 tbl_restart(int, int, struct tbl_node *);
++void		 tbl_capture_source(struct tbl_node *, int, const char *, int,
++			unsigned char, int);
+ void		 tbl_mark_source_unsafe(struct tbl_node *);
+ void		 tbl_set_source_safe(struct tbl_node *, int);
+ struct tbl_span	*tbl_span(struct tbl_node *);

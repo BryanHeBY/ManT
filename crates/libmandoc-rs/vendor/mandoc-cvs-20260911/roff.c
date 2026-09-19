@@ -1944,6 +1944,15 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
 		return e;
 	assert(e == ROFF_CONT);
 
+	/*
+	 * Preserve the direct cell source before roff_expand() changes it.
+	 * tbl still owns the executed operand and remains authoritative.
+	 */
+	if (r->tbl != NULL)
+		tbl_capture_source(r->tbl, ln, buf->buf, ppos,
+		    (unsigned char)r->escape,
+		    r->mstackpos < 0 && r->control == '\0');
+
 	e = roff_expand(r, buf, ln, pos, r->escape);
 	if ((e & ROFF_MASK) == ROFF_IGN)
 		return e;
@@ -2015,11 +2024,13 @@ static int
 roff_req_or_macro(ROFF_ARGS) {
 
 	/*
-	 * tbl input is normally direct high-level macro operands. A user macro
-	 * may consume the whole invocation and produce no tbl input, so record
-	 * that execution fact on an active T{...T} cell before expansion.
+	 * tbl input is normally direct high-level macro operands. A user macro or
+	 * conditional scope may consume or rerun the invocation before tbl sees
+	 * it, so record that fact on the active T{...T} cell before expansion.
 	 */
-	if (r->tbl != NULL && (tok == ROFF_USERDEF || tok == ROFF_RENAMED))
+	if (r->tbl != NULL && (tok == ROFF_USERDEF || tok == ROFF_RENAMED ||
+	    tok == ROFF_if || tok == ROFF_ie || tok == ROFF_el ||
+	    tok == ROFF_while))
 		tbl_mark_source_unsafe(r->tbl);
 
 	/* For now, tables ignore most macros and some request. */

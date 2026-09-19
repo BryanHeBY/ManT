@@ -110,6 +110,89 @@ tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
 }
 
 /*
+ * Retain only direct, post-comment and pre-expansion source belonging to an
+ * active continued-data cell.  This is evidence for an optional embedding
+ * enhancement, never a replacement for tbl's executed string.  Macro and
+ * conditional input is marked unsafe even when it produces no tbl payload.
+ */
+void
+tbl_capture_source(struct tbl_node *tbl, int line, const char *p, int pos,
+    unsigned char escape, int direct)
+{
+	struct tbl_dat	*dat;
+	const size_t	 max_source = 65536;
+	size_t		 linesz, nextlen, newsz, separator;
+
+	if (tbl->part != TBL_PART_CDATA || tbl->last_span == NULL ||
+	    (dat = tbl->last_span->last) == NULL)
+		return;
+	if ( ! direct) {
+		dat->source_safe = 0;
+		return;
+	}
+	if (dat->source_safe == 0)
+		return;
+
+	/* A standalone T} closes the source interval and is not its content. */
+	if (p[pos] == 'T' && p[pos + 1] == '}') {
+		int end = pos + 2;
+		if (tbl->opts.opts & TBL_OPT_NOSPACE)
+			while (p[end] == ' ')
+				end++;
+		if (p[end] == '\0' || p[end] == tbl->opts.tab) {
+			if (dat->source == NULL) {
+				dat->source = mandoc_strdup("");
+				dat->source_line = line;
+				dat->source_pos = pos;
+				dat->source_escape = escape;
+			}
+			dat->source_end_line = line;
+			dat->source_end_pos = pos + 2;
+			return;
+		}
+	}
+
+	linesz = strlen(p + pos);
+	separator = dat->source != NULL;
+	if (dat->source_len > max_source ||
+	    separator > max_source - dat->source_len) {
+		free(dat->source);
+		dat->source = NULL;
+		dat->source_len = 0;
+		dat->source_line = dat->source_pos = -1;
+		dat->source_end_line = dat->source_end_pos = -1;
+		dat->source_safe = 0;
+		return;
+	}
+	nextlen = dat->source_len + separator;
+	if (linesz > max_source - nextlen) {
+		free(dat->source);
+		dat->source = NULL;
+		dat->source_len = 0;
+		dat->source_line = dat->source_pos = -1;
+		dat->source_end_line = dat->source_end_pos = -1;
+		dat->source_safe = 0;
+		return;
+	}
+	nextlen += linesz;
+	newsz = nextlen + 1;
+	if (dat->source == NULL) {
+		dat->source = mandoc_strdup(p + pos);
+		dat->source_line = line;
+		dat->source_pos = pos;
+		dat->source_escape = escape;
+	} else {
+		dat->source = mandoc_realloc(dat->source, newsz);
+		dat->source[dat->source_len] = '\n';
+		(void)memcpy(dat->source + dat->source_len + 1,
+		    p + pos, linesz + 1);
+	}
+	dat->source_len = nextlen;
+	dat->source_end_line = line;
+	dat->source_end_pos = (int)strlen(p);
+}
+
+/*
  * A user-defined or renamed macro can be called from a continued-data cell
  * without producing tbl input at all.  In that case, tbl_data.c never gets a
  * chance to observe r->mstackpos.  Mark the active cell directly so clients
@@ -149,6 +232,7 @@ tbl_free(struct tbl_node *tbl)
 				dp = sp->first;
 				sp->first = dp->next;
 				free(dp->string);
+				free(dp->source);
 				free(dp);
 			}
 			free(sp);

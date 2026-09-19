@@ -251,11 +251,10 @@ impl Parser {
     /// Parse one caller-owned source buffer and execute the pinned native
     /// terminal traversal exactly once, returning its owned execution facts.
     ///
-    /// This execution boundary intentionally accepts one root buffer only.
-    /// Include expansion and equations return an explicit
-    /// [`ExecutionErrorKind::Unsupported`] error until their provenance and
-    /// cleanup contracts are represented by the report. Tables are returned
-    /// as bounded, typed execution records alongside the owned syntax tree.
+    /// This execution boundary intentionally accepts one root buffer only;
+    /// include expansion remains unsupported. Tables and equations are
+    /// returned as bounded, typed execution records alongside the owned
+    /// syntax tree.
     ///
     /// # Errors
     ///

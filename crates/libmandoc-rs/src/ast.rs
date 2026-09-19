@@ -420,6 +420,24 @@ pub struct TableCell {
     /// Only printable when [`Self::kind`] is [`TableCellKind::Text`] and the
     /// cell is not a vertical continuation.
     pub text: Option<String>,
+    /// Direct post-comment, pre-expansion source admitted to this `T{}` cell.
+    ///
+    /// This is optional evidence for a bounded semantic overlay. The native
+    /// [`Self::text`] remains the authoritative executed operand.
+    pub source: Option<String>,
+    /// One-based first direct source line retained for this cell.
+    pub source_line: Option<u32>,
+    /// One-based first direct source column retained for this cell.
+    pub source_column: Option<u32>,
+    /// One-based line containing the exclusive end of this source interval.
+    /// For a complete text block, this is the closing `T}` line.
+    pub source_end_line: Option<u32>,
+    /// One-based exclusive-end column of the syntactic ownership envelope.
+    /// For a complete text block, this is the column immediately after the
+    /// closing `T}` sentinel.
+    pub source_end_column: Option<u32>,
+    /// Escape byte active when the retained source interval began.
+    pub source_escape: Option<u8>,
     /// The cell was written using a multiline tbl(7) `T{`/`T}` text block.
     pub text_block: bool,
     /// Whether the complete native input for this cell bypassed user-defined

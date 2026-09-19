@@ -161,6 +161,7 @@
 #define tag_postprocess mant_vendored_tag_postprocess
 #define tag_put mant_vendored_tag_put
 #define tbl_alloc mant_vendored_tbl_alloc
+#define tbl_capture_source mant_vendored_tbl_capture_source
 #define tbl_cdata mant_vendored_tbl_cdata
 #define tbl_data mant_vendored_tbl_data
 #define tbl_end mant_vendored_tbl_end
@@ -211,6 +212,10 @@
 #define term_exec_device_advance mant_vendored_term_exec_device_advance
 #define term_exec_device_endline mant_vendored_term_exec_device_endline
 #define term_exec_device_letter mant_vendored_term_exec_device_letter
+#define term_exec_definition_phase mant_vendored_term_exec_definition_phase
+#define term_exec_equation mant_vendored_term_exec_equation
+#define term_exec_equation_box mant_vendored_term_exec_equation_box
+#define term_exec_equation_part mant_vendored_term_exec_equation_part
 #define term_exec_failed mant_vendored_term_exec_failed
 #define term_exec_field mant_vendored_term_exec_field
 #define term_exec_field_atom mant_vendored_term_exec_field_atom
@@ -220,6 +225,7 @@
 #define term_exec_flush mant_vendored_term_exec_flush
 #define term_exec_font mant_vendored_term_exec_font
 #define term_exec_heading mant_vendored_term_exec_heading
+#define term_exec_logical_tab mant_vendored_term_exec_logical_tab
 #define term_exec_mdoc_list_item mant_vendored_term_exec_mdoc_list_item
 #define term_exec_man_block mant_vendored_term_exec_man_block
 #define term_exec_region mant_vendored_term_exec_region

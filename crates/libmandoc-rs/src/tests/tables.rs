@@ -130,6 +130,159 @@ fn parser_marks_tbl_text_block_cells() {
 }
 
 #[test]
+fn parser_binds_direct_tbl_source_to_its_exact_native_cell() {
+    // Verified first with the pinned CVS reference: tbl_data.c retains the
+    // executed operands `Fl help` and `off WORD`, while roff_parseln() sees
+    // these direct source lines after comment removal and before expansion.
+    let source = b".Dd September 20, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl l.\nT{\n.Fl Fl help\nT}\tT{\n.Sm off\n.Em WORD\nT}\n.TE\n";
+    let report = Parser::default()
+        .parse_bytes("tbl-source-ownership.1", source)
+        .expect("parse direct tbl source")
+        .document;
+    let row = find_kind(&report.root, NodeKind::Table).expect("tbl row");
+    assert_eq!(row.table_cells.len(), 2);
+    assert_eq!(row.table_cells[0].text.as_deref(), Some("Fl help"));
+    assert_eq!(row.table_cells[0].source.as_deref(), Some(".Fl Fl help"));
+    assert_eq!(row.table_cells[0].source_line, Some(8));
+    assert_eq!(row.table_cells[0].source_column, Some(1));
+    assert_eq!(row.table_cells[0].source_end_line, Some(9));
+    assert_eq!(row.table_cells[0].source_end_column, Some(3));
+    assert_eq!(row.table_cells[0].source_escape, Some(b'\\'));
+    assert_eq!(row.table_cells[1].text.as_deref(), Some("off WORD"));
+    assert_eq!(
+        row.table_cells[1].source.as_deref(),
+        Some(".Sm off\n.Em WORD")
+    );
+    assert_eq!(row.table_cells[1].source_line, Some(10));
+    assert_eq!(row.table_cells[1].source_end_line, Some(12));
+    assert!(row.table_cells.iter().all(|cell| cell.source_recovery_safe));
+}
+
+#[test]
+fn parser_captures_post_comment_tbl_source_without_losing_direct_provenance() {
+    // Fixed CVS `roff_parse_comment()` removes both comments before
+    // `tbl_cdata()` receives `linked (3)`; the direct `.BR` invocation still
+    // belongs to this exact T{} cell and remains eligible for enrichment.
+    let report = Parser::default()
+        .parse_bytes(
+            "tbl-inline-comment.3",
+            b".TH TBL-INLINE-COMMENT 3\n.SH DESCRIPTION\n.TS\nl l.\nleft\tright\\\" ignored ordinary-cell payload\nT{ \\\" real text-block marker with comment\n.BR linked (3) \\\" ignored text-block payload\nT}\tplain\n.TE\n",
+        )
+        .expect("parse direct tbl text block with comments");
+    let row = find_node(&report.document.root, &|node| {
+        node.kind == NodeKind::Table
+            && node
+                .table_cells
+                .iter()
+                .any(|cell| cell.text_block && cell.text.as_deref() == Some("linked (3)"))
+    })
+    .expect("native table row containing the commented text block");
+    let cell = row
+        .table_cells
+        .iter()
+        .find(|cell| cell.text_block)
+        .expect("native text-block cell");
+    assert_eq!(cell.source.as_deref(), Some(".BR linked (3)"));
+    assert_eq!(cell.source_escape, Some(b'\\'));
+    assert!(cell.source_recovery_safe);
+}
+
+#[test]
+fn parser_marks_conditional_and_loop_tbl_source_as_session_dependent() {
+    // Fixed CVS `roff_cond()` returns ROFF_RERUN for these requests. The
+    // source suffix is then executed (or skipped) under condition state, so
+    // neither the original line nor its rerun is closed enhancement evidence.
+    for (label, conditional, native) in [
+        ("false", ".if 0 .Em HIDDEN", "VISIBLE"),
+        ("true", ".if 1 .Em ACTIVE", "ACTIVE VISIBLE"),
+        ("while", ".while 0 .Em NEVER", "VISIBLE"),
+    ] {
+        let source = format!(
+            ".Dd September 20, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{{\n{conditional}\n.No VISIBLE\nT}}\n.TE\n"
+        );
+        let report = Parser::default()
+            .parse_bytes(format!("tbl-conditional-{label}.1"), source.as_bytes())
+            .expect("parse conditional tbl source")
+            .document;
+        let row = find_kind(&report.root, NodeKind::Table).expect("tbl row");
+        let cell = &row.table_cells[0];
+        assert_eq!(cell.text.as_deref(), Some(native));
+        assert!(!cell.source_recovery_safe, "{label}: {cell:#?}");
+    }
+}
+
+#[test]
+fn parser_bounds_optional_tbl_enhancement_source_without_partial_evidence() {
+    // This is a local embedding resource contract. Native tbl content remains
+    // available; only the optional source-backed enhancement is disabled.
+    for (length, retained) in [(65_536, true), (65_537, false)] {
+        let payload = "x".repeat(length);
+        let source = format!(".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nT{{\n{payload}\nT}}\n.TE\n");
+        let report = Parser::default()
+            .parse_bytes(format!("tbl-source-budget-{length}.1"), source.as_bytes())
+            .expect("parse bounded tbl enhancement source")
+            .document;
+        let row = find_kind(&report.root, NodeKind::Table).expect("tbl row");
+        let cell = &row.table_cells[0];
+        assert!(cell.text.as_ref().is_some_and(|text| text.len() == length));
+        assert_eq!(
+            cell.source.as_ref().map(String::len),
+            retained.then_some(length)
+        );
+        assert_eq!(cell.source_line.is_some(), retained);
+        assert_eq!(cell.source_recovery_safe, retained);
+    }
+}
+
+#[test]
+fn parser_counts_empty_tbl_source_lines_in_the_bounded_evidence() {
+    // Fixed CVS `tbl_cdata()` appends both empty continued-data lines as
+    // formatter-owned spaces before `VALUE`. Optional source evidence must
+    // likewise retain both line boundaries without confusing byte length
+    // zero with an absent first line.
+    let report = Parser::default()
+        .parse_bytes(
+            "tbl-leading-empty-source.1",
+            b".TH PROBE 1 \"September 20, 2026\"\n.SH DESCRIPTION\n.TS\nl.\nT{\n\n\n.B VALUE\nT}\n.TE\n",
+        )
+        .expect("parse leading empty tbl source lines")
+        .document;
+    let row = find_kind(&report.root, NodeKind::Table).expect("tbl row");
+    let cell = &row.table_cells[0];
+    assert_eq!(cell.text.as_deref(), Some("  VALUE"));
+    assert_eq!(cell.source.as_deref(), Some("\n\n.B VALUE"));
+    assert!(cell.source_recovery_safe);
+
+    // The separator after one empty source line consumes one byte of the
+    // 64-KiB evidence budget. Exact capacity is retained; capacity + 1 drops
+    // the optional evidence while leaving the complete native operand.
+    for (payload_length, retained) in [(65_535, true), (65_536, false)] {
+        let payload = "x".repeat(payload_length);
+        let source = format!(
+            ".TH PROBE 1 \"September 20, 2026\"\n.SH DESCRIPTION\n.TS\nl.\nT{{\n\n{payload}\nT}}\n.TE\n"
+        );
+        let report = Parser::default()
+            .parse_bytes(
+                format!("tbl-leading-empty-budget-{payload_length}.1"),
+                source.as_bytes(),
+            )
+            .expect("parse tbl source with an empty leading line")
+            .document;
+        let row = find_kind(&report.root, NodeKind::Table).expect("tbl row");
+        let cell = &row.table_cells[0];
+        assert_eq!(
+            cell.source.as_ref().map(String::len),
+            retained.then_some(payload_length + 1)
+        );
+        assert_eq!(cell.source_recovery_safe, retained);
+        assert_eq!(
+            cell.text.as_ref().map(String::len),
+            Some(payload_length + 1)
+        );
+    }
+}
+
+#[test]
 fn parser_retains_the_parse_time_value_of_tbl_text_block_strings() {
     let document = Parser::default()
         .parse_bytes(
@@ -435,4 +588,27 @@ fn parser_tracks_source_recovery_provenance_per_tbl_text_block() {
         assert!(row.table_cells[1].text_block, "{label}: {row:#?}");
         assert!(row.table_cells[1].source_recovery_safe, "{label}: {row:#?}");
     }
+}
+
+#[test]
+fn parser_owns_an_empty_tbl_text_block_as_an_empty_source_interval() {
+    // Verified first with the pinned CVS reference: tbl_data.c::getdata()
+    // opens the second T{} cell and tbl_cdata() closes it on the next line
+    // without creating visible payload. The optional ManT evidence still owns
+    // that exact empty interval instead of exporting end coordinates alone.
+    let report = Parser::default()
+        .parse_bytes(
+            "tbl-empty-text-block.1",
+            b".TH PROBE 1 \"September 20, 2026\"\n.SH DESCRIPTION\n.TS\ntab(@);\nl l.\nT{\nLEFT\nT}@T{\nT}\n.TE\n",
+        )
+        .expect("parse an empty continued-data cell");
+    let row = find_kind(&report.document.root, NodeKind::Table).expect("table row");
+    assert_eq!(row.table_cells.len(), 2, "{row:#?}");
+    let empty = &row.table_cells[1];
+    assert_eq!(empty.source.as_deref(), Some(""));
+    assert_eq!((empty.source_line, empty.source_column), (Some(9), Some(1)));
+    assert_eq!(
+        (empty.source_end_line, empty.source_end_column),
+        (Some(9), Some(3))
+    );
 }

@@ -1614,7 +1614,7 @@ mant_mandoc_table_cell_view_align(void)
 uint32_t
 mant_mandoc_table_cell_view_field_count(void)
 {
-	return 11;
+	return 17;
 }
 
 size_t
@@ -1622,18 +1622,25 @@ mant_mandoc_table_cell_view_offset(unsigned int field)
 {
 	switch (field) {
 	MANT_VIEW_OFFSET_CASE(0, struct mant_mandoc_table_cell_view, text);
-	MANT_VIEW_OFFSET_CASE(1, struct mant_mandoc_table_cell_view, kind);
-	MANT_VIEW_OFFSET_CASE(2, struct mant_mandoc_table_cell_view, layout_kind);
-	MANT_VIEW_OFFSET_CASE(3, struct mant_mandoc_table_cell_view, data_kind);
-	MANT_VIEW_OFFSET_CASE(4, struct mant_mandoc_table_cell_view, text_block);
+	MANT_VIEW_OFFSET_CASE(1, struct mant_mandoc_table_cell_view, source);
+	MANT_VIEW_OFFSET_CASE(2, struct mant_mandoc_table_cell_view, source_line);
+	MANT_VIEW_OFFSET_CASE(3, struct mant_mandoc_table_cell_view, source_column);
+	MANT_VIEW_OFFSET_CASE(4, struct mant_mandoc_table_cell_view, source_end_line);
 	MANT_VIEW_OFFSET_CASE(5, struct mant_mandoc_table_cell_view,
+	    source_end_column);
+	MANT_VIEW_OFFSET_CASE(6, struct mant_mandoc_table_cell_view, source_escape);
+	MANT_VIEW_OFFSET_CASE(7, struct mant_mandoc_table_cell_view, kind);
+	MANT_VIEW_OFFSET_CASE(8, struct mant_mandoc_table_cell_view, layout_kind);
+	MANT_VIEW_OFFSET_CASE(9, struct mant_mandoc_table_cell_view, data_kind);
+	MANT_VIEW_OFFSET_CASE(10, struct mant_mandoc_table_cell_view, text_block);
+	MANT_VIEW_OFFSET_CASE(11, struct mant_mandoc_table_cell_view,
 	    source_recovery_safe);
-	MANT_VIEW_OFFSET_CASE(6, struct mant_mandoc_table_cell_view,
+	MANT_VIEW_OFFSET_CASE(12, struct mant_mandoc_table_cell_view,
 	    vertical_continuation);
-	MANT_VIEW_OFFSET_CASE(7, struct mant_mandoc_table_cell_view, column_span);
-	MANT_VIEW_OFFSET_CASE(8, struct mant_mandoc_table_cell_view, row_span);
-	MANT_VIEW_OFFSET_CASE(9, struct mant_mandoc_table_cell_view, alignment);
-	MANT_VIEW_OFFSET_CASE(10, struct mant_mandoc_table_cell_view, next);
+	MANT_VIEW_OFFSET_CASE(13, struct mant_mandoc_table_cell_view, column_span);
+	MANT_VIEW_OFFSET_CASE(14, struct mant_mandoc_table_cell_view, row_span);
+	MANT_VIEW_OFFSET_CASE(15, struct mant_mandoc_table_cell_view, alignment);
+	MANT_VIEW_OFFSET_CASE(16, struct mant_mandoc_table_cell_view, next);
 	default: return (size_t)-1;
 	}
 }
@@ -1829,6 +1836,13 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 	source = (const struct tbl_dat *)cell;
 	memset(view, 0, sizeof(*view));
 	view->text = source->string;
+	view->source = source->source;
+	view->source_line = source->source_line;
+	view->source_column = source->source_pos < 0 ? -1 : source->source_pos + 1;
+	view->source_end_line = source->source_end_line;
+	view->source_end_column = source->source_end_pos < 0 ? -1 :
+	    source->source_end_pos + 1;
+	view->source_escape = source->source == NULL ? -1 : source->source_escape;
 	if (source->layout == NULL)
 		return 0;
 	switch (source->layout->pos) {

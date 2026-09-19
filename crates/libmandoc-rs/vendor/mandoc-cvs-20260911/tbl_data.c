@@ -97,6 +97,13 @@ getdata(struct tbl_node *tbl, struct tbl_span *dp,
 	dat->layout = cp;
 	dat->next = NULL;
 	dat->string = NULL;
+	dat->source = NULL;
+	dat->source_len = 0;
+	dat->source_line = -1;
+	dat->source_pos = -1;
+	dat->source_end_line = -1;
+	dat->source_end_pos = -1;
+	dat->source_escape = '\\';
 	dat->hspans = 0;
 	dat->vspans = 0;
 	dat->block = 0;

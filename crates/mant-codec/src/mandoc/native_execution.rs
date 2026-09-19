@@ -14,14 +14,16 @@ use libmandoc_rs::{
     ExecutionNodeKey, ExecutionReferenceKind, ExecutionRegionKind, ExecutionTableAlignment,
     ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
     ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
-    ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport,
-    Node as NativeNode, NodeKind, NormalizedListKind, TableCellKind as NativeTableCellKind,
-    TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
+    ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind, MacroSet,
+    NativeExecutionReport, Node as NativeNode, NodeKind, NormalizedListKind,
+    TableCellKind as NativeTableCellKind, TableRowKind as NativeTableRowKind,
+    TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 mod layout;
 mod semantics;
+mod table_enhancement;
 
 use layout::{
     NativeDefinitionKind, ResponsiveDefinitionLayout, project_definition_layout, project_term_tabs,
@@ -341,12 +343,26 @@ pub(super) struct NativeTableCell {
     pub(super) alignment: ExecutionTableAlignment,
     pub(super) font: ExecutionFont,
     pub(super) flags: ExecutionTableCellFlags,
+    /// Exact operand retained by native tbl after original-session execution.
+    pub(super) native_operand: Option<String>,
+    /// Direct post-comment, pre-expansion source bound to this exact cell.
+    pub(super) enhancement_source: Option<String>,
+    pub(super) enhancement_source_line: Option<u32>,
+    pub(super) enhancement_source_column: Option<u32>,
+    pub(super) enhancement_source_end_line: Option<u32>,
+    pub(super) enhancement_source_end_column: Option<u32>,
+    pub(super) enhancement_escape: Option<u8>,
     /// Source-neutral cell kind after native layout and data controls agree.
     pub(super) kind: mant_ir::TableCellKind,
     pub(super) buffer_generation: Option<u32>,
     pub(super) atoms: Range<u32>,
     pub(super) fragments: Vec<ExecutionFragment>,
     pub(super) flushes: Vec<ExecutionFlush>,
+    /// Source-neutral content produced by the authoritative native execution.
+    pub(super) native_content: Vec<mant_ir::Inline>,
+    /// Cell-local optional enhancement outcome; rejection never changes
+    /// native content or any state outside this cell.
+    pub(super) enhancement: table_enhancement::EnhancementDecision,
     pub(super) content: Vec<mant_ir::Inline>,
 }
 
@@ -2144,27 +2160,50 @@ fn table_cell_content(report: &NativeExecutionReport, atoms: Range<u32>) -> Vec<
     output
 }
 
+struct TableCellProjectionContext<'a> {
+    report: &'a NativeExecutionReport,
+    origin: &'a libmandoc_rs::ExecutionNode,
+    source: &'a std::path::Path,
+    fragments_by_generation: &'a [Vec<ExecutionFragment>],
+    flushes_by_generation: &'a [Vec<ExecutionFlush>],
+    ast_cell: &'a libmandoc_rs::TableCell,
+    macro_set: MacroSet,
+}
+
 fn project_execution_table_cell(
-    report: &NativeExecutionReport,
     cell: &ExecutionTableCell,
-    origin: &libmandoc_rs::ExecutionNode,
-    source: &std::path::Path,
-    fragments_by_generation: &[Vec<ExecutionFragment>],
-    flushes_by_generation: &[Vec<ExecutionFlush>],
     kind: mant_ir::TableCellKind,
+    context: &TableCellProjectionContext<'_>,
 ) -> NativeTableCell {
     let fragments = cell.buffer_generation.map_or_else(Vec::new, |generation| {
-        fragments_by_generation[generation as usize].clone()
+        context.fragments_by_generation[generation as usize].clone()
     });
     let flushes = cell.buffer_generation.map_or_else(Vec::new, |generation| {
-        flushes_by_generation[generation as usize].clone()
+        context.flushes_by_generation[generation as usize].clone()
     });
+    let native_content = table_cell_content(context.report, cell.atoms.clone());
+    let mut enhancement = table_enhancement::analyze(&table_enhancement::CellEnhancementInput {
+        cell: cell.key,
+        kind,
+        flags: cell.flags,
+        native_operand: context.ast_cell.text.as_deref(),
+        native_content: &native_content,
+        source: context.ast_cell.source.as_deref(),
+        escape: context.ast_cell.source_escape,
+        macro_set: context.macro_set,
+        synopsis: context
+            .origin
+            .flags
+            .contains(libmandoc_rs::ExecutionNodeFlags::SYNOPSIS_PRETTY),
+    });
+    let final_content =
+        table_enhancement::commit(cell.key, native_content.clone(), &mut enhancement);
     NativeTableCell {
         key: cell.key,
         node: cell.node,
-        source: source.to_path_buf(),
-        line: origin.line,
-        column: origin.column,
+        source: context.source.to_path_buf(),
+        line: context.origin.line,
+        column: context.origin.column,
         ordinal: cell.ordinal,
         data_ordinal: cell.data_ordinal,
         logical_column: cell.logical_column,
@@ -2175,12 +2214,21 @@ fn project_execution_table_cell(
         alignment: cell.alignment,
         font: cell.font,
         flags: cell.flags,
+        native_operand: context.ast_cell.text.clone(),
+        enhancement_source: context.ast_cell.source.clone(),
+        enhancement_source_line: context.ast_cell.source_line,
+        enhancement_source_column: context.ast_cell.source_column,
+        enhancement_source_end_line: context.ast_cell.source_end_line,
+        enhancement_source_end_column: context.ast_cell.source_end_column,
+        enhancement_escape: context.ast_cell.source_escape,
         kind,
         buffer_generation: cell.buffer_generation,
         atoms: cell.atoms.clone(),
         fragments,
         flushes,
-        content: table_cell_content(report, cell.atoms.clone()),
+        native_content,
+        enhancement,
+        content: final_content,
     }
 }
 
@@ -2227,6 +2275,7 @@ fn project_table_row(
     row: &ExecutionTableRow,
     fragments_by_generation: &[Vec<ExecutionFragment>],
     flushes_by_generation: &[Vec<ExecutionFlush>],
+    macro_set: MacroSet,
 ) -> NativeTableRow {
     let ast_row = ast_nodes[row.node.0 as usize];
     assert_eq!(ast_row.kind, NodeKind::Table, "table row AST kind");
@@ -2256,13 +2305,17 @@ fn project_table_row(
                 .get(cell.data_ordinal as usize)
                 .expect("validated table data ordinal");
             project_execution_table_cell(
-                report,
                 cell,
-                origin,
-                &source,
-                fragments_by_generation,
-                flushes_by_generation,
                 table_cell_kind(ast_cell.kind),
+                &TableCellProjectionContext {
+                    report,
+                    origin,
+                    source: &source,
+                    fragments_by_generation,
+                    flushes_by_generation,
+                    ast_cell,
+                    macro_set,
+                },
             )
         })
         .collect::<Vec<_>>();
@@ -2358,6 +2411,7 @@ fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -
                     row,
                     &fragments_by_generation,
                     &flushes_by_generation,
+                    document.macro_set,
                 );
                 rows.push(projected);
             }
@@ -5636,6 +5690,137 @@ mod tests {
                 sections: Vec::new(),
             };
             assert!(mant_ir::validate_document(&document).is_empty());
+        }
+    }
+
+    #[test]
+    fn table_enhancement_is_cell_keyed_bounded_and_state_isolated() {
+        // This exact fixture was run with the pinned CVS reference before
+        // these assertions. `roff_parseln()` gives tbl the native operands
+        // `Fl help` and `off WORD`; `tbl_data.c` binds each T{} interval to
+        // one cell, and `.Sm off` does not change the following `AFTER SPACE`.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "native-execution-table-enhancement.1",
+                include_bytes!("fixtures/native-execution-table-enhancement.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [table] = projection.tables.as_slice() else {
+            panic!("one enhanced native table")
+        };
+        let [first, second] = table.rows[0].cells.as_slice() else {
+            panic!("two enhanced native cells")
+        };
+        assert_ne!(first.key, second.key);
+        assert_eq!(first.native_operand.as_deref(), Some("Fl help"));
+        assert_eq!(first.enhancement_source.as_deref(), Some(".Fl Fl help"));
+        assert_eq!(mant_ir::inline_plain_text(&first.native_content), "Fl help");
+        assert_eq!(mant_ir::inline_plain_text(&first.content), "--help");
+        assert!(matches!(
+            first.enhancement,
+            table_enhancement::EnhancementDecision::Accepted(
+                table_enhancement::CellOverlay { cell, .. }
+            ) if cell == first.key
+        ));
+
+        assert_eq!(second.native_operand.as_deref(), Some("off WORD"));
+        assert_eq!(
+            second.enhancement_source.as_deref(),
+            Some(".Sm off\n.Em WORD")
+        );
+        assert_eq!(
+            mant_ir::inline_plain_text(&second.native_content),
+            "off WORD"
+        );
+        assert_eq!(mant_ir::inline_plain_text(&second.content), "WORD");
+        assert!(matches!(
+            second.enhancement,
+            table_enhancement::EnhancementDecision::Accepted(
+                table_enhancement::CellOverlay { cell, .. }
+            ) if cell == second.key
+        ));
+        assert!(
+            projection
+                .visible_lines
+                .iter()
+                .any(|line| line.contains("AFTER SPACE")),
+            "cell-local `.Sm off` enhancement cannot alter native document state"
+        );
+    }
+
+    #[test]
+    fn rejected_table_cell_keeps_native_content_without_poisoning_its_neighbor() {
+        // Fixed CVS renders `REDEFINED` in the first cell and `SAFE` in the
+        // second. `roff_req_or_macro()` marks only the first cell unsafe even
+        // though the user macro itself emits no high-level `.Fl` semantics.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "native-execution-table-enhancement-rejected.1",
+                include_bytes!("fixtures/native-execution-table-enhancement-rejected.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [first, second] = projection.tables[0].rows[0].cells.as_slice() else {
+            panic!("two native cells")
+        };
+        assert_eq!(mant_ir::inline_plain_text(&first.content), "REDEFINED");
+        assert!(matches!(
+            first.enhancement,
+            table_enhancement::EnhancementDecision::Rejected(
+                table_enhancement::RejectReason::UnsafeExecutionSource
+            )
+        ));
+        assert_eq!(mant_ir::inline_plain_text(&second.content), "SAFE");
+        assert!(matches!(
+            second.enhancement,
+            table_enhancement::EnhancementDecision::Accepted(_)
+        ));
+    }
+
+    #[test]
+    fn duplicate_table_text_is_bound_by_native_cell_identity_not_content() {
+        // The pinned CVS reference renders two distinct T{} cells containing
+        // the same `SAME` operand. `tbl_data.c` nevertheless owns them as two
+        // cells, so enrichment must use their native keys and source ranges,
+        // never line-adjacent or content-based matching.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Mdoc)
+            .with_mdoc_operating_system("ManT")
+            .unwrap()
+            .execute_bytes(
+                "native-execution-table-duplicate-cells.1",
+                include_bytes!("fixtures/native-execution-table-duplicate-cells.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [first, second] = projection.tables[0].rows[0].cells.as_slice() else {
+            panic!("two native cells")
+        };
+        assert_ne!(first.key, second.key);
+        assert_ne!(
+            first.enhancement_source_line,
+            second.enhancement_source_line
+        );
+        for cell in [first, second] {
+            assert_eq!(cell.native_operand.as_deref(), Some("SAME"));
+            assert_eq!(cell.enhancement_source.as_deref(), Some(".Em SAME"));
+            assert_eq!(mant_ir::inline_plain_text(&cell.content), "SAME");
+            assert!(matches!(
+                cell.enhancement,
+                table_enhancement::EnhancementDecision::Accepted(
+                    table_enhancement::CellOverlay { cell: owner, .. }
+                ) if owner == cell.key
+            ));
         }
     }
 

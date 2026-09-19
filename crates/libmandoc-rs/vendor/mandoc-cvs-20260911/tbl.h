@@ -94,6 +94,13 @@ struct	tbl_dat {
 	struct tbl_dat	 *next;    /* Data cell to the right. */
 	struct tbl_cell	 *layout;  /* Associated layout cell. */
 	char		 *string;  /* Data, or NULL if not TBL_DATA_DATA. */
+	char		 *source;  /* Direct source admitted for enhancement. */
+	size_t		  source_len; /* Bytes retained in source. */
+	int		  source_line; /* First direct source line, or -1. */
+	int		  source_pos;  /* First direct source column, or -1. */
+	int		  source_end_line; /* Last direct source line, or -1. */
+	int		  source_end_pos;  /* End column on the last line. */
+	unsigned char	  source_escape; /* Escape state at source entry. */
 	int		  hspans;  /* How many horizontal spans follow. */
 	int		  vspans;  /* How many vertical spans follow. */
 	int		  block;   /* T{ text block T} */
