@@ -7,12 +7,12 @@
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryEffect, Document as NativeDocument,
     ExecutionAffinity, ExecutionBoundary, ExecutionControl, ExecutionFlush, ExecutionFont,
-    ExecutionFragment, ExecutionHeadingKind, ExecutionMdocListKind, ExecutionNodeKey,
-    ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags,
-    ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind,
-    ExecutionTableRow, ExecutionTableRowKey, ExecutionWrapperKind, FragmentRole, GeometryKind,
-    GeometryOriginKind, NativeExecutionReport, Node as NativeNode, NodeKind,
-    TableAlignment as NativeTableAlignment, TableCellKind as NativeTableCellKind,
+    ExecutionFragment, ExecutionHeadingKind, ExecutionManBlockKind, ExecutionMdocListKind,
+    ExecutionNodeKey, ExecutionReferenceKind, ExecutionTableAlignment, ExecutionTableCell,
+    ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey,
+    ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey, ExecutionWrapperKind,
+    FragmentRole, GeometryKind, GeometryOriginKind, NativeExecutionReport, Node as NativeNode,
+    NodeKind, TableAlignment as NativeTableAlignment, TableCellKind as NativeTableCellKind,
     TableRowKind as NativeTableRowKind, TableRuleCellKind as NativeTableRuleCellKind,
 };
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
@@ -187,6 +187,44 @@ pub(super) struct NativeMdocList {
     pub(super) items: Vec<NativeMdocListItem>,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum NativeManBlockRole {
+    Head,
+    Body,
+}
+
+/// One parser-owned HEAD or BODY interval within a native man block.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeManBlockSegment {
+    pub(super) node: ExecutionNodeKey,
+    pub(super) role: NativeManBlockRole,
+    pub(super) atoms: Range<u32>,
+    pub(super) flushes: Vec<ExecutionFlush>,
+    pub(super) boundaries: Vec<ExecutionBoundary>,
+    pub(super) runs: Vec<NativeTextRun>,
+    pub(super) anchors: Vec<u32>,
+}
+
+/// Exact fixed-CVS pre/children/post lifecycle for one man(7) block.
+#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct NativeManBlock {
+    pub(super) owner: ExecutionNodeKey,
+    pub(super) wrapper: u32,
+    pub(super) kind: ExecutionManBlockKind,
+    pub(super) state_before: u32,
+    pub(super) state_after: u32,
+    pub(super) atoms: Range<u32>,
+    pub(super) head: NativeManBlockSegment,
+    pub(super) body: NativeManBlockSegment,
+    pub(super) flushes: Vec<ExecutionFlush>,
+    pub(super) boundaries: Vec<ExecutionBoundary>,
+    pub(super) runs: Vec<NativeTextRun>,
+    pub(super) anchors: Vec<u32>,
+}
+
 /// One native `term_fill()`/`term_field()` decision together with the atom
 /// fates that make its accepted and discarded ranges observable to a
 /// projection consumer.
@@ -283,6 +321,7 @@ pub(super) struct NativeProjection {
     pub(super) references: Vec<NativeReference>,
     pub(super) anchors: Vec<NativeAnchor>,
     pub(super) definitions: Vec<NativeDefinitionFact>,
+    pub(super) man_blocks: Vec<NativeManBlock>,
     pub(super) mdoc_lists: Vec<NativeMdocList>,
     pub(super) fields: Vec<NativeFieldFact>,
     pub(super) controls: Vec<NativeControlFact>,
@@ -402,92 +441,90 @@ fn field_facts(report: &NativeExecutionReport) -> Vec<NativeFieldFact> {
 
 fn definition_facts(
     report: &NativeExecutionReport,
+    man_blocks: &[NativeManBlock],
     mdoc_lists: &[NativeMdocList],
 ) -> Vec<NativeDefinitionFact> {
-    #[derive(Default)]
-    struct PendingDefinition {
-        owner: Option<ExecutionNodeKey>,
-        macro_name: Option<String>,
-        head: Option<ExecutionNodeKey>,
-        body: Option<ExecutionNodeKey>,
-        head_flushes: Vec<ExecutionFlush>,
-        body_flushes: Vec<ExecutionFlush>,
-    }
-
-    let mut owner_definition = vec![None; report.nodes().len()];
-    let mut definitions = Vec::new();
-    for node in report.nodes() {
-        let is_man_definition =
-            matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "TQ" | "HP"));
-        if node.kind == NodeKind::Block && is_man_definition {
-            owner_definition[node.key.0 as usize] = Some(definitions.len());
-            definitions.push(PendingDefinition {
-                owner: Some(node.key),
-                macro_name: node.macro_name.clone(),
-                ..PendingDefinition::default()
-            });
-        }
-    }
-    let mut direct_content_definition = vec![None; report.nodes().len()];
-    for node in report.nodes() {
-        let Some(parent) = node.parent else {
-            continue;
-        };
-        let Some(definition) = owner_definition[parent.0 as usize] else {
-            continue;
-        };
-        match node.kind {
-            NodeKind::Head => {
-                definitions[definition].head = Some(node.key);
-                direct_content_definition[node.key.0 as usize] = Some((definition, true));
-            }
-            NodeKind::Body => {
-                definitions[definition].body = Some(node.key);
-                direct_content_definition[node.key.0 as usize] = Some((definition, false));
-            }
-            _ => {}
-        }
-    }
-
-    let mut content_definition = vec![None; report.nodes().len()];
-    for node in report.nodes() {
-        content_definition[node.key.0 as usize] = direct_content_definition[node.key.0 as usize]
-            .or_else(|| {
-                node.parent
-                    .and_then(|parent| content_definition[parent.0 as usize])
-            });
-    }
-
-    for flush in report.flushes() {
-        let Some(node) = flush.node else {
-            continue;
-        };
-        if let Some((definition, is_head)) = content_definition[node.0 as usize] {
-            if is_head {
-                definitions[definition].head_flushes.push(flush.clone());
-            } else {
-                definitions[definition].body_flushes.push(flush.clone());
-            }
-        }
-    }
-
-    let mut facts = definitions
-        .into_iter()
-        .filter_map(|definition| {
-            Some(NativeDefinitionFact {
-                owner: definition.owner?,
-                macro_name: definition.macro_name?,
-                head: definition.head?,
-                body: definition.body?,
-                head_flushes: definition.head_flushes,
-                body_flushes: definition.body_flushes,
-            })
-        })
-        .collect::<Vec<_>>();
-
+    let mut facts = man_definition_facts(report, man_blocks);
     facts.extend(mdoc_definition_facts(report, mdoc_lists));
     facts.sort_by_key(|definition| definition.owner);
     facts
+}
+
+fn is_man_definition_kind(kind: ExecutionManBlockKind) -> bool {
+    matches!(
+        kind,
+        ExecutionManBlockKind::IndentedParagraph
+            | ExecutionManBlockKind::TaggedParagraph
+            | ExecutionManBlockKind::AdditionalTag
+            | ExecutionManBlockKind::HangingParagraph
+    )
+}
+
+fn man_definition_facts(
+    report: &NativeExecutionReport,
+    man_blocks: &[NativeManBlock],
+) -> Vec<NativeDefinitionFact> {
+    struct Pending<'a> {
+        block: &'a NativeManBlock,
+        head_flushes: Vec<ExecutionFlush>,
+        body_flushes: Vec<ExecutionFlush>,
+    }
+    let mut pending = man_blocks
+        .iter()
+        .filter(|block| is_man_definition_kind(block.kind))
+        .map(|block| Pending {
+            block,
+            head_flushes: Vec::new(),
+            body_flushes: Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    let mut wrapper_depths = Vec::with_capacity(report.wrappers().len());
+    for wrapper in report.wrappers() {
+        wrapper_depths.push(
+            wrapper
+                .parent
+                .map_or(0, |parent| wrapper_depths[parent as usize] + 1),
+        );
+    }
+    let mut owners = vec![None::<(u32, usize, bool)>; report.flushes().len()];
+    for (definition, value) in pending.iter().enumerate() {
+        let depth = wrapper_depths[value.block.wrapper as usize];
+        for (is_head, flushes) in [
+            (true, &value.block.head.flushes),
+            (false, &value.block.body.flushes),
+        ] {
+            for flush in flushes {
+                let owner = &mut owners[flush.key as usize];
+                if owner.is_none_or(|current| current.0 < depth) {
+                    *owner = Some((depth, definition, is_head));
+                }
+            }
+        }
+    }
+    for (flush, owner) in report.flushes().iter().zip(owners) {
+        let Some((_, definition, is_head)) = owner else {
+            continue;
+        };
+        if is_head {
+            pending[definition].head_flushes.push(flush.clone());
+        } else {
+            pending[definition].body_flushes.push(flush.clone());
+        }
+    }
+    pending
+        .into_iter()
+        .map(|value| NativeDefinitionFact {
+            owner: value.block.owner,
+            macro_name: report.nodes()[value.block.owner.0 as usize]
+                .macro_name
+                .clone()
+                .expect("typed man block macro"),
+            head: value.block.head.node,
+            body: value.block.body.node,
+            head_flushes: value.head_flushes,
+            body_flushes: value.body_flushes,
+        })
+        .collect()
 }
 
 fn is_mdoc_definition_kind(kind: ExecutionMdocListKind) -> bool {
@@ -718,32 +755,33 @@ fn collect_mdoc_list_items(
     (items, direct_items, direct_segments)
 }
 
+fn propagate_wrapper_ownership<T: Copy>(
+    report: &NativeExecutionReport,
+    direct: &[Option<T>],
+) -> Vec<Vec<T>> {
+    let mut inherited_by_wrapper: Vec<Vec<T>> = Vec::with_capacity(report.wrappers().len());
+    for wrapper in report.wrappers() {
+        assert_eq!(wrapper.key as usize, inherited_by_wrapper.len());
+        let mut inherited = wrapper.parent.map_or_else(Vec::new, |parent| {
+            inherited_by_wrapper[parent as usize].clone()
+        });
+        if let Some(owner) = direct[wrapper.key as usize] {
+            inherited.push(owner);
+        }
+        inherited_by_wrapper.push(inherited);
+    }
+    inherited_by_wrapper
+}
+
 fn propagate_mdoc_list_ownership(
     report: &NativeExecutionReport,
     direct_items: &[Option<usize>],
     direct_segments: &[Option<(usize, MdocSegmentSlot)>],
 ) -> MdocListInclusiveOwnership {
-    let mut items_by_wrapper: Vec<Vec<usize>> = Vec::with_capacity(report.wrappers().len());
-    let mut segments_by_wrapper: Vec<Vec<(usize, MdocSegmentSlot)>> =
-        Vec::with_capacity(report.wrappers().len());
-    for wrapper in report.wrappers() {
-        assert_eq!(wrapper.key as usize, items_by_wrapper.len());
-        let mut inherited_items = wrapper
-            .parent
-            .map_or_else(Vec::new, |parent| items_by_wrapper[parent as usize].clone());
-        let mut inherited_segments = wrapper.parent.map_or_else(Vec::new, |parent| {
-            segments_by_wrapper[parent as usize].clone()
-        });
-        if let Some(item) = direct_items[wrapper.key as usize] {
-            inherited_items.push(item);
-        }
-        if let Some(segment) = direct_segments[wrapper.key as usize] {
-            inherited_segments.push(segment);
-        }
-        items_by_wrapper.push(inherited_items);
-        segments_by_wrapper.push(inherited_segments);
-    }
-    (items_by_wrapper, segments_by_wrapper)
+    (
+        propagate_wrapper_ownership(report, direct_items),
+        propagate_wrapper_ownership(report, direct_segments),
+    )
 }
 
 fn active_wrappers_at_sequences(
@@ -873,6 +911,171 @@ fn mdoc_list_facts(
         lists[list_index].items.push(item);
     }
     lists
+}
+
+fn empty_man_block_segment(
+    report: &NativeExecutionReport,
+    node_wrappers: &[Option<usize>],
+    node: ExecutionNodeKey,
+    role: NativeManBlockRole,
+) -> NativeManBlockSegment {
+    let wrapper =
+        &report.wrappers()[node_wrappers[node.0 as usize].expect("validated native node wrapper")];
+    NativeManBlockSegment {
+        node,
+        role,
+        atoms: wrapper.enter_atom..wrapper.leave_atom,
+        flushes: Vec::new(),
+        boundaries: Vec::new(),
+        runs: Vec::new(),
+        anchors: Vec::new(),
+    }
+}
+
+fn man_block_segment_mut(
+    blocks: &mut [NativeManBlock],
+    owner: (usize, NativeManBlockRole),
+) -> &mut NativeManBlockSegment {
+    match owner.1 {
+        NativeManBlockRole::Head => &mut blocks[owner.0].head,
+        NativeManBlockRole::Body => &mut blocks[owner.0].body,
+    }
+}
+
+type ManBlockDirectOwnership = (
+    Vec<NativeManBlock>,
+    Vec<Option<usize>>,
+    Vec<Option<(usize, NativeManBlockRole)>>,
+);
+
+fn collect_man_blocks(
+    document: &NativeDocument,
+    report: &NativeExecutionReport,
+) -> ManBlockDirectOwnership {
+    let ast_nodes = native_nodes_by_execution_key(document, report.nodes().len());
+    let node_wrappers = native_node_wrapper_index(report);
+    let mut blocks = Vec::new();
+    let mut direct_blocks = vec![None; report.wrappers().len()];
+    let mut direct_segments = vec![None; report.wrappers().len()];
+
+    for wrapper in report
+        .wrappers()
+        .iter()
+        .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::ManBlock)
+    {
+        let owner = wrapper.node.expect("validated man block owner");
+        let ast_block = ast_nodes[owner.0 as usize];
+        let child = |kind| {
+            ExecutionNodeKey(
+                ast_block
+                    .children
+                    .iter()
+                    .find(|child| child.kind == kind)
+                    .and_then(|child| child.execution_node_key)
+                    .expect("validated man block child"),
+            )
+        };
+        let head = empty_man_block_segment(
+            report,
+            &node_wrappers,
+            child(NodeKind::Head),
+            NativeManBlockRole::Head,
+        );
+        let body = empty_man_block_segment(
+            report,
+            &node_wrappers,
+            child(NodeKind::Body),
+            NativeManBlockRole::Body,
+        );
+        let index = blocks.len();
+        direct_blocks[wrapper.key as usize] = Some(index);
+        direct_segments[node_wrappers[head.node.0 as usize].expect("man head wrapper")] =
+            Some((index, NativeManBlockRole::Head));
+        direct_segments[node_wrappers[body.node.0 as usize].expect("man body wrapper")] =
+            Some((index, NativeManBlockRole::Body));
+        blocks.push(NativeManBlock {
+            owner,
+            wrapper: wrapper.key,
+            kind: wrapper.man_block_kind.expect("typed man block kind"),
+            state_before: wrapper.state_before,
+            state_after: wrapper.state_after,
+            atoms: wrapper.enter_atom..wrapper.leave_atom,
+            head,
+            body,
+            flushes: Vec::new(),
+            boundaries: Vec::new(),
+            runs: Vec::new(),
+            anchors: Vec::new(),
+        });
+    }
+
+    (blocks, direct_blocks, direct_segments)
+}
+
+fn man_block_facts(
+    document: &NativeDocument,
+    report: &NativeExecutionReport,
+    runs: &[NativeTextRun],
+) -> Vec<NativeManBlock> {
+    let (mut blocks, direct_blocks, direct_segments) = collect_man_blocks(document, report);
+
+    let blocks_by_wrapper = propagate_wrapper_ownership(report, &direct_blocks);
+    let segments_by_wrapper = propagate_wrapper_ownership(report, &direct_segments);
+    for run in runs {
+        let Some(wrapper) = run.wrapper.map(|key| key as usize) else {
+            continue;
+        };
+        for &block in &blocks_by_wrapper[wrapper] {
+            blocks[block].runs.push(run.clone());
+        }
+        for &segment in &segments_by_wrapper[wrapper] {
+            man_block_segment_mut(&mut blocks, segment)
+                .runs
+                .push(run.clone());
+        }
+    }
+    let flush_wrappers =
+        active_wrappers_at_sequences(report, report.flushes().iter().map(|flush| flush.sequence));
+    for (flush, wrapper) in report.flushes().iter().zip(flush_wrappers) {
+        let Some(wrapper) = wrapper else { continue };
+        for &block in &blocks_by_wrapper[wrapper] {
+            blocks[block].flushes.push(flush.clone());
+        }
+        for &segment in &segments_by_wrapper[wrapper] {
+            man_block_segment_mut(&mut blocks, segment)
+                .flushes
+                .push(flush.clone());
+        }
+    }
+    for boundary in report.boundaries() {
+        let Some(wrapper) = boundary.wrapper.map(|key| key as usize) else {
+            continue;
+        };
+        for &block in &blocks_by_wrapper[wrapper] {
+            blocks[block].boundaries.push(boundary.clone());
+        }
+        for &segment in &segments_by_wrapper[wrapper] {
+            man_block_segment_mut(&mut blocks, segment)
+                .boundaries
+                .push(boundary.clone());
+        }
+    }
+    let anchor_wrappers = active_wrappers_at_sequences(
+        report,
+        report.anchors().iter().map(|anchor| anchor.sequence),
+    );
+    for (anchor, wrapper) in report.anchors().iter().zip(anchor_wrappers) {
+        let Some(wrapper) = wrapper else { continue };
+        for &block in &blocks_by_wrapper[wrapper] {
+            blocks[block].anchors.push(anchor.key);
+        }
+        for &segment in &segments_by_wrapper[wrapper] {
+            man_block_segment_mut(&mut blocks, segment)
+                .anchors
+                .push(anchor.key);
+        }
+    }
+    blocks
 }
 
 fn atom_reference_owners(report: &NativeExecutionReport) -> Vec<Option<u32>> {
@@ -1588,6 +1791,22 @@ fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -
         .collect()
 }
 
+fn origin_facts(report: &NativeExecutionReport) -> Vec<NativeOrigin> {
+    report
+        .nodes()
+        .iter()
+        .map(|node| NativeOrigin {
+            key: node.key,
+            parent: node.parent,
+            source: report.sources()[node.source as usize].path.clone(),
+            line: node.line,
+            column: node.column,
+            kind: node.kind,
+            macro_name: node.macro_name.clone(),
+        })
+        .collect()
+}
+
 #[allow(dead_code)]
 pub(super) fn project(
     document: &NativeDocument,
@@ -1595,20 +1814,9 @@ pub(super) fn project(
 ) -> NativeProjection {
     let (runs, visible_lines) = text_projection(report);
     let mdoc_lists = mdoc_list_facts(document, report, &runs);
+    let man_blocks = man_block_facts(document, report, &runs);
     NativeProjection {
-        origins: report
-            .nodes()
-            .iter()
-            .map(|node| NativeOrigin {
-                key: node.key,
-                parent: node.parent,
-                source: report.sources()[node.source as usize].path.clone(),
-                line: node.line,
-                column: node.column,
-                kind: node.kind,
-                macro_name: node.macro_name.clone(),
-            })
-            .collect(),
+        origins: origin_facts(report),
         words: report
             .words()
             .iter()
@@ -1687,7 +1895,8 @@ pub(super) fn project(
                 affinity: anchor.affinity,
             })
             .collect(),
-        definitions: definition_facts(report, &mdoc_lists),
+        definitions: definition_facts(report, &man_blocks, &mdoc_lists),
+        man_blocks,
         mdoc_lists,
         fields: field_facts(report),
         controls: control_facts(report),
@@ -2197,6 +2406,87 @@ mod tests {
         let projection = project(&report.document, &report.execution);
         assert_mdoc_list_topology(&report.execution, &projection);
         assert_mdoc_list_targets(&report.execution, &projection);
+    }
+
+    #[test]
+    fn projects_exact_native_man_block_roles() {
+        // This exact fixture was first checked with the pinned CVS terminal,
+        // tree, and lint renderers.  Fixed `print_man_node()` wraps the whole
+        // block handler lifecycle; `.PD 0` only changes paragraph distance,
+        // `TQ` remains its own owner, and an `RS` lifecycle inclusively owns
+        // the nested `TP` while the closest definition retains its flushes.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "man-definition-lifecycle.1",
+                include_bytes!(
+                    "../../../libmandoc-rs/tests/fixtures/execution/man-definition-lifecycle.1"
+                ),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        assert_eq!(
+            projection
+                .man_blocks
+                .iter()
+                .map(|block| block.kind)
+                .collect::<Vec<_>>(),
+            [
+                ExecutionManBlockKind::TaggedParagraph,
+                ExecutionManBlockKind::AdditionalTag,
+                ExecutionManBlockKind::TaggedParagraph,
+                ExecutionManBlockKind::Paragraph,
+                ExecutionManBlockKind::TaggedParagraph,
+                ExecutionManBlockKind::TaggedParagraph,
+                ExecutionManBlockKind::IndentedParagraph,
+                ExecutionManBlockKind::HangingParagraph,
+                ExecutionManBlockKind::RelativeIndent,
+                ExecutionManBlockKind::TaggedParagraph,
+                ExecutionManBlockKind::Paragraph,
+                ExecutionManBlockKind::ParagraphP,
+                ExecutionManBlockKind::ParagraphLp,
+            ]
+        );
+        let text =
+            |runs: &[NativeTextRun]| runs.iter().map(|run| run.text.as_str()).collect::<String>();
+        let blocks = &projection.man_blocks;
+        assert_eq!(text(&blocks[0].head.runs), "-a");
+        assert_eq!(text(&blocks[1].head.runs), "--alpha");
+        assert_eq!(text(&blocks[2].head.runs), "--beta");
+        assert!(blocks[0].body.runs.is_empty());
+        assert!(blocks[1].body.runs.is_empty());
+        let shared_body = text(&blocks[2].body.runs);
+        assert_eq!(shared_body, "Sharedbody.");
+        assert_eq!(text(&blocks[4].head.runs), "-c");
+        assert_eq!(text(&blocks[5].head.runs), "--charlie");
+        assert!(blocks[4].body.runs.is_empty());
+        assert_eq!(text(&blocks[5].body.runs), "Separatebody.");
+        assert!(text(&blocks[6].head.runs).starts_with("1."));
+
+        let relative = &blocks[8];
+        let nested = &blocks[9];
+        assert!(nested.runs.iter().all(|run| relative.runs.contains(run)));
+        let nested_definition = projection
+            .definitions
+            .iter()
+            .find(|definition| definition.owner == nested.owner)
+            .expect("nested TP definition");
+        assert!(
+            nested
+                .body
+                .flushes
+                .iter()
+                .all(|flush| { nested_definition.body_flushes.contains(flush) })
+        );
+        assert_eq!(
+            projection
+                .definitions
+                .iter()
+                .filter(|definition| matches!(definition.macro_name.as_str(), "TP" | "TQ"))
+                .count(),
+            6
+        );
     }
 
     #[test]

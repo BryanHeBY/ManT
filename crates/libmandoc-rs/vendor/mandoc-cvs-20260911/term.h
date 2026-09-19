@@ -90,6 +90,18 @@ enum term_exec_mdoc_list_kind {
 	TERM_EXEC_MDOC_LIST_COLUMN
 };
 
+/* Stable observer-side spellings of man(7) block execution roles. */
+enum term_exec_man_block_kind {
+	TERM_EXEC_MAN_BLOCK_IP,
+	TERM_EXEC_MAN_BLOCK_TP,
+	TERM_EXEC_MAN_BLOCK_TQ,
+	TERM_EXEC_MAN_BLOCK_HP,
+	TERM_EXEC_MAN_BLOCK_RS,
+	TERM_EXEC_MAN_BLOCK_PP,
+	TERM_EXEC_MAN_BLOCK_P,
+	TERM_EXEC_MAN_BLOCK_LP
+};
+
 struct term_exec_ops {
 	int (*work)(void *, const struct termp *,
 	    const struct roff_node *, size_t);
@@ -106,6 +118,10 @@ struct term_exec_ops {
 	int (*mdoc_list_item_begin)(void *, const struct termp *,
 	    const struct roff_node *, int, int);
 	int (*mdoc_list_item_end)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*man_block_begin)(void *, const struct termp *,
+	    const struct roff_node *, int);
+	int (*man_block_end)(void *, const struct termp *,
 	    const struct roff_node *, int);
 	int (*word_begin)(void *, const struct termp *,
 	    const struct roff_node *, const char *, size_t, int *);
@@ -318,6 +334,8 @@ int		  term_exec_heading(struct termp *, const struct roff_node *,
 			int, int);
 int		  term_exec_mdoc_list_item(struct termp *,
 			const struct roff_node *, int, int, int);
+int		  term_exec_man_block(struct termp *, const struct roff_node *,
+			int, int);
 int		  term_exec_word(struct termp *, const char *, size_t, int);
 int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
 int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);

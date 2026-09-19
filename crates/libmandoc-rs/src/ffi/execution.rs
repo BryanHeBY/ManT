@@ -10,13 +10,13 @@ use crate::{
     BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
     ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest, ExecutionDiagnostic,
     ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
-    ExecutionHeadingKind, ExecutionLimits, ExecutionMdocListKind, ExecutionNode,
-    ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference, ExecutionReferenceKind,
-    ExecutionSource, ExecutionTable, ExecutionTableAlignment, ExecutionTableCell,
-    ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind, ExecutionTableKey,
-    ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey, ExecutionTableRowKind,
-    ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind, FlushOutcome,
-    FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
+    ExecutionHeadingKind, ExecutionLimits, ExecutionManBlockKind, ExecutionMdocListKind,
+    ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
+    ExecutionReferenceKind, ExecutionSource, ExecutionTable, ExecutionTableAlignment,
+    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
+    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
+    ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind,
+    FlushOutcome, FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit,
     NativeExecutionReport, PoolRange, RawDocument,
 };
 #[cfg(unix)]
@@ -1568,6 +1568,7 @@ fn is_structural_wrapper(kind: ExecutionWrapperKind) -> bool {
         ExecutionWrapperKind::Node
             | ExecutionWrapperKind::Heading
             | ExecutionWrapperKind::MdocListItem
+            | ExecutionWrapperKind::ManBlock
     )
 }
 
@@ -1583,6 +1584,23 @@ fn is_mdoc_list_item(nodes: &[ExecutionNode], node: ExecutionNodeKey) -> bool {
                     list.kind == crate::NodeKind::Block && list.macro_name.as_deref() == Some("Bl")
                 })
         })
+}
+
+fn expected_man_block_kind(node: &ExecutionNode) -> Option<ExecutionManBlockKind> {
+    if node.kind != crate::NodeKind::Block {
+        return None;
+    }
+    match node.macro_name.as_deref()? {
+        "IP" => Some(ExecutionManBlockKind::IndentedParagraph),
+        "TP" => Some(ExecutionManBlockKind::TaggedParagraph),
+        "TQ" => Some(ExecutionManBlockKind::AdditionalTag),
+        "HP" => Some(ExecutionManBlockKind::HangingParagraph),
+        "RS" => Some(ExecutionManBlockKind::RelativeIndent),
+        "PP" => Some(ExecutionManBlockKind::Paragraph),
+        "P" => Some(ExecutionManBlockKind::ParagraphP),
+        "LP" => Some(ExecutionManBlockKind::ParagraphLp),
+        _ => None,
+    }
 }
 
 fn expected_heading_kind(node: &ExecutionNode) -> Option<ExecutionHeadingKind> {
@@ -2601,7 +2619,7 @@ fn convert_report(
         }
         if let Some(wrapper) = wrapper {
             let wrapper = &wrapper_records[wrapper as usize];
-            if !matches!(wrapper.kind, 1 | 3 | 4)
+            if !matches!(wrapper.kind, 1 | 3 | 4 | 5)
                 || wrapper.node != value.node
                 || wrapper.enter_sequence >= value.enter_sequence
                 || wrapper.leave_sequence <= value.leave_sequence
@@ -3170,6 +3188,7 @@ fn convert_report(
     let mut heading_nodes = reserved_filled_vec(false, node_count, "heading node ownership")?;
     let mut mdoc_list_item_nodes =
         reserved_filled_vec(false, node_count, "mdoc list item ownership")?;
+    let mut man_block_nodes = reserved_filled_vec(false, node_count, "man block ownership")?;
     let mut last_wrapper_child_leave =
         reserved_filled_vec(None::<u64>, wrapper_count, "wrapper sibling order")?;
     let mut last_root_wrapper_leave = None;
@@ -3188,6 +3207,7 @@ fn convert_report(
             2 => ExecutionWrapperKind::Font,
             3 => ExecutionWrapperKind::Heading,
             4 => ExecutionWrapperKind::MdocListItem,
+            5 => ExecutionWrapperKind::ManBlock,
             _ => return Err("unknown execution wrapper kind".to_owned()),
         };
         let heading_kind = match (kind, value.detail) {
@@ -3198,7 +3218,9 @@ fn convert_report(
             (ExecutionWrapperKind::Heading, _) => {
                 return Err("invalid execution heading kind".to_owned());
             }
-            (ExecutionWrapperKind::MdocListItem, _) | (_, 0) => None,
+            (ExecutionWrapperKind::MdocListItem | ExecutionWrapperKind::ManBlock, _) | (_, 0) => {
+                None
+            }
             _ => return Err("unexpected execution wrapper heading kind".to_owned()),
         };
         let mdoc_list_kind = match (kind, value.detail) {
@@ -3215,6 +3237,20 @@ fn convert_report(
             (ExecutionWrapperKind::MdocListItem, 11) => Some(ExecutionMdocListKind::Column),
             (ExecutionWrapperKind::MdocListItem, _) => {
                 return Err("invalid execution mdoc list kind".to_owned());
+            }
+            (_, _) => None,
+        };
+        let man_block_kind = match (kind, value.detail) {
+            (ExecutionWrapperKind::ManBlock, 1) => Some(ExecutionManBlockKind::IndentedParagraph),
+            (ExecutionWrapperKind::ManBlock, 2) => Some(ExecutionManBlockKind::TaggedParagraph),
+            (ExecutionWrapperKind::ManBlock, 3) => Some(ExecutionManBlockKind::AdditionalTag),
+            (ExecutionWrapperKind::ManBlock, 4) => Some(ExecutionManBlockKind::HangingParagraph),
+            (ExecutionWrapperKind::ManBlock, 5) => Some(ExecutionManBlockKind::RelativeIndent),
+            (ExecutionWrapperKind::ManBlock, 6) => Some(ExecutionManBlockKind::Paragraph),
+            (ExecutionWrapperKind::ManBlock, 7) => Some(ExecutionManBlockKind::ParagraphP),
+            (ExecutionWrapperKind::ManBlock, 8) => Some(ExecutionManBlockKind::ParagraphLp),
+            (ExecutionWrapperKind::ManBlock, _) => {
+                return Err("invalid execution man block kind".to_owned());
             }
             (_, _) => None,
         };
@@ -3284,6 +3320,23 @@ fn convert_report(
             {
                 return Err("invalid execution mdoc list item wrapper".to_owned());
             }
+            ExecutionWrapperKind::ManBlock
+                if node.is_none()
+                    || value.flags != 0
+                    || value.target_start != NONE
+                    || value.target_length != 0
+                    || value.state_before >= 1 << 23
+                    || value.state_after >= 1 << 23
+                    || value.depth_before != 0
+                    || value.depth_after != 0
+                    || value.enter_sequence >= value.leave_sequence
+                    || parent.is_none()
+                    || node.is_none_or(|key| {
+                        expected_man_block_kind(&nodes[key.0 as usize]) != man_block_kind
+                    }) =>
+            {
+                return Err("invalid execution man block wrapper".to_owned());
+            }
             _ => {}
         }
         let last_sibling_leave = if let Some(parent) = parent {
@@ -3297,7 +3350,9 @@ fn convert_report(
             }
             if matches!(
                 kind,
-                ExecutionWrapperKind::Heading | ExecutionWrapperKind::MdocListItem
+                ExecutionWrapperKind::Heading
+                    | ExecutionWrapperKind::MdocListItem
+                    | ExecutionWrapperKind::ManBlock
             ) && (parent_wrapper.kind != ExecutionWrapperKind::Node
                 || parent_wrapper.node != node)
             {
@@ -3323,6 +3378,12 @@ fn convert_report(
                 return Err("duplicate execution mdoc list item wrapper".to_owned());
             }
             mdoc_list_item_nodes[node] = true;
+        } else if kind == ExecutionWrapperKind::ManBlock {
+            let node = node.expect("validated man block node").0 as usize;
+            if man_block_nodes[node] {
+                return Err("duplicate execution man block wrapper".to_owned());
+            }
+            man_block_nodes[node] = true;
         }
         wrappers.push(ExecutionWrapper {
             key: value.key,
@@ -3339,6 +3400,7 @@ fn convert_report(
             leave_atom: value.leave_atom,
             heading_kind,
             mdoc_list_kind,
+            man_block_kind,
             flags: value.flags,
             state_before: value.state_before,
             state_after: value.state_after,
@@ -3361,6 +3423,13 @@ fn convert_report(
         .any(|(index, node)| is_mdoc_list_item(&nodes, node.key) != mdoc_list_item_nodes[index])
     {
         return Err("missing execution mdoc list item wrapper".to_owned());
+    }
+    if nodes
+        .iter()
+        .enumerate()
+        .any(|(index, node)| expected_man_block_kind(node).is_some() != man_block_nodes[index])
+    {
+        return Err("missing execution man block wrapper".to_owned());
     }
     validate_active_wrapper_owners(&wrappers, &boundaries, &controls)?;
     // Upstream roff_term_pre_mc() stores an authored margin character and a
@@ -4883,6 +4952,40 @@ body
         (pool, records)
     }
 
+    fn records_with_man_block_wrapper() -> (Vec<u8>, RawRecords) {
+        let pool = b"xTP".to_vec();
+        let mut records = raw_records();
+        records.nodes.push(CNodeRecord {
+            key: 0,
+            kind: 1,
+            macro_start: 1,
+            macro_length: 2,
+            ..node()
+        });
+        records.wrappers.extend([
+            CWrapperRecord {
+                key: 0,
+                parent: NONE,
+                node: 0,
+                kind: 1,
+                enter_sequence: 1,
+                leave_sequence: 4,
+                ..wrapper()
+            },
+            CWrapperRecord {
+                key: 1,
+                parent: 0,
+                node: 0,
+                kind: 5,
+                detail: 2,
+                enter_sequence: 2,
+                leave_sequence: 3,
+                ..wrapper()
+            },
+        ]);
+        (pool, records)
+    }
+
     fn assert_heading_cardinality_rejected(
         head: CNodeRecord,
         parent: CWrapperRecord,
@@ -5591,6 +5694,50 @@ body
         assert_eq!(
             rejection_with_pool(pool, records),
             "duplicate execution mdoc list item wrapper"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_man_block_wrappers() {
+        let (pool, records) = records_with_man_block_wrapper();
+        let count = record_count(&records);
+        let report = convert_report(pool, 0, count, 2, records).unwrap();
+        assert_eq!(
+            report.wrappers[1].man_block_kind,
+            Some(ExecutionManBlockKind::TaggedParagraph)
+        );
+
+        let (pool, mut records) = records_with_man_block_wrapper();
+        records.wrappers[1].detail = 9;
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "invalid execution man block kind"
+        );
+
+        let (pool, mut records) = records_with_man_block_wrapper();
+        records.wrappers.pop();
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "missing execution man block wrapper"
+        );
+
+        let (pool, mut records) = records_with_man_block_wrapper();
+        records.buffer_generations[0].close_sequence = 10;
+        records.wrappers[0].leave_sequence = 6;
+        records.wrappers[1].leave_sequence = 3;
+        records.wrappers.push(CWrapperRecord {
+            key: 2,
+            parent: 0,
+            node: 0,
+            kind: 5,
+            detail: 2,
+            enter_sequence: 4,
+            leave_sequence: 5,
+            ..wrapper()
+        });
+        assert_eq!(
+            rejection_with_pool(pool, records),
+            "duplicate execution man block wrapper"
         );
     }
 

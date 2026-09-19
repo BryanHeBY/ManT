@@ -955,7 +955,7 @@ static void
 print_man_node(DECL_ARGS)
 {
 	const struct roff_node *previous;
-	int heading;
+	int heading, man_block;
 
 	if (term_exec_failed(p))
 		return;
@@ -965,9 +965,44 @@ print_man_node(DECL_ARGS)
 	    TERM_EXEC_HEADING_MAN_SH :
 	    n->type == ROFFT_HEAD && n->tok == MAN_SS ?
 	    TERM_EXEC_HEADING_MAN_SS : -1;
+	man_block = -1;
+	if (n->type == ROFFT_BLOCK) {
+		switch (n->tok) {
+		case MAN_IP:
+			man_block = TERM_EXEC_MAN_BLOCK_IP;
+			break;
+		case MAN_TP:
+			man_block = TERM_EXEC_MAN_BLOCK_TP;
+			break;
+		case MAN_TQ:
+			man_block = TERM_EXEC_MAN_BLOCK_TQ;
+			break;
+		case MAN_HP:
+			man_block = TERM_EXEC_MAN_BLOCK_HP;
+			break;
+		case MAN_RS:
+			man_block = TERM_EXEC_MAN_BLOCK_RS;
+			break;
+		case MAN_PP:
+			man_block = TERM_EXEC_MAN_BLOCK_PP;
+			break;
+		case MAN_P:
+			man_block = TERM_EXEC_MAN_BLOCK_P;
+			break;
+		case MAN_LP:
+			man_block = TERM_EXEC_MAN_BLOCK_LP;
+			break;
+		default:
+			break;
+		}
+	}
 	if (term_exec_node(p, n, 1)) {
-		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
+		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
+		    (man_block == -1 ||
+		     term_exec_man_block(p, n, man_block, 1))) {
 			print_man_node_inner(p, mt, n, meta);
+			if (man_block != -1)
+				term_exec_man_block(p, n, man_block, 0);
 			if (heading != -1)
 				term_exec_heading(p, n, heading, 0);
 		}

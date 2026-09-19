@@ -158,6 +158,23 @@ term_exec_mdoc_list_item(struct termp *p, const struct roff_node *node,
 }
 
 int
+term_exec_man_block(struct termp *p, const struct roff_node *node,
+    int kind, int entering)
+{
+	if (p->exec_failed || p->exec_ops == NULL)
+		return !p->exec_failed;
+	if (entering) {
+		if (p->exec_ops->man_block_begin == NULL)
+			return 1;
+		if (!p->exec_ops->man_block_begin(p->exec_arg, p, node, kind))
+			p->exec_failed = 1;
+	} else if (p->exec_ops->man_block_end != NULL &&
+	    !p->exec_ops->man_block_end(p->exec_arg, p, node, kind))
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
 term_exec_reference_node_begin(struct termp *p, int kind,
     const struct roff_node *owner, const struct roff_node *target_node,
     int affinity, int *opened)

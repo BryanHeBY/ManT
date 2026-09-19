@@ -1,0 +1,130 @@
+diff --git a/man_term.c b/man_term.c
+index d8a60db2..f04cb11b 100644
+--- a/man_term.c
++++ b/man_term.c
+@@ -955,7 +955,7 @@ static void
+ print_man_node(DECL_ARGS)
+ {
+ 	const struct roff_node *previous;
+-	int heading;
++	int heading, man_block;
+ 
+ 	if (term_exec_failed(p))
+ 		return;
+@@ -965,9 +965,44 @@ print_man_node(DECL_ARGS)
+ 	    TERM_EXEC_HEADING_MAN_SH :
+ 	    n->type == ROFFT_HEAD && n->tok == MAN_SS ?
+ 	    TERM_EXEC_HEADING_MAN_SS : -1;
++	man_block = -1;
++	if (n->type == ROFFT_BLOCK) {
++		switch (n->tok) {
++		case MAN_IP:
++			man_block = TERM_EXEC_MAN_BLOCK_IP;
++			break;
++		case MAN_TP:
++			man_block = TERM_EXEC_MAN_BLOCK_TP;
++			break;
++		case MAN_TQ:
++			man_block = TERM_EXEC_MAN_BLOCK_TQ;
++			break;
++		case MAN_HP:
++			man_block = TERM_EXEC_MAN_BLOCK_HP;
++			break;
++		case MAN_RS:
++			man_block = TERM_EXEC_MAN_BLOCK_RS;
++			break;
++		case MAN_PP:
++			man_block = TERM_EXEC_MAN_BLOCK_PP;
++			break;
++		case MAN_P:
++			man_block = TERM_EXEC_MAN_BLOCK_P;
++			break;
++		case MAN_LP:
++			man_block = TERM_EXEC_MAN_BLOCK_LP;
++			break;
++		default:
++			break;
++		}
++	}
+ 	if (term_exec_node(p, n, 1)) {
+-		if (heading == -1 || term_exec_heading(p, n, heading, 1)) {
++		if ((heading == -1 || term_exec_heading(p, n, heading, 1)) &&
++		    (man_block == -1 ||
++		     term_exec_man_block(p, n, man_block, 1))) {
+ 			print_man_node_inner(p, mt, n, meta);
++			if (man_block != -1)
++				term_exec_man_block(p, n, man_block, 0);
+ 			if (heading != -1)
+ 				term_exec_heading(p, n, heading, 0);
+ 		}
+diff --git a/term.c b/term.c
+index f89a270c..b95719b0 100644
+--- a/term.c
++++ b/term.c
+@@ -157,6 +157,23 @@ term_exec_mdoc_list_item(struct termp *p, const struct roff_node *node,
+ 	return !p->exec_failed;
+ }
+ 
++int
++term_exec_man_block(struct termp *p, const struct roff_node *node,
++    int kind, int entering)
++{
++	if (p->exec_failed || p->exec_ops == NULL)
++		return !p->exec_failed;
++	if (entering) {
++		if (p->exec_ops->man_block_begin == NULL)
++			return 1;
++		if (!p->exec_ops->man_block_begin(p->exec_arg, p, node, kind))
++			p->exec_failed = 1;
++	} else if (p->exec_ops->man_block_end != NULL &&
++	    !p->exec_ops->man_block_end(p->exec_arg, p, node, kind))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
+ int
+ term_exec_reference_node_begin(struct termp *p, int kind,
+     const struct roff_node *owner, const struct roff_node *target_node,
+diff --git a/term.h b/term.h
+index 46fd6c41..b93d4f5c 100644
+--- a/term.h
++++ b/term.h
+@@ -90,6 +90,18 @@ enum term_exec_mdoc_list_kind {
+ 	TERM_EXEC_MDOC_LIST_COLUMN
+ };
+ 
++/* Stable observer-side spellings of man(7) block execution roles. */
++enum term_exec_man_block_kind {
++	TERM_EXEC_MAN_BLOCK_IP,
++	TERM_EXEC_MAN_BLOCK_TP,
++	TERM_EXEC_MAN_BLOCK_TQ,
++	TERM_EXEC_MAN_BLOCK_HP,
++	TERM_EXEC_MAN_BLOCK_RS,
++	TERM_EXEC_MAN_BLOCK_PP,
++	TERM_EXEC_MAN_BLOCK_P,
++	TERM_EXEC_MAN_BLOCK_LP
++};
++
+ struct term_exec_ops {
+ 	int (*work)(void *, const struct termp *,
+ 	    const struct roff_node *, size_t);
+@@ -107,6 +119,10 @@ struct term_exec_ops {
+ 	    const struct roff_node *, int, int);
+ 	int (*mdoc_list_item_end)(void *, const struct termp *,
+ 	    const struct roff_node *, int);
++	int (*man_block_begin)(void *, const struct termp *,
++	    const struct roff_node *, int);
++	int (*man_block_end)(void *, const struct termp *,
++	    const struct roff_node *, int);
+ 	int (*word_begin)(void *, const struct termp *,
+ 	    const struct roff_node *, const char *, size_t, int *);
+ 	int (*word_end)(void *, const struct termp *,
+@@ -318,6 +334,8 @@ int		  term_exec_heading(struct termp *, const struct roff_node *,
+ 			int, int);
+ int		  term_exec_mdoc_list_item(struct termp *,
+ 			const struct roff_node *, int, int, int);
++int		  term_exec_man_block(struct termp *, const struct roff_node *,
++			int, int);
+ int		  term_exec_word(struct termp *, const char *, size_t, int);
+ int		  term_exec_buffer_write(struct termp *, size_t, int, int, int);
+ int		  term_exec_buffer_reserve(struct termp *, size_t, size_t);

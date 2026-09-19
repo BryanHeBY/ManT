@@ -331,6 +331,8 @@ pub enum ExecutionWrapperKind {
     Heading,
     /// Native mdoc(7) list-item execution interval.
     MdocListItem,
+    /// Native man(7) block execution interval.
+    ManBlock,
 }
 
 /// Native lifecycle used to execute one section heading.
@@ -374,6 +376,27 @@ pub enum ExecutionMdocListKind {
     Tag,
     /// `Bl -column`.
     Column,
+}
+
+/// Exact man(7) block lifecycle executed by fixed CVS.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionManBlockKind {
+    /// Tagged or indented paragraph `.IP`.
+    IndentedParagraph,
+    /// Tagged paragraph `.TP`.
+    TaggedParagraph,
+    /// Additional tag `.TQ`.
+    AdditionalTag,
+    /// Hanging paragraph `.HP`.
+    HangingParagraph,
+    /// Relative indentation `.RS` scope.
+    RelativeIndent,
+    /// Paragraph `.PP`.
+    Paragraph,
+    /// Paragraph `.P`.
+    ParagraphP,
+    /// Paragraph `.LP`.
+    ParagraphLp,
 }
 
 /// Semantic destination kind observed at the native macro handler.
@@ -844,6 +867,8 @@ pub struct ExecutionWrapper {
     pub heading_kind: Option<ExecutionHeadingKind>,
     /// Exact mdoc list style when this is a list-item wrapper.
     pub mdoc_list_kind: Option<ExecutionMdocListKind>,
+    /// Exact man block lifecycle when this is a man block wrapper.
+    pub man_block_kind: Option<ExecutionManBlockKind>,
     /// Stable wrapper flags.
     pub flags: u32,
     /// Effective state before and after state transitions.

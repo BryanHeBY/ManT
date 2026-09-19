@@ -3,10 +3,10 @@
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryRequest, ExecutionCancellation,
     ExecutionControlRequest, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
-    ExecutionLimits, ExecutionMdocListKind, ExecutionReferenceKind, ExecutionTableAlignment,
-    ExecutionTableDataKind, ExecutionTableLayoutKind, ExecutionTableRowKind, ExecutionWrapperKind,
-    FlushOutcome, FragmentRole, InputFormat, NativeExecutionReport, Node, NodeKind, ParseOptions,
-    Parser,
+    ExecutionLimits, ExecutionManBlockKind, ExecutionMdocListKind, ExecutionReferenceKind,
+    ExecutionTableAlignment, ExecutionTableDataKind, ExecutionTableLayoutKind,
+    ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome, FragmentRole, InputFormat,
+    NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -62,6 +62,8 @@ const INLINE_ANNOTATIONS_MDOC: &[u8] =
     include_bytes!("fixtures/execution/inline-annotations-mdoc.1");
 const INLINE_ANNOTATIONS_MAN: &[u8] = include_bytes!("fixtures/execution/inline-annotations-man.1");
 const MDOC_LIST_LIFECYCLE: &[u8] = include_bytes!("fixtures/execution/mdoc-list-lifecycle.1");
+const MAN_DEFINITION_LIFECYCLE: &[u8] =
+    include_bytes!("fixtures/execution/man-definition-lifecycle.1");
 
 fn execute(name: &str, input_format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
@@ -1436,6 +1438,85 @@ fn reports_exact_mdoc_list_item_lifecycles() {
         .find(|item| item.mdoc_list_kind == Some(ExecutionMdocListKind::Column))
         .expect("empty final column row");
     assert_eq!(empty_column.enter_atom, empty_column.leave_atom);
+}
+
+#[test]
+fn reports_exact_man_block_lifecycles() {
+    // Before these assertions were written, this exact fixture was run with
+    // the pinned CVS `-Tlint`, `-Tutf8`, and `-Ttree` renderers.  Fixed
+    // `man_term.c::print_man_node()` surrounds the complete pre/children/post
+    // execution of each block; `pre_TP()` owns the paragraph boundary while
+    // `TQ` deliberately omits that boundary, and `.PD 0` changes distance but
+    // never merges the independently parsed block owners.
+    let report = execute(
+        "man-definition-lifecycle.1",
+        InputFormat::Man,
+        MAN_DEFINITION_LIFECYCLE,
+    );
+    let execution = &report.execution;
+    let blocks = execution
+        .wrappers()
+        .iter()
+        .filter(|wrapper| wrapper.kind == ExecutionWrapperKind::ManBlock)
+        .collect::<Vec<_>>();
+    let expected = [
+        ExecutionManBlockKind::TaggedParagraph,
+        ExecutionManBlockKind::AdditionalTag,
+        ExecutionManBlockKind::TaggedParagraph,
+        ExecutionManBlockKind::Paragraph,
+        ExecutionManBlockKind::TaggedParagraph,
+        ExecutionManBlockKind::TaggedParagraph,
+        ExecutionManBlockKind::IndentedParagraph,
+        ExecutionManBlockKind::HangingParagraph,
+        ExecutionManBlockKind::RelativeIndent,
+        ExecutionManBlockKind::TaggedParagraph,
+        ExecutionManBlockKind::Paragraph,
+        ExecutionManBlockKind::ParagraphP,
+        ExecutionManBlockKind::ParagraphLp,
+    ];
+    assert_eq!(blocks.len(), expected.len());
+    for (index, (block, expected_kind)) in blocks.iter().zip(expected).enumerate() {
+        assert_eq!(block.man_block_kind, Some(expected_kind), "block {index}");
+        assert!(block.enter_sequence < block.leave_sequence, "block {index}");
+        let node = block.node.expect("man block node");
+        let origin = &execution.nodes()[node.0 as usize];
+        assert_eq!(origin.kind, NodeKind::Block);
+        let parent = &execution.wrappers()[block.parent.unwrap() as usize];
+        assert_eq!(parent.kind, ExecutionWrapperKind::Node);
+        assert_eq!(parent.node, Some(node));
+        assert!(parent.enter_sequence < block.enter_sequence);
+        assert!(block.leave_sequence < parent.leave_sequence);
+        assert!(
+            execution
+                .wrappers()
+                .iter()
+                .filter(|candidate| {
+                    candidate.kind == ExecutionWrapperKind::Node
+                        && candidate.node.is_some_and(|child| {
+                            execution.nodes()[child.0 as usize].parent == Some(node)
+                        })
+                })
+                .all(|child| {
+                    block.enter_sequence < child.enter_sequence
+                        && child.leave_sequence < block.leave_sequence
+                })
+        );
+    }
+
+    let relative = blocks
+        .iter()
+        .find(|block| block.man_block_kind == Some(ExecutionManBlockKind::RelativeIndent))
+        .unwrap();
+    let nested = blocks
+        .iter()
+        .find(|block| {
+            block.man_block_kind == Some(ExecutionManBlockKind::TaggedParagraph)
+                && block.enter_sequence > relative.enter_sequence
+                && block.leave_sequence < relative.leave_sequence
+        })
+        .expect("TP nested inside RS execution scope");
+    assert!(nested.enter_atom >= relative.enter_atom);
+    assert!(nested.leave_atom <= relative.leave_atom);
 }
 
 #[test]

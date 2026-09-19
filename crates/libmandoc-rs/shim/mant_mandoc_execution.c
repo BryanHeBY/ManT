@@ -141,6 +141,10 @@ static int execution_mdoc_list_item_begin(void *, const struct termp *,
     const struct roff_node *, int, int);
 static int execution_mdoc_list_item_end(void *, const struct termp *,
     const struct roff_node *, int);
+static int execution_man_block_begin(void *, const struct termp *,
+    const struct roff_node *, int);
+static int execution_man_block_end(void *, const struct termp *,
+    const struct roff_node *, int);
 static int execution_word_begin(void *, const struct termp *,
     const struct roff_node *, const char *, size_t, int *);
 static int execution_word_end(void *, const struct termp *,
@@ -222,6 +226,8 @@ static const struct term_exec_ops execution_ops = {
 	execution_heading_end,
 	execution_mdoc_list_item_begin,
 	execution_mdoc_list_item_end,
+	execution_man_block_begin,
+	execution_man_block_end,
 	execution_word_begin,
 	execution_word_end,
 	execution_buffer_write,
@@ -788,6 +794,31 @@ stable_mdoc_list_kind(int kind)
 	}
 }
 
+static uint32_t
+stable_man_block_kind(int kind)
+{
+	switch (kind) {
+	case TERM_EXEC_MAN_BLOCK_IP:
+		return MANT_MANDOC_MAN_BLOCK_IP;
+	case TERM_EXEC_MAN_BLOCK_TP:
+		return MANT_MANDOC_MAN_BLOCK_TP;
+	case TERM_EXEC_MAN_BLOCK_TQ:
+		return MANT_MANDOC_MAN_BLOCK_TQ;
+	case TERM_EXEC_MAN_BLOCK_HP:
+		return MANT_MANDOC_MAN_BLOCK_HP;
+	case TERM_EXEC_MAN_BLOCK_RS:
+		return MANT_MANDOC_MAN_BLOCK_RS;
+	case TERM_EXEC_MAN_BLOCK_PP:
+		return MANT_MANDOC_MAN_BLOCK_PP;
+	case TERM_EXEC_MAN_BLOCK_P:
+		return MANT_MANDOC_MAN_BLOCK_P;
+	case TERM_EXEC_MAN_BLOCK_LP:
+		return MANT_MANDOC_MAN_BLOCK_LP;
+	default:
+		return MANT_MANDOC_EXEC_NONE;
+	}
+}
+
 static const struct roff_node *
 mdoc_list_block(const struct roff_node *item)
 {
@@ -894,7 +925,8 @@ wrapper_is_structural(uint32_t kind)
 {
 	return kind == MANT_MANDOC_WRAPPER_NODE ||
 	    kind == MANT_MANDOC_WRAPPER_HEADING ||
-	    kind == MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM;
+	    kind == MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM ||
+	    kind == MANT_MANDOC_WRAPPER_MAN_BLOCK;
 }
 
 static const char *
@@ -961,6 +993,38 @@ stable_mdoc_list_item_node(const struct mant_mandoc_execution_report *report,
 	    list->macro_start <= report->pool_length && list->macro_length == 2 &&
 	    list->macro_length <= report->pool_length - list->macro_start &&
 	    memcmp(report->pool + list->macro_start, "Bl", 2) == 0;
+}
+
+static uint32_t
+stable_man_block_node_kind(const struct mant_mandoc_execution_report *report,
+    const struct mant_mandoc_node_record *node)
+{
+	const unsigned char *macro;
+
+	if (report == NULL || node == NULL || node->kind != 1 ||
+	    node->macro_start == MANT_MANDOC_EXEC_NONE ||
+	    node->macro_start > report->pool_length ||
+	    node->macro_length > report->pool_length - node->macro_start)
+		return MANT_MANDOC_EXEC_NONE;
+	macro = report->pool + node->macro_start;
+	if (node->macro_length == 2) {
+		if (memcmp(macro, "IP", 2) == 0)
+			return MANT_MANDOC_MAN_BLOCK_IP;
+		if (memcmp(macro, "TP", 2) == 0)
+			return MANT_MANDOC_MAN_BLOCK_TP;
+		if (memcmp(macro, "TQ", 2) == 0)
+			return MANT_MANDOC_MAN_BLOCK_TQ;
+		if (memcmp(macro, "HP", 2) == 0)
+			return MANT_MANDOC_MAN_BLOCK_HP;
+		if (memcmp(macro, "RS", 2) == 0)
+			return MANT_MANDOC_MAN_BLOCK_RS;
+		if (memcmp(macro, "PP", 2) == 0)
+			return MANT_MANDOC_MAN_BLOCK_PP;
+		if (memcmp(macro, "LP", 2) == 0)
+			return MANT_MANDOC_MAN_BLOCK_LP;
+	} else if (node->macro_length == 1 && macro[0] == 'P')
+		return MANT_MANDOC_MAN_BLOCK_P;
+	return MANT_MANDOC_EXEC_NONE;
 }
 
 static int
@@ -1095,6 +1159,71 @@ execution_mdoc_list_item_end(void *arg, const struct termp *p,
 		return 0;
 	record = &report->wrappers[report->current_wrapper];
 	if (record->kind != MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM ||
+	    record->node != node_key || record->detail != stable_kind ||
+	    record->leave_atom != MANT_MANDOC_EXEC_NONE)
+		return 0;
+	record->state_after = stable_term_flags(p->flags);
+	record->leave_atom = (uint32_t)report->atoms_count;
+	record->leave_sequence = report->sequence++;
+	report->current_wrapper = record->parent;
+	return 1;
+}
+
+static int
+execution_man_block_begin(void *arg, const struct termp *p,
+    const struct roff_node *node, int kind)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_wrapper_record *parent, *record;
+	uint32_t node_key, stable_kind;
+
+	stable_kind = stable_man_block_kind(kind);
+	node_key = lookup_node(report, node);
+	if (stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    node_key == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper >= report->wrappers_count)
+		return 0;
+	parent = &report->wrappers[report->current_wrapper];
+	if (parent->kind != MANT_MANDOC_WRAPPER_NODE || parent->node != node_key ||
+	    stable_man_block_node_kind(report, &report->nodes[node_key]) !=
+	    stable_kind || !charge_work(report, 1) || !charge_record(report) ||
+	    !reserve_wrappers(report, report->wrappers_count + 1))
+		return 0;
+	record = &report->wrappers[report->wrappers_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->wrappers_count++;
+	record->parent = report->current_wrapper;
+	record->node = node_key;
+	record->kind = MANT_MANDOC_WRAPPER_MAN_BLOCK;
+	record->target_start = MANT_MANDOC_EXEC_NONE;
+	record->enter_atom = (uint32_t)report->atoms_count;
+	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->detail = stable_kind;
+	record->state_before = stable_term_flags(p->flags);
+	record->enter_sequence = report->sequence++;
+	record->leave_sequence = UINT64_MAX;
+	report->current_wrapper = record->key;
+	return 1;
+}
+
+static int
+execution_man_block_end(void *arg, const struct termp *p,
+    const struct roff_node *node, int kind)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_wrapper_record *record;
+	uint32_t node_key, stable_kind;
+
+	stable_kind = stable_man_block_kind(kind);
+	node_key = lookup_node(report, node);
+	if (!charge_work(report, 1) || stable_kind == MANT_MANDOC_EXEC_NONE ||
+	    node_key == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper >= report->wrappers_count)
+		return 0;
+	record = &report->wrappers[report->current_wrapper];
+	if (record->kind != MANT_MANDOC_WRAPPER_MAN_BLOCK ||
 	    record->node != node_key || record->detail != stable_kind ||
 	    record->leave_atom != MANT_MANDOC_EXEC_NONE)
 		return 0;
@@ -3220,7 +3349,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	unsigned char *word_atoms, *margin_atoms, *margin_control_nodes;
 	unsigned char *covered_fragments;
 	unsigned char *covered_glyph_geometry;
-	unsigned char *heading_nodes, *mdoc_list_item_nodes, *terminal_flush;
+	unsigned char *heading_nodes, *mdoc_list_item_nodes, *man_block_nodes;
+	unsigned char *terminal_flush;
 	uint64_t *fragment_flush_outcome;
 	uint64_t capacity_total;
 	size_t index, inner, end, live_atom_count, live_index, control_cursor;
@@ -3257,6 +3387,8 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	heading_nodes = report->nodes_count == 0 ? NULL :
 	    calloc(report->nodes_count, 1);
 	mdoc_list_item_nodes = report->nodes_count == 0 ? NULL :
+	    calloc(report->nodes_count, 1);
+	man_block_nodes = report->nodes_count == 0 ? NULL :
 	    calloc(report->nodes_count, 1);
 	covered_fragments = report->fragments_count == 0 ? NULL :
 	    calloc(report->fragments_count, 1);
@@ -3305,7 +3437,7 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    word_atoms == NULL || margin_atoms == NULL || live_atoms == NULL)) ||
 	    (report->nodes_count != 0 &&
 	    (margin_control_nodes == NULL || heading_nodes == NULL ||
-	    mdoc_list_item_nodes == NULL)) ||
+	    mdoc_list_item_nodes == NULL || man_block_nodes == NULL)) ||
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
 	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
 	    (report->references_count != 0 &&
@@ -4265,7 +4397,7 @@ invalid_geometry:
 		    (index != 0 && report->wrappers[index - 1].enter_sequence >=
 		    wrapper->enter_sequence) ||
 		    wrapper->kind < MANT_MANDOC_WRAPPER_NODE ||
-		    wrapper->kind > MANT_MANDOC_WRAPPER_MDOC_LIST_ITEM ||
+		    wrapper->kind > MANT_MANDOC_WRAPPER_MAN_BLOCK ||
 		    wrapper->enter_atom > report->atoms_count ||
 		    wrapper->leave_atom > report->atoms_count ||
 		    wrapper->enter_atom > wrapper->leave_atom)
@@ -4355,6 +4487,26 @@ invalid_geometry:
 			    mdoc_list_item_nodes[wrapper->node])
 				goto invalid_wrapper;
 			mdoc_list_item_nodes[wrapper->node] = 1;
+		} else if (wrapper->kind == MANT_MANDOC_WRAPPER_MAN_BLOCK) {
+			if (wrapper->node >= report->nodes_count ||
+			    stable_man_block_node_kind(report,
+			    &report->nodes[wrapper->node]) != wrapper->detail ||
+			    wrapper->detail < MANT_MANDOC_MAN_BLOCK_IP ||
+			    wrapper->detail > MANT_MANDOC_MAN_BLOCK_LP ||
+			    wrapper->flags != 0 ||
+			    wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
+			    wrapper->target_length != 0 ||
+			    wrapper->state_before >= (1U << 23) ||
+			    wrapper->state_after >= (1U << 23) ||
+			    wrapper->depth_before != 0 || wrapper->depth_after != 0 ||
+			    wrapper->enter_sequence >= wrapper->leave_sequence ||
+			    wrapper->parent == MANT_MANDOC_EXEC_NONE ||
+			    report->wrappers[wrapper->parent].kind !=
+			    MANT_MANDOC_WRAPPER_NODE ||
+			    report->wrappers[wrapper->parent].node != wrapper->node ||
+			    man_block_nodes[wrapper->node])
+				goto invalid_wrapper;
+			man_block_nodes[wrapper->node] = 1;
 		} else if (wrapper->flags != 0 || wrapper->detail != 0 ||
 		    wrapper->target_start != MANT_MANDOC_EXEC_NONE ||
 		    wrapper->target_length != 0 ||
@@ -4375,6 +4527,10 @@ invalid_geometry:
 	for (index = 0; index < report->nodes_count; index++)
 		if (stable_mdoc_list_item_node(report, &report->nodes[index]) !=
 		    (mdoc_list_item_nodes[index] != 0))
+			goto invalid_wrapper;
+	for (index = 0; index < report->nodes_count; index++)
+		if ((stable_man_block_node_kind(report, &report->nodes[index]) !=
+		    MANT_MANDOC_EXEC_NONE) != (man_block_nodes[index] != 0))
 			goto invalid_wrapper;
 	goto valid_wrappers;
 invalid_wrapper:
@@ -4633,6 +4789,7 @@ valid_wrappers:
 	free(margin_control_nodes);
 	free(heading_nodes);
 	free(mdoc_list_item_nodes);
+	free(man_block_nodes);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
@@ -4705,6 +4862,7 @@ fail:
 	free(margin_control_nodes);
 	free(heading_nodes);
 	free(mdoc_list_item_nodes);
+	free(man_block_nodes);
 	free(covered_fragments);
 	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
