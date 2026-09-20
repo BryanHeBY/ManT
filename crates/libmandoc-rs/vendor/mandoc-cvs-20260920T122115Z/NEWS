@@ -1,4 +1,4 @@
-$Id: NEWS,v 1.46 2026/09/10 16:34:59 schwarze Exp $
+$Id: NEWS,v 1.50 2026/09/17 13:40:37 schwarze Exp $
 
 This file lists the most important changes in the mandoc.bsd.lv distribution.
 
@@ -60,7 +60,11 @@ Changes in the upcoming version 1.15.1, to be released in 2026
  * roff(7): do not fail an assertion on \zX\h'-N' at the beginning of a line
  * roff(7): do not fail assertions for certain nested escape sequences
     --- PORTABILITY IMPROVEMENTS ---
+ * on systems that rename or relocate programs or manuals, patch the
+   manuals before installation such that they use the correct names
  * configure: scaffolding to build without unveil(2) when unavailable
+ * configure: support TEST_EXECUTION=0 for use in cross compilation
+ * man.conf(5): make ETCDIR configurable, for systems unable to access /etc
  * support optionally building, installing, and using a libmandoc.so library
  * add missing <stddef.h> in strsep(3) compatibilty implementation
     --- MINOR FUNCTIONAL IMPROVEMENTS FOR GROFF-1.23 COMPATIBILITY ---
@@ -89,6 +93,8 @@ Changes in the upcoming version 1.15.1, to be released in 2026
  * makewhatis(8): make ordering in mandoc.db(5) deterministic even in
    the presence of pages with the same name distinguised only by case
  * -T man: do not print .PP before .RS, it has unreliable, surprising semantics
+ * man.cgi(8): allow serving from gzipped manual page files, even though
+   doing this is not recommended, wasting CPU time to save little disk space
  * catman(8): create the destination directory if it does not exist
  * catman(8), mandocd(8): improve error reporting in various respects
  * catman(8): implement signal handling to allow premature clean shutdowns
@@ -129,6 +135,8 @@ Changes in the upcoming version 1.15.1, to be released in 2026
  * Jonathan Gray (OpenBSD) for a small patch, two bug reports,
    and several minor documentation improvements
  * Hippolyte d'Oncieu de la Batie (EPITA) for two bug fix patches
+ * classabbyamp (Void Linux) for two man.cgi(8) patches
+ * Duncan Overbruck (Void Linux) for a man.cgi(8) patch
  * Natanael Copa (Alpine Linux) for a portability patch
  * Thomas Klausner (NetBSD) and Simon Branch for one small patch each
  * G. Branden Robinson (GNU roff) for suggesting a minor new feature, a few bug
@@ -151,6 +159,7 @@ Changes in the upcoming version 1.15.1, to be released in 2026
    Lennart Jablonka, Luca Del Re, and Paul Bredbury (Alpine Linux),
    Robert Kirkman (Termux), Eldred Habert, Jan Schreiber, Josiah Frentsos,
    Mohamed Akram, and Ted Bullock for one bug report each
+ * Joshua Kahn (Termux) for a portability suggestion
  * Marc Espie (OpenBSD) for supervising a small fuzzing and auditing project
  * Soeren Tempel (Alpine Linux) for useful discussions
  * Jason McIntyre (OpenBSD) for minor documentation and CSS improvements

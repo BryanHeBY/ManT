@@ -24,7 +24,7 @@ fn incomplete_root_font_scopes_report_diagnostics_and_reset() {
 
 #[test]
 fn upstream_version_is_pinned() {
-    assert_eq!(crate::LIBMANDOC_VERSION, "cvs-20260911");
+    assert_eq!(crate::LIBMANDOC_VERSION, "cvs-20260920T122115Z");
 }
 
 #[test]
@@ -294,6 +294,41 @@ fn parser_expands_the_libbsd_library_name() {
             .iter()
             .all(|diagnostic| !diagnostic.message.contains("unknown library"))
     );
+}
+
+#[test]
+fn parser_expands_refreshed_upstream_library_names() {
+    // CVS lib.in 1.23 supplies the catalog strings consumed by
+    // mdoc_validate.c::post_lb through lib.c::mdoc_a2lib outside SYNOPSIS.
+    // The pristine cvs-20260920T122115Z oracle established these results.
+    for (name, description) in [
+        (
+            "libbsdconf",
+            "Configuration File Library (libbsdconf, \\-lbsdconf)",
+        ),
+        ("libthr", "Threading Library (libthr, \\-lthr)"),
+    ] {
+        let source =
+            format!(".Dd September 20, 2026\n.Dt LIBRARY 3\n.Os\n.Sh LIBRARY\n.Lb {name}\n");
+        let report = Parser::default()
+            .parse_bytes("library.3", source.as_bytes())
+            .expect("parse refreshed upstream library declaration");
+        let library = find_macro(&report.document.root, "Lb").expect("Lb node");
+        let visible = library
+            .children
+            .iter()
+            .filter(|child| !child.flags.no_print)
+            .filter_map(|child| child.text.as_deref())
+            .collect::<Vec<_>>();
+
+        assert_eq!(visible, [description]);
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.message.contains("unknown library"))
+        );
+    }
 }
 
 #[test]

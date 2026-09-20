@@ -1,4 +1,4 @@
-/* $Id: cgi.c,v 1.185 2026/08/30 15:13:40 schwarze Exp $ */
+/* $Id: cgi.c,v 1.188 2026/09/14 15:36:30 schwarze Exp $ */
 /*
  * Copyright (c) 2014-2019, 2021, 2022, 2026 Ingo Schwarze <schwarze@usta.de>
  * Copyright (c) 2011, 2012 Kristaps Dzonsons <kristaps@bsd.lv>
@@ -70,6 +70,7 @@ enum	focus {
 	FOCUS_QUERY
 };
 
+static	int		 fileprec(const char *file);
 static	void		 html_print(const char *);
 static	void		 html_putchar(char);
 static	int		 http_decode(char *);
@@ -140,6 +141,7 @@ static	const char *const arch_names[] = {
 };
 static	const int arch_MAX = sizeof(arch_names) / sizeof(char *);
 
+static	int head_fd = -1;
 static	int header_fd = -1;
 static	int footer_fd = -1;
 
@@ -376,9 +378,20 @@ resp_copy(const char *element, int *fd)
 }
 
 static int
+fileprec(const char *file)
+{
+	int len;
+
+	len = strlen(file);
+	if (len > 3 && strcmp(file + len - 3, ".gz") == 0)
+		len -= 3;
+	return len;
+}
+
+static int
 resp_begin_html(int code, const char *msg, const char *file)
 {
-	const char	*name, *sec, *cp;
+	const char	*name, *sec, *cp, *end;
 	int		 namesz, secsz;
 
 	resp_begin_http(code, msg);
@@ -394,33 +407,59 @@ resp_begin_html(int code, const char *msg, const char *file)
 	       "  <title>",
 	       CSS_DIR);
 	if (file != NULL) {
-		cp = strrchr(file, '/');
-		name = cp == NULL ? file : cp + 1;
-		cp = strrchr(name, '.');
-		namesz = cp == NULL ? strlen(name) : cp - name;
-		sec = NULL;
-		if (cp != NULL && cp[1] != '0') {
-			sec = cp + 1;
-			secsz = strlen(sec);
-		} else if (name - file > 1) {
-			for (cp = name - 2; cp >= file; cp--) {
-				if (*cp < '1' || *cp > '9')
-					continue;
-				sec = cp;
-				secsz = name - cp - 1;
-				break;
-			}
+		cp = end = file + strlen(file);
+		while (cp > file && *cp != '.' && *cp != '/')
+			cp--;
+
+		/* Skip gzip filename extension. */
+
+		if (cp > file && strcmp(cp, ".gz") == 0) {
+			end = cp;
+			do {
+				cp--;
+			} while (cp > file && *cp != '.' && *cp != '/');
 		}
+
+		/* Determine the section number from the filename extension. */
+
+		sec = NULL;
+		if (*cp == '.') {
+			if (cp[1] != '\0' && cp[1] != '0') {
+				sec = cp + 1;
+				secsz = end - sec;
+			}
+			end = cp;
+		}
+
+		/* Determine the manual page name. */
+
+		while (cp > file && *cp != '/')
+			cp--;
+		name = *cp == '/' && cp + 1 < end ? cp + 1 : file;
+		namesz = end - name;
+
+		/* Determine the section number from the directory name. */
+
+		if (sec == NULL && cp > file) {
+			end = cp;
+			do {
+				cp--;
+			} while (cp > file && (*cp < '1' || *cp > '9'));
+			sec = cp;
+			secsz = end - sec;
+		}
+
+		/* Print name(section) to the <title> element. */
+
 		printf("%.*s", namesz, name);
 		if (sec != NULL)
 			printf("(%.*s)", secsz, sec);
 		fputs(" - ", stdout);
 	}
-	printf("%s</title>\n"
-	       "</head>\n"
-	       "<body>\n",
-	       CUSTOMIZE_TITLE);
-
+	printf("%s</title>\n", CUSTOMIZE_TITLE);
+	(void)resp_copy(NULL, &head_fd);
+	puts("</head>\n"
+	     "<body>");
 	return resp_copy("header", &header_fd);
 }
 
@@ -682,9 +721,10 @@ pg_searchres(const struct req *req, struct manpage *r, size_t sz)
 			printf("%s/", scriptname);
 		if (strcmp(req->q.manpath, req->p[0]))
 			printf("%s/", req->q.manpath);
-		printf("%s\r\n"
+		file = r[0].file;
+		printf("%.*s\r\n"
 		    "Content-Type: text/html; charset=utf-8\r\n\r\n",
-		    r[0].file);
+		    fileprec(file), file);
 		return EXIT_SUCCESS;
 	}
 
@@ -757,7 +797,7 @@ pg_searchres(const struct req *req, struct manpage *r, size_t sz)
 				printf("%s/", scriptname);
 			if (strcmp(req->q.manpath, req->p[0]))
 				printf("%s/", req->q.manpath);
-			printf("%s\">", r[i].file);
+			printf("%.*s\">", fileprec(r[i].file), r[i].file);
 			html_print(r[i].names);
 			printf("</a></td>\n"
 			       "    <td><span class=\"Nd\">");
@@ -950,8 +990,13 @@ resp_format(const struct req *req, const char *file, int html_begun)
 	void		*vp;
 	int		 fd;
 	int		 usepath;
+	int		 irc = EXIT_FAILURE;
 
-	if ((fd = open(file, O_RDONLY)) == -1) {
+	mchars_alloc();
+	mp = mparse_alloc(MPARSE_SO | MPARSE_UTF8 | MPARSE_LATIN1 |
+	    MPARSE_VALIDATE, MANDOC_OS_OTHER, req->q.manpath);
+
+	if ((fd = mparse_open(mp, file)) == -1) {
 		if (html_begun) {
 			puts("<p role=\"doc-notice\">"
 			     "Internal Server Error</p>");
@@ -959,12 +1004,8 @@ resp_format(const struct req *req, const char *file, int html_begun)
 		} else
 			pg_error_badrequest(
 			    "You specified an invalid manual file.");
-		return EXIT_FAILURE;
+		goto out;
 	}
-
-	mchars_alloc();
-	mp = mparse_alloc(MPARSE_SO | MPARSE_UTF8 | MPARSE_LATIN1 |
-	    MPARSE_VALIDATE, MANDOC_OS_OTHER, req->q.manpath);
 	mparse_readfd(mp, fd, file);
 	close(fd);
 
@@ -977,7 +1018,7 @@ resp_format(const struct req *req, const char *file, int html_begun)
 			resp_end_html();
 		} else
 			pg_error_internal();
-		return EXIT_FAILURE;
+		goto out;
 	}
 #endif
 
@@ -1005,11 +1046,14 @@ resp_format(const struct req *req, const char *file, int html_begun)
 	resp_end_html();
 
 	html_free(vp);
-	mparse_free(mp);
-	mchars_free();
 	free(conf.man);
 	free(conf.style);
-	return EXIT_SUCCESS;
+	irc = EXIT_SUCCESS;
+
+ out:
+	mparse_free(mp);
+	mchars_free();
+	return irc;
 }
 
 static int
@@ -1246,8 +1290,9 @@ main(void)
 		return EXIT_FAILURE;
 	}
 
-	/* These two files are optional. */
+	/* These three files are optional. */
 
+	head_fd = open("head.html", O_RDONLY);
 	header_fd = open("header.html", O_RDONLY);
 	footer_fd = open("footer.html", O_RDONLY);
 

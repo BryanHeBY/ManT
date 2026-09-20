@@ -1,4 +1,4 @@
-.\" $Id: demandoc.1,v 1.9 2022/03/20 15:41:47 schwarze Exp $
+.\" $Id: demandoc.1,v 1.10 2026/09/17 13:23:06 schwarze Exp $
 .\"
 .\" Copyright (c) 2011 Kristaps Dzonsons <kristaps@bsd.lv>
 .\"
@@ -14,7 +14,7 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate: March 20 2022 $
+.Dd $Mdocdate: September 17 2026 $
 .Dt DEMANDOC 1
 .Os
 .Sh NAME
@@ -28,11 +28,10 @@
 The
 .Nm
 utility emits only the text portions of well-formed
-.Xr mdoc 7
+.Xr  mdoc 7
 and
-.Xr man 7
-.Ux
-manual files.
+.Xr  man 7
+manual page files.
 .Pp
 By default,
 .Nm
@@ -95,10 +94,12 @@ This is accomplished as follows (assuming British spelling):
 .Xr mdoc 7
 .Sh HISTORY
 .Nm
-replaces the historical deroff utility for handling modern
-.Xr man 7
+replaces the historical
+.Nm deroff
+utility for handling modern
+.Xr  man 7
 and
-.Xr mdoc 7
+.Xr  mdoc 7
 documents.
 .Sh AUTHORS
 The

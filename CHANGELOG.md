@@ -14,9 +14,10 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.12.0
 
-- Replace the 1.14.6 native baseline with the official CVS tree pinned at
-  2026-09-11 08:00:00 UTC. `LIBMANDOC_VERSION` is `cvs-20260911`; the source
-  inventory records every upstream revision and SHA-256. Builds remain offline.
+- Refresh the official CVS baseline to the tree pinned at
+  2026-09-20 12:21:15 UTC. `LIBMANDOC_VERSION` is
+  `cvs-20260920T122115Z`; the source inventory records every upstream revision
+  and SHA-256. Builds remain offline.
 - Preserve the owned Rust AST shape, memory-only input, strict include roots,
   bounded parsing and per-thread session isolation. Native tokens and generated
   syntax now follow the pinned upstream, including distinct `P`/`LP` paragraphs,

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: configure,v 1.87 2026/09/02 20:19:05 schwarze Exp $
+# $Id: configure,v 1.91 2026/09/17 13:40:37 schwarze Exp $
 #
 # Copyright (c) 2014-2021, 2026 Ingo Schwarze <schwarze@openbsd.org>
 #
@@ -27,7 +27,7 @@ set -e
 # 3: config.log
 
 exec 3> config.log
-echo "file config.log: writing..."
+echo "file config.log: writing..." 1>&2
 
 # --- default settings -------------------------------------------------
 # Initialize all variables here,
@@ -41,6 +41,7 @@ DEBUG_MEMORY=0
 OSENUM=
 OSNAME=
 UTF8_LOCALE=
+TEST_EXECUTION=1
 
 AR=ar
 CC=cc
@@ -112,6 +113,7 @@ PREFIX="/usr/local"
 BINDIR=
 SBINDIR=
 BIN_FROM_SBIN=
+ETCDIR="/etc"
 INCLUDEDIR=
 LIBDIR=
 MANDIR=
@@ -191,10 +193,29 @@ __HEREDOC__
 		return 1
 	fi
 
-	if ./test-${1} 1>&3 2>&3; then
+	if [ ${TEST_EXECUTION} -eq 0 ]; then
+		echo "tested ${n}: yes (compilation only)" 1>&2
+		echo "running ${n} is disabled (manual)" 1>&3
+		echo "result of compiling ${n}: yes" 1>&3
+		_enable=1
+	elif ./test-${1} 1>&3 2>&3; then
 		echo "tested ${n}: yes" 1>&2
 		echo "result of running ${n}: yes" 1>&3
-		echo 1>&3
+		_enable=1
+	else
+		echo "tested ${n}: no (execution failed)" 1>&2
+		echo "result of ${n}: execution failed with exit status $?" 1>&3
+		echo "result of running ${n}: no" 1>&3
+		_enable=0
+	fi
+	echo 1>&3
+	rm "test-${1}"
+
+	if [ ${_enable} -eq 0 ]; then
+		unset _enable
+		return 1
+	else
+		unset _enable
 		eval HAVE_${2}=1
 		[ "${3}" = "-D_GNU_SOURCE" ] && NEED_GNU_SOURCE=1
 		[ "${3}" = "-D_OPENBSD_SOURCE" ] && NEED_OPENBSD_SOURCE=1
@@ -202,15 +223,7 @@ __HEREDOC__
 		[ "${3}" = "-lrt" ] && LD_NANOSLEEP="-lrt"
 		[ "${3}" = "-lsocket" ] && LD_RECVMSG="-lsocket"
 		[ "${3}" = "-lutil" ] && LD_OHASH="-lutil"
-		rm "test-${1}"
 		return 0
-	else
-		echo "tested ${n}: no (execution failed)" 1>&2
-		echo "result of ${n}: execution failed with exit status $?" 1>&3
-		echo "result of running ${n}: no" 1>&3
-		echo 1>&3
-		rm "test-${1}"
-		return 1
 	fi
 }
 
@@ -293,14 +306,13 @@ COMP="${CC} ${CFLAGS}"
 if [ -n "${STATIC}" ]; then
 	echo "selected STATIC=\"${STATIC}\" (manual)" 1>&2
 	echo "selected STATIC=\"${STATIC}\" (manual)" 1>&3
-	echo 1>&3
 else
 	runtest noop STATIC -static || true
 	[ ${HAVE_STATIC} -eq 0 ] || STATIC="-static"
 	echo "selected STATIC=\"${STATIC}\"" 1>&2
 	echo "selected STATIC=\"${STATIC}\"" 1>&3
-	echo 1>&3
 fi
+echo 1>&3
 
 # --- tests for config.h  ----------------------------------------------
 
@@ -467,7 +479,7 @@ __HEREDOC__
 [ ${HAVE_GETLINE} -eq 0 ] && echo "#include <stdio.h>"
 
 echo
-echo "#define MAN_CONF_FILE \"/etc/${MANM_MANCONF}\""
+echo "#define MAN_CONF_FILE \"${ETCDIR}/${MANM_MANCONF}\""
 echo "#define MANPATH_BASE \"${MANPATH_BASE}\""
 echo "#define MANPATH_DEFAULT \"${MANPATH_DEFAULT}\""
 if [ ${DEBUG_MEMORY} -ne 0 ]; then
@@ -675,6 +687,7 @@ PREFIX		= ${PREFIX}
 BINDIR		= ${BINDIR}
 SBINDIR		= ${SBINDIR}
 BIN_FROM_SBIN	= ${BIN_FROM_SBIN}
+ETCDIR		= ${ETCDIR}
 INCLUDEDIR	= ${INCLUDEDIR}
 LIBDIR		= ${LIBDIR}
 MANDIR		= ${MANDIR}
@@ -704,5 +717,70 @@ __HEREDOC__
 
 echo "file Makefile.local: written" 1>&2
 echo "file Makefile.local: written" 1>&3
+
+# --- write config.sed ---
+
+exec > config.sed
+
+if [ "X${BINM_APROPOS}" != "Xapropos" ]; then
+	echo "s#Dl \\\$ apropos #Dl \\\$ ${BINM_APROPOS} #"
+	echo "s#Li \\\$ apropos #Li \\\$ ${BINM_APROPOS} #"
+	echo "s#Nm apropos#Nm ${BINM_APROPOS}#"
+	echo "s#Xr apropos 1#Xr ${BINM_APROPOS} 1#"
+fi
+if [ "X${BINM_CATMAN}" != "Xcatman" ]; then
+	echo "s#Nm catman#Nm ${BINM_CATMAN}#"
+	echo "s#Xr catman 8#Xr ${BINM_CATMAN} 8#"
+fi
+if [ "X${BINM_MAKEWHATIS}" != "Xmakewhatis" ]; then
+	echo "s#Nm makewhatis#Nm ${BINM_MAKEWHATIS}#"
+	echo "s#Xr makewhatis 8#Xr ${BINM_MAKEWHATIS} 8#"
+fi
+if [ "X${BINM_MAN}" != "Xman" ]; then
+	echo "s#Dl \\\$ man #Dl \\\$ ${BINM_MAN} #"
+	echo "s# man -T # ${BINM_MAN} -T #"
+	echo "s#Ex -std man\$#Ex -std ${BINM_MAN}#"
+	echo "s#Ql man #Ql ${BINM_MAN} #"
+	echo "s#Xr man 1#Xr ${BINM_MAN} 1#"
+fi
+if [ "X${BINM_SOELIM}" != "Xsoelim" ]; then
+	echo "s#Nm soelim#Nm ${BINM_SOELIM}#"
+fi
+if [ "X${BINM_WHATIS}" != "Xwhatis" ]; then
+	echo "s#Nm whatis#Nm ${BINM_WHATIS}#"
+	echo "s#Xr whatis 1#Xr ${BINM_WHATIS} 1#"
+fi
+if [ "X${MANM_EQN}" != "Xeqn" ]; then
+	echo "s#Nm eqn#Nm ${MANM_EQN}#"
+	echo "s#Xr eqn 7#Xr ${MANM_EQN} 7#"
+fi
+if [ "X${MANM_MAN}" != "Xman" ]; then
+	echo "s#Xr man 7#Xr ${MANM_MAN} 7#"
+fi
+if [ "X${MANM_MANCONF}" != "Xman.conf" ]; then
+	echo "s#Nm man\\.conf#Nm ${MANM_MANCONF}#"
+	echo "s#Xr man\\.conf 5#Xr ${MANM_MANCONF} 5#"
+fi
+if [ "X${ETCDIR}/${MANM_MANCONF}" != "X/etc/man.conf" ]; then
+	echo "s#/etc/man\\.conf#${ETCDIR}/${MANM_MANCONF}#"
+fi
+if [ "X${MANM_MDOC}" != "Xmdoc" ]; then
+	echo "s#Nm mdoc#Nm ${MANM_MDOC}#"
+	echo "s#Xr mdoc 7#Xr ${MANM_MDOC} 7#"
+fi
+if [ "X${MANM_ROFF}" != "Xroff" ]; then
+	echo "s#Nm roff#Nm ${MANM_ROFF}#"
+	echo "s#Xr roff 7#Xr ${MANM_ROFF} 7#"
+fi
+if [ "X${MANM_TBL}" != "Xtbl" ]; then
+	echo "s#Nm tbl#Nm ${MANM_TBL}#"
+	echo "s#Xr tbl 7#Xr ${MANM_TBL} 7#"
+fi
+if [ "X${MISCDIR}" != "X/usr/share/misc" ]; then
+	echo "s#/usr/share/misc/#${MISCDIR}/#"
+fi
+
+echo "file config.sed: written" 1>&2
+echo "file config.sed: written" 1>&3
 
 exit 0

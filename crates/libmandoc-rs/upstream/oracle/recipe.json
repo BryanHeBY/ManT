@@ -18,7 +18,8 @@
   "evidenceFiles": [
     "config.h",
     "config.log",
-    "Makefile.local"
+    "Makefile.local",
+    "config.sed"
   ],
   "profiles": [
     "ascii",

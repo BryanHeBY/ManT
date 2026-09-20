@@ -1,6 +1,6 @@
 //! Build the parsing subset of the pinned mandoc source tree.
 //!
-//! The vendored source at `vendor/mandoc-cvs-20260911/` is a pre-patched snapshot
+//! The vendored source at `vendor/mandoc-cvs-20260920T122115Z/` is a pre-patched snapshot
 //! maintained by `scripts/sync-vendor`.  See `upstream/SOURCE` for provenance
 //! and `patches/series` for any local modifications.
 //!
@@ -69,7 +69,7 @@ const RENDER_SOURCES: &[&str] = &[
 
 fn main() {
     let crate_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
-    let vendor_dir = crate_dir.join("vendor/mandoc-cvs-20260911");
+    let vendor_dir = crate_dir.join("vendor/mandoc-cvs-20260920T122115Z");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target operating system");
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();

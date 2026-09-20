@@ -41,7 +41,7 @@ document model, and `ManT`'s existing engine integration remains unchanged.
 plain / gzip / zstd source
           │
           v
-Rust transport and policy ──> private C shim ──> libmandoc cvs-20260911
+Rust transport and policy ──> private C shim ──> libmandoc cvs-20260920T122115Z
           ^                         │                 │
           ├─ owned ParseReport <────┘                 │
           │  ├─ Document syntax tree                  │
@@ -220,7 +220,7 @@ indent is five columns, and HTML uses semantic section containers and
 accessible document structure. These native reference bytes are distinct from
 `ManT`'s source-neutral text and TUI layout. The owned public AST shape and the
 source, include, output-budget, and session-isolation contracts are unchanged
-by the baseline selection. `LIBMANDOC_VERSION` reports `cvs-20260911`.
+by the baseline selection. `LIBMANDOC_VERSION` reports `cvs-20260920T122115Z`.
 
 ```rust,no_run
 # #[cfg(feature = "render")]
@@ -257,8 +257,8 @@ overflow. Unix native file/gzip transport retains libmandoc's own limits;
 
 ## Vendor layering
 
-The vendored C source at `vendor/mandoc-cvs-20260911/` is derived from the
-official mandoc CVS module at 2026-09-11 08:00:00 UTC with ordered local
+The vendored C source at `vendor/mandoc-cvs-20260920T122115Z/` is derived from the
+official mandoc CVS module at 2026-09-20 12:21:15 UTC with ordered local
 patches applied. `upstream/SOURCE` pins the checkout; `upstream/FILES`
 records the SHA-256 and CVS revision of each of the 198 upstream files.
 End-user `cargo build` compiles this tree directly; no network access,
@@ -488,7 +488,7 @@ roff requests, but it does not reinterpret high-level source into `ManT` IR.
 
 ## Build requirements and supported targets
 
-The source package vendors libmandoc `cvs-20260911` and compiles it with the `cc`
+The source package vendors libmandoc `cvs-20260920T122115Z` and compiles it with the `cc`
 crate, so a working C compiler is required. Checked configurations are
 supplied for Linux/glibc, macOS, and Windows/MSVC. Unix native-file parsing
 also requires zlib development headers; Windows builds the memory-only parser
@@ -511,7 +511,7 @@ The Rust wrapper and C shim are licensed under Apache-2.0.  The vendored
 libmandoc source is primarily ISC licensed and includes selected compatibility
 files under BSD-2-Clause and BSD-3-Clause terms.  The complete license texts
 and upstream attribution are shipped under `LICENSES/` and
-`vendor/mandoc-cvs-20260911/LICENSE`.
+`vendor/mandoc-cvs-20260920T122115Z/LICENSE`.
 
 This crate is not affiliated with the upstream mandoc project.
 
