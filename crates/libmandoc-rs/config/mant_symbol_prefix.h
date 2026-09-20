@@ -181,6 +181,7 @@
 #define tbl_span mant_vendored_tbl_span
 #define tblcalc mant_vendored_tblcalc
 #define term_begin mant_vendored_term_begin
+#define term_collect_node mant_vendored_term_collect_node
 #define term_end mant_vendored_term_end
 #define term_eqn mant_vendored_term_eqn
 #define term_flushln mant_vendored_term_flushln
@@ -194,6 +195,7 @@
 #define term_len mant_vendored_term_len
 #define term_newln mant_vendored_term_newln
 #define term_setcol mant_vendored_term_setcol
+#define term_setcollector mant_vendored_term_setcollector
 #define term_setwidth mant_vendored_term_setwidth
 #define term_strlen mant_vendored_term_strlen
 #define term_tab_free mant_vendored_term_tab_free
@@ -205,6 +207,7 @@
 #define term_vspace mant_vendored_term_vspace
 #define term_vspan mant_vendored_term_vspan
 #define term_word mant_vendored_term_word
+#define term_word_node mant_vendored_term_word_node
 #define terminal_man mant_vendored_terminal_man
 #define terminal_mdoc mant_vendored_terminal_mdoc
 #define terminal_sepline mant_vendored_terminal_sepline

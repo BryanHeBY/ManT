@@ -54,6 +54,21 @@ rounds over the same GCC fixture contribute 21 samples per revision and
 operation; the raw data and peak-RSS checkpoint are tracked with the baseline.
 No fixed performance threshold is inferred from this host sample.
 
+The C02b collector was sampled again on 2026-09-21 with the checked-in GCC
+and Git fixtures, a warmed release build, UTF-8 profile, and native width 78.
+Each test performs one warm-up traversal followed by ten measured traversals;
+the metrics are deterministic across those ten traversals.  GCC reports
+6,416,335 collector events, 1,232,413 tokens, 16,384 sidecar slots,
+117,571,904 sidecar bytes, and 170,612,387 cumulative builder-allocation
+bytes; the complete test took 2.41 seconds wall time with 137,792 KiB peak
+RSS.  Git reports 287,477 events, 54,832 tokens, 1,024 sidecar slots,
+3,678,528 sidecar bytes, and 5,512,427 cumulative builder-allocation bytes;
+it took 0.17 seconds with 51,748 KiB peak RSS.  These are local workset
+evidence, not release thresholds or claims that unsupported structures loaded
+successfully.  The commands are the two ignored
+`ffi::structured::tests::probe_{gcc,git}_sidecar_workset` tests under
+`/usr/bin/time -v cargo test --release -p libmandoc-rs --all-features`.
+
 ## Authority and difference ledger
 
 The pinned pristine CVS implementation is the default behavior contract.

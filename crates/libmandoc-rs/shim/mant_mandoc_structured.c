@@ -10,14 +10,22 @@
 
 #include "mandoc.h"
 #include "roff.h"
+#include "tbl.h"
+#include "out.h"
 #include "mandoc_parse.h"
+#include "main.h"
+#include "manconf.h"
+#include "term.h"
 
 #include "mant_mandoc_structured.h"
+#include "mant_mandoc_output.h"
 
 #define MANT_STRUCTURED_MAGIC 0x4d535231U
 
 _Static_assert(MANT_DIAGNOSTIC_CODE_NATIVE_LAST == MANDOCERR_MAX,
     "structured diagnostic code range must match pinned mandocerr");
+
+struct structured_source_map;
 
 struct mant_structured_result {
 	uint32_t magic;
@@ -32,26 +40,81 @@ struct mant_structured_result {
 	struct mant_structured_span_view *spans;
 	uint32_t span_count;
 	uint32_t span_capacity;
+	struct mant_structured_provenance_view *provenances;
+	uint32_t provenance_count;
+	uint32_t provenance_capacity;
+	struct mant_structured_owner_view *owners;
+	uint32_t owner_count;
+	uint32_t owner_capacity;
+	struct mant_structured_content_root_view *content_roots;
+	uint32_t content_root_count;
+	uint32_t content_root_capacity;
+	struct mant_structured_content_atom_view *content_atoms;
+	uint32_t content_atom_count;
+	uint32_t content_atom_capacity;
+	struct mant_structured_content_ref_view *content_refs;
+	uint32_t content_ref_count;
+	uint32_t content_ref_capacity;
+	struct mant_structured_link_view *links;
+	uint32_t link_count;
+	uint32_t link_capacity;
+	struct mant_structured_block_view *blocks;
+	uint32_t block_count;
+	uint32_t block_capacity;
 	struct mant_structured_diagnostic_view *diagnostics;
 	uint32_t diagnostic_count;
 	uint32_t diagnostic_capacity;
+	struct structured_source_map *source_maps;
+	uint32_t source_map_count;
 };
 
 struct structured_source_line {
-	uint32_t source;
-	uint32_t line;
 	uint64_t length;
+	uint8_t present;
+};
+
+struct structured_source_map {
+	struct structured_source_line *lines;
+	uint32_t line_count;
+	uint32_t line_capacity;
+};
+
+struct structured_token {
+	const struct roff_node *node;
+	uint32_t provenance;
+	uint32_t root;
+	uint32_t role;
+	uint32_t style;
+	uint32_t link;
+	int value;
+	enum term_collector_reason reason;
+	uint32_t projection_start;
+	uint32_t projection_length;
+	uint32_t live_slots;
+	uint8_t survived;
+	uint8_t committed;
+};
+
+struct structured_slot {
+	uint32_t token;
+	uint32_t projection;
+};
+
+struct structured_column {
+	struct structured_slot *slots;
+	uint32_t capacity;
+	uint32_t partial_end;
+	uint8_t partial_pending;
 };
 
 struct structured_session {
 	const struct mant_structured_input_view *input;
 	const struct mant_input_source_view *inputs;
 	const struct mant_structured_limits *limits;
+	struct mant_structured_probe_metrics *probe;
 	struct mant_structured_result *result;
 	uint32_t *source_keys;
-	struct structured_source_line *source_lines;
-	uint32_t source_line_count;
-	uint32_t source_line_capacity;
+	struct structured_source_map *source_maps;
 	uint32_t current_input;
 	uint32_t status;
 	uint32_t stage;
@@ -66,12 +129,52 @@ struct structured_session {
 	uint64_t allocated_bytes;
 	uint64_t content_bytes;
 	uint64_t include_depth;
+	uint64_t connection_atoms;
+	uint64_t annotation_runs;
+	uint64_t annotation_mutations;
+	uint64_t relation_edges;
+	const struct roff_node **node_stack;
+	uint32_t node_depth;
+	uint32_t node_capacity;
+	uint32_t output_depth;
+	uint32_t current_root;
+	uint32_t current_owner;
+	uint32_t current_root_atom_count;
+	uint32_t section_owner;
+	uint32_t section_heading_block;
+	uint32_t section_root_count;
+	uint32_t section_child_block_count;
+	uint32_t top_level_block_count;
+	uint32_t pending_break_provenance;
+	uint32_t pending_break_root;
+	struct structured_token *tokens;
+	uint32_t token_count;
+	uint32_t token_capacity;
+	uint32_t pending_token;
+	uint8_t *projection_bytes;
+	uint8_t *projection_survived;
+	uint32_t projection_byte_count;
+	uint32_t projection_byte_capacity;
+	uint32_t projection_survived_capacity;
+	struct structured_column *columns;
+	uint32_t column_count;
+	uint32_t column_capacity;
+	const struct roff_node *last_span_node;
+	uint32_t last_span;
+	const struct roff_node *last_provenance_node;
+	uint32_t last_provenance;
+	uint8_t last_provenance_authored;
+	uint64_t current_atom_capacity;
+	uint64_t current_display_capacity;
+	const struct roff_node *last_link_node;
+	uint32_t last_link;
 };
 
 MANT_THREAD_LOCAL struct structured_session *active_session;
 MANT_THREAD_LOCAL int structured_active;
 MANT_THREAD_LOCAL uint64_t structured_fail_after = UINT64_MAX;
 MANT_THREAD_LOCAL uint64_t structured_allocation_count;
+MANT_THREAD_LOCAL struct mant_structured_probe_metrics *structured_probe;
 
 static void clear_failure(struct mant_structured_failure_view *);
 static void set_failure(struct structured_session *, uint32_t, uint32_t,
@@ -99,6 +202,8 @@ static int read_input(struct structured_session *, struct mparse *, uint32_t);
 static void observe_source_line(void *, uint32_t, int, size_t);
 static int valid_source_position(struct structured_session *, uint32_t,
     uint32_t, uint32_t);
+static int source_position_in_maps(const struct structured_source_map *,
+    uint32_t, uint32_t, uint32_t, uint32_t);
 static int check_source_positions(struct structured_session *);
 static uint32_t diagnostic_level(enum mandoclevel);
 static void observe_diagnostic(void *, enum mandocerr, enum mandoclevel,
@@ -110,6 +215,9 @@ static int validate_limits(const struct mant_structured_limits *);
 static int validate_input(struct structured_session *);
 static int check_result(const struct mant_structured_result *);
 static void free_bytes(struct mant_bytes_view);
+static int supported_tree(const struct roff_node *);
+static void observe_terminal(struct termp *, void *,
+    const struct term_collector_event *);
 
 static int
 zero_bytes(const uint8_t *bytes, size_t length)
@@ -128,6 +236,14 @@ valid_string(struct mant_bytes_view view)
 	return valid_bytes(view) && valid_utf8(view.ptr, view.len);
 }
 
+static int
+utf8_boundary(struct mant_bytes_view view, uint32_t offset)
+{
+	if (offset > view.len)
+		return 0;
+	return offset == view.len || (view.ptr[offset] & 0xc0) != 0x80;
+}
+
 void
 mant_structured_test_fail_after(uint64_t successful_allocations)
 {
@@ -135,24 +251,34 @@ mant_structured_test_fail_after(uint64_t successful_allocations)
 }
 
 static int
+source_position_in_maps(const struct structured_source_map *maps,
+    uint32_t map_count, uint32_t source_key, uint32_t line, uint32_t column)
+{
+	const struct structured_source_map *map;
+	const struct structured_source_line *entry;
+
+	if (maps == NULL || source_key == 0 || source_key > map_count || line == 0)
+		return 0;
+	map = maps + source_key - 1;
+	if (line > map->line_count)
+		return 0;
+	entry = map->lines + line - 1;
+	return entry->present && (uint64_t)column <= entry->length;
+}
+
+static int
 valid_source_position(struct structured_session *session, uint32_t source_key,
     uint32_t line, uint32_t column)
 {
-	uint32_t index;
-
-	if (source_key == 0 || line == 0)
+	if (source_key == 0 || source_key > session->input->sources.count ||
+	    line == 0)
 		return 0;
-	for (index = 0; index < session->source_line_count; index++) {
-		if (!charge(session, &session->builder_operations, 1,
-		    session->limits->max_builder_operations, 8,
-		    MANT_STRUCTURED_STAGE_CHECK))
-			return 0;
-		if (session->source_lines[index].source == source_key &&
-		    session->source_lines[index].line == line)
-			return (uint64_t)column <=
-			    session->source_lines[index].length;
-	}
-	return 0;
+	if (!charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_CHECK))
+		return 0;
+	return source_position_in_maps(session->source_maps,
+	    session->input->sources.count, source_key, line, column);
 }
 
 static int
@@ -168,6 +294,10 @@ check_source_positions(struct structured_session *session)
 		if (span->column_start == 0 ||
 		    !valid_source_position(session, span->source,
 		    span->line_start, span->column_start - 1))
+			return 0;
+		if (span->line_end != 0 && (span->column_end == 0 ||
+		    !valid_source_position(session, span->source,
+		    span->line_end, span->column_end - 1)))
 			return 0;
 	}
 	return 1;
@@ -692,44 +822,48 @@ observe_source_line(void *arg, uint32_t source_key, int line, size_t length)
 {
 	struct structured_session *session = arg;
 	struct structured_source_line *entry, *grown;
-	uint32_t i;
+	struct structured_source_map *map;
+	uint32_t needed, old_count;
+	uint64_t added_bytes;
 
 	if (session == NULL || session->status != MANT_STRUCTURED_OK ||
 	    source_key == 0 || source_key > session->result->source_count ||
 	    line <= 0)
 		return;
-	for (i = 0; i < session->source_line_count; i++) {
-		entry = session->source_lines + i;
-		if (entry->source != source_key)
-			continue;
-		if (entry->line == (uint32_t)line) {
-			if ((uint64_t)length > entry->length)
-				entry->length = length;
-			return;
-		}
+	map = session->source_maps + source_key - 1;
+	needed = (uint32_t)line;
+	if (needed <= map->line_count) {
+		entry = map->lines + needed - 1;
+		if ((uint64_t)length > entry->length)
+			entry->length = length;
+		entry->present = 1;
+		return;
 	}
+	old_count = map->line_count;
+	added_bytes = (uint64_t)(needed - old_count) * sizeof(*entry);
 	if (!charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_PARSE) ||
-	    !charge(session, &session->source_map_entries, 1,
+	    !charge(session, &session->source_map_entries, needed - old_count,
 	    session->limits->max_source_map_entries, 6,
 	    MANT_STRUCTURED_STAGE_PARSE) ||
-	    !charge(session, &session->source_map_bytes, sizeof(*entry),
+	    !charge(session, &session->source_map_bytes, added_bytes,
 	    session->limits->max_source_map_bytes, 7,
 	    MANT_STRUCTURED_STAGE_PARSE))
 		return;
-	grown = grow_array(session, session->source_lines,
-	    session->source_line_count, &session->source_line_capacity,
+	grown = grow_array(session, map->lines, needed - 1,
+	    &map->line_capacity,
 	    UINT32_MAX, sizeof(*grown),
 	    session->limits->max_builder_allocated_bytes, 6,
 	    MANT_STRUCTURED_STAGE_PARSE);
 	if (grown == NULL)
 		return;
-	session->source_lines = grown;
-	entry = grown + session->source_line_count++;
-	entry->source = source_key;
-	entry->line = (uint32_t)line;
+	map->lines = grown;
+	memset(grown + old_count, 0, (needed - old_count) * sizeof(*grown));
+	map->line_count = needed;
+	entry = grown + needed - 1;
 	entry->length = length;
+	entry->present = 1;
 }
 
 int
@@ -996,7 +1130,9 @@ copy_metadata(struct structured_session *session, const struct roff_meta *meta)
 	out->name = copy_cstring(session, meta->name);
 	out->date = copy_cstring(session, meta->date);
 	out->alias_target = copy_cstring(session, meta->sodest);
-	out->has_body = meta->hasbody != 0;
+	out->has_body = meta->hasbody != 0 ||
+	    (meta->macroset == MACROSET_MDOC && meta->first != NULL &&
+	    meta->first->child != NULL);
 	return session->status == MANT_STRUCTURED_OK;
 }
 
@@ -1142,6 +1278,1231 @@ validate_input(struct structured_session *session)
 	return 1;
 }
 
+static int
+supported_token(enum roff_tok tok)
+{
+	switch (tok) {
+	case TOKEN_NONE:
+	case ROFF_br:
+	case ROFF_ll:
+	case MDOC_Dd:
+	case MDOC_Dt:
+	case MDOC_Os:
+	case MDOC_Sh:
+	case MDOC_Pp:
+	case MDOC_Ar:
+	case MDOC_Cm:
+	case MDOC_Ev:
+	case MDOC_Fl:
+	case MDOC_Ic:
+	case MDOC_Li:
+	case MDOC_Nd:
+	case MDOC_Nm:
+	case MDOC_Pa:
+	case MDOC_Xr:
+	case MDOC_Em:
+	case MDOC_No:
+	case MDOC_Ns:
+	case MDOC_Pf:
+	case MDOC_Sy:
+	case MDOC_Lk:
+	case MDOC_Mt:
+	case MAN_TH:
+	case MAN_SH:
+	case MAN_LP:
+	case MAN_PP:
+	case MAN_P:
+	case MAN_SM:
+	case MAN_SB:
+	case MAN_BI:
+	case MAN_IB:
+	case MAN_BR:
+	case MAN_RB:
+	case MAN_R:
+	case MAN_B:
+	case MAN_I:
+	case MAN_IR:
+	case MAN_RI:
+	case MAN_UR:
+	case MAN_UE:
+	case MAN_MT:
+	case MAN_ME:
+	case MAN_MR:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static int
+supported_tree(const struct roff_node *node)
+{
+	for (; node != NULL; node = node->next) {
+		if ((node->flags & NODE_NOFILL) != 0 ||
+		    node->type == ROFFT_TBL || node->type == ROFFT_EQN ||
+		    !supported_token(node->tok) || !supported_tree(node->child))
+			return 0;
+	}
+	return 1;
+}
+
+static const struct roff_node *
+source_node(const struct roff_node *node)
+{
+	while (node != NULL && ((node->flags & NODE_NOSRC) != 0 ||
+	    node->mant_source_key == 0 || node->line <= 0 || node->pos < 0))
+		node = node->parent;
+	return node;
+}
+
+static uint32_t
+append_span_for_node(struct structured_session *session,
+    const struct roff_node *node)
+{
+	struct mant_structured_span_view *span, *grown;
+
+	node = source_node(node);
+	if (node == NULL || node->mant_source_key > session->result->source_count)
+		return 0;
+	if (node == session->last_span_node && session->last_span != 0)
+		return session->last_span;
+	if (!charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	grown = grow_array(session, session->result->spans,
+	    session->result->span_count, &session->result->span_capacity,
+	    UINT32_MAX, sizeof(*grown),
+	    session->limits->max_builder_allocated_bytes, 6,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (grown == NULL)
+		return 0;
+	session->result->spans = grown;
+	span = grown + session->result->span_count;
+	memset(span, 0, sizeof(*span));
+	span->line_column_present = 1;
+	span->source = node->mant_source_key;
+	span->line_start = (uint32_t)node->line;
+	span->column_start = (uint32_t)node->pos + 1;
+	session->last_span_node = node;
+	session->last_span = ++session->result->span_count;
+	return session->last_span;
+}
+
+static uint32_t
+append_provenance(struct structured_session *session,
+    const struct roff_node *node, int authored)
+{
+	struct mant_structured_provenance_view *provenance, *grown;
+	uint32_t span;
+
+	node = source_node(node);
+	if (node == session->last_provenance_node &&
+	    authored == session->last_provenance_authored &&
+	    session->last_provenance != 0)
+		return session->last_provenance;
+	span = append_span_for_node(session, node);
+	if (session->status != MANT_STRUCTURED_OK)
+		return 0;
+	grown = grow_array(session, session->result->provenances,
+	    session->result->provenance_count,
+	    &session->result->provenance_capacity, UINT32_MAX, sizeof(*grown),
+	    session->limits->max_builder_allocated_bytes, 9,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (grown == NULL)
+		return 0;
+	session->result->provenances = grown;
+	provenance = grown + session->result->provenance_count;
+	memset(provenance, 0, sizeof(*provenance));
+	if (authored && span != 0) {
+		provenance->kind = MANT_PROVENANCE_AUTHORED;
+		provenance->authored_span = span;
+	} else if (span != 0) {
+		provenance->kind = MANT_PROVENANCE_GENERATED;
+		provenance->generated_trigger_span = span;
+	} else
+		provenance->kind = MANT_PROVENANCE_UNKNOWN;
+	session->last_provenance_node = node;
+	session->last_provenance_authored = authored != 0;
+	session->last_provenance = ++session->result->provenance_count;
+	return session->last_provenance;
+}
+
+static int
+heading_context(const struct roff_node *node)
+{
+	const struct roff_node *child;
+
+	child = node;
+	for (; node != NULL; child = node, node = node->parent)
+		if (node->tok == MAN_SH || node->tok == MDOC_Sh) {
+			if (node->type == ROFFT_HEAD)
+				return 1;
+			if (node->type == ROFFT_BODY)
+				return 0;
+			if (node->type == ROFFT_BLOCK)
+				return node->head == child ||
+				    child->type == ROFFT_HEAD;
+		}
+	return 0;
+}
+
+static uint32_t
+limit_u32(uint64_t value)
+{
+	return value > UINT32_MAX ? UINT32_MAX : (uint32_t)value;
+}
+
+static uint32_t
+style_flags(enum termfont font)
+{
+	switch (font) {
+	case TERMFONT_BOLD:
+		return MANT_STYLE_BOLD;
+	case TERMFONT_UNDER:
+		return MANT_STYLE_ITALIC;
+	case TERMFONT_BI:
+		return MANT_STYLE_BOLD | MANT_STYLE_ITALIC;
+	default:
+		return 0;
+	}
+}
+
+static uint32_t
+semantic_role(const struct roff_node *node)
+{
+	for (; node != NULL; node = node->parent)
+		switch (node->tok) {
+		case MDOC_Fl: return MANT_ROLE_FLAG;
+		case MDOC_Ev: return MANT_ROLE_ENVIRONMENT_VARIABLE;
+		case MDOC_Ar: return MANT_ROLE_ARGUMENT;
+		case MDOC_Cm:
+		case MDOC_Ic: return MANT_ROLE_COMMAND_OR_DIRECTIVE;
+		case MDOC_Pa: return MANT_ROLE_PATH;
+		default: break;
+		}
+	return 0;
+}
+
+static int
+open_content_root(struct structured_session *session, int heading,
+    uint32_t provenance)
+{
+	struct mant_structured_owner_view *owners, *owner = NULL;
+	struct mant_structured_content_root_view *roots, *root;
+	struct mant_structured_block_view *blocks, *block;
+	uint32_t owner_key, operations;
+	int new_owner;
+
+	new_owner = heading || session->section_owner == 0;
+	if (new_owner) {
+		owners = grow_array(session, session->result->owners,
+		    session->result->owner_count,
+		    &session->result->owner_capacity,
+		    limit_u32(session->limits->max_owners), sizeof(*owners),
+		    session->limits->max_builder_allocated_bytes, 11,
+		    MANT_STRUCTURED_STAGE_RENDER);
+		if (owners == NULL)
+			return 0;
+		session->result->owners = owners;
+		owner = owners + session->result->owner_count;
+		memset(owner, 0, sizeof(*owner));
+		owner->key = ++session->result->owner_count;
+		owner->kind = heading ? MANT_OWNER_SECTION : MANT_OWNER_DOCUMENT;
+		owner->provenance = provenance;
+		owner_key = owner->key;
+	} else
+		owner_key = session->section_owner;
+	roots = grow_array(session, session->result->content_roots,
+	    session->result->content_root_count,
+	    &session->result->content_root_capacity,
+	    limit_u32(session->limits->max_blocks), sizeof(*roots),
+	    session->limits->max_builder_allocated_bytes, 12,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (roots == NULL)
+		return 0;
+	session->result->content_roots = roots;
+	blocks = grow_array(session, session->result->blocks,
+	    session->result->block_count, &session->result->block_capacity,
+	    limit_u32(session->limits->max_blocks), sizeof(*blocks),
+	    session->limits->max_builder_allocated_bytes, 12,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (blocks == NULL)
+		return 0;
+	session->result->blocks = blocks;
+	operations = new_owner ? 3 : 2;
+	if (!charge(session, &session->builder_operations, operations,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !charge(session, &session->relation_edges, 6,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	root = roots + session->result->content_root_count;
+	memset(root, 0, sizeof(*root));
+	root->key = ++session->result->content_root_count;
+	root->owner = owner_key;
+	root->ordinal = heading ? 0 :
+	    session->section_owner != 0 ? session->section_root_count : 0;
+	root->kind = heading ? MANT_ROOT_HEADING : MANT_ROOT_BODY;
+	root->provenance = provenance;
+	block = blocks + session->result->block_count;
+	memset(block, 0, sizeof(*block));
+	block->key = ++session->result->block_count;
+	block->owner = owner_key;
+	block->kind = heading ? MANT_BLOCK_HEADING : MANT_BLOCK_PARAGRAPH;
+	block->parent = heading ? 0 : session->section_heading_block;
+	block->ordinal = block->parent == 0 ?
+	    session->top_level_block_count : session->section_child_block_count;
+	block->provenance = provenance;
+	block->root = root->key;
+	session->current_owner = owner_key;
+	session->current_root = root->key;
+	session->current_root_atom_count = 0;
+	if (heading) {
+		session->top_level_block_count++;
+		session->section_owner = owner_key;
+		session->section_heading_block = block->key;
+		session->section_root_count = 1;
+		session->section_child_block_count = 0;
+	} else if (session->section_owner != 0) {
+		session->section_root_count++;
+		session->section_child_block_count++;
+	} else
+		session->top_level_block_count++;
+	return 1;
+}
+
+static int
+append_atom(struct structured_session *session, uint32_t root,
+    uint32_t provenance, uint32_t kind, uint32_t style, uint32_t role,
+    uint32_t link,
+    const uint8_t *bytes, size_t length, const uint8_t *display,
+    size_t display_length, int breakable)
+{
+	struct mant_structured_content_atom_view *atoms, *atom;
+	const struct mant_structured_content_root_view *content_root;
+	uint8_t *grown_text;
+	uint64_t required, new_capacity, added;
+
+	if (root == 0 || root > session->result->content_root_count)
+		return 0;
+	if (!charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	if ((length != 0 && !charge(session, &session->content_bytes, length,
+	    session->limits->max_content_bytes, 10,
+	    MANT_STRUCTURED_STAGE_RENDER)) ||
+	    (display_length != 0 && !charge(session, &session->content_bytes,
+	    display_length, session->limits->max_content_bytes, 10,
+	    MANT_STRUCTURED_STAGE_RENDER)))
+		return 0;
+	if (length != 0 && session->result->content_atom_count != 0) {
+		atom = session->result->content_atoms +
+		    session->result->content_atom_count - 1;
+		if (atom->root == root && atom->provenance == provenance &&
+		    atom->kind == kind && atom->style_flags == style &&
+		    atom->role == role && atom->link == link &&
+		    atom->display_override_present == (display_length != 0) &&
+		    atom->whitespace_breakable == (breakable != 0) &&
+		    (kind == MANT_ATOM_TEXT || kind == MANT_ATOM_WHITESPACE)) {
+			if (atom->text.len > UINT64_MAX - length) {
+				set_failure(session, MANT_STRUCTURED_BUDGET,
+				    MANT_STRUCTURED_STAGE_RENDER, 10,
+				    UINT64_MAX, session->limits->max_content_bytes);
+				return 0;
+			}
+			required = atom->text.len + length;
+			if (required > session->current_atom_capacity) {
+				new_capacity = session->current_atom_capacity == 0 ? 8 :
+				    session->current_atom_capacity;
+				while (new_capacity < required) {
+					if (new_capacity > UINT64_MAX / 2) {
+						new_capacity = required;
+						break;
+					}
+					new_capacity *= 2;
+				}
+				if (new_capacity > SIZE_MAX) {
+					set_failure(session, MANT_STRUCTURED_BUDGET,
+					    MANT_STRUCTURED_STAGE_RENDER, 9,
+					    new_capacity, SIZE_MAX);
+					return 0;
+				}
+				added = new_capacity - session->current_atom_capacity;
+				if (!charge(session, &session->allocated_bytes, added,
+				    session->limits->max_builder_allocated_bytes, 9,
+				    MANT_STRUCTURED_STAGE_RENDER))
+					return 0;
+				grown_text = injected_allocation_failure() ? NULL :
+				    realloc((void *)atom->text.ptr, (size_t)new_capacity);
+				if (grown_text == NULL) {
+					set_failure(session,
+					    MANT_STRUCTURED_BUILDER_ALLOC,
+					    MANT_STRUCTURED_STAGE_RENDER, 0,
+					    new_capacity,
+					    session->limits->max_builder_allocated_bytes);
+					return 0;
+				}
+				atom->text.ptr = grown_text;
+				session->current_atom_capacity = new_capacity;
+			}
+			memcpy((uint8_t *)atom->text.ptr + atom->text.len,
+			    bytes, length);
+			atom->text.len = required;
+			if (display_length != 0) {
+				if (atom->display_override.len >
+				    UINT64_MAX - display_length) {
+					set_failure(session, MANT_STRUCTURED_BUDGET,
+					    MANT_STRUCTURED_STAGE_RENDER, 10,
+					    UINT64_MAX,
+					    session->limits->max_content_bytes);
+					return 0;
+				}
+				required = atom->display_override.len + display_length;
+				if (required > session->current_display_capacity) {
+					new_capacity = session->current_display_capacity == 0 ?
+					    8 : session->current_display_capacity;
+					while (new_capacity < required) {
+						if (new_capacity > UINT64_MAX / 2) {
+							new_capacity = required;
+							break;
+						}
+						new_capacity *= 2;
+					}
+					added = new_capacity -
+					    session->current_display_capacity;
+					if (new_capacity > SIZE_MAX) {
+						set_failure(session, MANT_STRUCTURED_BUDGET,
+						    MANT_STRUCTURED_STAGE_RENDER, 9,
+						    new_capacity, SIZE_MAX);
+						return 0;
+					}
+					if (!charge(session, &session->allocated_bytes, added,
+					    session->limits->max_builder_allocated_bytes, 9,
+					    MANT_STRUCTURED_STAGE_RENDER))
+						return 0;
+					grown_text = injected_allocation_failure() ? NULL :
+					    realloc((void *)atom->display_override.ptr,
+					    (size_t)new_capacity);
+					if (grown_text == NULL) {
+						set_failure(session,
+						    MANT_STRUCTURED_BUILDER_ALLOC,
+						    MANT_STRUCTURED_STAGE_RENDER, 0,
+						    new_capacity,
+						    session->limits->max_builder_allocated_bytes);
+						return 0;
+					}
+					atom->display_override.ptr = grown_text;
+					session->current_display_capacity = new_capacity;
+				}
+				memcpy((uint8_t *)atom->display_override.ptr +
+				    atom->display_override.len, display, display_length);
+				atom->display_override.len = required;
+			}
+			return 1;
+		}
+	}
+	if (!charge(session, &session->annotation_runs, 1,
+	    session->limits->max_annotation_runs, 28,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	if ((kind == MANT_ATOM_BREAK_OPPORTUNITY ||
+	    kind == MANT_ATOM_HARD_BREAK) &&
+	    !charge(session, &session->connection_atoms, 1,
+	    session->limits->max_connection_atoms, 27,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	if (!charge(session, &session->relation_edges, link == 0 ? 3 : 4,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	atoms = grow_array(session, session->result->content_atoms,
+	    session->result->content_atom_count,
+	    &session->result->content_atom_capacity,
+	    limit_u32(session->limits->max_content_atoms), sizeof(*atoms),
+	    session->limits->max_builder_allocated_bytes, 13,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (atoms == NULL)
+		return 0;
+	session->result->content_atoms = atoms;
+	content_root = session->result->content_roots + root - 1;
+	atom = atoms + session->result->content_atom_count;
+	memset(atom, 0, sizeof(*atom));
+	atom->key = ++session->result->content_atom_count;
+	atom->root = root;
+	if (session->result->content_atom_count > 1 &&
+	    atom[-1].root == root)
+		atom->ordinal = atom[-1].ordinal + 1;
+	atom->owner = content_root->owner;
+	atom->kind = kind;
+	atom->style_flags = style;
+	atom->role = role;
+	atom->link = link;
+	atom->whitespace_breakable = breakable != 0;
+	atom->provenance = provenance;
+	if (length != 0) {
+		session->current_atom_capacity = length < 8 ? 8 : length;
+		atom->text.ptr = allocate(session, session->current_atom_capacity,
+		    0, MANT_STRUCTURED_STAGE_RENDER);
+		if (atom->text.ptr == NULL)
+			return 0;
+		memcpy((void *)atom->text.ptr, bytes, length);
+		atom->text.len = length;
+	} else
+		session->current_atom_capacity = 0;
+	if (display_length != 0) {
+		session->current_display_capacity = display_length < 8 ? 8 :
+		    display_length;
+		atom->display_override.ptr = allocate(session,
+		    session->current_display_capacity, 0,
+		    MANT_STRUCTURED_STAGE_RENDER);
+		if (atom->display_override.ptr == NULL)
+			return 0;
+		memcpy((void *)atom->display_override.ptr, display,
+		    display_length);
+		atom->display_override.len = display_length;
+		atom->display_override_present = 1;
+	} else
+		session->current_display_capacity = 0;
+	return 1;
+}
+
+static size_t
+encode_scalar(int value, uint8_t bytes[4])
+{
+	uint32_t scalar = (uint32_t)value;
+
+	if (scalar <= 0x7f) {
+		bytes[0] = (uint8_t)scalar;
+		return 1;
+	}
+	if (scalar <= 0x7ff) {
+		bytes[0] = 0xc0 | (uint8_t)(scalar >> 6);
+		bytes[1] = 0x80 | (uint8_t)(scalar & 0x3f);
+		return 2;
+	}
+	if (scalar <= 0xffff && !(scalar >= 0xd800 && scalar <= 0xdfff)) {
+		bytes[0] = 0xe0 | (uint8_t)(scalar >> 12);
+		bytes[1] = 0x80 | (uint8_t)((scalar >> 6) & 0x3f);
+		bytes[2] = 0x80 | (uint8_t)(scalar & 0x3f);
+		return 3;
+	}
+	if (scalar <= 0x10ffff) {
+		bytes[0] = 0xf0 | (uint8_t)(scalar >> 18);
+		bytes[1] = 0x80 | (uint8_t)((scalar >> 12) & 0x3f);
+		bytes[2] = 0x80 | (uint8_t)((scalar >> 6) & 0x3f);
+		bytes[3] = 0x80 | (uint8_t)(scalar & 0x3f);
+		return 4;
+	}
+	return 0;
+}
+
+static const struct roff_node *
+collector_node(const struct structured_session *session,
+    const struct term_collector_event *event)
+{
+	if (event->node != NULL)
+		return event->node;
+	return session->node_depth == 0 ? NULL :
+	    session->node_stack[session->node_depth - 1];
+}
+
+static const struct roff_node *
+link_node(const struct roff_node *node)
+{
+	for (; node != NULL; node = node->parent)
+		switch (node->tok) {
+		case MDOC_Lk:
+		case MDOC_Mt:
+		case MDOC_Xr:
+		case MAN_MR:
+			if (node->type == ROFFT_ELEM)
+				return node;
+			break;
+		case MAN_UR:
+		case MAN_MT:
+			if (node->type == ROFFT_BLOCK)
+				return node;
+			break;
+		default:
+			break;
+		}
+	return NULL;
+}
+
+static int
+copy_link_target(struct structured_session *session,
+    struct mant_bytes_view *out, const struct roff_node *node)
+{
+	size_t length;
+
+	if (node == NULL || node->type != ROFFT_TEXT || node->string == NULL ||
+	    node->string[0] == '\0' || strchr(node->string, '\\') != NULL)
+		return 0;
+	length = strlen(node->string);
+	if (!valid_utf8((const uint8_t *)node->string, length))
+		return 0;
+	out->ptr = copy_bytes(session, (const uint8_t *)node->string,
+	    length, 1, MANT_STRUCTURED_STAGE_RENDER);
+	if (out->ptr == NULL)
+		return 0;
+	out->len = length;
+	return 1;
+}
+
+static uint32_t
+ensure_link(struct structured_session *session, const struct roff_node *node,
+    uint32_t owner, uint32_t provenance)
+{
+	const struct roff_node *canonical, *first, *second;
+	struct mant_structured_link_view *links, *link = NULL;
+	uint32_t kind;
+
+	canonical = link_node(node);
+	if (canonical == NULL)
+		return 0;
+	if (canonical == session->last_link_node)
+		return session->last_link;
+	first = second = NULL;
+	switch (canonical->tok) {
+	case MDOC_Lk:
+		kind = MANT_LINK_EXTERNAL;
+		first = canonical->child;
+		break;
+	case MDOC_Mt:
+		kind = MANT_LINK_EMAIL;
+		first = canonical->child;
+		if (first != NULL && first->next != NULL &&
+		    (first->next->flags & NODE_DELIMC) == 0)
+			goto unsupported;
+		break;
+	case MDOC_Xr:
+		kind = MANT_LINK_MANUAL;
+		first = canonical->child;
+		second = first == NULL ? NULL : first->next;
+		break;
+	case MAN_UR:
+		kind = MANT_LINK_EXTERNAL;
+		first = canonical->head == NULL ? NULL : canonical->head->child;
+		break;
+	case MAN_MT:
+		kind = MANT_LINK_EMAIL;
+		first = canonical->head == NULL ? NULL : canonical->head->child;
+		break;
+	case MAN_MR:
+		kind = MANT_LINK_MANUAL;
+		first = canonical->child;
+		second = first == NULL ? NULL : first->next;
+		break;
+	default:
+		goto unsupported;
+	}
+	if (first == NULL || (kind == MANT_LINK_MANUAL && second == NULL))
+		goto unsupported;
+	if (!charge(session, &session->relation_edges, 2,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	links = grow_array(session, session->result->links,
+	    session->result->link_count, &session->result->link_capacity,
+	    limit_u32(session->limits->max_links), sizeof(*links),
+	    session->limits->max_builder_allocated_bytes, 16,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (links == NULL)
+		return 0;
+	session->result->links = links;
+	link = links + session->result->link_count;
+	memset(link, 0, sizeof(*link));
+	link->key = session->result->link_count + 1;
+	link->owner = owner;
+	link->target_kind = kind;
+	link->provenance = provenance;
+	if (!copy_link_target(session, &link->target_a, first))
+		goto unsupported;
+	if (kind == MANT_LINK_MANUAL) {
+		link->target_b_present = 1;
+		if (!copy_link_target(session, &link->target_b, second))
+			goto unsupported;
+	}
+	session->result->link_count++;
+	session->last_link_node = canonical;
+	session->last_link = link->key;
+	return link->key;
+
+unsupported:
+	if (link != NULL) {
+		free_bytes(link->target_a);
+		free_bytes(link->target_b);
+		memset(link, 0, sizeof(*link));
+	}
+	if (session->probe == NULL)
+		set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+	return 0;
+}
+
+static void
+record_link_ref(struct structured_session *session, uint32_t link_key)
+{
+	struct mant_structured_content_ref_view *refs, *ref;
+	struct mant_structured_content_atom_view *atom;
+	struct mant_structured_link_view *link;
+
+	if (link_key == 0 || session->result->content_atom_count == 0)
+		return;
+	atom = session->result->content_atoms +
+	    session->result->content_atom_count - 1;
+	link = session->result->links + link_key - 1;
+	if (link->label_ref_count != 0) {
+		ref = session->result->content_refs + link->first_label_ref - 1 +
+		    link->label_ref_count - 1;
+		if (ref->atom == atom->key) {
+			ref->byte_end = (uint32_t)atom->text.len;
+			return;
+		}
+	}
+	if (atom->text.len > UINT32_MAX) {
+		set_failure(session, MANT_STRUCTURED_BUDGET,
+		    MANT_STRUCTURED_STAGE_RENDER, 14,
+		    atom->text.len, UINT32_MAX);
+		return;
+	}
+	if (!charge(session, &session->relation_edges, 2,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return;
+	refs = grow_array(session, session->result->content_refs,
+	    session->result->content_ref_count,
+	    &session->result->content_ref_capacity,
+	    limit_u32(session->limits->max_content_refs), sizeof(*refs),
+	    session->limits->max_builder_allocated_bytes, 14,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (refs == NULL)
+		return;
+	session->result->content_refs = refs;
+	ref = refs + session->result->content_ref_count;
+	memset(ref, 0, sizeof(*ref));
+	ref->atom = atom->key;
+	ref->byte_end = (uint32_t)atom->text.len;
+	if (link->label_ref_count == 0)
+		link->first_label_ref = session->result->content_ref_count + 1;
+	link->label_ref_count++;
+	session->result->content_ref_count++;
+}
+
+static void
+commit_token(struct structured_session *session, uint32_t key)
+{
+	struct structured_token *token;
+	uint32_t kind;
+	uint8_t bytes[4];
+	size_t display_length, index, length;
+	int breakable;
+
+	if (key == 0 || key > session->token_count)
+		return;
+	token = session->tokens + key - 1;
+	if (token->committed)
+		return;
+	token->committed = 1;
+	if (token->value == ASCII_NBRZW)
+		return;
+	if (token->value == '\n') {
+		if (session->pending_break_root != 0) {
+			if (session->probe == NULL)
+				set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
+				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+			return;
+		}
+		session->pending_break_root = token->root;
+		session->pending_break_provenance = token->provenance;
+		return;
+	}
+	if (token->value == ASCII_BREAK) {
+		append_atom(session, token->root, token->provenance,
+		    MANT_ATOM_BREAK_OPPORTUNITY, 0, 0, 0, NULL, 0,
+		    NULL, 0, 0);
+		return;
+	}
+	if (token->value == ASCII_HYPH) {
+		bytes[0] = '-';
+		if (!append_atom(session, token->root, token->provenance,
+		    MANT_ATOM_TEXT, token->style, token->role, token->link,
+		    bytes, 1, NULL, 0, 0))
+			return;
+		record_link_ref(session, token->link);
+		append_atom(session, token->root, token->provenance,
+		    MANT_ATOM_BREAK_OPPORTUNITY, 0, 0, 0, NULL, 0,
+		    NULL, 0, 0);
+		return;
+	}
+	if (token->value == ASCII_NBRSP || token->value == 0xa0) {
+		static const uint8_t nbsp[] = { 0xc2, 0xa0 };
+		static const uint8_t ascii_space[] = { ' ' };
+
+		if (append_atom(session, token->root, token->provenance,
+		    MANT_ATOM_WHITESPACE, token->style, token->role, token->link,
+		    nbsp, sizeof(nbsp),
+		    session->result->profile == MANT_PROFILE_ASCII ? ascii_space :
+		    NULL,
+		    session->result->profile == MANT_PROFILE_ASCII ?
+		    sizeof(ascii_space) : 0, 0))
+			record_link_ref(session, token->link);
+		return;
+	}
+	length = encode_scalar(token->value, bytes);
+	if (length == 0 || (token->value < 0x20 && token->value != '\t')) {
+		if (session->probe == NULL)
+			set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
+			    MANT_STRUCTURED_STAGE_RENDER, 0,
+			    (uint32_t)token->value, 0);
+		return;
+	}
+	kind = token->value == ' ' || token->value == '\t' ?
+	    MANT_ATOM_WHITESPACE : MANT_ATOM_TEXT;
+	breakable = kind == MANT_ATOM_WHITESPACE &&
+	    token->reason != TERM_COLLECT_KEEP_SPACE;
+	display_length = 0;
+	for (index = token->projection_start;
+	    index < token->projection_start + token->projection_length; index++)
+		if (session->projection_survived[index])
+			session->projection_bytes[token->projection_start +
+			    display_length++] = session->projection_bytes[index];
+	if (append_atom(session, token->root, token->provenance, kind,
+	    token->style, token->role, token->link, bytes, length,
+	    display_length == 0 ? NULL :
+	    session->projection_bytes + token->projection_start,
+	    display_length, breakable))
+		record_link_ref(session, token->link);
+}
+
+static uint32_t
+record_projection(struct structured_session *session, uint32_t key, int value)
+{
+	struct structured_token *token;
+	uint8_t *bytes, *survived;
+
+	if (key == 0 || key > session->token_count || value < 0 || value > 0xff) {
+		set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, key, session->token_count);
+		return 0;
+	}
+	token = session->tokens + key - 1;
+	if (token->projection_length == 0)
+		token->projection_start = session->projection_byte_count;
+	else if (token->projection_start + token->projection_length !=
+	    session->projection_byte_count) {
+		set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0,
+		    token->projection_start + token->projection_length,
+		    session->projection_byte_count);
+		return 0;
+	}
+	bytes = grow_array(session, session->projection_bytes,
+	    session->projection_byte_count, &session->projection_byte_capacity,
+	    limit_u32(session->limits->max_content_bytes), sizeof(*bytes),
+	    session->limits->max_builder_allocated_bytes, 10,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (bytes == NULL)
+		return 0;
+	session->projection_bytes = bytes;
+	survived = grow_array(session, session->projection_survived,
+	    session->projection_byte_count, &session->projection_survived_capacity,
+	    limit_u32(session->limits->max_content_bytes), sizeof(*survived),
+	    session->limits->max_builder_allocated_bytes, 10,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (survived == NULL)
+		return 0;
+	session->projection_survived = survived;
+	bytes[session->projection_byte_count] = (uint8_t)value;
+	survived[session->projection_byte_count] = 0;
+	session->projection_byte_count++;
+	token->projection_length++;
+	return session->projection_byte_count;
+}
+
+static void
+discard_slot(struct structured_session *session, struct structured_slot *slot)
+{
+	struct structured_token *token;
+
+	if (slot->token != 0 && slot->token <= session->token_count) {
+		token = session->tokens + slot->token - 1;
+		if (token->live_slots != 0)
+			token->live_slots--;
+		if (token->live_slots == 0 && token->survived)
+			commit_token(session, slot->token);
+	}
+	if (slot->projection != 0 &&
+	    slot->projection <= session->projection_byte_count)
+		session->projection_survived[slot->projection - 1] = 0;
+	slot->token = 0;
+	slot->projection = 0;
+}
+
+static void
+consume_slot(struct structured_session *session, struct structured_slot *slot)
+{
+	struct structured_token *token;
+	uint32_t key;
+
+	key = slot->token;
+	if (key == 0 || key > session->token_count) {
+		discard_slot(session, slot);
+		return;
+	}
+	token = session->tokens + key - 1;
+	token->survived = 1;
+	if (slot->projection != 0 &&
+	    slot->projection <= session->projection_byte_count)
+		session->projection_survived[slot->projection - 1] = 1;
+	if (token->live_slots != 0)
+		token->live_slots--;
+	slot->token = 0;
+	slot->projection = 0;
+	if (token->live_slots == 0)
+		commit_token(session, key);
+}
+
+static void
+collect_logical(struct structured_session *session,
+    const struct term_collector_event *event)
+{
+	const struct roff_node *node;
+	struct structured_token *tokens, *token;
+	uint32_t provenance;
+	int heading, authored;
+
+	if (session->output_depth != 0) {
+		session->pending_token = 0;
+		return;
+	}
+	node = collector_node(session, event);
+	heading = heading_context(node);
+	authored = event->node != NULL &&
+	    (event->reason == TERM_COLLECT_TEXT ||
+	    event->reason == TERM_COLLECT_ESCAPE);
+	provenance = append_provenance(session, node, authored);
+	if (provenance == 0 || session->status != MANT_STRUCTURED_OK)
+		return;
+	if (session->current_root == 0 ||
+	    (session->result->content_roots[session->current_root - 1].kind ==
+	    MANT_ROOT_HEADING) != heading) {
+		if (!open_content_root(session, heading, provenance))
+			return;
+	}
+	if (!charge(session, &session->annotation_mutations, 1,
+	    session->limits->max_annotation_mutations, 29,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return;
+	tokens = grow_array(session, session->tokens, session->token_count,
+	    &session->token_capacity,
+	    limit_u32(session->limits->max_annotation_mutations),
+	    sizeof(*tokens), session->limits->max_builder_allocated_bytes, 29,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (tokens == NULL)
+		return;
+	session->tokens = tokens;
+	token = tokens + session->token_count;
+	memset(token, 0, sizeof(*token));
+	token->node = node;
+	token->provenance = provenance;
+	token->root = session->current_root;
+	token->role = semantic_role(node);
+	token->style = style_flags(event->font);
+	if (link_node(node) != NULL &&
+	    (event->node == NULL ||
+	    (event->node->flags & NODE_DELIMC) == 0)) {
+		const struct roff_node *canonical = link_node(node);
+		const struct roff_node *third = canonical->child == NULL ? NULL :
+		    canonical->child->next == NULL ? NULL :
+		    canonical->child->next->next;
+
+		if (!(canonical->tok == MAN_MR && event->node == third))
+			token->link = ensure_link(session, node,
+			    session->current_owner, provenance);
+		if (session->status != MANT_STRUCTURED_OK)
+			return;
+	}
+	token->value = event->value;
+	token->reason = event->reason;
+	session->pending_token = ++session->token_count;
+}
+
+static struct structured_column *
+collector_column(struct structured_session *session, size_t index)
+{
+	struct structured_column *columns;
+	uint32_t needed;
+
+	if (index >= UINT32_MAX) {
+		set_failure(session, MANT_STRUCTURED_BUDGET,
+		    MANT_STRUCTURED_STAGE_RENDER, 29,
+		    index, UINT32_MAX - 1);
+		return NULL;
+	}
+	needed = (uint32_t)index + 1;
+	if (needed <= session->column_count)
+		return session->columns + index;
+	columns = grow_array(session, session->columns, needed - 1,
+	    &session->column_capacity, UINT32_MAX, sizeof(*columns),
+	    session->limits->max_builder_allocated_bytes, 9,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (columns == NULL)
+		return NULL;
+	session->columns = columns;
+	memset(columns + session->column_count, 0,
+	    (needed - session->column_count) * sizeof(*columns));
+	session->column_count = needed;
+	return columns + index;
+}
+
+static int
+ensure_slots(struct structured_session *session,
+    struct structured_column *column, size_t end)
+{
+	struct structured_slot *slots;
+	uint32_t needed, old_capacity;
+
+	if (end > UINT32_MAX) {
+		set_failure(session, MANT_STRUCTURED_BUDGET,
+		    MANT_STRUCTURED_STAGE_RENDER, 29, end, UINT32_MAX);
+		return 0;
+	}
+	needed = (uint32_t)end;
+	if (needed <= column->capacity)
+		return 1;
+	old_capacity = column->capacity;
+	slots = grow_array(session, column->slots, needed - 1,
+	    &column->capacity, UINT32_MAX, sizeof(*slots),
+	    session->limits->max_builder_allocated_bytes, 9,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (slots == NULL)
+		return 0;
+	column->slots = slots;
+	memset(slots + old_capacity, 0,
+	    (column->capacity - old_capacity) * sizeof(*slots));
+	return 1;
+}
+
+static void
+observe_terminal(struct termp *p, void *arg,
+    const struct term_collector_event *event)
+{
+	struct structured_session *session = arg;
+	struct structured_column *column;
+	const struct roff_node **stack;
+	const struct roff_node *node;
+	uint32_t maximum, key;
+	size_t index;
+
+	(void)p;
+	if (session == NULL || event == NULL ||
+	    session->status != MANT_STRUCTURED_OK)
+		return;
+	if (session->probe != NULL) {
+		uint64_t columns;
+
+		if (session->probe->collector_events != UINT64_MAX)
+			session->probe->collector_events++;
+		columns = event->column == SIZE_MAX ? UINT64_MAX :
+		    (uint64_t)event->column + 1;
+		if (session->probe->peak_columns < columns)
+			session->probe->peak_columns = columns;
+		if (session->probe->peak_slots < event->end)
+			session->probe->peak_slots = event->end;
+		switch (event->op) {
+		case TERM_COLLECT_LOGICAL:
+			if (session->probe->logical_events != UINT64_MAX)
+				session->probe->logical_events++;
+			break;
+		case TERM_COLLECT_BUFFER_WRITE:
+			if (session->probe->buffer_writes != UINT64_MAX)
+				session->probe->buffer_writes++;
+			break;
+		case TERM_COLLECT_BUFFER_CURSOR:
+			if (session->probe->cursor_moves != UINT64_MAX)
+				session->probe->cursor_moves++;
+			break;
+		case TERM_COLLECT_BUFFER_TRUNCATE:
+			if (session->probe->truncates != UINT64_MAX)
+				session->probe->truncates++;
+			break;
+		case TERM_COLLECT_BUFFER_CONSUME:
+			if (session->probe->consumes != UINT64_MAX)
+				session->probe->consumes++;
+			break;
+		case TERM_COLLECT_BUFFER_RESET:
+			if (session->probe->resets != UINT64_MAX)
+				session->probe->resets++;
+			break;
+		default:
+			break;
+		}
+	}
+	if (!charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return;
+	if (event->op == TERM_COLLECT_OUTPUT) {
+		if (event->phase == TERM_COLLECT_ENTER)
+			session->output_depth++;
+		else if (event->phase == TERM_COLLECT_LEAVE &&
+		    session->output_depth != 0)
+			session->output_depth--;
+		return;
+	}
+	if (event->op == TERM_COLLECT_NODE) {
+		if (event->phase == TERM_COLLECT_ENTER) {
+			maximum = session->limits->max_nesting_depth > UINT32_MAX ?
+			    UINT32_MAX :
+			    (uint32_t)session->limits->max_nesting_depth;
+			stack = grow_array(session, session->node_stack,
+			    session->node_depth, &session->node_capacity, maximum,
+			    sizeof(*stack),
+			    session->limits->max_builder_allocated_bytes, 35,
+			    MANT_STRUCTURED_STAGE_RENDER);
+			if (stack == NULL)
+				return;
+			session->node_stack = stack;
+			session->node_stack[session->node_depth++] = event->node;
+			if (event->node != NULL && (event->node->tok == MAN_SH ||
+			    event->node->tok == MDOC_Sh ||
+			    event->node->tok == MAN_PP ||
+			    event->node->tok == MAN_LP ||
+			    event->node->tok == MAN_P ||
+			    event->node->tok == MDOC_Pp)) {
+				session->current_root = 0;
+				session->current_owner = 0;
+				session->current_root_atom_count = 0;
+			}
+		} else if (event->phase == TERM_COLLECT_LEAVE) {
+			if (session->node_depth == 0 ||
+			    session->node_stack[session->node_depth - 1] != event->node) {
+				set_failure(session, MANT_STRUCTURED_RELATION,
+				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+				return;
+			}
+			session->node_depth--;
+		}
+		return;
+	}
+	if (event->op == TERM_COLLECT_LOGICAL) {
+		collect_logical(session, event);
+		return;
+	}
+	if (event->op == TERM_COLLECT_BUFFER_WRITE) {
+		uint32_t projection;
+		struct structured_slot *slot;
+
+		column = collector_column(session, event->column);
+		if (column == NULL)
+			return;
+		if (event->pos >= event->end || event->end - event->pos != 1) {
+			set_failure(session, MANT_STRUCTURED_RELATION,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, event->pos,
+			    event->end);
+			return;
+		}
+		if (!ensure_slots(session, column, event->end))
+			return;
+		if (event->reason == TERM_COLLECT_NORMALIZE)
+			return;
+		projection = event->reason == TERM_COLLECT_PROJECTION ?
+		    record_projection(session, session->pending_token,
+		    event->value) : 0;
+		if (session->status != MANT_STRUCTURED_OK)
+			return;
+		if (!charge(session, &session->annotation_mutations, 1,
+		    session->limits->max_annotation_mutations, 29,
+		    MANT_STRUCTURED_STAGE_RENDER))
+			return;
+		key = event->reason == TERM_COLLECT_HORIZ ||
+		    event->reason == TERM_COLLECT_FIELD ? 0 :
+		    session->pending_token;
+		slot = column->slots + event->pos;
+		discard_slot(session, slot);
+		slot->token = key;
+		slot->projection = projection;
+		if (key != 0)
+			session->tokens[key - 1].live_slots++;
+		return;
+	}
+	if (event->op == TERM_COLLECT_DIRECT) {
+		commit_token(session, session->pending_token);
+		return;
+	}
+	if (event->op == TERM_COLLECT_BUFFER_TRUNCATE ||
+	    event->op == TERM_COLLECT_BUFFER_CONSUME ||
+	    event->op == TERM_COLLECT_BUFFER_RESET) {
+		column = collector_column(session, event->column);
+		if (column == NULL)
+			return;
+		if (event->op == TERM_COLLECT_BUFFER_TRUNCATE ||
+		    event->op == TERM_COLLECT_BUFFER_RESET) {
+			column->partial_end = 0;
+			column->partial_pending = 0;
+		} else if (session->probe != NULL) {
+			if (column->partial_pending &&
+			    event->pos == column->partial_end) {
+				if (session->probe->continued_consumes != UINT64_MAX)
+					session->probe->continued_consumes++;
+				column->partial_pending = 0;
+			}
+			if (event->end < p->tcol->lastcol) {
+				if (session->probe->partial_consumes != UINT64_MAX)
+					session->probe->partial_consumes++;
+				column->partial_end = event->end > UINT32_MAX ?
+				    UINT32_MAX : (uint32_t)event->end;
+				column->partial_pending = 1;
+			}
+		}
+		if (event->end > column->capacity || event->pos > event->end) {
+			set_failure(session, MANT_STRUCTURED_RELATION,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, event->end,
+			    column->capacity);
+			return;
+		}
+		if (!charge(session, &session->annotation_mutations,
+		    event->end - event->pos,
+		    session->limits->max_annotation_mutations, 29,
+		    MANT_STRUCTURED_STAGE_RENDER))
+			return;
+		for (index = event->pos; index < event->end; index++) {
+			if (event->op == TERM_COLLECT_BUFFER_CONSUME)
+				consume_slot(session, column->slots + index);
+			else
+				discard_slot(session, column->slots + index);
+		}
+		if (event->op == TERM_COLLECT_BUFFER_RESET)
+			session->pending_token = 0;
+		return;
+	}
+	if (event->op != TERM_COLLECT_ENDLINE)
+		return;
+	if (session->pending_break_root != 0) {
+		if (!append_atom(session, session->pending_break_root,
+		    session->pending_break_provenance, MANT_ATOM_HARD_BREAK,
+		    0, 0, 0, NULL, 0, NULL, 0, 0) &&
+		    session->status == MANT_STRUCTURED_OK)
+			set_failure(session, MANT_STRUCTURED_RELATION,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+		session->pending_break_root = 0;
+		session->pending_break_provenance = 0;
+		return;
+	}
+	node = collector_node(session, event);
+	if (node != NULL && node->tok == ROFF_br && session->current_root != 0) {
+		uint32_t provenance = append_provenance(session, node, 1);
+		if (provenance != 0)
+			append_atom(session, session->current_root, provenance,
+			    MANT_ATOM_HARD_BREAK, 0, 0, 0, NULL, 0,
+			    NULL, 0, 0);
+	}
+}
+
 uint32_t
 mant_structured_render(const struct mant_structured_input_view *input,
     const struct mant_structured_limits *limits,
@@ -1153,9 +2514,12 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	struct mparse *parser;
 	struct roff_meta *meta;
 	struct mandoc_msg_state message_state;
+	struct manoutput output_options;
+	struct mant_mandoc_output *output;
+	struct termp *renderer;
 	uint64_t source_map_bytes;
 	uint32_t status;
-	int options, message_state_saved, mchars_ready;
+	int options, message_state_saved, mchars_ready, output_active;
 
 	if (out_result == NULL || failure == NULL)
 		return MANT_STRUCTURED_INVALID_INPUT;
@@ -1171,11 +2535,15 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	memset(&session, 0, sizeof(session));
 	session.input = input;
 	session.limits = limits;
+	session.probe = structured_probe;
 	session.status = MANT_STRUCTURED_OK;
 	result = NULL;
 	parser = NULL;
+	output = NULL;
+	renderer = NULL;
 	message_state_saved = 0;
 	mchars_ready = 0;
+	output_active = 0;
 	if (!validate_limits(limits)) {
 		set_failure(&session, MANT_STRUCTURED_INVALID_INPUT,
 		    MANT_STRUCTURED_STAGE_MARSHAL, 0, 0, 0);
@@ -1193,16 +2561,22 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		goto cleanup;
 	session.result = result;
 	source_map_bytes = (uint64_t)input->sources.count *
-	    sizeof(*session.source_keys);
+	    (sizeof(*session.source_keys) + sizeof(*session.source_maps));
 	if (!charge(&session, &session.source_map_entries,
 	    input->sources.count, limits->max_source_map_entries, 6,
 	    MANT_STRUCTURED_STAGE_MARSHAL) ||
 	    !charge(&session, &session.source_map_bytes, source_map_bytes,
 	    limits->max_source_map_bytes, 7, MANT_STRUCTURED_STAGE_MARSHAL))
 		goto cleanup;
-	session.source_keys = allocate(&session, source_map_bytes, 1,
+	session.source_keys = allocate(&session,
+	    (uint64_t)input->sources.count * sizeof(*session.source_keys), 1,
 	    MANT_STRUCTURED_STAGE_MARSHAL);
 	if (session.source_keys == NULL)
+		goto cleanup;
+	session.source_maps = allocate(&session,
+	    (uint64_t)input->sources.count * sizeof(*session.source_maps), 1,
+	    MANT_STRUCTURED_STAGE_MARSHAL);
+	if (session.source_maps == NULL)
 		goto cleanup;
 	options = MPARSE_UTF8 | MPARSE_LATIN1 | MPARSE_VALIDATE |
 	    MPARSE_COMMENT | MPARSE_SO;
@@ -1233,19 +2607,74 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	}
 	if (!check_nesting_depth(&session, meta->first))
 		goto native_cleanup;
+	if (session.probe == NULL && !supported_tree(meta->first)) {
+		set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, 1, 0);
+		goto native_cleanup;
+	}
 	result->root_source = session.source_keys[input->root_input - 1];
 	result->profile = input->profile;
 	result->width = input->width;
 	if (!copy_metadata(&session, meta))
 		goto native_cleanup;
-	if (meta->hasbody) {
-		set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
-		    MANT_STRUCTURED_STAGE_RENDER, 0, 1, 0);
-		goto native_cleanup;
+	if (result->metadata.has_body) {
+		output = mant_mandoc_output_alloc(
+		    limits->max_content_bytes > SIZE_MAX ? SIZE_MAX :
+		    (size_t)limits->max_content_bytes);
+		if (output == NULL || !mant_mandoc_output_begin(output)) {
+			set_failure(&session, MANT_STRUCTURED_BUILDER_ALLOC,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, 0,
+			    limits->max_builder_allocated_bytes);
+			goto native_cleanup;
+		}
+		output_active = 1;
+		memset(&output_options, 0, sizeof(output_options));
+		output_options.width = input->width;
+		renderer = input->profile == MANT_PROFILE_ASCII ?
+		    ascii_alloc(&output_options) : utf8_alloc(&output_options);
+		if (renderer == NULL) {
+			set_failure(&session, MANT_STRUCTURED_NATIVE,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+			goto native_cleanup;
+		}
+		term_setcollector(renderer, observe_terminal, &session);
+		if (meta->macroset == MACROSET_MDOC)
+			terminal_mdoc(renderer, meta);
+		else
+			terminal_man(renderer, meta);
+		term_setcollector(renderer, NULL, NULL);
+		ascii_free(renderer);
+		renderer = NULL;
+		mant_mandoc_output_end();
+		output_active = 0;
+		if (mant_mandoc_output_status(output) != 0 &&
+		    session.status == MANT_STRUCTURED_OK)
+			set_failure(&session, MANT_STRUCTURED_BUDGET,
+			    MANT_STRUCTURED_STAGE_RENDER, 10,
+			    mant_mandoc_output_length(output),
+			    limits->max_content_bytes);
+		if (session.probe != NULL)
+			session.probe->rendered_bytes =
+			    mant_mandoc_output_length(output);
+		mant_mandoc_output_free(output);
+		output = NULL;
+		if (session.probe == NULL && session.pending_break_root != 0 &&
+		    session.status == MANT_STRUCTURED_OK)
+			set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+		if (session.status != MANT_STRUCTURED_OK)
+			goto native_cleanup;
 	}
 	result->magic = MANT_STRUCTURED_MAGIC;
 
 native_cleanup:
+	if (renderer != NULL) {
+		term_setcollector(renderer, NULL, NULL);
+		ascii_free(renderer);
+	}
+	if (output_active)
+		mant_mandoc_output_end();
+	mant_mandoc_output_free(output);
 	if (parser != NULL)
 		mparse_free(parser);
 	parser = NULL;
@@ -1259,15 +2688,52 @@ native_cleanup:
 		    session.status == MANT_STRUCTURED_OK)
 			set_failure(&session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
-		else if (session.status == MANT_STRUCTURED_OK &&
-		    !check_result(result))
-			set_failure(&session, MANT_STRUCTURED_RELATION,
-			    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
-		else if (session.status == MANT_STRUCTURED_OK)
-			result->checked = 1;
+		else if (session.status == MANT_STRUCTURED_OK) {
+			result->source_maps = session.source_maps;
+			result->source_map_count = input->sources.count;
+			session.source_maps = NULL;
+			if (!check_result(result))
+				set_failure(&session, MANT_STRUCTURED_RELATION,
+				    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
+			else
+				result->checked = 1;
+		}
 	}
+	if (session.probe != NULL && session.status == MANT_STRUCTURED_OK)
+		set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 
 cleanup:
+	if (session.probe != NULL) {
+		uint64_t slots = 0, sidecar_bytes;
+		uint32_t column;
+
+		for (column = 0; column < session.column_count; column++) {
+			if (UINT64_MAX - slots < session.columns[column].capacity) {
+				slots = UINT64_MAX;
+				break;
+			}
+			slots += session.columns[column].capacity;
+		}
+		sidecar_bytes = (uint64_t)session.node_capacity *
+		    sizeof(*session.node_stack) +
+		    (uint64_t)session.token_capacity * sizeof(*session.tokens) +
+		    (uint64_t)session.column_capacity * sizeof(*session.columns) +
+		    session.projection_byte_capacity +
+		    session.projection_survived_capacity;
+		if (slots == UINT64_MAX || slots >
+		    (UINT64_MAX - sidecar_bytes) / sizeof(struct structured_slot))
+			sidecar_bytes = UINT64_MAX;
+		else
+			sidecar_bytes += slots * sizeof(struct structured_slot);
+		session.probe->builder_allocated_bytes = session.allocated_bytes;
+		session.probe->content_bytes = session.content_bytes;
+		session.probe->source_count = result == NULL ? 0 :
+		    result->source_count;
+		session.probe->token_count = session.token_count;
+		session.probe->slot_capacity = slots;
+		session.probe->sidecar_allocated_bytes = sidecar_bytes;
+	}
 	status = session.status;
 	if (status == MANT_STRUCTURED_OK) {
 		*out_result = result;
@@ -1280,10 +2746,50 @@ cleanup:
 		failure->allowed = session.allowed;
 	}
 	free(session.source_keys);
-	free(session.source_lines);
+	if (session.source_maps != NULL)
+		for (uint32_t source = 0; source < input->sources.count; source++)
+			free(session.source_maps[source].lines);
+	free(session.source_maps);
+	free(session.node_stack);
+	for (uint32_t column = 0; column < session.column_count; column++)
+		free(session.columns[column].slots);
+	free(session.columns);
+	free(session.tokens);
+	free(session.projection_bytes);
+	free(session.projection_survived);
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;
 	structured_active = 0;
+	return status;
+}
+
+uint32_t
+mant_structured_probe(const struct mant_structured_input_view *input,
+    const struct mant_structured_limits *limits,
+    struct mant_structured_probe_metrics *metrics,
+    struct mant_structured_failure_view *failure)
+{
+	struct mant_structured_result *result = NULL;
+	uint32_t status;
+
+	if (metrics == NULL || failure == NULL)
+		return MANT_STRUCTURED_INVALID_INPUT;
+	memset(metrics, 0, sizeof(*metrics));
+	clear_failure(failure);
+	if (structured_active || structured_probe != NULL) {
+		failure->status = MANT_STRUCTURED_REENTRANT;
+		failure->stage = MANT_STRUCTURED_STAGE_MARSHAL;
+		return failure->status;
+	}
+	structured_probe = metrics;
+	status = mant_structured_render(input, limits, &result, failure);
+	structured_probe = NULL;
+	mant_structured_result_free(result);
+	if (status == MANT_STRUCTURED_OK) {
+		failure->status = MANT_STRUCTURED_RELATION;
+		failure->stage = MANT_STRUCTURED_STAGE_CHECK;
+		return failure->status;
+	}
 	return status;
 }
 
@@ -1293,6 +2799,13 @@ check_result(const struct mant_structured_result *result)
 	const struct mant_structured_metadata_view *metadata;
 	const struct mant_structured_source_view *source;
 	const struct mant_structured_span_view *span;
+	const struct mant_structured_provenance_view *provenance;
+	const struct mant_structured_owner_view *owner;
+	const struct mant_structured_content_root_view *root;
+	const struct mant_structured_content_atom_view *atom;
+	const struct mant_structured_content_ref_view *content_ref;
+	const struct mant_structured_link_view *link;
+	const struct mant_structured_block_view *block;
 	const struct mant_structured_diagnostic_view *diagnostic;
 	struct mant_bytes_view metadata_strings[8];
 	uint32_t metadata_flags[] = {
@@ -1300,18 +2813,32 @@ check_result(const struct mant_structured_result *result)
 		MANT_METADATA_VOLUME_PRESENT, MANT_METADATA_OS_PRESENT,
 		MANT_METADATA_ARCH_PRESENT, MANT_METADATA_NAME_PRESENT,
 		MANT_METADATA_DATE_PRESENT, MANT_METADATA_ALIAS_PRESENT };
-	uint32_t i;
+	uint32_t i, expected_ordinal, previous_root, previous_owner;
+	uint32_t next_ref, previous_ref_atom;
+	uint32_t top_level_ordinal, current_parent, child_ordinal;
 
 	if (result == NULL || result->magic != MANT_STRUCTURED_MAGIC ||
-	    result->root_source == 0 ||
-	    result->root_source > result->source_count ||
+	    result->root_source != 1 ||
 	    (result->profile != MANT_PROFILE_UTF8 &&
 	    result->profile != MANT_PROFILE_ASCII) || result->width == 0 ||
 	    result->metadata.reserved != 0 ||
 	    (result->source_count == 0) ||
 	    (result->source_count != 0) != (result->sources != NULL) ||
 	    (result->span_count != 0) != (result->spans != NULL) ||
-	    (result->diagnostic_count != 0) != (result->diagnostics != NULL))
+	    (result->provenance_count != 0) !=
+	    (result->provenances != NULL) ||
+	    (result->owner_count != 0) != (result->owners != NULL) ||
+	    (result->content_root_count != 0) !=
+	    (result->content_roots != NULL) ||
+	    (result->content_atom_count != 0) !=
+	    (result->content_atoms != NULL) ||
+	    (result->content_ref_count != 0) !=
+	    (result->content_refs != NULL) ||
+	    (result->link_count != 0) != (result->links != NULL) ||
+	    (result->block_count != 0) != (result->blocks != NULL) ||
+	    (result->diagnostic_count != 0) != (result->diagnostics != NULL) ||
+	    result->source_maps == NULL ||
+	    result->source_map_count < result->source_count)
 		return 0;
 	metadata = &result->metadata;
 	if ((metadata->macroset != MANT_FORMAT_MAN &&
@@ -1369,11 +2896,214 @@ check_result(const struct mant_structured_result *result)
 		    (span->line_end == span->line_start &&
 		    span->column_end < span->column_start))))
 			return 0;
-		if (span->byte_range_present == 0) {
-			if (span->byte_start != 0 || span->byte_end != 0)
+		if (span->line_column_present != 0 &&
+		    (!source_position_in_maps(result->source_maps,
+		    result->source_map_count, span->source, span->line_start,
+		    span->column_start - 1) ||
+		    (span->line_end != 0 && !source_position_in_maps(
+		    result->source_maps, result->source_map_count, span->source,
+		    span->line_end, span->column_end - 1))))
+			return 0;
+		if (span->byte_range_present != 0 || span->byte_start != 0 ||
+		    span->byte_end != 0)
+			return 0;
+	}
+	for (i = 0; i < result->provenance_count; i++) {
+		provenance = result->provenances + i;
+		if (provenance->reserved != 0)
+			return 0;
+		switch (provenance->kind) {
+		case MANT_PROVENANCE_AUTHORED:
+			if (provenance->authored_span == 0 ||
+			    provenance->authored_span > result->span_count ||
+			    provenance->generated_trigger_span != 0)
 				return 0;
-		} else if (span->byte_start > span->byte_end ||
-		    span->byte_end > result->sources[span->source - 1].decoded_length)
+			break;
+		case MANT_PROVENANCE_GENERATED:
+			if (provenance->authored_span != 0 ||
+			    provenance->generated_trigger_span > result->span_count)
+				return 0;
+			break;
+		case MANT_PROVENANCE_UNKNOWN:
+			if (provenance->authored_span != 0 ||
+			    provenance->generated_trigger_span != 0)
+				return 0;
+			break;
+		default:
+			return 0;
+		}
+	}
+	for (i = 0; i < result->owner_count; i++) {
+		owner = result->owners + i;
+		if (owner->key != i + 1 || owner->reserved != 0 ||
+		    (owner->kind != MANT_OWNER_DOCUMENT &&
+		    owner->kind != MANT_OWNER_SECTION) ||
+		    owner->provenance == 0 ||
+		    owner->provenance > result->provenance_count)
+			return 0;
+	}
+	previous_owner = expected_ordinal = 0;
+	for (i = 0; i < result->content_root_count; i++) {
+		root = result->content_roots + i;
+		if (root->owner != previous_owner) {
+			if (root->owner < previous_owner)
+				return 0;
+			previous_owner = root->owner;
+			expected_ordinal = 0;
+		}
+		if (root->key != i + 1 || root->owner == 0 ||
+		    root->owner > result->owner_count ||
+		    root->ordinal != expected_ordinal++ ||
+		    (root->kind != MANT_ROOT_HEADING &&
+		    root->kind != MANT_ROOT_BODY) || root->provenance == 0 ||
+		    root->provenance > result->provenance_count ||
+		    root->reserved != 0)
+			return 0;
+	}
+	previous_root = expected_ordinal = 0;
+	for (i = 0; i < result->content_atom_count; i++) {
+		atom = result->content_atoms + i;
+		if (atom->root != previous_root) {
+			previous_root = atom->root;
+			expected_ordinal = 0;
+		}
+		if (atom->key != i + 1 || atom->root == 0 ||
+		    atom->root > result->content_root_count ||
+		    atom->ordinal != expected_ordinal++ || atom->owner == 0 ||
+		    atom->owner != result->content_roots[atom->root - 1].owner ||
+		    (atom->style_flags & ~(MANT_STYLE_BOLD | MANT_STYLE_ITALIC |
+		    MANT_STYLE_LITERAL | MANT_STYLE_UNDERLINE)) != 0 ||
+		    atom->role > MANT_ROLE_PATH || atom->link > result->link_count ||
+		    atom->display_override_present > 1 ||
+		    !zero_bytes(atom->display_reserved_bytes,
+		    sizeof(atom->display_reserved_bytes)) ||
+		    (atom->display_override_present == 0 ?
+		    atom->display_override.ptr != NULL ||
+		    atom->display_override.len != 0 :
+		    !valid_string(atom->display_override) ||
+		    atom->display_override.len == 0) ||
+		    !zero_bytes(atom->reserved_bytes,
+		    sizeof(atom->reserved_bytes)) || atom->provenance == 0 ||
+		    atom->provenance > result->provenance_count ||
+		    atom->reserved != 0)
+			return 0;
+		if (atom->kind == MANT_ATOM_TEXT) {
+			if (!valid_string(atom->text) || atom->text.len == 0 ||
+			    atom->whitespace_breakable != 0)
+				return 0;
+		} else if (atom->kind == MANT_ATOM_WHITESPACE) {
+			if (!valid_string(atom->text) || atom->text.len == 0 ||
+			    atom->whitespace_breakable > 1)
+				return 0;
+		} else if (atom->kind == MANT_ATOM_BREAK_OPPORTUNITY ||
+		    atom->kind == MANT_ATOM_HARD_BREAK) {
+			if (atom->text.ptr != NULL || atom->text.len != 0 ||
+			    atom->whitespace_breakable != 0 ||
+			    atom->style_flags != 0 || atom->role != 0 ||
+			    atom->link != 0 || atom->display_override_present != 0)
+				return 0;
+		} else
+			return 0;
+	}
+	for (i = 0; i < result->content_ref_count; i++) {
+		content_ref = result->content_refs + i;
+		if (content_ref->reserved != 0 || content_ref->atom == 0 ||
+		    content_ref->atom > result->content_atom_count ||
+		    content_ref->byte_start >= content_ref->byte_end ||
+		    content_ref->byte_end >
+		    result->content_atoms[content_ref->atom - 1].text.len ||
+		    !utf8_boundary(
+		    result->content_atoms[content_ref->atom - 1].text,
+		    content_ref->byte_start) ||
+		    !utf8_boundary(
+		    result->content_atoms[content_ref->atom - 1].text,
+		    content_ref->byte_end))
+			return 0;
+	}
+	next_ref = previous_ref_atom = 0;
+	for (i = 0; i < result->link_count; i++) {
+		uint32_t ref_index;
+
+		link = result->links + i;
+		if (link->key != i + 1 || link->owner == 0 ||
+		    link->owner > result->owner_count ||
+		    link->target_kind < MANT_LINK_EXTERNAL ||
+		    link->target_kind > MANT_LINK_SECTION ||
+		    !valid_string(link->target_a) || link->target_a.len == 0 ||
+		    link->target_b_present > 1 ||
+		    !zero_bytes(link->target_b_reserved_bytes,
+		    sizeof(link->target_b_reserved_bytes)) ||
+		    link->title_present > 1 ||
+		    !zero_bytes(link->title_reserved_bytes,
+		    sizeof(link->title_reserved_bytes)) ||
+		    (link->target_b_present == 0 ?
+		    link->target_b.ptr != NULL || link->target_b.len != 0 :
+		    !valid_string(link->target_b) || link->target_b.len == 0) ||
+		    (link->title_present == 0 ?
+		    link->title.ptr != NULL || link->title.len != 0 :
+		    !valid_string(link->title)) ||
+		    link->first_label_ref != next_ref + 1 ||
+		    link->label_ref_count == 0 ||
+		    link->label_ref_count > result->content_ref_count -
+		    link->first_label_ref + 1 || link->provenance == 0 ||
+		    link->provenance > result->provenance_count ||
+		    link->reserved != 0)
+			return 0;
+		if ((link->target_kind == MANT_LINK_MANUAL) !=
+		    (link->target_b_present != 0))
+			return 0;
+		for (ref_index = 0; ref_index < link->label_ref_count;
+		    ref_index++) {
+			content_ref = result->content_refs +
+			    link->first_label_ref - 1 + ref_index;
+			if (content_ref->atom <= previous_ref_atom ||
+			    result->content_atoms[content_ref->atom - 1].link !=
+			    link->key)
+				return 0;
+			previous_ref_atom = content_ref->atom;
+		}
+		next_ref += link->label_ref_count;
+	}
+	if (next_ref != result->content_ref_count)
+		return 0;
+	next_ref = 0;
+	for (i = 0; i < result->content_atom_count; i++) {
+		atom = result->content_atoms + i;
+		if (atom->link == 0)
+			continue;
+		if (next_ref >= result->content_ref_count ||
+		    result->content_refs[next_ref].atom != atom->key)
+			return 0;
+		next_ref++;
+	}
+	if (next_ref != result->content_ref_count)
+		return 0;
+	if (result->block_count != result->content_root_count)
+		return 0;
+	top_level_ordinal = current_parent = child_ordinal = 0;
+	for (i = 0; i < result->block_count; i++) {
+		block = result->blocks + i;
+		root = result->content_roots + i;
+		if (block->parent == 0) {
+			if (block->ordinal != top_level_ordinal++)
+				return 0;
+			current_parent = block->key;
+			child_ordinal = 0;
+		} else if (block->parent != current_parent ||
+		    block->ordinal != child_ordinal++)
+			return 0;
+		if (block->key != i + 1 || block->owner != root->owner ||
+		    block->parent > result->block_count ||
+		    block->parent == block->key ||
+		    (block->parent != 0 &&
+		    result->blocks[block->parent - 1].owner != block->owner) ||
+		    block->provenance == 0 ||
+		    block->provenance > result->provenance_count ||
+		    block->root != root->key || block->table != 0 ||
+		    block->fixed_view != 0 || block->reserved != 0 ||
+		    (root->kind == MANT_ROOT_HEADING ?
+		    block->kind != MANT_BLOCK_HEADING :
+		    block->kind != MANT_BLOCK_PARAGRAPH))
 			return 0;
 	}
 	for (i = 0; i < result->diagnostic_count; i++) {
@@ -1385,9 +3115,15 @@ check_result(const struct mant_structured_result *result)
 		    diagnostic->code > MANT_DIAGNOSTIC_CODE_NATIVE_LAST ||
 		    !valid_string(diagnostic->message) ||
 		    diagnostic->span > result->span_count ||
-		    diagnostic->owner != 0)
+		    diagnostic->owner > result->owner_count)
 			return 0;
 	}
+	if ((metadata->has_body == 0 && (result->owner_count != 0 ||
+	    result->content_root_count != 0 || result->content_atom_count != 0 ||
+	    result->block_count != 0)) ||
+	    (metadata->has_body != 0 && (result->owner_count == 0 ||
+	    result->content_root_count == 0 || result->block_count == 0)))
+		return 0;
 	return 1;
 }
 
@@ -1425,14 +3161,18 @@ mant_structured_result_view(const struct mant_structured_result *result,
 	view->metadata = result->metadata;
 	view->sources = SLICE(result->sources, result->source_count);
 	view->spans = SLICE(result->spans, result->span_count);
-	view->provenances = EMPTY_SLICE(struct mant_structured_provenance_view);
-	view->owners = EMPTY_SLICE(struct mant_structured_owner_view);
-	view->content_roots = EMPTY_SLICE(struct mant_structured_content_root_view);
-	view->content_atoms = EMPTY_SLICE(struct mant_structured_content_atom_view);
-	view->content_refs = EMPTY_SLICE(struct mant_structured_content_ref_view);
+	view->provenances = SLICE(result->provenances,
+	    result->provenance_count);
+	view->owners = SLICE(result->owners, result->owner_count);
+	view->content_roots = SLICE(result->content_roots,
+	    result->content_root_count);
+	view->content_atoms = SLICE(result->content_atoms,
+	    result->content_atom_count);
+	view->content_refs = SLICE(result->content_refs,
+	    result->content_ref_count);
 	view->content_points = EMPTY_SLICE(struct mant_structured_content_point_view);
-	view->links = EMPTY_SLICE(struct mant_structured_link_view);
-	view->blocks = EMPTY_SLICE(struct mant_structured_block_view);
+	view->links = SLICE(result->links, result->link_count);
+	view->blocks = SLICE(result->blocks, result->block_count);
 	view->tables = EMPTY_SLICE(struct mant_structured_table_view);
 	view->table_rows = EMPTY_SLICE(struct mant_structured_table_row_view);
 	view->table_cells = EMPTY_SLICE(struct mant_structured_table_cell_view);
@@ -1464,6 +3204,17 @@ mant_structured_result_free(struct mant_structured_result *result)
 		free_bytes(result->sources[i].logical_name);
 	for (i = 0; i < result->diagnostic_count; i++)
 		free_bytes(result->diagnostics[i].message);
+	for (i = 0; i < result->content_atom_count; i++) {
+		free_bytes(result->content_atoms[i].text);
+		free_bytes(result->content_atoms[i].display_override);
+	}
+	for (i = 0; i < result->link_count; i++) {
+		free_bytes(result->links[i].target_a);
+		free_bytes(result->links[i].target_b);
+		free_bytes(result->links[i].title);
+	}
+	for (i = 0; i < result->source_map_count; i++)
+		free(result->source_maps[i].lines);
 	free_bytes(result->metadata.title);
 	free_bytes(result->metadata.section);
 	free_bytes(result->metadata.volume);
@@ -1474,7 +3225,15 @@ mant_structured_result_free(struct mant_structured_result *result)
 	free_bytes(result->metadata.alias_target);
 	free(result->sources);
 	free(result->spans);
+	free(result->provenances);
+	free(result->owners);
+	free(result->content_roots);
+	free(result->content_atoms);
+	free(result->content_refs);
+	free(result->links);
+	free(result->blocks);
 	free(result->diagnostics);
+	free(result->source_maps);
 	result->magic = 0;
 	free(result);
 }

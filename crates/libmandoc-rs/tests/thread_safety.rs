@@ -10,6 +10,8 @@ use std::{fs, process};
 
 #[cfg(unix)]
 use libmandoc_rs::{IncludePolicy, ParseOptions};
+#[cfg(feature = "structured")]
+use libmandoc_rs::{InputFormat, structured::StructuredRenderer};
 use libmandoc_rs::{Parser, SourceBundle};
 #[cfg(feature = "render")]
 use libmandoc_rs::{RenderFormat, Renderer};
@@ -156,6 +158,51 @@ fn concurrent_renderers_isolate_formatter_and_output_state() {
         .collect();
     for worker in workers {
         worker.join().expect("renderer worker must not panic");
+    }
+}
+
+#[cfg(feature = "structured")]
+#[test]
+#[ignore = "run crates/libmandoc-rs/scripts/check-thread-safety"]
+fn concurrent_structured_sessions_isolate_collectors_and_source_tables() {
+    let start = Arc::new(Barrier::new(WORKERS));
+    let workers: Vec<_> = (0..WORKERS)
+        .map(|worker| {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                let identity = format!("structured-worker-{worker}");
+                let root = format!("{identity}.1");
+                let mut bundle = SourceBundle::new();
+                bundle
+                    .insert(
+                        &root,
+                        format!(
+                            ".TH STRUCTURED-{worker} 1\n.SH NAME\n\
+                             {identity} isolated structured collector\n"
+                        )
+                        .into_bytes(),
+                    )
+                    .expect("insert structured stress input");
+                start.wait();
+                for _ in 0..rounds() {
+                    let document = StructuredRenderer::new()
+                        .render_bundle(&root, &bundle, InputFormat::Man)
+                        .expect("concurrent structured render must succeed");
+                    assert_eq!(document.sources().len(), 1);
+                    let logical = document
+                        .content_atoms()
+                        .iter()
+                        .filter_map(|atom| atom.kind().logical_text())
+                        .collect::<String>();
+                    assert!(logical.contains(&identity), "{logical:?}");
+                }
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker
+            .join()
+            .expect("structured renderer worker must not panic");
     }
 }
 

@@ -384,7 +384,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 27 ordered patches in `patches/series`. The following group contains
+the 29 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -456,6 +456,11 @@ The remaining patches implement the synchronous embedding boundary:
   in the Windows memory-only formatter build.
 - `0022-apply-private-config-to-roff-escapes.patch` applies the private target
   configuration, character policy, and symbol prefix to the new escape unit.
+- `0028-bind-structured-source-diagnostics.patch` retains parse-time source
+  identity on nodes and diagnostics across virtual include entry and return.
+- `0029-observe-terminal-structure.patch` adds nullable terminal observation
+  hooks for logical content, buffer mutation, node traversal, and field state;
+  an absent observer leaves the pinned formatter path unchanged.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

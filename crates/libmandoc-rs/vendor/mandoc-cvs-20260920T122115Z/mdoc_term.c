@@ -306,6 +306,9 @@ print_mdoc_node(DECL_ARGS)
 	size_t		 offset, rmargin;  /* In basic units. */
 	int		 chld;
 
+	term_collect_node(p, n, TERM_COLLECT_ENTER);
+	term_collect_node(p, n, TERM_COLLECT_PRE);
+
 	/*
 	 * In no-fill mode, break the output line at the beginning
 	 * of new input lines except after \c, and nowhere else.
@@ -322,8 +325,11 @@ print_mdoc_node(DECL_ARGS)
 		p->flags &= ~TERMP_BRNEVER;
 	}
 
-	if (n->type == ROFFT_COMMENT || n->flags & NODE_NOPRT)
+	if (n->type == ROFFT_COMMENT || n->flags & NODE_NOPRT) {
+		term_collect_node(p, n, TERM_COLLECT_POST);
+		term_collect_node(p, n, TERM_COLLECT_LEAVE);
 		return;
+	}
 
 	chld = 1;
 	offset = p->tcol->offset;
@@ -363,6 +369,8 @@ print_mdoc_node(DECL_ARGS)
 					term_newln(p);
 				else
 					term_vspace(p);
+				term_collect_node(p, n, TERM_COLLECT_POST);
+				term_collect_node(p, n, TERM_COLLECT_LEAVE);
 				return;
 			case ' ':
 				if ((p->flags & TERMP_NONEWLINE) == 0)
@@ -374,7 +382,7 @@ print_mdoc_node(DECL_ARGS)
 		}
 		if (NODE_DELIMC & n->flags)
 			p->flags |= TERMP_NOSPACE;
-		term_word(p, n->string);
+		term_word_node(p, n->string, n);
 		if (NODE_DELIMO & n->flags)
 			p->flags |= TERMP_NOSPACE;
 		break;
@@ -393,6 +401,8 @@ print_mdoc_node(DECL_ARGS)
 	default:
 		if (n->tok < ROFF_MAX) {
 			roff_term_pre(p, n);
+			term_collect_node(p, n, TERM_COLLECT_POST);
+			term_collect_node(p, n, TERM_COLLECT_LEAVE);
 			return;
 		}
 		assert(n->tok >= MDOC_Dd && n->tok < MDOC_MAX);
@@ -403,9 +413,12 @@ print_mdoc_node(DECL_ARGS)
 		break;
 	}
 
-	if (chld && n->child)
+	if (chld && n->child) {
+		term_collect_node(p, n, TERM_COLLECT_CHILD);
 		print_mdoc_nodelist(p, &npair, meta, n->child);
+	}
 
+	term_collect_node(p, n, TERM_COLLECT_POST);
 	term_fontpopq(p,
 	    (ENDBODY_NOT == n->end ? n : n->body)->prev_font);
 
@@ -437,6 +450,7 @@ print_mdoc_node(DECL_ARGS)
 	if (n->type != ROFFT_TEXT)
 		p->tcol->offset = offset;
 	p->tcol->rmargin = rmargin;
+	term_collect_node(p, n, TERM_COLLECT_LEAVE);
 }
 
 static void
@@ -1158,7 +1172,7 @@ termp_xr_pre(DECL_ARGS)
 		return 0;
 
 	assert(n->type == ROFFT_TEXT);
-	term_word(p, n->string);
+	term_word_node(p, n->string, n);
 
 	if (NULL == (n = n->next))
 		return 0;
@@ -1168,7 +1182,7 @@ termp_xr_pre(DECL_ARGS)
 	p->flags |= TERMP_NOSPACE;
 
 	assert(n->type == ROFFT_TEXT);
-	term_word(p, n->string);
+	term_word_node(p, n->string, n);
 
 	p->flags |= TERMP_NOSPACE;
 	term_word(p, ")");
@@ -1360,7 +1374,7 @@ termp_fn_pre(DECL_ARGS)
 
 	assert(n->type == ROFFT_TEXT);
 	term_fontpush(p, TERMFONT_BOLD);
-	term_word(p, n->string);
+	term_word_node(p, n->string, n);
 	term_fontpop(p);
 
 	if (pretty) {
@@ -1380,7 +1394,7 @@ termp_fn_pre(DECL_ARGS)
 		term_fontpush(p, TERMFONT_UNDER);
 		if (pretty)
 			p->flags |= TERMP_NBRWORD;
-		term_word(p, n->string);
+		term_word_node(p, n->string, n);
 		term_fontpop(p);
 
 		if (n->next) {
@@ -1411,7 +1425,7 @@ termp_fa_pre(DECL_ARGS)
 	for (nn = n->child; nn != NULL; nn = nn->next) {
 		term_fontpush(p, TERMFONT_UNDER);
 		p->flags |= TERMP_NBRWORD;
-		term_word(p, nn->string);
+		term_word_node(p, nn->string, nn);
 		term_fontpop(p);
 		if (nn->next != NULL) {
 			p->flags |= TERMP_NOSPACE;
@@ -1622,7 +1636,8 @@ termp_quote_pre(DECL_ARGS)
 		if (NULL == n->norm->Es ||
 		    NULL == n->norm->Es->child)
 			return 1;
-		term_word(p, n->norm->Es->child->string);
+		term_word_node(p, n->norm->Es->child->string,
+		    n->norm->Es->child);
 		break;
 	case MDOC_Po:
 	case MDOC_Pq:
@@ -1682,7 +1697,8 @@ termp_quote_post(DECL_ARGS)
 		    n->norm->Es->child->next == NULL)
 			p->flags &= ~TERMP_NOSPACE;
 		else
-			term_word(p, n->norm->Es->child->next->string);
+			term_word_node(p, n->norm->Es->child->next->string,
+			    n->norm->Es->child->next);
 		break;
 	case MDOC_Po:
 	case MDOC_Pq:
@@ -1897,7 +1913,7 @@ termp_lk_pre(DECL_ARGS)
 		while (descr != punct) {
 			if (descr->flags & (NODE_DELIMC | NODE_DELIMO))
 				p->flags |= TERMP_NOSPACE;
-			term_word(p, descr->string);
+			term_word_node(p, descr->string, descr);
 			descr = descr->next;
 		}
 		term_fontpop(p);
@@ -1906,12 +1922,12 @@ termp_lk_pre(DECL_ARGS)
 	}
 
 	/* Link target. */
-	term_word(p, link->string);
+	term_word_node(p, link->string, link);
 
 	/* Trailing punctuation. */
 	while (punct != NULL) {
 		p->flags |= TERMP_NOSPACE;
-		term_word(p, punct->string);
+		term_word_node(p, punct->string, punct);
 		punct = punct->next;
 	}
 	return 0;

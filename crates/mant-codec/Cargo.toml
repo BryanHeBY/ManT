@@ -19,6 +19,7 @@ all-features = true
 [features]
 default = []
 roff = ["dep:libmandoc-rs"]
+native-structured = ["roff", "libmandoc-rs/structured"]
 
 [dependencies]
 libmandoc-rs = { path = "../libmandoc-rs", version = "^0.12.0", optional = true }

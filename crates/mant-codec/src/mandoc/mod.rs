@@ -10,6 +10,9 @@ mod formatter;
 pub(crate) mod inline;
 mod layout;
 mod navigation;
+#[cfg(feature = "native-structured")]
+#[allow(dead_code)] // C02b is a private vertical slice; C03 supplies its first product caller.
+mod projection;
 mod redirect;
 mod reference;
 mod roff_escape;

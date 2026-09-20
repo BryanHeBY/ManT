@@ -45,6 +45,74 @@ struct	termp;
 
 typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
 
+/*
+ * Optional, read-only observation of terminal rendering.  The callback is
+ * invoked immediately before the reported mutation.  It must not modify the
+ * terminal state and cannot affect rendering.
+ */
+enum term_collector_op {
+	TERM_COLLECT_NODE,
+	TERM_COLLECT_OUTPUT,
+	TERM_COLLECT_LOGICAL,
+	TERM_COLLECT_COL_SELECT,
+	TERM_COLLECT_COL_RESIZE,
+	TERM_COLLECT_BUFFER_GROW,
+	TERM_COLLECT_COL_FREE,
+	TERM_COLLECT_BUFFER_WRITE,
+	TERM_COLLECT_BUFFER_CURSOR,
+	TERM_COLLECT_BUFFER_TRUNCATE,
+	TERM_COLLECT_BUFFER_CONSUME,
+	TERM_COLLECT_BUFFER_RESET,
+	TERM_COLLECT_FIELD_SKIP,
+	TERM_COLLECT_FIELD_PLACE,
+	TERM_COLLECT_DIRECT,
+	TERM_COLLECT_ENDLINE
+};
+
+enum term_collector_phase {
+	TERM_COLLECT_ENTER,
+	TERM_COLLECT_PRE,
+	TERM_COLLECT_CHILD,
+	TERM_COLLECT_POST,
+	TERM_COLLECT_LEAVE
+};
+
+enum term_collector_reason {
+	TERM_COLLECT_NONE,
+	TERM_COLLECT_TEXT,
+	TERM_COLLECT_AUTO_SPACE,
+	TERM_COLLECT_KEEP_SPACE,
+	TERM_COLLECT_ESCAPE,
+	TERM_COLLECT_PROJECTION,
+	TERM_COLLECT_HORIZ,
+	TERM_COLLECT_OVERSTRIKE,
+	TERM_COLLECT_FONT,
+	TERM_COLLECT_NORMALIZE,
+	TERM_COLLECT_FIELD,
+	TERM_COLLECT_WRAP,
+	TERM_COLLECT_FINAL,
+	TERM_COLLECT_MARGIN,
+	TERM_COLLECT_HEADER,
+	TERM_COLLECT_FOOTER
+};
+
+struct term_collector_event {
+	enum term_collector_op	 op;
+	enum term_collector_phase phase;
+	enum term_collector_reason reason;
+	const struct roff_node	*node;     /* Exact authored origin, if any. */
+	size_t			 column;   /* Index in termp.tcols. */
+	size_t			 pos;      /* Start/old position or allocation. */
+	size_t			 end;      /* Exclusive end/new position. */
+	size_t			 visual;   /* Width in basic units, if applicable. */
+	int			 value;    /* New/raw buffer value, if applicable. */
+	int			 previous; /* Replaced value, if applicable. */
+	enum termfont		 font;     /* Effective font at insertion. */
+};
+
+typedef void (*term_collector)(struct termp *, void *,
+		const struct term_collector_event *);
+
 struct	termp_col {
 	int		 *buf;		/* Output buffer. */
 	size_t		  maxcols;	/* Allocated bytes in buf. */
@@ -124,6 +192,9 @@ struct	termp {
 	const void	 *argf;		/* arg for headf/footf */
 	const char	 *mc;		/* Margin character. */
 	struct termp_ps	 *ps;
+	term_collector	  collector;	/* Optional terminal observer. */
+	void		 *collector_arg;
+	const struct roff_node *collector_node; /* Exact word origin. */
 };
 
 
@@ -138,10 +209,15 @@ void		  term_setcol(struct termp *, size_t);
 void		  term_newln(struct termp *);
 void		  term_vspace(struct termp *);
 void		  term_word(struct termp *, const char *);
+void		  term_word_node(struct termp *, const char *,
+			const struct roff_node *);
 void		  term_flushln(struct termp *);
 void		  term_begin(struct termp *, term_margin,
 			term_margin, const struct roff_meta *);
 void		  term_end(struct termp *);
+void		  term_setcollector(struct termp *, term_collector, void *);
+void		  term_collect_node(struct termp *, const struct roff_node *,
+			enum term_collector_phase);
 
 void		  term_setwidth(struct termp *, const char *);
 int		  term_hspan(const struct termp *, const struct roffsu *);

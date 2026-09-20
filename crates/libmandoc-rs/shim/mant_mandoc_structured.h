@@ -252,6 +252,28 @@ struct mant_structured_failure_view {
 	uint32_t reserved;
 };
 
+/* Private measurement-only result.  The probe never returns a document. */
+struct mant_structured_probe_metrics {
+	uint64_t collector_events;
+	uint64_t logical_events;
+	uint64_t buffer_writes;
+	uint64_t cursor_moves;
+	uint64_t truncates;
+	uint64_t consumes;
+	uint64_t partial_consumes;
+	uint64_t continued_consumes;
+	uint64_t resets;
+	uint64_t peak_columns;
+	uint64_t peak_slots;
+	uint64_t rendered_bytes;
+	uint64_t builder_allocated_bytes;
+	uint64_t content_bytes;
+	uint64_t source_count;
+	uint64_t token_count;
+	uint64_t slot_capacity;
+	uint64_t sidecar_allocated_bytes;
+};
+
 struct mant_structured_limits {
 	uint64_t max_input_sources;
 	uint64_t max_sources;
@@ -473,6 +495,10 @@ size_t mant_structured_view_size(uint32_t);
 size_t mant_structured_view_align(uint32_t);
 size_t mant_structured_view_offset(uint32_t, uint32_t);
 void mant_structured_test_fail_after(uint64_t);
+uint32_t mant_structured_probe(const struct mant_structured_input_view *,
+    const struct mant_structured_limits *,
+    struct mant_structured_probe_metrics *,
+    struct mant_structured_failure_view *);
 
 struct mparse;
 int mant_structured_read_bundle(struct mparse *, const char *);

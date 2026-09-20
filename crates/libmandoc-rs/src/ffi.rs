@@ -7,6 +7,8 @@ mod render;
 mod session;
 #[cfg(feature = "structured")]
 mod structured;
+#[cfg(feature = "structured")]
+pub(crate) use structured::render_structured;
 #[cfg(windows)]
 mod windows_root;
 

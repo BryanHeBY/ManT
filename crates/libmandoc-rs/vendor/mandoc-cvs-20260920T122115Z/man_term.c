@@ -303,7 +303,7 @@ pre_alternate(DECL_ARGS)
 	for (i = 0, nn = n->child; nn != NULL; nn = nn->next, i = 1 - i) {
 		term_fontrepl(p, font[i]);
 		assert(nn->type == ROFFT_TEXT);
-		term_word(p, nn->string);
+		term_word_node(p, nn->string, nn);
 		if (nn->flags & NODE_EOS)
 			p->flags |= TERMP_SENTENCE;
 		if (nn->next != NULL)
@@ -325,19 +325,19 @@ pre_MR(DECL_ARGS)
 	term_fontrepl(p, TERMFONT_NONE);
 	n = n->child;
 	if (n != NULL) {
-		term_word(p, n->string);   /* name */
+		term_word_node(p, n->string, n);   /* name */
 		p->flags |= TERMP_NOSPACE;
 	}
 	term_word(p, "(");
 	p->flags |= TERMP_NOSPACE;
 	if (n != NULL && (n = n->next) != NULL) {
-		term_word(p, n->string);   /* section */
+		term_word_node(p, n->string, n);   /* section */
 		p->flags |= TERMP_NOSPACE;
 	}
 	term_word(p, ")");
 	if (n != NULL && (n = n->next) != NULL) {
 		p->flags |= TERMP_NOSPACE;
-		term_word(p, n->string);   /* suffix */
+		term_word_node(p, n->string, n);   /* suffix */
 	}
 	return 0;
 }
@@ -350,11 +350,11 @@ pre_OP(DECL_ARGS)
 
 	if ((n = n->child) != NULL) {
 		term_fontrepl(p, TERMFONT_BOLD);
-		term_word(p, n->string);
+		term_word_node(p, n->string, n);
 	}
 	if (n != NULL && n->next != NULL) {
 		term_fontrepl(p, TERMFONT_UNDER);
-		term_word(p, n->next->string);
+		term_word_node(p, n->next->string, n->next);
 	}
 	term_fontrepl(p, TERMFONT_NONE);
 	p->flags &= ~TERMP_KEEP;
@@ -914,6 +914,9 @@ print_man_node(DECL_ARGS)
 	const struct man_term_act *act;
 	int c;
 
+	term_collect_node(p, n, TERM_COLLECT_ENTER);
+	term_collect_node(p, n, TERM_COLLECT_PRE);
+
 	/*
 	 * In no-fill mode, break the output line at the beginning
 	 * of new input lines except after \c, and nowhere else.
@@ -945,6 +948,8 @@ print_man_node(DECL_ARGS)
 				term_newln(p);
 			else
 				term_vspace(p);
+			term_collect_node(p, n, TERM_COLLECT_POST);
+			term_collect_node(p, n, TERM_COLLECT_LEAVE);
 			return;
 		} else if (*n->string == ' ' && n->flags & NODE_LINE &&
 		    (p->flags & TERMP_NONEWLINE) == 0)
@@ -952,9 +957,12 @@ print_man_node(DECL_ARGS)
 		else if (n->flags & NODE_DELIMC)
 			p->flags |= TERMP_NOSPACE;
 
-		term_word(p, n->string);
+		term_word_node(p, n->string, n);
+		term_collect_node(p, n, TERM_COLLECT_POST);
 		goto out;
 	case ROFFT_COMMENT:
+		term_collect_node(p, n, TERM_COLLECT_POST);
+		term_collect_node(p, n, TERM_COLLECT_LEAVE);
 		return;
 	case ROFFT_EQN:
 		if ( ! (n->flags & NODE_LINE))
@@ -962,11 +970,15 @@ print_man_node(DECL_ARGS)
 		term_eqn(p, n->eqn);
 		if (n->next != NULL && ! (n->next->flags & NODE_LINE))
 			p->flags |= TERMP_NOSPACE;
+		term_collect_node(p, n, TERM_COLLECT_POST);
+		term_collect_node(p, n, TERM_COLLECT_LEAVE);
 		return;
 	case ROFFT_TBL:
 		if (p->tbl.cols == NULL)
 			term_newln(p);
 		term_tbl(p, n->span);
+		term_collect_node(p, n, TERM_COLLECT_POST);
+		term_collect_node(p, n, TERM_COLLECT_LEAVE);
 		return;
 	default:
 		break;
@@ -974,6 +986,8 @@ print_man_node(DECL_ARGS)
 
 	if (n->tok < ROFF_MAX) {
 		roff_term_pre(p, n);
+		term_collect_node(p, n, TERM_COLLECT_POST);
+		term_collect_node(p, n, TERM_COLLECT_LEAVE);
 		return;
 	}
 
@@ -985,9 +999,12 @@ print_man_node(DECL_ARGS)
 	if (act->pre != NULL)
 		c = (*act->pre)(p, mt, n, meta);
 
-	if (c && n->child != NULL)
+	if (c && n->child != NULL) {
+		term_collect_node(p, n, TERM_COLLECT_CHILD);
 		print_man_nodelist(p, mt, n->child, meta);
+	}
 
+	term_collect_node(p, n, TERM_COLLECT_POST);
 	if (act->post != NULL)
 		(*act->post)(p, mt, n, meta);
 	if ((act->flags & MAN_NOTEXT) == 0 && n->tok != MAN_SM)
@@ -1002,6 +1019,7 @@ out:
 	}
 	if (n->flags & NODE_EOS)
 		p->flags |= TERMP_SENTENCE;
+	term_collect_node(p, n, TERM_COLLECT_LEAVE);
 }
 
 static void

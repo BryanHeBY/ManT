@@ -33,21 +33,110 @@
 #include "main.h"
 
 static	size_t		 cond_width(const struct termp *, int, int *);
-static	void		 adjbuf(struct termp_col *, size_t);
-static	void		 bufferc(struct termp *, char);
-static	void		 directc(struct termp *, int);
-static	void		 encode(struct termp *, const char *, size_t);
-static	void		 encode1(struct termp *, int);
-static	void		 endline(struct termp *);
+static	void		 adjbuf(struct termp *, size_t);
+static	void		 bufferc(struct termp *, char,
+				enum term_collector_reason);
+static	void		 directc(struct termp *, int,
+				enum term_collector_reason);
+static	void		 encode(struct termp *, const char *, size_t,
+				enum term_collector_reason);
+static	void		 encode1(struct termp *, int,
+				enum term_collector_reason);
+static	void		 endline(struct termp *, enum term_collector_reason);
 static	void		 term_field(struct termp *, size_t, size_t);
 static	void		 term_fill(struct termp *, size_t *, size_t *,
 				size_t);
+static	void		 collect_emit(struct termp *, enum term_collector_op,
+				enum term_collector_phase,
+				enum term_collector_reason, size_t, size_t,
+				size_t, int, int, enum termfont);
+static	void		 buffer_write(struct termp *, size_t, int,
+				enum term_collector_reason, enum termfont);
+static	void		 logical_emit(struct termp *, int,
+				enum term_collector_reason);
+
+
+static void
+collect_emit(struct termp *p, enum term_collector_op op,
+		enum term_collector_phase phase,
+		enum term_collector_reason reason, size_t pos, size_t end,
+		size_t visual, int value, int previous, enum termfont font)
+{
+	struct term_collector_event ev;
+
+	if (p->collector == NULL)
+		return;
+	memset(&ev, 0, sizeof(ev));
+	ev.op = op;
+	ev.phase = phase;
+	ev.reason = reason;
+	ev.node = p->collector_node;
+	ev.column = p->tcol == NULL ? 0 : (size_t)(p->tcol - p->tcols);
+	ev.pos = pos;
+	ev.end = end;
+	ev.visual = visual;
+	ev.value = value;
+	ev.previous = previous;
+	ev.font = font;
+	(*p->collector)(p, p->collector_arg, &ev);
+}
+
+void
+term_setcollector(struct termp *p, term_collector collector, void *arg)
+{
+	p->collector = collector;
+	p->collector_arg = arg;
+	if (collector != NULL)
+		collect_emit(p, TERM_COLLECT_COL_SELECT, TERM_COLLECT_ENTER,
+		    TERM_COLLECT_NONE, 0, p->lasttcol + 1, 0, 0, 0,
+		    TERMFONT_NONE);
+}
+
+void
+term_collect_node(struct termp *p, const struct roff_node *n,
+		enum term_collector_phase phase)
+{
+	const struct roff_node *saved;
+
+	if (p->collector == NULL)
+		return;
+	saved = p->collector_node;
+	p->collector_node = n;
+	collect_emit(p, TERM_COLLECT_NODE, phase, TERM_COLLECT_NONE,
+	    0, 0, 0, 0, 0, TERMFONT_NONE);
+	p->collector_node = saved;
+}
+
+static void
+buffer_write(struct termp *p, size_t pos, int value,
+		enum term_collector_reason reason, enum termfont font)
+{
+	int previous;
+
+	previous = pos < p->tcol->lastcol ? p->tcol->buf[pos] : 0;
+	collect_emit(p, TERM_COLLECT_BUFFER_WRITE, TERM_COLLECT_ENTER,
+	    reason, pos, pos + 1, 0, value, previous, font);
+	p->tcol->buf[pos] = value;
+}
+
+static void
+logical_emit(struct termp *p, int value, enum term_collector_reason reason)
+{
+	collect_emit(p, TERM_COLLECT_LOGICAL, TERM_COLLECT_ENTER,
+	    reason, p->col, p->col, 0, value, 0,
+	    p->fontq[p->fonti]);
+}
 
 
 void
 term_setcol(struct termp *p, size_t maxtcol)
 {
+	collect_emit(p, TERM_COLLECT_COL_SELECT, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_NONE, 0, maxtcol, 0, 0, 0, TERMFONT_NONE);
 	if (maxtcol > p->maxtcol) {
+		collect_emit(p, TERM_COLLECT_COL_RESIZE, TERM_COLLECT_ENTER,
+		    TERM_COLLECT_NONE, p->maxtcol, maxtcol, 0, 0, 0,
+		    TERMFONT_NONE);
 		p->tcols = mandoc_recallocarray(p->tcols,
 		    p->maxtcol, maxtcol, sizeof(*p->tcols));
 		p->maxtcol = maxtcol;
@@ -60,8 +149,12 @@ void
 term_free(struct termp *p)
 {
 	term_tab_free();
-	for (p->tcol = p->tcols; p->tcol < p->tcols + p->maxtcol; p->tcol++)
+	for (p->tcol = p->tcols; p->tcol < p->tcols + p->maxtcol; p->tcol++) {
+		collect_emit(p, TERM_COLLECT_COL_FREE, TERM_COLLECT_ENTER,
+		    TERM_COLLECT_NONE, 0, p->tcol->maxcols, 0, 0, 0,
+		    TERMFONT_NONE);
 		free(p->tcol->buf);
+	}
 	free(p->tcols);
 	free(p->fontq);
 	free(p);
@@ -75,14 +168,22 @@ term_begin(struct termp *p, term_margin head,
 	p->headf = head;
 	p->footf = foot;
 	p->argf = arg;
+	collect_emit(p, TERM_COLLECT_OUTPUT, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_HEADER, 0, 0, 0, 0, 0, TERMFONT_NONE);
 	(*p->begin)(p);
+	collect_emit(p, TERM_COLLECT_OUTPUT, TERM_COLLECT_LEAVE,
+	    TERM_COLLECT_HEADER, 0, 0, 0, 0, 0, TERMFONT_NONE);
 }
 
 void
 term_end(struct termp *p)
 {
 
+	collect_emit(p, TERM_COLLECT_OUTPUT, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_FOOTER, 0, 0, 0, 0, 0, TERMFONT_NONE);
 	(*p->end)(p);
+	collect_emit(p, TERM_COLLECT_OUTPUT, TERM_COLLECT_LEAVE,
+	    TERM_COLLECT_FOOTER, 0, 0, 0, 0, 0, TERMFONT_NONE);
 }
 
 /*
@@ -202,9 +303,15 @@ term_flushln(struct termp *p)
 		 * space characters are consumed by the line break.
 		 */
 
-		while (p->tcol->col < p->tcol->lastcol &&
-		    p->tcol->buf[p->tcol->col] == ' ')
-			p->tcol->col++;
+		ic = p->tcol->col;
+		while (ic < p->tcol->lastcol && p->tcol->buf[ic] == ' ')
+			ic++;
+		if (ic != p->tcol->col) {
+			collect_emit(p, TERM_COLLECT_BUFFER_CONSUME,
+			    TERM_COLLECT_ENTER, TERM_COLLECT_WRAP,
+			    p->tcol->col, ic, 0, 0, 0, TERMFONT_NONE);
+			p->tcol->col = ic;
+		}
 
 		/*
 		 * In multi-column mode, leave the rest of the text
@@ -217,7 +324,7 @@ term_flushln(struct termp *p)
 		if (p->flags & TERMP_MULTICOL)
 			return;
 
-		endline(p);
+		endline(p, TERM_COLLECT_WRAP);
 
 		/*
 		 * Normally, start the next line at the same indentation
@@ -232,6 +339,9 @@ term_flushln(struct termp *p)
 
 	/* Reset output state in preparation for the next field. */
 
+	collect_emit(p, TERM_COLLECT_BUFFER_RESET, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_FINAL, 0, p->tcol->lastcol, p->col,
+	    0, 0, TERMFONT_NONE);
 	p->col = p->tcol->col = p->tcol->lastcol = 0;
 	p->minbl = p->trailspace;
 	p->flags &= ~(TERMP_BACKAFTER | TERMP_BACKBEFORE | TERMP_NOPAD);
@@ -250,7 +360,7 @@ term_flushln(struct termp *p)
 	if ((p->flags & TERMP_HANG) == 0 &&
 	    ((p->flags & TERMP_NOBREAK) == 0 ||
 	     vbr + term_len(p, p->trailspace) > vfield + term_len(p, 1) / 2))
-		endline(p);
+		endline(p, TERM_COLLECT_FINAL);
 }
 
 /*
@@ -313,7 +423,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
 			 * to be marked as breakable.  Put back a real
 			 * hyphen such that we get the correct width.
 			 */
-			p->tcol->buf[ic] = '-';
+			buffer_write(p, ic, '-', TERM_COLLECT_NORMALIZE,
+			    TERMFONT_NONE);
 			vis += (*p->getwidth)(p, '-');
 			if (vis > vtarget) {
 				ic++;
@@ -340,7 +451,8 @@ term_fill(struct termp *p, size_t *nbr, size_t *vbr, size_t vtarget)
 			case ASCII_NBRZW:  /* Non-breakable zero-width. */
 				break;
 			case ASCII_NBRSP:  /* Non-breakable space. */
-				p->tcol->buf[ic] = ' ';
+				buffer_write(p, ic, ' ', TERM_COLLECT_NORMALIZE,
+				    TERMFONT_NONE);
 				/* FALLTHROUGH */
 			default:  /* Printable character. */
 				vis += (*p->getwidth)(p, p->tcol->buf[ic]);
@@ -395,8 +507,16 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 		case '\n':
 		case ASCII_BREAK:
 		case ASCII_NBRZW:
+			collect_emit(p, TERM_COLLECT_FIELD_SKIP,
+			    TERM_COLLECT_ENTER, TERM_COLLECT_FIELD,
+			    ic, ic + 1, 0, p->tcol->buf[ic], 0,
+			    TERMFONT_NONE);
 			continue;
 		case ASCII_TABREF:
+			collect_emit(p, TERM_COLLECT_FIELD_SKIP,
+			    TERM_COLLECT_ENTER, TERM_COLLECT_FIELD,
+			    ic, ic + 1, 0, p->tcol->buf[ic], 0,
+			    TERMFONT_NONE);
 			taboff = -vis - (*p->getwidth)(p, ' ');
 			continue;
 		case '\t':
@@ -410,6 +530,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 				dv = term_tab_next(vt) - vt;
 			} else
 				dv = (*p->getwidth)(p, ' ');
+			collect_emit(p, TERM_COLLECT_FIELD_SKIP,
+			    TERM_COLLECT_ENTER, TERM_COLLECT_FIELD,
+			    ic, ic + 1, dv, p->tcol->buf[ic], 0,
+			    TERMFONT_NONE);
 			vbl += dv;
 			vis += dv;
 			continue;
@@ -429,6 +553,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 
 		/* Print the character and adjust the visual position. */
 
+		collect_emit(p, TERM_COLLECT_FIELD_PLACE,
+		    TERM_COLLECT_ENTER, TERM_COLLECT_FIELD,
+		    ic, ic + 1, (*p->getwidth)(p, p->tcol->buf[ic]),
+		    p->tcol->buf[ic], 0, TERMFONT_NONE);
 		(*p->letter)(p, p->tcol->buf[ic]);
 		if (p->tcol->buf[ic] == '\b') {
 			dv = (*p->getwidth)(p, p->tcol->buf[ic - 1]);
@@ -440,6 +568,9 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
 			vis += dv;
 		}
 	}
+	collect_emit(p, TERM_COLLECT_BUFFER_CONSUME, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_FIELD, p->tcol->col, nbr, 0, 0, 0,
+	    TERMFONT_NONE);
 	p->tcol->col = nbr;
 }
 
@@ -448,7 +579,7 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  * and end the output line.
  */
 static void
-endline(struct termp *p)
+endline(struct termp *p, enum term_collector_reason reason)
 {
 	if ((p->flags & (TERMP_NEWMC | TERMP_ENDMC)) == TERMP_ENDMC) {
 		p->mc = NULL;
@@ -458,10 +589,16 @@ endline(struct termp *p)
 		if (p->viscol > 0 && p->viscol <= p->maxrmargin)
 			(*p->advance)(p,
 			    p->maxrmargin - p->viscol + term_len(p, 1));
+		collect_emit(p, TERM_COLLECT_OUTPUT, TERM_COLLECT_ENTER,
+		    TERM_COLLECT_MARGIN, 0, 0, 0, 0, 0, TERMFONT_NONE);
 		p->flags |= TERMP_NOBUF | TERMP_NOSPACE;
-		term_word(p, p->mc);
+		term_word_node(p, p->mc, NULL);
 		p->flags &= ~(TERMP_NOBUF | TERMP_NEWMC);
+		collect_emit(p, TERM_COLLECT_OUTPUT, TERM_COLLECT_LEAVE,
+		    TERM_COLLECT_MARGIN, 0, 0, 0, 0, 0, TERMFONT_NONE);
 	}
+	collect_emit(p, TERM_COLLECT_ENDLINE, TERM_COLLECT_ENTER,
+	    reason, 0, 0, p->viscol, 0, 0, TERMFONT_NONE);
 	(*p->endline)(p);
 }
 
@@ -492,8 +629,12 @@ term_vspace(struct termp *p)
 	term_newln(p);
 	if (0 < p->skipvsp)
 		p->skipvsp--;
-	else
+	else {
+		collect_emit(p, TERM_COLLECT_ENDLINE, TERM_COLLECT_ENTER,
+		    TERM_COLLECT_FINAL, 0, 0, p->viscol, 0, 0,
+		    TERMFONT_NONE);
 		(*p->endline)(p);
+	}
 }
 
 /* Swap current and previous font; for \fP and .ft P */
@@ -573,11 +714,11 @@ term_word(struct termp *p, const char *word)
 	if ((p->flags & TERMP_NOBUF) == 0) {
 		if ((p->flags & TERMP_NOSPACE) == 0) {
 			if ((p->flags & TERMP_KEEP) == 0) {
-				bufferc(p, ' ');
+				bufferc(p, ' ', TERM_COLLECT_AUTO_SPACE);
 				if (p->flags & TERMP_SENTENCE)
-					bufferc(p, ' ');
+					bufferc(p, ' ', TERM_COLLECT_AUTO_SPACE);
 			} else
-				bufferc(p, ASCII_NBRSP);
+				bufferc(p, ASCII_NBRSP, TERM_COLLECT_KEEP_SPACE);
 		}
 		if (p->flags & TERMP_PREKEEP)
 			p->flags |= TERMP_KEEP;
@@ -593,14 +734,14 @@ term_word(struct termp *p, const char *word)
 		if ('\\' != *word) {
 			if (TERMP_NBRWORD & p->flags) {
 				if (' ' == *word) {
-					encode(p, nbrsp, 1);
+					encode(p, nbrsp, 1, TERM_COLLECT_KEEP_SPACE);
 					word++;
 					continue;
 				}
 				ssz = strcspn(word, "\\ ");
 			} else
 				ssz = strcspn(word, "\\");
-			encode(p, word, ssz);
+			encode(p, word, ssz, TERM_COLLECT_TEXT);
 			word += (int)ssz;
 			continue;
 		}
@@ -615,21 +756,30 @@ term_word(struct termp *p, const char *word)
 			uc = mchars_num2char(seq, sz);
 			if (uc >= 0)
 				break;
-			bufferc(p, ASCII_NBRZW);
+			bufferc(p, ASCII_NBRZW, TERM_COLLECT_ESCAPE);
 			continue;
 		case ESCAPE_SPECIAL:
 			if (p->enc == TERMENC_ASCII) {
 				cp = mchars_spec2str(seq, sz, &ssz);
-				if (cp != NULL)
-					encode(p, cp, ssz);
+				uc = mchars_spec2cp(seq, sz);
+				if (cp != NULL) {
+					if (uc > 0) {
+						logical_emit(p, uc,
+						    TERM_COLLECT_ESCAPE);
+						encode(p, cp, ssz,
+						    TERM_COLLECT_PROJECTION);
+					} else
+						encode(p, cp, ssz,
+						    TERM_COLLECT_ESCAPE);
+				}
 				else
-					bufferc(p, ASCII_NBRZW);
+					bufferc(p, ASCII_NBRZW, TERM_COLLECT_ESCAPE);
 			} else {
 				uc = mchars_spec2cp(seq, sz);
 				if (uc > 0)
-					encode1(p, uc);
+					encode1(p, uc, TERM_COLLECT_ESCAPE);
 				else
-					bufferc(p, ASCII_NBRZW);
+					bufferc(p, ASCII_NBRZW, TERM_COLLECT_ESCAPE);
 			}
 			continue;
 		case ESCAPE_UNDEF:
@@ -655,7 +805,7 @@ term_word(struct termp *p, const char *word)
 			term_fontlast(p);
 			continue;
 		case ESCAPE_BREAK:
-			bufferc(p, '\n');
+			bufferc(p, '\n', TERM_COLLECT_ESCAPE);
 			continue;
 		case ESCAPE_NOSPACE:
 			if (p->flags & TERMP_BACKAFTER)
@@ -665,13 +815,13 @@ term_word(struct termp *p, const char *word)
 			continue;
 		case ESCAPE_DEVICE:
 			if (p->type == TERMTYPE_PDF)
-				encode(p, "pdf", 3);
+				encode(p, "pdf", 3, TERM_COLLECT_ESCAPE);
 			else if (p->type == TERMTYPE_PS)
-				encode(p, "ps", 2);
+				encode(p, "ps", 2, TERM_COLLECT_ESCAPE);
 			else if (p->enc == TERMENC_ASCII)
-				encode(p, "ascii", 5);
+				encode(p, "ascii", 5, TERM_COLLECT_ESCAPE);
 			else
-				encode(p, "utf8", 4);
+				encode(p, "utf8", 4, TERM_COLLECT_ESCAPE);
 			continue;
 		case ESCAPE_HORIZ:
 			if (p->flags & TERMP_BACKAFTER) {
@@ -692,19 +842,30 @@ term_word(struct termp *p, const char *word)
 					if (p->flags & TERMP_BACKBEFORE)
 						p->flags &= ~TERMP_BACKBEFORE;
 					else
-						bufferc(p, ASCII_NBRSP);
+						bufferc(p, ASCII_NBRSP, TERM_COLLECT_HORIZ);
 				}
 				continue;
 			}
 			if (p->flags & TERMP_BACKBEFORE) {
 				p->flags &= ~TERMP_BACKBEFORE;
 				assert(p->col > 1);
+				collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+				    TERM_COLLECT_ENTER, TERM_COLLECT_HORIZ,
+				    p->col, p->col - 1, 0, 0, 0,
+				    TERMFONT_NONE);
 				p->col--;
 			}
 			if (term_len(p, p->col) >= (size_t)(-bu)) {
+				collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+				    TERM_COLLECT_ENTER, TERM_COLLECT_HORIZ,
+				    p->col, p->col - -bu / term_len(p, 1),
+				    0, 0, 0, TERMFONT_NONE);
 				p->col -= -bu / term_len(p, 1);
 			} else {
 				bu += term_len(p, p->col);
+				collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+				    TERM_COLLECT_ENTER, TERM_COLLECT_HORIZ,
+				    p->col, 0, 0, 0, 0, TERMFONT_NONE);
 				p->col = 0;
 				if (p->tcol->offset > (size_t)(-bu)) {
 					p->ti += bu;
@@ -758,10 +919,13 @@ term_word(struct termp *p, const char *word)
 			} else
 				csz = (*p->getwidth)(p, uc);
 			while (lsz > 0) {
-				if (p->enc == TERMENC_ASCII)
-					encode(p, cp, ssz);
+				if (p->enc == TERMENC_ASCII) {
+					logical_emit(p, uc, TERM_COLLECT_ESCAPE);
+					encode(p, cp, ssz,
+					    TERM_COLLECT_PROJECTION);
+				}
 				else
-					encode1(p, uc);
+					encode1(p, uc, TERM_COLLECT_ESCAPE);
 				if (lsz > csz)
 					lsz -= csz;
 				else
@@ -778,7 +942,7 @@ term_word(struct termp *p, const char *word)
 					mandoc_escape(&seq, NULL, NULL);
 					continue;
 				}
-				encode1(p, *seq++);
+				encode1(p, *seq++, TERM_COLLECT_OVERSTRIKE);
 				if (seq < cp) {
 					if (p->flags & TERMP_BACKBEFORE)
 						p->flags |= TERMP_BACKAFTER;
@@ -789,13 +953,23 @@ term_word(struct termp *p, const char *word)
 			/* Trim trailing backspace/blank pair. */
 			if (p->tcol->lastcol > 2 &&
 			    (p->tcol->buf[p->tcol->lastcol - 1] == ' ' ||
-			     p->tcol->buf[p->tcol->lastcol - 1] == '\t'))
+			     p->tcol->buf[p->tcol->lastcol - 1] == '\t')) {
+				collect_emit(p, TERM_COLLECT_BUFFER_TRUNCATE,
+				    TERM_COLLECT_ENTER, TERM_COLLECT_OVERSTRIKE,
+				    p->tcol->lastcol - 2, p->tcol->lastcol,
+				    0, 0, 0, TERMFONT_NONE);
 				p->tcol->lastcol -= 2;
-			if (p->col > p->tcol->lastcol)
+			}
+			if (p->col > p->tcol->lastcol) {
+				collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+				    TERM_COLLECT_ENTER, TERM_COLLECT_OVERSTRIKE,
+				    p->col, p->tcol->lastcol, 0, 0, 0,
+				    TERMFONT_NONE);
 				p->col = p->tcol->lastcol;
+			}
 			continue;
 		case ESCAPE_IGNORE:
-			bufferc(p, ASCII_NBRZW);
+			bufferc(p, ASCII_NBRZW, TERM_COLLECT_ESCAPE);
 			continue;
 		default:
 			continue;
@@ -808,24 +982,43 @@ term_word(struct termp *p, const char *word)
 
 		if (p->enc == TERMENC_ASCII) {
 			cp = ascii_uc2str(uc);
-			encode(p, cp, strlen(cp));
+			logical_emit(p, uc, TERM_COLLECT_ESCAPE);
+			encode(p, cp, strlen(cp), TERM_COLLECT_PROJECTION);
 		} else {
 			if ((uc < 0x20 && uc != 0x09) ||
 			    (uc > 0x7E && uc < 0xA0))
 				uc = 0xFFFD;
-			encode1(p, uc);
+			encode1(p, uc, TERM_COLLECT_ESCAPE);
 		}
 	}
 	p->flags &= ~TERMP_NBRWORD;
 }
 
-static void
-adjbuf(struct termp_col *c, size_t sz)
+void
+term_word_node(struct termp *p, const char *word, const struct roff_node *n)
 {
-	if (c->maxcols == 0)
-		c->maxcols = 1024;
-	while (c->maxcols <= sz)
-		c->maxcols <<= 2;
+	const struct roff_node *saved;
+
+	saved = p->collector_node;
+	p->collector_node = n;
+	term_word(p, word);
+	p->collector_node = saved;
+}
+
+static void
+adjbuf(struct termp *p, size_t sz)
+{
+	struct termp_col *c;
+	size_t newmax;
+
+	c = p->tcol;
+	newmax = c->maxcols == 0 ? 1024 : c->maxcols;
+	while (newmax <= sz)
+		newmax <<= 2;
+	collect_emit(p, TERM_COLLECT_BUFFER_GROW, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_NONE, c->maxcols, newmax, 0, 0, 0,
+	    TERMFONT_NONE);
+	c->maxcols = newmax;
 	c->buf = mandoc_reallocarray(c->buf, c->maxcols, sizeof(*c->buf));
 }
 
@@ -836,8 +1029,10 @@ adjbuf(struct termp_col *c, size_t sz)
  * term_tab_ref() never inserts it while TERMP_NOBUF is set.
  */
 static void
-directc(struct termp *p, int c)
+directc(struct termp *p, int c, enum term_collector_reason reason)
 {
+	collect_emit(p, TERM_COLLECT_DIRECT, TERM_COLLECT_ENTER,
+	    reason, 0, 0, 0, c, 0, p->fontq[p->fonti]);
 	switch (c) {
 	case ASCII_BREAK:
 	case ASCII_NBRZW:
@@ -855,16 +1050,20 @@ directc(struct termp *p, int c)
 }
 
 static void
-bufferc(struct termp *p, char c)
+bufferc(struct termp *p, char c, enum term_collector_reason reason)
 {
+	if (reason != TERM_COLLECT_HORIZ && reason != TERM_COLLECT_FIELD)
+		logical_emit(p, (unsigned char)c, reason);
 	if (p->flags & TERMP_NOBUF) {
-		directc(p, c);
+		directc(p, c, reason);
 		return;
 	}
 	if (p->col + 1 >= p->tcol->maxcols)
-		adjbuf(p->tcol, p->col + 1);
+		adjbuf(p, p->col + 1);
 	if (p->tcol->lastcol <= p->col || (c != ' ' && c != ASCII_NBRSP))
-		p->tcol->buf[p->col] = c;
+		buffer_write(p, p->col, c, reason, p->fontq[p->fonti]);
+	collect_emit(p, TERM_COLLECT_BUFFER_CURSOR, TERM_COLLECT_ENTER,
+	    reason, p->col, p->col + 1, 0, 0, 0, TERMFONT_NONE);
 	if (p->tcol->lastcol < ++p->col)
 		p->tcol->lastcol = p->col;
 }
@@ -874,7 +1073,7 @@ term_tab_ref(struct termp *p)
 {
 	if (p->tcol->lastcol && p->tcol->lastcol <= p->col &&
 	    (p->flags & TERMP_NOBUF) == 0)
-		bufferc(p, ASCII_TABREF);
+		bufferc(p, ASCII_TABREF, TERM_COLLECT_FIELD);
 }
 
 /*
@@ -883,42 +1082,74 @@ term_tab_ref(struct termp *p)
  * Does not check for non-decorated glyphs.
  */
 static void
-encode1(struct termp *p, int c)
+encode1(struct termp *p, int c, enum term_collector_reason reason)
 {
 	enum termfont	  f;
 
+	if (reason != TERM_COLLECT_PROJECTION)
+		logical_emit(p, c, reason);
+
 	if (p->flags & TERMP_NOBUF) {
-		directc(p, c);
+		directc(p, c, reason);
 		return;
 	}
 
 	if (p->col + 7 >= p->tcol->maxcols)
-		adjbuf(p->tcol, p->col + 7);
+		adjbuf(p, p->col + 7);
 
 	f = (c == ASCII_HYPH || c > 127 || isgraph(c)) ?
 	    p->fontq[p->fonti] : TERMFONT_NONE;
 
 	if (p->flags & TERMP_BACKBEFORE) {
 		if (p->tcol->buf[p->col - 1] == ' ' ||
-		    p->tcol->buf[p->col - 1] == '\t')
+		    p->tcol->buf[p->col - 1] == '\t') {
+			collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+			    TERM_COLLECT_ENTER, TERM_COLLECT_OVERSTRIKE,
+			    p->col, p->col - 1, 0, 0, 0,
+			    TERMFONT_NONE);
 			p->col--;
-		else
-			p->tcol->buf[p->col++] = '\b';
+		} else {
+			buffer_write(p, p->col, '\b',
+			    TERM_COLLECT_OVERSTRIKE, TERMFONT_NONE);
+			collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+			    TERM_COLLECT_ENTER, TERM_COLLECT_OVERSTRIKE,
+			    p->col, p->col + 1, 0, 0, 0,
+			    TERMFONT_NONE);
+			p->col++;
+		}
 		p->flags &= ~TERMP_BACKBEFORE;
 	}
 	if (f == TERMFONT_UNDER || f == TERMFONT_BI) {
-		p->tcol->buf[p->col++] = '_';
-		p->tcol->buf[p->col++] = '\b';
+		buffer_write(p, p->col, '_', TERM_COLLECT_FONT, f);
+		collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+		    TERM_COLLECT_ENTER, TERM_COLLECT_FONT,
+		    p->col, p->col + 1, 0, 0, 0, TERMFONT_NONE);
+		p->col++;
+		buffer_write(p, p->col, '\b', TERM_COLLECT_FONT, f);
+		collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+		    TERM_COLLECT_ENTER, TERM_COLLECT_FONT,
+		    p->col, p->col + 1, 0, 0, 0, TERMFONT_NONE);
+		p->col++;
 	}
 	if (f == TERMFONT_BOLD || f == TERMFONT_BI) {
 		if (c == ASCII_HYPH)
-			p->tcol->buf[p->col++] = '-';
+			buffer_write(p, p->col, '-', TERM_COLLECT_FONT, f);
 		else
-			p->tcol->buf[p->col++] = c;
-		p->tcol->buf[p->col++] = '\b';
+			buffer_write(p, p->col, c, TERM_COLLECT_FONT, f);
+		collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+		    TERM_COLLECT_ENTER, TERM_COLLECT_FONT,
+		    p->col, p->col + 1, 0, 0, 0, TERMFONT_NONE);
+		p->col++;
+		buffer_write(p, p->col, '\b', TERM_COLLECT_FONT, f);
+		collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+		    TERM_COLLECT_ENTER, TERM_COLLECT_FONT,
+		    p->col, p->col + 1, 0, 0, 0, TERMFONT_NONE);
+		p->col++;
 	}
 	if (p->tcol->lastcol <= p->col || (c != ' ' && c != ASCII_NBRSP))
-		p->tcol->buf[p->col] = c;
+		buffer_write(p, p->col, c, reason, f);
+	collect_emit(p, TERM_COLLECT_BUFFER_CURSOR, TERM_COLLECT_ENTER,
+	    reason, p->col, p->col + 1, 0, 0, 0, TERMFONT_NONE);
 	if (p->tcol->lastcol < ++p->col)
 		p->tcol->lastcol = p->col;
 	if (p->flags & TERMP_BACKAFTER) {
@@ -928,27 +1159,34 @@ encode1(struct termp *p, int c)
 }
 
 static void
-encode(struct termp *p, const char *word, size_t sz)
+encode(struct termp *p, const char *word, size_t sz,
+		enum term_collector_reason reason)
 {
 	size_t		  i;
 
 	if (p->flags & TERMP_NOBUF) {
 		for (i = 0; i < sz; i++)
-			directc(p, word[i]);
+			directc(p, word[i], reason);
 		return;
 	}
 
 	if (p->col + 2 + (sz * 5) >= p->tcol->maxcols)
-		adjbuf(p->tcol, p->col + 2 + (sz * 5));
+		adjbuf(p, p->col + 2 + (sz * 5));
 
 	for (i = 0; i < sz; i++) {
 		if (ASCII_HYPH == word[i] ||
 		    isgraph((unsigned char)word[i]))
-			encode1(p, word[i]);
+			encode1(p, word[i], reason);
 		else {
+			if (reason != TERM_COLLECT_PROJECTION)
+				logical_emit(p, (unsigned char)word[i], reason);
 			if (p->tcol->lastcol <= p->col ||
 			    (word[i] != ' ' && word[i] != ASCII_NBRSP))
-				p->tcol->buf[p->col] = word[i];
+				buffer_write(p, p->col, word[i], reason,
+				    TERMFONT_NONE);
+			collect_emit(p, TERM_COLLECT_BUFFER_CURSOR,
+			    TERM_COLLECT_ENTER, reason, p->col, p->col + 1,
+			    0, 0, 0, TERMFONT_NONE);
 			p->col++;
 
 			/*

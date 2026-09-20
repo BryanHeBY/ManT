@@ -15,6 +15,9 @@ mod renderer;
 mod request;
 mod source_bundle;
 mod special_character;
+#[cfg(feature = "structured")]
+#[doc(hidden)]
+pub mod structured;
 mod transport;
 
 pub use ast::{
