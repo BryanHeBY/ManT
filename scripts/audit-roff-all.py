@@ -28,6 +28,7 @@ from roff_audit_common import (
     run_bounded_profile_batch,
 )
 from roff_reference import reference_environment, run_renderer
+import mandoc_oracle
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = ('structure', 'projection', 'targets', 'semantics')
@@ -80,6 +81,9 @@ def arguments(argv):
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--mant', required=True, type=Path)
     parser.add_argument('--mandoc', required=True, type=Path)
+    parser.add_argument('--oracle-attestation', required=True, type=Path)
+    parser.add_argument('--oracle-archive', required=True, type=Path)
+    parser.add_argument('--reference-id', required=True)
     parser.add_argument('--groff', required=True, type=Path)
     parser.add_argument('--profiler-dir', required=True, type=Path)
     parser.add_argument('--workers', type=int,
@@ -169,6 +173,11 @@ def git(*args):
 
 
 def plan(args):
+    if hasattr(args, 'oracle_archive'):
+        args.oracle_preflight = mandoc_oracle.preflight(
+            ROOT, args.mandoc.resolve(), args.oracle_archive.resolve(),
+            args.oracle_attestation.resolve(), args.reference_id, 'utf8',
+        )
     inputs = [(Path(path), rows) for path, rows in SOURCES.census_inputs(args)]
     binaries = {'mant': identity(args.mant), 'mandoc': identity(args.mandoc), 'groff': identity(args.groff)}
     dependencies = {'zstd': SOURCES.ZSTD_BINARY is not None}
@@ -201,7 +210,8 @@ def plan(args):
               'manifestSha256': args._manifest_sha256, 'producerCommit': git('rev-parse', 'HEAD'),
               'producerGitStatus': git('status', '--porcelain'), 'binaries': binaries,
               'dependencyAvailability': dependencies,
-              'producerAttribution': 'Working tree at run start; binary hashes are authoritative identities, not independent source-to-build attestations.',
+              'oraclePreflight': getattr(args, 'oracle_preflight', None),
+              'producerAttribution': 'Working tree and registered pristine mandoc attestation at run start.',
               'rules': {str(p.relative_to(ROOT)): SOURCES.file_hash(p) for p in rules},
               'physicalPages': len(inputs), 'logicalPages': sum(len(rows) for _, rows in inputs),
               'dimensions': list(DIMENSIONS), 'parameters': {key: getattr(args, key) for key in
@@ -659,6 +669,17 @@ def execute(args, inputs, report):
                 value.update({'execution:uncovered': missing, 'status:uncovered': missing, 'coverage:uncovered': missing})
         inventory.sort()
         encoded_inventory = ''.join(json.dumps(row, ensure_ascii=False, separators=(',', ':')) + '\n' for row in inventory).encode()
+        if hasattr(args, 'oracle_preflight'):
+            try:
+                oracle_after = mandoc_oracle.preflight(
+                    ROOT, args.mandoc.resolve(), args.oracle_archive.resolve(),
+                    args.oracle_attestation.resolve(), args.reference_id, 'utf8',
+                )
+                oracle_stable = oracle_after == args.oracle_preflight
+            except (OSError, ValueError):
+                oracle_after, oracle_stable = None, False
+        else:
+            oracle_after, oracle_stable = None, True
         report.update(finished=stamp(), processedPhysicalPages=physical, processedLogicalPages=logical,
             unprocessedLogicalPages=missing,
             actualSourceInventorySha256=hashlib.sha256(encoded_inventory).hexdigest(),
@@ -669,9 +690,10 @@ def execute(args, inputs, report):
             rulesUnchanged=all(unchanged(ROOT / path, digest) for path, digest in report['rules'].items()),
             manifestUnchanged=unchanged(args.manifest, report['manifestSha256']),
             sourcesUnchanged=all(unchanged(path, digest) for path, digest in snapshots.items()),
+            oracleStable=oracle_stable, oracleAfter=oracle_after,
             sourceHashesChecked=len(snapshots), reviewPending=True,
             triageCounts=dict(triage_counts))
-        report['evidenceStable'] = all(report[key] for key in ('binariesUnchanged', 'rulesUnchanged', 'manifestUnchanged', 'sourcesUnchanged'))
+        report['evidenceStable'] = all(report[key] for key in ('binariesUnchanged', 'rulesUnchanged', 'manifestUnchanged', 'sourcesUnchanged', 'oracleStable'))
         report['coverageComplete'] = (report['status'] == 'completed' and report['evidenceStable'] and
             all(value.get('coverage:legacy-dimensions-covered', 0) == logical for value in counts.values()))
         (args.output / 'summary.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

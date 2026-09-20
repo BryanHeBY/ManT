@@ -180,6 +180,28 @@ class VendorReplayTests(unittest.TestCase):
         self.assertEqual(set(vendor.source_files(staged)), {"source.c"})
         self.assertFalse((staged / "regress").exists())
 
+    def test_extended_cvs_source_rejects_archive_drift_before_extraction(self):
+        tree, manifest, source = self.cvs_source()
+        archive = self.root / "cvs.tar.gz"
+        with tarfile.open(archive, "w:gz") as stream:
+            stream.add(tree, arcname="mandoc")
+        inventory = self.root / "upstream" / "CVS_INVENTORY.json"
+        regress = self.root / "upstream" / "REGRESS_FILES"
+        inventory.write_text("{}\n")
+        regress.write_text("")
+        path = self.root / "upstream" / "SOURCE"
+        path.write_text(path.read_text()
+            + f"archive = cvs.tar.gz\narchive_sha256 = {vendor.sha256(archive)}\n"
+            + f"inventory = CVS_INVENTORY.json\ninventory_sha256 = {vendor.sha256(inventory)}\n"
+            + f"regress_manifest = REGRESS_FILES\nregress_manifest_sha256 = {vendor.sha256(regress)}\n")
+        source = vendor.read_source(path)
+        archive.write_bytes(b"drift")
+        work = self.root / "work"
+        work.mkdir()
+        with self.assertRaisesRegex(ValueError, "cvs archive checksum mismatch"):
+            vendor.acquire(self.root, source, work, archive)
+        self.assertEqual(list(work.iterdir()), [])
+
     def test_live_cvs_uses_fixed_date_and_pinned_ssh_wrapper(self):
         tree, _, source = self.cvs_source()
         work = self.root / "work"

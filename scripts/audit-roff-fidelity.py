@@ -31,6 +31,7 @@ from fractions import Fraction
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
 
+import mandoc_oracle
 from roff_reference import reference_environment, run_renderer
 from roff_reference import self_check as reference_runner_self_check
 
@@ -333,6 +334,8 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
             "ledgers, for example mandoc-1.14.6-1"
         ),
     )
+    parser.add_argument("--oracle-attestation", type=Path)
+    parser.add_argument("--oracle-archive", type=Path)
     sampling = parser.add_mutually_exclusive_group()
     sampling.add_argument(
         "--max-pages",
@@ -3181,10 +3184,19 @@ def main(argv: Sequence[str]) -> int:
             raise ValueError("--replay-source-records requires an explicit --corpus")
         if (
             arguments.reference_kind == "mandoc"
-            and arguments.audit_db is not None
-            and not arguments.reference_id
+            and (not arguments.reference_id
+                 or arguments.oracle_attestation is None
+                 or arguments.oracle_archive is None)
         ):
-            raise ValueError("mandoc --audit-db requires a stable --reference-id")
+            raise ValueError("mandoc audits require --reference-id, --oracle-attestation and --oracle-archive")
+        if arguments.reference_kind == "mandoc":
+            reference_path = Path(arguments.reference)
+            if not reference_path.is_absolute():
+                raise ValueError("mandoc reference must be an explicit absolute path")
+            arguments.oracle_preflight = mandoc_oracle.preflight(
+                ROOT, reference_path, arguments.oracle_archive.resolve(),
+                arguments.oracle_attestation.resolve(), arguments.reference_id, "utf8",
+            )
         if arguments.recorded_only and arguments.recheck_recorded:
             raise ValueError("--recorded-only and --recheck-recorded are mutually exclusive")
         exclusive_database_selections = sum(
@@ -3523,6 +3535,14 @@ def main(argv: Sequence[str]) -> int:
         write_review_bundle(arguments.review_dir, review_artifacts)
         print(f"review bundle: {arguments.review_dir}")
     if arguments.audit_db:
+        if arguments.reference_kind == "mandoc":
+            after = mandoc_oracle.preflight(
+                ROOT, Path(arguments.reference), arguments.oracle_archive.resolve(),
+                arguments.oracle_attestation.resolve(), arguments.reference_id, "utf8",
+            )
+            if after != arguments.oracle_preflight:
+                print("audit-roff-fidelity: oracle identity drifted during the audit", file=sys.stderr)
+                return 2
         write_audit_database(
             arguments.audit_db,
             database.values(),

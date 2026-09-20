@@ -41,6 +41,10 @@ run "check CI native dependency script syntax" \
   bash -n scripts/install-ci-native-dependencies.sh
 run "test locked vendor source replay" \
   python3 crates/libmandoc-rs/scripts/test_sync_vendor.py
+run "test CVS snapshot freezing" \
+  python3 crates/libmandoc-rs/scripts/test_freeze_cvs_snapshot.py
+run "test registered mandoc oracle identity" \
+  python3 scripts/test_mandoc_oracle.py
 run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
 run "test bidirectional roff content comparison" python3 scripts/roff_content_compare.py
 run "test source-bound presentation explanations" python3 scripts/test_roff_content_explanations.py

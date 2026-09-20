@@ -1,0 +1,10 @@
+{
+  "attestations": {
+    "cvs-20260911-linux-x86_64-gcc-16.2.1": {
+      "path": "crates/libmandoc-rs/upstream/oracle/attestations/cvs-20260911-linux-x86_64-gcc-16.2.1.json",
+      "sha256": "cc043059ce8beef62e92e6806203bee72ff4f8d3de47abe2aeefbaade09beb9d",
+      "status": "active"
+    }
+  },
+  "schema": "mant.mandoc-oracle-registry/v1"
+}

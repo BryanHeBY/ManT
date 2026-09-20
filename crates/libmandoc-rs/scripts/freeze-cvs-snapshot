@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Maintainer-only CVS snapshot freezer. Ordinary builds never run this command.
+set -euo pipefail
+exec python3 "$(dirname "$0")/freeze_cvs_snapshot.py" "$@"

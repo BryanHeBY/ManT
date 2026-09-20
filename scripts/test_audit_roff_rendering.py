@@ -214,8 +214,11 @@ class RenderingCensusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "report"
             args = ["audit", "--reference", str(Path(directory) / "absent"), "--reference-id", "test",
+                    "--oracle-attestation", str(Path(directory) / "attestation"),
+                    "--oracle-archive", str(Path(directory) / "archive"),
                     "--mant", str(Path(directory) / "absent"), "--output", str(output)]
-            with patch.object(sys, "argv", args):
+            with patch.object(sys, "argv", args), \
+                 patch.object(AUDIT.mandoc_oracle, "preflight", return_value={"identity": "test"}):
                 self.assertEqual(AUDIT.main(), 1)
             report = json.loads((output / "summary.json").read_text())
             self.assertEqual(report["status"], "audit-error")

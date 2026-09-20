@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 
+import mandoc_oracle
 from roff_rendering_frame import prepare_frame
 from roff_reference import reference_environment, run_renderer
 
@@ -267,6 +268,11 @@ def main() -> int:
     parser.add_argument("--mant", type=Path, default=ROOT / "target/debug/mant")
     parser.add_argument("--reference", type=Path,
                         help="Explicit unpatched pinned CVS mandoc binary; no PATH fallback")
+    parser.add_argument("--oracle-attestation", type=Path,
+                        help="Tracked build attestation for the explicit mandoc binary")
+    parser.add_argument("--oracle-archive", type=Path,
+                        help="Locked pristine archive named by the attestation")
+    parser.add_argument("--reference-id", help="Must equal the registered attestation identity")
     parser.add_argument("--geometry-probe", type=Path)
     parser.add_argument("--output", type=Path, help="New local evidence directory")
     parser.add_argument("--self-test", action="store_true", help="Run input, framing and comparator sensitivity tests without binaries")
@@ -287,14 +293,23 @@ def main() -> int:
         assert all(x["status"] == "detected" for x in outcomes), outcomes
         print("behavior matrix self-tests passed: 112 sources, 9 detected fault classes")
         return 0
-    if args.reference is None or args.output is None:
-        parser.error("--reference and --output are required for a replay")
+    if any(value is None for value in (
+            args.reference, args.output, args.oracle_attestation,
+            args.oracle_archive, args.reference_id)):
+        parser.error("--reference, --output, --oracle-attestation, --oracle-archive and --reference-id are required for a replay")
     widths = [int(x) for x in args.widths.split(",")]
     if not widths or any(x < 10 or x > 500 for x in widths) or args.timeout <= 0:
         parser.error("widths must be 10..500 and timeout must be positive")
     selected = [c for c in cases() if not args.case or any(x in c["id"] for x in args.case)]
     if not selected:
         parser.error("no matching cases")
+    try:
+        oracle = mandoc_oracle.preflight(
+            ROOT, args.reference.resolve(), args.oracle_archive.resolve(),
+            args.oracle_attestation.resolve(), args.reference_id, "utf8",
+        )
+    except (OSError, ValueError) as error:
+        parser.error(f"oracle preflight failed: {error}")
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
     binaries = {"mant": args.mant.resolve(), "reference": args.reference.resolve()}
@@ -313,7 +328,7 @@ def main() -> int:
         "subprocessBoundary": file_evidence(ROOT / "scripts/roff_reference.py"),
         "records": [file_evidence(p) for p in RECORDS], "widths": widths,
         "locale": "C.UTF-8", "timeoutSeconds": args.timeout,
-        "referenceTrust": "Caller supplies unpatched pinned CVS binary; binary hash is evidence, not proof of source-to-build mapping.",
+        "oraclePreflight": oracle,
     }
     save_json(args.output / "provenance.json", provenance)
     statuses = Counter()
@@ -380,6 +395,14 @@ def main() -> int:
     save_json(args.output / "sensitivity.json", mutations)
     after = {k: file_evidence(v) for k, v in binaries.items()}
     stable = before == after
+    try:
+        oracle_after = mandoc_oracle.preflight(
+            ROOT, args.reference.resolve(), args.oracle_archive.resolve(),
+            args.oracle_attestation.resolve(), args.reference_id, "utf8",
+        )
+        oracle_stable = oracle_after == oracle
+    except (OSError, ValueError):
+        oracle_after, oracle_stable = None, False
     comparator_stable = all(identity is None or file_evidence(Path(identity["path"])) == identity
                             for identity in (content_identity, geometry_identity))
     summary = {"schema": "mant-roff-behavior-matrix/1", "cases": len(rows),
@@ -387,6 +410,7 @@ def main() -> int:
                "generatedCases": sum(c["id"].startswith("generated/") for c in selected),
                "statuses": dict(statuses), "sensitivity": dict(Counter(x["status"] for x in mutations)),
                "binaryStable": stable, "comparatorStable": comparator_stable,
+               "oracleStable": oracle_stable, "oracleAfter": oracle_after,
                "binariesAfter": after, "reports": rows,
                "status": "review-required", "limitations": [
                    "No whole-corpus or cross-platform claim; source matrix only.",
@@ -395,9 +419,9 @@ def main() -> int:
                    "Historical review text is provenance, never an automatic waiver."]}
     save_json(args.output / "summary.json", summary)
     print(json.dumps({k: v for k, v in summary.items() if k not in ("reports", "binariesAfter")}, indent=2))
-    failed = not stable or not comparator_stable or any(k != "assertions:covered" and not k.endswith(":covered") for k in statuses)
+    failed = not stable or not comparator_stable or not oracle_stable or any(k != "assertions:covered" and not k.endswith(":covered") for k in statuses)
     failed |= any(x["status"] != "detected" for x in mutations)
-    hard_failure = not stable or not comparator_stable or statuses["process-error"] or any(k.endswith((":error", ":hard-failure")) for k in statuses)
+    hard_failure = not stable or not comparator_stable or not oracle_stable or statuses["process-error"] or any(k.endswith((":error", ":hard-failure")) for k in statuses)
     return 1 if hard_failure or (args.verify and failed) else 0
 
 

@@ -26,6 +26,7 @@ import stat
 import subprocess
 import sys
 
+import mandoc_oracle
 from roff_content_compare import compare_content
 from roff_content_explanations import assess_content
 from roff_audit_common import default_audit_batch_size, resolve_audit_parallelism
@@ -299,6 +300,8 @@ def main():
     parser.add_argument("--mant", type=Path, default=ROOT / "target/release/mant")
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--reference-id", required=True, help="Fixed upstream revision/date, not moving HEAD")
+    parser.add_argument("--oracle-attestation", type=Path)
+    parser.add_argument("--oracle-archive", type=Path)
     parser.add_argument("--output", type=Path, required=True, help="New evidence directory")
     parser.add_argument("--width", type=int, default=200)
     parser.add_argument("--timeout", type=float, default=15)
@@ -326,6 +329,15 @@ def main():
         parser.error("batch-size 1..64, width 20..1000, and positive timeout required")
     if args.artifact_pages < 0 or (args.max_pages is not None and args.max_pages < 1):
         parser.error("invalid page budget")
+    if args.oracle_attestation is None or args.oracle_archive is None:
+        parser.error("--oracle-attestation and --oracle-archive are required")
+    try:
+        args.oracle_preflight = mandoc_oracle.preflight(
+            ROOT, args.reference.resolve(), args.oracle_archive.resolve(),
+            args.oracle_attestation.resolve(), args.reference_id, "utf8",
+        )
+    except (OSError, ValueError) as error:
+        parser.error(f"oracle preflight failed: {error}")
     args.output.mkdir(parents=True, exist_ok=False)
     report = {"schema": "mant.roff-rendering-census/v5", "status": "audit-error", "coverageComplete": False}
     try:
@@ -359,6 +371,7 @@ def census(args, report):
               "producerDirtyPaths": dirty, "started": datetime.now(timezone.utc).isoformat(),
               "binaries": binaries, "sourceDecoders": {"zstd": decoder},
               "referenceIdentity": args.reference_id,
+              "oraclePreflight": getattr(args, "oracle_preflight", None),
               "limitations": [
                   "Byte/token/alignment/retention caps and renderer subprocess deadlines are not an end-to-end census or per-source wall-time bound.",
                   "Regular-file reads, in-process gzip/bzip2/XZ decoding, hashing, JSON transport and Python comparisons run in the parent without a total wall-time deadline or aggregate process-memory cap.",
@@ -434,6 +447,17 @@ def census(args, report):
         artifact_index.append({'key': key, 'ids': [i['id'] for i in record['identities']],
                                'triage': record['triage'], 'bytes': item['size'],
                                'files': {name: digest(data) for name, data in item['artifacts'].items()}})
+    if hasattr(args, "oracle_preflight"):
+        try:
+            oracle_after = mandoc_oracle.preflight(
+                ROOT, args.reference, args.oracle_archive.resolve(),
+                args.oracle_attestation.resolve(), args.reference_id, "utf8",
+            )
+            oracle_stable = oracle_after == args.oracle_preflight
+        except (OSError, ValueError):
+            oracle_after, oracle_stable = None, False
+    else:
+        oracle_after, oracle_stable = None, True
     report.update(status="completed", coverageComplete=all(status == "clean" for status in counts),
                   finished=datetime.now(timezone.utc).isoformat(), statusCounts=dict(counts),
                   dimensions=dict(dimensions), triageLogicalCounts=dict(triage_counts),
@@ -450,7 +474,8 @@ def census(args, report):
                   binariesUnchanged=all(identity_unchanged(v) for v in binaries.values()),
                   comparatorsUnchanged=all(file_hash(ROOT / "scripts" / name) == sha for name, sha in report["comparators"].items()),
                   manifestUnchanged=args.manifest is None or file_hash(args.manifest) == args._manifest_sha256)
-    identity_stable = report["binariesUnchanged"] and report["comparatorsUnchanged"] and report["manifestUnchanged"]
+    report.update(oracleStable=oracle_stable, oracleAfter=oracle_after)
+    identity_stable = report["binariesUnchanged"] and report["comparatorsUnchanged"] and report["manifestUnchanged"] and oracle_stable
     report["coverageComplete"] = report["coverageComplete"] and identity_stable
     (args.output / "summary.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"summary": str(args.output / "summary.json"), "counts": dict(counts)}))

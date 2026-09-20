@@ -1,0 +1,28 @@
+{
+  "schema": "libmandoc-rs.oracle-build-recipe/v1",
+  "archiveRoot": "mandoc",
+  "configureCommand": [
+    "./configure"
+  ],
+  "buildCommand": [
+    "make",
+    "-j{jobs}",
+    "mandoc"
+  ],
+  "environment": {
+    "CC": "cc",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "TZ": "UTC"
+  },
+  "evidenceFiles": [
+    "config.h",
+    "config.log",
+    "Makefile.local"
+  ],
+  "profiles": [
+    "ascii",
+    "utf8",
+    "html"
+  ]
+}

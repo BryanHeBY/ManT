@@ -28,6 +28,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+import mandoc_oracle
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
@@ -156,6 +157,8 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         metavar="IDENTITY",
         help="stable mandoc renderer/package identity",
     )
+    parser.add_argument("--oracle-attestation", type=Path)
+    parser.add_argument("--oracle-archive", type=Path)
     parser.add_argument(
         "--timeout",
         type=positive_integer,
@@ -530,6 +533,10 @@ def run_layout_auditor(
         ]
         if arguments.reference_id:
             command.extend(["--reference-id", arguments.reference_id])
+        if arguments.oracle_attestation:
+            command.extend(["--oracle-attestation", str(arguments.oracle_attestation)])
+        if arguments.oracle_archive:
+            command.extend(["--oracle-archive", str(arguments.oracle_archive)])
         if arguments.manpath:
             for root in roots:
                 command.extend(["--manpath", str(root)])
@@ -660,8 +667,17 @@ def main(argv: Sequence[str]) -> int:
         print("roff layout audit self-check succeeded")
         return 0
     try:
-        if arguments.reference_kind == "mandoc" and not arguments.reference_id:
-            raise ValueError("mandoc layout audits require a stable --reference-id")
+        if arguments.reference_kind == "mandoc":
+            if (not arguments.reference_id or arguments.oracle_attestation is None
+                    or arguments.oracle_archive is None):
+                raise ValueError("mandoc layout audits require --reference-id, --oracle-attestation and --oracle-archive")
+            reference_path = Path(arguments.reference)
+            if not reference_path.is_absolute():
+                raise ValueError("mandoc reference must be an explicit absolute path")
+            arguments.oracle_preflight = mandoc_oracle.preflight(
+                ROOT, reference_path, arguments.oracle_archive.resolve(),
+                arguments.oracle_attestation.resolve(), arguments.reference_id, "utf8",
+            )
         reference_id = arguments.reference_id or arguments.reference
         if arguments.audit_db is None:
             arguments.audit_db = (
@@ -785,6 +801,14 @@ def main(argv: Sequence[str]) -> int:
     if child_error:
         print(f"reference note: {child_error}")
     print("REVIEW is renderer evidence, not a regression until source and IR are inspected.")
+    if arguments.reference_kind == "mandoc":
+        after = mandoc_oracle.preflight(
+            ROOT, Path(arguments.reference), arguments.oracle_archive.resolve(),
+            arguments.oracle_attestation.resolve(), arguments.reference_id, "utf8",
+        )
+        if after != arguments.oracle_preflight:
+            print("audit-roff-layout: oracle identity drifted during the audit", file=sys.stderr)
+            return 2
     write_database(
         arguments.audit_db,
         database.values(),

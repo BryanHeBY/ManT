@@ -1,0 +1,68 @@
+{
+  "artifact": {
+    "sha256": "085366afa8d9403bd235b5ac40d12222f28eda474b4a8b393db03cfa5f14380f"
+  },
+  "buildEvidence": {
+    "buildRecord": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20260911-c00a/BUILD.json",
+      "sha256": "0dbf631f006c8a70cbd87697598ef9de45804fd69f5a4860e902c1fdfd379cbf"
+    },
+    "configHeader": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20260911-c00a/source/config.h",
+      "sha256": "395b7efbddea298440f5d59074800d55b03f9742e36f749551d9e778f6227921"
+    },
+    "configLog": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20260911-c00a/source/config.log",
+      "sha256": "c0abffe0111a0fbb06f2a8f9fc73e52fe7de2a90f562a124e1f2db413340785e"
+    },
+    "makefileLocal": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20260911-c00a/source/Makefile.local",
+      "sha256": "579bb1adc0ba9d7f131c10231fb063d433306adbb9311a47a496a0aa5ebb0428"
+    }
+  },
+  "identity": "cvs-20260911-linux-x86_64-gcc-16.2.1",
+  "platform": {
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "profiles": [
+    "ascii",
+    "html",
+    "utf8"
+  ],
+  "recipe": {
+    "buildCommand": [
+      "make",
+      "-j4",
+      "mandoc"
+    ],
+    "configureCommand": [
+      "./configure"
+    ],
+    "file": {
+      "path": "crates/libmandoc-rs/upstream/oracle/recipe.json",
+      "sha256": "1e723e6131bdae58161aa6113785c2cceac9dc92d602a3aeb7f412d73382bf14"
+    }
+  },
+  "schema": "mant.mandoc-oracle-attestation/v1",
+  "source": {
+    "archive": {
+      "path": "target/mandoc-migration/upstream-cvs.tar.gz",
+      "sha256": "2923cd32c63e5c8605b75ee190373d9f45221e2145ce55c7987d8813750f1fab"
+    },
+    "inventory": null,
+    "lock": {
+      "path": "crates/libmandoc-rs/upstream/SOURCE",
+      "sha256": "54b332a3dc0fa0fe89b3e7c44b6b7902cdc30fc579f48e19b5bf55bfd8ccb694"
+    },
+    "manifest": {
+      "path": "crates/libmandoc-rs/upstream/FILES",
+      "sha256": "1d49f6c3bd0b09b81e61bc04d034e974cf1c3d204af0596928edf9cd0be6e6dd"
+    },
+    "pristine": true
+  },
+  "toolchain": {
+    "compilerCommand": "/usr/bin/gcc",
+    "compilerVersion": "cc (GCC) 16.2.1 20260810\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  }
+}

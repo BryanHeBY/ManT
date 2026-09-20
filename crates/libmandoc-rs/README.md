@@ -5,6 +5,14 @@
 `tbl(7)`, and `eqn(7)` input into an owned syntax tree, so callers never need
 to depend on libmandoc's private C structures or parser lifetime.
 
+Maintainers refresh CVS sources with `scripts/freeze-cvs-snapshot`, not with
+the replay-only `scripts/sync-vendor`. The freezer performs two independent
+checkouts at one explicit UTC cutoff, records the complete shipping and
+`regress/` inventories, and emits a deterministic candidate archive below the
+repository `target/` directory without changing the active vendor. Independent
+behavior audits additionally require a registered pristine oracle attestation;
+see [`upstream/oracle/README.md`](upstream/oracle/README.md).
+
 ## What this crate provides
 
 - A fully owned AST with source locations, macro roles, display/list metadata,
@@ -271,8 +279,27 @@ thread-local program-name compatibility layer without changing host state.
 Date-only metadata is converted without process-global timezone state, while
 the special current-date form uses the platform's reentrant local-time API.
 
-From a `ManT` repository checkout, maintainers use `scripts/sync-vendor` to
-regenerate the vendor tree while working in `crates/libmandoc-rs/`:
+`scripts/sync-vendor` only replays an already locked source and patch series;
+it does not query moving CVS HEAD or generate `SOURCE`/`FILES`. To prepare a
+new CVS candidate, maintainers first run the separate freezer from the
+repository root with an explicit UTC cutoff and two new paths below `target/`:
+
+```sh
+crates/libmandoc-rs/scripts/freeze-cvs-snapshot \
+  --cvs /absolute/path/to/cvs \
+  --cutoff 'YYYY-MM-DD HH:MM:SS UTC' \
+  --work target/mandoc-migration/<snapshot>-work \
+  --output target/mandoc-migration/<snapshot>
+```
+
+The output contains candidate `SOURCE`, shipping `FILES`, `REGRESS_FILES`, a
+complete inventory, a deterministic pristine archive, and a change report.
+The command never promotes the candidate, edits vendor files, applies patches,
+or registers an oracle. Review and promote those files explicitly before using
+the replay command below.
+
+From a `ManT` repository checkout, maintainers use `scripts/sync-vendor` while
+working in `crates/libmandoc-rs/`:
 
 ```sh
 ./scripts/sync-vendor           # download, patch, replace vendor/

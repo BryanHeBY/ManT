@@ -69,7 +69,14 @@ def read_source(path):
         "cvs": {"cvsroot", "module", "date", "root", "manifest", "manifest_sha256"},
     }
     kind = fields.get("kind")
-    if kind not in kinds or fields.keys() != shared | kinds[kind]:
+    cvs_evidence = {
+        "archive", "archive_sha256", "inventory", "inventory_sha256",
+        "regress_manifest", "regress_manifest_sha256",
+    }
+    allowed = shared | kinds.get(kind, set())
+    if kind == "cvs" and fields.keys() == allowed | cvs_evidence:
+        allowed |= cvs_evidence
+    if kind not in kinds or fields.keys() != allowed:
         raise ValueError("SOURCE has missing, unknown, or incompatible fields")
     component(fields["version"])
     checksum = fields["sha256"] if kind == "release" else fields["manifest_sha256"]
@@ -82,6 +89,12 @@ def read_source(path):
     else:
         for key in ("module", "root", "manifest"):
             component(fields[key])
+        for key in ("archive", "inventory", "regress_manifest"):
+            if key in fields:
+                component(fields[key])
+        for key in ("archive_sha256", "inventory_sha256", "regress_manifest_sha256"):
+            if key in fields and not re.fullmatch(r"[0-9a-f]{64}", fields[key]):
+                raise ValueError(f"SOURCE {key} must be 64 lowercase hexadecimal digits")
         datetime.datetime.strptime(fields["date"], "%Y-%m-%d %H:%M:%S UTC")
         if fields["cvsroot"] != ":ext:anoncvs@mandoc.bsd.lv:/cvs":
             raise ValueError("CVS source must use the pinned official anonymous server")
@@ -179,10 +192,19 @@ def verify_cvs_tree(root, entries):
 def acquire(root, source, directory, archive):
     entries = None
     if source["kind"] == "cvs":
+        for name_key, hash_key in (
+            ("inventory", "inventory_sha256"),
+            ("regress_manifest", "regress_manifest_sha256"),
+        ):
+            if name_key in source:
+                evidence = root / "upstream" / source[name_key]
+                if not evidence.is_file() or evidence.is_symlink() or sha256(evidence) != source[hash_key]:
+                    raise ValueError(f"CVS {name_key} checksum mismatch")
         entries = read_manifest(root / "upstream" / source["manifest"], source["manifest_sha256"])
     if archive is not None:
-        if source["kind"] == "release" and sha256(archive) != source["sha256"]:
-            raise ValueError("release archive checksum mismatch")
+        expected_archive = source.get("archive_sha256", source.get("sha256"))
+        if expected_archive is not None and sha256(archive) != expected_archive:
+            raise ValueError(f"{source['kind']} archive checksum mismatch")
         unpacked = extract_archive(archive, directory, source["root"])
     elif source["kind"] == "release":
         downloaded = directory / "upstream.tar.gz"
