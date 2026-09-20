@@ -121,17 +121,17 @@ fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independen
         (
             "word-end-break-crosses-unpaddable-space",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\ C\"\n.No D\n".as_slice(),
-            "AB C\nD",
+            "AB\u{a0}C\nD",
         ),
         (
             "word-end-break-crosses-nonbreaking-space",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\~C\"\n.No D\n".as_slice(),
-            "AB C\nD",
+            "AB\u{a0}C\nD",
         ),
         (
             "word-end-break-crosses_fixed-width_space",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\0C\"\n.No D\n".as_slice(),
-            "AB C\nD",
+            "AB\u{a0}C\nD",
         ),
         (
             "projected-glyph-ends-only-the-consumed-break-whitespace-run",
@@ -141,12 +141,12 @@ fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independen
         (
             "nonbreaking-glyph-preserves-the-following-ordinary-blank",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\~ C\"\n".as_slice(),
-            "AB\n  C",
+            "AB\n\u{a0} C",
         ),
         (
             "fixed-width-glyph-preserves-the-following-ordinary-blank",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\0 C\"\n".as_slice(),
-            "AB\n  C",
+            "AB\n\u{a0} C",
         ),
         (
             "overstrike-glyph-preserves-the-following-ordinary-blank",
@@ -231,6 +231,10 @@ fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independen
         (
             "generated-close-consumes-physical-continuation",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Op BEFORE\\c\n AFTER\n".as_slice(),
+            // Checked with the pinned CVS renderer before changing this
+            // assertion.  `print_mdoc_node_inner()` starts the physical
+            // source line before `term_word()` emits its authored leading
+            // blank, so that cell remains visible after the generated `]`.
             "[BEFORE]\n AFTER",
         ),
         (
@@ -447,14 +451,23 @@ fn keep_words_tracks_repeated_macro_execution_and_transparent_targets() {
         };
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
         if label == "target-between-lines" {
+            // Fixed CVS executes both macro invocations and assigns the two
+            // authored fragments document-order ordinals.  Canonical IR IDs
+            // remain in the target namespace; selector-compatible authored
+            // spellings live in FragmentAlias.
             assert!(
                 children
                     .iter()
-                    .filter(
-                        |inline| matches!(inline, Inline::Anchor { id, .. } if id == "inside-macro")
-                    )
+                    .filter(|inline| matches!(
+                        inline,
+                        Inline::Anchor { id, fragment_aliases, .. }
+                            if id.as_str().starts_with("target-inside-macro")
+                                && fragment_aliases.iter().any(|alias| {
+                                    matches!(alias.as_str(), "inside-macro" | "inside-macro~2")
+                                })
+                    ))
                     .count()
-                    >= 1,
+                    == 2,
                 "{children:?}"
             );
         }
@@ -474,9 +487,12 @@ fn transparent_target_preserves_continuation_and_its_exact_anchor() {
     };
     assert_eq!(inline_text(children), "[BEFORE  AFTER");
     assert!(
-        children
-            .iter()
-            .any(|inline| matches!(inline, Inline::Anchor { id, .. } if id == "mark")),
+        children.iter().any(|inline| matches!(
+            inline,
+            Inline::Anchor { id, fragment_aliases, .. }
+                if id.as_str() == "target-mark"
+                    && fragment_aliases.iter().any(|alias| alias.as_str() == "mark")
+        )),
         "{children:?}"
     );
 }
@@ -488,7 +504,10 @@ fn overstrike_projects_one_terminal_cell_through_the_shared_zero_advance_state()
         ("trailing-blank", r"A\o'BC 'D", "ACD"),
         ("repeated-trailing-blanks", r"A\o'BC  'D", "ACD"),
         ("trailing-tab", "A\\o'BC\t'D", "ACD"),
-        ("all-blanks", r"A\o'   'D", "AD"),
+        // Checked with the pinned CVS binary before changing this assertion.
+        // term.c::term_field() retains one formatter cell for an all-blank
+        // overstrike operand even though no overstrike glyph survives.
+        ("all-blanks", r"A\o'   'D", "A D"),
         ("zero-advance", r"A\z\o'BC'D", "AD"),
         ("zero-advance-trailing-blank-at-end", r"A\z\o'BC '", "AC"),
         ("empty", r"A\o''D", "AD"),
@@ -566,8 +585,13 @@ fn numbered_and_named_nonbreaking_glyphs_defer_word_end_breaks() {
         ("numbered-nbsp", r"\N'160'", "\u{a0}"),
         ("unicode-nbsp", "\u{a0}", "\u{a0}"),
         ("named-unicode-nbsp", r"\[u00A0]", "\u{a0}"),
-        ("roff-nbsp", r"\~", " "),
-        ("roff-digit-width-space", r"\0", " "),
+        // Checked with the pinned CVS binary before changing this assertion.
+        // In UTF-8 mode, term.c::term_word() resolves `\~` and `\0` through
+        // chars.c plus mchars_spec2cp(), so their visible scalar remains
+        // U+00A0 rather than the internal ASCII_NBRSP sentinel used by KEEP
+        // and motion cells.
+        ("roff-nbsp", r"\~", "\u{a0}"),
+        ("roff-digit-width-space", r"\0", "\u{a0}"),
     ] {
         let manual = format!(
             ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\pB{spelling}C\n.No D\n"

@@ -104,6 +104,9 @@ getdata(struct tbl_node *tbl, struct tbl_span *dp,
 	dat->source_end_line = -1;
 	dat->source_end_pos = -1;
 	dat->source_escape = '\\';
+	dat->eqn_delim = tbl->eqn_delim;
+	dat->eqn_odelim = tbl->eqn_odelim;
+	dat->eqn_cdelim = tbl->eqn_cdelim;
 	dat->hspans = 0;
 	dat->vspans = 0;
 	dat->block = 0;

@@ -1,0 +1,329 @@
+--- a/man_term.c
++++ b/man_term.c
+@@ -387,6 +387,8 @@
+ 
+ 	if (n->child == NULL) {
+ 		p->tcol->offset = mt->offset;
++		(void)term_exec_placement(p,
++		    TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION);
+ 		return 0;
+ 	}
+ 
+@@ -414,6 +416,7 @@
+ 		p->tcol->offset = v;
+ 	if (p->tcol->offset > SHRT_MAX)
+ 		p->tcol->offset = term_len(p, p->defindent);
++	(void)term_exec_placement(p, TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION);
+ 
+ 	return 0;
+ }
+@@ -509,11 +512,15 @@
+ 	case ROFFT_BLOCK:
+ 		mt->lmargin[mt->lmargincur] = term_len(p, 7);
+ 		print_bvspace(p, n, mt->pardist);
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
++			return 0;
+ 		break;
+ 	case ROFFT_HEAD:
+ 		return 0;
+ 	case ROFFT_BODY:
+ 		p->tcol->offset = mt->offset;
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
++			return 0;
+ 		break;
+ 	default:
+ 		abort();
+@@ -560,6 +567,8 @@
+ 	case ROFFT_HEAD:
+ 		p->tcol->offset = mt->offset;
+ 		p->tcol->rmargin = mt->offset + len;
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_HEAD))
++			return 0;
+ 		if (!term_exec_definition_phase(p, 0))
+ 			return 0;
+ 		if (n->child != NULL)
+@@ -568,6 +577,8 @@
+ 	case ROFFT_BODY:
+ 		p->tcol->offset = mt->offset + len;
+ 		p->tcol->rmargin = p->maxrmargin;
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
++			return 0;
+ 		if (!term_exec_definition_phase(p, 1))
+ 			return 0;
+ 		break;
+@@ -639,6 +650,8 @@
+ 	case ROFFT_HEAD:
+ 		p->tcol->offset = mt->offset;
+ 		p->tcol->rmargin = mt->offset + len;
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_HEAD))
++			return 0;
+ 		if (!term_exec_definition_phase(p, 0))
+ 			return 0;
+ 
+@@ -657,6 +670,8 @@
+ 		p->tcol->rmargin = p->maxrmargin;
+ 		p->trailspace = 0;
+ 		p->flags &= ~(TERMP_NOBREAK | TERMP_BRTRSP);
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
++			return 0;
+ 		if (!term_exec_definition_phase(p, 1))
+ 			return 0;
+ 		break;
+@@ -793,6 +808,8 @@
+ 	switch (n->type) {
+ 	case ROFFT_BLOCK:
+ 		term_newln(p);
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
++			return 0;
+ 		return 1;
+ 	case ROFFT_HEAD:
+ 		return 0;
+@@ -821,6 +838,8 @@
+ 		mt->lmargincur = mt->lmarginsz;
+ 
+ 	mt->lmargin[mt->lmargincur] = term_len(p, 7);
++	if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION))
++		return 0;
+ 	return 1;
+ }
+ 
+@@ -841,6 +860,7 @@
+ 	p->tcol->offset = mt->offset;
+ 	if (--mt->lmarginsz < MAXMARGINS)
+ 		mt->lmargincur = mt->lmarginsz;
++	(void)term_exec_placement(p, TERM_EXEC_PLACEMENT_EXIT);
+ }
+ 
+ static int
+--- a/mdoc_term.c
++++ b/mdoc_term.c
+@@ -567,6 +567,10 @@
+ 	if (n->type != ROFFT_TEXT)
+ 		p->tcol->offset = offset;
+ 	p->tcol->rmargin = rmargin;
++	if (((n->tok == MDOC_Bl || n->tok == MDOC_D1 || n->tok == MDOC_Dl) &&
++	    n->type == ROFFT_BLOCK) ||
++	    (n->tok == MDOC_Bd && n->type == ROFFT_BODY))
++		(void)term_exec_placement(p, TERM_EXEC_PLACEMENT_EXIT);
+ }
+ 
+ static void
+@@ -1006,6 +1010,10 @@
+ 		break;
+ 	}
+ 
++	if (!term_exec_placement(p, n->type == ROFFT_HEAD ?
++	    TERM_EXEC_PLACEMENT_HEAD : TERM_EXEC_PLACEMENT_BODY))
++		return 0;
++
+ 	/*
+ 	 * Preserve the handler-computed field contract even when the phase
+ 	 * produces no terminal buffer content.  The observer records objective
+@@ -1273,6 +1281,8 @@
+ 	switch (n->type) {
+ 	case ROFFT_BLOCK:
+ 		term_newln(p);
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
++			return 0;
+ 		return 1;
+ 	case ROFFT_HEAD:
+ 		return 0;
+@@ -1486,6 +1496,8 @@
+ 	term_tab_set(p, NULL);
+ 	term_tab_set(p, "T");
+ 	term_tab_set(p, ".5i");
++	if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_CONTENT))
++		return 0;
+ 	return 1;
+ }
+ 
+@@ -1589,6 +1601,8 @@
+ 
+ 	if (n->type == ROFFT_BLOCK) {
+ 		print_bvspace(p, n, n);
++		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
++			return 0;
+ 		return 1;
+ 	} else if (n->type == ROFFT_HEAD)
+ 		return 0;
+@@ -1622,6 +1636,8 @@
+ 	default:
+ 		break;
+ 	}
++	if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
++		return 0;
+ 	return 1;
+ }
+ 
+--- a/term.c
++++ b/term.c
+@@ -43,7 +43,7 @@
+ static	void		 directc(struct termp *, int);
+ static	void		 encode(struct termp *, const char *, size_t);
+ static	void		 encode1(struct termp *, int);
+-static	void		 endline(struct termp *);
++static	void		 endline(struct termp *, int);
+ static	void		 term_field(struct termp *, size_t, size_t);
+ static	void		 term_fill(struct termp *, size_t *, size_t *,
+ 			    size_t *, size_t);
+@@ -65,6 +65,7 @@
+ 	p->exec_logical_origin = 0;
+ 	p->exec_logical_tab_count = 0;
+ 	p->exec_logical_forced_break = 0;
++	p->exec_line_commit_cause = TERM_EXEC_LINE_DIRECT_DEVICE;
+ }
+ 
+ int
+@@ -475,6 +476,17 @@
+ }
+ 
+ int
++term_exec_placement(struct termp *p, int phase)
++{
++	if (phase < TERM_EXEC_PLACEMENT_ENTER ||
++	    phase > TERM_EXEC_PLACEMENT_EXIT) {
++		term_exec_abort(p);
++		return 0;
++	}
++	TERM_EXEC_CALL(p, placement, phase);
++}
++
++int
+ term_exec_fill_decision(struct termp *p, size_t scan_end, size_t accepted,
+     size_t content_width, size_t target_width, size_t leading,
+     size_t field_width)
+@@ -572,7 +584,8 @@
+ term_exec_device_endline(struct termp *p, size_t line_before,
+     size_t line_after, size_t visual_before, size_t visual_after)
+ {
+-	TERM_EXEC_CALL(p, device_endline, line_before, line_after,
++	TERM_EXEC_CALL(p, device_endline, p->exec_line_commit_cause,
++	    line_before, line_after,
+ 	    visual_before, visual_after);
+ }
+ 
+@@ -821,7 +834,7 @@
+ 		}
+ 
+ 		term_exec_fill_outcome(p, 3, vbr);
+-		endline(p);
++		endline(p, TERM_EXEC_LINE_FIELD_WRAP);
+ 
+ 		/*
+ 		 * Normally, start the next line at the same indentation
+@@ -856,7 +869,7 @@
+ 	if ((p->flags & TERMP_HANG) == 0 &&
+ 	    ((p->flags & TERMP_NOBREAK) == 0 ||
+ 	     vbr + term_len(p, p->trailspace) > vfield + term_len(p, 1) / 2))
+-		endline(p);
++		endline(p, TERM_EXEC_LINE_FIELD_END);
+ 	term_exec_flush(p, 0);
+ }
+ 
+@@ -1196,9 +1209,10 @@
+  * and end the output line.
+  */
+ static void
+-endline(struct termp *p)
++endline(struct termp *p, int cause)
+ {
+ 	int fragment_role;
++	int previous_cause;
+ 
+ 	if (!term_exec_boundary(p, 3, 1))
+ 		return;
+@@ -1217,7 +1231,10 @@
+ 		p->exec_fragment_role = fragment_role;
+ 		p->flags &= ~(TERMP_NOBUF | TERMP_NEWMC);
+ 	}
++	previous_cause = p->exec_line_commit_cause;
++	p->exec_line_commit_cause = cause;
+ 	(*p->endline)(p);
++	p->exec_line_commit_cause = previous_cause;
+ 	term_exec_boundary(p, 3, 0);
+ }
+ 
+@@ -1247,6 +1264,8 @@
+ void
+ term_vspace(struct termp *p)
+ {
++	int previous_cause;
++
+ 	if (!term_exec_boundary(p, 2, 1))
+ 		return;
+ 	term_newln(p);
+@@ -1254,8 +1273,12 @@
+ 		return;
+ 	if (0 < p->skipvsp)
+ 		p->skipvsp--;
+-	else
++	else {
++		previous_cause = p->exec_line_commit_cause;
++		p->exec_line_commit_cause = TERM_EXEC_LINE_VERTICAL_BLANK;
+ 		(*p->endline)(p);
++		p->exec_line_commit_cause = previous_cause;
++	}
+ 	term_exec_boundary(p, 2, 0);
+ }
+ 
+--- a/term.h
++++ b/term.h
+@@ -117,6 +117,24 @@
+ 	TERM_EXEC_MAN_BLOCK_LP
+ };
+ 
++/* Stable reasons why the terminal device committed one physical line. */
++enum term_exec_line_commit_cause {
++	TERM_EXEC_LINE_DIRECT_DEVICE,
++	TERM_EXEC_LINE_FIELD_WRAP,
++	TERM_EXEC_LINE_FIELD_END,
++	TERM_EXEC_LINE_VERTICAL_BLANK
++};
++
++/* Stable formatter placement checkpoints, recorded after geometry changes. */
++enum term_exec_placement_phase {
++	TERM_EXEC_PLACEMENT_ENTER,
++	TERM_EXEC_PLACEMENT_CONTENT,
++	TERM_EXEC_PLACEMENT_HEAD,
++	TERM_EXEC_PLACEMENT_BODY,
++	TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION,
++	TERM_EXEC_PLACEMENT_EXIT
++};
++
+ /* Stable observer-side spellings of display and control execution regions. */
+ enum term_exec_region_kind {
+ 	TERM_EXEC_REGION_MAN_SYNOPSIS_SECTION,
+@@ -170,6 +188,8 @@
+ 	    const struct roff_node *, int);
+ 	int (*definition_phase)(void *, const struct termp *,
+ 	    const struct roff_node *, int);
++	int (*placement)(void *, const struct termp *,
++	    const struct roff_node *, int);
+ 	int (*region_begin)(void *, const struct termp *,
+ 	    const struct roff_node *, int);
+ 	int (*region_end)(void *, const struct termp *,
+@@ -220,7 +240,7 @@
+ 	int (*device_letter)(void *, const struct termp *,
+ 	    const struct roff_node *, size_t, int, size_t, size_t);
+ 	int (*device_endline)(void *, const struct termp *,
+-	    const struct roff_node *, size_t, size_t, size_t, size_t);
++	    const struct roff_node *, int, size_t, size_t, size_t, size_t);
+ 	int (*font)(void *, const struct termp *, const struct roff_node *,
+ 	    int, int, size_t, size_t);
+ 	int (*reference_begin)(void *, const struct termp *,
+@@ -362,6 +382,7 @@
+ 	size_t		  exec_logical_origin;
+ 	size_t		  exec_logical_tab_count;
+ 	int		  exec_logical_forced_break;
++	int		  exec_line_commit_cause;
+ };
+ 
+ 
+@@ -411,6 +432,7 @@
+ int		  term_exec_man_block(struct termp *, const struct roff_node *,
+ 			int, int);
+ int		  term_exec_definition_phase(struct termp *, int);
++int		  term_exec_placement(struct termp *, int);
+ int		  term_exec_region(struct termp *, const struct roff_node *,
+ 			int, int);
+ int		  term_exec_equation(struct termp *, const struct eqn_box *, int);

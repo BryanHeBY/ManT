@@ -55,11 +55,15 @@ fn explicit_initial_body_requests_end_short_heads_without_adding_blank_rows() {
                 assert_eq!(lines[head_row + 1].trim(), "BODY", "{source}\n{text}");
                 assert!(lines[head_row + 1].starts_with(' '), "{source}\n{text}");
                 assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
-                if prefix == ".ft B\n" {
+                // Fixed CVS `print_man_node()` resets the font around every
+                // man macro.  `.EX` and `.EE` are man macros; raw roff
+                // requests such as `.br`, `.nf`, and `.sp` are not.
+                if prefix == ".ft B\n" && !matches!(request, ".EX\n" | ".EE\n") {
                     assert!(
                         serde_json::to_string(&owner.description)
                             .unwrap()
-                            .contains("strong")
+                            .contains("strong"),
+                        "{source}\n{text}"
                     );
                 }
             }

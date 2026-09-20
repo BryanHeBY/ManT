@@ -26,6 +26,21 @@ SHARED BODY.
 .XX
 ";
 
+const HANGING_RS_OPTIONS: &[u8] = br#".TH PROBE 1
+.SH OPTIONS
+.SS "Special Options"
+.sp
+.B \-V
+.RS 4
+Print version.
+.RE
+.sp
+.B \-q
+.RS 4
+Quiet output.
+.RE
+"#;
+
 const MDOC_ENTRIES: &[u8] = br".Dd September 19, 2026
 .Dt PROBE 1
 .Os
@@ -304,6 +319,9 @@ Command body.
 .El
 ";
 
+const COMPLETE_MAN: &[u8] = include_bytes!("../fixtures/native-execution-complete-man.1");
+const DEVICE_DECORATION_MAN: &[u8] = include_bytes!("../fixtures/device-decoration-man.1");
+
 fn execute(name: &str, format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
         .with_input_format(format)
@@ -326,6 +344,29 @@ fn definition_lists(section: &Section) -> Vec<(&[DefinitionItem], &[mant_ir::Dec
             _ => None,
         })
         .collect()
+}
+
+#[test]
+fn page_lifecycle_spacing_never_becomes_root_content() {
+    // Verified before this assertion with the pinned CVS binary.  Fixed CVS
+    // term_ascii.c::ascii_begin()/ascii_end() execute man_term.c's page head
+    // and foot under TERM_EXEC_FRAGMENT_PAGE; those device rows are not
+    // authored content even though they surround the NAME body.
+    let executed = execute(
+        "device-decoration-man.1",
+        InputFormat::Man,
+        DEVICE_DECORATION_MAN,
+    );
+    let projected = project_semantic_document(&executed.document, &executed.execution);
+    assert!(projected.document.blocks.is_empty());
+    assert_eq!(projected.document.sections.len(), 1);
+    assert_eq!(projected.document.sections[0].heading.plain_text(), "NAME");
+    assert!(
+        projected.document.sections[0]
+            .blocks
+            .iter()
+            .all(|block| !matches!(block, Block::VerticalSpace { .. }))
+    );
 }
 
 #[test]
@@ -367,6 +408,41 @@ fn binds_repeated_tq_expansions_by_execution_owner_not_source_coordinates() {
         2,
         "each TP owner receives only its own immediately following TQ"
     );
+}
+
+#[test]
+fn binds_each_hanging_term_to_the_rs_entry_flush() {
+    // Checked first with the pinned CVS reference.  man_term.c::pre_RS()
+    // executes term_newln() before changing the offset, so each RS-entry
+    // flush is the authoritative predecessor field even though validation
+    // leaves the second formatted term outside an explicit paragraph block.
+    let executed = execute("hanging-rs-options.1", InputFormat::Man, HANGING_RS_OPTIONS);
+    let projected = project_semantic_document(&executed.document, &executed.execution);
+    let options = projected
+        .document
+        .sections
+        .iter()
+        .find(|section| section.heading.plain_text() == "OPTIONS")
+        .unwrap();
+    let special = options
+        .children
+        .iter()
+        .find(|section| section.heading.plain_text() == "Special Options")
+        .unwrap();
+    let lists = definition_lists(special);
+    let items = lists
+        .iter()
+        .flat_map(|(items, _)| items.iter())
+        .collect::<Vec<_>>();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["-V"]);
+    assert_eq!(items[1].entry.as_ref().unwrap().names, ["-q"]);
+    let description = |item: &DefinitionItem| match item.description.as_slice() {
+        [Block::Paragraph { children, .. }] => mant_ir::inline_plain_text(children),
+        blocks => panic!("one paragraph description, got {blocks:?}"),
+    };
+    assert_eq!(description(&items[0]), "Print version.");
+    assert_eq!(description(&items[1]), "Quiet output.");
 }
 
 #[test]
@@ -637,7 +713,7 @@ fn native_fragments_follow_cvs_html_case_and_duplicate_ordinals() {
                         id,
                         fragment_aliases,
                         ..
-                    } if id.as_str().starts_with("target-") => Some((
+                    } if !fragment_aliases.is_empty() => Some((
                         id.as_str().to_owned(),
                         fragment_aliases
                             .iter()
@@ -858,8 +934,8 @@ fn canonical_section_allocator_scales_with_one_repeated_base() {
     let projected = project_semantic_document(&executed.document, &executed.execution);
     let repeated = &projected.document.sections[1..];
     assert_eq!(repeated.len(), SECTION_COUNT);
-    assert_eq!(repeated[0].id.as_str(), "section-same");
-    assert_eq!(repeated[SECTION_COUNT - 1].id.as_str(), "section-same-2048");
+    assert_eq!(repeated[0].id.as_str(), "same");
+    assert_eq!(repeated[SECTION_COUNT - 1].id.as_str(), "same-2048");
 }
 
 #[test]
@@ -1087,9 +1163,9 @@ fn man_ip_presentation_marks_do_not_become_semantic_names() {
 
 #[test]
 fn staged_semantics_keeps_column_owners_nonsemantic_until_table_projection() {
-    // Pinned CVS mdoc_term.c executes each column body with an independently
-    // calculated offset. K20 owns the final table projection; K19 must retain
-    // the row without treating Cm in a cell as a declaration or panicking.
+    // Pinned CVS mdoc_term.c executes each column BODY with an independently
+    // calculated offset.  The exact fixture was run with the fixed binary
+    // before this assertion: alpha and beta occupy two cells on one row.
     let executed = execute("column.1", InputFormat::Mdoc, MDOC_COLUMN);
     let projected = project_semantic_document(&executed.document, &executed.execution);
     let table = projected
@@ -1098,11 +1174,25 @@ fn staged_semantics_keeps_column_owners_nonsemantic_until_table_projection() {
         .iter()
         .find(|section| section.heading.plain_text() == "TABLE")
         .unwrap();
-    let [Block::List { items, .. }] = table.blocks.as_slice() else {
-        panic!("K19 preserves the native column row for K20")
+    let [Block::Table { rows, .. }] = table.blocks.as_slice() else {
+        panic!("native mdoc column list materializes one table")
     };
-    assert_eq!(items.len(), 1);
-    assert!(items[0].entry.is_none());
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].cells.len(), 2);
+    assert_eq!(
+        mant_ir::inline_plain_text(match &rows[0].cells[0].blocks[0] {
+            Block::Paragraph { children, .. } => children,
+            _ => unreachable!(),
+        }),
+        "alpha"
+    );
+    assert_eq!(
+        mant_ir::inline_plain_text(match &rows[0].cells[1].blocks[0] {
+            Block::Paragraph { children, .. } => children,
+            _ => unreachable!(),
+        }),
+        "beta"
+    );
 }
 
 #[test]
@@ -1134,7 +1224,7 @@ fn native_section_fragments_and_semantic_ids_keep_separate_namespaces() {
         .iter()
         .find(|section| section.heading.plain_text() == "TERM GIT ADD")
         .unwrap();
-    assert_eq!(commands.id.as_str(), "section-term-git-add-section");
+    assert_eq!(commands.id.as_str(), "term-git-add-section");
     assert_eq!(commands.fragment_aliases[0].as_str(), "TERM_GIT_ADD");
     let lists = definition_lists(commands);
     let [(items, _)] = lists.as_slice() else {
@@ -1144,4 +1234,46 @@ fn native_section_fragments_and_semantic_ids_keep_separate_namespaces() {
     assert!(entry_id.starts_with("term-git-add"));
     assert_ne!(entry_id, commands.id.as_str());
     assert!(mant_ir::validate_document(&projected.document).is_empty());
+}
+
+#[test]
+fn native_arena_materializes_each_primary_content_owner_in_source_order() {
+    // Before this assertion was written, the exact fixture was run through
+    // the pinned CVS binary.  `print_man_node()` emits the filled prose and
+    // no-fill rows, `tbl_term.c::term_tbl()` emits one two-column table,
+    // `eqn_term.c::term_eqn()` emits x/y, and `man_term.c::pre_TP()` owns the
+    // final tagged paragraph.  These are distinct primary owners; none may be
+    // reconstructed by appending a second parser's output.
+    let executed = execute("complete-man.1", InputFormat::Man, COMPLETE_MAN);
+    let projected = project_semantic_document(&executed.document, &executed.execution);
+    let description = projected
+        .document
+        .sections
+        .iter()
+        .find(|section| section.heading.plain_text() == "DESCRIPTION")
+        .unwrap();
+    assert!(matches!(description.blocks[0], Block::Paragraph { .. }));
+    assert!(matches!(description.blocks[1], Block::Preformatted { .. }));
+    assert!(matches!(description.blocks[2], Block::Table { .. }));
+    assert!(matches!(description.blocks[3], Block::Equation { .. }));
+    assert!(matches!(
+        description.blocks[4],
+        Block::DefinitionList { .. }
+    ));
+
+    let Block::Paragraph { children, .. } = &description.blocks[0] else {
+        unreachable!()
+    };
+    assert_eq!(mant_ir::inline_plain_text(children), "ordinary prose");
+    let Block::Preformatted { children, .. } = &description.blocks[1] else {
+        unreachable!()
+    };
+    assert_eq!(
+        mant_ir::inline_plain_text(children),
+        "literal one\nliteral two"
+    );
+    let Block::Equation { value, .. } = &description.blocks[3] else {
+        unreachable!()
+    };
+    assert_eq!(value, "x / y");
 }

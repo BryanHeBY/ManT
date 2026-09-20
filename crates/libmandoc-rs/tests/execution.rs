@@ -5,9 +5,12 @@ use libmandoc_rs::{
     ExecutionControlRequest, ExecutionEquationBoxKind, ExecutionEquationFlags,
     ExecutionEquationPartKind, ExecutionErrorKind, ExecutionFont, ExecutionHeadingKind,
     ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind, ExecutionMdocListKind,
-    ExecutionReferenceKind, ExecutionRegionKind, ExecutionTableAlignment, ExecutionTableDataKind,
+    ExecutionOutputRole, ExecutionPlacementPhase, ExecutionReferenceKind,
+    ExecutionReferencePresentation, ExecutionRegionKind, ExecutionTableAlignment,
+    ExecutionTableDataDisposition, ExecutionTableDataKind, ExecutionTableInvocationOutcome,
     ExecutionTableLayoutKind, ExecutionTableRowKind, ExecutionWrapperKind, FlushOutcome,
-    FragmentRole, InputFormat, NativeExecutionReport, Node, NodeKind, ParseOptions, Parser,
+    FragmentRole, InputFormat, LineCommitCause, NativeExecutionReport, Node, NodeKind,
+    ParseOptions, Parser, TableRowKind,
 };
 
 const MAN: &[u8] = include_bytes!("fixtures/execution/plain-man.1");
@@ -31,6 +34,11 @@ const CONTROL_LARGE_NEGATIVE_VS_MAN: &[u8] =
 const TABLE: &[u8] = include_bytes!("fixtures/execution/unsupported-table.1");
 const TABLE_VERTICAL_CONTINUATION: &[u8] =
     include_bytes!("fixtures/execution/table-vertical-continuation.1");
+const TABLE_LAYOUT_RULE_SUPPRESSED: &[u8] =
+    include_bytes!("fixtures/execution/table-layout-rule-suppressed.1");
+const TABLE_INLINE_EQUATION_STATE: &[u8] =
+    include_bytes!("fixtures/execution/table-inline-equation-state.1");
+const TABLE_TAND_SPAN: &[u8] = include_bytes!("fixtures/execution/table-tand-span.1");
 const TABLE_WITH_EMPTY_CELL: &[u8] = br#".TH PROBE 1 "September 14, 2026" "ManT" "Manual"
 .SH DESCRIPTION
 .TS
@@ -54,10 +62,19 @@ const EQUATION_EMPTY: &[u8] = include_bytes!("fixtures/execution/equation-empty.
 const EXECUTED_SO: &[u8] = include_bytes!("fixtures/execution/executed-so.1");
 const INACTIVE_SO: &[u8] = include_bytes!("fixtures/execution/inactive-so.1");
 const DEVICE_ROLES: &[u8] = include_bytes!("fixtures/execution/device-roles.1");
+const DEVICE_LIFECYCLE_MAN: &[u8] = include_bytes!("fixtures/execution/device-lifecycle-man.1");
+const DELAYED_BODY_BEFORE_FOOTER: &[u8] = br".TH PROBE 1
+.UC 5
+BODY
+";
 const ANNOTATED_MAN: &[u8] = include_bytes!("fixtures/execution/annotated-man.1");
 const ANNOTATED_MDOC: &[u8] = include_bytes!("fixtures/execution/annotated-mdoc.1");
 const REFERENCES_MAN: &[u8] = include_bytes!("fixtures/execution/references-man.1");
 const REFERENCES_MDOC: &[u8] = include_bytes!("fixtures/execution/references-mdoc.1");
+const REFERENCE_PRESENTATIONS_MAN: &[u8] =
+    include_bytes!("fixtures/execution/reference-presentations-man.1");
+const REFERENCE_PRESENTATIONS_MDOC: &[u8] =
+    include_bytes!("fixtures/execution/reference-presentations-mdoc.1");
 const WRAPPED_REFERENCE_MDOC: &[u8] = include_bytes!("fixtures/execution/wrapped-reference-mdoc.1");
 const NESTED_REFERENCE_MAN: &[u8] = include_bytes!("fixtures/execution/nested-reference-man.1");
 const HEADING_EXECUTION_MDOC: &[u8] = include_bytes!("fixtures/execution/heading-execution-mdoc.1");
@@ -102,6 +119,9 @@ const DISPLAY_CONTROL_MAN: &[u8] = include_bytes!("fixtures/execution/display-co
 const DISPLAY_CONTROL_MDOC: &[u8] = include_bytes!("fixtures/execution/display-control-mdoc.1");
 const DISPLAY_CONTROL_MDOC_SYNOPSIS_OVERLAP: &[u8] =
     include_bytes!("fixtures/execution/display-control-mdoc-synopsis-overlap.1");
+const PLACEMENT_MAN: &[u8] = include_bytes!("fixtures/execution/placement-man.1");
+const PLACEMENT_MDOC: &[u8] = include_bytes!("fixtures/execution/placement-mdoc.1");
+const LINE_COMMIT_CAUSES_MAN: &[u8] = include_bytes!("fixtures/execution/line-commit-causes-man.1");
 
 fn execute(name: &str, input_format: InputFormat, source: &[u8]) -> libmandoc_rs::ExecutionReport {
     Parser::new(ParseOptions::default())
@@ -404,7 +424,7 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
         .iter()
         .find(|fragment| fragment.role == FragmentRole::MarginDecoration)
         .expect("native .mc margin fragment");
-    let margin_atom = &decorated.execution.atoms()[margin.atoms[0].0 as usize];
+    let margin_atom = &decorated.execution.atoms()[margin.atom.0 as usize];
     assert_eq!(margin_atom.role, AtomRole::Authored);
     assert_eq!(
         margin_atom
@@ -420,6 +440,82 @@ fn reports_native_flush_branches_and_device_decoration_roles() {
         margin_node.line, 4,
         "margin must not inherit VISIBLE's owner"
     );
+}
+
+#[test]
+fn source_owned_body_flushed_by_the_footer_remains_content() {
+    // Checked first with the pinned CVS reference: man_term.c ignores `.UC`
+    // as visible content, while term_ascii.c::ascii_end() can flush the still
+    // buffered BODY immediately before emitting page decoration.  The flush
+    // phase must not reclassify source-owned atoms as a footer.
+    let report = execute(
+        "delayed-body-before-footer.1",
+        InputFormat::Man,
+        DELAYED_BODY_BEFORE_FOOTER,
+    );
+    let fragment = report
+        .execution
+        .fragments()
+        .iter()
+        .find(|fragment| {
+            let atom = &report.execution.atoms()[fragment.atom.0 as usize];
+            atom.node
+                .is_some_and(|node| report.execution.nodes()[node.0 as usize].line == 3)
+                && char::from_u32(atom.display_scalar) == Some('B')
+        })
+        .expect("BODY fragment emitted during final flush");
+    assert_eq!(fragment.role, FragmentRole::Content);
+    assert!(
+        report
+            .execution
+            .fragments()
+            .iter()
+            .any(|fragment| fragment.role == FragmentRole::PageDecoration),
+        "the same execution still distinguishes the actual footer"
+    );
+}
+
+#[test]
+fn reports_page_lifecycle_on_every_output_fact() {
+    // Verified first with target/mandoc-migration/reference/mandoc.  Fixed
+    // CVS term_ascii.c::ascii_begin()/ascii_end() select PAGE while
+    // man_term.c::print_man_head()/print_man_foot() emit their device-only
+    // spacing.  Source-owned NAME content remains CONTENT.
+    let report = execute(
+        "device-lifecycle-man.1",
+        InputFormat::Man,
+        DEVICE_LIFECYCLE_MAN,
+    );
+    let execution = &report.execution;
+    assert!(
+        execution
+            .atoms()
+            .iter()
+            .any(|atom| atom.output_role == ExecutionOutputRole::PageDecoration)
+    );
+    assert!(
+        execution
+            .boundaries()
+            .iter()
+            .any(|boundary| boundary.output_role == ExecutionOutputRole::PageDecoration)
+    );
+    assert!(
+        execution
+            .geometry()
+            .iter()
+            .any(|geometry| geometry.output_role == ExecutionOutputRole::PageDecoration)
+    );
+    assert!(execution.atoms().iter().any(|atom| {
+        atom.output_role == ExecutionOutputRole::Content
+            && atom.node.is_some_and(|node| {
+                execution.nodes()[node.0 as usize].line == 3
+                    && char::from_u32(atom.display_scalar) == Some('S')
+            })
+    }));
+    assert!(execution.flushes().iter().all(|flush| matches!(
+        flush.output_role,
+        ExecutionOutputRole::Content | ExecutionOutputRole::PageDecoration
+    )));
 }
 
 fn assert_consumed_tail(
@@ -922,9 +1018,8 @@ fn oversized_control_distances_do_not_overflow_native_state() {
         .expect("oversized .sp still has an authored control fact");
     assert!(control.enter_sequence < control.leave_sequence);
     assert!(report.execution.fragments().iter().any(|fragment| {
-        fragment.atoms.iter().any(|key| {
-            char::from_u32(report.execution.atoms()[key.0 as usize].display_scalar) == Some('B')
-        })
+        char::from_u32(report.execution.atoms()[fragment.atom.0 as usize].display_scalar)
+            == Some('B')
     }));
 }
 
@@ -1187,7 +1282,9 @@ fn reports_typed_reference_components_and_exact_label_intervals() {
                 && report.execution.atoms()
                     [reference.execution_atoms.start as usize..reference.atoms.start as usize]
                     .iter()
-                    .all(|atom| atom.role == AtomRole::ImplicitSpace)
+                    .all(|atom| {
+                        atom.role == AtomRole::ImplicitSpace || atom.kind == AtomKind::TabReference
+                    })
         }));
         let manual = report
             .execution
@@ -1205,6 +1302,124 @@ fn reports_typed_reference_components_and_exact_label_intervals() {
         assert!(operands.contains(&b"3".as_slice()));
         assert!(!operands.contains(&b",".as_slice()));
     }
+}
+
+#[test]
+fn reports_native_reference_presentation_phases_without_macro_inference() {
+    // Verified before writing these assertions with the pinned CVS UTF-8 and
+    // tree renderers.  `mdoc_term.c::termp_lk_pre()` renders a labelled `.Lk`
+    // as `label: target`, while `man_term.c::pre_UR()/post_UR()` renders a
+    // non-empty body as `label <target>`.  Direct references have no
+    // supplement; the trailing `.Lk` delimiter remains outside all phases.
+    for (name, format, source, expected) in [
+        (
+            "reference-presentations-mdoc.1",
+            InputFormat::Mdoc,
+            REFERENCE_PRESENTATIONS_MDOC,
+            vec![
+                ExecutionReferencePresentation::LabelledSupplement,
+                ExecutionReferencePresentation::Direct,
+                ExecutionReferencePresentation::Direct,
+                ExecutionReferencePresentation::Direct,
+                ExecutionReferencePresentation::Direct,
+            ],
+        ),
+        (
+            "reference-presentations-man.1",
+            InputFormat::Man,
+            REFERENCE_PRESENTATIONS_MAN,
+            vec![
+                ExecutionReferencePresentation::Direct,
+                ExecutionReferencePresentation::LabelledSupplement,
+                ExecutionReferencePresentation::Direct,
+                ExecutionReferencePresentation::LabelledSupplement,
+                ExecutionReferencePresentation::Direct,
+            ],
+        ),
+    ] {
+        let report = execute(name, format, source);
+        let references = report.execution.references();
+        assert_eq!(
+            references
+                .iter()
+                .map(|reference| reference.presentation)
+                .collect::<Vec<_>>(),
+            expected
+        );
+        for reference in references {
+            assert!(reference.execution_atoms.start <= reference.atoms.start);
+            assert!(reference.atoms.end <= reference.execution_atoms.end);
+            assert!(reference.target_atoms.end <= reference.execution_atoms.end);
+            match reference.presentation {
+                ExecutionReferencePresentation::Direct => {
+                    assert_eq!(reference.atoms, reference.target_atoms);
+                    assert_eq!(reference.supplement_atoms, None);
+                }
+                ExecutionReferencePresentation::LabelledSupplement => {
+                    let supplement = reference.supplement_atoms.clone().unwrap();
+                    assert!(reference.atoms.end <= supplement.start);
+                    assert!(supplement.start <= reference.target_atoms.start);
+                    assert!(reference.target_atoms.end <= supplement.end);
+                    assert!(supplement.end <= reference.execution_atoms.end);
+                }
+            }
+        }
+
+        if format == InputFormat::Mdoc {
+            let labelled = &references[0];
+            assert_eq!(
+                atom_text(&report.execution, labelled.atoms.clone()),
+                "label"
+            );
+            assert_eq!(
+                atom_text(&report.execution, labelled.target_atoms.clone()),
+                "https://labelled.example"
+            );
+            assert_eq!(
+                atom_text(
+                    &report.execution,
+                    labelled.supplement_atoms.clone().unwrap()
+                ),
+                ": https://labelled.example"
+            );
+            assert!(
+                report.execution.atoms()[labelled.execution_atoms.end as usize..]
+                    .iter()
+                    .any(|atom| char::from_u32(atom.display_scalar) == Some('.'))
+            );
+        } else {
+            let labelled = &references[1];
+            assert_eq!(
+                atom_text(&report.execution, labelled.atoms.clone()),
+                "label body"
+            );
+            assert_eq!(
+                atom_text(&report.execution, labelled.target_atoms.clone()),
+                "https://labelled.example"
+            );
+            assert_eq!(
+                atom_text(
+                    &report.execution,
+                    labelled.supplement_atoms.clone().unwrap()
+                ),
+                " <https://labelled.example>"
+            );
+        }
+    }
+}
+
+fn atom_text(report: &NativeExecutionReport, range: std::ops::Range<u32>) -> String {
+    report.atoms()[range.start as usize..range.end as usize]
+        .iter()
+        .filter(|atom| {
+            atom.role != AtomRole::FontDecoration && atom.role != AtomRole::DeviceGenerated
+        })
+        .filter_map(|atom| match atom.kind {
+            AtomKind::Glyph => char::from_u32(atom.display_scalar),
+            AtomKind::BreakableSpace | AtomKind::NonBreakingSpace => Some(' '),
+            _ => None,
+        })
+        .collect()
 }
 
 #[test]
@@ -1656,6 +1871,186 @@ fn reports_exact_man_block_lifecycles() {
         .expect("TP nested inside RS execution scope");
     assert!(nested.enter_atom >= relative.enter_atom);
     assert!(nested.leave_atom <= relative.leave_atom);
+}
+
+#[test]
+fn reports_native_line_commit_causes_without_inferring_them_from_line_deltas() {
+    // Verified before this assertion with the pinned CVS `mandoc -Tutf8
+    // -O width=40`.  `term.c::term_flushln()` calls `endline()` separately
+    // for a mid-field wrap and the completed field, while `term_vspace()`
+    // calls the device endline directly for the blank line.
+    let report = execute(
+        "line-commit-causes-man.1",
+        InputFormat::Man,
+        LINE_COMMIT_CAUSES_MAN,
+    );
+    let execution = &report.execution;
+    let device = execution
+        .boundaries()
+        .iter()
+        .filter(|boundary| boundary.request == BoundaryRequest::DeviceEndline)
+        .collect::<Vec<_>>();
+    assert!(!device.is_empty());
+    assert!(
+        device
+            .iter()
+            .any(|boundary| boundary.line_commit_cause == Some(LineCommitCause::FieldWrap))
+    );
+    assert!(
+        device
+            .iter()
+            .any(|boundary| boundary.line_commit_cause == Some(LineCommitCause::FieldEnd))
+    );
+    assert!(
+        device
+            .iter()
+            .any(|boundary| { boundary.line_commit_cause == Some(LineCommitCause::VerticalBlank) })
+    );
+    assert!(device.iter().all(
+        |boundary| match (boundary.line_commit_cause, boundary.parent,) {
+            (Some(LineCommitCause::DirectDevice), None) => true,
+            (Some(LineCommitCause::FieldWrap | LineCommitCause::FieldEnd), Some(parent)) => {
+                execution.boundaries()[parent as usize].request == BoundaryRequest::Endline
+            }
+            (Some(LineCommitCause::VerticalBlank), Some(parent)) => {
+                execution.boundaries()[parent as usize].request == BoundaryRequest::VerticalSpace
+            }
+            _ => false,
+        }
+    ));
+
+    // Fixed CVS `tbl_term.c` also owns raw device commits that do not have a
+    // `term_flushln()`/`term_vspace()` parent.
+    let table = execute("unsupported-table.1", InputFormat::Man, TABLE);
+    assert!(table.execution.boundaries().iter().any(|boundary| {
+        boundary.request == BoundaryRequest::DeviceEndline
+            && boundary.line_commit_cause == Some(LineCommitCause::DirectDevice)
+            && boundary.parent.is_none()
+    }));
+}
+
+#[test]
+fn reports_man_handler_placement_after_native_geometry_calculation() {
+    // Verified before writing this assertion with the pinned CVS terminal.
+    // `man_term.c::pre_IP/pre_TP/pre_RS/pre_PP/pre_in()` establishes each
+    // origin and field edge before handing the corresponding content to the
+    // formatter; checkpoints retain those values in basic units.
+    let report = execute("placement-man.1", InputFormat::Man, PLACEMENT_MAN);
+    let execution = &report.execution;
+    assert!(!execution.placements().is_empty());
+    assert!(execution.placements().iter().all(|placement| {
+        placement.cell_bu > 0
+            && placement.offset_bu >= 0
+            && placement.rmargin_bu >= 0
+            && placement.maxrmargin_bu >= placement.rmargin_bu
+            && placement.sequence > execution.wrappers()[placement.wrapper as usize].enter_sequence
+            && placement.sequence < execution.wrappers()[placement.wrapper as usize].leave_sequence
+    }));
+    for (name, phase) in [
+        ("IP", ExecutionPlacementPhase::Head),
+        ("IP", ExecutionPlacementPhase::Body),
+        ("TP", ExecutionPlacementPhase::Head),
+        ("TP", ExecutionPlacementPhase::Body),
+        ("TQ", ExecutionPlacementPhase::Head),
+        ("TQ", ExecutionPlacementPhase::Body),
+        ("PP", ExecutionPlacementPhase::Enter),
+        ("PP", ExecutionPlacementPhase::Body),
+        ("RS", ExecutionPlacementPhase::Enter),
+        ("RS", ExecutionPlacementPhase::OriginTransition),
+        ("RS", ExecutionPlacementPhase::Exit),
+        ("in", ExecutionPlacementPhase::OriginTransition),
+    ] {
+        assert!(
+            execution.placements().iter().any(|placement| {
+                placement.phase == phase && has_ancestor_macro(execution, placement.node, name)
+            }),
+            "missing {name} {phase:?} placement"
+        );
+    }
+    let transition = execution
+        .placements()
+        .iter()
+        .find(|placement| {
+            placement.phase == ExecutionPlacementPhase::OriginTransition
+                && has_ancestor_macro(execution, placement.node, "in")
+        })
+        .expect(".in origin transition");
+    assert_eq!(transition.offset_bu, transition.cell_bu * 8);
+}
+
+#[test]
+fn reports_mdoc_list_and_display_placement_in_native_basic_units() {
+    // Verified before writing this assertion with the pinned CVS terminal.
+    // `mdoc_term.c::termp_it_pre()`, `termp_d1_pre()`, and
+    // `termp_bd_pre/post()` calculate their native origins before content is
+    // rendered; no IR column rounding participates in this report.
+    let report = execute("placement-mdoc.1", InputFormat::Mdoc, PLACEMENT_MDOC);
+    let execution = &report.execution;
+    for (name, phase) in [
+        ("Bl", ExecutionPlacementPhase::Enter),
+        ("Bl", ExecutionPlacementPhase::Exit),
+        ("It", ExecutionPlacementPhase::Head),
+        ("It", ExecutionPlacementPhase::Body),
+        ("D1", ExecutionPlacementPhase::Content),
+        ("D1", ExecutionPlacementPhase::Exit),
+        ("Dl", ExecutionPlacementPhase::Content),
+        ("Dl", ExecutionPlacementPhase::Exit),
+        ("Bd", ExecutionPlacementPhase::Enter),
+        ("Bd", ExecutionPlacementPhase::Body),
+        ("Bd", ExecutionPlacementPhase::Exit),
+    ] {
+        assert!(
+            execution.placements().iter().any(|placement| {
+                placement.phase == phase && has_ancestor_macro(execution, placement.node, name)
+            }),
+            "missing {name} {phase:?} placement"
+        );
+    }
+    let item_head = execution
+        .placements()
+        .iter()
+        .find(|placement| {
+            placement.phase == ExecutionPlacementPhase::Head
+                && has_ancestor_macro(execution, placement.node, "It")
+        })
+        .expect("list head placement");
+    assert_eq!(
+        item_head.offset_bu,
+        item_head.cell_bu * i64::from(execution.content_indent_columns() + 3)
+    );
+    let item_body = execution
+        .placements()
+        .iter()
+        .find(|placement| {
+            placement.phase == ExecutionPlacementPhase::Body
+                && has_ancestor_macro(execution, placement.node, "It")
+        })
+        .expect("list body placement");
+    assert!(item_body.offset_bu > item_head.offset_bu);
+    for name in ["D1", "Dl", "Bd"] {
+        let content = execution
+            .placements()
+            .iter()
+            .find(|placement| {
+                matches!(
+                    placement.phase,
+                    ExecutionPlacementPhase::Content | ExecutionPlacementPhase::Body
+                ) && has_ancestor_macro(execution, placement.node, name)
+            })
+            .expect("display content placement");
+        let exit = execution
+            .placements()
+            .iter()
+            .find(|placement| {
+                placement.phase == ExecutionPlacementPhase::Exit
+                    && has_ancestor_macro(execution, placement.node, name)
+            })
+            .expect("display exit placement");
+        assert!(
+            content.offset_bu > exit.offset_bu,
+            "{name} restores its outer origin"
+        );
+    }
 }
 
 #[test]
@@ -2347,10 +2742,7 @@ fn one_native_reference_interval_survives_multiple_flushes() {
         .fragments()
         .iter()
         .filter(|fragment| {
-            fragment
-                .atoms
-                .iter()
-                .any(|atom| reference.atoms.start <= atom.0 && atom.0 < reference.atoms.end)
+            reference.atoms.start <= fragment.atom.0 && fragment.atom.0 < reference.atoms.end
         })
         .map(|fragment| fragment.device_line)
         .collect::<Vec<_>>();
@@ -2690,37 +3082,46 @@ fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
     let execution = &report.execution;
     assert_eq!(execution.tables().len(), 1);
     assert_eq!(execution.table_rows().len(), 1);
-    assert_eq!(execution.table_cells().len(), 2);
+    assert_eq!(execution.table_layout_cells().len(), 2);
+    assert_eq!(execution.table_data_cells().len(), 2);
+    assert_eq!(execution.table_cell_invocations().len(), 2);
 
     let table = &execution.tables()[0];
     let row = &execution.table_rows()[0];
     assert_eq!(table.rows, 0..1);
-    assert_eq!(table.cells, 0..2);
+    assert_eq!(table.layout_cells, 0..2);
+    assert_eq!(table.data_cells, 0..2);
+    assert_eq!(table.cell_invocations, 0..2);
     assert_eq!(table.logical_columns, 2);
     assert_eq!(row.table, table.key);
     assert_eq!(row.kind, ExecutionTableRowKind::Data);
     assert_eq!(row.logical_columns, 2);
-    assert_eq!(row.cells, 0..2);
+    assert_eq!(row.layout_cells, 0..2);
+    assert_eq!(row.data_cells, 0..2);
+    assert_eq!(row.cell_invocations, 0..2);
     assert_eq!(row.node, table.first_row_node);
 
-    for (index, cell) in execution.table_cells().iter().enumerate() {
+    for (index, invocation) in execution.table_cell_invocations().iter().enumerate() {
         let index = u32::try_from(index).unwrap();
-        assert_eq!(cell.row, row.key);
-        assert_eq!(cell.ordinal, index);
-        assert_eq!(cell.data_ordinal, index);
-        assert_eq!(cell.logical_column, index);
-        assert_eq!(cell.column_span, 1);
-        assert_eq!(cell.row_span, 1);
-        assert_eq!(cell.layout_kind, ExecutionTableLayoutKind::Left);
-        assert_eq!(cell.data_kind, ExecutionTableDataKind::Text);
-        assert_eq!(cell.alignment, ExecutionTableAlignment::Left);
-        let buffer = cell.buffer.expect("non-empty table cell buffer");
-        let generation_key = cell
+        let layout = &execution.table_layout_cells()[invocation.layout.0 as usize];
+        let data = &execution.table_data_cells()[invocation.data.expect("data").0 as usize];
+        assert_eq!(invocation.row, row.key);
+        assert_eq!(invocation.ordinal, index);
+        assert_eq!(data.ordinal, index);
+        assert_eq!(layout.logical_column, index);
+        assert_eq!(data.column_span, 1);
+        assert_eq!(data.row_span, 1);
+        assert_eq!(layout.kind, ExecutionTableLayoutKind::Left);
+        assert_eq!(data.kind, ExecutionTableDataKind::Text);
+        assert_eq!(layout.alignment, ExecutionTableAlignment::Left);
+        let buffer = invocation.buffer.expect("non-empty table cell buffer");
+        let generation_key = invocation
             .buffer_generation
             .expect("non-empty table cell generation");
         let generation = &execution.buffer_generations()[generation_key as usize];
         assert_eq!(generation.buffer, buffer);
-        let payload_atoms = execution.atoms()[cell.atoms.start as usize..cell.atoms.end as usize]
+        let payload_atoms = execution.atoms()
+            [invocation.atoms.start as usize..invocation.atoms.end as usize]
             .iter()
             .filter(|atom| atom.role == AtomRole::TableCellPayload)
             .collect::<Vec<_>>();
@@ -2736,11 +3137,34 @@ fn table_execution_transfers_typed_rows_cells_and_payload_ownership() {
     }
 
     let owned_table = table.clone();
-    let owned_cells = execution.table_cells().to_vec();
+    let owned_cells = execution.table_data_cells().to_vec();
     drop(report);
     assert_eq!(owned_table.logical_columns, 2);
-    assert_eq!(owned_cells[0].data_ordinal, 0);
-    assert_eq!(owned_cells[1].data_ordinal, 1);
+    assert_eq!(owned_cells[0].ordinal, 0);
+    assert_eq!(owned_cells[1].ordinal, 1);
+}
+
+#[test]
+fn table_cells_snapshot_the_document_inline_equation_state() {
+    // This exact fixture was first run with the pinned CVS reference.  Its
+    // `roff.c::roff_parseln()` deliberately skips `roff_eqndelim()` while
+    // `r->tbl` is active, so both rows render their percent delimiters
+    // literally.  The report preserves the active/off parser fact without
+    // claiming that native tbl itself expanded either expression.
+    let report = execute(
+        "table-inline-equation-state.1",
+        InputFormat::Man,
+        TABLE_INLINE_EQUATION_STATE,
+    );
+    assert_eq!(report.execution.table_data_cells().len(), 2);
+    assert_eq!(
+        report.execution.table_data_cells()[0].equation_delimiters,
+        Some((b'%', b'%'))
+    );
+    assert_eq!(
+        report.execution.table_data_cells()[1].equation_delimiters,
+        None
+    );
 }
 
 #[test]
@@ -2758,17 +3182,18 @@ fn table_execution_preserves_layout_and_data_kinds_independently() {
     let [row] = report.execution.table_rows() else {
         panic!("one native table row")
     };
-    let cells = &report.execution.table_cells()[row.cells.start as usize..row.cells.end as usize];
-    assert_eq!(cells.len(), 3);
+    let layouts = &report.execution.table_layout_cells()
+        [row.layout_cells.start as usize..row.layout_cells.end as usize];
+    let data = &report.execution.table_data_cells()
+        [row.data_cells.start as usize..row.data_cells.end as usize];
+    assert_eq!(layouts.len(), 3);
+    assert_eq!(data.len(), 3);
     assert_eq!(
-        cells[1].layout_kind,
+        layouts[1].kind,
         libmandoc_rs::ExecutionTableLayoutKind::HorizontalRule
     );
-    assert_eq!(
-        cells[1].data_kind,
-        libmandoc_rs::ExecutionTableDataKind::Text
-    );
-    let ast = ast_node_by_execution_key(&report.document.root, cells[1].node.0)
+    assert_eq!(data[1].kind, libmandoc_rs::ExecutionTableDataKind::Text);
+    let ast = ast_node_by_execution_key(&report.document.root, row.node.0)
         .expect("table row remains bound to the same native AST");
     assert_eq!(
         ast.table_cells[1].layout_kind,
@@ -2782,6 +3207,56 @@ fn table_execution_preserves_layout_and_data_kinds_independently() {
         ast.table_cells[1].kind,
         libmandoc_rs::TableCellKind::HorizontalRule
     );
+}
+
+#[test]
+fn table_layout_rule_retains_suppressed_data_without_projecting_it() {
+    // Verified before this assertion with the pinned CVS reference:
+    // `-Ttree` retains `0-[IGNORED]`, while `-Tutf8` emits only the rule.
+    // `tbl_term.c::term_tbl()` still calls `tbl_data()` with both the layout
+    // and data pointers, so all three layers must remain explicit.
+    let report = execute(
+        "table-layout-rule-suppressed.1",
+        InputFormat::Man,
+        TABLE_LAYOUT_RULE_SUPPRESSED,
+    );
+    let [row] = report.execution.table_rows() else {
+        panic!("one native table row")
+    };
+    assert_eq!(row.kind, ExecutionTableRowKind::LayoutRule);
+    assert_eq!(row.layout_cells, 0..1);
+    assert_eq!(row.data_cells, 0..1);
+    assert_eq!(row.cell_invocations, 0..1);
+
+    let [layout] = report.execution.table_layout_cells() else {
+        panic!("one native layout cell")
+    };
+    let [data] = report.execution.table_data_cells() else {
+        panic!("one parsed data cell")
+    };
+    let [invocation] = report.execution.table_cell_invocations() else {
+        panic!("one renderer invocation")
+    };
+    assert_eq!(layout.kind, ExecutionTableLayoutKind::HorizontalRule);
+    assert_eq!(data.layout, layout.key);
+    assert_eq!(
+        data.disposition,
+        ExecutionTableDataDisposition::SuppressedByLayout
+    );
+    assert_eq!(invocation.layout, layout.key);
+    assert_eq!(invocation.data, Some(data.key));
+    assert_eq!(
+        invocation.outcome,
+        ExecutionTableInvocationOutcome::LayoutRule
+    );
+
+    let ast_row = ast_node_by_execution_key(&report.document.root, row.node.0)
+        .expect("layout-rule row remains bound to the AST");
+    assert!(ast_row.table_cells.is_empty());
+    assert!(matches!(
+        ast_row.table_row_kind,
+        Some(TableRowKind::LayoutRule { ref cells }) if cells.len() == 1
+    ));
 }
 
 #[test]
@@ -2809,7 +3284,7 @@ fn table_execution_budget_failure_is_atomic_and_reentrant() {
 
         let next = execute("table.1", InputFormat::Man, TABLE);
         assert_eq!(next.execution.tables().len(), 1);
-        assert_eq!(next.execution.table_cells().len(), 2);
+        assert_eq!(next.execution.table_cell_invocations().len(), 2);
     }
 }
 
@@ -2819,19 +3294,34 @@ fn empty_native_table_cell_has_no_buffer_identity() {
     // emits `left` and `third`; tbl_term.c still executes the empty middle
     // logical data cell.
     let report = execute("empty-table.1", InputFormat::Man, TABLE_WITH_EMPTY_CELL);
-    assert_eq!(report.execution.table_cells().len(), 3);
-    assert!(report.execution.table_cells()[0].buffer.is_some());
+    assert_eq!(report.execution.table_cell_invocations().len(), 3);
     assert!(
-        report.execution.table_cells()[0]
+        report.execution.table_cell_invocations()[0]
+            .buffer
+            .is_some()
+    );
+    assert!(
+        report.execution.table_cell_invocations()[0]
             .buffer_generation
             .is_some()
     );
-    assert_eq!(report.execution.table_cells()[1].buffer, None);
-    assert_eq!(report.execution.table_cells()[1].buffer_generation, None);
-    assert!(report.execution.table_cells()[1].atoms.is_empty());
-    assert!(report.execution.table_cells()[2].buffer.is_some());
+    assert_eq!(report.execution.table_cell_invocations()[1].buffer, None);
+    assert_eq!(
+        report.execution.table_cell_invocations()[1].buffer_generation,
+        None
+    );
     assert!(
-        report.execution.table_cells()[2]
+        report.execution.table_cell_invocations()[1]
+            .atoms
+            .is_empty()
+    );
+    assert!(
+        report.execution.table_cell_invocations()[2]
+            .buffer
+            .is_some()
+    );
+    assert!(
+        report.execution.table_cell_invocations()[2]
             .buffer_generation
             .is_some()
     );
@@ -2849,16 +3339,121 @@ fn explicit_table_vertical_continuation_matches_the_owned_ast() {
         TABLE_VERTICAL_CONTINUATION,
     );
     assert_eq!(report.execution.table_rows().len(), 2);
-    assert_eq!(report.execution.table_cells().len(), 2);
-    let continuation = &report.execution.table_cells()[1];
+    assert_eq!(report.execution.table_data_cells().len(), 2);
+    let continuation = &report.execution.table_data_cells()[1];
     assert!(
         continuation
             .flags
             .contains(libmandoc_rs::ExecutionTableCellFlags::VERTICAL_CONTINUATION)
     );
-    let ast_row = ast_node_by_execution_key(&report.document.root, continuation.node.0)
+    let row = &report.execution.table_rows()[continuation.row.0 as usize];
+    let ast_row = ast_node_by_execution_key(&report.document.root, row.node.0)
         .expect("continuation row remains in the owned AST");
     assert!(ast_row.table_cells[0].vertical_continuation);
+}
+
+#[test]
+fn table_layout_changes_and_horizontal_spans_keep_total_native_mapping() {
+    // This exact fixture was linted and rendered with the pinned CVS binary
+    // before the assertions were written. `tbl_data.c::getdata()` skips the
+    // horizontal-span layout cell while recording it in `hspans`; the
+    // `tbl_term.c::term_tbl()` renderer loop then skips that covered layout
+    // position instead of manufacturing a renderer invocation for it.
+    let report = execute("table-tand-span.1", InputFormat::Man, TABLE_TAND_SPAN);
+    let execution = &report.execution;
+    assert_eq!(execution.table_rows().len(), 2);
+    assert_eq!(execution.table_layout_cells().len(), 4);
+    assert_eq!(execution.table_data_cells().len(), 3);
+    assert_eq!(execution.table_cell_invocations().len(), 3);
+
+    let second_row = &execution.table_rows()[1];
+    let layouts = &execution.table_layout_cells()
+        [second_row.layout_cells.start as usize..second_row.layout_cells.end as usize];
+    let data = &execution.table_data_cells()
+        [second_row.data_cells.start as usize..second_row.data_cells.end as usize];
+    let invocations = &execution.table_cell_invocations()
+        [second_row.cell_invocations.start as usize..second_row.cell_invocations.end as usize];
+    assert_eq!(layouts.len(), 2);
+    assert_eq!(data.len(), 1);
+    assert_eq!(invocations.len(), 1);
+    assert_eq!(data[0].column_span, 2);
+    assert_eq!(invocations[0].data, Some(data[0].key));
+    assert_eq!(layouts[1].kind, ExecutionTableLayoutKind::Span);
+    assert!(
+        invocations
+            .iter()
+            .all(|invocation| invocation.layout != layouts[1].key)
+    );
+}
+
+#[test]
+fn leading_layout_span_keeps_two_invocations_for_one_data_cell() {
+    // Verified first with the pinned CVS reference.  In
+    // `tbl_term.c::term_tbl()` (the data-column loop around revisions
+    // 1.61/1.89), a leading `TBL_CELL_SPAN` invokes `tbl_data()` without
+    // advancing `dp`; the following real layout cell invokes the same
+    // `tbl_dat` again and is its unique primary structural owner.
+    let report = execute(
+        "table-leading-span.1",
+        InputFormat::Man,
+        include_bytes!("fixtures/execution/table-leading-span.1"),
+    );
+    let [row] = report.execution.table_rows() else {
+        panic!("one native table row")
+    };
+    let layout = &report.execution.table_layout_cells()
+        [row.layout_cells.start as usize..row.layout_cells.end as usize];
+    let data = &report.execution.table_data_cells()
+        [row.data_cells.start as usize..row.data_cells.end as usize];
+    let invocations = &report.execution.table_cell_invocations()
+        [row.cell_invocations.start as usize..row.cell_invocations.end as usize];
+
+    assert_eq!(layout.len(), 2);
+    assert!(layout[0].horizontal_continuation);
+    assert!(!layout[1].horizontal_continuation);
+    assert_eq!(data.len(), 1);
+    assert_eq!(invocations.len(), 2);
+    assert!(
+        invocations
+            .iter()
+            .all(|call| call.data == Some(data[0].key))
+    );
+    assert_eq!(
+        invocations
+            .iter()
+            .filter(|call| call.layout == data[0].layout)
+            .count(),
+        1,
+        "exactly one invocation is the structural presentation owner"
+    );
+}
+
+#[test]
+fn mixed_layout_rule_suppresses_only_its_linked_data_cell() {
+    // Verified first with pinned CVS `mandoc -Ttree` and `-Tutf8`.
+    // `tbl_data.c::getdata()` retains both parsed payload records, while
+    // `tbl_term.c::tbl_data()` gives layout `_` precedence over IGNORED and
+    // still renders VISIBLE through the neighboring `l` cell.
+    let report = execute(
+        "table-mixed-layout-rule.1",
+        InputFormat::Man,
+        include_bytes!("fixtures/execution/table-mixed-layout-rule.1"),
+    );
+    let [row] = report.execution.table_rows() else {
+        panic!("one native table row")
+    };
+    assert_eq!(row.kind, ExecutionTableRowKind::Data);
+    let data = &report.execution.table_data_cells()
+        [row.data_cells.start as usize..row.data_cells.end as usize];
+    assert_eq!(data.len(), 2);
+    assert_eq!(
+        data[0].disposition,
+        ExecutionTableDataDisposition::SuppressedByLayout
+    );
+    assert_eq!(
+        data[1].disposition,
+        ExecutionTableDataDisposition::Projected
+    );
 }
 
 #[test]
@@ -2866,8 +3461,9 @@ fn table_payload_role_does_not_overwrite_implicit_spacing_provenance() {
     // The pinned CVS renderer was run before this assertion was written and
     // emits `left alpha` followed by the two native words `outside words`.
     let report = execute("spaced-table.1", InputFormat::Man, TABLE_WITH_WORD_SPACING);
-    let cell = &report.execution.table_cells()[0];
-    let atoms = &report.execution.atoms()[cell.atoms.start as usize..cell.atoms.end as usize];
+    let invocation = &report.execution.table_cell_invocations()[0];
+    let atoms =
+        &report.execution.atoms()[invocation.atoms.start as usize..invocation.atoms.end as usize];
     assert!(
         atoms
             .iter()
@@ -2888,7 +3484,7 @@ fn table_payload_role_does_not_overwrite_implicit_spacing_provenance() {
 }
 
 #[test]
-fn equations_execute_as_complete_typed_reports_while_other_unsupported_shapes_fail() {
+fn equations_execute_as_complete_typed_reports_and_standalone_so_keeps_the_safe_tree() {
     // Checked before writing these assertions with the fixed reference:
     // `mandoc -Ttree/-Tascii tests/fixtures/execution/unsupported-equation.1`.
     // The artificial root owns `x + { width over 2 }`, including the nested
@@ -2911,11 +3507,28 @@ fn equations_execute_as_complete_typed_reports_while_other_unsupported_shapes_fa
         .unwrap_err();
     assert_eq!(error.kind, ExecutionErrorKind::Unsupported);
 
-    let error = Parser::default()
+    // The exact `executed-so.1` fixture was also run with the pinned CVS
+    // reference before changing this assertion.  `roff.c::roff_so()` returns
+    // `ROFF_SO`; `read.c::mparse_buf_r()` then applies the host include policy.
+    // With source inclusion disabled, the EOF-special case records `sodest`
+    // and retains the already parsed tree, so execution must not reject that
+    // safe partial tree a second time.  The loader remains responsible for
+    // resolving the standalone alias.
+    let partial = Parser::default()
         .with_input_format(InputFormat::Man)
         .execute_bytes("executed-so.1", EXECUTED_SO, ExecutionLimits::default())
-        .unwrap_err();
-    assert_eq!(error.kind, ExecutionErrorKind::Unsupported);
+        .expect("execute the safe tree preceding a denied source request");
+    assert_eq!(
+        partial.document.metadata.alias_target.as_deref(),
+        Some("missing.1")
+    );
+    assert!(!partial.execution.fragments().is_empty());
+    assert!(
+        partial
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains(".so is fragile"))
+    );
     let inactive = Parser::default()
         .with_input_format(InputFormat::Man)
         .execute_bytes("inactive-so.1", INACTIVE_SO, ExecutionLimits::default())

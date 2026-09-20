@@ -212,7 +212,7 @@ fn split_boundary_prefix(mut children: Vec<Inline>) -> (Vec<Inline>, Vec<Inline>
 /// the zero-advance glyph in the surrounding output flow.  Keeping this
 /// separate from [`visible_text`] prevents a later sibling from changing a
 /// typed destination and lets the label retain its own formatter state.
-fn link_identity_text(source: &str) -> String {
+pub(in crate::mandoc) fn link_identity_text(source: &str) -> String {
     let mut identity = String::new();
     let mut skip_next_glyph = false;
     for event in decode(source) {
@@ -226,7 +226,7 @@ fn link_identity_text(source: &str) -> String {
                     }
                 }
             }
-            RoffInlineEvent::Glyph(value) => {
+            RoffInlineEvent::Glyph(value) | RoffInlineEvent::CompatibilityGlyph(value) => {
                 if skip_next_glyph {
                     skip_next_glyph = false;
                 } else {

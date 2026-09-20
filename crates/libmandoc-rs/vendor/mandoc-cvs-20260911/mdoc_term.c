@@ -495,7 +495,7 @@ print_mdoc_node_inner(DECL_ARGS)
 		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
 		    !term_exec_reference_begin(p, TERM_EXEC_REFERENCE_EMAIL,
 		    n->parent, n, n->string, NULL,
-		    TERM_EXEC_AFFINITY_INLINE))
+		    TERM_EXEC_AFFINITY_INLINE, TERM_EXEC_REFERENCE_DIRECT))
 			return;
 		term_word(p, n->string);
 		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
@@ -567,6 +567,10 @@ print_mdoc_node_inner(DECL_ARGS)
 	if (n->type != ROFFT_TEXT)
 		p->tcol->offset = offset;
 	p->tcol->rmargin = rmargin;
+	if (((n->tok == MDOC_Bl || n->tok == MDOC_D1 || n->tok == MDOC_Dl) &&
+	    n->type == ROFFT_BLOCK) ||
+	    (n->tok == MDOC_Bd && n->type == ROFFT_BODY))
+		(void)term_exec_placement(p, TERM_EXEC_PLACEMENT_EXIT);
 }
 
 static void
@@ -1006,6 +1010,10 @@ termp_it_pre(DECL_ARGS)
 		break;
 	}
 
+	if (!term_exec_placement(p, n->type == ROFFT_HEAD ?
+	    TERM_EXEC_PLACEMENT_HEAD : TERM_EXEC_PLACEMENT_BODY))
+		return 0;
+
 	/*
 	 * Preserve the handler-computed field contract even when the phase
 	 * produces no terminal buffer content.  The observer records objective
@@ -1273,6 +1281,8 @@ termp_bl_pre(DECL_ARGS)
 	switch (n->type) {
 	case ROFFT_BLOCK:
 		term_newln(p);
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
+			return 0;
 		return 1;
 	case ROFFT_HEAD:
 		return 0;
@@ -1306,7 +1316,7 @@ termp_xr_pre(DECL_ARGS)
 	if (!term_exec_reference_begin(p, TERM_EXEC_REFERENCE_MANUAL,
 	    owner, name, name->string,
 	    section == NULL ? NULL : section->string,
-	    TERM_EXEC_AFFINITY_INLINE))
+	    TERM_EXEC_AFFINITY_INLINE, TERM_EXEC_REFERENCE_DIRECT))
 		return 0;
 
 	assert(name->type == ROFFT_TEXT);
@@ -1486,6 +1496,8 @@ termp_d1_pre(DECL_ARGS)
 	term_tab_set(p, NULL);
 	term_tab_set(p, "T");
 	term_tab_set(p, ".5i");
+	if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_CONTENT))
+		return 0;
 	return 1;
 }
 
@@ -1589,6 +1601,8 @@ termp_bd_pre(DECL_ARGS)
 
 	if (n->type == ROFFT_BLOCK) {
 		print_bvspace(p, n, n);
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
+			return 0;
 		return 1;
 	} else if (n->type == ROFFT_HEAD)
 		return 0;
@@ -1622,6 +1636,8 @@ termp_bd_pre(DECL_ARGS)
 	default:
 		break;
 	}
+	if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
+		return 0;
 	return 1;
 }
 
@@ -2075,7 +2091,8 @@ termp_lk_pre(DECL_ARGS)
 	if (has_descr) {
 		if (!term_exec_reference_begin(p,
 		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
-		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
+		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE,
+		    TERM_EXEC_REFERENCE_LABELLED_SUPPLEMENT))
 			return 0;
 		term_fontpush(p, TERMFONT_UNDER);
 		while (descr != punct) {
@@ -2085,7 +2102,9 @@ termp_lk_pre(DECL_ARGS)
 			descr = descr->next;
 		}
 		term_fontpop(p);
-		if (!term_exec_reference_end(p))
+		if (!term_exec_reference_phase(p, TERM_EXEC_REFERENCE_LABEL_END) ||
+		    !term_exec_reference_phase(p,
+		    TERM_EXEC_REFERENCE_SUPPLEMENT_BEGIN))
 			return 0;
 		p->flags |= TERMP_NOSPACE;
 		term_word(p, ":");
@@ -2095,10 +2114,20 @@ termp_lk_pre(DECL_ARGS)
 	if (!has_descr)
 		if (!term_exec_reference_begin(p,
 		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
-		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
+		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE,
+		    TERM_EXEC_REFERENCE_DIRECT))
 			return 0;
+	if (has_descr && !term_exec_reference_phase(p,
+	    TERM_EXEC_REFERENCE_TARGET_BEGIN))
+		return 0;
 	term_word(p, link->string);
-	if (!has_descr)
+	if (has_descr) {
+		if (!term_exec_reference_phase(p, TERM_EXEC_REFERENCE_TARGET_END) ||
+		    !term_exec_reference_phase(p,
+		    TERM_EXEC_REFERENCE_SUPPLEMENT_END) ||
+		    !term_exec_reference_end(p))
+			return 0;
+	} else
 		if (!term_exec_reference_end(p))
 			return 0;
 

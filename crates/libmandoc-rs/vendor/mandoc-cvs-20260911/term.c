@@ -43,7 +43,7 @@ static	void		 buffer_append(struct termp *, int, int);
 static	void		 directc(struct termp *, int);
 static	void		 encode(struct termp *, const char *, size_t);
 static	void		 encode1(struct termp *, int);
-static	void		 endline(struct termp *);
+static	void		 endline(struct termp *, int);
 static	void		 term_field(struct termp *, size_t, size_t);
 static	void		 term_fill(struct termp *, size_t *, size_t *,
 			    size_t *, size_t);
@@ -65,6 +65,7 @@ term_exec_attach(struct termp *p, const struct term_exec_ops *ops, void *arg)
 	p->exec_logical_origin = 0;
 	p->exec_logical_tab_count = 0;
 	p->exec_logical_forced_break = 0;
+	p->exec_line_commit_cause = TERM_EXEC_LINE_DIRECT_DEVICE;
 }
 
 int
@@ -258,7 +259,8 @@ term_exec_reference_node_begin(struct termp *p, int kind,
 		return 0;
 	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
 	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
-	    owner, target_node, kind, NULL, 0, NULL, 0, affinity, opened))
+	    owner, target_node, kind, NULL, 0, NULL, 0, affinity,
+	    TERM_EXEC_REFERENCE_DIRECT, opened))
 		p->exec_failed = 1;
 	return !p->exec_failed;
 }
@@ -266,7 +268,8 @@ term_exec_reference_node_begin(struct termp *p, int kind,
 int
 term_exec_reference_begin(struct termp *p, int kind,
     const struct roff_node *owner, const struct roff_node *target_node,
-    const char *primary, const char *secondary, int affinity)
+    const char *primary, const char *secondary, int affinity,
+    int presentation)
 {
 	int opened;
 
@@ -277,10 +280,22 @@ term_exec_reference_begin(struct termp *p, int kind,
 	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
 	    owner, target_node, kind, primary,
 	    primary == NULL ? 0 : strlen(primary), secondary,
-	    secondary == NULL ? 0 : strlen(secondary), affinity, &opened))
+	    secondary == NULL ? 0 : strlen(secondary), affinity,
+	    presentation, &opened))
 		p->exec_failed = 1;
 	else if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
 	    !opened)
+		p->exec_failed = 1;
+	return !p->exec_failed;
+}
+
+int
+term_exec_reference_phase(struct termp *p, int phase)
+{
+	if (p->exec_failed)
+		return 0;
+	if (p->exec_ops != NULL && p->exec_ops->reference_phase != NULL &&
+	    !p->exec_ops->reference_phase(p->exec_arg, p, p->exec_node, phase))
 		p->exec_failed = 1;
 	return !p->exec_failed;
 }
@@ -461,6 +476,17 @@ term_exec_definition_phase(struct termp *p, int phase)
 }
 
 int
+term_exec_placement(struct termp *p, int phase)
+{
+	if (phase < TERM_EXEC_PLACEMENT_ENTER ||
+	    phase > TERM_EXEC_PLACEMENT_EXIT) {
+		term_exec_abort(p);
+		return 0;
+	}
+	TERM_EXEC_CALL(p, placement, phase);
+}
+
+int
 term_exec_fill_decision(struct termp *p, size_t scan_end, size_t accepted,
     size_t content_width, size_t target_width, size_t leading,
     size_t field_width)
@@ -558,7 +584,8 @@ int
 term_exec_device_endline(struct termp *p, size_t line_before,
     size_t line_after, size_t visual_before, size_t visual_after)
 {
-	TERM_EXEC_CALL(p, device_endline, line_before, line_after,
+	TERM_EXEC_CALL(p, device_endline, p->exec_line_commit_cause,
+	    line_before, line_after,
 	    visual_before, visual_after);
 }
 
@@ -807,7 +834,7 @@ term_flushln(struct termp *p)
 		}
 
 		term_exec_fill_outcome(p, 3, vbr);
-		endline(p);
+		endline(p, TERM_EXEC_LINE_FIELD_WRAP);
 
 		/*
 		 * Normally, start the next line at the same indentation
@@ -842,7 +869,7 @@ term_flushln(struct termp *p)
 	if ((p->flags & TERMP_HANG) == 0 &&
 	    ((p->flags & TERMP_NOBREAK) == 0 ||
 	     vbr + term_len(p, p->trailspace) > vfield + term_len(p, 1) / 2))
-		endline(p);
+		endline(p, TERM_EXEC_LINE_FIELD_END);
 	term_exec_flush(p, 0);
 }
 
@@ -1182,9 +1209,10 @@ term_field(struct termp *p, size_t vbl, size_t nbr)
  * and end the output line.
  */
 static void
-endline(struct termp *p)
+endline(struct termp *p, int cause)
 {
 	int fragment_role;
+	int previous_cause;
 
 	if (!term_exec_boundary(p, 3, 1))
 		return;
@@ -1203,7 +1231,10 @@ endline(struct termp *p)
 		p->exec_fragment_role = fragment_role;
 		p->flags &= ~(TERMP_NOBUF | TERMP_NEWMC);
 	}
+	previous_cause = p->exec_line_commit_cause;
+	p->exec_line_commit_cause = cause;
 	(*p->endline)(p);
+	p->exec_line_commit_cause = previous_cause;
 	term_exec_boundary(p, 3, 0);
 }
 
@@ -1233,6 +1264,8 @@ term_newln(struct termp *p)
 void
 term_vspace(struct termp *p)
 {
+	int previous_cause;
+
 	if (!term_exec_boundary(p, 2, 1))
 		return;
 	term_newln(p);
@@ -1240,8 +1273,12 @@ term_vspace(struct termp *p)
 		return;
 	if (0 < p->skipvsp)
 		p->skipvsp--;
-	else
+	else {
+		previous_cause = p->exec_line_commit_cause;
+		p->exec_line_commit_cause = TERM_EXEC_LINE_VERTICAL_BLANK;
 		(*p->endline)(p);
+		p->exec_line_commit_cause = previous_cause;
+	}
 	term_exec_boundary(p, 2, 0);
 }
 

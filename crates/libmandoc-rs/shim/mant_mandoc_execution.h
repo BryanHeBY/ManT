@@ -46,6 +46,8 @@ enum mant_mandoc_execution_atom_role {
 	MANT_MANDOC_ATOM_EQUATION_CONTENT
 };
 
+#define MANT_MANDOC_ATOM_NO_FILL (1U << 0)
+
 #define MANT_MANDOC_EXEC_NODE_GENERATED (1U << 0)
 
 enum mant_mandoc_execution_atom_disposition {
@@ -68,6 +70,17 @@ enum mant_mandoc_execution_fragment_role {
 	MANT_MANDOC_FRAGMENT_FONT_DECORATION = 2,
 	MANT_MANDOC_FRAGMENT_MARGIN_DECORATION = 3,
 	MANT_MANDOC_FRAGMENT_PAGE_DECORATION = 4
+};
+
+/*
+ * Native output lifecycle active when a report record was created.  Unlike
+ * fragment_role, this applies to state and geometry records that may not
+ * emit a fragment of their own.
+ */
+enum mant_mandoc_execution_output_role {
+	MANT_MANDOC_OUTPUT_CONTENT = 1,
+	MANT_MANDOC_OUTPUT_MARGIN_DECORATION,
+	MANT_MANDOC_OUTPUT_PAGE_DECORATION
 };
 
 enum mant_mandoc_execution_flush_outcome {
@@ -94,6 +107,32 @@ enum mant_mandoc_execution_boundary_effect {
 	MANT_MANDOC_BOUNDARY_FLUSHED = 1,
 	MANT_MANDOC_BOUNDARY_ENDED_LINE = 2,
 	MANT_MANDOC_BOUNDARY_ADDED_VERTICAL_SPACE = 3
+};
+
+enum mant_mandoc_execution_line_commit_cause {
+	/* Non-device boundaries carry no physical-line cause. */
+	MANT_MANDOC_LINE_COMMIT_NONE = 0,
+	/* Only a raw device callback may have no enclosing formatter boundary. */
+	MANT_MANDOC_LINE_COMMIT_DIRECT_DEVICE,
+	/* These two causes are children of an ENDLINE boundary. */
+	MANT_MANDOC_LINE_COMMIT_FIELD_WRAP,
+	MANT_MANDOC_LINE_COMMIT_FIELD_END,
+	/* This cause is a child of a VERTICAL_SPACE boundary. */
+	MANT_MANDOC_LINE_COMMIT_VERTICAL_BLANK
+};
+
+/*
+ * Checkpoints are emitted by native handlers after they establish geometry.
+ * All geometry fields remain in terminal basic units; consumers must not
+ * interpret them as document columns.
+ */
+enum mant_mandoc_execution_placement_phase {
+	MANT_MANDOC_PLACEMENT_ENTER = 1,
+	MANT_MANDOC_PLACEMENT_CONTENT,
+	MANT_MANDOC_PLACEMENT_HEAD,
+	MANT_MANDOC_PLACEMENT_BODY,
+	MANT_MANDOC_PLACEMENT_ORIGIN_TRANSITION,
+	MANT_MANDOC_PLACEMENT_EXIT
 };
 
 enum mant_mandoc_execution_control_request {
@@ -207,6 +246,11 @@ enum mant_mandoc_execution_reference_kind {
 	MANT_MANDOC_REFERENCE_SECTION
 };
 
+enum mant_mandoc_execution_reference_presentation {
+	MANT_MANDOC_REFERENCE_DIRECT = 1,
+	MANT_MANDOC_REFERENCE_LABELLED_SUPPLEMENT
+};
+
 enum mant_mandoc_execution_affinity {
 	MANT_MANDOC_AFFINITY_INLINE = 1,
 	MANT_MANDOC_AFFINITY_BEFORE_OUTPUT
@@ -215,7 +259,21 @@ enum mant_mandoc_execution_affinity {
 enum mant_mandoc_execution_table_row_kind {
 	MANT_MANDOC_EXEC_TABLE_ROW_DATA = 1,
 	MANT_MANDOC_EXEC_TABLE_ROW_SINGLE_RULE,
-	MANT_MANDOC_EXEC_TABLE_ROW_DOUBLE_RULE
+	MANT_MANDOC_EXEC_TABLE_ROW_DOUBLE_RULE,
+	MANT_MANDOC_EXEC_TABLE_ROW_LAYOUT_RULE
+};
+
+enum mant_mandoc_execution_table_data_disposition {
+	MANT_MANDOC_EXEC_TABLE_DATA_PROJECTED = 1,
+	MANT_MANDOC_EXEC_TABLE_DATA_SUPPRESSED_BY_LAYOUT
+};
+
+enum mant_mandoc_execution_table_invocation_outcome {
+	MANT_MANDOC_EXEC_TABLE_INVOKE_DATA = 1,
+	MANT_MANDOC_EXEC_TABLE_INVOKE_LAYOUT_RULE,
+	MANT_MANDOC_EXEC_TABLE_INVOKE_DATA_RULE,
+	MANT_MANDOC_EXEC_TABLE_INVOKE_EMPTY,
+	MANT_MANDOC_EXEC_TABLE_INVOKE_CONTINUATION
 };
 
 enum mant_mandoc_execution_table_layout_kind {
@@ -312,7 +370,7 @@ struct mant_mandoc_execution_limits {
 	uint64_t max_report_bytes;
 };
 
-#define MANT_MANDOC_EXECUTION_LIMITS_VERSION 2U
+#define MANT_MANDOC_EXECUTION_LIMITS_VERSION 4U
 size_t mant_mandoc_execution_limits_size(void);
 size_t mant_mandoc_execution_limits_align(void);
 uint32_t mant_mandoc_execution_limits_field_count(void);
@@ -385,6 +443,8 @@ struct mant_mandoc_atom_record {
 	uint32_t wrapper;
 	uint32_t replaced_by;
 	uint32_t disposition;
+	uint32_t flags;
+	uint32_t output_role;
 	uint64_t sequence;
 };
 
@@ -394,8 +454,8 @@ struct mant_mandoc_fragment_record {
 	uint32_t buffer;
 	uint32_t generation;
 	uint32_t buffer_generation;
-	uint32_t atom_ref_start;
-	uint32_t atom_ref_length;
+	uint32_t atom;
+	uint32_t reserved_atom;
 	uint32_t device_line;
 	uint32_t role;
 	uint32_t wrapper;
@@ -403,11 +463,6 @@ struct mant_mandoc_fragment_record {
 	int64_t start_bu;
 	int64_t end_bu;
 	uint64_t sequence;
-};
-
-struct mant_mandoc_fragment_atom_record {
-	uint32_t fragment;
-	uint32_t atom;
 };
 
 struct mant_mandoc_logical_tab_record {
@@ -448,7 +503,7 @@ struct mant_mandoc_flush_record {
 	int64_t logical_origin_bu;
 	int64_t effective_content_bu;
 	uint32_t logical_forced_break;
-	uint32_t reserved_fit;
+	uint32_t output_role;
 	int64_t field_bu;
 	int64_t target_bu;
 	int64_t offset_bu;
@@ -480,8 +535,26 @@ struct mant_mandoc_boundary_record {
 	int64_t visual_after;
 	uint32_t direct_device_lines;
 	uint32_t wrapper;
+	uint32_t line_commit_cause;
+	uint32_t output_role;
 	uint64_t enter_sequence;
 	uint64_t leave_sequence;
+};
+
+struct mant_mandoc_placement_record {
+	/* Dense report-local identity and native syntax owner. */
+	uint32_t key;
+	uint32_t node;
+	/* Active structural wrapper containing node and sequence. */
+	uint32_t wrapper;
+	uint32_t phase;
+	/* Exact terminal basic-unit geometry at this execution point. */
+	int64_t offset_bu;
+	int64_t rmargin_bu;
+	int64_t maxrmargin_bu;
+	int64_t visual_bu;
+	int64_t cell_bu;
+	uint64_t sequence;
 };
 
 struct mant_mandoc_control_record {
@@ -544,7 +617,7 @@ struct mant_mandoc_geometry_record {
 	uint32_t unit;
 	uint32_t origin_kind;
 	uint32_t origin_key;
-	uint32_t reserved;
+	uint32_t output_role;
 	int64_t requested;
 	int64_t effective;
 	int64_t before;
@@ -597,7 +670,13 @@ struct mant_mandoc_reference_record {
 	uint32_t secondary_length;
 	uint32_t enter_atom;
 	uint32_t label_start_atom;
+	uint32_t label_end_atom;
+	uint32_t target_start_atom;
+	uint32_t target_end_atom;
+	uint32_t supplement_start_atom;
+	uint32_t supplement_end_atom;
 	uint32_t leave_atom;
+	uint32_t presentation;
 	uint32_t affinity;
 	uint32_t flags;
 	uint64_t enter_sequence;
@@ -622,9 +701,14 @@ struct mant_mandoc_table_record {
 	uint32_t first_row_node;
 	uint32_t row_start;
 	uint32_t row_length;
-	uint32_t cell_start;
-	uint32_t cell_length;
+	uint32_t layout_start;
+	uint32_t layout_length;
+	uint32_t data_start;
+	uint32_t data_length;
+	uint32_t invocation_start;
+	uint32_t invocation_length;
 	uint32_t logical_columns;
+	uint32_t wrapper;
 	uint32_t flags;
 	uint32_t enter_atom;
 	uint32_t leave_atom;
@@ -632,6 +716,8 @@ struct mant_mandoc_table_record {
 	uint32_t leave_fragment;
 	uint32_t enter_flush;
 	uint32_t leave_flush;
+	int64_t offset_bu;
+	int64_t cell_bu;
 	uint64_t enter_sequence;
 	uint64_t leave_sequence;
 };
@@ -643,8 +729,12 @@ struct mant_mandoc_table_row_record {
 	uint32_t ordinal;
 	uint32_t kind;
 	uint32_t logical_columns;
-	uint32_t cell_start;
-	uint32_t cell_length;
+	uint32_t layout_start;
+	uint32_t layout_length;
+	uint32_t data_start;
+	uint32_t data_length;
+	uint32_t invocation_start;
+	uint32_t invocation_length;
 	uint32_t enter_atom;
 	uint32_t leave_atom;
 	uint32_t enter_fragment;
@@ -655,23 +745,47 @@ struct mant_mandoc_table_row_record {
 	uint64_t leave_sequence;
 };
 
-struct mant_mandoc_table_cell_record {
+struct mant_mandoc_table_layout_cell_record {
+	uint32_t key;
+	uint32_t row;
+	uint32_t ordinal;
+	uint32_t logical_column;
+	uint32_t kind;
+	uint32_t alignment;
+	uint32_t font;
+	uint32_t flags;
+	uint32_t horizontal_continuation;
+	uint32_t spacing_en;
+	uint32_t vertical_rule;
+	uint32_t reserved;
+};
+
+struct mant_mandoc_table_data_cell_record {
+	uint32_t key;
+	uint32_t row;
+	uint32_t ordinal;
+	uint32_t layout;
+	uint32_t kind;
+	uint32_t disposition;
+	uint32_t column_span;
+	uint32_t row_span;
+	uint32_t flags;
+	uint32_t equation_delimiters;
+	uint32_t equation_opening;
+	uint32_t equation_closing;
+};
+
+struct mant_mandoc_table_cell_invocation_record {
 	uint32_t key;
 	uint32_t row;
 	uint32_t node;
 	uint32_t ordinal;
-	uint32_t data_ordinal;
+	uint32_t layout;
+	uint32_t data;
+	uint32_t outcome;
 	uint32_t logical_column;
-	uint32_t column_span;
-	uint32_t row_span;
-	uint32_t layout_kind;
-	uint32_t data_kind;
-	uint32_t alignment;
-	uint32_t font;
-	uint32_t flags;
 	uint32_t buffer;
 	uint32_t buffer_generation;
-	uint32_t reserved;
 	uint32_t enter_atom;
 	uint32_t leave_atom;
 	int64_t offset_bu;
@@ -794,6 +908,8 @@ uint64_t mant_mandoc_execution_allocated_record_bytes(
     const struct mant_mandoc_execution_report *);
 uint64_t mant_mandoc_execution_buffer_cell_count(
     const struct mant_mandoc_execution_report *);
+uint32_t mant_mandoc_execution_content_indent_columns(
+    const struct mant_mandoc_execution_report *);
 int mant_mandoc_execution_node_key(
     const struct mant_mandoc_execution_report *, const struct roff_node *,
     uint32_t *);
@@ -815,18 +931,20 @@ MANT_DECLARE_RECORD_API(buffer_generation, buffer_generations);
 MANT_DECLARE_RECORD_API(word, words);
 MANT_DECLARE_RECORD_API(atom, atoms);
 MANT_DECLARE_RECORD_API(fragment, fragments);
-MANT_DECLARE_RECORD_API(fragment_atom, fragment_atoms);
 MANT_DECLARE_RECORD_API(logical_tab, logical_tabs);
 MANT_DECLARE_RECORD_API(flush, flushes);
 MANT_DECLARE_RECORD_API(boundary, boundaries);
 MANT_DECLARE_RECORD_API(control, controls);
 MANT_DECLARE_RECORD_API(geometry, geometries);
+MANT_DECLARE_RECORD_API(placement, placements);
 MANT_DECLARE_RECORD_API(wrapper, wrappers);
 MANT_DECLARE_RECORD_API(reference, references);
 MANT_DECLARE_RECORD_API(anchor, anchors);
 MANT_DECLARE_RECORD_API(table, tables);
 MANT_DECLARE_RECORD_API(table_row, table_rows);
-MANT_DECLARE_RECORD_API(table_cell, table_cells);
+MANT_DECLARE_RECORD_API(table_layout_cell, table_layout_cells);
+MANT_DECLARE_RECORD_API(table_data_cell, table_data_cells);
+MANT_DECLARE_RECORD_API(table_cell_invocation, table_cell_invocations);
 MANT_DECLARE_RECORD_API(equation, equations);
 MANT_DECLARE_RECORD_API(equation_box, equation_boxes);
 MANT_DECLARE_RECORD_API(equation_box_execution, equation_box_executions);

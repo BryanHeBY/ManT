@@ -332,7 +332,7 @@ pre_MR(DECL_ARGS)
 	if (name != NULL && !term_exec_reference_begin(p,
 	    TERM_EXEC_REFERENCE_MANUAL, n, name, name->string,
 	    section == NULL ? NULL : section->string,
-	    TERM_EXEC_AFFINITY_INLINE))
+	    TERM_EXEC_AFFINITY_INLINE, TERM_EXEC_REFERENCE_DIRECT))
 		return 0;
 	if (name != NULL) {
 		term_word(p, name->string);   /* name */
@@ -387,6 +387,8 @@ pre_in(DECL_ARGS)
 
 	if (n->child == NULL) {
 		p->tcol->offset = mt->offset;
+		(void)term_exec_placement(p,
+		    TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION);
 		return 0;
 	}
 
@@ -414,6 +416,7 @@ pre_in(DECL_ARGS)
 		p->tcol->offset = v;
 	if (p->tcol->offset > SHRT_MAX)
 		p->tcol->offset = term_len(p, p->defindent);
+	(void)term_exec_placement(p, TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION);
 
 	return 0;
 }
@@ -509,11 +512,15 @@ pre_PP(DECL_ARGS)
 	case ROFFT_BLOCK:
 		mt->lmargin[mt->lmargincur] = term_len(p, 7);
 		print_bvspace(p, n, mt->pardist);
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
+			return 0;
 		break;
 	case ROFFT_HEAD:
 		return 0;
 	case ROFFT_BODY:
 		p->tcol->offset = mt->offset;
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
+			return 0;
 		break;
 	default:
 		abort();
@@ -560,6 +567,8 @@ pre_IP(DECL_ARGS)
 	case ROFFT_HEAD:
 		p->tcol->offset = mt->offset;
 		p->tcol->rmargin = mt->offset + len;
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_HEAD))
+			return 0;
 		if (!term_exec_definition_phase(p, 0))
 			return 0;
 		if (n->child != NULL)
@@ -568,6 +577,8 @@ pre_IP(DECL_ARGS)
 	case ROFFT_BODY:
 		p->tcol->offset = mt->offset + len;
 		p->tcol->rmargin = p->maxrmargin;
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
+			return 0;
 		if (!term_exec_definition_phase(p, 1))
 			return 0;
 		break;
@@ -639,6 +650,8 @@ pre_TP(DECL_ARGS)
 	case ROFFT_HEAD:
 		p->tcol->offset = mt->offset;
 		p->tcol->rmargin = mt->offset + len;
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_HEAD))
+			return 0;
 		if (!term_exec_definition_phase(p, 0))
 			return 0;
 
@@ -657,6 +670,8 @@ pre_TP(DECL_ARGS)
 		p->tcol->rmargin = p->maxrmargin;
 		p->trailspace = 0;
 		p->flags &= ~(TERMP_NOBREAK | TERMP_BRTRSP);
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_BODY))
+			return 0;
 		if (!term_exec_definition_phase(p, 1))
 			return 0;
 		break;
@@ -793,6 +808,8 @@ pre_RS(DECL_ARGS)
 	switch (n->type) {
 	case ROFFT_BLOCK:
 		term_newln(p);
+		if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ENTER))
+			return 0;
 		return 1;
 	case ROFFT_HEAD:
 		return 0;
@@ -821,6 +838,8 @@ pre_RS(DECL_ARGS)
 		mt->lmargincur = mt->lmarginsz;
 
 	mt->lmargin[mt->lmargincur] = term_len(p, 7);
+	if (!term_exec_placement(p, TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION))
+		return 0;
 	return 1;
 }
 
@@ -841,6 +860,7 @@ post_RS(DECL_ARGS)
 	p->tcol->offset = mt->offset;
 	if (--mt->lmarginsz < MAXMARGINS)
 		mt->lmargincur = mt->lmarginsz;
+	(void)term_exec_placement(p, TERM_EXEC_PLACEMENT_EXIT);
 }
 
 static int
@@ -920,7 +940,8 @@ pre_UR(DECL_ARGS)
 		    TERM_EXEC_REFERENCE_EXTERNAL_URI;
 		if (target != NULL && !term_exec_reference_begin(p, kind,
 		    block, target, target->string, NULL,
-		    TERM_EXEC_AFFINITY_INLINE))
+		    TERM_EXEC_AFFINITY_INLINE,
+		    TERM_EXEC_REFERENCE_LABELLED_SUPPLEMENT))
 			return 0;
 	}
 	return n->type != ROFFT_HEAD;
@@ -934,7 +955,8 @@ post_UR(DECL_ARGS)
 
 	if (n->type == ROFFT_BODY) {
 		if (n->child != NULL)
-			(void)term_exec_reference_end(p);
+			(void)term_exec_reference_phase(p,
+			    TERM_EXEC_REFERENCE_LABEL_END);
 		return;
 	}
 	if (n->type != ROFFT_BLOCK)
@@ -944,19 +966,33 @@ post_UR(DECL_ARGS)
 	    TERM_EXEC_REFERENCE_EXTERNAL_URI;
 	if (n->body->child == NULL && target != NULL &&
 	    !term_exec_reference_begin(p, kind, n, target,
-	    target->string, NULL, TERM_EXEC_AFFINITY_INLINE))
+	    target->string, NULL, TERM_EXEC_AFFINITY_INLINE,
+	    TERM_EXEC_REFERENCE_DIRECT))
+		return;
+	if (n->body->child != NULL && target != NULL &&
+	    !term_exec_reference_phase(p, TERM_EXEC_REFERENCE_SUPPLEMENT_BEGIN))
 		return;
 
 	term_word(p, "<");
 	p->flags |= TERMP_NOSPACE;
+	if (n->body->child != NULL && target != NULL &&
+	    !term_exec_reference_phase(p, TERM_EXEC_REFERENCE_TARGET_BEGIN))
+		return;
 
 	if (n->child->child != NULL)
 		print_man_node(p, mt, n->child->child, meta);
+	if (n->body->child != NULL && target != NULL &&
+	    !term_exec_reference_phase(p, TERM_EXEC_REFERENCE_TARGET_END))
+		return;
 
 	p->flags |= TERMP_NOSPACE;
 	term_word(p, ">");
-	if (n->body->child == NULL && target != NULL)
+	if (target != NULL) {
+		if (n->body->child != NULL)
+			(void)term_exec_reference_phase(p,
+			    TERM_EXEC_REFERENCE_SUPPLEMENT_END);
 		(void)term_exec_reference_end(p);
+	}
 }
 
 static void

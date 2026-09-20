@@ -1,7 +1,8 @@
 # Native execution fixtures
 
-These fixtures exercise the private, staged native-execution projection. They
-do not switch the production roff lowering path.
+These fixtures exercise the native-execution projection used by the production
+roff lowering path.  The fixed CVS reference commands below remain independent
+oracles rather than an alternate product renderer.
 
 Before the K05 assertions were written, both table inputs were checked with
 the pinned CVS binary:

@@ -24,7 +24,7 @@ pub(crate) fn is_internal_definition_owner_marker(id: &str) -> bool {
     })
 }
 
-fn owner_marker(item: &DefinitionItem) -> Option<usize> {
+pub(crate) fn native_definition_owner_marker(item: &DefinitionItem) -> Option<usize> {
     item.terms
         .iter()
         .flat_map(|term| term.iter())
@@ -197,7 +197,7 @@ impl GroupEvidence {
     #[cfg(feature = "roff")]
     pub(crate) fn continued(&mut self, item: &DefinitionItem, last_key: usize) {
         let Some(source) = item.source else { return };
-        let Some(key) = owner_marker(item) else {
+        let Some(key) = native_definition_owner_marker(item) else {
             return;
         };
         let head = head_content(&item.terms);
@@ -248,7 +248,7 @@ impl GroupEvidence {
     fn key(item: &DefinitionItem, plan: &mut GroupMatchingPlan) -> Option<(usize, usize)> {
         let source = item.source?;
         let head = head_content(&item.terms);
-        let owner = owner_marker(item)?;
+        let owner = native_definition_owner_marker(item)?;
         // A normalized rewrite must retain exactly one native owner marker.
         // Duplicate/collapsed owners are unsafe just like a missing owner;
         // neither may borrow another macro expansion's witness.
@@ -370,7 +370,7 @@ impl GroupMatchingPlan {
     }
 
     fn count(&mut self, item: &DefinitionItem) {
-        if let Some(owner) = owner_marker(item) {
+        if let Some(owner) = native_definition_owner_marker(item) {
             *self.occurrences.entry(owner).or_default() += 1;
         }
     }

@@ -79,9 +79,9 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
         if label == "link-label" {
             assert!(
-                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Text { value: glyph }, Inline::Link { .. }]
-                    if prefix == "A" && glyph == "X"),
-                "the pending glyph must precede the atomically lowered link: {children:?}"
+                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Link { .. }]
+                    if prefix == "AX"),
+                "the native device stream keeps the pending glyph outside and before the atomically lowered link: {children:?}"
             );
         }
     }

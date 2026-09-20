@@ -35,3 +35,6 @@
 0035-report-native-definition-fields.patch
 0036-observe-native-equation-execution.patch
 0037-retain-bounded-tbl-enhancement-source.patch
+0038-expose-reference-presentation-phases.patch
+0039-observe-every-native-table-cell-invocation.patch
+0040-observe-native-line-causes-and-placement.patch

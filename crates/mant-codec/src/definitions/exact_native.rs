@@ -8,7 +8,7 @@ use super::{
         identify_list_item, identity_plan, list_identity_base,
     },
 };
-use mant_ir::{Block, EntryNameEvidence, Inline, Section};
+use mant_ir::{Block, EntryNameEvidence, Inline, NodeId, Section};
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
@@ -53,10 +53,41 @@ struct ExactPlan {
     group_head: bool,
 }
 
+#[derive(Debug)]
 pub(crate) struct ExactNativeIdentityResult {
     pub(crate) retained: HashSet<String>,
     pub(crate) groupable: HashSet<String>,
+    /// Identity assigned to each exact owner in the input evidence order.
+    /// `None` denotes a native definition that intentionally remained prose.
+    pub(crate) allocated: Vec<Option<NodeId>>,
 }
+
+/// Structural mismatch between the final definition walk and K23's exact
+/// native evidence stream.
+///
+/// The checked K23 entry point returns these errors instead of relying on
+/// iterator `expect`/`assert` calls.  The legacy wrapper remains temporarily
+/// infallible until the production route is switched atomically.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExactNativeIdentityError {
+    MissingEvidence,
+    ExcessEvidence,
+    MissingPlan,
+    ExcessPlan,
+}
+
+impl std::fmt::Display for ExactNativeIdentityError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::MissingEvidence => "final native definition has no semantic evidence",
+            Self::ExcessEvidence => "semantic evidence has no final native definition",
+            Self::MissingPlan => "final native definition has no prepared identity plan",
+            Self::ExcessPlan => "prepared identity plan has no final native definition",
+        })
+    }
+}
+
+impl std::error::Error for ExactNativeIdentityError {}
 
 fn prepare_sections(
     sections: &mut [Section],
@@ -66,7 +97,7 @@ fn prepare_sections(
     preferred: &mut HashMap<String, usize>,
     target_aliases: &HashMap<String, String>,
     authored_titles: &HashMap<String, String>,
-) {
+) -> Result<(), ExactNativeIdentityError> {
     for section in sections {
         let title = authored_titles
             .get(section.id.as_str())
@@ -79,7 +110,7 @@ fn prepare_sections(
             plans,
             preferred,
             target_aliases,
-        );
+        )?;
         prepare_sections(
             &mut section.children,
             context,
@@ -88,8 +119,9 @@ fn prepare_sections(
             preferred,
             target_aliases,
             authored_titles,
-        );
+        )?;
     }
+    Ok(())
 }
 
 fn prepare_blocks(
@@ -99,7 +131,7 @@ fn prepare_blocks(
     plans: &mut Vec<ExactPlan>,
     preferred: &mut HashMap<String, usize>,
     target_aliases: &HashMap<String, String>,
-) {
+) -> Result<(), ExactNativeIdentityError> {
     for block in blocks {
         match block {
             Block::List { items, .. } => {
@@ -117,7 +149,7 @@ fn prepare_blocks(
                         plans,
                         preferred,
                         target_aliases,
-                    );
+                    )?;
                 }
             }
             Block::DefinitionList { items, .. } => {
@@ -125,7 +157,7 @@ fn prepare_blocks(
                 for item in items {
                     let exact = evidence
                         .next()
-                        .expect("every exact native definition has evidence");
+                        .ok_or(ExactNativeIdentityError::MissingEvidence)?;
                     let mut identity = identity_plan(item, item_context, exact.role);
                     identity.add_native_environment_arguments(
                         item,
@@ -156,7 +188,7 @@ fn prepare_blocks(
                         plans,
                         preferred,
                         target_aliases,
-                    );
+                    )?;
                 }
             }
             Block::Table { rows, .. } => {
@@ -168,7 +200,7 @@ fn prepare_blocks(
                         plans,
                         preferred,
                         target_aliases,
-                    );
+                    )?;
                 }
             }
             Block::Paragraph { .. }
@@ -179,6 +211,7 @@ fn prepare_blocks(
             | Block::Unsupported { .. } => {}
         }
     }
+    Ok(())
 }
 
 fn merge_native_anchor(inlines: &mut [Inline], old_id: &str, entry_id: &str) {
@@ -208,11 +241,19 @@ fn allocate_sections(
     plans: &mut std::vec::IntoIter<ExactPlan>,
     discovery: &mut DefinitionDiscovery<'_>,
     groupable: &mut HashSet<String>,
-) {
+    allocated: &mut Vec<Option<NodeId>>,
+) -> Result<(), ExactNativeIdentityError> {
     for section in sections {
-        allocate_blocks(&mut section.blocks, plans, discovery, groupable);
-        allocate_sections(&mut section.children, plans, discovery, groupable);
+        allocate_blocks(&mut section.blocks, plans, discovery, groupable, allocated)?;
+        allocate_sections(
+            &mut section.children,
+            plans,
+            discovery,
+            groupable,
+            allocated,
+        )?;
     }
+    Ok(())
 }
 
 fn allocate_blocks(
@@ -220,7 +261,8 @@ fn allocate_blocks(
     plans: &mut std::vec::IntoIter<ExactPlan>,
     discovery: &mut DefinitionDiscovery<'_>,
     groupable: &mut HashSet<String>,
-) {
+    allocated: &mut Vec<Option<NodeId>>,
+) -> Result<(), ExactNativeIdentityError> {
     for block in blocks {
         match block {
             Block::List { items, .. } => {
@@ -232,14 +274,12 @@ fn allocate_blocks(
                         &mut discovery.retained,
                         discovery.preferred_counts,
                     );
-                    allocate_blocks(&mut item.blocks, plans, discovery, groupable);
+                    allocate_blocks(&mut item.blocks, plans, discovery, groupable, allocated)?;
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
-                    let exact = plans
-                        .next()
-                        .expect("every exact native definition has a plan");
+                    let exact = plans.next().ok_or(ExactNativeIdentityError::MissingPlan)?;
                     identify_item(
                         item,
                         exact.identity,
@@ -264,12 +304,19 @@ fn allocate_blocks(
                             }
                         }
                     }
-                    allocate_blocks(&mut item.description, plans, discovery, groupable);
+                    allocated.push(item.entry.as_ref().map(|facts| facts.id.clone()));
+                    allocate_blocks(
+                        &mut item.description,
+                        plans,
+                        discovery,
+                        groupable,
+                        allocated,
+                    )?;
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
-                    allocate_blocks(&mut cell.blocks, plans, discovery, groupable);
+                    allocate_blocks(&mut cell.blocks, plans, discovery, groupable, allocated)?;
                 }
             }
             Block::Paragraph { .. }
@@ -280,10 +327,12 @@ fn allocate_blocks(
             | Block::Unsupported { .. } => {}
         }
     }
+    Ok(())
 }
 
-/// Apply shared name grammar and ID policy to an exact native owner stream.
-pub(crate) fn identify_exact_native_definitions(
+/// Checked K23 entry point for applying semantic identities to an exact,
+/// stable native owner stream.
+pub(crate) fn identify_exact_native_definitions_checked(
     blocks: &mut [Block],
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
@@ -291,7 +340,7 @@ pub(crate) fn identify_exact_native_definitions(
     evidence: Vec<ExactNativeDefinitionEvidence>,
     target_aliases: &HashMap<String, String>,
     authored_titles: &HashMap<String, String>,
-) -> ExactNativeIdentityResult {
+) -> Result<ExactNativeIdentityResult, ExactNativeIdentityError> {
     let root_context = document_name.map_or(DefinitionContext::Generic, |name| {
         let name = name.to_ascii_lowercase();
         if name.ends_with("_config") || name.ends_with("-config") {
@@ -310,7 +359,7 @@ pub(crate) fn identify_exact_native_definitions(
         &mut plans,
         &mut preferred_counts,
         target_aliases,
-    );
+    )?;
     prepare_sections(
         sections,
         root_context,
@@ -319,11 +368,10 @@ pub(crate) fn identify_exact_native_definitions(
         &mut preferred_counts,
         target_aliases,
         authored_titles,
-    );
-    assert!(
-        evidence.next().is_none(),
-        "all exact native evidence was consumed"
-    );
+    )?;
+    if evidence.next().is_some() {
+        return Err(ExactNativeIdentityError::ExcessEvidence);
+    }
 
     let used = document_anchor_ids(blocks, sections);
     let mut discovery = DefinitionDiscovery {
@@ -335,14 +383,79 @@ pub(crate) fn identify_exact_native_definitions(
     };
     let mut plans = plans.into_iter();
     let mut groupable = HashSet::new();
-    allocate_blocks(blocks, &mut plans, &mut discovery, &mut groupable);
-    allocate_sections(sections, &mut plans, &mut discovery, &mut groupable);
-    assert!(
-        plans.next().is_none(),
-        "all exact native plans were allocated"
-    );
-    ExactNativeIdentityResult {
+    let mut allocated = Vec::new();
+    allocate_blocks(
+        blocks,
+        &mut plans,
+        &mut discovery,
+        &mut groupable,
+        &mut allocated,
+    )?;
+    allocate_sections(
+        sections,
+        &mut plans,
+        &mut discovery,
+        &mut groupable,
+        &mut allocated,
+    )?;
+    if plans.next().is_some() {
+        return Err(ExactNativeIdentityError::ExcessPlan);
+    }
+    Ok(ExactNativeIdentityResult {
         retained: discovery.retained,
         groupable,
+        allocated,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mant_ir::{DefinitionItem, DefinitionLayout};
+
+    fn checked(
+        blocks: &mut [Block],
+        evidence: Vec<ExactNativeDefinitionEvidence>,
+    ) -> Result<ExactNativeIdentityResult, ExactNativeIdentityError> {
+        identify_exact_native_definitions_checked(
+            blocks,
+            &mut [],
+            &HashSet::new(),
+            None,
+            evidence,
+            &HashMap::new(),
+            &HashMap::new(),
+        )
+    }
+
+    #[test]
+    fn checked_entry_rejects_excess_evidence() {
+        assert_eq!(
+            checked(&mut [], vec![ExactNativeDefinitionEvidence::default()]).unwrap_err(),
+            ExactNativeIdentityError::ExcessEvidence
+        );
+    }
+
+    #[test]
+    fn checked_entry_rejects_missing_evidence() {
+        let mut blocks = vec![Block::DefinitionList {
+            items: vec![DefinitionItem {
+                terms: vec![vec![Inline::Text {
+                    value: "--probe".to_owned(),
+                }]],
+                description: Vec::new(),
+                entry: None,
+                layout: DefinitionLayout::default(),
+                source: None,
+            }],
+            declaration_groups: Vec::new(),
+            compact: false,
+            layout: Default::default(),
+            source: None,
+        }];
+        assert_eq!(
+            checked(&mut blocks, Vec::new()).unwrap_err(),
+            ExactNativeIdentityError::MissingEvidence
+        );
     }
 }

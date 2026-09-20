@@ -400,9 +400,22 @@ through a per-call output sink. These are library capabilities, not a second
 ManT rendering path: `mant-codec` consumes the owned parser tree, while
 `mant-render` reports and the UI render the resulting shared source-neutral IR.
 
-#### Native execution migration checkpoint
+#### Native execution production path
 
-The S1 checkpoint adds a staged execution path without changing the production
+Roff byte loading now performs one pinned native parse/terminal execution and
+projects the resulting owned AST plus typed execution report into shared IR.
+There is no document-dependent executor selection and no runtime fallback to
+the former Rust formatter. The `native-semantic-audit` feature only exposes the
+same production materializer to repository audit tooling; it does not select
+another backend.
+
+#### Historical native execution migration checkpoint
+
+The remainder of this subsection records the S1 checkpoint as it existed
+before the production switch; statements about incomplete coverage and the old
+production path are historical evidence, not the current architecture.
+
+The S1 checkpoint added a staged execution path without changing the production
 lowering selection. It parses and executes a caller-owned root exactly once in
 the pinned native session, copies one matching owned AST plus a typed execution
 report, releases all per-call C document and report storage, and lets a private
@@ -453,7 +466,7 @@ The checkpoint applies the six migration decisions as follows:
 | D05 failure and cleanup | Node/depth/work/record/pool/buffer limits fail atomically. Native table-budget integration tests verify cleanup and a subsequent call; pure Rust malformed-report tests separately prove safe rejection of bad layouts, discriminants, keys, ranges and relationships, not native-session recovery. Broader cancellation and all later feature paths remain to be proven. |
 | D06 ABI and licensing | C views have checked size/alignment/offset and slice/range validation, private discriminant mapping, prefixed symbols, replayable patches, and contemporaneous notices. Debug/release execute-only and execute+render transfer paths are exercised. |
 
-The default execution limits are 1,000,000 nodes, depth 256, 16,000,000 work
+The default execution limits are 1,000,000 nodes, depth 256, 24,000,000 work
 units, 4,000,000 records, a 16 MiB pool, and 1,000,000 native buffer cells.
 They bound native work and storage independently. Transfer first bulk-copies C
 arrays into temporary raw Rust record vectors and the byte pool, then validates

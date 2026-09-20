@@ -17,11 +17,12 @@ pub use mant_ir::ResolvedContent;
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use tldr::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 
-#[cfg(feature = "staged-native-audit")]
+#[cfg(feature = "native-semantic-audit")]
 #[doc(hidden)]
-pub use mandoc::lower_staged_semantic_document;
+pub use mandoc::lower_native_semantic_document;
 #[cfg(feature = "roff")]
 pub use mandoc::{
-    RedirectSyntaxError, lower_mandoc_document, parse_plain_manual as parse_roff_bytes,
+    RedirectSyntaxError, RoffError, RoffProjectionError, RoffProjectionStage,
+    lower_mandoc_document, parse_plain_manual as parse_roff_bytes,
     parse_plain_manual_report as parse_roff_bytes_with_report, redirect_target,
 };

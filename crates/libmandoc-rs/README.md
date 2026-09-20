@@ -23,11 +23,13 @@ to depend on libmandoc's private C structures or parser lifetime.
   the pinned terminal executor's sources, nodes, formatter words (including
   zero-output operands), buffer generations, atoms, fragments, flushes,
   boundaries, geometry, wrappers, anchors, and findings.
-  Typed table, row, and cell records retain authored payload ownership apart
-  from device-generated padding and rules. Equation records independently
-  retain parser structure, actual renderer invocations, and generated equation
-  parts, so consumers never need to reconstruct `eqn_term.c` from terminal
-  text.
+  Typed table and row records separate structural layout cells, parsed data
+  cells, and actual renderer invocations. The total mapping retains authored
+  payload ownership apart from device-generated padding and rules, including
+  leading-span many-to-one calls and per-layout suppression. Equation records
+  independently retain parser structure, actual renderer invocations, and
+  generated equation parts, so consumers never need to reconstruct
+  `eqn_term.c` from terminal text.
 - An optional `render` feature exposing bounded upstream ASCII, deterministic
   UTF-8, and HTML reference output without writing to process standard output.
 
@@ -116,7 +118,7 @@ RSS peaks for each transfer phase. That measurement remains required before
 switching production lowering.
 
 `ExecutionLimits::default()` starts with independent ceilings of 1,000,000
-syntax nodes, depth 256, 16,000,000 charged work units, 4,000,000 typed
+syntax nodes, depth 256, 24,000,000 charged work units, 4,000,000 typed
 records, a 16 MiB immutable byte pool, 1,000,000 native buffer cells, and
 512 MiB allocated across the native typed-record tables. A zero,
 unrepresentable, or exhausted limit fails the whole execution; it never returns
@@ -417,7 +419,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 29 ordered patches in `patches/series`. The following group contains
+the ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -539,6 +541,29 @@ The remaining patches implement the synchronous embedding boundary:
   inherit the same native offset settlement as `term_flushln()`, rather than
   restarting a second tab model. These are objective native facts: the C layer
   never emits `ManT`'s `stacked`, `run-in`, or `fit` policy.
+- `0037-retain-bounded-tbl-enhancement-source.patch` retains cell-local source
+  only as optional, bounded enrichment evidence; native execution remains the
+  authoritative payload and state transition.
+- `0039-observe-every-native-table-cell-invocation.patch` observes every
+  fixed-CVS `tbl_data()` call rather than assuming a one-to-one relationship
+  between parsed data and renderer calls. In particular, the leading-span
+  branch in `tbl_term.c` can invoke one `tbl_dat` through multiple layout
+  positions. Exactly one invocation whose layout equals `tbl_dat::layout` is
+  the primary structural presentation; the others remain execution evidence.
+  Layout-rule suppression is likewise a property of the linked layout cell,
+  so mixed `_ l.` rows retain their rule and neighboring visible payload while
+  never exposing the source text ignored by the rule cell. This total mapping
+  follows pinned `tbl_data.c` revision 1.61 and its `getdata()` ownership
+  rules; later row-level fragment and flush records remain presentation facts,
+  not additional semantic cells.
+- `0040-observe-native-line-causes-and-placement.patch` labels every physical
+  device-line commit with the fixed-CVS path that caused it: an automatic
+  field wrap, completed field, unconditional vertical blank, or direct device
+  call. It also records handler-owned placement checkpoints for man `PP/P/LP`,
+  `IP/TP/TQ`, `RS`, and `in`, plus mdoc `Bl/It`, `D1/Dl`, and `Bd`, only after
+  those handlers calculate or restore their native origins. All offsets,
+  margins, visual positions, and cell widths remain in terminal basic units;
+  neither the patch nor the C shim rounds them into document-IR columns.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local
@@ -559,14 +584,18 @@ private synchronous FFI call. In addition to the upstream tree,
 libmandoc but unavailable through a public C API:
 
 - normalized mdoc enclosures, list/display/font/author roles, source flags,
-  table cells and spans, complete equation trees, and validated tags;
+  separate tbl layout/data/invocation facts, complete equation trees, and
+  validated tags;
 - a one-way normalized equation-text view, including the common GNU `ldots`
   spelling which the pinned parser retains as an unexpanded identifier;
 - tbl multiline-cell and vertical-continuation flags, including both tbl(7)
   spellings of vertical continuation;
+- physical line-commit causes and handler placement checkpoints, with dense
+  identities, structural execution owners, total ordering, and exact native
+  basic-unit geometry;
 - effective cell and row rule kinds plus first-data-row table boundaries,
-  retaining native layout precedence, empty data rows, and the distinction
-  between `T&` and a new table;
+  retaining native layout precedence, leading and horizontal continuations,
+  empty data rows, and the distinction between `T&` and a new table;
 - the pinned native roff-request lookup used by consumers that need to retain
   libmandoc's tbl dispatch boundary without duplicating its request registry;
 - structured diagnostics and explicit source/include/compression policy.

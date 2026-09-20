@@ -215,7 +215,6 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 	int	 fc;	 /* Frame character index in tbl_borders[]. */
 	int	 more;	 /* Boolean: there are more columns to print. */
 	int	 first_row;
-	int	 cell_owner;
 	size_t	 rows, layout_cells, data_cells;
 	size_t	 cell_ordinal, data_ordinal, coloff_before;
 
@@ -387,23 +386,19 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 			tp->tcol++;
 			tp->col = 0;
 			tp->flags &= ~(TERMP_BACKAFTER | TERMP_BACKBEFORE);
-			cell_owner = dp != NULL && dp->layout == cp;
 			coloff_before = coloff;
-			if (cell_owner) {
-				if (!term_exec_table_cell(tp, sp, cp, dp, 1,
-				    cell_ordinal, data_ordinal, coloff_before,
-				    coloff_before))
-					goto fail;
-			}
+			if (!term_exec_table_cell(tp, sp, cp, dp, 1,
+			    cell_ordinal, dp == NULL ? SIZE_MAX : data_ordinal,
+			    coloff_before, coloff_before))
+				goto fail;
 			if (!tbl_data(tp, sp->opts, cp, dp, tp->tbl.cols + ic,
 			    &coloff))
 				goto fail;
-			if (cell_owner) {
-				if (!term_exec_table_cell(tp, sp, cp, dp, 0,
-				    cell_ordinal, data_ordinal, coloff_before, coloff))
-					goto fail;
-				cell_ordinal++;
-			}
+			if (!term_exec_table_cell(tp, sp, cp, dp, 0,
+			    cell_ordinal, dp == NULL ? SIZE_MAX : data_ordinal,
+			    coloff_before, coloff))
+				goto fail;
+			cell_ordinal++;
 			coloff += term_len(tp, tp->tbl.cols[ic].spacing);
 			if (dp != NULL &&
 			    (ic || sp->layout->first->pos != TBL_CELL_SPAN)) {

@@ -59,6 +59,21 @@ enum term_exec_reference_kind {
 	TERM_EXEC_REFERENCE_SECTION
 };
 
+/* How a native handler presents a semantic reference to the terminal. */
+enum term_exec_reference_presentation {
+	TERM_EXEC_REFERENCE_DIRECT,
+	TERM_EXEC_REFERENCE_LABELLED_SUPPLEMENT
+};
+
+/* Ordered sub-ranges of a labelled reference presentation. */
+enum term_exec_reference_phase {
+	TERM_EXEC_REFERENCE_LABEL_END,
+	TERM_EXEC_REFERENCE_SUPPLEMENT_BEGIN,
+	TERM_EXEC_REFERENCE_TARGET_BEGIN,
+	TERM_EXEC_REFERENCE_TARGET_END,
+	TERM_EXEC_REFERENCE_SUPPLEMENT_END
+};
+
 enum term_exec_affinity {
 	TERM_EXEC_AFFINITY_INLINE,
 	TERM_EXEC_AFFINITY_BEFORE_OUTPUT
@@ -100,6 +115,24 @@ enum term_exec_man_block_kind {
 	TERM_EXEC_MAN_BLOCK_PP,
 	TERM_EXEC_MAN_BLOCK_P,
 	TERM_EXEC_MAN_BLOCK_LP
+};
+
+/* Stable reasons why the terminal device committed one physical line. */
+enum term_exec_line_commit_cause {
+	TERM_EXEC_LINE_DIRECT_DEVICE,
+	TERM_EXEC_LINE_FIELD_WRAP,
+	TERM_EXEC_LINE_FIELD_END,
+	TERM_EXEC_LINE_VERTICAL_BLANK
+};
+
+/* Stable formatter placement checkpoints, recorded after geometry changes. */
+enum term_exec_placement_phase {
+	TERM_EXEC_PLACEMENT_ENTER,
+	TERM_EXEC_PLACEMENT_CONTENT,
+	TERM_EXEC_PLACEMENT_HEAD,
+	TERM_EXEC_PLACEMENT_BODY,
+	TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION,
+	TERM_EXEC_PLACEMENT_EXIT
 };
 
 /* Stable observer-side spellings of display and control execution regions. */
@@ -155,6 +188,8 @@ struct term_exec_ops {
 	    const struct roff_node *, int);
 	int (*definition_phase)(void *, const struct termp *,
 	    const struct roff_node *, int);
+	int (*placement)(void *, const struct termp *,
+	    const struct roff_node *, int);
 	int (*region_begin)(void *, const struct termp *,
 	    const struct roff_node *, int);
 	int (*region_end)(void *, const struct termp *,
@@ -205,13 +240,15 @@ struct term_exec_ops {
 	int (*device_letter)(void *, const struct termp *,
 	    const struct roff_node *, size_t, int, size_t, size_t);
 	int (*device_endline)(void *, const struct termp *,
-	    const struct roff_node *, size_t, size_t, size_t, size_t);
+	    const struct roff_node *, int, size_t, size_t, size_t, size_t);
 	int (*font)(void *, const struct termp *, const struct roff_node *,
 	    int, int, size_t, size_t);
 	int (*reference_begin)(void *, const struct termp *,
 	    const struct roff_node *, const struct roff_node *,
 	    const struct roff_node *, int, const char *, size_t,
-	    const char *, size_t, int, int *);
+	    const char *, size_t, int, int, int *);
+	int (*reference_phase)(void *, const struct termp *,
+	    const struct roff_node *, int);
 	int (*reference_end)(void *, const struct termp *,
 	    const struct roff_node *);
 	int (*anchor)(void *, const struct termp *, const struct roff_node *,
@@ -345,6 +382,7 @@ struct	termp {
 	size_t		  exec_logical_origin;
 	size_t		  exec_logical_tab_count;
 	int		  exec_logical_forced_break;
+	int		  exec_line_commit_cause;
 };
 
 
@@ -394,6 +432,7 @@ int		  term_exec_mdoc_list_item(struct termp *,
 int		  term_exec_man_block(struct termp *, const struct roff_node *,
 			int, int);
 int		  term_exec_definition_phase(struct termp *, int);
+int		  term_exec_placement(struct termp *, int);
 int		  term_exec_region(struct termp *, const struct roff_node *,
 			int, int);
 int		  term_exec_equation(struct termp *, const struct eqn_box *, int);
@@ -426,11 +465,12 @@ int		  term_exec_device_endline(struct termp *, size_t, size_t,
 int		  term_exec_font(struct termp *, int, int, size_t, size_t);
 int		  term_exec_reference_begin(struct termp *, int,
 			const struct roff_node *, const struct roff_node *,
-			const char *, const char *, int);
+			const char *, const char *, int, int);
 int		  term_exec_reference_node_begin(struct termp *, int,
 			const struct roff_node *, const struct roff_node *, int,
 			int *);
 int		  term_exec_reference_end(struct termp *);
+int		  term_exec_reference_phase(struct termp *, int);
 int		  term_exec_anchor(struct termp *, const struct roff_node *);
 int		  term_exec_table_preflight(struct termp *, size_t);
 int		  term_exec_table(struct termp *, const struct tbl_span *, int,

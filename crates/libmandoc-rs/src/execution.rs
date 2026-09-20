@@ -38,6 +38,22 @@ impl ExecutionNodeFlags {
     }
 }
 
+/// Stable formatter state captured when one terminal atom was written.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ExecutionAtomFlags(pub u32);
+
+impl ExecutionAtomFlags {
+    /// The atom was written while the native terminal formatter prohibited
+    /// automatic line filling (`TERMP_BRNEVER`).
+    pub const NO_FILL: u32 = 1 << 0;
+
+    /// Return whether a stable flag is present.
+    #[must_use]
+    pub const fn contains(self, flag: u32) -> bool {
+        self.0 & flag != 0
+    }
+}
+
 /// Report-local identity of one executed formatter word.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionWordKey(pub u32);
@@ -58,9 +74,17 @@ pub struct ExecutionTableKey(pub u32);
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionTableRowKey(pub u32);
 
-/// Report-local identity of one executed tbl(7) cell.
+/// Report-local identity of one native tbl(7) layout cell.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ExecutionTableCellKey(pub u32);
+pub struct ExecutionTableLayoutCellKey(pub u32);
+
+/// Report-local identity of one native tbl(7) data cell.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ExecutionTableDataCellKey(pub u32);
+
+/// Report-local identity of one actual tbl(7) renderer invocation.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ExecutionTableCellInvocationKey(pub u32);
 
 /// Dense identity of one native eqn(7) execution.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -148,6 +172,35 @@ pub enum ExecutionTableRowKind {
     HorizontalRule,
     /// A whole-row double horizontal rule.
     DoubleHorizontalRule,
+    /// A data span whose layout row consists entirely of rule cells.
+    ///
+    /// Fixed CVS retains the parsed data cells but renderer layout precedence
+    /// suppresses their payloads and draws the layout rules instead.
+    LayoutRule,
+}
+
+/// Whether one parsed tbl(7) data cell participates in terminal projection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionTableDataDisposition {
+    /// The renderer projects this data cell through its linked invocation.
+    Projected,
+    /// A whole-row layout rule suppresses the parsed payload.
+    SuppressedByLayout,
+}
+
+/// What one actual native tbl(7) cell-renderer invocation projected.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionTableInvocationOutcome {
+    /// Ordinary text data.
+    Data,
+    /// A rule selected by the layout cell, independent of parsed data.
+    LayoutRule,
+    /// A rule selected by the data cell.
+    DataRule,
+    /// An empty native cell.
+    Empty,
+    /// A horizontal or vertical continuation.
+    Continuation,
 }
 
 /// Native layout kind of one executed tbl(7) cell.
@@ -377,6 +430,17 @@ pub enum FragmentRole {
     PageDecoration,
 }
 
+/// Native output lifecycle active when a report fact was created.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionOutputRole {
+    /// Document content and authored layout.
+    Content,
+    /// Device-generated margin decoration.
+    MarginDecoration,
+    /// Device-generated page header or footer lifecycle.
+    PageDecoration,
+}
+
 /// Native newline or vertical-space request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoundaryRequest {
@@ -401,6 +465,36 @@ pub enum BoundaryEffect {
     EndedLine,
     /// A blank device line was added.
     AddedVerticalSpace,
+}
+
+/// Why the terminal device committed one physical line.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LineCommitCause {
+    /// A direct device-line request outside field settlement.
+    DirectDevice,
+    /// A field exceeded its target and continued on another device line.
+    FieldWrap,
+    /// A completed field ended its device line.
+    FieldEnd,
+    /// An unconditional vertical-space request emitted a blank device line.
+    VerticalBlank,
+}
+
+/// Formatter phase captured by one native placement checkpoint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionPlacementPhase {
+    /// Entering a structural placement scope.
+    Enter,
+    /// Content origin established by a non-head/body structure.
+    Content,
+    /// Definition or list head geometry is active.
+    Head,
+    /// Definition or list body geometry is active.
+    Body,
+    /// The current origin changed without introducing an IR structure.
+    OriginTransition,
+    /// Leaving a structural placement scope after restoring its origin.
+    Exit,
 }
 
 /// Kind of a native geometry observation.
@@ -571,6 +665,15 @@ pub enum ExecutionReferenceKind {
     SameDocumentSection,
 }
 
+/// Native terminal presentation selected by the reference macro handler.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionReferencePresentation {
+    /// The semantic target is rendered directly as the visible label.
+    Direct,
+    /// A visible label is followed by a generated supplement containing the target.
+    LabelledSupplement,
+}
+
 /// Relationship between an execution fact and surrounding emitted content.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ExecutionAffinity {
@@ -708,6 +811,10 @@ pub struct ExecutionAtom {
     pub replaced_by: Option<AtomKey>,
     /// Final atom disposition.
     pub disposition: AtomDisposition,
+    /// Formatter execution state at the exact write operation.
+    pub flags: ExecutionAtomFlags,
+    /// Native output lifecycle at the write operation.
+    pub output_role: ExecutionOutputRole,
     /// Total execution order.
     pub sequence: u64,
 }
@@ -725,8 +832,8 @@ pub struct ExecutionFragment {
     pub generation: Option<u32>,
     /// Owning buffer-generation fact, absent for direct device output.
     pub buffer_generation: Option<u32>,
-    /// Atom keys contributing to this fragment.
-    pub atoms: Vec<AtomKey>,
+    /// The atom emitted as this device fragment.
+    pub atom: AtomKey,
     /// One-based device line.
     pub device_line: u32,
     /// Whether this is content or device decoration.
@@ -810,6 +917,8 @@ pub struct ExecutionFlush {
     /// logical field. Unlike a fixed-device wrap, this remains a hard
     /// responsive placement constraint.
     pub logical_forced_break: bool,
+    /// Native output lifecycle at the fill decision.
+    pub output_role: ExecutionOutputRole,
     /// Field width in basic units.
     pub field_bu: i64,
     /// Target width in basic units.
@@ -895,10 +1004,39 @@ pub struct ExecutionBoundary {
     pub visual_after: i64,
     /// Device-line commits directly owned by this boundary.
     pub direct_device_lines: u32,
+    /// Physical-line cause, present only for `DeviceEndline` boundaries.
+    pub line_commit_cause: Option<LineCommitCause>,
+    /// Native output lifecycle at the boundary request.
+    pub output_role: ExecutionOutputRole,
     /// Total execution order on entry.
     pub enter_sequence: u64,
     /// Total execution order on leave.
     pub leave_sequence: u64,
+}
+
+/// One objective native placement checkpoint in terminal basic units.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionPlacementCheckpoint {
+    /// Dense checkpoint key.
+    pub key: u32,
+    /// Syntax node whose handler established the geometry.
+    pub node: ExecutionNodeKey,
+    /// Active structural wrapper.
+    pub wrapper: u32,
+    /// Handler phase observed after its geometry calculation.
+    pub phase: ExecutionPlacementPhase,
+    /// Current left origin in basic units.
+    pub offset_bu: i64,
+    /// Current field right edge in basic units.
+    pub rmargin_bu: i64,
+    /// Current device right edge in basic units.
+    pub maxrmargin_bu: i64,
+    /// Current device visual position in basic units.
+    pub visual_bu: i64,
+    /// Width of one formatter cell in basic units.
+    pub cell_bu: i64,
+    /// Total execution order.
+    pub sequence: u64,
 }
 
 /// One native roff control request executed by the fixed-CVS terminal path.
@@ -1041,6 +1179,8 @@ pub struct ExecutionGeometry {
     pub origin_kind: GeometryOriginKind,
     /// Report-local key of the causing record.
     pub origin_key: Option<u32>,
+    /// Native output lifecycle at the geometry observation.
+    pub output_role: ExecutionOutputRole,
     /// Requested and effective values.
     pub requested: i64,
     /// Effective value.
@@ -1172,6 +1312,12 @@ pub struct ExecutionReference {
     /// Half-open interval used as the visible label, excluding the leading
     /// implicit word-boundary space emitted by `term_word()`.
     pub atoms: Range<u32>,
+    /// Native presentation contract selected by the macro handler.
+    pub presentation: ExecutionReferencePresentation,
+    /// Exact formatter atoms rendering the target in this presentation.
+    pub target_atoms: Range<u32>,
+    /// Generated supplement, including punctuation around the target when present.
+    pub supplement_atoms: Option<Range<u32>>,
     /// Attachment affinity.
     pub affinity: ExecutionAffinity,
     /// Total execution order on entry and leave.
@@ -1210,10 +1356,16 @@ pub struct ExecutionTable {
     pub first_row_node: ExecutionNodeKey,
     /// Contiguous execution-row records owned by this table.
     pub rows: Range<u32>,
-    /// Contiguous execution-cell records owned by this table.
-    pub cells: Range<u32>,
+    /// Contiguous layout-cell records owned by this table.
+    pub layout_cells: Range<u32>,
+    /// Contiguous parsed data-cell records owned by this table.
+    pub data_cells: Range<u32>,
+    /// Contiguous actual renderer invocations owned by this table.
+    pub cell_invocations: Range<u32>,
     /// Number of logical columns in the native table.
     pub logical_columns: u32,
+    /// Active native wrapper at table entry, when any.
+    pub wrapper: Option<u32>,
     /// Stable table flags reserved by this report version.
     pub flags: u32,
     /// Atom cursor before and after the complete table execution.
@@ -1222,6 +1374,13 @@ pub struct ExecutionTable {
     pub fragments: Range<u32>,
     /// Flush cursor before and after the complete table execution.
     pub flushes: Range<u32>,
+    /// Surrounding formatter field origin at table entry, in basic units.
+    ///
+    /// Fixed CVS `term_tbl()` saves this value before calculating table-local
+    /// columns and restores it after the final row.
+    pub offset_bu: i64,
+    /// Width of one formatter cell for this execution profile, in basic units.
+    pub cell_bu: i64,
     /// Total execution point at table entry.
     pub enter_sequence: u64,
     /// Total execution point after table cleanup.
@@ -1243,8 +1402,12 @@ pub struct ExecutionTableRow {
     pub kind: ExecutionTableRowKind,
     /// Number of logical columns visible to this row.
     pub logical_columns: u32,
-    /// Contiguous execution-cell records owned by this row.
-    pub cells: Range<u32>,
+    /// Contiguous layout-cell records owned by this row.
+    pub layout_cells: Range<u32>,
+    /// Contiguous parsed data-cell records owned by this row.
+    pub data_cells: Range<u32>,
+    /// Contiguous actual renderer invocations owned by this row.
+    pub cell_invocations: Range<u32>,
     /// Atom cursor before and after this row execution.
     pub atoms: Range<u32>,
     /// Fragment cursor before and after this row execution.
@@ -1257,40 +1420,85 @@ pub struct ExecutionTableRow {
     pub leave_sequence: u64,
 }
 
-/// One logical tbl(7) cell fill operation.
+/// One structural cell from a native tbl(7) layout row.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExecutionTableCell {
-    /// Dense report-local cell identity.
-    pub key: ExecutionTableCellKey,
+pub struct ExecutionTableLayoutCell {
+    /// Dense report-local layout-cell identity.
+    pub key: ExecutionTableLayoutCellKey,
     /// Owning execution row.
     pub row: ExecutionTableRowKey,
-    /// Syntax node that owns the row containing this cell.
-    pub node: ExecutionNodeKey,
-    /// Zero-based executed-cell ordinal within the row.
+    /// Zero-based structural-cell ordinal within the row.
     pub ordinal: u32,
-    /// Zero-based ordinal in the row's owned AST data cells.
-    pub data_ordinal: u32,
     /// Zero-based logical column at which this cell begins.
     pub logical_column: u32,
-    /// Number of logical columns occupied by this cell.
-    pub column_span: u32,
-    /// Number of logical rows occupied by this cell.
-    pub row_span: u32,
     /// Native layout-cell kind.
-    pub layout_kind: ExecutionTableLayoutKind,
-    /// Native data-cell kind.
-    pub data_kind: ExecutionTableDataKind,
+    pub kind: ExecutionTableLayoutKind,
     /// Effective horizontal alignment.
     pub alignment: ExecutionTableAlignment,
     /// Font selected by the native table layout.
     pub font: ExecutionFont,
-    /// Stable native layout and provenance flags.
+    /// Stable native layout flags.
     pub flags: ExecutionTableCellFlags,
+    /// Whether this layout position continues the preceding horizontal cell.
+    ///
+    /// Fixed CVS represents each `s` position as its own `TBL_CELL_SPAN`
+    /// record.  This is therefore a continuation marker, not a span count.
+    pub horizontal_continuation: bool,
+    /// Requested inter-column spacing, in en units.
+    pub spacing_en: u32,
+    /// Native vertical-rule count preceding this layout cell.
+    pub vertical_rule: u32,
+}
+
+/// One parsed tbl(7) data cell and its explicit renderer disposition.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionTableDataCell {
+    /// Dense report-local data-cell identity.
+    pub key: ExecutionTableDataCellKey,
+    /// Owning execution row.
+    pub row: ExecutionTableRowKey,
+    /// Zero-based data-cell ordinal within the row.
+    pub ordinal: u32,
+    /// Structural layout cell associated with this payload.
+    pub layout: ExecutionTableLayoutCellKey,
+    /// Native data-cell kind.
+    pub kind: ExecutionTableDataKind,
+    /// Whether layout precedence projects or suppresses this payload.
+    pub disposition: ExecutionTableDataDisposition,
+    /// Number of logical columns occupied by this cell.
+    pub column_span: u32,
+    /// Number of logical rows occupied by this cell.
+    pub row_span: u32,
+    /// Stable native data and provenance flags.
+    pub flags: ExecutionTableCellFlags,
+    /// Inline eqn delimiter bytes active when native tbl created this cell.
+    pub equation_delimiters: Option<(u8, u8)>,
+}
+
+/// One actual invocation of fixed-CVS `tbl_data()`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionTableCellInvocation {
+    /// Dense report-local invocation identity.
+    pub key: ExecutionTableCellInvocationKey,
+    /// Owning execution row.
+    pub row: ExecutionTableRowKey,
+    /// Syntax node that owns the row containing this invocation.
+    pub node: ExecutionNodeKey,
+    /// Zero-based renderer invocation ordinal within the row.
+    pub ordinal: u32,
+    /// Structural layout cell selected by the renderer.
+    pub layout: ExecutionTableLayoutCellKey,
+    /// Parsed data cell passed to the renderer, when any.
+    pub data: Option<ExecutionTableDataCellKey>,
+    /// Renderer-selected projection outcome.
+    pub outcome: ExecutionTableInvocationOutcome,
+    /// Zero-based logical column at which this invocation begins.
+    pub logical_column: u32,
     /// Native terminal column-buffer identity, absent when no generation was opened.
     pub buffer: Option<u32>,
     /// Buffer generation containing this cell's atoms, absent when no generation was opened.
     pub buffer_generation: Option<u32>,
-    /// Contiguous atoms created while filling this cell.
+    /// Contiguous atoms created during this renderer invocation.
     pub atoms: Range<u32>,
     /// Native left edge of the cell field, in basic units.
     pub offset_bu: i64,
@@ -1444,6 +1652,8 @@ pub struct NativeExecutionReport {
     pub(crate) record_bytes: u64,
     /// Peak native terminal buffer capacity charged to this execution.
     pub(crate) buffer_cells: u64,
+    /// Renderer-configured body origin in terminal columns.
+    pub(crate) content_indent_columns: u32,
     /// Participating sources.
     pub(crate) sources: Vec<ExecutionSource>,
     /// Final-tree node registry.
@@ -1464,6 +1674,8 @@ pub struct NativeExecutionReport {
     pub(crate) controls: Vec<ExecutionControl>,
     /// Objective native geometry.
     pub(crate) geometry: Vec<ExecutionGeometry>,
+    /// Handler-owned placement checkpoints in native basic units.
+    pub(crate) placements: Vec<ExecutionPlacementCheckpoint>,
     /// Execution scopes and instantaneous state transitions.
     pub(crate) wrappers: Vec<ExecutionWrapper>,
     /// Semantic references observed at their native macro handlers.
@@ -1474,8 +1686,12 @@ pub struct NativeExecutionReport {
     pub(crate) tables: Vec<ExecutionTable>,
     /// Native table rows.
     pub(crate) table_rows: Vec<ExecutionTableRow>,
-    /// Native table cells.
-    pub(crate) table_cells: Vec<ExecutionTableCell>,
+    /// Native table layout cells.
+    pub(crate) table_layout_cells: Vec<ExecutionTableLayoutCell>,
+    /// Native table data cells, including payloads suppressed by layout.
+    pub(crate) table_data_cells: Vec<ExecutionTableDataCell>,
+    /// Actual native table renderer invocations.
+    pub(crate) table_cell_invocations: Vec<ExecutionTableCellInvocation>,
     /// Native equation executions.
     pub(crate) equations: Vec<ExecutionEquation>,
     /// Native equation structural boxes.
@@ -1505,6 +1721,12 @@ impl NativeExecutionReport {
     #[must_use]
     pub const fn record_bytes(&self) -> u64 {
         self.record_bytes
+    }
+
+    /// Renderer-configured body origin in terminal columns.
+    #[must_use]
+    pub const fn content_indent_columns(&self) -> u32 {
+        self.content_indent_columns
     }
 
     /// Peak native terminal buffer capacity charged to this execution.
@@ -1573,6 +1795,12 @@ impl NativeExecutionReport {
         &self.geometry
     }
 
+    /// Native placement checkpoints recorded after handler geometry changes.
+    #[must_use]
+    pub fn placements(&self) -> &[ExecutionPlacementCheckpoint] {
+        &self.placements
+    }
+
     /// Execution scopes and state transitions.
     #[must_use]
     pub fn wrappers(&self) -> &[ExecutionWrapper] {
@@ -1603,10 +1831,22 @@ impl NativeExecutionReport {
         &self.table_rows
     }
 
-    /// Native table cells.
+    /// Native table layout cells.
     #[must_use]
-    pub fn table_cells(&self) -> &[ExecutionTableCell] {
-        &self.table_cells
+    pub fn table_layout_cells(&self) -> &[ExecutionTableLayoutCell] {
+        &self.table_layout_cells
+    }
+
+    /// Native table data cells, including payloads suppressed by layout.
+    #[must_use]
+    pub fn table_data_cells(&self) -> &[ExecutionTableDataCell] {
+        &self.table_data_cells
+    }
+
+    /// Actual native table renderer invocations.
+    #[must_use]
+    pub fn table_cell_invocations(&self) -> &[ExecutionTableCellInvocation] {
+        &self.table_cell_invocations
     }
 
     /// Native equation executions.
@@ -1682,7 +1922,7 @@ impl Default for ExecutionLimits {
         Self {
             max_nodes: 1_000_000,
             max_depth: 256,
-            max_work: 16_000_000,
+            max_work: 24_000_000,
             max_records: 4_000_000,
             max_pool_bytes: 16 * 1024 * 1024,
             max_buffer_cells: 1_000_000,

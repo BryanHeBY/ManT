@@ -12,7 +12,7 @@ use std::{
 
 use flate2::read::GzDecoder;
 use libmandoc_rs::{Compression, ExecutionLimits, IncludePolicy, Node, ParseOptions, Parser};
-use mant_codec::{lower_mandoc_document, lower_staged_semantic_document};
+use mant_codec::{lower_mandoc_document, lower_native_semantic_document};
 use mant_ir::{
     Block, Document, EntryKind, Inline, ParameterKind, Section, SemanticEntry, SemanticIndex,
     ValueDomain,
@@ -103,14 +103,15 @@ fn profile_request(line: &str) -> Result<Value, String> {
         "production" => {
             let (document, report) = mant_loader::parse_manual_source_with_report(&path)
                 .map_err(|error| error.to_string())?;
-            (document, report.document.root, report.diagnostics.len())
+            let (native_document, diagnostics, _) = report.into_parts();
+            (document, native_document.root, diagnostics.len())
         }
         "native-semantic-staged" => {
             let source = read_staged_source(&path)?;
             let report = Parser::new(ParseOptions::default())
                 .execute_bytes(&path, &source, ExecutionLimits::default())
                 .map_err(|error| error.to_string())?;
-            let document = lower_staged_semantic_document(&report);
+            let document = lower_native_semantic_document(&report);
             let (native_document, diagnostics, _) = report.into_parts();
             (document, native_document.root, diagnostics.len())
         }

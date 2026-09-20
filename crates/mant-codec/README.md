@@ -40,15 +40,12 @@ have not passed whole-document representability checks.
 ## Native lowering ownership
 
 Native lowering internals live under `src/mandoc/`, behind the optional `roff`
-feature. Public entry points return the shared IR, not a second document model.
-Production currently remains on the existing owned-AST lowering until the
-native-execution migration reaches its single atomic switch. The private
-`native_execution` projection is the staged replacement seam: it consumes the
-AST and execution facts returned by one `libmandoc-rs::Parser::execute_bytes`
-call, performs no second parse or source replay, and cannot be selected as a
-per-page fallback by public entry points.
+feature. Public byte entry points return the shared IR, not a second document
+model. Production performs one `libmandoc-rs::Parser::execute_bytes` call and
+projects its matching owned AST and execution report; it performs no second
+parse, source replay, per-page backend selection, or legacy fallback.
 
-The staged seam now projects ordinary man/mdoc visible lines, typed heading,
+The native projection covers ordinary man/mdoc visible lines, typed heading,
 list, definition, display and control lifecycles, definition HEAD/BODY
 ownership and partial flushes, font runs, nested manual/URI references, exact
 target attachments, and a bounded native table matrix. For definitions it is
@@ -67,10 +64,9 @@ and topology while discarding device padding, border glyphs, and alternating
 column flush order.
 Include-enabled sessions and executed `.so` requests remain explicit
 unsupported execution inputs. Equation execution retains the native parser
-tree, actual renderer invocations, and generated parts in the staged
-projection, while the general macro/tbl/eqn production migration remains
-unfinished. The following boundaries describe the current production
-implementation until that switch:
+tree, actual renderer invocations, and generated parts, while optional
+cell-local table enhancement is bounded and transactional. The following
+boundaries describe the production implementation:
 
 | Responsibility | Owner and lifetime |
 | --- | --- |

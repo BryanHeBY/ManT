@@ -9,6 +9,7 @@ mod flow;
 mod font;
 mod generated;
 mod links;
+pub(in crate::mandoc) use links::link_identity_text;
 pub(super) use links::lower_man_link;
 mod scopes;
 mod source_cursor;

@@ -55,8 +55,9 @@ fn operator_table_retains_definition_placement_decisions() {
 // bullet-normalisation test for this fixture.
 
 /// Inline operator bodies use the resolved source column, not a renderer's
-/// hard-coded single-space separator. The compound width expression in this
-/// fixture uses the documented unsupported-measurement fallback.
+/// hard-coded single-space separator. Fixed CVS `pre_TP()` evaluates the
+/// explicit width on the first operator item and retains that 11-column field
+/// for the following implicit-width `.TP` items.
 #[test]
 fn man_format_preserves_resolved_operator_body_columns() {
     let output = render_query_man(&archlinux_manual_query("gawk"));
@@ -76,11 +77,11 @@ fn man_format_preserves_resolved_operator_body_columns() {
             .unwrap();
         assert_eq!(item.layout.placement, mant_ir::DefinitionPlacement::Fit);
         assert!(mant_ir::geometry::definition_placement(item, 0, None).run_in);
-        assert_eq!(item.layout.body_indent_columns, 7);
+        assert_eq!(item.layout.body_indent_columns, 11);
         let line = output.lines().find(|line| line.contains(body)).unwrap();
         assert_eq!(
             line.find(body).unwrap() - line.find(term).unwrap(),
-            7,
+            11,
             "{line}"
         );
     }

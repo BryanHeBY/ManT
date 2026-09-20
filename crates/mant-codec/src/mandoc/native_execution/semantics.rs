@@ -4,25 +4,30 @@
 //! anchor order. Device lines, rendered run boundaries, source coordinates,
 //! pointers, slugs, and legacy marker anchors never select an owner.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
 use std::path::Path;
 
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, ExecutionBoundary, ExecutionFont, ExecutionManBlockKind,
-    ExecutionMdocListKind, ExecutionNodeKey, ExecutionReferenceKind, MacroSet,
-    NativeExecutionReport, NodeKind,
+    ExecutionNodeKey, ExecutionReferenceKind, ExecutionReferencePresentation, MacroSet,
+    NativeExecutionReport,
 };
+#[cfg(test)]
+use mant_ir::DefinitionItem;
 use mant_ir::{
-    Block, ContentBlockStep, DefinitionItem, DefinitionLayout, Document, DocumentMeta,
-    DocumentSource, FragmentAlias, Heading, Inline, LayoutHint, LinkTarget, ListItem,
-    ListItemLayout, ListKind, NodeId, ParserInfo, Section, SourceFormat, SourceSpan,
+    Block, ContentBlockStep, Document, DocumentMeta, DocumentSource, FragmentAlias, Heading,
+    Inline, LayoutHint, LinkTarget, NodeId, ParserInfo, Section, SourceFormat, SourceSpan,
 };
 
 use super::{
-    NativeAnchor, NativeHeadingFact, NativeHeadingKind, NativeMdocListItem, NativeProjection,
+    NativeAnchor, NativeBodySettlement, NativeHeadingFact, NativeHeadingKind, NativeProjection,
     NativeReference, native_node_wrapper_index,
 };
+
+mod bindings;
+mod man;
+mod materializer;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct NativeSemanticReceipt {
@@ -41,36 +46,18 @@ pub(in crate::mandoc) struct NativeSemanticProjection {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum Location {
-    Root,
     Section { top: usize, child: Option<usize> },
-}
-
-#[derive(Clone, Debug)]
-struct OwnerSlot {
-    origins: Vec<ExecutionNodeKey>,
-    location: Location,
-    blocks: Vec<ContentBlockStep>,
-    item_index: usize,
-    evidence: crate::definitions::ExactNativeDefinitionEvidence,
-}
-
-#[derive(Clone, Debug)]
-struct GroupCandidate {
-    location: Location,
-    blocks: Vec<ContentBlockStep>,
-    start: usize,
-    end: usize,
 }
 
 #[derive(Default)]
 struct SectionPlan {
     sections: Vec<Section>,
-    bodies: HashMap<ExecutionNodeKey, Location>,
     authored: HashMap<String, Option<NodeId>>,
     identities: IdentityAllocator,
     authored_titles: HashMap<String, String>,
     fragment_candidates: Vec<(Location, String, ExecutionNodeKey)>,
     heading_nodes: HashSet<ExecutionNodeKey>,
+    heading_locations: Vec<Location>,
 }
 
 impl SectionPlan {
@@ -86,11 +73,11 @@ impl SectionPlan {
                 .authored_phrase
                 .as_deref()
                 .unwrap_or(heading.label.as_str());
-            let id = plan.identities.allocate(&format!(
-                "section-{}",
-                crate::producer_identity::section_id_base(authored)
-            ));
+            let id = plan
+                .identities
+                .allocate(&crate::producer_identity::section_id_base(authored));
             let source = source_span(report, heading.head);
+            let first_top_level = plan.sections.is_empty();
             let section = Section {
                 id: NodeId::new(id.clone()),
                 fragment_aliases: Vec::new(),
@@ -100,7 +87,11 @@ impl SectionPlan {
                     }],
                     source,
                 },
-                spacing_before_lines: 0,
+                spacing_before_lines: if subsection || !first_top_level {
+                    heading.spacing_before_lines
+                } else {
+                    0
+                },
                 blocks: Vec::new(),
                 children: Vec::new(),
                 source,
@@ -130,8 +121,8 @@ impl SectionPlan {
                 current_top = Some(top);
                 Location::Section { top, child: None }
             };
+            plan.heading_locations.push(location);
             plan.authored_titles.insert(id.clone(), authored.to_owned());
-            plan.bodies.insert(heading.body, location);
             plan.heading_nodes.insert(heading.section);
             plan.heading_nodes.insert(heading.head);
             if let Some(fragment) = &heading.authored_fragment {
@@ -150,43 +141,8 @@ impl SectionPlan {
         plan
     }
 
-    fn location_for(&self, report: &NativeExecutionReport, mut node: ExecutionNodeKey) -> Location {
-        loop {
-            if let Some(location) = self.bodies.get(&node) {
-                return *location;
-            }
-            let Some(parent) = report.nodes()[node.0 as usize].parent else {
-                return Location::Root;
-            };
-            node = parent;
-        }
-    }
-
-    fn blocks(&self, location: Location) -> &[Block] {
-        match location {
-            Location::Root => &[],
-            Location::Section { top, child: None } => &self.sections[top].blocks,
-            Location::Section {
-                top,
-                child: Some(child),
-            } => &self.sections[top].children[child].blocks,
-        }
-    }
-
-    fn blocks_mut(&mut self, location: Location) -> &mut Vec<Block> {
-        match location {
-            Location::Root => unreachable!("document root is stored separately"),
-            Location::Section { top, child: None } => &mut self.sections[top].blocks,
-            Location::Section {
-                top,
-                child: Some(child),
-            } => &mut self.sections[top].children[child].blocks,
-        }
-    }
-
     fn section_mut(&mut self, location: Location) -> &mut Section {
         match location {
-            Location::Root => unreachable!("document root has no section identity"),
             Location::Section { top, child: None } => &mut self.sections[top],
             Location::Section {
                 top,
@@ -194,6 +150,40 @@ impl SectionPlan {
             } => &mut self.sections[top].children[child],
         }
     }
+}
+
+/// Native SH/Sh handlers add a presentation-only bold scope around the whole
+/// heading.  Keep nested semantic styling and references, but remove that one
+/// structural layer because every IR heading consumer already supplies its
+/// own heading presentation.
+fn remove_structural_heading_bold(inlines: &mut Vec<Inline>) {
+    let mut output = Vec::new();
+    for inline in std::mem::take(inlines) {
+        match inline {
+            Inline::Strong { mut children } => {
+                remove_structural_heading_bold(&mut children);
+                output.extend(children);
+            }
+            Inline::Emphasis { mut children } => {
+                remove_structural_heading_bold(&mut children);
+                output.push(Inline::Emphasis { children });
+            }
+            Inline::Link {
+                target,
+                title,
+                mut children,
+            } => {
+                remove_structural_heading_bold(&mut children);
+                output.push(Inline::Link {
+                    target,
+                    title,
+                    children,
+                });
+            }
+            other => output.push(other),
+        }
+    }
+    *inlines = output;
 }
 
 #[derive(Clone, Default)]
@@ -231,75 +221,8 @@ fn source_span(report: &NativeExecutionReport, key: ExecutionNodeKey) -> Option<
     })
 }
 
-fn blocks_mut<'a>(
-    root: &'a mut Vec<Block>,
-    sections: &'a mut SectionPlan,
-    location: Location,
-) -> &'a mut Vec<Block> {
-    match location {
-        Location::Root => root,
-        Location::Section { .. } => sections.blocks_mut(location),
-    }
-}
-
-fn blocks<'a>(root: &'a [Block], sections: &'a SectionPlan, location: Location) -> &'a [Block] {
-    match location {
-        Location::Root => root,
-        Location::Section { .. } => sections.blocks(location),
-    }
-}
-
-fn resolve_location_block<'a>(
-    root: &'a [Block],
-    sections: &'a SectionPlan,
-    location: Location,
-    path: &[ContentBlockStep],
-) -> Option<&'a Block> {
-    mant_ir::resolve_content_block(blocks(root, sections, location), path)
-}
-
-fn resolve_block_mut<'a>(
-    blocks: &'a mut [Block],
-    path: &[ContentBlockStep],
-) -> Option<&'a mut Block> {
-    let (ContentBlockStep::Block { index }, rest) = path.split_first()? else {
-        return None;
-    };
-    resolve_block_descendant_mut(blocks.get_mut(*index as usize)?, rest)
-}
-
-fn resolve_block_descendant_mut<'a>(
-    block: &'a mut Block,
-    path: &[ContentBlockStep],
-) -> Option<&'a mut Block> {
-    let Some((owner, rest)) = path.split_first() else {
-        return Some(block);
-    };
-    let (ContentBlockStep::Block { index }, tail) = rest.split_first()? else {
-        return None;
-    };
-    let children = match (block, *owner) {
-        (Block::List { items, .. }, ContentBlockStep::ListItem { index }) => {
-            &mut items.get_mut(index as usize)?.blocks
-        }
-        (Block::DefinitionList { items, .. }, ContentBlockStep::DefinitionItem { index }) => {
-            &mut items.get_mut(index as usize)?.description
-        }
-        (Block::Table { rows, .. }, ContentBlockStep::TableCell { row, column }) => {
-            &mut rows
-                .get_mut(row as usize)?
-                .cells
-                .get_mut(column as usize)?
-                .blocks
-        }
-        _ => return None,
-    };
-    resolve_block_descendant_mut(children.get_mut(*index as usize)?, tail)
-}
-
 fn section_coordinates(location: Location) -> Vec<u32> {
     match location {
-        Location::Root => Vec::new(),
         Location::Section { top, child: None } => vec![u32::try_from(top).unwrap()],
         Location::Section {
             top,
@@ -312,21 +235,96 @@ fn reference_target(
     reference: &NativeReference,
     authored_sections: &HashMap<String, Option<NodeId>>,
 ) -> Option<LinkTarget> {
-    let primary = String::from_utf8_lossy(&reference.primary).into_owned();
+    let primary =
+        super::super::inline::link_identity_text(&String::from_utf8_lossy(&reference.primary));
+    if primary.is_empty()
+        && matches!(
+            reference.kind,
+            ExecutionReferenceKind::ExternalUri | ExecutionReferenceKind::Email
+        )
+    {
+        return None;
+    }
     Some(match reference.kind {
         ExecutionReferenceKind::ExternalUri => LinkTarget::External { uri: primary },
         ExecutionReferenceKind::Email => LinkTarget::Email { address: primary },
         ExecutionReferenceKind::Manual => LinkTarget::Manual {
             name: primary,
-            manual_section: reference
-                .secondary
-                .as_deref()
-                .map(|value| String::from_utf8_lossy(value).into_owned()),
+            manual_section: reference.secondary.as_deref().map(|value| {
+                super::super::inline::link_identity_text(&String::from_utf8_lossy(value))
+            }),
         },
         ExecutionReferenceKind::SameDocumentSection => LinkTarget::Section {
             id: authored_sections.get(&primary)?.clone()?,
         },
     })
+}
+
+/// Plan the documented ManT presentation of the three portable mdoc `Bx`
+/// lifecycle spellings without replaying any formatter state.
+///
+/// Fixed CVS `mdoc_validate.c::post_bx()` executes the authored operand first
+/// and appends a generated `BSD` word in the same node wrapper.  The native
+/// report is therefore authoritative for fonts, word-end breaks, zero-width
+/// effects, and following-word geometry.  ManT only replaces the visible
+/// glyphs when that executed wrapper contains exactly one authored formatter
+/// word whose decoded identity is a lifecycle spelling; execution/layout
+/// atoms inside the interval remain active.
+fn bsd_replacements(
+    report: &NativeExecutionReport,
+    node_wrappers: &[Option<usize>],
+    final_cells: &[Option<(u32, u32, i64, i64)>],
+) -> (BTreeMap<u32, BsdReplacement>, Vec<bool>) {
+    let mut replacements = BTreeMap::new();
+    let mut replaced_atoms = vec![false; report.atoms().len()];
+    for node in report
+        .nodes()
+        .iter()
+        .filter(|node| node.macro_name.as_deref() == Some("Bx"))
+    {
+        let Some(wrapper_index) = node_wrappers[node.key.0 as usize] else {
+            continue;
+        };
+        let wrapper = &report.wrappers()[wrapper_index];
+        let authored = report
+            .words()
+            .iter()
+            .filter(|word| {
+                word.role == AtomRole::Authored
+                    && wrapper.enter_atom <= word.atoms.start
+                    && word.atoms.end <= wrapper.leave_atom
+            })
+            .collect::<Vec<_>>();
+        let [word] = authored.as_slice() else {
+            continue;
+        };
+        let identity = super::super::roff_escape::visible_text(&String::from_utf8_lossy(
+            report.pool_bytes(word.operand).unwrap_or_default(),
+        ));
+        let value = match identity.as_str() {
+            "-alpha" => "BSD (currently in alpha test)",
+            "-beta" => "BSD (currently in beta test)",
+            "-devel" => "BSD (currently under development)",
+            _ => continue,
+        };
+        let range = wrapper.enter_atom..wrapper.leave_atom;
+        let injection = range
+            .clone()
+            .find(|cursor| {
+                final_cells[*cursor as usize].is_some()
+                    || report.atoms()[*cursor as usize].kind == AtomKind::WordEndBreak
+            })
+            .unwrap_or(range.start);
+        let font = range
+            .clone()
+            .rev()
+            .filter_map(|cursor| report.atoms().get(cursor as usize))
+            .find(|atom| atom.role == AtomRole::MacroGenerated && atom.kind == AtomKind::Glyph)
+            .map_or(ExecutionFont::Roman, |atom| atom.font);
+        replaced_atoms[range.start as usize..range.end as usize].fill(true);
+        replacements.insert(injection, BsdReplacement { range, font, value });
+    }
+    (replacements, replaced_atoms)
 }
 
 fn native_target_identities(
@@ -346,10 +344,9 @@ fn native_target_identities(
             continue;
         }
         let authored = String::from_utf8_lossy(&anchor.target).into_owned();
-        let id = identities.allocate(&format!(
-            "target-{}",
-            crate::definitions::document_id_slug(&authored)
-        ));
+        let base = crate::definitions::document_id_slug(&authored);
+        let base = format!("target-{base}");
+        let id = identities.allocate(&base);
         output.insert(anchor.key, (NodeId::new(id), Vec::new()));
     }
 
@@ -398,12 +395,14 @@ fn native_target_identities(
                 }
             }
             Owner::Anchor(key) => {
-                let (id, aliases) = output
+                let (_, aliases) = output
                     .get_mut(&key)
                     .expect("native target candidate has an allocated identity");
-                if fragment != id.as_str() {
-                    aliases.push(FragmentAlias::from(fragment));
-                }
+                // `.Tg` is an authored fragment identity even when its exact
+                // spelling happens to equal the normalized internal NodeId.
+                // Keep both namespaces explicit so later allocator changes do
+                // not silently remove the source-authored deep link.
+                aliases.push(FragmentAlias::from(fragment));
             }
         }
     }
@@ -416,10 +415,153 @@ struct InlineProjector<'a> {
     subtree_ends: Vec<usize>,
     word_nodes: Vec<(u32, usize)>,
     references: &'a [NativeReference],
+    reference_ranges: Vec<Range<u32>>,
     reference_children: HashMap<Option<u32>, Vec<usize>>,
+    visible_atoms: Vec<bool>,
+    visible_implicit_spaces: Vec<bool>,
+    final_cells: Vec<Option<(u32, u32, i64, i64)>>,
+    /// Native leading cells before the first visible atom of one logical
+    /// field.  Unlike a block offset, these cells are part of the field's
+    /// executed content relationship (for example the retained separator
+    /// after `.mc` flushes an occupied but glyph-free field).
+    field_leading_bu: Vec<Option<i64>>,
+    /// Origin atom of an invisible native field whose settlement ended a
+    /// device line immediately before this visible atom.  Keeping the origin
+    /// lets each structural owner decide whether the line event belongs
+    /// inside it or between two owners.
+    settled_break_origin: Vec<Option<u32>>,
+    word_end_break_before: Vec<bool>,
+    /// Ordered native `.fi`/`.nf` completion points.  Fill mode belongs to
+    /// the formatter execution stream, not to one IR owner: structured man
+    /// descriptions and generic prose must split at the same transition.
+    fill_transitions: Vec<u64>,
+    cell_bu: i64,
+    suppressed_reference_atoms: Vec<bool>,
+    bsd_replacements: BTreeMap<u32, BsdReplacement>,
+    replaced_bsd_atoms: Vec<bool>,
+    compatibility_glyphs: BTreeMap<u32, String>,
     anchors: HashMap<u32, &'a NativeAnchor>,
     anchor_ids: &'a HashMap<u32, (NodeId, Vec<FragmentAlias>)>,
     authored_sections: &'a HashMap<String, Option<NodeId>>,
+}
+
+#[derive(Clone, Debug)]
+struct BsdReplacement {
+    range: Range<u32>,
+    font: ExecutionFont,
+    value: &'static str,
+}
+
+/// Resolve the terminal device stream into its final visible cells.
+///
+/// Fixed CVS emits overstrikes as ordinary glyphs interleaved with backspace
+/// device events (`term.c::term_field()` and `encode1()`).  Fragment geometry
+/// records the native logical `viscol`, which can deliberately remain ahead
+/// of the physical device after a zero-width marker separates a glyph from
+/// its backspace.  Replaying the emitted device events is therefore the only
+/// authoritative way to decide which later content glyph occupies a cell;
+/// re-decoding source operands cannot recover this cross-word relationship.
+fn native_final_cells(
+    report: &NativeExecutionReport,
+) -> (Vec<bool>, Vec<Option<(u32, u32, i64, i64)>>) {
+    let default_cell_bu = report
+        .fragments()
+        .iter()
+        .filter_map(|fragment| {
+            (fragment.end_bu > fragment.start_bu).then_some(fragment.end_bu - fragment.start_bu)
+        })
+        .min()
+        .unwrap_or(1);
+    let mut final_cells = BTreeMap::<(u32, i64), (u32, i64)>::new();
+    let mut line = None;
+    let mut correction_bu = 0i64;
+    let mut emitted_widths = Vec::<i64>::new();
+
+    for fragment in report.fragments() {
+        let atom = &report.atoms()[fragment.atom.0 as usize];
+        if line != Some(fragment.device_line) {
+            line = Some(fragment.device_line);
+            correction_bu = 0;
+            emitted_widths.clear();
+        }
+        let actual_start = fragment.start_bu.saturating_add(correction_bu).max(0);
+        if atom.kind == AtomKind::Backspace {
+            let reported_width = fragment.start_bu.saturating_sub(fragment.end_bu);
+            let width = (reported_width > 0)
+                .then_some(reported_width)
+                .or_else(|| emitted_widths.pop())
+                .unwrap_or(default_cell_bu);
+            let actual_end = actual_start.saturating_sub(width);
+            correction_bu = actual_end.saturating_sub(fragment.end_bu);
+            continue;
+        }
+
+        let reported_width = fragment.end_bu.saturating_sub(fragment.start_bu);
+        let width = reported_width.max(atom.width_bu).max(0);
+        let actual_end = actual_start.saturating_add(width);
+        correction_bu = actual_end.saturating_sub(fragment.end_bu);
+        if width > 0 {
+            emitted_widths.push(width);
+        }
+        if fragment.role == libmandoc_rs::FragmentRole::Content {
+            final_cells.insert(
+                (fragment.device_line, actual_start),
+                (fragment.atom.0, actual_end),
+            );
+        }
+    }
+
+    let mut visible_atoms = vec![false; report.atoms().len()];
+    let mut cells = vec![None; report.atoms().len()];
+    for ((line, start), (atom, end)) in final_cells {
+        visible_atoms[atom as usize] = true;
+        cells[atom as usize] = Some((atom, line, start, end));
+    }
+    (visible_atoms, cells)
+}
+
+/// Pair ManT's deliberately narrow character-table extensions with the
+/// unknown special-character atoms executed by fixed CVS.
+///
+/// `term.c::term_word()` asks `mchars_spec2cp()` for a named character and
+/// writes `ASCII_NBRZW` when the pinned table does not know it.  Source text
+/// alone is not permission to replace native output: a formatter word may
+/// also contain real zero-width controls.  Promote an extension only when the
+/// exact word supplies a one-to-one correspondence between compatibility
+/// glyph events and retained native zero-width atoms; otherwise native output
+/// wins unchanged.
+fn native_compatibility_glyphs(report: &NativeExecutionReport) -> BTreeMap<u32, String> {
+    let mut output = BTreeMap::new();
+    for word in report.words() {
+        let Some(operand) = report.pool_bytes(word.operand) else {
+            continue;
+        };
+        let glyphs =
+            super::super::roff_escape::compatibility_glyphs(&String::from_utf8_lossy(operand));
+        if glyphs.is_empty() {
+            continue;
+        }
+        let atoms = word
+            .atoms
+            .clone()
+            .filter(|cursor| {
+                let atom = &report.atoms()[*cursor as usize];
+                atom.kind == AtomKind::ZeroWidth
+                    && atom.role == word.role
+                    && matches!(
+                        atom.disposition,
+                        AtomDisposition::Emitted
+                            | AtomDisposition::Buffered
+                            | AtomDisposition::Consumed
+                    )
+            })
+            .collect::<Vec<_>>();
+        if atoms.len() != glyphs.len() {
+            continue;
+        }
+        output.extend(atoms.into_iter().zip(glyphs));
+    }
+    output
 }
 
 impl<'a> InlineProjector<'a> {
@@ -442,6 +584,202 @@ impl<'a> InlineProjector<'a> {
             }
             open.push(index);
         }
+        let (visible_atoms, cells) = native_final_cells(report);
+        let compatibility_glyphs = native_compatibility_glyphs(report);
+        let mut previous = vec![None; report.atoms().len()];
+        let mut current = None;
+        for (index, cell) in cells.iter().enumerate() {
+            previous[index] = current;
+            if cell.is_some() {
+                current = *cell;
+            }
+        }
+        let mut next = vec![None; report.atoms().len()];
+        current = None;
+        for (index, cell) in cells.iter().enumerate().rev() {
+            next[index] = current;
+            if cell.is_some() {
+                current = *cell;
+            }
+        }
+        let mut visible_implicit_spaces = report
+            .atoms()
+            .iter()
+            .enumerate()
+            .map(|(index, atom)| {
+                atom.kind == AtomKind::BreakableSpace
+                    && atom.disposition == AtomDisposition::Emitted
+                    && (atom.role != AtomRole::ImplicitSpace
+                        || matches!(
+                            (previous[index], next[index]),
+                            (Some((_, before_line, _, before_end)), Some((_, after_line, after_start, _)))
+                                if before_line == after_line && before_end < after_start
+                        ))
+            })
+            .collect::<Vec<_>>();
+        // `term_fill_mode()` consumes the logical separator at an automatic
+        // device wrap before the next field is emitted.  That cell is absent
+        // from device fragments, but compact semantic text must retain the
+        // word relationship instead of concatenating the two source words.
+        // Restrict restoration to the exact tail range of a native Wrapped
+        // flush; other Consumed spaces are layout state, not prose.
+        let mut wrapped_tails = HashMap::<u32, Vec<(Range<u32>, u64)>>::new();
+        for flush in report
+            .flushes()
+            .iter()
+            .filter(|flush| flush.outcome == libmandoc_rs::FlushOutcome::Wrapped)
+        {
+            wrapped_tails
+                .entry(flush.buffer_generation)
+                .or_default()
+                .push((flush.tail_discarded.clone(), flush.outcome_sequence));
+        }
+        for (index, atom) in report.atoms().iter().enumerate() {
+            if atom.kind != AtomKind::BreakableSpace
+                || atom.disposition != AtomDisposition::Consumed
+            {
+                continue;
+            }
+            let Some((generation, slot)) = atom.buffer_generation.zip(atom.slot) else {
+                continue;
+            };
+            if wrapped_tails.get(&generation).is_some_and(|ranges| {
+                ranges
+                    .iter()
+                    .any(|(range, outcome)| range.contains(&slot) && atom.sequence < *outcome)
+            }) {
+                visible_implicit_spaces[index] = true;
+            }
+        }
+        let cell_bu = cells
+            .iter()
+            .flatten()
+            .filter_map(|(_, _, start, end)| (*end > *start).then_some(*end - *start))
+            .min()
+            .unwrap_or(1);
+        let mut field_leading_bu = vec![None; report.atoms().len()];
+        for flush in report.flushes() {
+            let first = report.fragments()
+                [flush.fragments.start as usize..flush.fragments.end as usize]
+                .iter()
+                .filter(|fragment| fragment.role == libmandoc_rs::FragmentRole::Content)
+                .filter_map(|fragment| Some((fragment.atom, fragment.start_bu)))
+                .min_by_key(|(atom, _)| atom.0);
+            let Some((atom, start_bu)) = first else {
+                continue;
+            };
+            // `term_field()` folds buffered leading blanks into `vbl` before
+            // emitting the first glyph.  The flush's logical origin excludes
+            // those cells, so their difference is the exact line-local
+            // prefix independently of whether the blanks were authored,
+            // implicit, or introduced by native alignment.
+            field_leading_bu[atom.0 as usize] =
+                Some(start_bu.saturating_sub(flush.logical_origin_bu));
+        }
+        let mut generation_execution_origin = HashMap::<u32, u32>::new();
+        for atom in report.atoms().iter().filter(|atom| {
+            atom.node.is_some() && matches!(atom.kind, AtomKind::WordEndBreak | AtomKind::ZeroWidth)
+        }) {
+            if let Some(generation) = atom.buffer_generation {
+                generation_execution_origin
+                    .entry(generation)
+                    .and_modify(|current| *current = (*current).min(atom.key.0))
+                    .or_insert(atom.key.0);
+            }
+        }
+        let boundaries = report
+            .boundaries()
+            .iter()
+            .map(|boundary| (boundary.key, boundary))
+            .collect::<HashMap<_, _>>();
+        let mut settled_break_origin = vec![None; report.atoms().len()];
+        for flush in report.flushes().iter().filter(|flush| {
+            flush.fragments.is_empty()
+                && (flush.logical_forced_break
+                    || flush.boundary.is_some_and(|key| {
+                        boundaries.get(&key).is_some_and(|boundary| {
+                            boundary.effect == libmandoc_rs::BoundaryEffect::EndedLine
+                        })
+                    }))
+        }) {
+            let Some(&origin) = generation_execution_origin.get(&flush.buffer_generation) else {
+                continue;
+            };
+            if let Some((next, _)) = cells.iter().enumerate().find(|(index, cell)| {
+                cell.is_some() && report.atoms()[*index].sequence > flush.outcome_sequence
+            }) {
+                settled_break_origin[next] = Some(origin);
+            }
+        }
+        let mut word_end_break_before = vec![false; report.atoms().len()];
+        let mut pending_word_end_break = None::<(Option<u32>, bool, Option<u32>)>;
+        let mut previous_content = None::<(Option<u32>, u32)>;
+        for (index, atom) in report.atoms().iter().enumerate() {
+            if atom.kind == AtomKind::WordEndBreak {
+                let seen_content = previous_content
+                    .is_some_and(|(generation, _)| generation == atom.buffer_generation);
+                pending_word_end_break = Some((
+                    atom.buffer_generation,
+                    seen_content,
+                    seen_content.then(|| previous_content.unwrap().1),
+                ));
+            }
+            let Some((_, device_line, _, _)) = cells[index] else {
+                continue;
+            };
+            if let Some((generation, seen_content, pending_line)) = &mut pending_word_end_break {
+                if !*seen_content && atom.buffer_generation == *generation {
+                    *seen_content = true;
+                    *pending_line = Some(device_line);
+                } else if *seen_content && pending_line.is_some_and(|line| line != device_line) {
+                    word_end_break_before[index] = true;
+                    pending_word_end_break = None;
+                }
+            }
+            previous_content = Some((atom.buffer_generation, device_line));
+        }
+        let mut suppressed_reference_atoms = vec![false; report.atoms().len()];
+        let mut reference_ranges = Vec::with_capacity(references.len());
+        for reference in references {
+            let label_is_visible = reference.atoms.clone().any(|cursor| {
+                (visible_atoms[cursor as usize] || compatibility_glyphs.contains_key(&cursor))
+                    && char::from_u32(report.atoms()[cursor as usize].display_scalar).map_or_else(
+                        || {
+                            compatibility_glyphs
+                                .get(&cursor)
+                                .is_some_and(|value| !value.chars().all(char::is_whitespace))
+                        },
+                        |value| !value.is_whitespace(),
+                    )
+            });
+            match reference.presentation {
+                ExecutionReferencePresentation::Direct => {
+                    reference_ranges.push(reference.atoms.clone());
+                }
+                ExecutionReferencePresentation::LabelledSupplement if label_is_visible => {
+                    reference_ranges.push(reference.atoms.clone());
+                    if let Some(supplement) = &reference.supplement_atoms {
+                        suppressed_reference_atoms
+                            [supplement.start as usize..supplement.end as usize]
+                            .fill(true);
+                    }
+                }
+                ExecutionReferencePresentation::LabelledSupplement => {
+                    reference_ranges.push(reference.target_atoms.clone());
+                    suppressed_reference_atoms
+                        [reference.atoms.start as usize..reference.atoms.end as usize]
+                        .fill(true);
+                    if let Some(supplement) = &reference.supplement_atoms {
+                        suppressed_reference_atoms
+                            [supplement.start as usize..reference.target_atoms.start as usize]
+                            .fill(true);
+                        suppressed_reference_atoms
+                            [reference.target_atoms.end as usize..supplement.end as usize]
+                            .fill(true);
+                    }
+                }
+            }
+        }
         let mut reference_children = HashMap::<Option<u32>, Vec<usize>>::new();
         for (index, reference) in references.iter().enumerate() {
             reference_children
@@ -451,10 +789,26 @@ impl<'a> InlineProjector<'a> {
         }
         for children in reference_children.values_mut() {
             children.sort_unstable_by_key(|index| {
-                let reference = &references[*index];
-                (reference.atoms.start, reference.atoms.end)
+                let range = &reference_ranges[*index];
+                (range.start, range.end)
             });
         }
+        let (bsd_replacements, replaced_bsd_atoms) =
+            bsd_replacements(report, &node_wrappers, &cells);
+        let mut fill_transitions = report
+            .controls()
+            .iter()
+            .filter(|control| {
+                matches!(
+                    control.request,
+                    libmandoc_rs::ExecutionControlRequest::Fill
+                        | libmandoc_rs::ExecutionControlRequest::NoFill
+                )
+            })
+            .map(|control| control.leave_sequence)
+            .collect::<Vec<_>>();
+        fill_transitions.sort_unstable();
+        fill_transitions.dedup();
         let mut word_nodes = report
             .words()
             .iter()
@@ -468,11 +822,51 @@ impl<'a> InlineProjector<'a> {
             subtree_ends,
             word_nodes,
             references,
+            reference_ranges,
             reference_children,
+            visible_atoms,
+            visible_implicit_spaces,
+            final_cells: cells,
+            field_leading_bu,
+            settled_break_origin,
+            word_end_break_before,
+            fill_transitions,
+            cell_bu,
+            suppressed_reference_atoms,
+            bsd_replacements,
+            replaced_bsd_atoms,
+            compatibility_glyphs,
             anchors: anchors.iter().map(|value| (value.key, value)).collect(),
             anchor_ids,
             authored_sections,
         }
+    }
+
+    fn atom_visible(&self, cursor: u32) -> bool {
+        let atom = &self.report.atoms()[cursor as usize];
+        if atom.kind == AtomKind::Tab {
+            // A tab is an execution/layout event rather than a compactable
+            // label glyph.  Word-end breaks are deliberately not projected
+            // here: fixed CVS records `\p` when encountered but only performs
+            // it at the later formatter-word boundary, which is represented
+            // by the native boundary stream.
+            return atom.disposition == AtomDisposition::Emitted;
+        }
+        if self.suppressed_reference_atoms[cursor as usize] {
+            return false;
+        }
+        self.compatibility_glyphs.contains_key(&cursor)
+            || self.visible_atoms[cursor as usize]
+            || self.visible_implicit_spaces[cursor as usize]
+    }
+
+    fn has_fill_transition_between(&self, before: u64, after: u64) -> bool {
+        let transition = self
+            .fill_transitions
+            .partition_point(|sequence| *sequence <= before);
+        self.fill_transitions
+            .get(transition)
+            .is_some_and(|sequence| *sequence < after)
     }
 
     fn descendants(&self, root: ExecutionNodeKey) -> &[libmandoc_rs::ExecutionNode] {
@@ -499,6 +893,7 @@ impl<'a> InlineProjector<'a> {
         anchor_keys: &[u32],
         boundaries: &[ExecutionBoundary],
         source: Option<SourceSpan>,
+        policy: FlowProjectionPolicy,
     ) -> Vec<Inline> {
         let mut anchor_cursors = BTreeMap::<u32, Vec<u32>>::new();
         for key in anchor_keys {
@@ -512,27 +907,50 @@ impl<'a> InlineProjector<'a> {
                     .push(*key);
             }
         }
-        let mut break_cursors = BTreeSet::new();
-        for boundary in boundaries.iter().filter(|boundary| {
-            matches!(
-                boundary.request,
-                libmandoc_rs::BoundaryRequest::Newline | libmandoc_rs::BoundaryRequest::Endline
-            ) && matches!(
-                boundary.effect,
-                libmandoc_rs::BoundaryEffect::EndedLine
-                    | libmandoc_rs::BoundaryEffect::AddedVerticalSpace
-            )
-        }) {
-            let atoms = self
-                .report
-                .atoms()
-                .get(range.start as usize..range.end as usize)
-                .unwrap_or_default();
-            let index = atoms.partition_point(|atom| atom.sequence <= boundary.leave_sequence);
-            let cursor = atoms.get(index).map_or(range.end, |atom| atom.key.0);
-            break_cursors.insert(cursor);
+        let mut break_cursors = physical_break_cursors(self.report, boundaries, &range);
+        break_cursors.retain(|cursor, _| {
+            // A boundary at either edge belongs between primary content
+            // owners.  Fixed CVS `term_newln()` flushes the preceding field
+            // before the following word is executed; it does not make the
+            // following source-neutral block begin with a LineBreak.
+            (range.start < *cursor || policy.include_edge_breaks && range.start == *cursor)
+                && *cursor < range.end
+        });
+        if policy.alignment_owner_start == Some(range.start)
+            && let Some(count) = break_cursors.get_mut(&range.start)
+            && (!policy.retain_owner_start_break || *count > 1)
+        {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                break_cursors.remove(&range.start);
+            }
         }
-        self.range(range, None, &anchor_cursors, &break_cursors, source)
+        if let Some(NativeBodySettlement::Boundary(settlement)) = policy.body_settlement {
+            // Consume only the descendant device newline of the exact native
+            // event that closed the pending label row.  Later BODY-local
+            // newlines remain content even when their geometry is identical.
+            if let Some(boundary) = boundaries.iter().find(|boundary| {
+                boundary.request == libmandoc_rs::BoundaryRequest::DeviceEndline
+                    && boundary_has_ancestor_key(self.report, boundary, settlement)
+            }) {
+                let cursor = boundary_atom_cursor(self.report, &range, boundary.leave_sequence);
+                if let Some(count) = break_cursors.get_mut(&cursor) {
+                    *count = count.saturating_sub(1);
+                    if *count == 0 {
+                        break_cursors.remove(&cursor);
+                    }
+                }
+            }
+        }
+        self.range(
+            range,
+            None,
+            &anchor_cursors,
+            &break_cursors,
+            source,
+            policy.allow_field_leading,
+            policy.body_settlement,
+        )
     }
 
     fn standalone_anchors(&self, keys: &[u32], source: Option<SourceSpan>) -> Vec<Inline> {
@@ -551,21 +969,37 @@ impl<'a> InlineProjector<'a> {
         range: Range<u32>,
         parent_reference: Option<u32>,
         anchors: &BTreeMap<u32, Vec<u32>>,
-        breaks: &BTreeSet<u32>,
+        breaks: &BTreeMap<u32, usize>,
         source: Option<SourceSpan>,
+        allow_field_leading: bool,
+        body_settlement: Option<NativeBodySettlement>,
     ) -> Vec<Inline> {
         let mut output = Vec::new();
+        let first_content = range
+            .clone()
+            .find(|cursor| self.final_cells[*cursor as usize].is_some());
+        let settlement_cursor = match body_settlement {
+            Some(NativeBodySettlement::Boundary(key)) => {
+                let sequence = self.report.boundaries()[key as usize].leave_sequence;
+                range.clone().find(|cursor| {
+                    self.report.atoms()[*cursor as usize].sequence > sequence
+                        && self.final_cells[*cursor as usize].is_some()
+                })
+            }
+            Some(NativeBodySettlement::WordEndBreak) | None => None,
+        };
         let children = self
             .reference_children
             .get(&parent_reference)
             .map_or(&[][..], Vec::as_slice);
         let child_start =
-            children.partition_point(|index| self.references[*index].atoms.start < range.start);
+            children.partition_point(|index| self.reference_ranges[*index].start < range.start);
         let child_end =
-            children.partition_point(|index| self.references[*index].atoms.start < range.end);
+            children.partition_point(|index| self.reference_ranges[*index].start < range.end);
         let children = &children[child_start..child_end];
         let mut child = 0;
         let mut cursor = range.start;
+        let mut previous_cell = None;
         while cursor <= range.end {
             if let Some(keys) = anchors.get(&cursor) {
                 for key in keys {
@@ -581,19 +1015,69 @@ impl<'a> InlineProjector<'a> {
             if cursor == range.end {
                 break;
             }
-            if breaks.contains(&cursor) && !matches!(output.last(), Some(Inline::LineBreak)) {
-                output.push(Inline::LineBreak);
+            if let Some(count) = breaks.get(&cursor) {
+                trim_breakable_space(&mut output);
+                output.extend(std::iter::repeat_n(Inline::LineBreak, *count));
+                // `term_newln()` flushes the previous field and resets the
+                // device-line relationship before the next formatter word.
+                // The next atom must therefore project its own field-leading
+                // cells rather than measure from the preceding device row.
+                previous_cell = None;
             }
-            if let Some(reference) = children.get(child).map(|index| &self.references[*index])
-                && reference.atoms.start == cursor
-                && reference.atoms.end <= range.end
+            if let Some(replacement) = self.bsd_replacements.get(&cursor)
+                && replacement.range.end <= range.end
             {
+                let first_cell = replacement
+                    .range
+                    .clone()
+                    .filter_map(|atom| self.final_cells[atom as usize])
+                    .next();
+                self.push_cell_boundary(
+                    &mut output,
+                    previous_cell,
+                    first_cell,
+                    range.start,
+                    cursor,
+                    allow_field_leading,
+                    body_settlement,
+                    first_content,
+                    settlement_cursor,
+                );
+                output.push(styled_text(replacement.font, replacement.value.to_owned()));
+            }
+            if let Some(reference_index) = children.get(child).copied()
+                && self.reference_ranges[reference_index].start == cursor
+                && self.reference_ranges[reference_index].end <= range.end
+            {
+                let reference = &self.references[reference_index];
+                let reference_range = self.reference_ranges[reference_index].clone();
+                let first_cell = reference_range
+                    .clone()
+                    .filter_map(|atom| {
+                        (!self.suppressed_reference_atoms[atom as usize])
+                            .then_some(self.final_cells[atom as usize])
+                            .flatten()
+                    })
+                    .next();
+                self.push_cell_boundary(
+                    &mut output,
+                    previous_cell,
+                    first_cell,
+                    range.start,
+                    cursor,
+                    allow_field_leading,
+                    body_settlement,
+                    first_content,
+                    settlement_cursor,
+                );
                 let nested = self.range(
-                    reference.atoms.clone(),
+                    reference_range.clone(),
                     Some(reference.key),
                     anchors,
                     breaks,
                     source,
+                    false,
+                    body_settlement,
                 );
                 if let Some(target) = reference_target(reference, self.authored_sections) {
                     output.push(Inline::Link {
@@ -601,20 +1085,199 @@ impl<'a> InlineProjector<'a> {
                         title: None,
                         children: nested,
                     });
+                } else if matches!(
+                    reference.kind,
+                    ExecutionReferenceKind::ExternalUri | ExecutionReferenceKind::Email
+                ) && super::super::inline::link_identity_text(&String::from_utf8_lossy(
+                    &reference.primary,
+                ))
+                .is_empty()
+                {
+                    // A control-only URI/mail operand executes natively but
+                    // has no semantic destination or visible identity.  Its
+                    // terminal state is already reflected in later atoms;
+                    // do not manufacture an empty target or leak the hidden
+                    // formatter operand into content.  A labelled `.Lk`
+                    // still degrades to its executed visible label.
+                    if reference.presentation == ExecutionReferencePresentation::LabelledSupplement
+                    {
+                        output.extend(nested);
+                    }
                 } else {
                     output.extend(nested);
                 }
-                cursor = reference.atoms.end;
+                previous_cell = reference_range
+                    .clone()
+                    .filter_map(|atom| {
+                        (!self.suppressed_reference_atoms[atom as usize])
+                            .then_some(self.final_cells[atom as usize])
+                            .flatten()
+                    })
+                    .next_back()
+                    .or(previous_cell);
+                cursor = reference_range.end;
                 child += 1;
                 continue;
             }
             let atom = &self.report.atoms()[cursor as usize];
-            if let Some((font, value)) = visible_atom(atom) {
+            if self.replaced_bsd_atoms[cursor as usize]
+                && !matches!(atom.kind, AtomKind::WordEndBreak | AtomKind::Tab)
+            {
+                previous_cell = self.final_cells[cursor as usize].or(previous_cell);
+                cursor += 1;
+                continue;
+            }
+            if self.atom_visible(cursor)
+                && let Some((font, value)) = self
+                    .compatibility_glyphs
+                    .get(&cursor)
+                    .map(|value| (atom.font, value.clone()))
+                    .or_else(|| fragment_atom(atom))
+            {
+                let cell = self.final_cells[cursor as usize];
+                self.push_cell_boundary(
+                    &mut output,
+                    previous_cell,
+                    cell,
+                    range.start,
+                    cursor,
+                    allow_field_leading,
+                    body_settlement,
+                    first_content,
+                    settlement_cursor,
+                );
                 push_styled_text(&mut output, font, value);
+                previous_cell = cell.or(previous_cell);
             }
             cursor += 1;
         }
+        trim_breakable_space(&mut output);
         output
+    }
+
+    fn push_cell_boundary(
+        &self,
+        output: &mut Vec<Inline>,
+        previous: Option<(u32, u32, i64, i64)>,
+        current: Option<(u32, u32, i64, i64)>,
+        range_start: u32,
+        cursor: u32,
+        allow_field_leading: bool,
+        body_settlement: Option<NativeBodySettlement>,
+        first_content: Option<u32>,
+        settlement_cursor: Option<u32>,
+    ) {
+        let Some((after_atom, after_line, after_start, _)) = current else {
+            return;
+        };
+        if self.settled_break_origin[after_atom as usize]
+            .is_some_and(|origin| range_start <= origin)
+        {
+            let consume = match body_settlement {
+                Some(NativeBodySettlement::Boundary(_)) => Some(cursor) == settlement_cursor,
+                Some(NativeBodySettlement::WordEndBreak) => Some(cursor) == first_content,
+                None => false,
+            };
+            if consume {
+                if allow_field_leading {
+                    self.push_field_leading(output, after_atom);
+                }
+                return;
+            }
+            trim_breakable_space(output);
+            if !matches!(output.last(), Some(Inline::LineBreak)) {
+                output.push(Inline::LineBreak);
+            }
+            if allow_field_leading {
+                self.push_field_leading(output, after_atom);
+            }
+            return;
+        }
+        let Some((before_atom, before_line, _, before_end)) = previous else {
+            // Fixed CVS `term_flushln()` computes `vbl` from the field's
+            // logical origin before calling `term_field()`.  Preserve only
+            // the extra cells between that origin and the first emitted
+            // content atom; the origin itself remains block layout.
+            if allow_field_leading {
+                self.push_field_leading(output, after_atom);
+            }
+            return;
+        };
+        if self.word_end_break_before[after_atom as usize] {
+            if body_settlement == Some(NativeBodySettlement::WordEndBreak)
+                && Some(cursor) == first_content
+            {
+                if allow_field_leading {
+                    self.push_field_leading(output, after_atom);
+                }
+                return;
+            }
+            trim_breakable_space(output);
+            if !matches!(output.last(), Some(Inline::LineBreak)) {
+                output.push(Inline::LineBreak);
+            }
+            if allow_field_leading {
+                self.push_field_leading(output, after_atom);
+            }
+            return;
+        }
+        if before_line == after_line {
+            let cells = after_start.saturating_sub(before_end) / self.cell_bu.max(1);
+            // Only native geometry between two content cells is projected.
+            // Leading offsets remain block layout, and an explicit formatter
+            // blank atom already owns its own cell.
+            // A gap spanning suppressed atoms belongs to a compacted native
+            // presentation envelope (for example `.Lk`'s `: URI`), not to
+            // surrounding authored whitespace.  Other gaps are objective
+            // formatter cells and retain their exact width.
+            let compacted = (before_atom.saturating_add(1)..after_atom).any(|atom| {
+                self.suppressed_reference_atoms
+                    .get(atom as usize)
+                    .copied()
+                    .unwrap_or(false)
+            });
+            let positioned_by_tab = (before_atom.saturating_add(1)..after_atom).any(|atom| {
+                self.report.atoms()[atom as usize].kind == AtomKind::Tab
+                    && self.report.atoms()[atom as usize].disposition == AtomDisposition::Emitted
+            });
+            if !compacted && !positioned_by_tab {
+                let already_projected =
+                    output.last().is_some_and(inline_ends_in_breakable_space) as i64;
+                for _ in already_projected..cells {
+                    match output.last_mut() {
+                        Some(Inline::Text { value }) => value.push(' '),
+                        _ => output.push(Inline::Text {
+                            value: " ".to_owned(),
+                        }),
+                    }
+                }
+            }
+        } else if cursor > range_start
+            && self.report.atoms()[cursor as usize]
+                .node
+                .is_some_and(|node| {
+                    self.report.nodes()[node.0 as usize]
+                        .flags
+                        .contains(libmandoc_rs::ExecutionNodeFlags::NO_FILL)
+                })
+        {
+            trim_breakable_space(output);
+            for _ in before_line..after_line {
+                if !matches!(output.last(), Some(Inline::LineBreak)) {
+                    output.push(Inline::LineBreak);
+                }
+            }
+        }
+    }
+
+    fn push_field_leading(&self, output: &mut Vec<Inline>, atom: u32) {
+        let leading =
+            self.field_leading_bu[atom as usize].unwrap_or_default() / self.cell_bu.max(1);
+        for _ in 0..leading {
+            output.push(Inline::Text {
+                value: " ".to_owned(),
+            });
+        }
     }
 }
 
@@ -628,6 +1291,16 @@ fn visible_atom(atom: &libmandoc_rs::ExecutionAtom) -> Option<(ExecutionFont, St
     ) {
         return None;
     }
+    fragment_atom(atom)
+}
+
+fn fragment_atom(atom: &libmandoc_rs::ExecutionAtom) -> Option<(ExecutionFont, String)> {
+    // Membership in a native `Content` fragment, rather than the atom's
+    // origin role, is the visibility authority.  Fixed CVS emits generated
+    // punctuation and replacement words as `MacroGenerated` or
+    // `DeviceGenerated` atoms, while font overstrike decorations are assigned
+    // to non-content fragments.  The report validator also guarantees that a
+    // fragment atom has the final `Emitted` disposition.
     let value = match atom.kind {
         AtomKind::Glyph | AtomKind::BreakableHyphen => {
             char::from_u32(atom.display_scalar)?.to_string()
@@ -646,13 +1319,27 @@ fn visible_atom(atom: &libmandoc_rs::ExecutionAtom) -> Option<(ExecutionFont, St
 
 fn push_styled_text(output: &mut Vec<Inline>, font: ExecutionFont, value: String) {
     if value == "\n" {
+        trim_breakable_space(output);
         if !matches!(output.last(), Some(Inline::LineBreak)) {
             output.push(Inline::LineBreak);
         }
         return;
     }
+    if value == " " {
+        if output.is_empty() || inline_ends_in_breakable_space(output.last().unwrap()) {
+            return;
+        }
+        // `term_field()` emits a retained buffered space under the same
+        // effective font as its neighbouring glyphs.  Preserve that native
+        // span instead of splitting styled phrases at every word boundary.
+    }
     match (font, output.last_mut()) {
-        (ExecutionFont::Roman, Some(Inline::Text { value: current })) => current.push_str(&value),
+        (ExecutionFont::Roman, Some(Inline::Text { value: current }))
+            if !(current.chars().all(char::is_whitespace)
+                && !value.chars().all(char::is_whitespace)) =>
+        {
+            current.push_str(&value);
+        }
         (ExecutionFont::Bold, Some(Inline::Strong { children }))
         | (ExecutionFont::Underline, Some(Inline::Emphasis { children }))
             if matches!(children.as_slice(), [Inline::Text { .. }]) =>
@@ -662,20 +1349,60 @@ fn push_styled_text(output: &mut Vec<Inline>, font: ExecutionFont, value: String
             };
             current.push_str(&value);
         }
-        _ => output.push(match font {
-            ExecutionFont::Roman => Inline::Text { value },
-            ExecutionFont::Bold => Inline::Strong {
+        _ => output.push(styled_text(font, value)),
+    }
+}
+
+fn styled_text(font: ExecutionFont, value: String) -> Inline {
+    match font {
+        ExecutionFont::Roman => Inline::Text { value },
+        ExecutionFont::Bold => Inline::Strong {
+            children: vec![Inline::Text { value }],
+        },
+        ExecutionFont::Underline => Inline::Emphasis {
+            children: vec![Inline::Text { value }],
+        },
+        ExecutionFont::BoldUnderline => Inline::Strong {
+            children: vec![Inline::Emphasis {
                 children: vec![Inline::Text { value }],
-            },
-            ExecutionFont::Underline => Inline::Emphasis {
-                children: vec![Inline::Text { value }],
-            },
-            ExecutionFont::BoldUnderline => Inline::Strong {
-                children: vec![Inline::Emphasis {
-                    children: vec![Inline::Text { value }],
-                }],
-            },
-        }),
+            }],
+        },
+    }
+}
+
+fn inline_ends_in_breakable_space(inline: &Inline) -> bool {
+    match inline {
+        Inline::Text { value } => value.ends_with(' '),
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => {
+            children.last().is_some_and(inline_ends_in_breakable_space)
+        }
+        Inline::LineBreak => true,
+        _ => false,
+    }
+}
+
+fn trim_breakable_space(output: &mut Vec<Inline>) {
+    loop {
+        let remove = match output.last_mut() {
+            Some(Inline::Text { value }) if value.ends_with(' ') => {
+                value.pop();
+                value.is_empty()
+            }
+            Some(
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. },
+            ) if children.last().is_some_and(inline_ends_in_breakable_space) => {
+                trim_breakable_space(children);
+                children.is_empty()
+            }
+            _ => break,
+        };
+        if remove {
+            output.pop();
+        }
     }
 }
 
@@ -688,6 +1415,316 @@ fn paragraph(inlines: Vec<Inline>, source: Option<SourceSpan>) -> Vec<Block> {
         })
         .into_iter()
         .collect()
+}
+
+fn native_content_block(
+    children: Vec<Inline>,
+    preformatted: bool,
+    source: Option<SourceSpan>,
+) -> Option<Block> {
+    if children.is_empty() {
+        return None;
+    }
+    let layout = LayoutHint::default();
+    Some(if preformatted {
+        Block::Preformatted {
+            children,
+            language: None,
+            layout,
+            source,
+        }
+    } else {
+        Block::Paragraph {
+            children,
+            layout,
+            source,
+        }
+    })
+}
+
+fn collapse_inline_flow(
+    blocks: Vec<Block>,
+    preformatted: bool,
+    source: Option<SourceSpan>,
+) -> Vec<Block> {
+    let mut children = Vec::new();
+    for block in blocks {
+        match block {
+            Block::Paragraph {
+                children: mut next, ..
+            }
+            | Block::Preformatted {
+                children: mut next, ..
+            } => {
+                if !children.is_empty() && !matches!(children.last(), Some(Inline::LineBreak)) {
+                    children.push(Inline::LineBreak);
+                }
+                children.append(&mut next);
+            }
+            Block::VerticalSpace { lines, .. } => {
+                if !children.is_empty() && !matches!(children.last(), Some(Inline::LineBreak)) {
+                    children.push(Inline::LineBreak);
+                }
+                children.extend((0..lines).map(|_| Inline::LineBreak));
+            }
+            _ => unreachable!("native inline flow contains only text and vertical-space blocks"),
+        }
+    }
+    native_content_block(children, preformatted, source)
+        .into_iter()
+        .collect()
+}
+
+fn boundary_atom_cursor(report: &NativeExecutionReport, range: &Range<u32>, sequence: u64) -> u32 {
+    let atoms = report
+        .atoms()
+        .get(range.start as usize..range.end as usize)
+        .unwrap_or_default();
+    let index = atoms.partition_point(|atom| atom.sequence <= sequence);
+    atoms.get(index).map_or(range.end, |atom| atom.key.0)
+}
+
+fn boundary_has_ancestor_request(
+    report: &NativeExecutionReport,
+    boundary: &ExecutionBoundary,
+    request: libmandoc_rs::BoundaryRequest,
+) -> bool {
+    let mut current = Some(boundary.key);
+    while let Some(key) = current {
+        let value = &report.boundaries()[key as usize];
+        if value.request == request {
+            return true;
+        }
+        current = value.parent;
+    }
+    false
+}
+
+fn boundary_has_ancestor_key(
+    report: &NativeExecutionReport,
+    boundary: &ExecutionBoundary,
+    ancestor: u32,
+) -> bool {
+    let mut current = Some(boundary.key);
+    while let Some(key) = current {
+        if key == ancestor {
+            return true;
+        }
+        current = report.boundaries()[key as usize].parent;
+    }
+    false
+}
+
+fn physical_break_cursors(
+    report: &NativeExecutionReport,
+    boundaries: &[ExecutionBoundary],
+    range: &Range<u32>,
+) -> BTreeMap<u32, usize> {
+    let atoms = report
+        .atoms()
+        .get(range.start as usize..range.end as usize)
+        .unwrap_or_default();
+    let mut output = BTreeMap::new();
+    for boundary in boundaries.iter().filter(|boundary| {
+        boundary.request == libmandoc_rs::BoundaryRequest::DeviceEndline
+            && boundary.effect == libmandoc_rs::BoundaryEffect::EndedLine
+            && !boundary_has_ancestor_request(
+                report,
+                boundary,
+                libmandoc_rs::BoundaryRequest::VerticalSpace,
+            )
+    }) {
+        let index = atoms.partition_point(|atom| atom.sequence <= boundary.leave_sequence);
+        let cursor = atoms.get(index).map_or(range.end, |atom| atom.key.0);
+        if (range.start..=range.end).contains(&cursor) {
+            *output.entry(cursor).or_default() += 1;
+        }
+    }
+    output
+}
+
+#[derive(Clone, Copy)]
+struct FlowProjectionPolicy {
+    include_edge_vertical: bool,
+    include_edge_breaks: bool,
+    body_settlement: Option<NativeBodySettlement>,
+    allow_field_leading: bool,
+    alignment_owner_start: Option<u32>,
+    retain_owner_start_break: bool,
+}
+
+impl FlowProjectionPolicy {
+    const fn content(include_edge_vertical: bool) -> Self {
+        Self {
+            include_edge_vertical,
+            include_edge_breaks: false,
+            body_settlement: None,
+            allow_field_leading: true,
+            alignment_owner_start: None,
+            retain_owner_start_break: false,
+        }
+    }
+}
+
+/// Project one formatter-owned flow without confusing an IR block boundary
+/// with a native line flush.
+///
+/// Fixed CVS `roff_term_pre_sp()` executes `term_vspace()` once per requested
+/// row and only then executes the conditional break.  Consequently a vertical
+/// request is a structural blank row, while an ordinary `term_newln()` inside
+/// the same owner is an inline hard break.  Both are already present in the
+/// owned execution report; this function merely partitions that ordered fact
+/// stream and never replays a roff request.
+fn flow_blocks(
+    projector: &InlineProjector<'_>,
+    range: Range<u32>,
+    anchor_keys: &[u32],
+    boundaries: &[ExecutionBoundary],
+    preformatted: bool,
+    source: Option<SourceSpan>,
+    policy: FlowProjectionPolicy,
+) -> Vec<Block> {
+    let sequence_window = range
+        .clone()
+        .filter_map(|cursor| projector.report.atoms().get(cursor as usize))
+        .map(|atom| atom.sequence)
+        .fold(None::<(u64, u64)>, |window, sequence| {
+            Some(match window {
+                Some((first, last)) => (first.min(sequence), last.max(sequence)),
+                None => (sequence, sequence),
+            })
+        });
+    let mut vertical = boundaries
+        .iter()
+        .filter(|boundary| {
+            boundary.request == libmandoc_rs::BoundaryRequest::VerticalSpace
+                && boundary.effect == libmandoc_rs::BoundaryEffect::AddedVerticalSpace
+                && (policy.include_edge_vertical
+                    || sequence_window.is_some_and(|(first, last)| {
+                        first <= boundary.enter_sequence && boundary.leave_sequence <= last
+                    }))
+        })
+        .map(|boundary| {
+            let cursor = boundary_atom_cursor(projector.report, &range, boundary.leave_sequence);
+            // Fixed CVS `term_vspace()` first calls `term_newln()` and then
+            // emits its requested empty device row.  Count the row committed
+            // directly by the vertical request plus nested endlines that
+            // committed a zero-visible field.  The enclosing line delta also
+            // includes soft wraps of visible prose and is not blank-space
+            // multiplicity.
+            let nested_empty_rows = boundaries
+                .iter()
+                .filter(|candidate| {
+                    candidate.key != boundary.key
+                        && candidate.request == libmandoc_rs::BoundaryRequest::Endline
+                        && candidate.visual_before == 0
+                        && boundary_has_ancestor_key(projector.report, candidate, boundary.key)
+                })
+                .map(|candidate| candidate.direct_device_lines)
+                .sum::<u32>();
+            let lines = boundary
+                .direct_device_lines
+                .saturating_add(nested_empty_rows)
+                .max(1);
+            (cursor, u16::try_from(lines).unwrap_or(u16::MAX))
+        })
+        .filter(|(cursor, _)| (range.start..=range.end).contains(cursor))
+        .collect::<Vec<_>>();
+    vertical.sort_unstable_by_key(|(cursor, _)| *cursor);
+    let physical_breaks = physical_break_cursors(projector.report, boundaries, &range);
+
+    let mut blocks = Vec::new();
+    let mut start = range.start;
+    for (end, vertical_lines) in vertical.into_iter().chain(std::iter::once((range.end, 0))) {
+        let mut segment_policy = policy;
+        if start != range.start {
+            segment_policy.include_edge_breaks = false;
+        }
+        let inlines =
+            projector.segment(start..end, anchor_keys, boundaries, source, segment_policy);
+        if !inlines.is_empty() {
+            if inlines
+                .iter()
+                .all(|inline| matches!(inline, Inline::LineBreak))
+            {
+                for _ in 0..inlines.len() {
+                    blocks.push(Block::VerticalSpace { lines: 1, source });
+                }
+            } else if let Some(block) = native_content_block(inlines, preformatted, source) {
+                blocks.push(block);
+            }
+        }
+        if vertical_lines != 0 {
+            let lines = vertical_lines.saturating_add(
+                u16::try_from(physical_breaks.get(&end).copied().unwrap_or_default())
+                    .unwrap_or(u16::MAX),
+            );
+            blocks.push(Block::VerticalSpace { lines, source });
+        }
+        start = end;
+    }
+    blocks
+}
+
+fn flow_blocks_by_fill_with_default(
+    projector: &InlineProjector<'_>,
+    range: Range<u32>,
+    anchor_keys: &[u32],
+    boundaries: &[ExecutionBoundary],
+    source: Option<SourceSpan>,
+    policy: FlowProjectionPolicy,
+    initial_preformatted: Option<bool>,
+) -> Vec<Block> {
+    let report = projector.report;
+    let mut output = Vec::new();
+    let range_sequence = range
+        .start
+        .checked_sub(1)
+        .map_or(0, |cursor| report.atoms()[cursor as usize].sequence);
+    let mut cursor = range.start;
+    while cursor < range.end {
+        let atom_preformatted = |cursor: u32| {
+            let atom = &report.atoms()[cursor as usize];
+            if !projector.has_fill_transition_between(range_sequence, atom.sequence)
+                && let Some(initial) = initial_preformatted
+            {
+                initial
+            } else {
+                atom.flags
+                    .contains(libmandoc_rs::ExecutionAtomFlags::NO_FILL)
+            }
+        };
+        let preformatted = atom_preformatted(cursor);
+        let mut end = cursor + 1;
+        while end < range.end {
+            let candidate = atom_preformatted(end);
+            if candidate != preformatted {
+                break;
+            }
+            if projector.has_fill_transition_between(
+                report.atoms()[end as usize - 1].sequence,
+                report.atoms()[end as usize].sequence,
+            ) {
+                break;
+            }
+            end += 1;
+        }
+        let mut blocks = flow_blocks(
+            projector,
+            cursor..end,
+            anchor_keys,
+            boundaries,
+            preformatted,
+            source,
+            policy,
+        );
+        if preformatted {
+            blocks = collapse_inline_flow(blocks, true, source);
+        }
+        output.extend(blocks);
+        cursor = end;
+    }
+    output
 }
 
 enum NativeHeadRoleEvidence {
@@ -810,13 +1847,6 @@ fn markup_evidence(
     evidence
 }
 
-fn definition_list_mut(blocks: &mut [Block], index: usize) -> &mut Vec<DefinitionItem> {
-    let Block::DefinitionList { items, .. } = &mut blocks[index] else {
-        unreachable!("native definition block")
-    };
-    items
-}
-
 fn wholly_styled(inlines: &[Inline], in_style: bool) -> bool {
     inlines.iter().all(|inline| match inline {
         Inline::Anchor { .. } | Inline::Code { .. } => true,
@@ -855,785 +1885,8 @@ fn man_head_evidence(
     evidence
 }
 
-fn append_definition_list(blocks: &mut Vec<Block>, compact: bool) -> usize {
-    let index = blocks.len();
-    blocks.push(Block::DefinitionList {
-        items: Vec::new(),
-        declaration_groups: Vec::new(),
-        compact,
-        layout: LayoutHint::default(),
-        source: None,
-    });
-    index
-}
-
-#[derive(Clone, Copy)]
-struct ManActive {
-    location: Location,
-    block_index: usize,
-    pending: Option<usize>,
-    previous_empty: bool,
-    flow_epoch: usize,
-}
-
-struct ProjectionOutput<'a> {
-    root: &'a mut Vec<Block>,
-    sections: &'a mut SectionPlan,
-    slots: &'a mut Vec<OwnerSlot>,
-}
-
-fn merge_man_additional_tag(
-    report: &NativeExecutionReport,
-    projector: &InlineProjector<'_>,
-    native: &super::NativeManBlock,
-    active: ManActive,
-    term: Vec<Inline>,
-    description: Vec<Block>,
-    output: &mut ProjectionOutput<'_>,
-) -> ManActive {
-    let ManActive {
-        location,
-        block_index,
-        pending,
-        flow_epoch,
-        ..
-    } = active;
-    let mut additional = man_head_evidence(native, &term, report, projector);
-    let items = definition_list_mut(
-        blocks_mut(output.root, output.sections, location),
-        block_index,
-    );
-    let item_index = items.len() - 1;
-    items[item_index].terms.push(term);
-    if !description.is_empty() {
-        items[item_index].description = description;
-    }
-    let slot = output
-        .slots
-        .iter_mut()
-        .rev()
-        .find(|slot| {
-            slot.location == location
-                && slot.blocks
-                    == [ContentBlockStep::Block {
-                        index: u32::try_from(block_index).unwrap(),
-                    }]
-                && slot.item_index == item_index
-        })
-        .expect("native TQ continuation owner");
-    slot.origins.push(native.owner);
-    if additional.role.is_some() {
-        slot.evidence.role = additional.role;
-    }
-    let term_index = items[item_index].terms.len() - 1;
-    additional.shift_terms(term_index);
-    slot.evidence.append(additional);
-    ManActive {
-        location,
-        block_index,
-        pending,
-        previous_empty: items[item_index].description.is_empty(),
-        flow_epoch,
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn append_man_definition(
-    report: &NativeExecutionReport,
-    projector: &InlineProjector<'_>,
-    native: &super::NativeManBlock,
-    location: Location,
-    active: Option<ManActive>,
-    term: Vec<Inline>,
-    description: Vec<Block>,
-    source: Option<SourceSpan>,
-    layout: DefinitionLayout,
-    root: &mut Vec<Block>,
-    sections: &mut SectionPlan,
-    slots: &mut Vec<OwnerSlot>,
-    candidates: &mut Vec<GroupCandidate>,
-) -> ManActive {
-    let evidence = man_head_evidence(native, &term, report, projector);
-    let (block_index, pending_start) = if let Some(active) = active {
-        (active.block_index, active.pending)
-    } else {
-        let block_index = append_definition_list(blocks_mut(root, sections, location), true);
-        (block_index, None)
-    };
-    let items = definition_list_mut(blocks_mut(root, sections, location), block_index);
-    let item_index = items.len();
-    let empty = description.is_empty();
-    items.push(DefinitionItem {
-        terms: vec![term],
-        description,
-        entry: None,
-        source,
-        layout,
-    });
-    slots.push(OwnerSlot {
-        origins: vec![native.owner],
-        location,
-        blocks: vec![ContentBlockStep::Block {
-            index: u32::try_from(block_index).unwrap(),
-        }],
-        item_index,
-        evidence,
-    });
-    let next_pending = if empty {
-        Some(pending_start.unwrap_or(item_index))
-    } else {
-        if let Some(start) = pending_start
-            && start < item_index
-        {
-            candidates.push(GroupCandidate {
-                location,
-                blocks: vec![ContentBlockStep::Block {
-                    index: u32::try_from(block_index).unwrap(),
-                }],
-                start,
-                end: item_index + 1,
-            });
-        }
-        None
-    };
-    ManActive {
-        location,
-        block_index,
-        pending: next_pending,
-        previous_empty: empty,
-        flow_epoch: native.flow_epoch,
-    }
-}
-
-fn project_man(
-    report: &NativeExecutionReport,
-    projection: &NativeProjection,
-    projector: &InlineProjector<'_>,
-    root: &mut Vec<Block>,
-    sections: &mut SectionPlan,
-    slots: &mut Vec<OwnerSlot>,
-    candidates: &mut Vec<GroupCandidate>,
-) {
-    let layouts = projection
-        .definitions
-        .iter()
-        .map(|definition| (definition.owner, definition.responsive.layout))
-        .collect::<HashMap<_, _>>();
-    let mut native_blocks = projection.man_blocks.iter().collect::<Vec<_>>();
-    native_blocks.sort_by_key(|block| report.wrappers()[block.wrapper as usize].enter_sequence);
-    let mut active: Option<ManActive> = None;
-
-    for native in native_blocks {
-        if !matches!(
-            native.kind,
-            ExecutionManBlockKind::IndentedParagraph
-                | ExecutionManBlockKind::TaggedParagraph
-                | ExecutionManBlockKind::AdditionalTag
-        ) {
-            active = None;
-            continue;
-        }
-        let location = sections.location_for(report, native.owner);
-        if active.is_some_and(|active| {
-            active.location != location || active.flow_epoch != native.flow_epoch
-        }) {
-            active = None;
-        }
-        let source = source_span(report, native.owner);
-        let term = projector.segment(
-            native.head.atoms.clone(),
-            &native.head.anchors,
-            &native.head.boundaries,
-            source,
-        );
-        let description = paragraph(
-            projector.segment(
-                native.body.atoms.clone(),
-                &native.body.anchors,
-                &native.body.boundaries,
-                source,
-            ),
-            source,
-        );
-        let merge_tq = native.kind == ExecutionManBlockKind::AdditionalTag
-            && active.is_some_and(|active| active.previous_empty);
-        if merge_tq {
-            active = Some(merge_man_additional_tag(
-                report,
-                projector,
-                native,
-                active.unwrap(),
-                term,
-                description,
-                &mut ProjectionOutput {
-                    root,
-                    sections,
-                    slots,
-                },
-            ));
-            continue;
-        }
-        active = Some(append_man_definition(
-            report,
-            projector,
-            native,
-            location,
-            active,
-            term,
-            description,
-            source,
-            *layouts
-                .get(&native.owner)
-                .expect("native definition layout"),
-            root,
-            sections,
-            slots,
-            candidates,
-        ));
-    }
-}
-
-fn project_mdoc(
-    report: &NativeExecutionReport,
-    projection: &NativeProjection,
-    projector: &InlineProjector<'_>,
-    root: &mut Vec<Block>,
-    sections: &mut SectionPlan,
-    slots: &mut Vec<OwnerSlot>,
-) {
-    let plan = MdocPlan::new(report, projection, projector);
-    for list in &plan.roots {
-        let native = &projection.mdoc_lists[*list];
-        let location = sections.location_for(report, native.owner);
-        let orphan_anchors = plan.orphan_anchor_block(*list);
-        blocks_mut(root, sections, location).extend(orphan_anchors);
-        let block_index = blocks_mut(root, sections, location).len();
-        let path = vec![ContentBlockStep::Block {
-            index: u32::try_from(block_index).unwrap(),
-        }];
-        let block = plan.materialize(*list, location, &path, slots);
-        blocks_mut(root, sections, location).push(block);
-    }
-}
-
-struct MdocPlan<'a> {
-    report: &'a NativeExecutionReport,
-    projection: &'a NativeProjection,
-    projector: &'a InlineProjector<'a>,
-    layouts: HashMap<ExecutionNodeKey, DefinitionLayout>,
-    children: HashMap<(usize, usize), Vec<usize>>,
-    ranges: Vec<Range<u32>>,
-    list_anchors: Vec<ListLevelAnchors>,
-    roots: Vec<usize>,
-}
-
-impl<'a> MdocPlan<'a> {
-    fn new(
-        report: &'a NativeExecutionReport,
-        projection: &'a NativeProjection,
-        projector: &'a InlineProjector<'a>,
-    ) -> Self {
-        let node_wrappers = native_node_wrapper_index(report);
-        let ranges = projection
-            .mdoc_lists
-            .iter()
-            .map(|list| {
-                let wrapper = node_wrappers[list.owner.0 as usize]
-                    .expect("validated native mdoc list wrapper");
-                let wrapper = &report.wrappers()[wrapper];
-                wrapper.enter_atom..wrapper.leave_atom
-            })
-            .collect::<Vec<_>>();
-        let body_owners = projection
-            .mdoc_lists
-            .iter()
-            .enumerate()
-            .flat_map(|(list, value)| {
-                value
-                    .items
-                    .iter()
-                    .enumerate()
-                    .flat_map(move |(item, value)| {
-                        value
-                            .bodies
-                            .iter()
-                            .map(move |body| (body.node, (list, item)))
-                    })
-            })
-            .collect::<HashMap<_, _>>();
-        let mut children = HashMap::<(usize, usize), Vec<usize>>::new();
-        let mut roots = Vec::new();
-        for (list, value) in projection.mdoc_lists.iter().enumerate() {
-            let mut node = report.nodes()[value.owner.0 as usize].parent;
-            let mut parent = None;
-            while let Some(key) = node {
-                if let Some(owner) = body_owners.get(&key) {
-                    parent = Some(*owner);
-                    break;
-                }
-                node = report.nodes()[key.0 as usize].parent;
-            }
-            if let Some(owner) = parent {
-                children.entry(owner).or_default().push(list);
-            } else {
-                roots.push(list);
-            }
-        }
-        // Execution node keys are validated dense DFS identities.  Sorting all
-        // lists by that one structural order also places empty Bl owners; never
-        // mix wrapper sequence numbers with node keys in the same key space.
-        let structural_order = |list: &usize| projection.mdoc_lists[*list].owner;
-        roots.sort_by_key(structural_order);
-        for nested in children.values_mut() {
-            nested.sort_by_key(structural_order);
-        }
-        let layouts = projection
-            .definitions
-            .iter()
-            .map(|definition| (definition.owner, definition.responsive.layout))
-            .collect();
-        let mut anchors_by_parent = HashMap::<ExecutionNodeKey, Vec<&NativeAnchor>>::new();
-        let mut anchors_by_node = HashMap::<ExecutionNodeKey, Vec<&NativeAnchor>>::new();
-        for anchor in &projection.anchors {
-            anchors_by_node.entry(anchor.node).or_default().push(anchor);
-            if let Some(parent) = report.nodes()[anchor.node.0 as usize].parent {
-                anchors_by_parent.entry(parent).or_default().push(anchor);
-            }
-        }
-        for anchors in anchors_by_parent.values_mut() {
-            anchors.sort_unstable_by_key(|anchor| anchor.node);
-        }
-        for anchors in anchors_by_node.values_mut() {
-            anchors.sort_unstable_by_key(|anchor| anchor.key);
-        }
-        let mut body_by_parent = vec![None; report.nodes().len()];
-        for node in report.nodes() {
-            if node.kind == NodeKind::Body
-                && let Some(parent) = node.parent
-            {
-                body_by_parent[parent.0 as usize] = Some(node.key);
-            }
-        }
-        let list_anchors = projection
-            .mdoc_lists
-            .iter()
-            .map(|list| {
-                let body = mdoc_list_body(list, report, &body_by_parent);
-                list_level_anchor_keys(
-                    list,
-                    anchors_by_node.get(&body).map_or(&[], Vec::as_slice),
-                    anchors_by_parent.get(&body).map_or(&[], Vec::as_slice),
-                )
-            })
-            .collect();
-        Self {
-            report,
-            projection,
-            projector,
-            layouts,
-            children,
-            ranges,
-            list_anchors,
-            roots,
-        }
-    }
-
-    fn materialize(
-        &self,
-        list_index: usize,
-        location: Location,
-        path: &[ContentBlockStep],
-        slots: &mut Vec<OwnerSlot>,
-    ) -> Block {
-        let list = &self.projection.mdoc_lists[list_index];
-        if is_definition_list(list.kind) {
-            self.definition_list(list_index, location, path, slots)
-        } else {
-            self.ordinary_list(list_index, location, path, slots)
-        }
-    }
-
-    fn orphan_anchor_block(&self, list_index: usize) -> Vec<Block> {
-        let list = &self.projection.mdoc_lists[list_index];
-        let keys = &self.list_anchors[list_index].leading;
-        paragraph(
-            self.projector
-                .standalone_anchors(keys, source_span(self.report, list.owner)),
-            source_span(self.report, list.owner),
-        )
-    }
-
-    fn definition_list(
-        &self,
-        list_index: usize,
-        location: Location,
-        path: &[ContentBlockStep],
-        slots: &mut Vec<OwnerSlot>,
-    ) -> Block {
-        let list = &self.projection.mdoc_lists[list_index];
-        let anchors = &self.list_anchors[list_index];
-        let mut items = Vec::new();
-        let mut declaration_groups = Vec::new();
-        let mut pending = None;
-        let mut previous_epoch = None;
-        for (item_index, item) in list.items.iter().enumerate() {
-            if previous_epoch.is_some_and(|epoch| epoch != item.flow_epoch) {
-                pending = None;
-            }
-            let source = source_span(self.report, item.owner);
-            let mut term = self
-                .projector
-                .standalone_anchors(&anchors.by_item[item_index], source);
-            term.extend(self.projector.segment(
-                item.head.atoms.clone(),
-                &item.head.anchors,
-                &item.head.boundaries,
-                source,
-            ));
-            let description = self.item_body(
-                list_index,
-                item_index,
-                item,
-                location,
-                path,
-                ContentBlockStep::DefinitionItem {
-                    index: u32::try_from(item_index).unwrap(),
-                },
-                slots,
-            );
-            if description.is_empty() {
-                pending = Some(pending.unwrap_or(item_index));
-            } else if let Some(start_item) = pending.take()
-                && start_item < item_index
-            {
-                declaration_groups.push(mant_ir::DeclarationGroup {
-                    start_item,
-                    end_item: item_index + 1,
-                });
-            }
-            previous_epoch = Some(item.flow_epoch);
-            items.push(DefinitionItem {
-                terms: vec![term],
-                description,
-                entry: None,
-                source,
-                layout: *self
-                    .layouts
-                    .get(&item.owner)
-                    .expect("native mdoc definition layout"),
-            });
-            slots.push(OwnerSlot {
-                origins: vec![item.owner],
-                location,
-                blocks: path.to_vec(),
-                item_index,
-                evidence: markup_evidence(&[item.head.node], self.report, self.projector),
-            });
-        }
-        Block::DefinitionList {
-            items,
-            declaration_groups,
-            compact: list.compact,
-            layout: LayoutHint::default(),
-            source: source_span(self.report, list.owner),
-        }
-    }
-
-    fn ordinary_list(
-        &self,
-        list_index: usize,
-        location: Location,
-        path: &[ContentBlockStep],
-        slots: &mut Vec<OwnerSlot>,
-    ) -> Block {
-        let list = &self.projection.mdoc_lists[list_index];
-        let anchors = &self.list_anchors[list_index];
-        let mut items = Vec::new();
-        for (item_index, item) in list.items.iter().enumerate() {
-            let source = source_span(self.report, item.owner);
-            let leading = self
-                .projector
-                .standalone_anchors(&anchors.by_item[item_index], source);
-            let mut item_blocks = paragraph(leading, source);
-            item_blocks.extend(self.item_body(
-                list_index,
-                item_index,
-                item,
-                location,
-                path,
-                ContentBlockStep::ListItem {
-                    index: u32::try_from(item_index).unwrap(),
-                },
-                slots,
-            ));
-            items.push(ListItem {
-                layout: ListItemLayout::default(),
-                source,
-                entry: None,
-                blocks: item_blocks,
-            });
-        }
-        Block::List {
-            kind: ordinary_list_kind(list.kind).expect("non-definition native mdoc list"),
-            items,
-            compact: list.compact,
-            layout: LayoutHint::default(),
-            source: source_span(self.report, list.owner),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn item_body(
-        &self,
-        list_index: usize,
-        item_index: usize,
-        item: &NativeMdocListItem,
-        location: Location,
-        parent_path: &[ContentBlockStep],
-        item_step: ContentBlockStep,
-        slots: &mut Vec<OwnerSlot>,
-    ) -> Vec<Block> {
-        let nested = self
-            .children
-            .get(&(list_index, item_index))
-            .map_or(&[][..], Vec::as_slice);
-        let mut output = Vec::new();
-        for body in &item.bodies {
-            let mut cursor = body.atoms.start;
-            for child in nested.iter().copied().filter(|child| {
-                self.ranges[*child].start >= body.atoms.start
-                    && self.ranges[*child].end <= body.atoms.end
-            }) {
-                output.extend(paragraph(
-                    self.projector.segment(
-                        cursor..self.ranges[child].start,
-                        &body.anchors,
-                        &body.boundaries,
-                        source_span(self.report, item.owner),
-                    ),
-                    source_span(self.report, item.owner),
-                ));
-                let mut child_path = parent_path.to_vec();
-                child_path.push(item_step);
-                output.extend(self.orphan_anchor_block(child));
-                child_path.push(ContentBlockStep::Block {
-                    index: u32::try_from(output.len()).unwrap(),
-                });
-                output.push(self.materialize(child, location, &child_path, slots));
-                cursor = self.ranges[child].end;
-            }
-            output.extend(paragraph(
-                self.projector.segment(
-                    cursor..body.atoms.end,
-                    &body.anchors,
-                    &body.boundaries,
-                    source_span(self.report, item.owner),
-                ),
-                source_span(self.report, item.owner),
-            ));
-        }
-        output
-    }
-}
-
-struct ListLevelAnchors {
-    leading: Vec<u32>,
-    by_item: Vec<Vec<u32>>,
-}
-
-fn mdoc_list_body(
-    list: &super::NativeMdocList,
-    report: &NativeExecutionReport,
-    body_by_parent: &[Option<ExecutionNodeKey>],
-) -> ExecutionNodeKey {
-    list.items
-        .first()
-        .and_then(|item| report.nodes()[item.owner.0 as usize].parent)
-        .or(body_by_parent[list.owner.0 as usize])
-        .expect("validated mdoc list body")
-}
-
-fn list_level_anchor_keys(
-    list: &super::NativeMdocList,
-    container_anchors: &[&NativeAnchor],
-    anchors: &[&NativeAnchor],
-) -> ListLevelAnchors {
-    let mut output = ListLevelAnchors {
-        leading: container_anchors.iter().map(|anchor| anchor.key).collect(),
-        by_item: vec![Vec::new(); list.items.len()],
-    };
-    for anchor in anchors {
-        let preceding_items = list.items.partition_point(|item| item.owner <= anchor.node);
-        if preceding_items == 0 {
-            output.leading.push(anchor.key);
-        } else {
-            output.by_item[preceding_items - 1].push(anchor.key);
-        }
-    }
-    output
-}
-
-const fn is_definition_list(kind: ExecutionMdocListKind) -> bool {
-    matches!(
-        kind,
-        ExecutionMdocListKind::Hang
-            | ExecutionMdocListKind::Overhang
-            | ExecutionMdocListKind::Inset
-            | ExecutionMdocListKind::Diagnostic
-            | ExecutionMdocListKind::Tag
-    )
-}
-
-const fn ordinary_list_kind(kind: ExecutionMdocListKind) -> Option<ListKind> {
-    match kind {
-        ExecutionMdocListKind::Bullet
-        | ExecutionMdocListKind::Dash
-        | ExecutionMdocListKind::Hyphen => Some(ListKind::Bullet),
-        ExecutionMdocListKind::Enum => Some(ListKind::Ordered { start: None }),
-        ExecutionMdocListKind::Item | ExecutionMdocListKind::Column => Some(ListKind::Plain),
-        ExecutionMdocListKind::Hang
-        | ExecutionMdocListKind::Overhang
-        | ExecutionMdocListKind::Inset
-        | ExecutionMdocListKind::Diagnostic
-        | ExecutionMdocListKind::Tag => None,
-    }
-}
-
-fn evidence_in_document_order(
-    root: &[Block],
-    sections: &[Section],
-    slots: &[OwnerSlot],
-) -> Vec<crate::definitions::ExactNativeDefinitionEvidence> {
-    let by_slot = slots
-        .iter()
-        .map(|slot| {
-            (
-                (slot.location, slot.blocks.clone(), slot.item_index),
-                slot.evidence.clone(),
-            )
-        })
-        .collect::<HashMap<_, _>>();
-    let mut output = Vec::new();
-    collect_evidence(root, Location::Root, &mut Vec::new(), &by_slot, &mut output);
-    for (top, section) in sections.iter().enumerate() {
-        collect_evidence(
-            &section.blocks,
-            Location::Section { top, child: None },
-            &mut Vec::new(),
-            &by_slot,
-            &mut output,
-        );
-        for (child, section) in section.children.iter().enumerate() {
-            collect_evidence(
-                &section.blocks,
-                Location::Section {
-                    top,
-                    child: Some(child),
-                },
-                &mut Vec::new(),
-                &by_slot,
-                &mut output,
-            );
-        }
-    }
-    output
-}
-
-fn collect_evidence(
-    blocks: &[Block],
-    location: Location,
-    path: &mut Vec<ContentBlockStep>,
-    by_slot: &HashMap<
-        (Location, Vec<ContentBlockStep>, usize),
-        crate::definitions::ExactNativeDefinitionEvidence,
-    >,
-    output: &mut Vec<crate::definitions::ExactNativeDefinitionEvidence>,
-) {
-    for (block_index, block) in blocks.iter().enumerate() {
-        path.push(ContentBlockStep::Block {
-            index: u32::try_from(block_index).unwrap(),
-        });
-        match block {
-            Block::DefinitionList { items, .. } => {
-                for (item_index, item) in items.iter().enumerate() {
-                    output.push(
-                        by_slot
-                            .get(&(location, path.clone(), item_index))
-                            .expect("exact native definition slot")
-                            .clone(),
-                    );
-                    path.push(ContentBlockStep::DefinitionItem {
-                        index: u32::try_from(item_index).unwrap(),
-                    });
-                    collect_evidence(&item.description, location, path, by_slot, output);
-                    path.pop();
-                }
-            }
-            Block::List { items, .. } => {
-                for (item_index, item) in items.iter().enumerate() {
-                    path.push(ContentBlockStep::ListItem {
-                        index: u32::try_from(item_index).unwrap(),
-                    });
-                    collect_evidence(&item.blocks, location, path, by_slot, output);
-                    path.pop();
-                }
-            }
-            Block::Table { rows, .. } => {
-                for (row_index, row) in rows.iter().enumerate() {
-                    for (column_index, cell) in row.cells.iter().enumerate() {
-                        path.push(ContentBlockStep::TableCell {
-                            row: u32::try_from(row_index).unwrap(),
-                            column: u32::try_from(column_index).unwrap(),
-                        });
-                        collect_evidence(&cell.blocks, location, path, by_slot, output);
-                        path.pop();
-                    }
-                }
-            }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-        path.pop();
-    }
-}
-
-fn apply_groups(
-    root: &mut [Block],
-    sections: &mut SectionPlan,
-    candidates: &[GroupCandidate],
-    groupable: &HashSet<String>,
-) {
-    for candidate in candidates {
-        let block = match candidate.location {
-            Location::Root => resolve_block_mut(root, &candidate.blocks),
-            Location::Section { .. } => {
-                resolve_block_mut(sections.blocks_mut(candidate.location), &candidate.blocks)
-            }
-        };
-        let Some(block) = block else { continue };
-        let Block::DefinitionList {
-            items,
-            declaration_groups,
-            ..
-        } = block
-        else {
-            continue;
-        };
-        if items[candidate.start..candidate.end].iter().all(|item| {
-            item.entry
-                .as_ref()
-                .is_some_and(|facts| groupable.contains(facts.id.as_str()))
-        }) {
-            declaration_groups.push(mant_ir::DeclarationGroup {
-                start_item: candidate.start,
-                end_item: candidate.end,
-            });
-        }
-    }
+fn document_origin_columns(report: &NativeExecutionReport) -> i32 {
+    i32::try_from(report.content_indent_columns()).unwrap_or(i32::MAX)
 }
 
 fn retain_semantic_groups(blocks: &mut [Block], groupable: &HashSet<String>) {
@@ -1680,31 +1933,15 @@ fn retain_semantic_groups(blocks: &mut [Block], groupable: &HashSet<String>) {
 fn finish_projection(
     path: &Path,
     native: &libmandoc_rs::Document,
+    native_diagnostics: &[libmandoc_rs::Diagnostic],
     root_blocks: Vec<Block>,
     section_plan: SectionPlan,
-    slots: &[OwnerSlot],
+    receipts: Vec<NativeSemanticReceipt>,
+    table_equation_budget_line: Option<u32>,
 ) -> NativeSemanticProjection {
-    let receipts = slots
-        .iter()
-        .filter_map(|slot| {
-            let Block::DefinitionList { items, .. } =
-                resolve_location_block(&root_blocks, &section_plan, slot.location, &slot.blocks)?
-            else {
-                return None;
-            };
-            let facts = items[slot.item_index].entry.as_ref()?;
-            Some(NativeSemanticReceipt {
-                origins: slot.origins.clone(),
-                id: facts.id.clone(),
-                sections: section_coordinates(slot.location),
-                blocks: slot.blocks.clone(),
-                item_index: u32::try_from(slot.item_index).unwrap(),
-            })
-        })
-        .collect();
     let mut document = Document {
         parser: Some(ParserInfo {
-            name: "libmandoc-native-staged".to_owned(),
+            name: "libmandoc".to_owned(),
             version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
         }),
         source: DocumentSource {
@@ -1715,27 +1952,56 @@ fn finish_projection(
             path: Some(path.to_string_lossy().into_owned()),
         },
         meta: DocumentMeta {
-            title: native.metadata.title.clone(),
-            manual_section: native.metadata.section.clone(),
-            date: native.metadata.date.clone(),
-            volume: native.metadata.volume.clone(),
-            os: native.metadata.os.clone(),
-            arch: native.metadata.arch.clone(),
-            names: native.metadata.name.clone().into_iter().collect(),
+            title: super::super::normalize_metadata(native.metadata.title.as_deref()),
+            manual_section: super::super::normalize_metadata(native.metadata.section.as_deref()),
+            date: super::super::normalize_metadata(native.metadata.date.as_deref()),
+            volume: super::super::normalize_metadata(native.metadata.volume.as_deref()),
+            os: super::super::normalize_metadata(native.metadata.os.as_deref()),
+            arch: super::super::normalize_metadata(native.metadata.arch.as_deref()),
+            names: super::super::normalize_metadata(native.metadata.name.as_deref())
+                .into_iter()
+                .collect(),
             alias_target: native.metadata.alias_target.clone(),
         },
         heading: None,
         fragment_aliases: Vec::new(),
-        diagnostics: Vec::new(),
+        diagnostics: super::super::diagnostics::lower_diagnostics(native_diagnostics),
         blocks: root_blocks,
         sections: section_plan.sections,
     };
+    super::super::navigation::promote_manual_references_in_document(
+        &mut document.blocks,
+        &mut document.sections,
+    );
+    if let Some(line) = table_equation_budget_line {
+        document.diagnostics.push(mant_ir::Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
+            level: mant_ir::DiagnosticLevel::Unsupported,
+            code: Some("manual.inline-equation-budget".to_owned()),
+            message: format!(
+                "more than {} distinct inline table equations; later source spellings were retained without normalization",
+                super::super::MAX_INLINE_EQUATION_NORMALIZATIONS
+            ),
+            source: Some(SourceSpan {
+                byte_range: None,
+                line,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
+        });
+    }
     document
         .diagnostics
         .extend(crate::producer_identity::outline_identity_diagnostics(
             &document.blocks,
             &document.sections,
             "roff",
+        ));
+    document
+        .diagnostics
+        .extend(crate::definitions::manual_discovery_diagnostics(
+            &document.sections,
         ));
     document
         .diagnostics
@@ -1746,9 +2012,20 @@ fn finish_projection(
 pub(super) fn project_semantics(
     path: &Path,
     native: &libmandoc_rs::Document,
+    native_diagnostics: &[libmandoc_rs::Diagnostic],
     report: &NativeExecutionReport,
     projection: &NativeProjection,
-) -> NativeSemanticProjection {
+) -> Result<NativeSemanticProjection, crate::mandoc::RoffProjectionError> {
+    use crate::mandoc::{RoffProjectionError, RoffProjectionStage};
+    let profile = std::env::var_os("MANT_NATIVE_PROFILE").is_some();
+    let mut phase = std::time::Instant::now();
+    let mark = |name: &str, phase: &mut std::time::Instant| {
+        if profile {
+            eprintln!("native-profile {name} {:?}", phase.elapsed());
+        }
+        *phase = std::time::Instant::now();
+    };
+
     let mut section_plan = SectionPlan::build(&projection.headings, report);
     let anchor_ids = native_target_identities(&projection.anchors, &mut section_plan);
     let authored_sections = section_plan.authored.clone();
@@ -1759,29 +2036,57 @@ pub(super) fn project_semantics(
         &anchor_ids,
         &authored_sections,
     );
-    let mut root_blocks = Vec::new();
-    let mut slots = Vec::new();
-    let mut candidates = Vec::new();
-    match native.macro_set {
-        MacroSet::Man | MacroSet::None => project_man(
-            report,
-            projection,
-            &projector,
-            &mut root_blocks,
-            &mut section_plan,
-            &mut slots,
-            &mut candidates,
-        ),
-        MacroSet::Mdoc => project_mdoc(
-            report,
-            projection,
-            &projector,
-            &mut root_blocks,
-            &mut section_plan,
-            &mut slots,
-        ),
+    let (section_index, section_locations) =
+        materializer::section_index(report, projection, &section_plan).map_err(|error| {
+            RoffProjectionError::with_source(path, RoffProjectionStage::Ownership, error)
+        })?;
+    mark("semantic-setup", &mut phase);
+    let arena =
+        super::ownership::plan_native(report, projection, &section_index).map_err(|error| {
+            RoffProjectionError::with_source(path, RoffProjectionStage::Ownership, error)
+        })?;
+    mark("ownership", &mut phase);
+    let mut emitter = materializer::NativeRecipeEmitter::new(
+        report, projection, &projector, &arena,
+    )
+    .map_err(|error| {
+        RoffProjectionError::with_source(path, RoffProjectionStage::Materialization, error)
+    })?;
+    let mut materialized = materializer::materialize(&arena, &mut emitter).map_err(|error| {
+        RoffProjectionError::with_source(path, RoffProjectionStage::Materialization, error)
+    })?;
+    mark("materialize", &mut phase);
+
+    for (key, location) in &section_locations {
+        let heading = materialized.headings.remove(key).ok_or_else(|| {
+            RoffProjectionError::new(
+                path,
+                RoffProjectionStage::Materialization,
+                format!("section {key:?} has no materialized heading"),
+            )
+        })?;
+        section_plan.section_mut(*location).heading.content = heading;
+        section_plan.section_mut(*location).blocks =
+            materialized.sections.remove(key).unwrap_or_default();
+        materialized
+            .bindings
+            .register_section_address(*key, section_coordinates(*location))
+            .map_err(|error| {
+                RoffProjectionError::with_source(path, RoffProjectionStage::Validation, error)
+            })?;
     }
-    let evidence = evidence_in_document_order(&root_blocks, &section_plan.sections, &slots);
+    if !materialized.headings.is_empty() || !materialized.sections.is_empty() {
+        return Err(RoffProjectionError::new(
+            path,
+            RoffProjectionStage::Materialization,
+            "materializer returned an unknown section destination",
+        ));
+    }
+    let mut root_blocks = materialized.root;
+    let binding_plan = materialized.bindings.seal().map_err(|error| {
+        RoffProjectionError::with_source(path, RoffProjectionStage::Validation, error)
+    })?;
+    mark("section-bind", &mut phase);
     let target_aliases = anchor_ids
         .values()
         .flat_map(|(id, aliases)| {
@@ -1815,21 +2120,19 @@ pub(super) fn project_semantics(
         }))
         .collect::<HashSet<_>>();
     let authored_titles = section_plan.authored_titles.clone();
-    let identities = crate::definitions::identify_exact_native_definitions(
-        &mut root_blocks,
-        &mut section_plan.sections,
-        &reserved_targets,
-        native.metadata.name.as_deref(),
-        evidence,
-        &target_aliases,
-        &authored_titles,
-    );
-    apply_groups(
-        &mut root_blocks,
-        &mut section_plan,
-        &candidates,
-        &identities.groupable,
-    );
+    let identities = binding_plan
+        .identify(
+            &mut root_blocks,
+            &mut section_plan.sections,
+            &reserved_targets,
+            native.metadata.name.as_deref(),
+            &target_aliases,
+            &authored_titles,
+        )
+        .map_err(|error| {
+            RoffProjectionError::with_source(path, RoffProjectionStage::Validation, error)
+        })?;
+    mark("identify", &mut phase);
     retain_semantic_groups(&mut root_blocks, &identities.groupable);
     for section in &mut section_plan.sections {
         retain_semantic_groups(&mut section.blocks, &identities.groupable);
@@ -1837,9 +2140,23 @@ pub(super) fn project_semantics(
             retain_semantic_groups(&mut child.blocks, &identities.groupable);
         }
     }
+    let receipts = binding_plan.receipts(&identities).map_err(|error| {
+        RoffProjectionError::with_source(path, RoffProjectionStage::Validation, error)
+    })?;
+    mark("receipts", &mut phase);
     let _retained_targets = identities.retained;
 
-    finish_projection(path, native, root_blocks, section_plan, &slots)
+    let projection = finish_projection(
+        path,
+        native,
+        native_diagnostics,
+        root_blocks,
+        section_plan,
+        receipts,
+        projection.table_equation_budget_line,
+    );
+    mark("finish", &mut phase);
+    Ok(projection)
 }
 
 #[cfg(test)]

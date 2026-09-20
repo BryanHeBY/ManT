@@ -83,18 +83,21 @@ struct mant_mandoc_execution_report {
 	RECORD_STORAGE(words, mant_mandoc_word_record);
 	RECORD_STORAGE(atoms, mant_mandoc_atom_record);
 	RECORD_STORAGE(fragments, mant_mandoc_fragment_record);
-	RECORD_STORAGE(fragment_atoms, mant_mandoc_fragment_atom_record);
 	RECORD_STORAGE(logical_tabs, mant_mandoc_logical_tab_record);
 	RECORD_STORAGE(flushes, mant_mandoc_flush_record);
 	RECORD_STORAGE(boundaries, mant_mandoc_boundary_record);
 	RECORD_STORAGE(controls, mant_mandoc_control_record);
 	RECORD_STORAGE(geometries, mant_mandoc_geometry_record);
+	RECORD_STORAGE(placements, mant_mandoc_placement_record);
 	RECORD_STORAGE(wrappers, mant_mandoc_wrapper_record);
 	RECORD_STORAGE(references, mant_mandoc_reference_record);
 	RECORD_STORAGE(anchors, mant_mandoc_anchor_record);
 	RECORD_STORAGE(tables, mant_mandoc_table_record);
 	RECORD_STORAGE(table_rows, mant_mandoc_table_row_record);
-	RECORD_STORAGE(table_cells, mant_mandoc_table_cell_record);
+	RECORD_STORAGE(table_layout_cells, mant_mandoc_table_layout_cell_record);
+	RECORD_STORAGE(table_data_cells, mant_mandoc_table_data_cell_record);
+	RECORD_STORAGE(table_cell_invocations,
+	    mant_mandoc_table_cell_invocation_record);
 	RECORD_STORAGE(equations, mant_mandoc_equation_record);
 	RECORD_STORAGE(equation_boxes, mant_mandoc_equation_box_record);
 	RECORD_STORAGE(equation_box_executions,
@@ -111,6 +114,7 @@ struct mant_mandoc_execution_report {
 	size_t buffer_count;
 	uint64_t buffer_cells;
 	uint64_t allocated_record_bytes;
+	uint32_t content_indent_columns;
 	uint32_t current_wrapper;
 	uint32_t current_reference;
 	uint32_t current_word_start;
@@ -122,7 +126,7 @@ struct mant_mandoc_execution_report {
 	uint32_t current_control;
 	uint32_t current_table;
 	uint32_t current_table_row;
-	uint32_t current_table_cell;
+	uint32_t current_table_cell_invocation;
 	uint32_t current_equation;
 	uint32_t current_equation_box_execution;
 	uint32_t current_equation_part;
@@ -131,7 +135,6 @@ struct mant_mandoc_execution_report {
 	const struct tbl_cell *current_table_cell_layout;
 	const struct tbl_dat *current_table_cell_data;
 	size_t current_table_cell_ordinal;
-	size_t current_table_cell_data_ordinal;
 	size_t current_table_cell_column;
 	size_t current_table_cell_coloff;
 	uint64_t sequence;
@@ -164,6 +167,8 @@ static int execution_man_block_begin(void *, const struct termp *,
 static int execution_man_block_end(void *, const struct termp *,
     const struct roff_node *, int);
 static int execution_definition_phase(void *, const struct termp *,
+    const struct roff_node *, int);
+static int execution_placement(void *, const struct termp *,
     const struct roff_node *, int);
 static int execution_region_begin(void *, const struct termp *,
     const struct roff_node *, int);
@@ -215,13 +220,15 @@ static int execution_device_advance(void *, const struct termp *,
 static int execution_device_letter(void *, const struct termp *,
     const struct roff_node *, size_t, int, size_t, size_t);
 static int execution_device_endline(void *, const struct termp *,
-    const struct roff_node *, size_t, size_t, size_t, size_t);
+    const struct roff_node *, int, size_t, size_t, size_t, size_t);
 static int execution_font(void *, const struct termp *,
     const struct roff_node *, int, int, size_t, size_t);
 static int execution_reference_begin(void *, const struct termp *,
     const struct roff_node *, const struct roff_node *,
     const struct roff_node *, int, const char *, size_t,
-    const char *, size_t, int, int *);
+    const char *, size_t, int, int, int *);
+static int execution_reference_phase(void *, const struct termp *,
+    const struct roff_node *, int);
 static int execution_reference_end(void *, const struct termp *,
     const struct roff_node *);
 static int execution_anchor(void *, const struct termp *,
@@ -268,6 +275,7 @@ static const struct term_exec_ops execution_ops = {
 	execution_man_block_begin,
 	execution_man_block_end,
 	execution_definition_phase,
+	execution_placement,
 	execution_region_begin,
 	execution_region_end,
 	execution_word_begin,
@@ -295,6 +303,7 @@ static const struct term_exec_ops execution_ops = {
 	execution_device_endline,
 	execution_font,
 	execution_reference_begin,
+	execution_reference_phase,
 	execution_reference_end,
 	execution_anchor,
 	execution_table_preflight,
@@ -354,10 +363,10 @@ static int collect_equation_box(struct mant_mandoc_execution_report *,
 static int compare_node_index(const void *, const void *);
 static int compare_word_index(const void *, const void *);
 static int compare_equation_box_index(const void *, const void *);
-static int compare_live_atom_location(const void *, const void *);
+static size_t live_atom_hash(uint32_t, uint32_t, size_t);
+static const struct live_atom_location *find_live_atom(
+    const struct live_atom_location *, size_t, uint32_t, uint32_t);
 static int compare_generation_checkpoint(const void *, const void *);
-static size_t lower_bound_live_atom(const struct live_atom_location *,
-    size_t, uint32_t, uint32_t);
 static uint32_t lookup_node(const struct mant_mandoc_execution_report *,
     const struct roff_node *);
 static uint32_t lookup_word_node(const struct mant_mandoc_execution_report *,
@@ -369,12 +378,16 @@ static uint32_t lookup_equation_box(
 static uint32_t stable_node_kind(enum roff_type);
 static uint32_t stable_node_flags(const struct roff_node *);
 static uint32_t stable_term_flags(int);
+static uint32_t stable_output_role(const struct termp *);
 static uint32_t stable_control_request(enum roff_tok);
 static const char *stable_control_name(uint32_t);
 static uint32_t stable_font(int);
 static uint32_t atom_kind(int);
 static uint32_t table_layout_kind(enum tbl_cellt);
 static uint32_t table_data_kind(enum tbl_datt);
+static uint32_t table_alignment(enum tbl_cellt);
+static uint32_t table_cell_flags(const struct tbl_cell *,
+    const struct tbl_dat *);
 static uint32_t equation_box_kind(enum eqn_boxt);
 static uint32_t equation_font(enum eqn_fontt);
 static uint32_t equation_position(enum eqn_post);
@@ -443,18 +456,21 @@ DEFINE_RESERVE(buffer_generations, mant_mandoc_buffer_generation_record)
 DEFINE_RESERVE(words, mant_mandoc_word_record)
 DEFINE_RESERVE(atoms, mant_mandoc_atom_record)
 DEFINE_RESERVE(fragments, mant_mandoc_fragment_record)
-DEFINE_RESERVE(fragment_atoms, mant_mandoc_fragment_atom_record)
 DEFINE_RESERVE(logical_tabs, mant_mandoc_logical_tab_record)
 DEFINE_RESERVE(flushes, mant_mandoc_flush_record)
 DEFINE_RESERVE(boundaries, mant_mandoc_boundary_record)
 DEFINE_RESERVE(controls, mant_mandoc_control_record)
 DEFINE_RESERVE(geometries, mant_mandoc_geometry_record)
+DEFINE_RESERVE(placements, mant_mandoc_placement_record)
 DEFINE_RESERVE(wrappers, mant_mandoc_wrapper_record)
 DEFINE_RESERVE(references, mant_mandoc_reference_record)
 DEFINE_RESERVE(anchors, mant_mandoc_anchor_record)
 DEFINE_RESERVE(tables, mant_mandoc_table_record)
 DEFINE_RESERVE(table_rows, mant_mandoc_table_row_record)
-DEFINE_RESERVE(table_cells, mant_mandoc_table_cell_record)
+DEFINE_RESERVE(table_layout_cells, mant_mandoc_table_layout_cell_record)
+DEFINE_RESERVE(table_data_cells, mant_mandoc_table_data_cell_record)
+DEFINE_RESERVE(table_cell_invocations,
+    mant_mandoc_table_cell_invocation_record)
 DEFINE_RESERVE(equations, mant_mandoc_equation_record)
 DEFINE_RESERVE(equation_boxes, mant_mandoc_equation_box_record)
 DEFINE_RESERVE(equation_box_executions,
@@ -497,7 +513,7 @@ mant_mandoc_execution_alloc(const char *source_path,
 	report->current_control = MANT_MANDOC_EXEC_NONE;
 	report->current_table = MANT_MANDOC_EXEC_NONE;
 	report->current_table_row = MANT_MANDOC_EXEC_NONE;
-	report->current_table_cell = MANT_MANDOC_EXEC_NONE;
+	report->current_table_cell_invocation = MANT_MANDOC_EXEC_NONE;
 	report->current_equation = MANT_MANDOC_EXEC_NONE;
 	report->current_equation_box_execution = MANT_MANDOC_EXEC_NONE;
 	report->current_equation_part = MANT_MANDOC_EXEC_NONE;
@@ -575,11 +591,14 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 		}
 		return 0;
 	}
-	if (meta->source_request_seen) {
-		fail_report(report, MANT_MANDOC_EXECUTION_UNSUPPORTED,
-		    "native execution rejects executed .so and .soquiet requests");
-		return finish_execution_run(report);
-	}
+	/*
+	 * Upstream roff.c::roff_so() returns ROFF_SO after recording the
+	 * request.  The parser host has already applied its include policy by
+	 * this point; a denied request leaves a safe, executable partial tree and
+	 * an explicit diagnostic.  Execution must therefore consume that tree
+	 * rather than turning a recoverable host-policy denial into a second,
+	 * document-wide unsupported error.
+	 */
 	node_count = equation_box_count = 0;
 	if (!tree_supported(report, meta->first, 0, &node_count,
 	    &equation_box_count))
@@ -627,6 +646,7 @@ mant_mandoc_execution_run(struct mant_mandoc_execution_report *report,
 	memset(&options, 0, sizeof(options));
 	options.width = 78;
 	options.indent = 5;
+	report->content_indent_columns = (uint32_t)options.indent;
 	termp = utf8_alloc(&options);
 	if (termp == NULL) {
 		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
@@ -677,18 +697,20 @@ mant_mandoc_execution_free(struct mant_mandoc_execution_report *report)
 	free(report->words);
 	free(report->atoms);
 	free(report->fragments);
-	free(report->fragment_atoms);
 	free(report->logical_tabs);
 	free(report->flushes);
 	free(report->boundaries);
 	free(report->controls);
 	free(report->geometries);
+	free(report->placements);
 	free(report->wrappers);
 	free(report->references);
 	free(report->anchors);
 	free(report->tables);
 	free(report->table_rows);
-	free(report->table_cells);
+	free(report->table_layout_cells);
+	free(report->table_data_cells);
+	free(report->table_cell_invocations);
 	free(report->equations);
 	free(report->equation_boxes);
 	free(report->equation_box_executions);
@@ -757,6 +779,15 @@ mant_mandoc_execution_buffer_cell_count(
 	return report != NULL &&
 	    report->status == MANT_MANDOC_EXECUTION_COMPLETE ?
 	    report->buffer_cells : 0;
+}
+
+uint32_t
+mant_mandoc_execution_content_indent_columns(
+    const struct mant_mandoc_execution_report *report)
+{
+	return report != NULL &&
+	    report->status == MANT_MANDOC_EXECUTION_COMPLETE ?
+	    report->content_indent_columns : 0;
 }
 
 int
@@ -1599,6 +1630,67 @@ execution_definition_phase(void *arg, const struct termp *p,
 }
 
 static int
+execution_placement(void *arg, const struct termp *p,
+    const struct roff_node *node, int phase)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_placement_record *record;
+	uint32_t stable_phase;
+	int64_t offset_bu, rmargin_bu, maxrmargin_bu, visual_bu, cell_bu;
+
+	switch (phase) {
+	case TERM_EXEC_PLACEMENT_ENTER:
+		stable_phase = MANT_MANDOC_PLACEMENT_ENTER;
+		break;
+	case TERM_EXEC_PLACEMENT_CONTENT:
+		stable_phase = MANT_MANDOC_PLACEMENT_CONTENT;
+		break;
+	case TERM_EXEC_PLACEMENT_HEAD:
+		stable_phase = MANT_MANDOC_PLACEMENT_HEAD;
+		break;
+	case TERM_EXEC_PLACEMENT_BODY:
+		stable_phase = MANT_MANDOC_PLACEMENT_BODY;
+		break;
+	case TERM_EXEC_PLACEMENT_ORIGIN_TRANSITION:
+		stable_phase = MANT_MANDOC_PLACEMENT_ORIGIN_TRANSITION;
+		break;
+	case TERM_EXEC_PLACEMENT_EXIT:
+		stable_phase = MANT_MANDOC_PLACEMENT_EXIT;
+		break;
+	default:
+		return 0;
+	}
+	if (p == NULL || p->tcol == NULL ||
+	    report->current_wrapper == MANT_MANDOC_EXEC_NONE ||
+	    report->current_wrapper >= report->wrappers_count ||
+	    !wrapper_is_structural(
+	    report->wrappers[report->current_wrapper].kind) ||
+	    lookup_node(report, node) == MANT_MANDOC_EXEC_NONE ||
+	    !size_to_report_i64(report, p->tcol->offset, &offset_bu) ||
+	    !size_to_report_i64(report, p->tcol->rmargin, &rmargin_bu) ||
+	    !size_to_report_i64(report, p->maxrmargin, &maxrmargin_bu) ||
+	    !size_to_report_i64(report, p->viscol, &visual_bu) ||
+	    !size_to_report_i64(report, term_len(p, 1), &cell_bu) ||
+	    cell_bu <= 0 || !charge_work(report, 1) ||
+	    !charge_record(report) ||
+	    !reserve_placements(report, report->placements_count + 1))
+		return 0;
+	record = &report->placements[report->placements_count];
+	memset(record, 0, sizeof(*record));
+	record->key = (uint32_t)report->placements_count++;
+	record->node = lookup_node(report, node);
+	record->wrapper = report->current_wrapper;
+	record->phase = stable_phase;
+	record->offset_bu = offset_bu;
+	record->rmargin_bu = rmargin_bu;
+	record->maxrmargin_bu = maxrmargin_bu;
+	record->visual_bu = visual_bu;
+	record->cell_bu = cell_bu;
+	record->sequence = report->sequence++;
+	return 1;
+}
+
+static int
 execution_region_begin(void *arg, const struct termp *p,
     const struct roff_node *node, int kind)
 {
@@ -1792,6 +1884,9 @@ execution_buffer_write(void *arg, const struct termp *p,
 	record->font = stable_font(p->fontq[p->fonti]);
 	record->wrapper = report->current_wrapper;
 	record->replaced_by = MANT_MANDOC_EXEC_NONE;
+	record->flags = p->flags & TERMP_BRNEVER ?
+	    MANT_MANDOC_ATOM_NO_FILL : 0;
+	record->output_role = stable_output_role(p);
 	record->disposition = MANT_MANDOC_ATOM_BUFFERED;
 	record->sequence = report->sequence++;
 	if (replaced != MANT_MANDOC_EXEC_NONE && replaced < report->atoms_count) {
@@ -2066,6 +2161,7 @@ execution_fill_decision(void *arg, const struct termp *p,
 	record->logical_field_bu = logical_field_bu;
 	record->logical_origin_bu = logical_origin_bu;
 	record->logical_forced_break = p->exec_logical_forced_break != 0;
+	record->output_role = stable_output_role(p);
 	record->field_bu = field_bu;
 	record->target_bu = target_bu;
 	record->offset_bu = offset_bu;
@@ -2411,6 +2507,7 @@ execution_device_advance(void *arg, const struct termp *p,
 	    MANT_MANDOC_GEOMETRY_ORIGIN_NONE :
 	    MANT_MANDOC_GEOMETRY_ORIGIN_FLUSH;
 	record->origin_key = flush_origin;
+	record->output_role = stable_output_role(p);
 	record->sequence = report->sequence++;
 	return 1;
 }
@@ -2425,16 +2522,35 @@ execution_device_letter(void *arg, const struct termp *p,
 
 static int
 execution_device_endline(void *arg, const struct termp *p,
-    const struct roff_node *node, size_t line_before, size_t line_after,
-    size_t visual_before, size_t visual_after)
+    const struct roff_node *node, int cause, size_t line_before,
+    size_t line_after, size_t visual_before, size_t visual_after)
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_geometry_record *record;
 	struct mant_mandoc_boundary_record *boundary;
 	uint32_t parent;
+	uint32_t stable_cause;
 	int64_t line_before_value, line_after_value;
 	int64_t visual_before_value, visual_after_value;
 
+	switch (cause) {
+	case TERM_EXEC_LINE_DIRECT_DEVICE:
+		stable_cause = MANT_MANDOC_LINE_COMMIT_DIRECT_DEVICE;
+		break;
+	case TERM_EXEC_LINE_FIELD_WRAP:
+		stable_cause = MANT_MANDOC_LINE_COMMIT_FIELD_WRAP;
+		break;
+	case TERM_EXEC_LINE_FIELD_END:
+		stable_cause = MANT_MANDOC_LINE_COMMIT_FIELD_END;
+		break;
+	case TERM_EXEC_LINE_VERTICAL_BLANK:
+		stable_cause = MANT_MANDOC_LINE_COMMIT_VERTICAL_BLANK;
+		break;
+	default:
+		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+		    "native execution reported an unknown line commit cause");
+		return 0;
+	}
 	parent = report->current_boundary;
 	if (!size_to_report_i64(report, line_before, &line_before_value) ||
 	    !size_to_report_i64(report, line_after, &line_after_value) ||
@@ -2450,6 +2566,7 @@ execution_device_endline(void *arg, const struct termp *p,
 	boundary->visual_before = visual_before_value;
 	boundary->visual_after = visual_after_value;
 	boundary->flags_after = stable_term_flags(p->flags);
+	boundary->line_commit_cause = stable_cause;
 	if (boundary->parent != MANT_MANDOC_EXEC_NONE &&
 	    boundary->parent < report->boundaries_count) {
 		if (report->boundaries[boundary->parent].direct_device_lines ==
@@ -2474,6 +2591,7 @@ execution_device_endline(void *arg, const struct termp *p,
 	record->effective = 1;
 	record->origin_kind = MANT_MANDOC_GEOMETRY_ORIGIN_BOUNDARY;
 	record->origin_key = boundary->key;
+	record->output_role = stable_output_role(p);
 	record->before = line_before_value;
 	record->after = line_after_value;
 	record->sequence = report->sequence++;
@@ -2519,11 +2637,12 @@ execution_reference_begin(void *arg, const struct termp *p,
     const struct roff_node *current, const struct roff_node *owner,
     const struct roff_node *target_node, int kind, const char *primary,
     size_t primary_length, const char *secondary, size_t secondary_length,
-    int affinity, int *opened)
+    int affinity, int presentation, int *opened)
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_reference_record *record;
-	uint32_t stable_kind, stable_affinity, primary_start, primary_derived_length;
+	uint32_t stable_kind, stable_affinity, stable_presentation;
+	uint32_t primary_start, primary_derived_length;
 	uint32_t secondary_start;
 	uint32_t owner_key, target_key;
 	int derive_primary;
@@ -2555,6 +2674,16 @@ execution_reference_begin(void *arg, const struct termp *p,
 		break;
 	case TERM_EXEC_AFFINITY_BEFORE_OUTPUT:
 		stable_affinity = MANT_MANDOC_AFFINITY_BEFORE_OUTPUT;
+		break;
+	default:
+		return 0;
+	}
+	switch (presentation) {
+	case TERM_EXEC_REFERENCE_DIRECT:
+		stable_presentation = MANT_MANDOC_REFERENCE_DIRECT;
+		break;
+	case TERM_EXEC_REFERENCE_LABELLED_SUPPLEMENT:
+		stable_presentation = MANT_MANDOC_REFERENCE_LABELLED_SUPPLEMENT;
 		break;
 	default:
 		return 0;
@@ -2603,12 +2732,77 @@ execution_reference_begin(void *arg, const struct termp *p,
 	record->secondary_length = (uint32_t)secondary_length;
 	record->enter_atom = (uint32_t)report->atoms_count;
 	record->label_start_atom = record->enter_atom;
+	record->label_end_atom = MANT_MANDOC_EXEC_NONE;
+	record->target_start_atom = MANT_MANDOC_EXEC_NONE;
+	record->target_end_atom = MANT_MANDOC_EXEC_NONE;
+	record->supplement_start_atom = MANT_MANDOC_EXEC_NONE;
+	record->supplement_end_atom = MANT_MANDOC_EXEC_NONE;
 	record->leave_atom = MANT_MANDOC_EXEC_NONE;
+	record->presentation = stable_presentation;
 	record->affinity = stable_affinity;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
 	report->current_reference = record->key;
 	*opened = 1;
+	return 1;
+}
+
+static int
+execution_reference_phase(void *arg, const struct termp *p,
+    const struct roff_node *current, int phase)
+{
+	struct mant_mandoc_execution_report *report = arg;
+	struct mant_mandoc_reference_record *record;
+	uint32_t atom;
+
+	(void)p;
+	(void)current;
+	if (!charge_work(report, 1) ||
+	    report->current_reference == MANT_MANDOC_EXEC_NONE ||
+	    report->current_reference >= report->references_count ||
+	    report->atoms_count > UINT32_MAX)
+		return 0;
+	record = &report->references[report->current_reference];
+	if (record->presentation != MANT_MANDOC_REFERENCE_LABELLED_SUPPLEMENT)
+		return 0;
+	atom = (uint32_t)report->atoms_count;
+	switch (phase) {
+	case TERM_EXEC_REFERENCE_LABEL_END:
+		if (record->label_end_atom != MANT_MANDOC_EXEC_NONE)
+			return 0;
+		record->label_end_atom = atom;
+		break;
+	case TERM_EXEC_REFERENCE_SUPPLEMENT_BEGIN:
+		if (record->label_end_atom == MANT_MANDOC_EXEC_NONE ||
+		    record->supplement_start_atom != MANT_MANDOC_EXEC_NONE)
+			return 0;
+		record->supplement_start_atom = atom;
+		break;
+	case TERM_EXEC_REFERENCE_TARGET_BEGIN:
+		if (record->supplement_start_atom == MANT_MANDOC_EXEC_NONE ||
+		    record->target_start_atom != MANT_MANDOC_EXEC_NONE)
+			return 0;
+		record->target_start_atom = atom;
+		break;
+	case TERM_EXEC_REFERENCE_TARGET_END:
+		if (record->target_start_atom == MANT_MANDOC_EXEC_NONE ||
+		    record->target_end_atom != MANT_MANDOC_EXEC_NONE)
+			return 0;
+		record->target_end_atom = atom;
+		while (record->target_start_atom < record->target_end_atom &&
+		    report->atoms[record->target_start_atom].role ==
+		    MANT_MANDOC_ATOM_IMPLICIT_SPACE)
+			record->target_start_atom++;
+		break;
+	case TERM_EXEC_REFERENCE_SUPPLEMENT_END:
+		if (record->target_end_atom == MANT_MANDOC_EXEC_NONE ||
+		    record->supplement_end_atom != MANT_MANDOC_EXEC_NONE)
+			return 0;
+		record->supplement_end_atom = atom;
+		break;
+	default:
+		return 0;
+	}
 	return 1;
 }
 
@@ -2631,9 +2825,27 @@ execution_reference_end(void *arg, const struct termp *p,
 		return 0;
 	record->leave_atom = (uint32_t)report->atoms_count;
 	while (record->label_start_atom < record->leave_atom &&
-	    report->atoms[record->label_start_atom].role ==
-	    MANT_MANDOC_ATOM_IMPLICIT_SPACE)
+	    (report->atoms[record->label_start_atom].role ==
+	    MANT_MANDOC_ATOM_IMPLICIT_SPACE ||
+	    report->atoms[record->label_start_atom].kind ==
+	    MANT_MANDOC_ATOM_TAB_REFERENCE))
 		record->label_start_atom++;
+	if (record->presentation == MANT_MANDOC_REFERENCE_DIRECT) {
+		record->label_end_atom = record->leave_atom;
+		record->target_start_atom = record->label_start_atom;
+		record->target_end_atom = record->leave_atom;
+	} else if (record->label_end_atom == MANT_MANDOC_EXEC_NONE ||
+	    record->supplement_start_atom == MANT_MANDOC_EXEC_NONE ||
+	    record->target_start_atom == MANT_MANDOC_EXEC_NONE ||
+	    record->target_end_atom == MANT_MANDOC_EXEC_NONE ||
+	    record->supplement_end_atom == MANT_MANDOC_EXEC_NONE ||
+	    record->label_start_atom > record->label_end_atom ||
+	    record->label_end_atom > record->supplement_start_atom ||
+	    record->supplement_start_atom > record->target_start_atom ||
+	    record->target_start_atom > record->target_end_atom ||
+	    record->target_end_atom > record->supplement_end_atom ||
+	    record->supplement_end_atom > record->leave_atom)
+		return 0;
 	record->leave_sequence = report->sequence++;
 	report->current_reference = record->parent;
 	return 1;
@@ -2692,15 +2904,17 @@ execution_table_begin(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_table_record *record;
+	int64_t offset_bu, cell_bu;
 
-	(void)p;
 	if (span == NULL || span->opts == NULL || rows == 0 ||
 	    rows > UINT32_MAX || layout_cells > UINT32_MAX ||
 	    data_cells > UINT32_MAX || report->current_table !=
 	    MANT_MANDOC_EXEC_NONE || report->atoms_count > UINT32_MAX ||
 	    report->fragments_count > UINT32_MAX ||
 	    report->flushes_count > UINT32_MAX ||
-	    !charge_record(report) ||
+	    !size_to_report_i64(report, p->tcol->offset, &offset_bu) ||
+	    !size_to_report_i64(report, term_len(p, 1), &cell_bu) ||
+	    cell_bu <= 0 || !charge_record(report) ||
 	    !reserve_tables(report, report->tables_count + 1))
 		return 0;
 	record = &report->tables[report->tables_count];
@@ -2709,17 +2923,32 @@ execution_table_begin(void *arg, const struct termp *p,
 	record->first_row_node = lookup_node(report, node);
 	record->row_start = (uint32_t)report->table_rows_count;
 	record->row_length = (uint32_t)rows;
-	record->cell_start = (uint32_t)report->table_cells_count;
-	record->cell_length = (uint32_t)data_cells;
+	record->layout_start = (uint32_t)report->table_layout_cells_count;
+	record->layout_length = 0;
+	record->data_start = (uint32_t)report->table_data_cells_count;
+	record->data_length = 0;
+	record->invocation_start =
+	    (uint32_t)report->table_cell_invocations_count;
+	record->invocation_length = 0;
 	record->logical_columns = (uint32_t)span->opts->cols;
+	record->wrapper = report->current_wrapper;
 	record->enter_atom = (uint32_t)report->atoms_count;
 	record->leave_atom = MANT_MANDOC_EXEC_NONE;
 	record->enter_fragment = (uint32_t)report->fragments_count;
 	record->leave_fragment = MANT_MANDOC_EXEC_NONE;
 	record->enter_flush = (uint32_t)report->flushes_count;
 	record->leave_flush = MANT_MANDOC_EXEC_NONE;
+	record->offset_bu = offset_bu;
+	record->cell_bu = cell_bu;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
+	if (!reserve_table_layout_cells(report,
+	    report->table_layout_cells_count + layout_cells) ||
+	    !reserve_table_data_cells(report,
+	    report->table_data_cells_count + data_cells) ||
+	    !reserve_table_cell_invocations(report,
+	    report->table_cell_invocations_count + layout_cells))
+		return 0;
 	report->current_table = record->key;
 	return 1;
 }
@@ -2730,13 +2959,14 @@ execution_table_end(void *arg, const struct termp *p,
 {
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_table_record *record;
+	struct mant_mandoc_wrapper_record *wrapper;
 
 	(void)p;
 	(void)node;
 	if (span == NULL || span->next != NULL || report->current_table ==
 	    MANT_MANDOC_EXEC_NONE || report->current_table >=
 	    report->tables_count || report->current_table_row !=
-	    MANT_MANDOC_EXEC_NONE || report->current_table_cell !=
+	    MANT_MANDOC_EXEC_NONE || report->current_table_cell_invocation !=
 	    MANT_MANDOC_EXEC_NONE || !charge_work(report, 1) ||
 	    report->atoms_count > UINT32_MAX ||
 	    report->fragments_count > UINT32_MAX ||
@@ -2746,7 +2976,20 @@ execution_table_end(void *arg, const struct termp *p,
 	record->leave_atom = (uint32_t)report->atoms_count;
 	record->leave_fragment = (uint32_t)report->fragments_count;
 	record->leave_flush = (uint32_t)report->flushes_count;
+	record->layout_length = (uint32_t)report->table_layout_cells_count -
+	    record->layout_start;
+	record->data_length = (uint32_t)report->table_data_cells_count -
+	    record->data_start;
+	record->invocation_length =
+	    (uint32_t)report->table_cell_invocations_count -
+	    record->invocation_start;
 	record->leave_sequence = report->sequence++;
+	while (record->wrapper != MANT_MANDOC_EXEC_NONE) {
+		wrapper = &report->wrappers[record->wrapper];
+		if (wrapper->leave_sequence > record->leave_sequence)
+			break;
+		record->wrapper = wrapper->parent;
+	}
 	report->current_table = MANT_MANDOC_EXEC_NONE;
 	return 1;
 }
@@ -2758,6 +3001,11 @@ execution_table_row_begin(void *arg, const struct termp *p,
 	struct mant_mandoc_execution_report *report = arg;
 	struct mant_mandoc_table_record *table;
 	struct mant_mandoc_table_row_record *record;
+	struct mant_mandoc_table_layout_cell_record *layout_record;
+	struct mant_mandoc_table_data_cell_record *data_record;
+	const struct tbl_cell *layout;
+	const struct tbl_dat *data;
+	size_t layout_count, data_count, layout_key;
 	uint32_t kind;
 
 	(void)p;
@@ -2765,19 +3013,40 @@ execution_table_row_begin(void *arg, const struct termp *p,
 	    report->current_table >= report->tables_count ||
 	    report->current_table_row != MANT_MANDOC_EXEC_NONE ||
 	    report->table_rows_count > UINT32_MAX ||
-	    report->table_cells_count > UINT32_MAX ||
+	    report->table_layout_cells_count > UINT32_MAX ||
+	    report->table_data_cells_count > UINT32_MAX ||
+	    report->table_cell_invocations_count > UINT32_MAX ||
 	    report->atoms_count > UINT32_MAX ||
 	    report->fragments_count > UINT32_MAX ||
 	    report->flushes_count > UINT32_MAX)
 		return 0;
+	layout_count = data_count = 0;
 	switch (span->pos) {
-	case TBL_SPAN_DATA: kind = MANT_MANDOC_EXEC_TABLE_ROW_DATA; break;
+	case TBL_SPAN_DATA:
+		for (layout = span->layout->first; layout != NULL;
+		    layout = layout->next)
+			layout_count++;
+		for (data = span->first; data != NULL; data = data->next)
+			data_count++;
+		kind = MANT_MANDOC_EXEC_TABLE_ROW_LAYOUT_RULE;
+		for (layout = span->layout->first; layout != NULL;
+		    layout = layout->next)
+			if (layout->pos != TBL_CELL_HORIZ &&
+			    layout->pos != TBL_CELL_DHORIZ) {
+				kind = MANT_MANDOC_EXEC_TABLE_ROW_DATA;
+				break;
+			}
+		break;
 	case TBL_SPAN_HORIZ: kind = MANT_MANDOC_EXEC_TABLE_ROW_SINGLE_RULE; break;
 	case TBL_SPAN_DHORIZ: kind = MANT_MANDOC_EXEC_TABLE_ROW_DOUBLE_RULE; break;
 	default: return 0;
 	}
 	if (!charge_record(report) ||
-	    !reserve_table_rows(report, report->table_rows_count + 1))
+	    !reserve_table_rows(report, report->table_rows_count + 1) ||
+	    !reserve_table_layout_cells(report,
+	    report->table_layout_cells_count + layout_count) ||
+	    !reserve_table_data_cells(report,
+	    report->table_data_cells_count + data_count))
 		return 0;
 	table = &report->tables[report->current_table];
 	record = &report->table_rows[report->table_rows_count];
@@ -2788,7 +3057,13 @@ execution_table_row_begin(void *arg, const struct termp *p,
 	record->ordinal = record->key - table->row_start;
 	record->kind = kind;
 	record->logical_columns = (uint32_t)span->opts->cols;
-	record->cell_start = (uint32_t)report->table_cells_count;
+	record->layout_start = (uint32_t)report->table_layout_cells_count;
+	record->layout_length = (uint32_t)layout_count;
+	record->data_start = (uint32_t)report->table_data_cells_count;
+	record->data_length = (uint32_t)data_count;
+	record->invocation_start =
+	    (uint32_t)report->table_cell_invocations_count;
+	record->invocation_length = 0;
 	record->enter_atom = (uint32_t)report->atoms_count;
 	record->leave_atom = MANT_MANDOC_EXEC_NONE;
 	record->enter_fragment = (uint32_t)report->fragments_count;
@@ -2797,6 +3072,75 @@ execution_table_row_begin(void *arg, const struct termp *p,
 	record->leave_flush = MANT_MANDOC_EXEC_NONE;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
+	for (layout = span->pos == TBL_SPAN_DATA ? span->layout->first : NULL;
+	    layout != NULL; layout = layout->next) {
+		if (!charge_record(report))
+			return 0;
+		layout_record = &report->table_layout_cells[
+		    report->table_layout_cells_count];
+		memset(layout_record, 0, sizeof(*layout_record));
+		layout_record->key = (uint32_t)report->table_layout_cells_count++;
+		layout_record->row = record->key;
+		layout_record->ordinal = layout_record->key - record->layout_start;
+		layout_record->logical_column = (uint32_t)layout->col;
+		layout_record->kind = table_layout_kind(layout->pos);
+		layout_record->alignment = table_alignment(layout->pos);
+		layout_record->font = stable_font(
+		    layout->font == ESCAPE_FONTBI ? TERMFONT_BI :
+		    layout->font == ESCAPE_FONTBOLD || layout->font == ESCAPE_FONTCB ?
+		    TERMFONT_BOLD : layout->font == ESCAPE_FONTITALIC ||
+		    layout->font == ESCAPE_FONTCI ? TERMFONT_UNDER : TERMFONT_NONE);
+		layout_record->flags =
+		    (layout->flags & TBL_CELL_TALIGN ? 1U << 0 : 0) |
+		    (layout->flags & TBL_CELL_UP ? 1U << 1 : 0) |
+		    (layout->flags & TBL_CELL_BALIGN ? 1U << 2 : 0) |
+		    (layout->flags & TBL_CELL_WIGN ? 1U << 3 : 0) |
+		    (layout->flags & TBL_CELL_EQUAL ? 1U << 4 : 0) |
+		    (layout->flags & TBL_CELL_WMAX ? 1U << 5 : 0);
+		layout_record->horizontal_continuation = layout->pos == TBL_CELL_SPAN;
+		layout_record->spacing_en = layout->spacing == SIZE_MAX ? UINT32_MAX :
+		    layout->spacing > UINT32_MAX ? UINT32_MAX : (uint32_t)layout->spacing;
+		layout_record->vertical_rule = layout->vert < 0 ? 0 :
+		    (uint32_t)layout->vert;
+		if (layout_record->kind == MANT_MANDOC_EXEC_NONE ||
+		    layout_record->font == MANT_MANDOC_EXEC_NONE)
+			return 0;
+	}
+	for (data = span->pos == TBL_SPAN_DATA ? span->first : NULL;
+	    data != NULL; data = data->next) {
+		if (!charge_record(report))
+			return 0;
+		layout_key = record->layout_start;
+		while (layout_key < record->layout_start + record->layout_length &&
+		    report->table_layout_cells[layout_key].logical_column !=
+		    (uint32_t)data->layout->col)
+			layout_key++;
+		if (layout_key == record->layout_start + record->layout_length)
+			return 0;
+		layout_record = &report->table_layout_cells[layout_key];
+		data_record = &report->table_data_cells[
+		    report->table_data_cells_count];
+		memset(data_record, 0, sizeof(*data_record));
+		data_record->key = (uint32_t)report->table_data_cells_count++;
+		data_record->row = record->key;
+		data_record->ordinal = data_record->key - record->data_start;
+		data_record->layout = (uint32_t)layout_key;
+		data_record->kind = table_data_kind(data->pos);
+		data_record->disposition = layout_record->kind ==
+		    MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE ||
+		    layout_record->kind ==
+		    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE ?
+		    MANT_MANDOC_EXEC_TABLE_DATA_SUPPRESSED_BY_LAYOUT :
+		    MANT_MANDOC_EXEC_TABLE_DATA_PROJECTED;
+		data_record->column_span = (uint32_t)data->hspans + 1;
+		data_record->row_span = (uint32_t)data->vspans + 1;
+		data_record->flags = table_cell_flags(data->layout, data);
+		data_record->equation_delimiters = data->eqn_delim != 0;
+		data_record->equation_opening = data->eqn_odelim;
+		data_record->equation_closing = data->eqn_cdelim;
+		if (data_record->kind == MANT_MANDOC_EXEC_NONE)
+			return 0;
+	}
 	report->current_table_row = record->key;
 	return 1;
 }
@@ -2813,14 +3157,15 @@ execution_table_row_end(void *arg, const struct termp *p,
 	(void)span;
 	if (report->current_table_row == MANT_MANDOC_EXEC_NONE ||
 	    report->current_table_row >= report->table_rows_count ||
-	    report->current_table_cell != MANT_MANDOC_EXEC_NONE ||
+	    report->current_table_cell_invocation != MANT_MANDOC_EXEC_NONE ||
 	    !charge_work(report, 1) || report->atoms_count > UINT32_MAX ||
 	    report->fragments_count > UINT32_MAX ||
 	    report->flushes_count > UINT32_MAX)
 		return 0;
 	record = &report->table_rows[report->current_table_row];
-	record->cell_length = (uint32_t)report->table_cells_count -
-	    record->cell_start;
+	record->invocation_length =
+	    (uint32_t)report->table_cell_invocations_count -
+	    record->invocation_start;
 	record->leave_atom = (uint32_t)report->atoms_count;
 	record->leave_fragment = (uint32_t)report->fragments_count;
 	record->leave_flush = (uint32_t)report->flushes_count;
@@ -2973,52 +3318,82 @@ execution_table_cell_begin(void *arg, const struct termp *p,
     size_t data_ordinal, size_t coloff_before, size_t coloff_after)
 {
 	struct mant_mandoc_execution_report *report = arg;
-	struct mant_mandoc_table_cell_record *record;
-	uint32_t layout_kind, data_kind, font;
-	size_t buffer;
+	struct mant_mandoc_table_cell_invocation_record *record;
+	struct mant_mandoc_table_row_record *row;
+	struct mant_mandoc_table_layout_cell_record *layout_record;
+	struct mant_mandoc_table_data_cell_record *data_record;
+	uint32_t outcome;
+	size_t buffer, layout_key, data_key;
 	int64_t offset_bu, rmargin_bu, coloff_before_bu;
 
-	(void)span;
 	(void)coloff_after;
-	if (cell == NULL || data == NULL || data->layout != cell ||
-	    ordinal > UINT32_MAX || data_ordinal > UINT32_MAX ||
+	if (cell == NULL || ordinal > UINT32_MAX ||
 	    cell->col < 0 || report->current_table_row ==
-	    MANT_MANDOC_EXEC_NONE || report->current_table_cell !=
+	    MANT_MANDOC_EXEC_NONE || report->current_table_row >=
+	    report->table_rows_count || report->current_table_cell_invocation !=
 	    MANT_MANDOC_EXEC_NONE || report->atoms_count > UINT32_MAX ||
 	    !charge_record(report) ||
-	    !reserve_table_cells(report, report->table_cells_count + 1))
+	    !reserve_table_cell_invocations(report,
+	    report->table_cell_invocations_count + 1))
 		return 0;
 	if (p->tcol < p->tcols || p->tcol >= p->tcols + p->maxtcol)
 		return 0;
+	row = &report->table_rows[report->current_table_row];
+	if (row->node != lookup_node(report, node) ||
+	    ordinal != report->table_cell_invocations_count -
+	    row->invocation_start)
+		return 0;
+	layout_key = row->layout_start;
+	while (layout_key < row->layout_start + row->layout_length &&
+	    report->table_layout_cells[layout_key].logical_column !=
+	    (uint32_t)cell->col)
+		layout_key++;
+	if (layout_key == row->layout_start + row->layout_length)
+		return 0;
+	layout_record = &report->table_layout_cells[layout_key];
+	if (data == NULL) {
+		if (data_ordinal != SIZE_MAX)
+			return 0;
+		data_key = MANT_MANDOC_EXEC_NONE;
+		data_record = NULL;
+	} else {
+		if (data_ordinal > UINT32_MAX ||
+		    data_ordinal >= row->data_length)
+			return 0;
+		data_key = row->data_start + data_ordinal;
+		data_record = &report->table_data_cells[data_key];
+	}
 	buffer = (size_t)(p->tcol - p->tcols);
-	layout_kind = table_layout_kind(cell->pos);
-	data_kind = table_data_kind(data->pos);
-	font = stable_font(cell->font == ESCAPE_FONTBI ? TERMFONT_BI :
-	    cell->font == ESCAPE_FONTBOLD || cell->font == ESCAPE_FONTCB ?
-	    TERMFONT_BOLD : cell->font == ESCAPE_FONTITALIC ||
-	    cell->font == ESCAPE_FONTCI ? TERMFONT_UNDER : TERMFONT_NONE);
 	if (!size_to_report_i64(report, p->tcol->offset, &offset_bu) ||
 	    !size_to_report_i64(report, p->tcol->rmargin, &rmargin_bu) ||
-	    !size_to_report_i64(report, coloff_before, &coloff_before_bu) ||
-	    layout_kind == MANT_MANDOC_EXEC_NONE ||
-	    data_kind == MANT_MANDOC_EXEC_NONE ||
-	    font == MANT_MANDOC_EXEC_NONE)
+	    !size_to_report_i64(report, coloff_before, &coloff_before_bu))
 		return 0;
-	record = &report->table_cells[report->table_cells_count];
+	if (layout_record->kind == MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE ||
+	    layout_record->kind == MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE)
+		outcome = MANT_MANDOC_EXEC_TABLE_INVOKE_LAYOUT_RULE;
+	else if (data_record == NULL || data_record->kind ==
+	    MANT_MANDOC_EXEC_TABLE_DATA_NONE)
+		outcome = MANT_MANDOC_EXEC_TABLE_INVOKE_EMPTY;
+	else if (data_record->kind != MANT_MANDOC_EXEC_TABLE_DATA_TEXT)
+		outcome = MANT_MANDOC_EXEC_TABLE_INVOKE_DATA_RULE;
+	else if (layout_record->kind == MANT_MANDOC_EXEC_TABLE_LAYOUT_DOWN ||
+	    layout_record->kind == MANT_MANDOC_EXEC_TABLE_LAYOUT_SPAN ||
+	    (data_record->flags &
+	    MANT_MANDOC_EXEC_TABLE_CELL_VERTICAL_CONTINUATION))
+		outcome = MANT_MANDOC_EXEC_TABLE_INVOKE_CONTINUATION;
+	else
+		outcome = MANT_MANDOC_EXEC_TABLE_INVOKE_DATA;
+	record = &report->table_cell_invocations[
+	    report->table_cell_invocations_count];
 	memset(record, 0, sizeof(*record));
-	record->key = (uint32_t)report->table_cells_count++;
+	record->key = (uint32_t)report->table_cell_invocations_count++;
 	record->row = report->current_table_row;
 	record->node = lookup_node(report, node);
 	record->ordinal = (uint32_t)ordinal;
-	record->data_ordinal = (uint32_t)data_ordinal;
+	record->layout = (uint32_t)layout_key;
+	record->data = (uint32_t)data_key;
+	record->outcome = outcome;
 	record->logical_column = (uint32_t)cell->col;
-	record->column_span = (uint32_t)data->hspans + 1;
-	record->row_span = (uint32_t)data->vspans + 1;
-	record->layout_kind = layout_kind;
-	record->data_kind = data_kind;
-	record->alignment = table_alignment(cell->pos);
-	record->font = font;
-	record->flags = table_cell_flags(cell, data);
 	record->buffer = MANT_MANDOC_EXEC_NONE;
 	record->buffer_generation = MANT_MANDOC_EXEC_NONE;
 	record->enter_atom = (uint32_t)report->atoms_count;
@@ -3029,13 +3404,12 @@ execution_table_cell_begin(void *arg, const struct termp *p,
 	record->coloff_after_bu = coloff_before_bu;
 	record->enter_sequence = report->sequence++;
 	record->leave_sequence = UINT64_MAX;
-	report->current_table_cell = record->key;
+	report->current_table_cell_invocation = record->key;
 	report->current_table_cell_node = node;
 	report->current_table_cell_span = span;
 	report->current_table_cell_layout = cell;
 	report->current_table_cell_data = data;
 	report->current_table_cell_ordinal = ordinal;
-	report->current_table_cell_data_ordinal = data_ordinal;
 	report->current_table_cell_column = buffer;
 	report->current_table_cell_coloff = coloff_before;
 	return 1;
@@ -3048,22 +3422,27 @@ execution_table_cell_end(void *arg, const struct termp *p,
     size_t data_ordinal, size_t coloff_before, size_t coloff_after)
 {
 	struct mant_mandoc_execution_report *report = arg;
-	struct mant_mandoc_table_cell_record *record;
+	struct mant_mandoc_table_cell_invocation_record *record;
 	size_t buffer;
 	int64_t coloff_after_bu;
 
 	if (!size_to_report_i64(report, coloff_after, &coloff_after_bu) ||
-	    report->current_table_cell == MANT_MANDOC_EXEC_NONE ||
-	    report->current_table_cell >= report->table_cells_count ||
+	    report->current_table_cell_invocation == MANT_MANDOC_EXEC_NONE ||
+	    report->current_table_cell_invocation >=
+	    report->table_cell_invocations_count ||
 	    report->atoms_count > UINT32_MAX || !charge_work(report, 1))
 		return 0;
-	record = &report->table_cells[report->current_table_cell];
+	record = &report->table_cell_invocations[
+	    report->current_table_cell_invocation];
 	if (node != report->current_table_cell_node ||
 	    span != report->current_table_cell_span ||
 	    cell != report->current_table_cell_layout ||
 	    data != report->current_table_cell_data ||
 	    ordinal != report->current_table_cell_ordinal ||
-	    data_ordinal != report->current_table_cell_data_ordinal ||
+	    ((data == NULL && data_ordinal != SIZE_MAX) ||
+	    (data != NULL && (data_ordinal > UINT32_MAX ||
+	    record->data != report->table_rows[record->row].data_start +
+	    data_ordinal))) ||
 	    coloff_before != report->current_table_cell_coloff ||
 	    p->tcol < p->tcols || p->tcol >= p->tcols + p->maxtcol)
 		return 0;
@@ -3078,7 +3457,7 @@ execution_table_cell_end(void *arg, const struct termp *p,
 	record->leave_atom = (uint32_t)report->atoms_count;
 	record->coloff_after_bu = coloff_after_bu;
 	record->leave_sequence = report->sequence++;
-	report->current_table_cell = MANT_MANDOC_EXEC_NONE;
+	report->current_table_cell_invocation = MANT_MANDOC_EXEC_NONE;
 	report->current_table_cell_node = NULL;
 	report->current_table_cell_span = NULL;
 	report->current_table_cell_layout = NULL;
@@ -3328,40 +3707,57 @@ execution_equation_part_end(void *arg, const struct termp *p,
 static int
 validate_table_records(struct mant_mandoc_execution_report *report)
 {
+	struct mant_mandoc_table_record *table;
+	struct mant_mandoc_table_row_record *row, *previous_row;
+	struct mant_mandoc_table_layout_cell_record *layout;
+	struct mant_mandoc_table_data_cell_record *data;
+	struct mant_mandoc_table_cell_invocation_record *invocation,
+	    *previous_invocation;
 	struct mant_mandoc_buffer_generation_record *generation;
 	struct mant_mandoc_atom_record *atom;
-	struct mant_mandoc_table_record *table;
-	struct mant_mandoc_table_row_record *row;
-	struct mant_mandoc_table_cell_record *cell;
-	struct mant_mandoc_table_row_record *previous_row;
-	struct mant_mandoc_table_cell_record *previous_cell;
 	struct mant_mandoc_flush_record *flush;
 	struct mant_mandoc_fragment_record *fragment;
-	size_t index, inner, row_cursor, cell_cursor, payload_cell, owner;
-	uint32_t next_data_ordinal, next_column, *generation_cell;
+	uint32_t *generation_invocation, *data_invocations,
+	    *data_primary_invocations;
+	size_t table_index, inner, index, owner;
+	size_t row_cursor, layout_cursor, data_cursor, invocation_cursor;
+	uint32_t expected_outcome;
 
-	row_cursor = cell_cursor = 0;
-	generation_cell = report->buffer_generations_count == 0 ? NULL :
-	    malloc(report->buffer_generations_count * sizeof(*generation_cell));
-	if (report->buffer_generations_count != 0 && generation_cell == NULL) {
-		fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
-		    "could not validate native table generation ownership");
-		return 0;
-	}
+	row_cursor = layout_cursor = data_cursor = invocation_cursor = 0;
+	generation_invocation = report->buffer_generations_count == 0 ? NULL :
+	    malloc(report->buffer_generations_count *
+	    sizeof(*generation_invocation));
+	data_invocations = report->table_data_cells_count == 0 ? NULL :
+	    calloc(report->table_data_cells_count, sizeof(*data_invocations));
+	data_primary_invocations = report->table_data_cells_count == 0 ? NULL :
+	    calloc(report->table_data_cells_count,
+	    sizeof(*data_primary_invocations));
+	if ((report->buffer_generations_count != 0 &&
+	    generation_invocation == NULL) ||
+	    (report->table_data_cells_count != 0 &&
+	    (data_invocations == NULL || data_primary_invocations == NULL)))
+		goto allocation;
 	for (index = 0; index < report->buffer_generations_count; index++)
-		generation_cell[index] = MANT_MANDOC_EXEC_NONE;
+		generation_invocation[index] = MANT_MANDOC_EXEC_NONE;
 
-	for (index = 0; index < report->tables_count; index++) {
-		table = &report->tables[index];
-		if (table->key != index ||
+	for (table_index = 0; table_index < report->tables_count; table_index++) {
+		table = &report->tables[table_index];
+		if (table->key != table_index ||
 		    table->first_row_node >= report->nodes_count ||
 		    table->row_start != row_cursor || table->row_length == 0 ||
-		    table->row_start > report->table_rows_count ||
-		    table->row_length > report->table_rows_count - table->row_start ||
-		    table->cell_start != cell_cursor ||
-		    table->cell_start > report->table_cells_count ||
-		    table->cell_length > report->table_cells_count - table->cell_start ||
-		    table->logical_columns == 0 || table->flags != 0 ||
+		    table->layout_start != layout_cursor ||
+		    table->data_start != data_cursor ||
+		    table->invocation_start != invocation_cursor ||
+		    !valid_record_range(report->table_rows_count,
+		    table->row_start, table->row_length) ||
+		    !valid_record_range(report->table_layout_cells_count,
+		    table->layout_start, table->layout_length) ||
+		    !valid_record_range(report->table_data_cells_count,
+		    table->data_start, table->data_length) ||
+		    !valid_record_range(report->table_cell_invocations_count,
+		    table->invocation_start, table->invocation_length))
+			goto invalid;
+		if (table->logical_columns == 0 || table->flags != 0 ||
 		    table->enter_atom > table->leave_atom ||
 		    table->leave_atom > report->atoms_count ||
 		    table->enter_fragment > table->leave_fragment ||
@@ -3370,6 +3766,13 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 		    table->leave_flush > report->flushes_count ||
 		    table->enter_sequence >= table->leave_sequence)
 			goto invalid;
+		if (table->wrapper != MANT_MANDOC_EXEC_NONE &&
+		    (table->wrapper >= report->wrappers_count ||
+		    report->wrappers[table->wrapper].enter_sequence >=
+		    table->enter_sequence ||
+		    report->wrappers[table->wrapper].leave_sequence <=
+		    table->leave_sequence))
+			goto invalid;
 		previous_row = NULL;
 		for (inner = 0; inner < table->row_length; inner++) {
 			row = &report->table_rows[table->row_start + inner];
@@ -3377,12 +3780,18 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 			    row->table != table->key || row->ordinal != inner ||
 			    row->node >= report->nodes_count ||
 			    row->kind < MANT_MANDOC_EXEC_TABLE_ROW_DATA ||
-			    row->kind > MANT_MANDOC_EXEC_TABLE_ROW_DOUBLE_RULE ||
+			    row->kind > MANT_MANDOC_EXEC_TABLE_ROW_LAYOUT_RULE ||
 			    row->logical_columns != table->logical_columns ||
-			    row->cell_start != cell_cursor ||
-			    row->cell_start > report->table_cells_count ||
-			    row->cell_length > report->table_cells_count -
-			    row->cell_start || row->enter_atom > row->leave_atom ||
+			    row->layout_start != layout_cursor ||
+			    row->data_start != data_cursor ||
+			    row->invocation_start != invocation_cursor ||
+			    !valid_record_range(report->table_layout_cells_count,
+			    row->layout_start, row->layout_length) ||
+			    !valid_record_range(report->table_data_cells_count,
+			    row->data_start, row->data_length) ||
+			    !valid_record_range(report->table_cell_invocations_count,
+			    row->invocation_start, row->invocation_length) ||
+			    row->enter_atom > row->leave_atom ||
 			    row->enter_atom < table->enter_atom ||
 			    row->leave_atom > table->leave_atom ||
 			    row->enter_fragment > row->leave_fragment ||
@@ -3393,9 +3802,12 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 			    row->leave_flush > table->leave_flush ||
 			    row->enter_sequence <= table->enter_sequence ||
 			    row->leave_sequence >= table->leave_sequence ||
-			    row->enter_sequence >= row->leave_sequence ||
-			    (row->kind != MANT_MANDOC_EXEC_TABLE_ROW_DATA &&
-			    row->cell_length != 0))
+			    row->enter_sequence >= row->leave_sequence)
+				goto invalid;
+			if (row->kind != MANT_MANDOC_EXEC_TABLE_ROW_DATA &&
+			    row->kind != MANT_MANDOC_EXEC_TABLE_ROW_LAYOUT_RULE &&
+			    (row->layout_length != 0 || row->data_length != 0 ||
+			    row->invocation_length != 0))
 				goto invalid;
 			if (previous_row == NULL) {
 				if (row->node != table->first_row_node ||
@@ -3409,120 +3821,171 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 			    row->enter_sequence <= previous_row->leave_sequence)
 				goto invalid;
 
-			previous_cell = NULL;
-			next_data_ordinal = next_column = 0;
-			for (cell_cursor = row->cell_start;
-			    cell_cursor < row->cell_start + row->cell_length;
-			    cell_cursor++) {
-				cell = &report->table_cells[cell_cursor];
-				if (cell->key != cell_cursor || cell->row != row->key ||
-				    cell->node != row->node ||
-				    cell->ordinal != cell_cursor - row->cell_start ||
-				    cell->data_ordinal != next_data_ordinal ||
-				    cell->logical_column < next_column ||
-				    cell->logical_column >= row->logical_columns ||
-				    cell->column_span == 0 ||
-				    cell->column_span > row->logical_columns -
-				    cell->logical_column || cell->row_span == 0 ||
-				    cell->layout_kind <
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER ||
-				    cell->layout_kind >
+			for (index = row->layout_start;
+			    index < row->layout_start + row->layout_length; index++) {
+				layout = &report->table_layout_cells[index];
+				if (layout->key != index || layout->row != row->key ||
+				    layout->ordinal != index - row->layout_start ||
+				    layout->logical_column >= row->logical_columns ||
+				    layout->kind < MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER ||
+				    layout->kind >
 				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE ||
-				    cell->data_kind < MANT_MANDOC_EXEC_TABLE_DATA_NONE ||
-				    cell->data_kind >
+				    layout->alignment > MANT_MANDOC_EXEC_TABLE_ALIGN_LONG ||
+				    layout->font > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
+				    layout->flags & ~0x003fU ||
+				    layout->horizontal_continuation > 1 ||
+				    layout->reserved != 0)
+					goto invalid;
+				if (row->kind == MANT_MANDOC_EXEC_TABLE_ROW_LAYOUT_RULE &&
+				    layout->kind !=
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE &&
+				    layout->kind !=
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE)
+					goto invalid;
+			}
+			for (index = row->data_start;
+			    index < row->data_start + row->data_length; index++) {
+				data = &report->table_data_cells[index];
+				if (data->key != index || data->row != row->key ||
+				    data->ordinal != index - row->data_start ||
+				    data->layout < row->layout_start ||
+				    data->layout >= row->layout_start + row->layout_length ||
+				    data->kind < MANT_MANDOC_EXEC_TABLE_DATA_NONE ||
+				    data->kind >
 				    MANT_MANDOC_EXEC_TABLE_DATA_ISOLATED_DOUBLE_RULE ||
-				    cell->alignment > MANT_MANDOC_EXEC_TABLE_ALIGN_LONG ||
-				    cell->font > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
-				    cell->flags & ~0x01ffU || cell->reserved != 0 ||
-				    cell->enter_atom > cell->leave_atom ||
-				    cell->enter_atom < row->enter_atom ||
-				    cell->leave_atom > row->leave_atom ||
-				    cell->enter_sequence <= row->enter_sequence ||
-				    cell->leave_sequence >= row->leave_sequence ||
-				    cell->enter_sequence >= cell->leave_sequence ||
-				    cell->offset_bu < 0 ||
-				    cell->rmargin_bu < cell->offset_bu ||
-				    cell->coloff_before_bu < 0 ||
-				    cell->coloff_after_bu < cell->coloff_before_bu ||
-				    ((cell->buffer == MANT_MANDOC_EXEC_NONE) !=
-				    (cell->buffer_generation == MANT_MANDOC_EXEC_NONE)))
+				    data->column_span == 0 || data->row_span == 0 ||
+				    data->flags & ~0x01ffU ||
+				    data->equation_delimiters > 1 ||
+				    (data->equation_delimiters == 0 &&
+				    (data->equation_opening != 0 ||
+				    data->equation_closing != 0)) ||
+				    (data->equation_delimiters != 0 &&
+				    (data->equation_opening == 0 ||
+				    data->equation_closing == 0)))
 					goto invalid;
-				if (previous_cell != NULL &&
-				    (cell->enter_atom < previous_cell->leave_atom ||
-				    cell->enter_sequence <= previous_cell->leave_sequence))
-					goto invalid;
-				if ((cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_LEFT &&
-				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_LEFT) ||
-				    (cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_CENTER &&
-				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_CENTER) ||
-				    (cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_RIGHT &&
-				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_RIGHT) ||
-				    (cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_NUMERIC &&
-				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_NUMERIC) ||
-				    (cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_LONG &&
-				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_LONG) ||
-				    ((cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_SPAN ||
-				    cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOWN ||
-				    cell->layout_kind ==
+				layout = &report->table_layout_cells[data->layout];
+				if (((layout->kind ==
 				    MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE ||
-				    cell->layout_kind ==
-				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE) &&
-				    cell->alignment != MANT_MANDOC_EXEC_TABLE_ALIGN_NONE))
+				    layout->kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE) !=
+				    (data->disposition ==
+				    MANT_MANDOC_EXEC_TABLE_DATA_SUPPRESSED_BY_LAYOUT)))
 					goto invalid;
-				if (cell->buffer_generation != MANT_MANDOC_EXEC_NONE) {
-					if (cell->buffer_generation >=
+			}
+			previous_invocation = NULL;
+			for (index = row->invocation_start;
+			    index < row->invocation_start + row->invocation_length;
+			    index++) {
+				invocation = &report->table_cell_invocations[index];
+				if (invocation->key != index ||
+				    invocation->row != row->key ||
+				    invocation->node != row->node ||
+				    invocation->ordinal != index - row->invocation_start ||
+				    invocation->layout < row->layout_start ||
+				    invocation->layout >=
+				    row->layout_start + row->layout_length ||
+				    invocation->logical_column !=
+				    report->table_layout_cells[
+				    invocation->layout].logical_column ||
+				    invocation->enter_atom > invocation->leave_atom ||
+				    invocation->enter_atom < row->enter_atom ||
+				    invocation->leave_atom > row->leave_atom ||
+				    invocation->enter_sequence <= row->enter_sequence ||
+				    invocation->leave_sequence >= row->leave_sequence ||
+				    invocation->enter_sequence >= invocation->leave_sequence ||
+				    invocation->offset_bu < 0 ||
+				    invocation->rmargin_bu < invocation->offset_bu ||
+				    invocation->coloff_before_bu < 0 ||
+				    invocation->coloff_after_bu <
+				    invocation->coloff_before_bu ||
+				    ((invocation->buffer == MANT_MANDOC_EXEC_NONE) !=
+				    (invocation->buffer_generation ==
+				    MANT_MANDOC_EXEC_NONE)))
+					goto invalid;
+				layout = &report->table_layout_cells[invocation->layout];
+				if (invocation->data == MANT_MANDOC_EXEC_NONE)
+					data = NULL;
+				else {
+					if (invocation->data < row->data_start ||
+					    invocation->data >= row->data_start +
+					    row->data_length)
+						goto invalid;
+					data = &report->table_data_cells[invocation->data];
+				}
+				expected_outcome = layout->kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_SINGLE_RULE ||
+				    layout->kind ==
+				    MANT_MANDOC_EXEC_TABLE_LAYOUT_DOUBLE_RULE ?
+				    MANT_MANDOC_EXEC_TABLE_INVOKE_LAYOUT_RULE :
+				    data == NULL || data->kind ==
+				    MANT_MANDOC_EXEC_TABLE_DATA_NONE ?
+				    MANT_MANDOC_EXEC_TABLE_INVOKE_EMPTY :
+				    data->kind != MANT_MANDOC_EXEC_TABLE_DATA_TEXT ?
+				    MANT_MANDOC_EXEC_TABLE_INVOKE_DATA_RULE :
+				    layout->kind == MANT_MANDOC_EXEC_TABLE_LAYOUT_DOWN ||
+				    layout->kind == MANT_MANDOC_EXEC_TABLE_LAYOUT_SPAN ||
+				    (data->flags &
+				    MANT_MANDOC_EXEC_TABLE_CELL_VERTICAL_CONTINUATION) ?
+				    MANT_MANDOC_EXEC_TABLE_INVOKE_CONTINUATION :
+				    MANT_MANDOC_EXEC_TABLE_INVOKE_DATA;
+				if (invocation->outcome != expected_outcome)
+					goto invalid;
+				if (data != NULL) {
+					if (invocation->layout != data->layout &&
+					    (layout->kind !=
+					    MANT_MANDOC_EXEC_TABLE_LAYOUT_SPAN ||
+					    layout->horizontal_continuation == 0 ||
+					    layout->logical_column >=
+					    report->table_layout_cells[
+					    data->layout].logical_column))
+						goto invalid;
+					data_invocations[data->key]++;
+					if (invocation->layout == data->layout)
+						data_primary_invocations[data->key]++;
+				}
+				if (previous_invocation != NULL &&
+				    (invocation->enter_atom <
+				    previous_invocation->leave_atom ||
+				    invocation->enter_sequence <=
+				    previous_invocation->leave_sequence))
+					goto invalid;
+				if (invocation->buffer_generation !=
+				    MANT_MANDOC_EXEC_NONE) {
+					if (invocation->buffer_generation >=
 					    report->buffer_generations_count)
 						goto invalid;
 					generation = &report->buffer_generations[
-					    cell->buffer_generation];
-					if (generation->buffer != cell->buffer ||
+					    invocation->buffer_generation];
+					if (generation->buffer != invocation->buffer ||
 					    generation->open_sequence <=
-					    cell->enter_sequence ||
+					    invocation->enter_sequence ||
 					    generation->open_sequence >=
-					    cell->leave_sequence ||
-					    generation->close_sequence >=
-					    row->leave_sequence ||
-					    generation_cell[cell->buffer_generation] !=
+					    invocation->leave_sequence ||
+					    generation->close_sequence >= row->leave_sequence ||
+					    generation_invocation[
+					    invocation->buffer_generation] !=
 					    MANT_MANDOC_EXEC_NONE ||
-					    cell->enter_atom == cell->leave_atom)
+					    invocation->enter_atom == invocation->leave_atom)
 						goto invalid;
-					generation_cell[cell->buffer_generation] = cell->key;
-				} else if (cell->enter_atom != cell->leave_atom)
+					generation_invocation[
+					    invocation->buffer_generation] = invocation->key;
+				} else if (invocation->enter_atom != invocation->leave_atom)
 					goto invalid;
-				if ((cell->enter_atom != 0 &&
-				    report->atoms[cell->enter_atom - 1].sequence >=
-				    cell->enter_sequence) ||
-				    (cell->enter_atom < cell->leave_atom &&
-				    report->atoms[cell->enter_atom].sequence <=
-				    cell->enter_sequence) ||
-				    (cell->enter_atom < cell->leave_atom &&
-				    report->atoms[cell->leave_atom - 1].sequence >=
-				    cell->leave_sequence) ||
-				    (cell->leave_atom < report->atoms_count &&
-				    report->atoms[cell->leave_atom].sequence <=
-				    cell->leave_sequence))
-					goto invalid;
-				for (owner = cell->enter_atom;
-				    owner < cell->leave_atom; owner++) {
+				for (owner = invocation->enter_atom;
+				    owner < invocation->leave_atom; owner++) {
 					atom = &report->atoms[owner];
-					if (atom->node != cell->node ||
-					    atom->buffer != cell->buffer ||
+					if (atom->node != invocation->node ||
+					    atom->buffer != invocation->buffer ||
 					    atom->buffer_generation !=
-					    cell->buffer_generation)
+					    invocation->buffer_generation)
 						goto invalid;
 				}
-				next_data_ordinal++;
-				next_column = cell->logical_column + cell->column_span;
-				previous_cell = cell;
+				previous_invocation = invocation;
 			}
-			cell_cursor = row->cell_start + row->cell_length;
+			layout_cursor = row->layout_start + row->layout_length;
+			data_cursor = row->data_start + row->data_length;
+			invocation_cursor = row->invocation_start +
+			    row->invocation_length;
 			previous_row = row;
 		}
 		if (previous_row == NULL ||
@@ -3530,40 +3993,47 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 		    previous_row->leave_fragment != table->leave_fragment ||
 		    previous_row->leave_flush != table->leave_flush ||
 		    previous_row->leave_sequence >= table->leave_sequence ||
-		    cell_cursor != table->cell_start + table->cell_length)
+		    layout_cursor != table->layout_start + table->layout_length ||
+		    data_cursor != table->data_start + table->data_length ||
+		    invocation_cursor != table->invocation_start +
+		    table->invocation_length)
 			goto invalid;
 		row_cursor = table->row_start + table->row_length;
 	}
 	if (row_cursor != report->table_rows_count ||
-	    cell_cursor != report->table_cells_count)
+	    layout_cursor != report->table_layout_cells_count ||
+	    data_cursor != report->table_data_cells_count ||
+	    invocation_cursor != report->table_cell_invocations_count)
 		goto invalid;
+	for (index = 0; index < report->table_data_cells_count; index++) {
+		if (data_invocations[index] == 0 ||
+		    data_primary_invocations[index] != 1)
+			goto invalid;
+	}
 
-	payload_cell = 0;
 	for (index = 0; index < report->atoms_count; index++) {
 		atom = &report->atoms[index];
 		if (atom->role != MANT_MANDOC_ATOM_TABLE_CELL_PAYLOAD)
 			continue;
-		while (payload_cell < report->table_cells_count &&
-		    report->table_cells[payload_cell].leave_atom <= index)
-			payload_cell++;
-		if (payload_cell == report->table_cells_count)
-			goto invalid;
-		cell = &report->table_cells[payload_cell];
-		if (index < cell->enter_atom || index >= cell->leave_atom ||
-		    cell->buffer_generation == MANT_MANDOC_EXEC_NONE ||
-		    atom->buffer != cell->buffer || atom->buffer_generation !=
-		    cell->buffer_generation)
+		for (owner = 0; owner < report->table_cell_invocations_count;
+		    owner++) {
+			invocation = &report->table_cell_invocations[owner];
+			if (index >= invocation->enter_atom &&
+			    index < invocation->leave_atom)
+				break;
+		}
+		if (owner == report->table_cell_invocations_count)
 			goto invalid;
 	}
 	for (index = 0; index < report->flushes_count; index++) {
 		flush = &report->flushes[index];
 		if (flush->buffer_generation >= report->buffer_generations_count)
 			continue;
-		owner = generation_cell[flush->buffer_generation];
+		owner = generation_invocation[flush->buffer_generation];
 		if (owner == MANT_MANDOC_EXEC_NONE)
 			continue;
-		cell = &report->table_cells[owner];
-		row = &report->table_rows[cell->row];
+		invocation = &report->table_cell_invocations[owner];
+		row = &report->table_rows[invocation->row];
 		table = &report->tables[row->table];
 		if (flush->key < row->enter_flush || flush->key >= row->leave_flush ||
 		    flush->key < table->enter_flush ||
@@ -3575,11 +4045,11 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 		if (fragment->buffer_generation == MANT_MANDOC_EXEC_NONE ||
 		    fragment->buffer_generation >= report->buffer_generations_count)
 			continue;
-		owner = generation_cell[fragment->buffer_generation];
+		owner = generation_invocation[fragment->buffer_generation];
 		if (owner == MANT_MANDOC_EXEC_NONE)
 			continue;
-		cell = &report->table_cells[owner];
-		row = &report->table_rows[cell->row];
+		invocation = &report->table_cell_invocations[owner];
+		row = &report->table_rows[invocation->row];
 		table = &report->tables[row->table];
 		if (fragment->key < row->enter_fragment ||
 		    fragment->key >= row->leave_fragment ||
@@ -3587,11 +4057,22 @@ validate_table_records(struct mant_mandoc_execution_report *report)
 		    fragment->key >= table->leave_fragment)
 			goto invalid;
 	}
-	free(generation_cell);
+	free(generation_invocation);
+	free(data_invocations);
+	free(data_primary_invocations);
 	return 1;
 
+allocation:
+	free(generation_invocation);
+	free(data_invocations);
+	free(data_primary_invocations);
+	fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
+	    "could not validate native table ownership");
+	return 0;
 invalid:
-	free(generation_cell);
+	free(generation_invocation);
+	free(data_invocations);
+	free(data_primary_invocations);
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution table relationship is inconsistent");
 	return 0;
@@ -3932,8 +4413,6 @@ append_fragment(struct mant_mandoc_execution_report *report,
     size_t slot, size_t before, size_t after)
 {
 	struct mant_mandoc_fragment_record *fragment;
-	struct mant_mandoc_fragment_atom_record *reference;
-	struct mant_mandoc_geometry_record *geometry;
 	struct mant_mandoc_atom_record *atom;
 	struct buffer_origin *buffer;
 	size_t buffer_key;
@@ -3982,6 +4461,7 @@ append_fragment(struct mant_mandoc_execution_report *report,
 		atom->wrapper = report->current_wrapper;
 		atom->replaced_by = MANT_MANDOC_EXEC_NONE;
 		atom->disposition = MANT_MANDOC_ATOM_EMITTED;
+		atom->output_role = stable_output_role(p);
 		atom->sequence = report->sequence++;
 		atom_key = atom->key;
 	} else if (atom_key < report->atoms_count) {
@@ -3999,11 +4479,7 @@ append_fragment(struct mant_mandoc_execution_report *report,
 		return 0;
 
 	if (!charge_record(report) ||
-	    !reserve_fragments(report, report->fragments_count + 1) ||
-	    !charge_record(report) ||
-	    !reserve_fragment_atoms(report, report->fragment_atoms_count + 1) ||
-	    !charge_record(report) ||
-	    !reserve_geometries(report, report->geometries_count + 1))
+	    !reserve_fragments(report, report->fragments_count + 1))
 		return 0;
 	fragment = &report->fragments[report->fragments_count];
 	memset(fragment, 0, sizeof(*fragment));
@@ -4020,17 +4496,30 @@ append_fragment(struct mant_mandoc_execution_report *report,
 	fragment->generation = report->atoms[atom_key].generation;
 	fragment->buffer_generation =
 	    report->atoms[atom_key].buffer_generation;
-	fragment->atom_ref_start = (uint32_t)report->fragment_atoms_count;
-	fragment->atom_ref_length = 1;
+	fragment->atom = atom_key;
 	fragment->device_line = (uint32_t)p->line;
 	if (p->exec_fragment_role == TERM_EXEC_FRAGMENT_MARGIN)
 		fragment->role = MANT_MANDOC_FRAGMENT_MARGIN_DECORATION;
-	else if (p->exec_fragment_role == TERM_EXEC_FRAGMENT_PAGE)
+	else if (p->exec_fragment_role == TERM_EXEC_FRAGMENT_PAGE &&
+	    report->atoms[atom_key].node == MANT_MANDOC_EXEC_NONE)
 		fragment->role = MANT_MANDOC_FRAGMENT_PAGE_DECORATION;
 	else if (p->exec_fragment_role != TERM_EXEC_FRAGMENT_CONTENT) {
-		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
-		    "native execution reported an unknown fragment role");
-		return 0;
+		/*
+		 * ascii_end() switches to the page role before printing the
+		 * footer.  If the body did not flush yet, that footer flush also
+		 * emits source-owned atoms already buffered by print_*_node().
+		 * Provenance belongs to each atom, not to the later device call:
+		 * only node-less footer glyphs are page decoration.
+		 */
+		if (p->exec_fragment_role != TERM_EXEC_FRAGMENT_PAGE) {
+			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+			    "native execution reported an unknown fragment role");
+			return 0;
+		}
+		fragment->role = report->atoms[atom_key].role ==
+		    MANT_MANDOC_ATOM_FONT_DECORATION ?
+		    MANT_MANDOC_FRAGMENT_FONT_DECORATION :
+		    MANT_MANDOC_FRAGMENT_CONTENT;
 	} else if (report->atoms[atom_key].role ==
 	    MANT_MANDOC_ATOM_FONT_DECORATION)
 		fragment->role = MANT_MANDOC_FRAGMENT_FONT_DECORATION;
@@ -4040,23 +4529,6 @@ append_fragment(struct mant_mandoc_execution_report *report,
 	fragment->start_bu = start_bu;
 	fragment->end_bu = end_bu;
 	fragment->sequence = report->sequence++;
-	reference = &report->fragment_atoms[report->fragment_atoms_count++];
-	reference->fragment = fragment->key;
-	reference->atom = atom_key;
-	geometry = &report->geometries[report->geometries_count];
-	memset(geometry, 0, sizeof(*geometry));
-	geometry->key = (uint32_t)report->geometries_count++;
-	geometry->node = fragment->node;
-	geometry->related = fragment->key;
-	geometry->kind = MANT_MANDOC_GEOMETRY_GLYPH;
-	geometry->unit = MANT_MANDOC_UNIT_BASIC;
-	geometry->origin_kind = MANT_MANDOC_GEOMETRY_ORIGIN_ATOM;
-	geometry->origin_key = atom_key;
-	geometry->requested = width_bu;
-	geometry->effective = geometry->requested;
-	geometry->before = fragment->start_bu;
-	geometry->after = fragment->end_bu;
-	geometry->sequence = report->sequence++;
 	return 1;
 }
 
@@ -4084,6 +4556,7 @@ append_boundary(struct mant_mandoc_execution_report *report,
 	record->flags_after = record->flags_before;
 	record->control = report->current_control;
 	record->wrapper = report->current_wrapper;
+	record->output_role = stable_output_role(p);
 	record->line_before = line;
 	record->line_after = line;
 	record->visual_before = visual;
@@ -4283,7 +4756,7 @@ seal_report(struct mant_mandoc_execution_report *report)
 	    report->current_flush != MANT_MANDOC_EXEC_NONE ||
 	    report->current_table != MANT_MANDOC_EXEC_NONE ||
 	    report->current_table_row != MANT_MANDOC_EXEC_NONE ||
-	    report->current_table_cell != MANT_MANDOC_EXEC_NONE ||
+	    report->current_table_cell_invocation != MANT_MANDOC_EXEC_NONE ||
 	    report->current_equation != MANT_MANDOC_EXEC_NONE ||
 	    report->current_equation_box_execution != MANT_MANDOC_EXEC_NONE ||
 	    report->word_active) {
@@ -4313,18 +4786,20 @@ seal_report(struct mant_mandoc_execution_report *report)
 	ADD_RECORD_COUNT(words);
 	ADD_RECORD_COUNT(atoms);
 	ADD_RECORD_COUNT(fragments);
-	ADD_RECORD_COUNT(fragment_atoms);
 	ADD_RECORD_COUNT(logical_tabs);
 	ADD_RECORD_COUNT(flushes);
 	ADD_RECORD_COUNT(boundaries);
 	ADD_RECORD_COUNT(controls);
 	ADD_RECORD_COUNT(geometries);
+	ADD_RECORD_COUNT(placements);
 	ADD_RECORD_COUNT(wrappers);
 	ADD_RECORD_COUNT(references);
 	ADD_RECORD_COUNT(anchors);
 	ADD_RECORD_COUNT(tables);
 	ADD_RECORD_COUNT(table_rows);
-	ADD_RECORD_COUNT(table_cells);
+	ADD_RECORD_COUNT(table_layout_cells);
+	ADD_RECORD_COUNT(table_data_cells);
+	ADD_RECORD_COUNT(table_cell_invocations);
 	ADD_RECORD_COUNT(equations);
 	ADD_RECORD_COUNT(equation_boxes);
 	ADD_RECORD_COUNT(equation_box_executions);
@@ -4391,18 +4866,20 @@ validate_report_storage(struct mant_mandoc_execution_report *report)
 	VALIDATE_RECORD_STORAGE(words);
 	VALIDATE_RECORD_STORAGE(atoms);
 	VALIDATE_RECORD_STORAGE(fragments);
-	VALIDATE_RECORD_STORAGE(fragment_atoms);
 	VALIDATE_RECORD_STORAGE(logical_tabs);
 	VALIDATE_RECORD_STORAGE(flushes);
 	VALIDATE_RECORD_STORAGE(boundaries);
 	VALIDATE_RECORD_STORAGE(controls);
 	VALIDATE_RECORD_STORAGE(geometries);
+	VALIDATE_RECORD_STORAGE(placements);
 	VALIDATE_RECORD_STORAGE(wrappers);
 	VALIDATE_RECORD_STORAGE(references);
 	VALIDATE_RECORD_STORAGE(anchors);
 	VALIDATE_RECORD_STORAGE(tables);
 	VALIDATE_RECORD_STORAGE(table_rows);
-	VALIDATE_RECORD_STORAGE(table_cells);
+	VALIDATE_RECORD_STORAGE(table_layout_cells);
+	VALIDATE_RECORD_STORAGE(table_data_cells);
+	VALIDATE_RECORD_STORAGE(table_cell_invocations);
 	VALIDATE_RECORD_STORAGE(equations);
 	VALIDATE_RECORD_STORAGE(equation_boxes);
 	VALIDATE_RECORD_STORAGE(equation_box_executions);
@@ -4481,17 +4958,17 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	struct mant_mandoc_word_record *word;
 	struct mant_mandoc_atom_record *atom;
 	struct mant_mandoc_fragment_record *fragment;
-	struct mant_mandoc_fragment_atom_record *reference;
 	struct mant_mandoc_logical_tab_record *logical_tab;
 	struct mant_mandoc_flush_record *flush, *next_flush;
 	struct mant_mandoc_boundary_record *boundary;
 	struct mant_mandoc_control_record *control;
 	struct mant_mandoc_geometry_record *geometry;
+	struct mant_mandoc_placement_record *placement;
 	struct mant_mandoc_wrapper_record *wrapper;
 	struct mant_mandoc_reference_record *semantic_reference;
 	struct mant_mandoc_anchor_record *anchor;
 	struct mant_mandoc_execution_diagnostic_record *diagnostic;
-	struct live_atom_location *live_atoms;
+	struct live_atom_location *slot_history;
 	struct generation_checkpoint *generation_checkpoints;
 	uint32_t *next_generation, *last_capacity, *last_close_reason, origin;
 	uint32_t *pending_flush, *direct_boundary_lines, *subtree_boundary_lines;
@@ -4499,16 +4976,16 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	uint64_t *last_wrapper_child_leave, *last_control_child_leave;
 	uint64_t last_root_reference_leave, last_root_wrapper_leave;
 	uint64_t last_root_control_leave;
-	unsigned char *covered_refs, *referenced_atoms, *replaced_atoms;
-	unsigned char *word_atoms, *margin_atoms, *margin_control_nodes;
+	unsigned char *referenced_atoms, *replaced_atoms;
+	unsigned char *word_atoms;
 	unsigned char *covered_fragments;
-	unsigned char *covered_glyph_geometry;
 	unsigned char *heading_nodes, *mdoc_list_item_nodes, *man_block_nodes;
 	uint32_t *region_node_kinds;
 	unsigned char *terminal_flush;
 	uint64_t *fragment_flush_outcome;
 	uint64_t capacity_total;
-	size_t index, inner, end, live_atom_count, live_index, control_cursor;
+	size_t index, inner, end, control_cursor;
+	size_t slot_history_capacity, slot_history_index;
 	size_t wrapper_cursor, generation_checkpoint_count;
 	uint32_t active_control, active_wrapper;
 	uint64_t last_boundary_enter;
@@ -4527,18 +5004,12 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    calloc(report->buffer_count, sizeof(*last_close_reason));
 	last_close_sequence = report->buffer_count == 0 ? NULL :
 	    calloc(report->buffer_count, sizeof(*last_close_sequence));
-	covered_refs = report->fragment_atoms_count == 0 ? NULL :
-	    calloc(report->fragment_atoms_count, 1);
 	referenced_atoms = report->atoms_count == 0 ? NULL :
 	    calloc(report->atoms_count, 1);
 	replaced_atoms = report->atoms_count == 0 ? NULL :
 	    calloc(report->atoms_count, 1);
 	word_atoms = report->atoms_count == 0 ? NULL :
 	    calloc(report->atoms_count, 1);
-	margin_atoms = report->atoms_count == 0 ? NULL :
-	    calloc(report->atoms_count, 1);
-	margin_control_nodes = report->nodes_count == 0 ? NULL :
-	    calloc(report->nodes_count, 1);
 	heading_nodes = report->nodes_count == 0 ? NULL :
 	    calloc(report->nodes_count, 1);
 	mdoc_list_item_nodes = report->nodes_count == 0 ? NULL :
@@ -4548,8 +5019,6 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	region_node_kinds = report->nodes_count == 0 ? NULL :
 	    calloc(report->nodes_count, sizeof(*region_node_kinds));
 	covered_fragments = report->fragments_count == 0 ? NULL :
-	    calloc(report->fragments_count, 1);
-	covered_glyph_geometry = report->fragments_count == 0 ? NULL :
 	    calloc(report->fragments_count, 1);
 	fragment_flush_outcome = report->fragments_count == 0 ? NULL :
 	    calloc(report->fragments_count, sizeof(*fragment_flush_outcome));
@@ -4570,8 +5039,28 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	    calloc(report->boundaries_count, sizeof(*direct_boundary_lines));
 	subtree_boundary_lines = report->boundaries_count == 0 ? NULL :
 	    calloc(report->boundaries_count, sizeof(*subtree_boundary_lines));
-	live_atoms = report->atoms_count == 0 ? NULL :
-	    calloc(report->atoms_count, sizeof(*live_atoms));
+	slot_history = NULL;
+	slot_history_capacity = 0;
+	if (report->atoms_count != 0) {
+		slot_history_capacity = 64;
+		while (slot_history_capacity < report->atoms_count &&
+		    slot_history_capacity <= SIZE_MAX / 2)
+			slot_history_capacity *= 2;
+		if (slot_history_capacity < report->atoms_count ||
+		    slot_history_capacity > SIZE_MAX / 2 ||
+		    slot_history_capacity * 2 >
+		    SIZE_MAX / sizeof(*slot_history)) {
+			fail_report(report, MANT_MANDOC_EXECUTION_ALLOCATION,
+			    "native execution atom history allocation overflow");
+			goto fail;
+		}
+		slot_history_capacity *= 2;
+		slot_history = calloc(slot_history_capacity,
+		    sizeof(*slot_history));
+		if (slot_history != NULL)
+			for (index = 0; index < slot_history_capacity; index++)
+				slot_history[index].atom = MANT_MANDOC_EXEC_NONE;
+	}
 	if (report->buffer_generations_count > SIZE_MAX - report->controls_count ||
 	    report->buffer_generations_count + report->controls_count >
 	    SIZE_MAX / 2 / sizeof(*generation_checkpoints)) {
@@ -4588,16 +5077,15 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	if ((report->buffer_count != 0 &&
 	    (next_generation == NULL || last_capacity == NULL ||
 	    last_close_reason == NULL || last_close_sequence == NULL)) ||
-	    (report->fragment_atoms_count != 0 && covered_refs == NULL) ||
 	    (report->atoms_count != 0 &&
 	    (referenced_atoms == NULL || replaced_atoms == NULL ||
-	    word_atoms == NULL || margin_atoms == NULL || live_atoms == NULL)) ||
+	    word_atoms == NULL || slot_history == NULL)) ||
 	    (report->nodes_count != 0 &&
-	    (margin_control_nodes == NULL || heading_nodes == NULL ||
-	    mdoc_list_item_nodes == NULL || man_block_nodes == NULL ||
+	    (heading_nodes == NULL || mdoc_list_item_nodes == NULL ||
+	    man_block_nodes == NULL ||
 	    region_node_kinds == NULL)) ||
 	    (report->fragments_count != 0 && (covered_fragments == NULL ||
-	    covered_glyph_geometry == NULL || fragment_flush_outcome == NULL)) ||
+	    fragment_flush_outcome == NULL)) ||
 	    (report->references_count != 0 &&
 	    last_reference_child_leave == NULL) ||
 	    (report->wrappers_count != 0 &&
@@ -4616,7 +5104,6 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 	last_root_reference_leave = 0;
 	last_root_wrapper_leave = 0;
 	last_root_control_leave = 0;
-	live_atom_count = 0;
 	for (index = 0; index < report->buffer_generations_count; index++)
 		pending_flush[index] = MANT_MANDOC_EXEC_NONE;
 	if (report->sources_count != 1 || report->nodes_count == 0 ||
@@ -4756,6 +5243,9 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    atom->font > MANT_MANDOC_FONT_BOLD_UNDERLINE ||
 		    atom->disposition < MANT_MANDOC_ATOM_EMITTED ||
 		    atom->disposition > MANT_MANDOC_ATOM_TRAILING_DISCARD ||
+		    (atom->flags & ~MANT_MANDOC_ATOM_NO_FILL) != 0 ||
+		    atom->output_role < MANT_MANDOC_OUTPUT_CONTENT ||
+		    atom->output_role > MANT_MANDOC_OUTPUT_PAGE_DECORATION ||
 		    !valid_scalar(atom->input_scalar) ||
 		    !valid_scalar(atom->display_scalar) ||
 		    !valid_pool_range(report, atom->operand_start,
@@ -4806,89 +5296,75 @@ validate_sealed_report(struct mant_mandoc_execution_report *report)
 		    atom->sequence <= generation->open_sequence ||
 		    atom->sequence >= generation->close_sequence)
 			goto invalid_atom;
-		live_atoms[live_atom_count].buffer_generation =
-		    atom->buffer_generation;
-		live_atoms[live_atom_count].slot = atom->slot;
-		live_atoms[live_atom_count].atom = atom->key;
-		live_atom_count++;
+		slot_history_index = live_atom_hash(atom->buffer_generation,
+		    atom->slot, slot_history_capacity);
+		while (slot_history[slot_history_index].atom !=
+		    MANT_MANDOC_EXEC_NONE &&
+		    (slot_history[slot_history_index].buffer_generation !=
+		    atom->buffer_generation ||
+		    slot_history[slot_history_index].slot != atom->slot))
+			slot_history_index = (slot_history_index + 1) &
+			    (slot_history_capacity - 1);
+		if (slot_history[slot_history_index].atom !=
+		    MANT_MANDOC_EXEC_NONE) {
+			struct mant_mandoc_atom_record *previous_atom;
+
+			previous_atom = &report->atoms[
+			    slot_history[slot_history_index].atom];
+			if (previous_atom->disposition ==
+			    MANT_MANDOC_ATOM_REPLACED) {
+				if (previous_atom->replaced_by != atom->key)
+					goto invalid_atom;
+			} else if (previous_atom->disposition !=
+			    MANT_MANDOC_ATOM_CONSUMED &&
+			    previous_atom->disposition !=
+			    MANT_MANDOC_ATOM_TRAILING_DISCARD)
+				goto invalid_atom;
+		} else {
+			slot_history[slot_history_index].buffer_generation =
+			    atom->buffer_generation;
+			slot_history[slot_history_index].slot = atom->slot;
+		}
+		slot_history[slot_history_index].atom = atom->key;
 		continue;
 invalid_atom:
 		fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 		    "native execution atom buffer relationship is inconsistent");
 		goto fail;
 	}
-	if (live_atom_count > 1 &&
-	    !charge_sort_work(report, live_atom_count))
+	if (!charge_work(report, report->atoms_count))
 		goto fail;
-	if (live_atom_count > 1)
-		qsort(live_atoms, live_atom_count, sizeof(*live_atoms),
-		    compare_live_atom_location);
-	/*
-	 * Validate the complete write history of each slot.  A replacement must
-	 * point to the immediately following write.  Consumed or discarded atoms
-	 * instead end one occupancy epoch, allowing a later write to reuse the
-	 * cleared slot without a replacement edge.  The final write is the current
-	 * occupant used by field validation below.
-	 */
-	inner = 0;
-	for (index = 0; index < live_atom_count;) {
-		size_t group_end, previous;
-
-		group_end = index + 1;
-		while (group_end < live_atom_count &&
-		    live_atoms[group_end].buffer_generation ==
-		    live_atoms[index].buffer_generation &&
-		    live_atoms[group_end].slot == live_atoms[index].slot)
-			group_end++;
-		for (previous = index; previous + 1 < group_end; previous++) {
-			atom = &report->atoms[live_atoms[previous].atom];
-			if (atom->disposition == MANT_MANDOC_ATOM_REPLACED) {
-				if (atom->replaced_by !=
-				    live_atoms[previous + 1].atom)
-					goto invalid_atom;
-			} else if (atom->disposition !=
-			    MANT_MANDOC_ATOM_CONSUMED && atom->disposition !=
-			    MANT_MANDOC_ATOM_TRAILING_DISCARD)
-				goto invalid_atom;
-		}
-		if (report->atoms[live_atoms[group_end - 1].atom].disposition ==
+	/* Validate that no slot's final write still points beyond the report. */
+	for (index = 0; index < slot_history_capacity; index++) {
+		if (slot_history[index].atom == MANT_MANDOC_EXEC_NONE)
+			continue;
+		if (report->atoms[slot_history[index].atom].disposition ==
 		    MANT_MANDOC_ATOM_REPLACED)
 			goto invalid_atom;
-		live_atoms[inner++] = live_atoms[group_end - 1];
-		index = group_end;
 	}
-	live_atom_count = inner;
 	for (index = 0; index < report->fragments_count; index++) {
 		fragment = &report->fragments[index];
 		if (fragment->key != index ||
 		    (index != 0 && report->fragments[index - 1].sequence >=
-		    fragment->sequence) || fragment->atom_ref_length != 1 ||
-		    fragment->atom_ref_start > report->fragment_atoms_count ||
-		    fragment->atom_ref_length > report->fragment_atoms_count -
-		    fragment->atom_ref_start || fragment->reserved != 0 ||
+		    fragment->sequence) || fragment->atom >= report->atoms_count ||
+		    fragment->reserved_atom != 0 || fragment->reserved != 0 ||
 		    fragment->role < MANT_MANDOC_FRAGMENT_CONTENT ||
 		    fragment->role > MANT_MANDOC_FRAGMENT_PAGE_DECORATION ||
 		    fragment->start_bu < 0 || fragment->end_bu < 0 ||
 		    (fragment->node != MANT_MANDOC_EXEC_NONE &&
 		    fragment->node >= report->nodes_count))
 			goto invalid_fragment;
-		end = fragment->atom_ref_start + fragment->atom_ref_length;
-		for (inner = fragment->atom_ref_start; inner < end; inner++) {
-			reference = &report->fragment_atoms[inner];
-			if (covered_refs[inner] || reference->fragment != index ||
-			    reference->atom >= report->atoms_count ||
-			    referenced_atoms[reference->atom])
-				goto invalid_fragment;
-			covered_refs[inner] = 1;
-			referenced_atoms[reference->atom] = 1;
-			atom = &report->atoms[reference->atom];
-			if (atom->disposition != MANT_MANDOC_ATOM_EMITTED ||
-			    atom->node != fragment->node ||
-			    atom->buffer != fragment->buffer ||
-			    atom->generation != fragment->generation ||
-			    atom->buffer_generation != fragment->buffer_generation)
-				goto invalid_fragment;
-		}
+		if (referenced_atoms[fragment->atom])
+			goto invalid_fragment;
+		referenced_atoms[fragment->atom] = 1;
+		atom = &report->atoms[fragment->atom];
+		if (atom->disposition != MANT_MANDOC_ATOM_EMITTED ||
+		    fragment->end_bu - fragment->start_bu != atom->width_bu ||
+		    atom->node != fragment->node ||
+		    atom->buffer != fragment->buffer ||
+		    atom->generation != fragment->generation ||
+		    atom->buffer_generation != fragment->buffer_generation)
+			goto invalid_fragment;
 		if (fragment->buffer == MANT_MANDOC_EXEC_NONE ||
 		    fragment->generation == MANT_MANDOC_EXEC_NONE ||
 		    fragment->buffer_generation == MANT_MANDOC_EXEC_NONE) {
@@ -4914,13 +5390,6 @@ invalid_fragment:
 		    "native execution fragment relationship is inconsistent");
 		goto fail;
 	}
-	for (index = 0; index < report->fragment_atoms_count; index++) {
-		if (!covered_refs[index]) {
-			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
-			    "native execution fragment reference is unclaimed");
-			goto fail;
-		}
-	}
 	for (index = 0; index < report->atoms_count; index++)
 		if (report->atoms[index].buffer == MANT_MANDOC_EXEC_NONE &&
 		    !referenced_atoms[index]) {
@@ -4940,6 +5409,8 @@ invalid_fragment:
 		    flush->outcome > MANT_MANDOC_FLUSH_DEFERRED_COLUMN ||
 		    flush->flags_before & ~0x7fffffU ||
 		    flush->flags_after & ~0x7fffffU ||
+		    flush->output_role < MANT_MANDOC_OUTPUT_CONTENT ||
+		    flush->output_role > MANT_MANDOC_OUTPUT_PAGE_DECORATION ||
 		    (flush->boundary != MANT_MANDOC_EXEC_NONE &&
 		    flush->boundary >= report->boundaries_count) ||
 		    flush->sequence >= flush->outcome_sequence)
@@ -5015,13 +5486,9 @@ invalid_fragment:
 			    fragment->buffer_generation != flush->buffer_generation ||
 			    fragment->sequence <= flush->sequence ||
 			    fragment->sequence >= flush->outcome_sequence ||
-			    fragment->atom_ref_length != 1)
+			    fragment->atom >= report->atoms_count)
 				goto invalid_flush;
-			reference = &report->fragment_atoms[
-			    fragment->atom_ref_start];
-			if (reference->atom >= report->atoms_count)
-				goto invalid_flush;
-			atom = &report->atoms[reference->atom];
+			atom = &report->atoms[fragment->atom];
 			if (atom->slot == MANT_MANDOC_EXEC_NONE ||
 			    atom->slot < flush->accepted_start ||
 			    atom->slot >= flush->accepted_end)
@@ -5047,66 +5514,53 @@ invalid_fragment:
 		    generation->close_reason != MANT_MANDOC_BUFFER_RESET))
 			goto invalid_flush;
 		end = flush->accepted_start;
-		live_index = lower_bound_live_atom(live_atoms, live_atom_count,
-		    flush->buffer_generation, flush->accepted_start);
-		for (; live_index < live_atom_count; live_index++) {
-			struct live_atom_location *location =
-			    &live_atoms[live_index];
+		while (end < flush->tail_discarded_end) {
+			const struct live_atom_location *location;
 
-			if (location->buffer_generation !=
-			    flush->buffer_generation ||
-			    location->slot >= flush->tail_discarded_end)
-				break;
+			location = find_live_atom(slot_history,
+			    slot_history_capacity, flush->buffer_generation,
+			    (uint32_t)end);
+			if (location == NULL)
+				goto invalid_flush;
 			atom = &report->atoms[location->atom];
 			if (atom->sequence >= flush->sequence)
 				goto invalid_flush;
 			if (location->slot < flush->accepted_end) {
-				if (location->slot != end ||
-				    (atom->disposition != MANT_MANDOC_ATOM_EMITTED &&
+				if (atom->disposition != MANT_MANDOC_ATOM_EMITTED &&
 				    atom->disposition != MANT_MANDOC_ATOM_CONSUMED &&
 				    atom->disposition !=
-				    MANT_MANDOC_ATOM_TRAILING_DISCARD))
+				    MANT_MANDOC_ATOM_TRAILING_DISCARD)
 					goto invalid_flush;
-				end++;
 			} else if (flush->outcome ==
 			    MANT_MANDOC_FLUSH_NO_CONTENT || flush->outcome ==
 			    MANT_MANDOC_FLUSH_EXHAUSTED) {
-				if (location->slot != end ||
-				    !terminal_tail_scalar(atom->display_scalar))
+				if (!terminal_tail_scalar(atom->display_scalar))
 					goto invalid_flush;
 				if (atom->disposition !=
 				    MANT_MANDOC_ATOM_TRAILING_DISCARD)
 					goto invalid_flush;
-				end++;
 			} else {
-				if (location->slot != end || atom->display_scalar != ' ' ||
+				if (atom->display_scalar != ' ' ||
 				    atom->disposition != MANT_MANDOC_ATOM_CONSUMED)
 					goto invalid_flush;
-				end++;
 			}
+			end++;
 		}
-		if (end != flush->tail_discarded_end)
-			goto invalid_flush;
 		if (first_flush) {
 			end = 0;
-			live_index = lower_bound_live_atom(live_atoms,
-			    live_atom_count, flush->buffer_generation, 0);
-			for (; live_index < live_atom_count; live_index++) {
-				struct live_atom_location *location =
-				    &live_atoms[live_index];
+			while (end < flush->remaining_end) {
+				const struct live_atom_location *location;
 
-				if (location->buffer_generation !=
-				    flush->buffer_generation ||
-				    location->slot >= flush->remaining_end)
-					break;
+				location = find_live_atom(slot_history,
+				    slot_history_capacity, flush->buffer_generation,
+				    (uint32_t)end);
+				if (location == NULL)
+					goto invalid_flush;
 				atom = &report->atoms[location->atom];
-				if (location->slot != end ||
-				    atom->sequence >= flush->sequence)
+				if (atom->sequence >= flush->sequence)
 					goto invalid_flush;
 				end++;
 			}
-			if (end != flush->remaining_end)
-				goto invalid_flush;
 		}
 		if (flush->outcome == MANT_MANDOC_FLUSH_WRAPPED) {
 			if (index + 1 >= report->flushes_count)
@@ -5159,6 +5613,8 @@ invalid_flush:
 		    boundary->effect > MANT_MANDOC_BOUNDARY_ADDED_VERTICAL_SPACE ||
 		    boundary->flags_before & ~0x7fffffU ||
 		    boundary->flags_after & ~0x7fffffU ||
+		    boundary->output_role < MANT_MANDOC_OUTPUT_CONTENT ||
+		    boundary->output_role > MANT_MANDOC_OUTPUT_PAGE_DECORATION ||
 		    (boundary->control != MANT_MANDOC_EXEC_NONE &&
 		    boundary->control >= report->controls_count) ||
 		    (boundary->wrapper != MANT_MANDOC_EXEC_NONE &&
@@ -5197,6 +5653,29 @@ invalid_flush:
 				goto invalid_boundary;
 			direct_boundary_lines[boundary->parent]++;
 		}
+		if (boundary->request == MANT_MANDOC_BOUNDARY_DEVICE_ENDLINE) {
+			if (boundary->line_commit_cause <
+			    MANT_MANDOC_LINE_COMMIT_DIRECT_DEVICE ||
+			    boundary->line_commit_cause >
+			    MANT_MANDOC_LINE_COMMIT_VERTICAL_BLANK)
+				goto invalid_boundary;
+			if (boundary->line_commit_cause ==
+			    MANT_MANDOC_LINE_COMMIT_DIRECT_DEVICE) {
+				if (boundary->parent != MANT_MANDOC_EXEC_NONE)
+					goto invalid_boundary;
+			} else if (boundary->parent == MANT_MANDOC_EXEC_NONE)
+				goto invalid_boundary;
+			else if (boundary->line_commit_cause ==
+			    MANT_MANDOC_LINE_COMMIT_VERTICAL_BLANK) {
+				if (report->boundaries[boundary->parent].request !=
+				    MANT_MANDOC_BOUNDARY_VERTICAL_SPACE)
+					goto invalid_boundary;
+			} else if (report->boundaries[boundary->parent].request !=
+			    MANT_MANDOC_BOUNDARY_ENDLINE)
+				goto invalid_boundary;
+		} else if (boundary->line_commit_cause !=
+		    MANT_MANDOC_LINE_COMMIT_NONE)
+			goto invalid_boundary;
 	}
 	for (index = report->boundaries_count; index > 0; index--) {
 		uint32_t lines;
@@ -5363,8 +5842,6 @@ invalid_flush:
 		VALIDATE_CONTROL_RANGE(geometries, geometries_count, geometry, sequence);
 		VALIDATE_CONTROL_RANGE(wrappers, wrappers_count, wrapper, enter_sequence);
 #undef VALIDATE_CONTROL_RANGE
-		if (control->request == MANT_MANDOC_CONTROL_MARGIN_CHARACTER)
-			margin_control_nodes[control->node] = 1;
 		active_control = control->key;
 	}
 	inner = 0;
@@ -5450,10 +5927,6 @@ invalid_flush:
 			goto invalid_boundary;
 		last_boundary_enter = boundary->enter_sequence;
 	}
-	for (index = 0; index < report->nodes_count; index++)
-		if (report->nodes[index].parent != MANT_MANDOC_EXEC_NONE &&
-		    margin_control_nodes[report->nodes[index].parent])
-			margin_control_nodes[index] = 1;
 	for (index = 0; index < report->geometries_count; index++) {
 		geometry = &report->geometries[index];
 		if (geometry->key != index ||
@@ -5464,7 +5937,8 @@ invalid_flush:
 		    geometry->unit < MANT_MANDOC_UNIT_BASIC ||
 		    geometry->unit > MANT_MANDOC_UNIT_DEVICE_LINE ||
 		    geometry->origin_kind > MANT_MANDOC_GEOMETRY_ORIGIN_FRAGMENT ||
-		    geometry->reserved != 0)
+		    geometry->output_role < MANT_MANDOC_OUTPUT_CONTENT ||
+		    geometry->output_role > MANT_MANDOC_OUTPUT_PAGE_DECORATION)
 			goto invalid_geometry;
 		switch (geometry->kind) {
 		case MANT_MANDOC_GEOMETRY_ADVANCE:
@@ -5536,38 +6010,38 @@ invalid_flush:
 			    "native execution field geometry is inconsistent");
 			goto fail;
 		case MANT_MANDOC_GEOMETRY_GLYPH:
-			break;
 		default:
 			goto invalid_geometry;
 		}
-		if (geometry->origin_kind != MANT_MANDOC_GEOMETRY_ORIGIN_ATOM ||
-		    geometry->origin_key >= report->atoms_count ||
-		    geometry->related >= report->fragments_count ||
-		    covered_glyph_geometry[geometry->related])
-			goto invalid_geometry;
-		fragment = &report->fragments[geometry->related];
-		reference = &report->fragment_atoms[fragment->atom_ref_start];
-		if (fragment->start_bu < 0 || fragment->end_bu < 0 ||
-		    reference->atom != geometry->origin_key ||
-		    geometry->node != fragment->node ||
-		    geometry->requested != fragment->end_bu - fragment->start_bu ||
-		    geometry->effective != geometry->requested ||
-		    geometry->before != fragment->start_bu ||
-		    geometry->after != fragment->end_bu ||
-		    geometry->sequence <= fragment->sequence ||
-		    (fragment_flush_outcome[geometry->related] != 0 &&
-		    geometry->sequence >=
-		    fragment_flush_outcome[geometry->related])) {
 invalid_geometry:
 			fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 			    "native execution geometry is inconsistent");
 			goto fail;
-		}
-		covered_glyph_geometry[geometry->related] = 1;
 	}
-	for (index = 0; index < report->fragments_count; index++)
-		if (!covered_glyph_geometry[index])
-			goto invalid_geometry;
+	for (index = 0; index < report->placements_count; index++) {
+		uint32_t origin;
+
+		placement = &report->placements[index];
+		if (placement->key != index ||
+		    placement->node >= report->nodes_count ||
+		    placement->wrapper >= report->wrappers_count ||
+		    placement->phase < MANT_MANDOC_PLACEMENT_ENTER ||
+		    placement->phase > MANT_MANDOC_PLACEMENT_EXIT ||
+		    placement->offset_bu < 0 || placement->rmargin_bu < 0 ||
+		    placement->maxrmargin_bu < 0 || placement->visual_bu < 0 ||
+		    placement->cell_bu <= 0 ||
+		    (index != 0 && report->placements[index - 1].sequence >=
+		    placement->sequence))
+			goto invalid_placement;
+		wrapper = &report->wrappers[placement->wrapper];
+		origin = placement->node;
+		while (origin != MANT_MANDOC_EXEC_NONE && origin != wrapper->node)
+			origin = report->nodes[origin].parent;
+		if (!wrapper_is_structural(wrapper->kind) || origin != wrapper->node ||
+		    wrapper->enter_sequence >= placement->sequence ||
+		    wrapper->leave_sequence <= placement->sequence)
+			goto invalid_placement;
+	}
 	active_wrapper = MANT_MANDOC_EXEC_NONE;
 	for (index = 0; index < report->wrappers_count; index++) {
 		uint64_t *last_sibling_leave;
@@ -5896,12 +6370,40 @@ valid_wrappers:
 		    semantic_reference->enter_atom >
 		    semantic_reference->label_start_atom ||
 		    semantic_reference->label_start_atom >
+		    semantic_reference->label_end_atom ||
+		    semantic_reference->label_end_atom >
 		    semantic_reference->leave_atom ||
 		    semantic_reference->leave_atom > report->atoms_count ||
+		    semantic_reference->presentation <
+		    MANT_MANDOC_REFERENCE_DIRECT ||
+		    semantic_reference->presentation >
+		    MANT_MANDOC_REFERENCE_LABELLED_SUPPLEMENT ||
 		    semantic_reference->affinity != MANT_MANDOC_AFFINITY_INLINE ||
 		    semantic_reference->flags != 0 ||
 		    semantic_reference->leave_sequence <=
 		    semantic_reference->enter_sequence)
+			goto invalid_reference;
+		if (semantic_reference->presentation ==
+		    MANT_MANDOC_REFERENCE_DIRECT) {
+			if (semantic_reference->target_start_atom !=
+			    semantic_reference->label_start_atom ||
+			    semantic_reference->target_end_atom !=
+			    semantic_reference->label_end_atom ||
+			    semantic_reference->supplement_start_atom !=
+			    MANT_MANDOC_EXEC_NONE ||
+			    semantic_reference->supplement_end_atom !=
+			    MANT_MANDOC_EXEC_NONE)
+				goto invalid_reference;
+		} else if (semantic_reference->label_end_atom >
+		    semantic_reference->supplement_start_atom ||
+		    semantic_reference->supplement_start_atom >
+		    semantic_reference->target_start_atom ||
+		    semantic_reference->target_start_atom >
+		    semantic_reference->target_end_atom ||
+		    semantic_reference->target_end_atom >
+		    semantic_reference->supplement_end_atom ||
+		    semantic_reference->supplement_end_atom >
+		    semantic_reference->leave_atom)
 			goto invalid_reference;
 		if (semantic_reference->kind != MANT_MANDOC_REFERENCE_MANUAL &&
 		    semantic_reference->secondary_start != MANT_MANDOC_EXEC_NONE)
@@ -5929,7 +6431,9 @@ valid_wrappers:
 		for (inner = semantic_reference->enter_atom;
 		    inner < semantic_reference->label_start_atom; inner++)
 			if (report->atoms[inner].role !=
-			    MANT_MANDOC_ATOM_IMPLICIT_SPACE)
+			    MANT_MANDOC_ATOM_IMPLICIT_SPACE &&
+			    report->atoms[inner].kind !=
+			    MANT_MANDOC_ATOM_TAB_REFERENCE)
 				goto invalid_reference;
 		if (semantic_reference->label_start_atom <
 		    semantic_reference->leave_atom &&
@@ -6003,19 +6507,15 @@ valid_wrappers:
 		    diagnostic->message_length, 0))
 			goto invalid_diagnostic;
 	}
-	for (index = 0; index < report->fragments_count; index++) {
-		fragment = &report->fragments[index];
-		if (fragment->role != MANT_MANDOC_FRAGMENT_MARGIN_DECORATION)
-			continue;
-		for (inner = fragment->atom_ref_start;
-		    inner < fragment->atom_ref_start + fragment->atom_ref_length;
-		    inner++)
-			margin_atoms[report->fragment_atoms[inner].atom] = 1;
-	}
 	/*
-	 * Upstream roff_term_pre_mc() retains an authored margin character
-	 * until a later term_newln().  That specific source edge can cross a
-	 * node-wrapper subtree; all other formatter words and atoms cannot.
+	 * A syntax node identifies the authored origin of a formatter word,
+	 * while the wrapper identifies where that word executed.  Fixed CVS
+	 * intentionally reuses authored operands in later macro handlers (for
+	 * example the `.Es` delimiters emitted by `.En`) and retains `.mc`
+	 * operands until a later line boundary.  Consequently source ancestry
+	 * and execution-wrapper nesting are independent invariants: validate the
+	 * execution interval here and validate the source key in the node table,
+	 * but do not require one tree to contain the other.
 	 */
 	for (index = 0; index < report->words_count; index++) {
 		word = &report->words[index];
@@ -6030,18 +6530,6 @@ valid_wrappers:
 		    word->enter_atom < wrapper->enter_atom ||
 		    word->leave_atom > wrapper->leave_atom)
 			goto invalid_word_wrapper;
-		origin = word->node;
-		while (origin != MANT_MANDOC_EXEC_NONE && origin != wrapper->node)
-			origin = report->nodes[origin].parent;
-		if (origin == wrapper->node)
-			continue;
-		if (word->node == MANT_MANDOC_EXEC_NONE ||
-		    !margin_control_nodes[word->node] ||
-		    word->enter_atom == word->leave_atom)
-			goto invalid_word_wrapper;
-		for (inner = word->enter_atom; inner < word->leave_atom; inner++)
-			if (!margin_atoms[inner])
-				goto invalid_word_wrapper;
 	}
 	for (index = 0; index < report->atoms_count; index++) {
 		atom = &report->atoms[index];
@@ -6055,13 +6543,6 @@ valid_wrappers:
 		    atom->sequence >= wrapper->leave_sequence ||
 		    atom->key < wrapper->enter_atom ||
 		    atom->key >= wrapper->leave_atom)
-			goto invalid_atom_wrapper;
-		origin = atom->node;
-		while (origin != MANT_MANDOC_EXEC_NONE && origin != wrapper->node)
-			origin = report->nodes[origin].parent;
-		if (origin != wrapper->node &&
-		    (atom->node == MANT_MANDOC_EXEC_NONE ||
-		    !margin_control_nodes[atom->node] || !margin_atoms[index]))
 			goto invalid_atom_wrapper;
 	}
 	for (index = 0; index < report->fragments_count; index++) {
@@ -6081,18 +6562,14 @@ valid_wrappers:
 	free(last_capacity);
 	free(last_close_reason);
 	free(last_close_sequence);
-	free(covered_refs);
 	free(referenced_atoms);
 	free(replaced_atoms);
 	free(word_atoms);
-	free(margin_atoms);
-	free(margin_control_nodes);
 	free(heading_nodes);
 	free(mdoc_list_item_nodes);
 	free(man_block_nodes);
 	free(region_node_kinds);
 	free(covered_fragments);
-	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
 	free(last_reference_child_leave);
 	free(last_wrapper_child_leave);
@@ -6101,7 +6578,7 @@ valid_wrappers:
 	free(terminal_flush);
 	free(direct_boundary_lines);
 	free(subtree_boundary_lines);
-	free(live_atoms);
+	free(slot_history);
 	return 1;
 
 invalid_flush_after_loop:
@@ -6120,6 +6597,10 @@ invalid_word:
 invalid_boundary:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
 	    "native execution boundary relationship is inconsistent");
+	goto fail;
+invalid_placement:
+	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
+	    "native execution placement relationship is inconsistent");
 	goto fail;
 invalid_control:
 	fail_report(report, MANT_MANDOC_EXECUTION_INTERNAL,
@@ -6155,18 +6636,14 @@ fail:
 	free(last_capacity);
 	free(last_close_reason);
 	free(last_close_sequence);
-	free(covered_refs);
 	free(referenced_atoms);
 	free(replaced_atoms);
 	free(word_atoms);
-	free(margin_atoms);
-	free(margin_control_nodes);
 	free(heading_nodes);
 	free(mdoc_list_item_nodes);
 	free(man_block_nodes);
 	free(region_node_kinds);
 	free(covered_fragments);
-	free(covered_glyph_geometry);
 	free(fragment_flush_outcome);
 	free(last_reference_child_leave);
 	free(last_wrapper_child_leave);
@@ -6175,7 +6652,7 @@ fail:
 	free(terminal_flush);
 	free(direct_boundary_lines);
 	free(subtree_boundary_lines);
-	free(live_atoms);
+	free(slot_history);
 	return 0;
 }
 
@@ -6515,17 +6992,34 @@ compare_equation_box_index(const void *left, const void *right)
 	return ap < bp ? -1 : ap > bp;
 }
 
-static int
-compare_live_atom_location(const void *left, const void *right)
+static size_t
+live_atom_hash(uint32_t generation, uint32_t slot, size_t capacity)
 {
-	const struct live_atom_location *a = left;
-	const struct live_atom_location *b = right;
+	uint64_t key;
 
-	if (a->buffer_generation != b->buffer_generation)
-		return a->buffer_generation < b->buffer_generation ? -1 : 1;
-	if (a->slot != b->slot)
-		return a->slot < b->slot ? -1 : 1;
-	return a->atom < b->atom ? -1 : a->atom > b->atom;
+	key = ((uint64_t)generation << 32) | slot;
+	key ^= key >> 30;
+	key *= UINT64_C(0xbf58476d1ce4e5b9);
+	key ^= key >> 27;
+	key *= UINT64_C(0x94d049bb133111eb);
+	key ^= key >> 31;
+	return (size_t)key & (capacity - 1);
+}
+
+static const struct live_atom_location *
+find_live_atom(const struct live_atom_location *locations, size_t capacity,
+    uint32_t generation, uint32_t slot)
+{
+	size_t index;
+
+	index = live_atom_hash(generation, slot, capacity);
+	while (locations[index].atom != MANT_MANDOC_EXEC_NONE) {
+		if (locations[index].buffer_generation == generation &&
+		    locations[index].slot == slot)
+			return &locations[index];
+		index = (index + 1) & (capacity - 1);
+	}
+	return NULL;
 }
 
 static int
@@ -6535,28 +7029,6 @@ compare_generation_checkpoint(const void *left, const void *right)
 	const struct generation_checkpoint *b = right;
 
 	return a->sequence < b->sequence ? -1 : a->sequence > b->sequence;
-}
-
-static size_t
-lower_bound_live_atom(const struct live_atom_location *locations, size_t count,
-    uint32_t generation, uint32_t slot)
-{
-	size_t first, length, half, middle;
-
-	first = 0;
-	length = count;
-	while (length != 0) {
-		half = length / 2;
-		middle = first + half;
-		if (locations[middle].buffer_generation < generation ||
-		    (locations[middle].buffer_generation == generation &&
-		    locations[middle].slot < slot)) {
-			first = middle + 1;
-			length -= half + 1;
-		} else
-			length = half;
-	}
-	return first;
 }
 
 static uint32_t
@@ -6676,6 +7148,21 @@ static uint32_t
 stable_term_flags(int flags)
 {
 	return (uint32_t)flags & ((1U << 23) - 1);
+}
+
+static uint32_t
+stable_output_role(const struct termp *p)
+{
+	switch (p->exec_fragment_role) {
+	case TERM_EXEC_FRAGMENT_CONTENT:
+		return MANT_MANDOC_OUTPUT_CONTENT;
+	case TERM_EXEC_FRAGMENT_MARGIN:
+		return MANT_MANDOC_OUTPUT_MARGIN_DECORATION;
+	case TERM_EXEC_FRAGMENT_PAGE:
+		return MANT_MANDOC_OUTPUT_PAGE_DECORATION;
+	default:
+		return 0;
+	}
 }
 
 static uint32_t
@@ -6898,6 +7385,7 @@ mant_mandoc_execution_validation_selftest(void)
 	struct mant_mandoc_atom_record *atom;
 	struct mant_mandoc_boundary_record *boundary;
 	struct mant_mandoc_geometry_record *geometry;
+	struct mant_mandoc_placement_record *placement;
 	struct mant_mandoc_wrapper_record *wrapper;
 	struct mant_mandoc_equation_record *equation;
 	struct mant_mandoc_equation_box_record *equation_box;
@@ -6905,6 +7393,9 @@ mant_mandoc_execution_validation_selftest(void)
 	struct mant_mandoc_equation_part_record *equation_part;
 	struct mant_mandoc_word_record *equation_word;
 	struct mant_mandoc_execution_diagnostic_record *diagnostic;
+	struct mant_mandoc_table_row_record *table_row;
+	struct mant_mandoc_table_layout_cell_record *table_layout;
+	struct mant_mandoc_table_data_cell_record *table_data;
 	struct mant_mandoc_node_record *node_storage;
 	struct roff_node native_node;
 	struct tbl_span span;
@@ -6925,6 +7416,14 @@ mant_mandoc_execution_validation_selftest(void)
 	limits.max_pool_bytes = 4096;
 	limits.max_buffer_cells = 1024;
 	limits.max_report_bytes = 1024 * 1024;
+	limits.abi_version--;
+	report = mant_mandoc_execution_alloc("native-selftest.1", &limits,
+	    NULL, NULL);
+	if (report != NULL) {
+		mant_mandoc_execution_free(report);
+		failures |= 1U << 20;
+	}
+	limits.abi_version++;
 	report = mant_mandoc_execution_alloc("native-selftest.1", &limits,
 	    NULL, NULL);
 	if (report == NULL)
@@ -7128,6 +7627,30 @@ mant_mandoc_execution_validation_selftest(void)
 	term.tcols = columns;
 	term.tcol = columns + 1;
 	term.maxtcol = 2;
+	if (!reserve_table_rows(report, 1) ||
+	    !reserve_table_layout_cells(report, 1) ||
+	    !reserve_table_data_cells(report, 1)) {
+		failures |= 1U << 10;
+		goto out;
+	}
+	report->table_rows_count = 1;
+	table_row = &report->table_rows[0];
+	memset(table_row, 0, sizeof(*table_row));
+	table_row->node = 0;
+	table_row->layout_length = 1;
+	table_row->data_length = 1;
+	report->table_layout_cells_count = 1;
+	table_layout = &report->table_layout_cells[0];
+	memset(table_layout, 0, sizeof(*table_layout));
+	table_layout->kind = MANT_MANDOC_EXEC_TABLE_LAYOUT_LEFT;
+	table_layout->alignment = MANT_MANDOC_EXEC_TABLE_ALIGN_LEFT;
+	table_layout->font = MANT_MANDOC_FONT_ROMAN;
+	report->table_data_cells_count = 1;
+	table_data = &report->table_data_cells[0];
+	memset(table_data, 0, sizeof(*table_data));
+	table_data->kind = MANT_MANDOC_EXEC_TABLE_DATA_TEXT;
+	table_data->disposition = MANT_MANDOC_EXEC_TABLE_DATA_PROJECTED;
+	table_data->column_span = table_data->row_span = 1;
 	report->current_table_row = 0;
 	if (!execution_table_cell_begin(report, &term, &native_node, &span,
 	    &cell, &data, 0, 0, 0, 0))
@@ -7142,6 +7665,11 @@ mant_mandoc_execution_validation_selftest(void)
 	    !execution_table_cell_end(report, &term, &native_node, &span,
 	    &cell, &data, 0, 0, 0, 0))
 		failures |= 1U << 10;
+	report->current_table_row = MANT_MANDOC_EXEC_NONE;
+	report->table_rows_count = 0;
+	report->table_layout_cells_count = 0;
+	report->table_data_cells_count = 0;
+	report->table_cell_invocations_count = 0;
 
 	free(report->error);
 	report->error = NULL;
@@ -7213,6 +7741,43 @@ mant_mandoc_execution_validation_selftest(void)
 	if (validate_sealed_report(report))
 		failures |= 1U << 14;
 	report->wrappers_count = 0;
+
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	node->kind = 0;
+	node->macro_start = MANT_MANDOC_EXEC_NONE;
+	node->macro_length = 0;
+	if (!reserve_wrappers(report, 1) || !reserve_placements(report, 1)) {
+		failures |= 1U << 21;
+		goto out;
+	}
+	report->wrappers_count = report->placements_count = 1;
+	wrapper = &report->wrappers[0];
+	memset(wrapper, 0, sizeof(*wrapper));
+	wrapper->parent = MANT_MANDOC_EXEC_NONE;
+	wrapper->node = 0;
+	wrapper->kind = MANT_MANDOC_WRAPPER_NODE;
+	wrapper->target_start = MANT_MANDOC_EXEC_NONE;
+	wrapper->enter_sequence = 1;
+	wrapper->leave_sequence = 3;
+	placement = &report->placements[0];
+	memset(placement, 0, sizeof(*placement));
+	placement->node = placement->wrapper = 0;
+	placement->phase = MANT_MANDOC_PLACEMENT_CONTENT;
+	placement->rmargin_bu = placement->maxrmargin_bu = 80 * 24;
+	placement->cell_bu = 24;
+	placement->sequence = 2;
+	if (!validate_sealed_report(report))
+		failures |= 1U << 21;
+	free(report->error);
+	report->error = NULL;
+	report->status = MANT_MANDOC_EXECUTION_BUILDING;
+	placement->phase = MANT_MANDOC_PLACEMENT_EXIT + 1;
+	if (validate_sealed_report(report))
+		failures |= 1U << 21;
+	placement->phase = MANT_MANDOC_PLACEMENT_CONTENT;
+	report->placements_count = report->wrappers_count = 0;
 
 	free(report->error);
 	report->error = NULL;
@@ -7409,22 +7974,19 @@ static const size_t atom_offsets[] = {
 	OFF(mant_mandoc_atom_record, source), OFF(mant_mandoc_atom_record, operand_start),
 	OFF(mant_mandoc_atom_record, operand_length), OFF(mant_mandoc_atom_record, font),
 	OFF(mant_mandoc_atom_record, wrapper), OFF(mant_mandoc_atom_record, replaced_by),
-	OFF(mant_mandoc_atom_record, disposition), OFF(mant_mandoc_atom_record, sequence)
+	OFF(mant_mandoc_atom_record, disposition), OFF(mant_mandoc_atom_record, flags),
+	OFF(mant_mandoc_atom_record, output_role), OFF(mant_mandoc_atom_record, sequence)
 };
 static const size_t fragment_offsets[] = {
 	OFF(mant_mandoc_fragment_record, key), OFF(mant_mandoc_fragment_record, node),
 	OFF(mant_mandoc_fragment_record, buffer),
 	OFF(mant_mandoc_fragment_record, generation),
 	OFF(mant_mandoc_fragment_record, buffer_generation),
-	OFF(mant_mandoc_fragment_record, atom_ref_start), OFF(mant_mandoc_fragment_record, atom_ref_length),
+	OFF(mant_mandoc_fragment_record, atom), OFF(mant_mandoc_fragment_record, reserved_atom),
 	OFF(mant_mandoc_fragment_record, device_line), OFF(mant_mandoc_fragment_record, role),
 	OFF(mant_mandoc_fragment_record, wrapper), OFF(mant_mandoc_fragment_record, reserved),
 	OFF(mant_mandoc_fragment_record, start_bu), OFF(mant_mandoc_fragment_record, end_bu),
 	OFF(mant_mandoc_fragment_record, sequence)
-};
-static const size_t fragment_atom_offsets[] = {
-	OFF(mant_mandoc_fragment_atom_record, fragment),
-	OFF(mant_mandoc_fragment_atom_record, atom)
 };
 static const size_t logical_tab_offsets[] = {
 	OFF(mant_mandoc_logical_tab_record, row_epoch),
@@ -7457,7 +8019,7 @@ static const size_t flush_offsets[] = {
 	OFF(mant_mandoc_flush_record, logical_origin_bu),
 	OFF(mant_mandoc_flush_record, effective_content_bu),
 	OFF(mant_mandoc_flush_record, logical_forced_break),
-	OFF(mant_mandoc_flush_record, reserved_fit),
+	OFF(mant_mandoc_flush_record, output_role),
 	OFF(mant_mandoc_flush_record, field_bu),
 	OFF(mant_mandoc_flush_record, target_bu),
 	OFF(mant_mandoc_flush_record, offset_bu),
@@ -7481,6 +8043,8 @@ static const size_t boundary_offsets[] = {
 	OFF(mant_mandoc_boundary_record, visual_before), OFF(mant_mandoc_boundary_record, visual_after),
 	OFF(mant_mandoc_boundary_record, direct_device_lines),
 	OFF(mant_mandoc_boundary_record, wrapper),
+	OFF(mant_mandoc_boundary_record, line_commit_cause),
+	OFF(mant_mandoc_boundary_record, output_role),
 	OFF(mant_mandoc_boundary_record, enter_sequence),
 	OFF(mant_mandoc_boundary_record, leave_sequence)
 };
@@ -7539,10 +8103,22 @@ static const size_t geometry_offsets[] = {
 	OFF(mant_mandoc_geometry_record, key), OFF(mant_mandoc_geometry_record, node),
 	OFF(mant_mandoc_geometry_record, related), OFF(mant_mandoc_geometry_record, kind),
 	OFF(mant_mandoc_geometry_record, unit), OFF(mant_mandoc_geometry_record, origin_kind),
-	OFF(mant_mandoc_geometry_record, origin_key), OFF(mant_mandoc_geometry_record, reserved),
+	OFF(mant_mandoc_geometry_record, origin_key), OFF(mant_mandoc_geometry_record, output_role),
 	OFF(mant_mandoc_geometry_record, requested), OFF(mant_mandoc_geometry_record, effective),
 	OFF(mant_mandoc_geometry_record, before), OFF(mant_mandoc_geometry_record, after),
 	OFF(mant_mandoc_geometry_record, sequence)
+};
+static const size_t placement_offsets[] = {
+	OFF(mant_mandoc_placement_record, key),
+	OFF(mant_mandoc_placement_record, node),
+	OFF(mant_mandoc_placement_record, wrapper),
+	OFF(mant_mandoc_placement_record, phase),
+	OFF(mant_mandoc_placement_record, offset_bu),
+	OFF(mant_mandoc_placement_record, rmargin_bu),
+	OFF(mant_mandoc_placement_record, maxrmargin_bu),
+	OFF(mant_mandoc_placement_record, visual_bu),
+	OFF(mant_mandoc_placement_record, cell_bu),
+	OFF(mant_mandoc_placement_record, sequence)
 };
 static const size_t wrapper_offsets[] = {
 	OFF(mant_mandoc_wrapper_record, key), OFF(mant_mandoc_wrapper_record, parent),
@@ -7580,7 +8156,13 @@ static const size_t reference_offsets[] = {
 	OFF(mant_mandoc_reference_record, secondary_length),
 	OFF(mant_mandoc_reference_record, enter_atom),
 	OFF(mant_mandoc_reference_record, label_start_atom),
+	OFF(mant_mandoc_reference_record, label_end_atom),
+	OFF(mant_mandoc_reference_record, target_start_atom),
+	OFF(mant_mandoc_reference_record, target_end_atom),
+	OFF(mant_mandoc_reference_record, supplement_start_atom),
+	OFF(mant_mandoc_reference_record, supplement_end_atom),
 	OFF(mant_mandoc_reference_record, leave_atom),
+	OFF(mant_mandoc_reference_record, presentation),
 	OFF(mant_mandoc_reference_record, affinity),
 	OFF(mant_mandoc_reference_record, flags),
 	OFF(mant_mandoc_reference_record, enter_sequence),
@@ -7602,9 +8184,14 @@ static const size_t table_offsets[] = {
 	OFF(mant_mandoc_table_record, first_row_node),
 	OFF(mant_mandoc_table_record, row_start),
 	OFF(mant_mandoc_table_record, row_length),
-	OFF(mant_mandoc_table_record, cell_start),
-	OFF(mant_mandoc_table_record, cell_length),
+	OFF(mant_mandoc_table_record, layout_start),
+	OFF(mant_mandoc_table_record, layout_length),
+	OFF(mant_mandoc_table_record, data_start),
+	OFF(mant_mandoc_table_record, data_length),
+	OFF(mant_mandoc_table_record, invocation_start),
+	OFF(mant_mandoc_table_record, invocation_length),
 	OFF(mant_mandoc_table_record, logical_columns),
+	OFF(mant_mandoc_table_record, wrapper),
 	OFF(mant_mandoc_table_record, flags),
 	OFF(mant_mandoc_table_record, enter_atom),
 	OFF(mant_mandoc_table_record, leave_atom),
@@ -7612,6 +8199,8 @@ static const size_t table_offsets[] = {
 	OFF(mant_mandoc_table_record, leave_fragment),
 	OFF(mant_mandoc_table_record, enter_flush),
 	OFF(mant_mandoc_table_record, leave_flush),
+	OFF(mant_mandoc_table_record, offset_bu),
+	OFF(mant_mandoc_table_record, cell_bu),
 	OFF(mant_mandoc_table_record, enter_sequence),
 	OFF(mant_mandoc_table_record, leave_sequence)
 };
@@ -7622,8 +8211,12 @@ static const size_t table_row_offsets[] = {
 	OFF(mant_mandoc_table_row_record, ordinal),
 	OFF(mant_mandoc_table_row_record, kind),
 	OFF(mant_mandoc_table_row_record, logical_columns),
-	OFF(mant_mandoc_table_row_record, cell_start),
-	OFF(mant_mandoc_table_row_record, cell_length),
+	OFF(mant_mandoc_table_row_record, layout_start),
+	OFF(mant_mandoc_table_row_record, layout_length),
+	OFF(mant_mandoc_table_row_record, data_start),
+	OFF(mant_mandoc_table_row_record, data_length),
+	OFF(mant_mandoc_table_row_record, invocation_start),
+	OFF(mant_mandoc_table_row_record, invocation_length),
 	OFF(mant_mandoc_table_row_record, enter_atom),
 	OFF(mant_mandoc_table_row_record, leave_atom),
 	OFF(mant_mandoc_table_row_record, enter_fragment),
@@ -7633,31 +8226,53 @@ static const size_t table_row_offsets[] = {
 	OFF(mant_mandoc_table_row_record, enter_sequence),
 	OFF(mant_mandoc_table_row_record, leave_sequence)
 };
-static const size_t table_cell_offsets[] = {
-	OFF(mant_mandoc_table_cell_record, key),
-	OFF(mant_mandoc_table_cell_record, row),
-	OFF(mant_mandoc_table_cell_record, node),
-	OFF(mant_mandoc_table_cell_record, ordinal),
-	OFF(mant_mandoc_table_cell_record, data_ordinal),
-	OFF(mant_mandoc_table_cell_record, logical_column),
-	OFF(mant_mandoc_table_cell_record, column_span),
-	OFF(mant_mandoc_table_cell_record, row_span),
-	OFF(mant_mandoc_table_cell_record, layout_kind),
-	OFF(mant_mandoc_table_cell_record, data_kind),
-	OFF(mant_mandoc_table_cell_record, alignment),
-	OFF(mant_mandoc_table_cell_record, font),
-	OFF(mant_mandoc_table_cell_record, flags),
-	OFF(mant_mandoc_table_cell_record, buffer),
-	OFF(mant_mandoc_table_cell_record, buffer_generation),
-	OFF(mant_mandoc_table_cell_record, reserved),
-	OFF(mant_mandoc_table_cell_record, enter_atom),
-	OFF(mant_mandoc_table_cell_record, leave_atom),
-	OFF(mant_mandoc_table_cell_record, offset_bu),
-	OFF(mant_mandoc_table_cell_record, rmargin_bu),
-	OFF(mant_mandoc_table_cell_record, coloff_before_bu),
-	OFF(mant_mandoc_table_cell_record, coloff_after_bu),
-	OFF(mant_mandoc_table_cell_record, enter_sequence),
-	OFF(mant_mandoc_table_cell_record, leave_sequence)
+static const size_t table_layout_cell_offsets[] = {
+	OFF(mant_mandoc_table_layout_cell_record, key),
+	OFF(mant_mandoc_table_layout_cell_record, row),
+	OFF(mant_mandoc_table_layout_cell_record, ordinal),
+	OFF(mant_mandoc_table_layout_cell_record, logical_column),
+	OFF(mant_mandoc_table_layout_cell_record, kind),
+	OFF(mant_mandoc_table_layout_cell_record, alignment),
+	OFF(mant_mandoc_table_layout_cell_record, font),
+	OFF(mant_mandoc_table_layout_cell_record, flags),
+	OFF(mant_mandoc_table_layout_cell_record, horizontal_continuation),
+	OFF(mant_mandoc_table_layout_cell_record, spacing_en),
+	OFF(mant_mandoc_table_layout_cell_record, vertical_rule),
+	OFF(mant_mandoc_table_layout_cell_record, reserved)
+};
+static const size_t table_data_cell_offsets[] = {
+	OFF(mant_mandoc_table_data_cell_record, key),
+	OFF(mant_mandoc_table_data_cell_record, row),
+	OFF(mant_mandoc_table_data_cell_record, ordinal),
+	OFF(mant_mandoc_table_data_cell_record, layout),
+	OFF(mant_mandoc_table_data_cell_record, kind),
+	OFF(mant_mandoc_table_data_cell_record, disposition),
+	OFF(mant_mandoc_table_data_cell_record, column_span),
+	OFF(mant_mandoc_table_data_cell_record, row_span),
+	OFF(mant_mandoc_table_data_cell_record, flags),
+	OFF(mant_mandoc_table_data_cell_record, equation_delimiters),
+	OFF(mant_mandoc_table_data_cell_record, equation_opening),
+	OFF(mant_mandoc_table_data_cell_record, equation_closing)
+};
+static const size_t table_cell_invocation_offsets[] = {
+	OFF(mant_mandoc_table_cell_invocation_record, key),
+	OFF(mant_mandoc_table_cell_invocation_record, row),
+	OFF(mant_mandoc_table_cell_invocation_record, node),
+	OFF(mant_mandoc_table_cell_invocation_record, ordinal),
+	OFF(mant_mandoc_table_cell_invocation_record, layout),
+	OFF(mant_mandoc_table_cell_invocation_record, data),
+	OFF(mant_mandoc_table_cell_invocation_record, outcome),
+	OFF(mant_mandoc_table_cell_invocation_record, logical_column),
+	OFF(mant_mandoc_table_cell_invocation_record, buffer),
+	OFF(mant_mandoc_table_cell_invocation_record, buffer_generation),
+	OFF(mant_mandoc_table_cell_invocation_record, enter_atom),
+	OFF(mant_mandoc_table_cell_invocation_record, leave_atom),
+	OFF(mant_mandoc_table_cell_invocation_record, offset_bu),
+	OFF(mant_mandoc_table_cell_invocation_record, rmargin_bu),
+	OFF(mant_mandoc_table_cell_invocation_record, coloff_before_bu),
+	OFF(mant_mandoc_table_cell_invocation_record, coloff_after_bu),
+	OFF(mant_mandoc_table_cell_invocation_record, enter_sequence),
+	OFF(mant_mandoc_table_cell_invocation_record, leave_sequence)
 };
 static const size_t equation_offsets[] = {
 	OFF(mant_mandoc_equation_record, key),
@@ -7746,19 +8361,25 @@ DEFINE_RECORD_API(buffer_generation, buffer_generations,
 DEFINE_RECORD_API(word, words, mant_mandoc_word_record, word_offsets)
 DEFINE_RECORD_API(atom, atoms, mant_mandoc_atom_record, atom_offsets)
 DEFINE_RECORD_API(fragment, fragments, mant_mandoc_fragment_record, fragment_offsets)
-DEFINE_RECORD_API(fragment_atom, fragment_atoms, mant_mandoc_fragment_atom_record, fragment_atom_offsets)
 DEFINE_RECORD_API(logical_tab, logical_tabs, mant_mandoc_logical_tab_record,
     logical_tab_offsets)
 DEFINE_RECORD_API(flush, flushes, mant_mandoc_flush_record, flush_offsets)
 DEFINE_RECORD_API(boundary, boundaries, mant_mandoc_boundary_record, boundary_offsets)
 DEFINE_RECORD_API(control, controls, mant_mandoc_control_record, control_offsets)
 DEFINE_RECORD_API(geometry, geometries, mant_mandoc_geometry_record, geometry_offsets)
+DEFINE_RECORD_API(placement, placements, mant_mandoc_placement_record,
+    placement_offsets)
 DEFINE_RECORD_API(wrapper, wrappers, mant_mandoc_wrapper_record, wrapper_offsets)
 DEFINE_RECORD_API(reference, references, mant_mandoc_reference_record, reference_offsets)
 DEFINE_RECORD_API(anchor, anchors, mant_mandoc_anchor_record, anchor_offsets)
 DEFINE_RECORD_API(table, tables, mant_mandoc_table_record, table_offsets)
 DEFINE_RECORD_API(table_row, table_rows, mant_mandoc_table_row_record, table_row_offsets)
-DEFINE_RECORD_API(table_cell, table_cells, mant_mandoc_table_cell_record, table_cell_offsets)
+DEFINE_RECORD_API(table_layout_cell, table_layout_cells,
+    mant_mandoc_table_layout_cell_record, table_layout_cell_offsets)
+DEFINE_RECORD_API(table_data_cell, table_data_cells,
+    mant_mandoc_table_data_cell_record, table_data_cell_offsets)
+DEFINE_RECORD_API(table_cell_invocation, table_cell_invocations,
+    mant_mandoc_table_cell_invocation_record, table_cell_invocation_offsets)
 DEFINE_RECORD_API(equation, equations, mant_mandoc_equation_record,
     equation_offsets)
 DEFINE_RECORD_API(equation_box, equation_boxes,

@@ -10,9 +10,9 @@ mod formatter;
 pub(crate) mod inline;
 mod layout;
 mod native_execution;
-#[cfg(feature = "staged-native-audit")]
+#[cfg(feature = "native-semantic-audit")]
 #[doc(hidden)]
-pub use native_execution::lower_staged_semantic_document;
+pub use native_execution::lower_native_semantic_document;
 mod navigation;
 mod redirect;
 mod reference;
@@ -23,6 +23,8 @@ mod source_lines;
 use source_context::{LoweringContext, TableTextBlock};
 mod equations;
 use equations::{EquationDelimiterChange, equation_delimiter_changes};
+mod error;
+pub use error::{RoffError, RoffProjectionError, RoffProjectionStage};
 mod ast;
 use ast::{first_part_children, part_child_groups, source_span};
 mod targets;
@@ -34,8 +36,8 @@ use std::{
 };
 
 use libmandoc_rs::{
-    Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseError,
-    ParseOptions, ParseReport, Parser,
+    Compression, Document as MandocDocument, ExecutionLimits, ExecutionReport, IncludePolicy,
+    MacroSet, Node, ParseOptions, ParseReport, Parser,
 };
 use mant_ir::{
     Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, SourceFormat,
@@ -51,27 +53,26 @@ const MAX_INLINE_EQUATION_NORMALIZATIONS: usize = 256;
 /// Includes are disabled and compression must already have been decoded.
 ///
 /// # Errors
-/// Returns the native parser's controlled failure for invalid or bounded input.
-pub fn parse_plain_manual(path: &Path, source: &[u8]) -> Result<Document, ParseError> {
+/// Returns a controlled native-execution or semantic-projection failure.
+pub fn parse_plain_manual(path: &Path, source: &[u8]) -> Result<Document, RoffError> {
     parse_plain_manual_report(path, source).map(|(document, _)| document)
 }
 
 /// Lower one owned witness from the same input, without filesystem fallbacks.
 ///
 /// # Errors
-/// Returns the native parser's controlled failure for invalid or bounded input.
+/// Returns a controlled native-execution or semantic-projection failure.
 pub fn parse_plain_manual_report(
     path: &Path,
     source: &[u8],
-) -> Result<(Document, ParseReport), ParseError> {
+) -> Result<(Document, ExecutionReport), RoffError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
         compression: Compression::Plain,
     })
-    .parse_bytes(path, source.as_ref())?;
-    let source_text = String::from_utf8_lossy(source.as_ref());
-    let mut document = lower_mandoc_document_with_source(path, &report, Some(&source_text));
+    .execute_bytes(path, source.as_ref(), ExecutionLimits::default())?;
+    let mut document = native_execution::lower_native_document(path, &report)?;
     if masked_controls > 0 {
         document.diagnostics.insert(
             0,

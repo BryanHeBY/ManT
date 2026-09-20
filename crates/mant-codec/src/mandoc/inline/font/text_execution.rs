@@ -191,6 +191,7 @@ fn execute_formatter_word_events(
             }
             FormatterWordEvent::Source(
                 RoffInlineEvent::Glyph(value)
+                | RoffInlineEvent::CompatibilityGlyph(value)
                 | RoffInlineEvent::Overstrike {
                     terminal: Some(value),
                     ..
@@ -333,6 +334,7 @@ fn trailing_breakable_spaces(events: &[FormatterWordEvent]) -> usize {
             FormatterWordEvent::Code(_)
             | FormatterWordEvent::Source(
                 RoffInlineEvent::Glyph(_)
+                | RoffInlineEvent::CompatibilityGlyph(_)
                 | RoffInlineEvent::FallbackGlyph(_)
                 | RoffInlineEvent::DeviceName
                 | RoffInlineEvent::Overstrike { .. }

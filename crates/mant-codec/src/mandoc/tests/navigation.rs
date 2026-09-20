@@ -1,35 +1,29 @@
 //! Codec-internal lowering contracts; no query or rendering dependencies.
+use crate::mandoc::native_execution;
+
 use super::*;
 
 #[test]
-fn target_identity_is_independent_from_optional_raw_source_recovery() {
+fn native_execution_report_owns_each_authored_and_automatic_target() {
+    // The exact fixture was checked with the pinned CVS HTML renderer before
+    // this assertion was written: it emits `Mixed.Section`,
+    // `derived-command`, and `automatic_function` as three addressable IDs.
+    // `tag.c::tag_postprocess()` moves each target to its final structural
+    // owner, so the production projector must recover all three exclusively
+    // from the owned execution report, without a second source interpretation.
     let path = std::path::Path::new("target-source-parity.7");
-    let source = b".Dd September 4, 2026\n.Dt TARGET-SOURCE-PARITY 7\n.Os\n\
-.Tg Mixed.Section\n\
-.Sh HEADING\n\
-.Pp\n\
-Paragraph before a target request.\n\
-.Tg\n\
-.Ic derived-command\n\
-.Pp\n\
-.Fn automatic_function\n";
-    let with_source = parse_manual_bytes(path, source).expect("lower source-aware document");
+    let source = include_bytes!("../native_execution/fixtures/target-source-parity.7");
     let report = Parser::default()
-        .parse_bytes(path, source)
-        .expect("parse owned native tree");
-    let without_source = lower_mandoc_document(path, &report);
+        .execute_bytes(path, source, libmandoc_rs::ExecutionLimits::default())
+        .expect("execute one owned native report");
+    let document =
+        native_execution::lower_native_document(path, &report).expect("native projection succeeds");
 
-    let with_source_index = mant_ir::DocumentIndex::build(&with_source);
-    let without_source_index = mant_ir::DocumentIndex::build(&without_source);
+    let index = mant_ir::DocumentIndex::build(&document);
     for target in ["Mixed.Section", "derived-command", "automatic_function"] {
-        assert_eq!(
-            with_source_index
-                .fragment_target(target)
-                .map(mant_ir::NodeId::as_str),
-            without_source_index
-                .fragment_target(target)
-                .map(mant_ir::NodeId::as_str),
-            "target {target} changed when raw source recovery was unavailable"
+        assert!(
+            index.fragment_target(target).is_some(),
+            "native report did not retain target {target}: {document:#?}"
         );
     }
 }

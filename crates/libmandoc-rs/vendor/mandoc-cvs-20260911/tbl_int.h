@@ -37,6 +37,9 @@ struct	tbl_node {
 	int		  line;		/* Line number in input file. */
 	int		  pos;		/* Column number in input file. */
 	int		  source_safe;	/* Current input avoids user macro expansion. */
+	unsigned char	  eqn_delim;	/* Inline eqn delimiters are active. */
+	unsigned char	  eqn_odelim;	/* Active inline eqn opening delimiter. */
+	unsigned char	  eqn_cdelim;	/* Active inline eqn closing delimiter. */
 	enum tbl_part	  part;		/* Table section being parsed. */
 };
 

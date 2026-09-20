@@ -1,0 +1,348 @@
+Subject: expose final native execution facts for lowering
+Upstream-Status: Local embedding (observer-only; not submitted)
+
+Record the terminal handler's exact direct or labelled-supplement presentation
+and the ordered label, target, and supplement phases.  Consumers can compact
+semantic links without inferring formatter behavior from macro names or words.
+
+Snapshot the active inline-equation delimiters on each tbl data cell as well.
+The parser deliberately does not interpret equations while tbl is active; the
+snapshot only authorizes a bounded, cell-local semantic enhancement after the
+native table result has been accepted as authoritative.
+
+diff --git old/man_term.c new/man_term.c
+index 4dab24c..5a93db4 100644
+--- old/man_term.c
++++ new/man_term.c
+@@ -332,7 +332,7 @@ pre_MR(DECL_ARGS)
+ 	if (name != NULL && !term_exec_reference_begin(p,
+ 	    TERM_EXEC_REFERENCE_MANUAL, n, name, name->string,
+ 	    section == NULL ? NULL : section->string,
+-	    TERM_EXEC_AFFINITY_INLINE))
++	    TERM_EXEC_AFFINITY_INLINE, TERM_EXEC_REFERENCE_DIRECT))
+ 		return 0;
+ 	if (name != NULL) {
+ 		term_word(p, name->string);   /* name */
+@@ -920,7 +920,8 @@ pre_UR(DECL_ARGS)
+ 		    TERM_EXEC_REFERENCE_EXTERNAL_URI;
+ 		if (target != NULL && !term_exec_reference_begin(p, kind,
+ 		    block, target, target->string, NULL,
+-		    TERM_EXEC_AFFINITY_INLINE))
++		    TERM_EXEC_AFFINITY_INLINE,
++		    TERM_EXEC_REFERENCE_LABELLED_SUPPLEMENT))
+ 			return 0;
+ 	}
+ 	return n->type != ROFFT_HEAD;
+@@ -934,7 +935,8 @@ post_UR(DECL_ARGS)
+ 
+ 	if (n->type == ROFFT_BODY) {
+ 		if (n->child != NULL)
+-			(void)term_exec_reference_end(p);
++			(void)term_exec_reference_phase(p,
++			    TERM_EXEC_REFERENCE_LABEL_END);
+ 		return;
+ 	}
+ 	if (n->type != ROFFT_BLOCK)
+@@ -944,19 +946,33 @@ post_UR(DECL_ARGS)
+ 	    TERM_EXEC_REFERENCE_EXTERNAL_URI;
+ 	if (n->body->child == NULL && target != NULL &&
+ 	    !term_exec_reference_begin(p, kind, n, target,
+-	    target->string, NULL, TERM_EXEC_AFFINITY_INLINE))
++	    target->string, NULL, TERM_EXEC_AFFINITY_INLINE,
++	    TERM_EXEC_REFERENCE_DIRECT))
++		return;
++	if (n->body->child != NULL && target != NULL &&
++	    !term_exec_reference_phase(p, TERM_EXEC_REFERENCE_SUPPLEMENT_BEGIN))
+ 		return;
+ 
+ 	term_word(p, "<");
+ 	p->flags |= TERMP_NOSPACE;
++	if (n->body->child != NULL && target != NULL &&
++	    !term_exec_reference_phase(p, TERM_EXEC_REFERENCE_TARGET_BEGIN))
++		return;
+ 
+ 	if (n->child->child != NULL)
+ 		print_man_node(p, mt, n->child->child, meta);
++	if (n->body->child != NULL && target != NULL &&
++	    !term_exec_reference_phase(p, TERM_EXEC_REFERENCE_TARGET_END))
++		return;
+ 
+ 	p->flags |= TERMP_NOSPACE;
+ 	term_word(p, ">");
+-	if (n->body->child == NULL && target != NULL)
++	if (target != NULL) {
++		if (n->body->child != NULL)
++			(void)term_exec_reference_phase(p,
++			    TERM_EXEC_REFERENCE_SUPPLEMENT_END);
+ 		(void)term_exec_reference_end(p);
++	}
+ }
+ 
+ static void
+diff --git old/mdoc_term.c new/mdoc_term.c
+index 4fd5880..975ba62 100644
+--- old/mdoc_term.c
++++ new/mdoc_term.c
+@@ -495,7 +495,7 @@ print_mdoc_node_inner(DECL_ARGS)
+ 		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
+ 		    !term_exec_reference_begin(p, TERM_EXEC_REFERENCE_EMAIL,
+ 		    n->parent, n, n->string, NULL,
+-		    TERM_EXEC_AFFINITY_INLINE))
++		    TERM_EXEC_AFFINITY_INLINE, TERM_EXEC_REFERENCE_DIRECT))
+ 			return;
+ 		term_word(p, n->string);
+ 		if (n->parent != NULL && n->parent->tok == MDOC_Mt &&
+@@ -1306,7 +1306,7 @@ termp_xr_pre(DECL_ARGS)
+ 	if (!term_exec_reference_begin(p, TERM_EXEC_REFERENCE_MANUAL,
+ 	    owner, name, name->string,
+ 	    section == NULL ? NULL : section->string,
+-	    TERM_EXEC_AFFINITY_INLINE))
++	    TERM_EXEC_AFFINITY_INLINE, TERM_EXEC_REFERENCE_DIRECT))
+ 		return 0;
+ 
+ 	assert(name->type == ROFFT_TEXT);
+@@ -2075,7 +2075,8 @@ termp_lk_pre(DECL_ARGS)
+ 	if (has_descr) {
+ 		if (!term_exec_reference_begin(p,
+ 		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
+-		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
++		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE,
++		    TERM_EXEC_REFERENCE_LABELLED_SUPPLEMENT))
+ 			return 0;
+ 		term_fontpush(p, TERMFONT_UNDER);
+ 		while (descr != punct) {
+@@ -2085,7 +2086,9 @@ termp_lk_pre(DECL_ARGS)
+ 			descr = descr->next;
+ 		}
+ 		term_fontpop(p);
+-		if (!term_exec_reference_end(p))
++		if (!term_exec_reference_phase(p, TERM_EXEC_REFERENCE_LABEL_END) ||
++		    !term_exec_reference_phase(p,
++		    TERM_EXEC_REFERENCE_SUPPLEMENT_BEGIN))
+ 			return 0;
+ 		p->flags |= TERMP_NOSPACE;
+ 		term_word(p, ":");
+@@ -2095,10 +2098,20 @@ termp_lk_pre(DECL_ARGS)
+ 	if (!has_descr)
+ 		if (!term_exec_reference_begin(p,
+ 		    TERM_EXEC_REFERENCE_EXTERNAL_URI, n, link,
+-		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE))
++		    link->string, NULL, TERM_EXEC_AFFINITY_INLINE,
++		    TERM_EXEC_REFERENCE_DIRECT))
+ 			return 0;
++	if (has_descr && !term_exec_reference_phase(p,
++	    TERM_EXEC_REFERENCE_TARGET_BEGIN))
++		return 0;
+ 	term_word(p, link->string);
+-	if (!has_descr)
++	if (has_descr) {
++		if (!term_exec_reference_phase(p, TERM_EXEC_REFERENCE_TARGET_END) ||
++		    !term_exec_reference_phase(p,
++		    TERM_EXEC_REFERENCE_SUPPLEMENT_END) ||
++		    !term_exec_reference_end(p))
++			return 0;
++	} else
+ 		if (!term_exec_reference_end(p))
+ 			return 0;
+ 
+diff --git old/roff.c new/roff.c
+index 20f80ca..24a00de 100644
+--- old/roff.c
++++ new/roff.c
+@@ -1948,10 +1948,15 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
+ 	 * Preserve the direct cell source before roff_expand() changes it.
+ 	 * tbl still owns the executed operand and remains authoritative.
+ 	 */
+-	if (r->tbl != NULL)
++	if (r->tbl != NULL) {
++		tbl_set_eqn_delimiters(r->tbl,
++		    r->last_eqn != NULL && r->last_eqn->delim,
++		    r->last_eqn == NULL ? 0 : r->last_eqn->odelim,
++		    r->last_eqn == NULL ? 0 : r->last_eqn->cdelim);
+ 		tbl_capture_source(r->tbl, ln, buf->buf, ppos,
+ 		    (unsigned char)r->escape,
+ 		    r->mstackpos < 0 && r->control == '\0');
++	}
+ 
+ 	e = roff_expand(r, buf, ln, pos, r->escape);
+ 	if ((e & ROFF_MASK) == ROFF_IGN)
+diff --git old/tbl.c new/tbl.c
+index 824db55..927b071 100644
+--- old/tbl.c
++++ new/tbl.c
+@@ -109,6 +109,20 @@ tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
+ 	tbl->source_safe = source_safe;
+ }
+ 
++/*
++ * Snapshot the document-level inline eqn state before tbl consumes a data
++ * line.  roff_parseln() deliberately does not expand inline equations while
++ * a table is active, so each tbl_dat has to retain this parse-time fact for
++ * bounded consumers that elect to enrich the otherwise opaque cell string.
++ */
++void
++tbl_set_eqn_delimiters(struct tbl_node *tbl, int enabled, char open, char close)
++{
++	tbl->eqn_delim = enabled != 0;
++	tbl->eqn_odelim = enabled ? (unsigned char)open : 0;
++	tbl->eqn_cdelim = enabled ? (unsigned char)close : 0;
++}
++
+ /*
+  * Retain only direct, post-comment and pre-expansion source belonging to an
+  * active continued-data cell.  This is evidence for an optional embedding
+diff --git old/tbl.h new/tbl.h
+index e0168ba..254d594 100644
+--- old/tbl.h
++++ new/tbl.h
+@@ -101,6 +101,9 @@ struct	tbl_dat {
+ 	int		  source_end_line; /* Last direct source line, or -1. */
+ 	int		  source_end_pos;  /* End column on the last line. */
+ 	unsigned char	  source_escape; /* Escape state at source entry. */
++	unsigned char	  eqn_delim; /* Inline eqn delimiters were active. */
++	unsigned char	  eqn_odelim; /* Inline eqn opening delimiter. */
++	unsigned char	  eqn_cdelim; /* Inline eqn closing delimiter. */
+ 	int		  hspans;  /* How many horizontal spans follow. */
+ 	int		  vspans;  /* How many vertical spans follow. */
+ 	int		  block;   /* T{ text block T} */
+diff --git old/tbl_data.c new/tbl_data.c
+index 92ea19c..999c842 100644
+--- old/tbl_data.c
++++ new/tbl_data.c
+@@ -104,6 +104,9 @@ getdata(struct tbl_node *tbl, struct tbl_span *dp,
+ 	dat->source_end_line = -1;
+ 	dat->source_end_pos = -1;
+ 	dat->source_escape = '\\';
++	dat->eqn_delim = tbl->eqn_delim;
++	dat->eqn_odelim = tbl->eqn_odelim;
++	dat->eqn_cdelim = tbl->eqn_cdelim;
+ 	dat->hspans = 0;
+ 	dat->vspans = 0;
+ 	dat->block = 0;
+diff --git old/tbl_int.h new/tbl_int.h
+index 75dd864..5060c63 100644
+--- old/tbl_int.h
++++ new/tbl_int.h
+@@ -37,6 +37,9 @@ struct	tbl_node {
+ 	int		  line;		/* Line number in input file. */
+ 	int		  pos;		/* Column number in input file. */
+ 	int		  source_safe;	/* Current input avoids user macro expansion. */
++	unsigned char	  eqn_delim;	/* Inline eqn delimiters are active. */
++	unsigned char	  eqn_odelim;	/* Active inline eqn opening delimiter. */
++	unsigned char	  eqn_cdelim;	/* Active inline eqn closing delimiter. */
+ 	enum tbl_part	  part;		/* Table section being parsed. */
+ };
+ 
+diff --git old/tbl_parse.h new/tbl_parse.h
+index 6bc1f54..c387e5d 100644
+--- old/tbl_parse.h
++++ new/tbl_parse.h
+@@ -31,4 +31,5 @@ void		 tbl_capture_source(struct tbl_node *, int, const char *, int,
+ 			unsigned char, int);
+ void		 tbl_mark_source_unsafe(struct tbl_node *);
+ void		 tbl_set_source_safe(struct tbl_node *, int);
++void		 tbl_set_eqn_delimiters(struct tbl_node *, int, char, char);
+ struct tbl_span	*tbl_span(struct tbl_node *);
+diff --git old/term.c new/term.c
+index a161817..f621ce8 100644
+--- old/term.c
++++ new/term.c
+@@ -258,7 +258,8 @@ term_exec_reference_node_begin(struct termp *p, int kind,
+ 		return 0;
+ 	if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
+ 	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
+-	    owner, target_node, kind, NULL, 0, NULL, 0, affinity, opened))
++	    owner, target_node, kind, NULL, 0, NULL, 0, affinity,
++	    TERM_EXEC_REFERENCE_DIRECT, opened))
+ 		p->exec_failed = 1;
+ 	return !p->exec_failed;
+ }
+@@ -266,7 +267,8 @@ term_exec_reference_node_begin(struct termp *p, int kind,
+ int
+ term_exec_reference_begin(struct termp *p, int kind,
+     const struct roff_node *owner, const struct roff_node *target_node,
+-    const char *primary, const char *secondary, int affinity)
++    const char *primary, const char *secondary, int affinity,
++    int presentation)
+ {
+ 	int opened;
+ 
+@@ -277,7 +279,8 @@ term_exec_reference_begin(struct termp *p, int kind,
+ 	    !p->exec_ops->reference_begin(p->exec_arg, p, p->exec_node,
+ 	    owner, target_node, kind, primary,
+ 	    primary == NULL ? 0 : strlen(primary), secondary,
+-	    secondary == NULL ? 0 : strlen(secondary), affinity, &opened))
++	    secondary == NULL ? 0 : strlen(secondary), affinity,
++	    presentation, &opened))
+ 		p->exec_failed = 1;
+ 	else if (p->exec_ops != NULL && p->exec_ops->reference_begin != NULL &&
+ 	    !opened)
+@@ -285,6 +288,17 @@ term_exec_reference_begin(struct termp *p, int kind,
+ 	return !p->exec_failed;
+ }
+ 
++int
++term_exec_reference_phase(struct termp *p, int phase)
++{
++	if (p->exec_failed)
++		return 0;
++	if (p->exec_ops != NULL && p->exec_ops->reference_phase != NULL &&
++	    !p->exec_ops->reference_phase(p->exec_arg, p, p->exec_node, phase))
++		p->exec_failed = 1;
++	return !p->exec_failed;
++}
++
+ int
+ term_exec_reference_end(struct termp *p)
+ {
+diff --git old/term.h new/term.h
+index 27005bb..d75aa85 100644
+--- old/term.h
++++ new/term.h
+@@ -59,6 +59,21 @@ enum term_exec_reference_kind {
+ 	TERM_EXEC_REFERENCE_SECTION
+ };
+ 
++/* How a native handler presents a semantic reference to the terminal. */
++enum term_exec_reference_presentation {
++	TERM_EXEC_REFERENCE_DIRECT,
++	TERM_EXEC_REFERENCE_LABELLED_SUPPLEMENT
++};
++
++/* Ordered sub-ranges of a labelled reference presentation. */
++enum term_exec_reference_phase {
++	TERM_EXEC_REFERENCE_LABEL_END,
++	TERM_EXEC_REFERENCE_SUPPLEMENT_BEGIN,
++	TERM_EXEC_REFERENCE_TARGET_BEGIN,
++	TERM_EXEC_REFERENCE_TARGET_END,
++	TERM_EXEC_REFERENCE_SUPPLEMENT_END
++};
++
+ enum term_exec_affinity {
+ 	TERM_EXEC_AFFINITY_INLINE,
+ 	TERM_EXEC_AFFINITY_BEFORE_OUTPUT
+@@ -211,7 +226,9 @@ struct term_exec_ops {
+ 	int (*reference_begin)(void *, const struct termp *,
+ 	    const struct roff_node *, const struct roff_node *,
+ 	    const struct roff_node *, int, const char *, size_t,
+-	    const char *, size_t, int, int *);
++	    const char *, size_t, int, int, int *);
++	int (*reference_phase)(void *, const struct termp *,
++	    const struct roff_node *, int);
+ 	int (*reference_end)(void *, const struct termp *,
+ 	    const struct roff_node *);
+ 	int (*anchor)(void *, const struct termp *, const struct roff_node *,
+@@ -426,11 +443,12 @@ int		  term_exec_device_endline(struct termp *, size_t, size_t,
+ int		  term_exec_font(struct termp *, int, int, size_t, size_t);
+ int		  term_exec_reference_begin(struct termp *, int,
+ 			const struct roff_node *, const struct roff_node *,
+-			const char *, const char *, int);
++			const char *, const char *, int, int);
+ int		  term_exec_reference_node_begin(struct termp *, int,
+ 			const struct roff_node *, const struct roff_node *, int,
+ 			int *);
+ int		  term_exec_reference_end(struct termp *);
++int		  term_exec_reference_phase(struct termp *, int);
+ int		  term_exec_anchor(struct termp *, const struct roff_node *);
+ int		  term_exec_table_preflight(struct termp *, size_t);
+ int		  term_exec_table(struct termp *, const struct tbl_span *, int,

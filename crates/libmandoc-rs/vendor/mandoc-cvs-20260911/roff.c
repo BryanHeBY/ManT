@@ -1948,10 +1948,15 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
 	 * Preserve the direct cell source before roff_expand() changes it.
 	 * tbl still owns the executed operand and remains authoritative.
 	 */
-	if (r->tbl != NULL)
+	if (r->tbl != NULL) {
+		tbl_set_eqn_delimiters(r->tbl,
+		    r->last_eqn != NULL && r->last_eqn->delim,
+		    r->last_eqn == NULL ? 0 : r->last_eqn->odelim,
+		    r->last_eqn == NULL ? 0 : r->last_eqn->cdelim);
 		tbl_capture_source(r->tbl, ln, buf->buf, ppos,
 		    (unsigned char)r->escape,
 		    r->mstackpos < 0 && r->control == '\0');
+	}
 
 	e = roff_expand(r, buf, ln, pos, r->escape);
 	if ((e & ROFF_MASK) == ROFF_IGN)

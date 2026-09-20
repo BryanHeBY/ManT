@@ -110,6 +110,20 @@ tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
 }
 
 /*
+ * Snapshot the document-level inline eqn state before tbl consumes a data
+ * line.  roff_parseln() deliberately does not expand inline equations while
+ * a table is active, so each tbl_dat has to retain this parse-time fact for
+ * bounded consumers that elect to enrich the otherwise opaque cell string.
+ */
+void
+tbl_set_eqn_delimiters(struct tbl_node *tbl, int enabled, char open, char close)
+{
+	tbl->eqn_delim = enabled != 0;
+	tbl->eqn_odelim = enabled ? (unsigned char)open : 0;
+	tbl->eqn_cdelim = enabled ? (unsigned char)close : 0;
+}
+
+/*
  * Retain only direct, post-comment and pre-expansion source belonging to an
  * active continued-data cell.  This is evidence for an optional embedding
  * enhancement, never a replacement for tbl's executed string.  Macro and

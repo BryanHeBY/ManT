@@ -31,4 +31,5 @@ void		 tbl_capture_source(struct tbl_node *, int, const char *, int,
 			unsigned char, int);
 void		 tbl_mark_source_unsafe(struct tbl_node *);
 void		 tbl_set_source_safe(struct tbl_node *, int);
+void		 tbl_set_eqn_delimiters(struct tbl_node *, int, char, char);
 struct tbl_span	*tbl_span(struct tbl_node *);

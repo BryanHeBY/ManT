@@ -27,7 +27,7 @@ all-features = true
 [features]
 default = ["roff"]
 roff = ["mant-loader/roff"]
-native-semantic-audit = ["roff", "mant-codec/staged-native-audit"]
+native-semantic-audit = ["roff", "mant-codec/native-semantic-audit"]
 
 [[example]]
 name = "roff_semantic_profile"

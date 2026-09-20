@@ -23,7 +23,8 @@ pub(crate) use diagnostics::manual_discovery_diagnostics;
 pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
 #[cfg(feature = "roff")]
 pub(crate) use exact_native::{
-    ExactNativeDefinitionEvidence, ExactNativeNameEvidence, identify_exact_native_definitions,
+    ExactNativeDefinitionEvidence, ExactNativeIdentityError, ExactNativeIdentityResult,
+    ExactNativeNameEvidence, identify_exact_native_definitions_checked,
 };
 #[cfg(feature = "roff")]
 pub(crate) use groups::mark_native_definition_owner;

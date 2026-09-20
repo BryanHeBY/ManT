@@ -157,9 +157,14 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
         1,
         "{children:?}"
     );
+    // The pinned CVS HTML renderer keeps the zero-width authored fragment at
+    // this exact point.  IR gives it a canonical target namespace while
+    // retaining the authored spelling as a fragment alias.
     assert!(children.iter().any(|node| matches!(
         node,
-        Inline::Anchor { id, .. } if id == "mark"
+        Inline::Anchor { id, fragment_aliases, .. }
+            if id.as_str() == "target-mark"
+                && fragment_aliases.iter().any(|alias| alias.as_str() == "mark")
     )));
 }
 
@@ -347,7 +352,11 @@ fn bare_zero_advance_crosses_only_structures_without_generated_words() {
     )
     .expect("parse active zero-advance cell before a display");
     let visible = projected_document_text(&completed_and_armed);
-    assert!(visible.contains("XB C"), "{visible:?}");
+    // Fixed CVS `termp_bd_pre()` retains the completed `X`, then
+    // `termp_bd_post()` settles the preceding formatter field before the
+    // literal body.  The second bare `\z` is cleared by that real line
+    // boundary; it does not join the first display word to `X`.
+    assert!(visible.contains("X\nB C"), "{visible:?}");
     assert!(!visible.contains("XBC"), "{visible:?}");
 
     let man = parse_manual_bytes(
@@ -552,9 +561,20 @@ fn margin_flush_obeys_current_cell_and_continuation_state() {
         );
     };
     assert_eq!(inline_text(children), "A B", "{children:?}");
+    // The exact fixture was run through the pinned CVS renderer before this
+    // assertion was changed.  `mdoc_term.c::termp_tg_pre()` keeps `.Tg`
+    // zero-width between the two `.mc` flushes, while the source-neutral IR
+    // separates its canonical identity from the authored fragment.
     assert!(children.iter().any(|node| matches!(
         node,
-        Inline::Anchor { id, .. } if id == "between-margins"
+        Inline::Anchor {
+            id,
+            fragment_aliases,
+            ..
+        } if id.as_str() == "target-between-margins"
+            && fragment_aliases
+                .iter()
+                .any(|alias| alias.as_str() == "between-margins")
     )));
 
     for (label, first, expected) in [

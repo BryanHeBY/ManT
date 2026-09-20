@@ -20,6 +20,10 @@ pub(in crate::mandoc) enum NativeDefinitionKind {
 #[derive(Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct ResponsiveDefinitionLayout {
     pub(super) layout: DefinitionLayout,
+    /// Exact native event that settled the pending label before BODY content.
+    /// Projection consumes this event once instead of guessing from later
+    /// newline geometry.
+    pub(super) body_settlement: Option<NativeBodySettlement>,
     /// Canonical native label origin, retained only to prove translation
     /// invariance.  It is never serialized into the relative IR layout.
     pub(super) label_origin_columns: i32,
@@ -31,6 +35,12 @@ pub(in crate::mandoc) struct ResponsiveDefinitionLayout {
     /// logical term field. Hard `\p` rows remain distinct; fixed-device soft
     /// wraps do not create epochs.
     pub(super) term_tab_fields: Vec<NativeTermTabField>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum NativeBodySettlement {
+    Boundary(u32),
+    WordEndBreak,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -50,12 +60,13 @@ pub(super) fn project_definition_layout(
     kind: NativeDefinitionKind,
     contract: ExecutionDefinitionContract,
     fit_constraint: Option<DefinitionFitConstraint>,
+    body_settlement: Option<NativeBodySettlement>,
     head_flushes: impl Iterator<Item = ExecutionFlush>,
     body_flushes: impl Iterator<Item = ExecutionFlush>,
     head_boundaries: impl Iterator<Item = ExecutionBoundary>,
     body_boundaries: impl Iterator<Item = ExecutionBoundary>,
 ) -> ResponsiveDefinitionLayout {
-    let (placement, gap) = match kind {
+    let (mut placement, gap) = match kind {
         NativeDefinitionKind::Man(
             ExecutionManBlockKind::IndentedParagraph
             | ExecutionManBlockKind::TaggedParagraph
@@ -94,11 +105,17 @@ pub(super) fn project_definition_layout(
     } else {
         0
     };
+    if body_settlement.is_some() && placement == DefinitionPlacement::Fit {
+        placement = DefinitionPlacement::Stacked;
+    }
     let mut fit_constraint = match placement {
         DefinitionPlacement::Fit => fit_constraint,
         DefinitionPlacement::Stacked | DefinitionPlacement::RunIn => None,
     };
     let head_flushes = head_flushes.collect::<Vec<_>>();
+    let body_flushes = body_flushes.collect::<Vec<_>>();
+    let head_boundaries = head_boundaries.collect::<Vec<_>>();
+    let body_boundaries = body_boundaries.collect::<Vec<_>>();
     let final_head_field_sequence = head_flushes
         .iter()
         .rev()
@@ -115,7 +132,7 @@ pub(super) fn project_definition_layout(
     let soft_flushes = head_flushes
         .iter()
         .cloned()
-        .chain(body_flushes)
+        .chain(body_flushes.iter().cloned())
         .filter(|flush| {
             matches!(
                 flush.outcome,
@@ -124,7 +141,6 @@ pub(super) fn project_definition_layout(
         })
         .map(|flush| flush.key)
         .collect();
-    let head_boundaries = head_boundaries.collect::<Vec<_>>();
     let head_has_hard_boundary = head_boundaries.iter().any(|boundary| {
         boundary_is_hard(boundary, contract, placement, true)
             && final_head_field_sequence.is_none_or(|sequence| boundary.leave_sequence > sequence)
@@ -150,6 +166,7 @@ pub(super) fn project_definition_layout(
             fit_constraint,
             spacing_before_lines: None,
         },
+        body_settlement,
         label_origin_columns,
         soft_flushes,
         hard_boundaries,
@@ -234,6 +251,18 @@ fn basic_units_to_columns(value: i64, cell_bu: i64) -> i32 {
         value.saturating_add(half_down) / cell_bu
     };
     i32::try_from(columns).unwrap_or(if columns < 0 { i32::MIN } else { i32::MAX })
+}
+
+/// Convert two absolute native endpoints to one parent-relative IR distance.
+/// Fixed CVS rounds device endpoints independently; rounding the delta first
+/// changes the result near a half-cell boundary.
+pub(super) fn relative_basic_units_to_columns(
+    origin_bu: i64,
+    parent_origin_bu: i64,
+    cell_bu: i64,
+) -> i32 {
+    basic_units_to_columns(origin_bu, cell_bu)
+        .saturating_sub(basic_units_to_columns(parent_origin_bu, cell_bu))
 }
 
 /// Materialize native logical-row tab destinations without leaking formatter

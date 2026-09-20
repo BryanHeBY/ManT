@@ -6,19 +6,142 @@
 //! of one already completed cell. It has no resolver, filesystem, mutable
 //! document session, or legacy Rust formatter access.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, Compression, DiagnosticCode, ExecutionAtom,
     ExecutionErrorKind, ExecutionFont, ExecutionLimits, ExecutionNodeKey, ExecutionReferenceKind,
-    ExecutionTableCellFlags, ExecutionTableCellKey, IncludePolicy, MacroSet, Node, NodeKind,
-    ParseOptions, Parser,
+    ExecutionTableCellFlags, ExecutionTableCellInvocationKey, IncludePolicy, MacroSet, Node,
+    NodeKind, ParseOptions, Parser,
 };
 use mant_ir::{Inline, LinkTarget};
 
 use crate::mandoc::inline::{PreparedFragmentSource, inline_request, prepare_fragment_source};
 
 const MAX_OVERLAY_INLINES: usize = 4_096;
+
+/// One document-level budget for optional semantic work over opaque tbl data.
+///
+/// Fixed CVS intentionally skips `roff_eqndelim()` while `r->tbl` is active,
+/// so native tbl content remains authoritative.  The execution report carries
+/// the exact parse-time delimiter snapshot for each cell; this session may
+/// enrich only an otherwise identical plain native payload, caches distinct
+/// expressions, and stops after the public document budget is exhausted.
+#[derive(Default)]
+pub(super) struct TableEnhancementSession {
+    normalized_equations: BTreeMap<String, String>,
+    budget_exhausted_line: Option<u32>,
+}
+
+impl TableEnhancementSession {
+    pub(super) fn budget_exhausted_line(&self) -> Option<u32> {
+        self.budget_exhausted_line
+    }
+
+    pub(super) fn enhance_inline_equations(
+        &mut self,
+        native_operand: Option<&str>,
+        native_content: &[Inline],
+        delimiters: Option<(u8, u8)>,
+        line: u32,
+    ) -> Vec<Inline> {
+        let Some((opening, closing)) = delimiters else {
+            return native_content.to_vec();
+        };
+        let Some(operand) = native_operand else {
+            return native_content.to_vec();
+        };
+        // Strings that require terminal escape execution, font segmentation,
+        // or generated geometry are not an identity-preserving overlay.  In
+        // particular, never grant reparsing authority merely because a source
+        // spelling resembles the final display.
+        if mant_ir::inline_plain_text(native_content) != operand {
+            return native_content.to_vec();
+        }
+        let opening = char::from(opening);
+        let closing = char::from(closing);
+        let mut remainder = operand;
+        let mut output = Vec::new();
+        let mut enhanced = false;
+        while let Some(opening_index) = remainder.find(opening) {
+            let after_opening = &remainder[opening_index + opening.len_utf8()..];
+            let Some(closing_index) = after_opening.find(closing) else {
+                break;
+            };
+            push_plain(&mut output, &remainder[..opening_index]);
+            let expression = &after_opening[..closing_index];
+            if expression.trim().is_empty() {
+                push_plain(
+                    &mut output,
+                    &remainder[opening_index
+                        ..opening_index + opening.len_utf8() + closing_index + closing.len_utf8()],
+                );
+            } else if let Some(normalized) = self.normalize_equation(expression, line) {
+                output.push(Inline::Code { value: normalized });
+                enhanced = true;
+            } else {
+                push_plain(
+                    &mut output,
+                    &remainder[opening_index
+                        ..opening_index + opening.len_utf8() + closing_index + closing.len_utf8()],
+                );
+            }
+            remainder = &after_opening[closing_index + closing.len_utf8()..];
+        }
+        if !enhanced {
+            return native_content.to_vec();
+        }
+        push_plain(&mut output, remainder);
+        output
+    }
+
+    fn normalize_equation(&mut self, expression: &str, line: u32) -> Option<String> {
+        if let Some(normalized) = self.normalized_equations.get(expression) {
+            return Some(normalized.clone());
+        }
+        if self.normalized_equations.len() >= super::super::MAX_INLINE_EQUATION_NORMALIZATIONS {
+            self.budget_exhausted_line.get_or_insert(line);
+            return None;
+        }
+        let source = format!(".TH MANT-EQN 7\n.EQ\n{expression}\n.EN\n");
+        let normalized = Parser::new(ParseOptions {
+            includes: IncludePolicy::Deny,
+            compression: Compression::Plain,
+        })
+        .execute_bytes(
+            "mant-inline-table-eqn.7",
+            source.as_bytes(),
+            fragment_execution_limits(),
+        )
+        .ok()
+        .and_then(|report| first_equation(&report.document.root))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| super::super::roff_escape::visible_text(expression));
+        self.normalized_equations
+            .insert(expression.to_owned(), normalized.clone());
+        Some(normalized)
+    }
+}
+
+fn push_plain(output: &mut Vec<Inline>, value: &str) {
+    if value.is_empty() {
+        return;
+    }
+    if let Some(Inline::Text { value: previous }) = output.last_mut() {
+        previous.push_str(value);
+    } else {
+        output.push(Inline::Text {
+            value: value.to_owned(),
+        });
+    }
+}
+
+fn first_equation(node: &Node) -> Option<String> {
+    node.equation
+        .as_deref()
+        .map(libmandoc_rs::Equation::normalized_text)
+        .or_else(|| node.children.iter().find_map(first_equation))
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) enum RejectReason {
@@ -40,7 +163,7 @@ pub(in crate::mandoc) enum LimitKind {
 
 #[derive(Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct CellOverlay {
-    pub(super) cell: ExecutionTableCellKey,
+    pub(super) cell: ExecutionTableCellInvocationKey,
     pub(super) content: Vec<Inline>,
 }
 
@@ -52,7 +175,7 @@ pub(in crate::mandoc) enum EnhancementDecision {
 }
 
 pub(super) struct CellEnhancementInput<'a> {
-    pub(super) cell: ExecutionTableCellKey,
+    pub(super) cell: ExecutionTableCellInvocationKey,
     pub(super) kind: mant_ir::TableCellKind,
     pub(super) flags: ExecutionTableCellFlags,
     pub(super) native_operand: Option<&'a str>,
@@ -420,7 +543,7 @@ fn inline_tree_size(nodes: &[Inline]) -> usize {
 }
 
 pub(super) fn commit(
-    owner: ExecutionTableCellKey,
+    owner: ExecutionTableCellInvocationKey,
     native_content: Vec<Inline>,
     decision: &mut EnhancementDecision,
 ) -> Vec<Inline> {
@@ -443,7 +566,7 @@ mod tests {
 
     fn input(key: u32, source: Option<&str>, flags: u32) -> CellEnhancementInput<'_> {
         CellEnhancementInput {
-            cell: ExecutionTableCellKey(key),
+            cell: ExecutionTableCellInvocationKey(key),
             kind: mant_ir::TableCellKind::Text,
             flags: ExecutionTableCellFlags(flags),
             native_operand: Some("Fl help"),
@@ -466,7 +589,7 @@ mod tests {
             matches!(
                 accepted,
                 EnhancementDecision::Accepted(CellOverlay {
-                    cell: ExecutionTableCellKey(3),
+                    cell: ExecutionTableCellInvocationKey(3),
                     ..
                 })
             ),
@@ -492,13 +615,17 @@ mod tests {
             value: "native".to_owned(),
         }];
         let mut accepted = EnhancementDecision::Accepted(CellOverlay {
-            cell: ExecutionTableCellKey(8),
+            cell: ExecutionTableCellInvocationKey(8),
             content: vec![Inline::Text {
                 value: "overlay".to_owned(),
             }],
         });
         assert_eq!(
-            commit(ExecutionTableCellKey(8), native.clone(), &mut accepted),
+            commit(
+                ExecutionTableCellInvocationKey(8),
+                native.clone(),
+                &mut accepted,
+            ),
             vec![Inline::Text {
                 value: "overlay".to_owned(),
             }]
@@ -509,13 +636,17 @@ mod tests {
         ));
 
         let mut mismatch = EnhancementDecision::Accepted(CellOverlay {
-            cell: ExecutionTableCellKey(8),
+            cell: ExecutionTableCellInvocationKey(8),
             content: vec![Inline::Text {
                 value: "overlay".to_owned(),
             }],
         });
         assert_eq!(
-            commit(ExecutionTableCellKey(7), native.clone(), &mut mismatch),
+            commit(
+                ExecutionTableCellInvocationKey(7),
+                native.clone(),
+                &mut mismatch,
+            ),
             native
         );
         assert_eq!(

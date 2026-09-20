@@ -18,7 +18,7 @@ use support::{configure_registered_documents, registered_documents_dir};
 
 #[test]
 #[cfg(feature = "roff")]
-fn incomplete_native_scopes_do_not_terminate_the_mcp_session() {
+fn recoverable_native_scope_diagnostics_do_not_terminate_the_mcp_session() {
     let fixture_root = std::env::temp_dir().join(format!("mant-mcp-eof-{}", std::process::id()));
     let manuals = fixture_root.join("man1");
     fs::create_dir_all(&manuals).expect("manual directory");
@@ -51,7 +51,10 @@ fn incomplete_native_scopes_do_not_terminate_the_mcp_session() {
     input.flush().expect("flush incomplete request");
     let reply = parse_reply(lines.next().expect("recoverable incomplete reply"));
     assert_eq!(reply["id"], 3);
-    assert_eq!(reply["result"]["isError"], true);
+    // Pinned CVS `man_descope()` closes pending next-line scopes at EOF and
+    // reports `MANDOCERR_BLK_LINE`; it still returns a renderable document.
+    // The atomic native boundary therefore remains a successful MCP result.
+    assert_ne!(reply["result"]["isError"], true);
     call_tool(
         &mut input,
         4,

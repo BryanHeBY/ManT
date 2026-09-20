@@ -56,6 +56,12 @@ pub(super) enum RoffInlineEvent {
     /// One source-level glyph whose printable fallback spans several
     /// characters, for example an unknown `\\[name]` escape.
     Glyph(String),
+    /// A source glyph supplied by ManT's narrow, documented compatibility
+    /// table because the pinned CVS character table reports it as an unknown
+    /// zero-width special character.  Native projection may promote this
+    /// event only when it can pair it one-to-one with that executed native
+    /// zero-width atom.
+    CompatibilityGlyph(String),
     /// An unrecognized source glyph. It remains visible normally, but cannot
     /// be made into a terminal `\\z` glyph because no output glyph exists to
     /// overstrike.
@@ -184,6 +190,7 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
     match event {
         RoffInlineEvent::Text(value)
         | RoffInlineEvent::Glyph(value)
+        | RoffInlineEvent::CompatibilityGlyph(value)
         | RoffInlineEvent::FallbackGlyph(value) => {
             if value.is_empty() {
                 InlineEventEffect::StateOnly
@@ -221,6 +228,21 @@ pub(super) fn source_has_visible_glyph(source: &str) -> bool {
 /// Decode one libmandoc text node into typed, renderer-independent events.
 pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
     Decoder::new(source).decode()
+}
+
+/// Return only the narrow compatibility glyphs proven by the source word.
+///
+/// The native formatter remains authoritative for ordering and state.  This
+/// evidence is consumed only when the execution report contains the same
+/// number of unknown zero-width atoms in that exact formatter word.
+pub(super) fn compatibility_glyphs(source: &str) -> Vec<String> {
+    decode(source)
+        .into_iter()
+        .filter_map(|event| match event {
+            RoffInlineEvent::CompatibilityGlyph(value) => Some(value),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Project the one terminal cell written by CVS `ESCAPE_OVERSTRIKE`.
@@ -335,6 +357,7 @@ impl PlainTextProjection {
         match event {
             RoffInlineEvent::Text(value) => self.append_text(&value),
             RoffInlineEvent::Glyph(value)
+            | RoffInlineEvent::CompatibilityGlyph(value)
             | RoffInlineEvent::Overstrike {
                 terminal: Some(value),
                 ..
@@ -646,7 +669,7 @@ impl Decoder {
 
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
         if let Some(value) = dedicated_special_character(name) {
-            self.emit(RoffInlineEvent::Glyph(value.to_owned()));
+            self.emit(RoffInlineEvent::CompatibilityGlyph(value.to_owned()));
             return;
         }
         if let Some(value) = documented_groff_composite_character(name) {

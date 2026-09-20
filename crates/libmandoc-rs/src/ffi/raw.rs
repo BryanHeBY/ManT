@@ -205,6 +205,9 @@ unsafe extern "C" {
     ) -> *const CExecutionReport;
     #[cfg(feature = "execute")]
     pub(super) fn mant_mandoc_execution_buffer_cell_count(report: *const CExecutionReport) -> u64;
+    pub(super) fn mant_mandoc_execution_content_indent_columns(
+        report: *const CExecutionReport,
+    ) -> u32;
     #[cfg(all(feature = "render", unix))]
     pub(super) fn mant_mandoc_render_file(
         path: *const c_char,

@@ -1,8 +1,9 @@
-//! First private consumer of the owned native execution report.
+//! Production projection of one owned native execution report.
 //!
-//! This is deliberately not the production switch. It establishes the
-//! execution-to-projection boundary used by the staged migration without
-//! reconstructing formatter state in Rust.
+//! The public byte parser executes the pinned native parser and terminal once,
+//! transfers the matching owned AST and report, then materializes source-neutral
+//! IR here.  This module never reconstructs formatter state or selects a
+//! document-dependent legacy fallback.
 
 use libmandoc_rs::{
     AtomDisposition, AtomKind, AtomRole, BoundaryEffect, Document as NativeDocument,
@@ -11,10 +12,11 @@ use libmandoc_rs::{
     ExecutionEquationInvocationKey, ExecutionEquationKey, ExecutionEquationPartKey,
     ExecutionEquationPartKind, ExecutionEquationPosition, ExecutionFlush, ExecutionFont,
     ExecutionFragment, ExecutionHeadingKind, ExecutionManBlockKind, ExecutionMdocListKind,
-    ExecutionNodeKey, ExecutionReferenceKind, ExecutionRegionKind, ExecutionTableAlignment,
-    ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey, ExecutionTableDataKind,
-    ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey,
-    ExecutionWrapperKind, FragmentRole, GeometryKind, GeometryOriginKind, MacroSet,
+    ExecutionNodeKey, ExecutionReferenceKind, ExecutionReferencePresentation, ExecutionRegionKind,
+    ExecutionTableAlignment, ExecutionTableCellFlags, ExecutionTableCellInvocation,
+    ExecutionTableCellInvocationKey, ExecutionTableDataCell, ExecutionTableDataDisposition,
+    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutCell, ExecutionTableLayoutKind,
+    ExecutionTableRow, ExecutionTableRowKey, ExecutionWrapperKind, FragmentRole, MacroSet,
     NativeExecutionReport, Node as NativeNode, NodeKind, NormalizedListKind,
     TableCellKind as NativeTableCellKind, TableRowKind as NativeTableRowKind,
     TableRuleCellKind as NativeTableRuleCellKind,
@@ -22,11 +24,13 @@ use libmandoc_rs::{
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 mod layout;
+mod ownership;
 mod semantics;
 mod table_enhancement;
 
 use layout::{
-    NativeDefinitionKind, ResponsiveDefinitionLayout, project_definition_layout, project_term_tabs,
+    NativeBodySettlement, NativeDefinitionKind, ResponsiveDefinitionLayout,
+    project_definition_layout, project_term_tabs,
 };
 
 #[allow(dead_code)]
@@ -70,6 +74,10 @@ pub(super) enum NativeHeadingKind {
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeHeadingFact {
     pub(super) kind: NativeHeadingKind,
+    /// Exact native heading execution wrapper.  A syntax node can also own
+    /// ordinary node/font wrappers, so this identity must not be recovered
+    /// later through the generic node-to-wrapper index.
+    pub(super) wrapper: u32,
     pub(super) section: ExecutionNodeKey,
     pub(super) head: ExecutionNodeKey,
     pub(super) body: ExecutionNodeKey,
@@ -80,6 +88,8 @@ pub(super) struct NativeHeadingFact {
     pub(super) runs: Vec<NativeTextRun>,
     pub(super) display_lines: Vec<String>,
     pub(super) label: String,
+    /// Native vertical rows emitted by the section block before its head.
+    pub(super) spacing_before_lines: u16,
 }
 
 #[allow(dead_code)]
@@ -106,6 +116,9 @@ pub(super) struct NativeReference {
     pub(super) secondary: Option<Vec<u8>>,
     pub(super) execution_atoms: Range<u32>,
     pub(super) atoms: Range<u32>,
+    pub(super) presentation: ExecutionReferencePresentation,
+    pub(super) target_atoms: Range<u32>,
+    pub(super) supplement_atoms: Option<Range<u32>>,
     pub(super) affinity: ExecutionAffinity,
 }
 
@@ -304,8 +317,7 @@ pub(super) struct NativeFieldFact {
 }
 
 /// One control request paired with its source provenance, exact native state
-/// transition, and directly owned primitive boundary effects. This remains private until the staged
-/// projection can replace the legacy Rust execution model atomically.
+/// transition, and directly owned primitive boundary effects.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum NativeControlProvenance {
@@ -328,7 +340,10 @@ pub(super) struct NativeControlFact {
 #[allow(dead_code)]
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct NativeTableCell {
-    pub(super) key: ExecutionTableCellKey,
+    pub(super) key: ExecutionTableCellInvocationKey,
+    /// All renderer calls that executed this parsed data cell. The primary
+    /// call is `key`; leading-span calls remain causal evidence only.
+    pub(super) invocations: Vec<ExecutionTableCellInvocationKey>,
     pub(super) node: ExecutionNodeKey,
     pub(super) source: PathBuf,
     pub(super) line: u32,
@@ -343,6 +358,7 @@ pub(super) struct NativeTableCell {
     pub(super) alignment: ExecutionTableAlignment,
     pub(super) font: ExecutionFont,
     pub(super) flags: ExecutionTableCellFlags,
+    pub(super) equation_delimiters: Option<(u8, u8)>,
     /// Exact operand retained by native tbl after original-session execution.
     pub(super) native_operand: Option<String>,
     /// Direct post-comment, pre-expansion source bound to this exact cell.
@@ -355,7 +371,14 @@ pub(super) struct NativeTableCell {
     /// Source-neutral cell kind after native layout and data controls agree.
     pub(super) kind: mant_ir::TableCellKind,
     pub(super) buffer_generation: Option<u32>,
+    /// Complete, contiguous atom envelope owned by this semantic cell across
+    /// all of its renderer invocations. Only the primary invocation supplies
+    /// `native_content`; claiming this envelope prevents auxiliary calls from
+    /// leaking through the ordinary prose projection.
     pub(super) atoms: Range<u32>,
+    /// Row-output evidence causally descended from these invocations. These
+    /// records are audit geometry only; `to_ir_blocks()` materializes the
+    /// primary atom payload exactly once and never replays fragments/flushes.
     pub(super) fragments: Vec<ExecutionFragment>,
     pub(super) flushes: Vec<ExecutionFlush>,
     /// Source-neutral content produced by the authoritative native execution.
@@ -388,6 +411,13 @@ pub(super) struct NativeTable {
     /// Explicit native targets whose attachment cursor is the table entry.
     pub(super) leading_anchors: Vec<u32>,
     pub(super) rows: Vec<NativeTableRow>,
+    /// Complete native atom envelope owned by `term_tbl()`.
+    pub(super) atoms: Range<u32>,
+    /// Surrounding formatter field origin saved by `term_tbl()` before it
+    /// installs table-local columns, in basic units.
+    pub(super) offset_bu: i64,
+    /// Width of one formatter cell in the same execution profile.
+    pub(super) cell_bu: i64,
 }
 
 /// One native eqn(7) structural box with its pool-backed payloads transferred
@@ -446,7 +476,7 @@ pub(super) struct NativeEquationPart {
     pub(super) leave_sequence: u64,
 }
 
-/// One complete staged equation projection.
+/// One complete native equation projection.
 ///
 /// `normalized_text` is a one-way compatibility view derived from the owned
 /// parser tree.  The structural boxes, actual renderer invocations, and
@@ -480,7 +510,7 @@ impl NativeTable {
     #[allow(dead_code)]
     fn to_ir_block(&self) -> mant_ir::Block {
         let [block] = self
-            .to_ir_blocks(Vec::new())
+            .to_ir_blocks(Vec::new(), 0)
             .try_into()
             .unwrap_or_else(|_| {
                 unreachable!("a table without leading targets materializes one block")
@@ -493,7 +523,11 @@ impl NativeTable {
     /// targets in a preceding anchor-only paragraph because table blocks do
     /// not own identities in the source-neutral IR.
     #[allow(dead_code)]
-    fn to_ir_blocks(&self, leading: Vec<mant_ir::Inline>) -> Vec<mant_ir::Block> {
+    fn to_ir_blocks(
+        &self,
+        leading: Vec<mant_ir::Inline>,
+        indent_columns: i32,
+    ) -> Vec<mant_ir::Block> {
         let mut table = mant_ir::Block::Table {
             rows: self
                 .rows
@@ -550,7 +584,10 @@ impl NativeTable {
                         .collect(),
                 })
                 .collect(),
-            layout: mant_ir::LayoutHint::default(),
+            layout: mant_ir::LayoutHint {
+                indent_columns,
+                ..Default::default()
+            },
             source: self.rows.first().and_then(|row| {
                 (row.line > 0).then_some(mant_ir::SourceSpan {
                     byte_range: None,
@@ -604,7 +641,6 @@ pub(super) struct NativeProjection {
     pub(super) visible_lines: Vec<String>,
     pub(super) implicit_spaces: usize,
     pub(super) hard_boundaries: usize,
-    pub(super) glyph_geometries: usize,
     pub(super) references: Vec<NativeReference>,
     pub(super) anchors: Vec<NativeAnchor>,
     pub(super) definitions: Vec<NativeDefinitionFact>,
@@ -616,6 +652,7 @@ pub(super) struct NativeProjection {
     pub(super) regions: Vec<NativeRegion>,
     pub(super) tables: Vec<NativeTable>,
     pub(super) equations: Vec<NativeEquation>,
+    pub(super) table_equation_budget_line: Option<u32>,
 }
 
 fn partition_control_boundaries<'a>(
@@ -756,6 +793,67 @@ fn definition_fit_constraint(
     })
 }
 
+/// Return whether BODY execution closed the pending label row before it
+/// produced its first formatter cell.
+///
+/// Fixed CVS establishes the BODY field before visiting its children.  A
+/// control request such as `.br`/`.sp`, an mdoc macro boundary, or a realized
+/// word-end break can therefore settle the still-open tag row before any body
+/// content.  The ordinary BODY-finalization newline occurs after the first
+/// content atom and is deliberately excluded.
+fn initial_body_settlement(
+    report: &NativeExecutionReport,
+    atom_ranges: impl Iterator<Item = Range<u32>>,
+    flushes: &[ExecutionFlush],
+    boundaries: &[ExecutionBoundary],
+) -> Option<NativeBodySettlement> {
+    let ranges = atom_ranges.collect::<Vec<_>>();
+    let mut atoms = ranges
+        .iter()
+        .flat_map(|range| &report.atoms()[range.start as usize..range.end as usize]);
+    let first_cell = atoms
+        .clone()
+        .find(|atom| {
+            matches!(
+                atom.kind,
+                libmandoc_rs::AtomKind::Glyph
+                    | libmandoc_rs::AtomKind::BreakableSpace
+                    | libmandoc_rs::AtomKind::NonBreakingSpace
+                    | libmandoc_rs::AtomKind::BreakableHyphen
+                    | libmandoc_rs::AtomKind::Tab
+            )
+        })
+        .map(|atom| atom.sequence);
+    let Some(first_cell) = first_cell else {
+        return None;
+    };
+    let boundary_before_content = boundaries
+        .iter()
+        .filter(|boundary| {
+            boundary.parent.is_none()
+                && boundary.enter_sequence < first_cell
+                && !matches!(
+                    boundary.request,
+                    libmandoc_rs::BoundaryRequest::DeviceEndline
+                )
+                && matches!(
+                    boundary.effect,
+                    libmandoc_rs::BoundaryEffect::EndedLine
+                        | libmandoc_rs::BoundaryEffect::AddedVerticalSpace
+                )
+        })
+        .min_by_key(|boundary| boundary.enter_sequence)
+        .map(|boundary| NativeBodySettlement::Boundary(boundary.key));
+    if boundary_before_content.is_some() {
+        return boundary_before_content;
+    }
+    let realized_word_break = flushes.iter().any(|flush| flush.logical_forced_break)
+        && atoms.any(|atom| {
+            atom.sequence < first_cell && atom.kind == libmandoc_rs::AtomKind::WordEndBreak
+        });
+    realized_word_break.then_some(NativeBodySettlement::WordEndBreak)
+}
+
 fn definition_facts(
     report: &NativeExecutionReport,
     man_blocks: &[NativeManBlock],
@@ -867,10 +965,17 @@ fn man_definition_facts(
                 .expect("validated native man definition contract");
             let kind = NativeDefinitionKind::Man(value.block.kind);
             let fit_constraint = definition_fit_constraint(contract, &value.head_flushes);
+            let body_settlement = initial_body_settlement(
+                report,
+                std::iter::once(value.block.body.atoms.clone()),
+                &value.body_flushes,
+                &value.body_boundaries,
+            );
             let responsive = project_definition_layout(
                 kind,
                 contract,
                 fit_constraint,
+                body_settlement,
                 value.head_flushes.iter().cloned(),
                 value.body_flushes.iter().cloned(),
                 value.head_boundaries.iter().cloned(),
@@ -1002,10 +1107,17 @@ fn mdoc_definition_facts(
                 .expect("validated native mdoc definition contract");
             let kind = NativeDefinitionKind::Mdoc(value.item.kind);
             let fit_constraint = definition_fit_constraint(contract, &value.head_flushes);
+            let body_settlement = initial_body_settlement(
+                report,
+                value.item.bodies.iter().map(|body| body.atoms.clone()),
+                &value.body_flushes,
+                &value.body_boundaries,
+            );
             let responsive = project_definition_layout(
                 kind,
                 contract,
                 fit_constraint,
+                body_settlement,
                 value.head_flushes.iter().cloned(),
                 value.body_flushes.iter().cloned(),
                 value.head_boundaries.iter().cloned(),
@@ -1687,7 +1799,8 @@ fn text_projection(report: &NativeExecutionReport) -> (Vec<NativeTextRun>, Vec<S
         if fragment.role != FragmentRole::Content {
             continue;
         }
-        for key in &fragment.atoms {
+        {
+            let key = fragment.atom;
             let atom = &report.atoms()[key.0 as usize];
             let reference = atom_references[key.0 as usize];
             let word = atom_words[key.0 as usize];
@@ -1877,6 +1990,7 @@ impl HeadingCollector<'_> {
             });
         self.headings.push(NativeHeadingFact {
             kind: heading_kind(wrapper.heading_kind.expect("typed native heading kind")),
+            wrapper: wrapper.key,
             section,
             head,
             body,
@@ -1887,6 +2001,7 @@ impl HeadingCollector<'_> {
             runs: Vec::new(),
             display_lines: Vec::new(),
             label: String::new(),
+            spacing_before_lines: 0,
         });
     }
 }
@@ -1951,6 +2066,21 @@ fn heading_facts(
         }
     }
     for heading in &mut headings {
+        let enter_sequence = heading_wrapper_by_node[heading.head.0 as usize]
+            .map(|wrapper| report.wrappers()[wrapper].enter_sequence)
+            .expect("native heading retains its wrapper");
+        heading.spacing_before_lines = u16::try_from(
+            report
+                .boundaries()
+                .iter()
+                .filter(|boundary| {
+                    boundary.node == Some(heading.section)
+                        && boundary.effect == BoundaryEffect::AddedVerticalSpace
+                        && boundary.leave_sequence <= enter_sequence
+                })
+                .count(),
+        )
+        .unwrap_or(u16::MAX);
         heading.display_lines = heading_display_lines(&heading.runs);
         heading.label = heading
             .display_lines
@@ -2171,24 +2301,59 @@ struct TableCellProjectionContext<'a> {
 }
 
 fn project_execution_table_cell(
-    cell: &ExecutionTableCell,
+    layout: &ExecutionTableLayoutCell,
+    data: &ExecutionTableDataCell,
+    invocation: &ExecutionTableCellInvocation,
+    related_invocations: &[&ExecutionTableCellInvocation],
     kind: mant_ir::TableCellKind,
     context: &TableCellProjectionContext<'_>,
+    enhancement_session: &mut table_enhancement::TableEnhancementSession,
 ) -> NativeTableCell {
-    let fragments = cell.buffer_generation.map_or_else(Vec::new, |generation| {
-        context.fragments_by_generation[generation as usize].clone()
-    });
-    let flushes = cell.buffer_generation.map_or_else(Vec::new, |generation| {
-        context.flushes_by_generation[generation as usize].clone()
-    });
-    let native_content = table_cell_content(context.report, cell.atoms.clone());
+    let suppressed_by_layout =
+        data.disposition == ExecutionTableDataDisposition::SuppressedByLayout;
+    let atoms =
+        related_invocations
+            .iter()
+            .fold(invocation.atoms.clone(), |mut envelope, related| {
+                envelope.start = envelope.start.min(related.atoms.start);
+                envelope.end = envelope.end.max(related.atoms.end);
+                envelope
+            });
+    assert!(related_invocations.windows(2).all(|pair| {
+        pair[0].key.0 + 1 == pair[1].key.0 && pair[0].atoms.end == pair[1].atoms.start
+    }));
+    let mut fragments = related_invocations
+        .iter()
+        .filter_map(|related| related.buffer_generation)
+        .flat_map(|generation| context.fragments_by_generation[generation as usize].clone())
+        .collect::<Vec<_>>();
+    fragments.sort_unstable_by_key(|fragment| fragment.key);
+    fragments.dedup_by_key(|fragment| fragment.key);
+    let mut flushes = related_invocations
+        .iter()
+        .filter_map(|related| related.buffer_generation)
+        .flat_map(|generation| context.flushes_by_generation[generation as usize].clone())
+        .collect::<Vec<_>>();
+    flushes.sort_unstable_by_key(|flush| flush.key);
+    flushes.dedup_by_key(|flush| flush.key);
+    let native_content = if suppressed_by_layout {
+        Vec::new()
+    } else {
+        table_cell_content(context.report, invocation.atoms.clone())
+    };
+    let native_operand = (!suppressed_by_layout)
+        .then(|| context.ast_cell.text.clone())
+        .flatten();
+    let enhancement_source = (!suppressed_by_layout)
+        .then(|| context.ast_cell.source.clone())
+        .flatten();
     let mut enhancement = table_enhancement::analyze(&table_enhancement::CellEnhancementInput {
-        cell: cell.key,
+        cell: invocation.key,
         kind,
-        flags: cell.flags,
-        native_operand: context.ast_cell.text.as_deref(),
+        flags: data.flags,
+        native_operand: native_operand.as_deref(),
         native_content: &native_content,
-        source: context.ast_cell.source.as_deref(),
+        source: enhancement_source.as_deref(),
         escape: context.ast_cell.source_escape,
         macro_set: context.macro_set,
         synopsis: context
@@ -2196,34 +2361,49 @@ fn project_execution_table_cell(
             .flags
             .contains(libmandoc_rs::ExecutionNodeFlags::SYNOPSIS_PRETTY),
     });
+    let equation_content = if suppressed_by_layout {
+        Vec::new()
+    } else {
+        enhancement_session.enhance_inline_equations(
+            native_operand.as_deref(),
+            &native_content,
+            data.equation_delimiters,
+            context.origin.line,
+        )
+    };
     let final_content =
-        table_enhancement::commit(cell.key, native_content.clone(), &mut enhancement);
+        table_enhancement::commit(invocation.key, equation_content, &mut enhancement);
     NativeTableCell {
-        key: cell.key,
-        node: cell.node,
+        key: invocation.key,
+        invocations: related_invocations
+            .iter()
+            .map(|related| related.key)
+            .collect(),
+        node: invocation.node,
         source: context.source.to_path_buf(),
         line: context.origin.line,
         column: context.origin.column,
-        ordinal: cell.ordinal,
-        data_ordinal: cell.data_ordinal,
-        logical_column: cell.logical_column,
-        column_span: cell.column_span,
-        row_span: cell.row_span,
-        layout_kind: cell.layout_kind,
-        data_kind: cell.data_kind,
-        alignment: cell.alignment,
-        font: cell.font,
-        flags: cell.flags,
-        native_operand: context.ast_cell.text.clone(),
-        enhancement_source: context.ast_cell.source.clone(),
+        ordinal: invocation.ordinal,
+        data_ordinal: data.ordinal,
+        logical_column: invocation.logical_column,
+        column_span: data.column_span,
+        row_span: data.row_span,
+        layout_kind: layout.kind,
+        data_kind: data.kind,
+        alignment: layout.alignment,
+        font: layout.font,
+        flags: data.flags,
+        equation_delimiters: data.equation_delimiters,
+        native_operand,
+        enhancement_source,
         enhancement_source_line: context.ast_cell.source_line,
         enhancement_source_column: context.ast_cell.source_column,
         enhancement_source_end_line: context.ast_cell.source_end_line,
         enhancement_source_end_column: context.ast_cell.source_end_column,
         enhancement_escape: context.ast_cell.source_escape,
         kind,
-        buffer_generation: cell.buffer_generation,
-        atoms: cell.atoms.clone(),
+        buffer_generation: invocation.buffer_generation,
+        atoms,
         fragments,
         flushes,
         native_content,
@@ -2247,7 +2427,7 @@ fn validate_projected_table_cells(
                 &projected_cells[projected.expect("every AST table data cell was executed")];
             let kind = table_cell_kind(ast_cell.kind);
             assert_eq!(projected.node, row.node, "table cell row owner");
-            assert_eq!(projected.logical_column, *logical_column);
+            assert!(projected.logical_column >= *logical_column);
             assert_eq!(projected.column_span, u32::from(ast_cell.column_span));
             assert_eq!(projected.row_span, u32::from(ast_cell.row_span));
             assert_eq!(
@@ -2260,7 +2440,8 @@ fn validate_projected_table_cells(
                     .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION,),
                 ast_cell.vertical_continuation,
             );
-            *logical_column = logical_column
+            *logical_column = projected
+                .logical_column
                 .checked_add(u32::from(ast_cell.column_span))
                 .expect("validated table logical width");
             assert_eq!(projected.kind, kind);
@@ -2276,6 +2457,7 @@ fn project_table_row(
     fragments_by_generation: &[Vec<ExecutionFragment>],
     flushes_by_generation: &[Vec<ExecutionFlush>],
     macro_set: MacroSet,
+    enhancement_session: &mut table_enhancement::TableEnhancementSession,
 ) -> NativeTableRow {
     let ast_row = ast_nodes[row.node.0 as usize];
     assert_eq!(ast_row.kind, NodeKind::Table, "table row AST kind");
@@ -2289,23 +2471,43 @@ fn project_table_row(
     assert_eq!(ast_row.line, origin.line, "table row source line");
     assert_eq!(ast_row.column, origin.column, "table row source column");
     let source = report.sources()[origin.source as usize].path.clone();
-    let execution_cells = &report.table_cells()[row.cells.start as usize..row.cells.end as usize];
+    let execution_invocations = &report.table_cell_invocations()
+        [row.cell_invocations.start as usize..row.cell_invocations.end as usize];
+    let mut invocations_by_data = vec![Vec::new(); row.data_cells.len()];
+    for invocation in execution_invocations {
+        if let Some(data) = invocation.data {
+            let data = &report.table_data_cells()[data.0 as usize];
+            invocations_by_data[data.ordinal as usize].push(invocation);
+        }
+    }
     let mut data_cells = vec![None; ast_row.table_cells.len()];
-    let projected_cells = execution_cells
+    let projected_cells = execution_invocations
         .iter()
-        .map(|cell| {
-            if matches!(&kind, mant_ir::TableRowKind::Data) {
-                let slot = data_cells
-                    .get_mut(cell.data_ordinal as usize)
-                    .expect("validated table data ordinal");
-                assert!(slot.replace(cell.ordinal as usize).is_none());
+        .filter_map(|invocation| {
+            if !matches!(&kind, mant_ir::TableRowKind::Data) {
+                return None;
             }
+            let data = invocation
+                .data
+                .map(|key| &report.table_data_cells()[key.0 as usize])?;
+            if invocation.layout != data.layout {
+                return None;
+            }
+            let layout = &report.table_layout_cells()[invocation.layout.0 as usize];
+            let related_invocations = &invocations_by_data[data.ordinal as usize];
+            let slot = data_cells
+                .get_mut(data.ordinal as usize)
+                .expect("validated table data ordinal");
+            assert!(slot.replace(data.ordinal as usize).is_none());
             let ast_cell = ast_row
                 .table_cells
-                .get(cell.data_ordinal as usize)
+                .get(data.ordinal as usize)
                 .expect("validated table data ordinal");
-            project_execution_table_cell(
-                cell,
+            Some(project_execution_table_cell(
+                layout,
+                data,
+                invocation,
+                related_invocations,
                 table_cell_kind(ast_cell.kind),
                 &TableCellProjectionContext {
                     report,
@@ -2316,7 +2518,8 @@ fn project_table_row(
                     ast_cell,
                     macro_set,
                 },
-            )
+                enhancement_session,
+            ))
         })
         .collect::<Vec<_>>();
     if matches!(&kind, mant_ir::TableRowKind::Data) {
@@ -2379,7 +2582,11 @@ fn leading_table_anchors(
         .collect()
 }
 
-fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -> Vec<NativeTable> {
+fn table_projection(
+    document: &NativeDocument,
+    report: &NativeExecutionReport,
+    enhancement_session: &mut table_enhancement::TableEnhancementSession,
+) -> Vec<NativeTable> {
     if report.tables().is_empty() {
         return Vec::new();
     }
@@ -2412,6 +2619,7 @@ fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -
                     &fragments_by_generation,
                     &flushes_by_generation,
                     document.macro_set,
+                    enhancement_session,
                 );
                 rows.push(projected);
             }
@@ -2421,6 +2629,9 @@ fn table_projection(document: &NativeDocument, report: &NativeExecutionReport) -
                 logical_columns: table.logical_columns,
                 leading_anchors: leading_table_anchors(&ast_nodes, report, table),
                 rows,
+                atoms: table.atoms.clone(),
+                offset_bu: table.offset_bu,
+                cell_bu: table.cell_bu,
             }
         })
         .collect()
@@ -2557,6 +2768,8 @@ pub(super) fn project(
     let mdoc_lists = mdoc_list_facts(document, report, &runs);
     let man_blocks = man_block_facts(document, report, &runs);
     let regions = region_facts(report, &runs);
+    let mut table_enhancement = table_enhancement::TableEnhancementSession::default();
+    let tables = table_projection(document, report, &mut table_enhancement);
     NativeProjection {
         origins: origin_facts(report),
         words: report
@@ -2591,13 +2804,6 @@ pub(super) fn project(
             .iter()
             .filter(|boundary| boundary.effect == BoundaryEffect::EndedLine)
             .count(),
-        glyph_geometries: report
-            .geometry()
-            .iter()
-            .filter(|fact| {
-                fact.kind == GeometryKind::Glyph && fact.origin_kind == GeometryOriginKind::Atom
-            })
-            .count(),
         references: report
             .references()
             .iter()
@@ -2619,6 +2825,9 @@ pub(super) fn project(
                 }),
                 execution_atoms: reference.execution_atoms.clone(),
                 atoms: reference.atoms.clone(),
+                presentation: reference.presentation,
+                target_atoms: reference.target_atoms.clone(),
+                supplement_atoms: reference.supplement_atoms.clone(),
                 affinity: reference.affinity,
             })
             .collect(),
@@ -2643,14 +2852,14 @@ pub(super) fn project(
         mdoc_lists,
         fields: field_facts(report),
         controls: control_facts(report),
-        tables: table_projection(document, report),
+        tables,
         equations: equation_projection(document, report),
+        table_equation_budget_line: table_enhancement.budget_exhausted_line(),
     }
 }
 
-/// Build the staged source-neutral semantic document without changing the
-/// lower-level execution-fact projection used by K03--K18.
-#[allow(dead_code)]
+/// Build the source-neutral semantic document from owned native parts.
+#[cfg(test)]
 pub(super) fn project_semantic_document(
     document: &NativeDocument,
     report: &NativeExecutionReport,
@@ -2662,20 +2871,49 @@ pub(super) fn project_semantic_document(
             |source| source.path.as_path(),
         ),
         document,
+        &[],
         report,
         &projection,
     )
+    .expect("test native projection must materialize")
 }
 
-/// Materialize the staged native semantic projection for development audits.
-///
-/// This is intentionally hidden from the stable documentation surface until
-/// the K19--K24 migration switches the production roff path.
+/// Materialize the semantic document from one atomic native execution.
+#[must_use]
+pub fn lower_native_document(
+    path: &std::path::Path,
+    report: &libmandoc_rs::ExecutionReport,
+) -> Result<mant_ir::Document, crate::mandoc::RoffProjectionError> {
+    let profile = std::env::var_os("MANT_NATIVE_PROFILE").is_some();
+    let started = std::time::Instant::now();
+    let projection = project(report.document(), report.execution());
+    if profile {
+        eprintln!("native-profile projection {:?}", started.elapsed());
+    }
+    let semantic_started = std::time::Instant::now();
+    let document = semantics::project_semantics(
+        path,
+        report.document(),
+        report.diagnostics(),
+        report.execution(),
+        &projection,
+    )?
+    .document;
+    if profile {
+        eprintln!("native-profile semantics {:?}", semantic_started.elapsed());
+    }
+    Ok(document)
+}
+
+#[cfg(feature = "native-semantic-audit")]
 #[doc(hidden)]
 #[must_use]
-#[cfg(feature = "staged-native-audit")]
-pub fn lower_staged_semantic_document(report: &libmandoc_rs::ExecutionReport) -> mant_ir::Document {
-    project_semantic_document(&report.document, &report.execution).document
+pub fn lower_native_semantic_document(report: &libmandoc_rs::ExecutionReport) -> mant_ir::Document {
+    let path = report.execution().sources().first().map_or_else(
+        || std::path::Path::new("manual"),
+        |source| source.path.as_path(),
+    );
+    lower_native_document(path, report).expect("native projection must materialize")
 }
 
 #[cfg(test)]
@@ -2693,7 +2931,7 @@ mod tests {
 
     fn cell_inlines(cell: &mant_ir::TableCell) -> &[mant_ir::Inline] {
         let [mant_ir::Block::Paragraph { children, .. }] = cell.blocks.as_slice() else {
-            panic!("printable staged table cell must contain one paragraph");
+            panic!("printable native table cell must contain one paragraph");
         };
         children
     }
@@ -2949,10 +3187,6 @@ mod tests {
                     .runs
                     .iter()
                     .all(|run| run.source == std::path::Path::new(path))
-            );
-            assert_eq!(
-                projection.glyph_geometries,
-                report.execution.fragments().len()
             );
             assert!(projection.runs.iter().all(|run| run.end_bu >= run.start_bu));
             if format == InputFormat::Man {
@@ -3814,7 +4048,7 @@ mod tests {
                 "ZETA",
                 "ETA",
             ],
-            "the staged projection must preserve the explicit fixed-CVS visible-line oracle"
+            "the native projection must preserve the explicit fixed-CVS visible-line oracle"
         );
     }
 
@@ -5694,6 +5928,74 @@ mod tests {
     }
 
     #[test]
+    fn table_projection_materializes_only_the_primary_leading_span_invocation() {
+        // Run first with the pinned CVS reference. `tbl_term.c::term_tbl()`
+        // invokes the same `tbl_dat` once through leading `TBL_CELL_SPAN` and
+        // once through its real `TBL_CELL_LEFT` owner; only the latter is the
+        // source-neutral cell presentation, and CVS renders one `A`.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "native-execution-table-leading-span.1",
+                include_bytes!("fixtures/native-execution-table-leading-span.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [table] = projection.tables.as_slice() else {
+            panic!("one native table")
+        };
+        let [cell] = table.rows[0].cells.as_slice() else {
+            panic!("many renderer calls materialize one semantic cell")
+        };
+        assert_eq!(cell.invocations.len(), 2);
+        let native_calls = report.execution.table_cell_invocations();
+        assert_eq!(cell.atoms.start, native_calls[0].atoms.start);
+        assert_eq!(cell.atoms.end, native_calls[1].atoms.end);
+        assert_eq!(mant_ir::inline_plain_text(&cell.content), "A");
+        let rows = table_rows(table);
+        assert_eq!(rows[0].cells.len(), 1);
+        assert_eq!(
+            mant_ir::inline_plain_text(cell_inlines(&rows[0].cells[0])),
+            "A"
+        );
+    }
+
+    #[test]
+    fn table_projection_suppresses_only_the_mixed_rule_cell_payload() {
+        // Run first with pinned CVS `mandoc -Ttree` and `-Tutf8`.
+        // `tbl_data.c::getdata()` retains IGNORED on the `_` layout cell, but
+        // `tbl_term.c::tbl_data()` renders the rule instead and independently
+        // renders VISIBLE through the adjacent `l` cell.
+        let report = Parser::new(ParseOptions::default())
+            .with_input_format(InputFormat::Man)
+            .execute_bytes(
+                "native-execution-table-mixed-rule.1",
+                include_bytes!("fixtures/native-execution-table-mixed-rule.1"),
+                ExecutionLimits::default(),
+            )
+            .unwrap();
+        let projection = project(&report.document, &report.execution);
+        let [table] = projection.tables.as_slice() else {
+            panic!("one native table")
+        };
+        let [rule, visible] = table.rows[0].cells.as_slice() else {
+            panic!("two primary native cells")
+        };
+        assert_eq!(rule.kind, mant_ir::TableCellKind::HorizontalRule);
+        assert!(rule.content.is_empty());
+        assert!(rule.native_operand.is_none());
+        assert!(rule.enhancement_source.is_none());
+        assert_eq!(mant_ir::inline_plain_text(&visible.content), "VISIBLE");
+        let rows = table_rows(table);
+        assert!(rows[0].cells[0].blocks.is_empty());
+        assert_eq!(
+            mant_ir::inline_plain_text(cell_inlines(&rows[0].cells[1])),
+            "VISIBLE"
+        );
+    }
+
+    #[test]
     fn table_enhancement_is_cell_keyed_bounded_and_state_isolated() {
         // This exact fixture was run with the pinned CVS reference before
         // these assertions. `roff_parseln()` gives tbl the native operands
@@ -5853,7 +6155,8 @@ mod tests {
                 .iter()
                 .any(|candidate| candidate.target == b"after-table")
         );
-        let blocks = table.to_ir_blocks(vec![mant_ir::Inline::anchor("before-table")]);
+
+        let blocks = table.to_ir_blocks(vec![mant_ir::Inline::anchor("before-table")], 0);
         let [mant_ir::Block::Table { rows, .. }] = blocks.as_slice() else {
             panic!("a data table carries its leading target in the first cell")
         };
@@ -6153,9 +6456,8 @@ mod tests {
         assert!(!inline.parts.is_empty());
     }
 
-    #[cfg(feature = "staged-native-audit")]
     #[test]
-    fn staged_audit_accepts_only_one_atomic_execution_result() {
+    fn native_lowering_accepts_only_one_atomic_execution_result() {
         let report = Parser::new(ParseOptions::default())
             .with_input_format(InputFormat::Man)
             .execute_bytes(
@@ -6164,7 +6466,8 @@ mod tests {
                 ExecutionLimits::default(),
             )
             .unwrap();
-        let document = lower_staged_semantic_document(&report);
+        let document = lower_native_document(std::path::Path::new("staged-pair-first.1"), &report)
+            .expect("native lowering succeeds");
         assert_eq!(document.meta.title.as_deref(), Some("FIRST"));
     }
 }

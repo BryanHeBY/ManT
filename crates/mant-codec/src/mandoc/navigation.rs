@@ -189,6 +189,27 @@ fn promote_manual_references(blocks: &mut [Block]) {
     }
 }
 
+/// Promote traditional styled `name(section)` references after projection.
+///
+/// Both the legacy syntax walker and the native execution projector preserve
+/// the fixed-CVS alternating-font result as adjacent styled/text inlines.  The
+/// reference interpretation is source-neutral, so keep it in one shared
+/// post-processing pass rather than duplicating it in either producer.
+pub(super) fn promote_manual_references_in_document(
+    root_blocks: &mut [Block],
+    sections: &mut [Section],
+) {
+    promote_manual_references(root_blocks);
+    for section in sections {
+        promote_manual_reference_inlines(&mut section.heading.content);
+        promote_manual_references(&mut section.blocks);
+        for child in &mut section.children {
+            promote_manual_reference_inlines(&mut child.heading.content);
+            promote_manual_references(&mut child.blocks);
+        }
+    }
+}
+
 fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
     let mut promoted = Vec::with_capacity(nodes.len());
     let mut source = std::mem::take(nodes).into_iter().peekable();
@@ -200,7 +221,17 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
             promoted.push(node);
             continue;
         };
-        let name = mant_ir::inline_plain_text(children);
+        let styled_name = mant_ir::inline_plain_text(children);
+        // `term_word()` inserts an implicit separator after the macro handler
+        // has selected the alternating font, so a portable `.MR` fallback
+        // can place that separator inside the Emphasis span. It is execution
+        // geometry, not part of the manual name. A trailing separator would
+        // separate the name from `(section)` and is therefore not promotable.
+        let name = styled_name.trim_start();
+        if styled_name.trim_end().len() != styled_name.len() {
+            promoted.push(node);
+            continue;
+        }
         let Some(Inline::Text { value }) = source.peek() else {
             promoted.push(node);
             continue;
@@ -209,15 +240,21 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
             promoted.push(node);
             continue;
         };
-        if !is_manual_reference_name(&name) {
+        if !is_manual_reference_name(name) {
             promoted.push(node);
             continue;
         }
 
         source.next();
+        let leading = &styled_name[..styled_name.len() - name.len()];
+        if !leading.is_empty() {
+            promoted.push(Inline::Text {
+                value: leading.to_owned(),
+            });
+        }
         promoted.push(Inline::Link {
             target: LinkTarget::Manual {
-                name: name.clone(),
+                name: name.to_owned(),
                 manual_section: Some(section.clone()),
             },
             title: None,
@@ -524,10 +561,14 @@ mod tests {
 
     #[test]
     fn promotes_groff_mr_fallback_pairs_from_emphasis() {
+        // Checked first with the pinned CVS reference using a user-defined
+        // `.MR` that expands to `.IR`: term_word() inserts the preceding
+        // separator after selecting italic, but the manual name remains
+        // `groff_man` and the separator stays outside the typed target.
         let mut nodes = vec![
             Inline::Emphasis {
                 children: vec![Inline::Text {
-                    value: "groff_man".to_owned(),
+                    value: " groff_man".to_owned(),
                 }],
             },
             Inline::Text {
@@ -538,11 +579,12 @@ mod tests {
         promote_manual_reference_inlines(&mut nodes);
 
         assert!(matches!(
-            &nodes[0],
+            &nodes[1],
             Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
                 if name == "groff_man" && manual_section == "7"
         ));
-        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+        assert!(matches!(&nodes[0], Inline::Text { value } if value == " "));
+        assert!(matches!(&nodes[2], Inline::Text { value } if value == ", next"));
     }
 
     #[test]

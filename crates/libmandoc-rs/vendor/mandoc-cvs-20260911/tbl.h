@@ -101,6 +101,9 @@ struct	tbl_dat {
 	int		  source_end_line; /* Last direct source line, or -1. */
 	int		  source_end_pos;  /* End column on the last line. */
 	unsigned char	  source_escape; /* Escape state at source entry. */
+	unsigned char	  eqn_delim; /* Inline eqn delimiters were active. */
+	unsigned char	  eqn_odelim; /* Inline eqn opening delimiter. */
+	unsigned char	  eqn_cdelim; /* Inline eqn closing delimiter. */
 	int		  hspans;  /* How many horizontal spans follow. */
 	int		  vspans;  /* How many vertical spans follow. */
 	int		  block;   /* T{ text block T} */

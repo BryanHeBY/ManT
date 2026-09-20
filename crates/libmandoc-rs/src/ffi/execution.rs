@@ -7,8 +7,8 @@ use super::{
 };
 use crate::{
     AtomDisposition, AtomKey, AtomKind, AtomRole, BoundaryEffect, BoundaryRequest,
-    BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionBoundary,
-    ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest,
+    BufferCloseReason, ExecutionAffinity, ExecutionAnchor, ExecutionAtom, ExecutionAtomFlags,
+    ExecutionBoundary, ExecutionBufferGeneration, ExecutionControl, ExecutionControlRequest,
     ExecutionDefinitionContract, ExecutionDefinitionField, ExecutionDiagnostic, ExecutionEquation,
     ExecutionEquationBox, ExecutionEquationBoxKey, ExecutionEquationBoxKind,
     ExecutionEquationFlags, ExecutionEquationFont, ExecutionEquationInvocation,
@@ -16,13 +16,17 @@ use crate::{
     ExecutionEquationPartKey, ExecutionEquationPartKind, ExecutionEquationPosition,
     ExecutionErrorKind, ExecutionFlush, ExecutionFont, ExecutionFragment, ExecutionGeometry,
     ExecutionHeadingKind, ExecutionLimits, ExecutionLogicalTab, ExecutionManBlockKind,
-    ExecutionMdocListKind, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey, ExecutionReference,
-    ExecutionReferenceKind, ExecutionRegionKind, ExecutionSource, ExecutionTable,
-    ExecutionTableAlignment, ExecutionTableCell, ExecutionTableCellFlags, ExecutionTableCellKey,
-    ExecutionTableDataKind, ExecutionTableKey, ExecutionTableLayoutKind, ExecutionTableRow,
-    ExecutionTableRowKey, ExecutionTableRowKind, ExecutionWord, ExecutionWordKey, ExecutionWrapper,
-    ExecutionWrapperKind, FlushOutcome, FragmentKey, FragmentRole, GeometryKind,
-    GeometryOriginKind, GeometryUnit, NativeExecutionReport, NodeKind, PoolRange, RawDocument,
+    ExecutionMdocListKind, ExecutionNode, ExecutionNodeFlags, ExecutionNodeKey,
+    ExecutionOutputRole, ExecutionPlacementCheckpoint, ExecutionPlacementPhase, ExecutionReference,
+    ExecutionReferenceKind, ExecutionReferencePresentation, ExecutionRegionKind, ExecutionSource,
+    ExecutionTable, ExecutionTableAlignment, ExecutionTableCellFlags, ExecutionTableCellInvocation,
+    ExecutionTableCellInvocationKey, ExecutionTableDataCell, ExecutionTableDataCellKey,
+    ExecutionTableDataDisposition, ExecutionTableDataKind, ExecutionTableInvocationOutcome,
+    ExecutionTableKey, ExecutionTableLayoutCell, ExecutionTableLayoutCellKey,
+    ExecutionTableLayoutKind, ExecutionTableRow, ExecutionTableRowKey, ExecutionTableRowKind,
+    ExecutionWord, ExecutionWordKey, ExecutionWrapper, ExecutionWrapperKind, FlushOutcome,
+    FragmentKey, FragmentRole, GeometryKind, GeometryOriginKind, GeometryUnit, LineCommitCause,
+    NativeExecutionReport, NodeKind, PoolRange, RawDocument,
 };
 #[cfg(unix)]
 use std::ffi::OsString;
@@ -112,6 +116,8 @@ struct CAtomRecord {
     wrapper: u32,
     replaced_by: u32,
     disposition: u32,
+    flags: u32,
+    output_role: u32,
     sequence: u64,
 }
 #[repr(C)]
@@ -122,8 +128,8 @@ struct CFragmentRecord {
     buffer: u32,
     generation: u32,
     buffer_generation: u32,
-    atom_ref_start: u32,
-    atom_ref_length: u32,
+    atom: u32,
+    reserved_atom: u32,
     device_line: u32,
     role: u32,
     wrapper: u32,
@@ -131,12 +137,6 @@ struct CFragmentRecord {
     start_bu: i64,
     end_bu: i64,
     sequence: u64,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct CFragmentAtomRecord {
-    fragment: u32,
-    atom: u32,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -179,7 +179,7 @@ struct CFlushRecord {
     logical_origin_bu: i64,
     effective_content_bu: i64,
     logical_forced_break: u32,
-    reserved_fit: u32,
+    output_role: u32,
     field_bu: i64,
     target_bu: i64,
     offset_bu: i64,
@@ -212,8 +212,24 @@ struct CBoundaryRecord {
     visual_after: i64,
     direct_device_lines: u32,
     wrapper: u32,
+    line_commit_cause: u32,
+    output_role: u32,
     enter_sequence: u64,
     leave_sequence: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CPlacementRecord {
+    key: u32,
+    node: u32,
+    wrapper: u32,
+    phase: u32,
+    offset_bu: i64,
+    rmargin_bu: i64,
+    maxrmargin_bu: i64,
+    visual_bu: i64,
+    cell_bu: i64,
+    sequence: u64,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -278,7 +294,7 @@ struct CGeometryRecord {
     unit: u32,
     origin_kind: u32,
     origin_key: u32,
-    reserved: u32,
+    output_role: u32,
     requested: i64,
     effective: i64,
     before: i64,
@@ -333,7 +349,13 @@ struct CReferenceRecord {
     secondary_length: u32,
     enter_atom: u32,
     label_start_atom: u32,
+    label_end_atom: u32,
+    target_start_atom: u32,
+    target_end_atom: u32,
+    supplement_start_atom: u32,
+    supplement_end_atom: u32,
     leave_atom: u32,
+    presentation: u32,
     affinity: u32,
     flags: u32,
     enter_sequence: u64,
@@ -360,9 +382,14 @@ struct CTableRecord {
     first_row_node: u32,
     row_start: u32,
     row_length: u32,
-    cell_start: u32,
-    cell_length: u32,
+    layout_start: u32,
+    layout_length: u32,
+    data_start: u32,
+    data_length: u32,
+    invocation_start: u32,
+    invocation_length: u32,
     logical_columns: u32,
+    wrapper: u32,
     flags: u32,
     enter_atom: u32,
     leave_atom: u32,
@@ -370,6 +397,8 @@ struct CTableRecord {
     leave_fragment: u32,
     enter_flush: u32,
     leave_flush: u32,
+    offset_bu: i64,
+    cell_bu: i64,
     enter_sequence: u64,
     leave_sequence: u64,
 }
@@ -382,8 +411,12 @@ struct CTableRowRecord {
     ordinal: u32,
     kind: u32,
     logical_columns: u32,
-    cell_start: u32,
-    cell_length: u32,
+    layout_start: u32,
+    layout_length: u32,
+    data_start: u32,
+    data_length: u32,
+    invocation_start: u32,
+    invocation_length: u32,
     enter_atom: u32,
     leave_atom: u32,
     enter_fragment: u32,
@@ -395,23 +428,49 @@ struct CTableRowRecord {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct CTableCellRecord {
+struct CTableLayoutCellRecord {
+    key: u32,
+    row: u32,
+    ordinal: u32,
+    logical_column: u32,
+    kind: u32,
+    alignment: u32,
+    font: u32,
+    flags: u32,
+    horizontal_continuation: u32,
+    spacing_en: u32,
+    vertical_rule: u32,
+    reserved: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CTableDataCellRecord {
+    key: u32,
+    row: u32,
+    ordinal: u32,
+    layout: u32,
+    kind: u32,
+    disposition: u32,
+    column_span: u32,
+    row_span: u32,
+    flags: u32,
+    equation_delimiters: u32,
+    equation_opening: u32,
+    equation_closing: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CTableCellInvocationRecord {
     key: u32,
     row: u32,
     node: u32,
     ordinal: u32,
-    data_ordinal: u32,
+    layout: u32,
+    data: u32,
+    outcome: u32,
     logical_column: u32,
-    column_span: u32,
-    row_span: u32,
-    layout_kind: u32,
-    data_kind: u32,
-    alignment: u32,
-    font: u32,
-    flags: u32,
     buffer: u32,
     buffer_generation: u32,
-    reserved: u32,
     enter_atom: u32,
     leave_atom: u32,
     offset_bu: i64,
@@ -605,14 +664,6 @@ declare_record_api!(
     mant_mandoc_execution_copy_fragments
 );
 declare_record_api!(
-    mant_mandoc_execution_fragment_atom_count,
-    mant_mandoc_execution_fragment_atom_size,
-    mant_mandoc_execution_fragment_atom_align,
-    mant_mandoc_execution_fragment_atom_field_count,
-    mant_mandoc_execution_fragment_atom_offset,
-    mant_mandoc_execution_copy_fragment_atoms
-);
-declare_record_api!(
     mant_mandoc_execution_logical_tab_count,
     mant_mandoc_execution_logical_tab_size,
     mant_mandoc_execution_logical_tab_align,
@@ -651,6 +702,14 @@ declare_record_api!(
     mant_mandoc_execution_geometry_field_count,
     mant_mandoc_execution_geometry_offset,
     mant_mandoc_execution_copy_geometries
+);
+declare_record_api!(
+    mant_mandoc_execution_placement_count,
+    mant_mandoc_execution_placement_size,
+    mant_mandoc_execution_placement_align,
+    mant_mandoc_execution_placement_field_count,
+    mant_mandoc_execution_placement_offset,
+    mant_mandoc_execution_copy_placements
 );
 declare_record_api!(
     mant_mandoc_execution_wrapper_count,
@@ -693,12 +752,28 @@ declare_record_api!(
     mant_mandoc_execution_copy_table_rows
 );
 declare_record_api!(
-    mant_mandoc_execution_table_cell_count,
-    mant_mandoc_execution_table_cell_size,
-    mant_mandoc_execution_table_cell_align,
-    mant_mandoc_execution_table_cell_field_count,
-    mant_mandoc_execution_table_cell_offset,
-    mant_mandoc_execution_copy_table_cells
+    mant_mandoc_execution_table_layout_cell_count,
+    mant_mandoc_execution_table_layout_cell_size,
+    mant_mandoc_execution_table_layout_cell_align,
+    mant_mandoc_execution_table_layout_cell_field_count,
+    mant_mandoc_execution_table_layout_cell_offset,
+    mant_mandoc_execution_copy_table_layout_cells
+);
+declare_record_api!(
+    mant_mandoc_execution_table_data_cell_count,
+    mant_mandoc_execution_table_data_cell_size,
+    mant_mandoc_execution_table_data_cell_align,
+    mant_mandoc_execution_table_data_cell_field_count,
+    mant_mandoc_execution_table_data_cell_offset,
+    mant_mandoc_execution_copy_table_data_cells
+);
+declare_record_api!(
+    mant_mandoc_execution_table_cell_invocation_count,
+    mant_mandoc_execution_table_cell_invocation_size,
+    mant_mandoc_execution_table_cell_invocation_align,
+    mant_mandoc_execution_table_cell_invocation_field_count,
+    mant_mandoc_execution_table_cell_invocation_offset,
+    mant_mandoc_execution_copy_table_cell_invocations
 );
 declare_record_api!(
     mant_mandoc_execution_equation_count,
@@ -1254,53 +1329,7 @@ fn validate_execution_table_ast_bindings(
             return Err("owned AST table row has multiple execution rows".to_owned());
         }
         bound_rows[row.node.0 as usize] = true;
-        let expected_row_kind = match ast_row.table_row_kind.as_ref() {
-            Some(crate::TableRowKind::Data | crate::TableRowKind::LayoutRule { .. }) => {
-                ExecutionTableRowKind::Data
-            }
-            Some(crate::TableRowKind::HorizontalRule) => ExecutionTableRowKind::HorizontalRule,
-            Some(crate::TableRowKind::DoubleHorizontalRule) => {
-                ExecutionTableRowKind::DoubleHorizontalRule
-            }
-            None => {
-                return Err("execution table row is not a table row in the owned AST".to_owned());
-            }
-        };
-        if ast_row.kind != crate::NodeKind::Table || row.kind != expected_row_kind {
-            return Err("execution table row kind does not match the owned AST".to_owned());
-        }
-        let cells = &report.table_cells[row.cells.start as usize..row.cells.end as usize];
-        let mut logical_column = 0_u32;
-        for (expected_data_ordinal, (cell, ast_cell)) in
-            cells.iter().zip(&ast_row.table_cells).enumerate()
-        {
-            if usize::try_from(cell.data_ordinal).ok() != Some(expected_data_ordinal)
-                || cell.node != row.node
-                || cell.logical_column != logical_column
-                || cell.column_span != u32::from(ast_cell.column_span)
-                || cell.row_span != u32::from(ast_cell.row_span)
-                || cell.layout_kind != ast_table_layout_kind(ast_cell.layout_kind)
-                || cell.data_kind != ast_table_data_kind(ast_cell.data_kind)
-                || !table_alignment_matches(ast_cell.alignment, cell.alignment)
-                || cell.flags.contains(ExecutionTableCellFlags::TEXT_BLOCK) != ast_cell.text_block
-                || cell
-                    .flags
-                    .contains(ExecutionTableCellFlags::SOURCE_RECOVERY_SAFE)
-                    != ast_cell.source_recovery_safe
-                || cell
-                    .flags
-                    .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION)
-                    != ast_cell.vertical_continuation
-            {
-                return Err("execution table cell does not match the owned AST row".to_owned());
-            }
-            logical_column = logical_column
-                .checked_add(cell.column_span)
-                .ok_or_else(|| "execution table logical column overflow".to_owned())?;
-        }
-        if cells.len() != ast_row.table_cells.len() || logical_column > row.logical_columns {
-            return Err("execution table cells do not match the owned AST row".to_owned());
-        }
+        validate_execution_table_row_ast_binding(ast_row, row, report)?;
     }
     if ast_nodes.iter().enumerate().any(|(key, node)| {
         node.table_row_kind.is_some() != bound_rows.get(key).copied().unwrap_or(false)
@@ -1310,9 +1339,119 @@ fn validate_execution_table_ast_bindings(
     Ok(())
 }
 
+fn validate_execution_table_row_ast_binding(
+    ast_row: &crate::Node,
+    row: &ExecutionTableRow,
+    report: &NativeExecutionReport,
+) -> Result<(), String> {
+    let expected_row_kind = match ast_row.table_row_kind.as_ref() {
+        Some(crate::TableRowKind::Data) => ExecutionTableRowKind::Data,
+        Some(crate::TableRowKind::LayoutRule { .. }) => ExecutionTableRowKind::LayoutRule,
+        Some(crate::TableRowKind::HorizontalRule) => ExecutionTableRowKind::HorizontalRule,
+        Some(crate::TableRowKind::DoubleHorizontalRule) => {
+            ExecutionTableRowKind::DoubleHorizontalRule
+        }
+        None => return Err("execution table row is not a table row in the owned AST".to_owned()),
+    };
+    if ast_row.kind != crate::NodeKind::Table || row.kind != expected_row_kind {
+        return Err("execution table row kind does not match the owned AST".to_owned());
+    }
+    let layout_cells =
+        &report.table_layout_cells[row.layout_cells.start as usize..row.layout_cells.end as usize];
+    let data_cells =
+        &report.table_data_cells[row.data_cells.start as usize..row.data_cells.end as usize];
+    match ast_row.table_row_kind.as_ref() {
+        Some(crate::TableRowKind::Data) => {
+            validate_execution_table_data_row(ast_row, row, layout_cells, data_cells, report)
+        }
+        Some(crate::TableRowKind::LayoutRule { cells }) => {
+            if !ast_row.table_cells.is_empty()
+                || cells.len() != layout_cells.len()
+                || data_cells.iter().any(|data| {
+                    data.disposition != ExecutionTableDataDisposition::SuppressedByLayout
+                })
+                || cells.iter().zip(layout_cells).any(|(expected, actual)| {
+                    matches!(expected, crate::TableRuleCellKind::Horizontal)
+                        != (actual.kind == ExecutionTableLayoutKind::HorizontalRule)
+                })
+            {
+                return Err("execution layout-rule row does not match the owned AST row".to_owned());
+            }
+            Ok(())
+        }
+        Some(crate::TableRowKind::HorizontalRule | crate::TableRowKind::DoubleHorizontalRule) => {
+            if !layout_cells.is_empty() || !data_cells.is_empty() || !ast_row.table_cells.is_empty()
+            {
+                return Err("whole table rule unexpectedly owns cells".to_owned());
+            }
+            Ok(())
+        }
+        None => unreachable!("table row kind validated above"),
+    }
+}
+
+fn validate_execution_table_data_row(
+    ast_row: &crate::Node,
+    row: &ExecutionTableRow,
+    layout_cells: &[ExecutionTableLayoutCell],
+    data_cells: &[ExecutionTableDataCell],
+    report: &NativeExecutionReport,
+) -> Result<(), String> {
+    let mut logical_column = 0_u32;
+    for (data, ast_cell) in data_cells.iter().zip(&ast_row.table_cells) {
+        let layout = report
+            .table_layout_cells
+            .get(data.layout.0 as usize)
+            .ok_or_else(|| "table data cell has no layout fact".to_owned())?;
+        let expected_disposition = if matches!(
+            layout.kind,
+            ExecutionTableLayoutKind::HorizontalRule
+                | ExecutionTableLayoutKind::DoubleHorizontalRule
+        ) {
+            ExecutionTableDataDisposition::SuppressedByLayout
+        } else {
+            ExecutionTableDataDisposition::Projected
+        };
+        let leading_layout_is_continuation = layout_cells.iter().all(|candidate| {
+            candidate.logical_column < logical_column
+                || candidate.logical_column >= layout.logical_column
+                || candidate.horizontal_continuation
+        });
+        if data.disposition != expected_disposition
+            || data.ordinal as usize >= ast_row.table_cells.len()
+            || layout.logical_column < logical_column
+            || !leading_layout_is_continuation
+            || data.column_span != u32::from(ast_cell.column_span)
+            || data.row_span != u32::from(ast_cell.row_span)
+            || layout.kind != ast_table_layout_kind(ast_cell.layout_kind)
+            || data.kind != ast_table_data_kind(ast_cell.data_kind)
+            || !table_alignment_matches(ast_cell.alignment, layout.alignment)
+            || data.flags.contains(ExecutionTableCellFlags::TEXT_BLOCK) != ast_cell.text_block
+            || data
+                .flags
+                .contains(ExecutionTableCellFlags::SOURCE_RECOVERY_SAFE)
+                != ast_cell.source_recovery_safe
+            || data
+                .flags
+                .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION)
+                != ast_cell.vertical_continuation
+        {
+            return Err("execution table data cell does not match the owned AST row".to_owned());
+        }
+        logical_column = layout
+            .logical_column
+            .checked_add(data.column_span)
+            .ok_or_else(|| "execution table logical column overflow".to_owned())?;
+    }
+    if data_cells.len() != ast_row.table_cells.len() || logical_column > row.logical_columns {
+        return Err("execution table data cells do not match the owned AST row".to_owned());
+    }
+    Ok(())
+}
+
 pub(super) fn native_limits(limits: ExecutionLimits) -> CExecutionLimits {
     CExecutionLimits {
-        abi_version: 2,
+        abi_version: 4,
         abi_size: u32::try_from(size_of::<CExecutionLimits>())
             .expect("execution limits ABI size fits in u32"),
         max_nodes: limits.max_nodes,
@@ -1357,6 +1496,8 @@ unsafe fn copy_report(
     let record_count = unsafe { mant_mandoc_execution_record_count(report) };
     let record_bytes = unsafe { mant_mandoc_execution_allocated_record_bytes(report) };
     let buffer_cells = unsafe { raw::mant_mandoc_execution_buffer_cell_count(report) };
+    let content_indent_columns =
+        unsafe { raw::mant_mandoc_execution_content_indent_columns(report) };
     let pool_length = unsafe { mant_mandoc_execution_pool_length(report) };
     if work_units > limits.max_work
         || record_count > limits.max_records
@@ -1375,6 +1516,7 @@ unsafe fn copy_report(
     let pool = unsafe { copy_pool(report, pool_length) }?;
     let mut owned = convert_report(pool, work_units, record_count, buffer_cells, records)?;
     owned.record_bytes = record_bytes;
+    owned.content_indent_columns = content_indent_columns;
     Ok(owned)
 }
 
@@ -1385,18 +1527,20 @@ struct RawRecords {
     words: Vec<CWordRecord>,
     atoms: Vec<CAtomRecord>,
     fragments: Vec<CFragmentRecord>,
-    fragment_atoms: Vec<CFragmentAtomRecord>,
     logical_tabs: Vec<CLogicalTabRecord>,
     flushes: Vec<CFlushRecord>,
     boundaries: Vec<CBoundaryRecord>,
     controls: Vec<CControlRecord>,
     geometry: Vec<CGeometryRecord>,
+    placements: Vec<CPlacementRecord>,
     wrappers: Vec<CWrapperRecord>,
     references: Vec<CReferenceRecord>,
     anchors: Vec<CAnchorRecord>,
     tables: Vec<CTableRecord>,
     table_rows: Vec<CTableRowRecord>,
-    table_cells: Vec<CTableCellRecord>,
+    table_layout_cells: Vec<CTableLayoutCellRecord>,
+    table_data_cells: Vec<CTableDataCellRecord>,
+    table_cell_invocations: Vec<CTableCellInvocationRecord>,
     equations: Vec<CEquationRecord>,
     equation_boxes: Vec<CEquationBoxRecord>,
     equation_box_executions: Vec<CEquationBoxExecutionRecord>,
@@ -1495,18 +1639,6 @@ copy_record_table!(
     mant_mandoc_execution_copy_fragments
 );
 copy_record_table!(
-    copy_fragment_atoms,
-    CFragmentAtomRecord,
-    fragment_atom_offsets,
-    "fragment-atom",
-    mant_mandoc_execution_fragment_atom_count,
-    mant_mandoc_execution_fragment_atom_size,
-    mant_mandoc_execution_fragment_atom_align,
-    mant_mandoc_execution_fragment_atom_field_count,
-    mant_mandoc_execution_fragment_atom_offset,
-    mant_mandoc_execution_copy_fragment_atoms
-);
-copy_record_table!(
     copy_logical_tabs,
     CLogicalTabRecord,
     logical_tab_offsets,
@@ -1565,6 +1697,18 @@ copy_record_table!(
     mant_mandoc_execution_geometry_field_count,
     mant_mandoc_execution_geometry_offset,
     mant_mandoc_execution_copy_geometries
+);
+copy_record_table!(
+    copy_placements,
+    CPlacementRecord,
+    placement_offsets,
+    "placement",
+    mant_mandoc_execution_placement_count,
+    mant_mandoc_execution_placement_size,
+    mant_mandoc_execution_placement_align,
+    mant_mandoc_execution_placement_field_count,
+    mant_mandoc_execution_placement_offset,
+    mant_mandoc_execution_copy_placements
 );
 copy_record_table!(
     copy_wrappers,
@@ -1627,16 +1771,40 @@ copy_record_table!(
     mant_mandoc_execution_copy_table_rows
 );
 copy_record_table!(
-    copy_table_cells,
-    CTableCellRecord,
-    table_cell_offsets,
-    "table-cell",
-    mant_mandoc_execution_table_cell_count,
-    mant_mandoc_execution_table_cell_size,
-    mant_mandoc_execution_table_cell_align,
-    mant_mandoc_execution_table_cell_field_count,
-    mant_mandoc_execution_table_cell_offset,
-    mant_mandoc_execution_copy_table_cells
+    copy_table_layout_cells,
+    CTableLayoutCellRecord,
+    table_layout_cell_offsets,
+    "table-layout-cell",
+    mant_mandoc_execution_table_layout_cell_count,
+    mant_mandoc_execution_table_layout_cell_size,
+    mant_mandoc_execution_table_layout_cell_align,
+    mant_mandoc_execution_table_layout_cell_field_count,
+    mant_mandoc_execution_table_layout_cell_offset,
+    mant_mandoc_execution_copy_table_layout_cells
+);
+copy_record_table!(
+    copy_table_data_cells,
+    CTableDataCellRecord,
+    table_data_cell_offsets,
+    "table-data-cell",
+    mant_mandoc_execution_table_data_cell_count,
+    mant_mandoc_execution_table_data_cell_size,
+    mant_mandoc_execution_table_data_cell_align,
+    mant_mandoc_execution_table_data_cell_field_count,
+    mant_mandoc_execution_table_data_cell_offset,
+    mant_mandoc_execution_copy_table_data_cells
+);
+copy_record_table!(
+    copy_table_cell_invocations,
+    CTableCellInvocationRecord,
+    table_cell_invocation_offsets,
+    "table-cell-invocation",
+    mant_mandoc_execution_table_cell_invocation_count,
+    mant_mandoc_execution_table_cell_invocation_size,
+    mant_mandoc_execution_table_cell_invocation_align,
+    mant_mandoc_execution_table_cell_invocation_field_count,
+    mant_mandoc_execution_table_cell_invocation_offset,
+    mant_mandoc_execution_copy_table_cell_invocations
 );
 copy_record_table!(
     copy_equations,
@@ -1711,18 +1879,20 @@ unsafe fn copy_raw_records(
         words: unsafe { copy_words(report, &mut remaining) }?,
         atoms: unsafe { copy_atoms(report, &mut remaining) }?,
         fragments: unsafe { copy_fragments(report, &mut remaining) }?,
-        fragment_atoms: unsafe { copy_fragment_atoms(report, &mut remaining) }?,
         logical_tabs: unsafe { copy_logical_tabs(report, &mut remaining) }?,
         flushes: unsafe { copy_flushes(report, &mut remaining) }?,
         boundaries: unsafe { copy_boundaries(report, &mut remaining) }?,
         controls: unsafe { copy_controls(report, &mut remaining) }?,
         geometry: unsafe { copy_geometry(report, &mut remaining) }?,
+        placements: unsafe { copy_placements(report, &mut remaining) }?,
         wrappers: unsafe { copy_wrappers(report, &mut remaining) }?,
         references: unsafe { copy_references(report, &mut remaining) }?,
         anchors: unsafe { copy_anchors(report, &mut remaining) }?,
         tables: unsafe { copy_tables(report, &mut remaining) }?,
         table_rows: unsafe { copy_table_rows(report, &mut remaining) }?,
-        table_cells: unsafe { copy_table_cells(report, &mut remaining) }?,
+        table_layout_cells: unsafe { copy_table_layout_cells(report, &mut remaining) }?,
+        table_data_cells: unsafe { copy_table_data_cells(report, &mut remaining) }?,
+        table_cell_invocations: unsafe { copy_table_cell_invocations(report, &mut remaining) }?,
         equations: unsafe { copy_equations(report, &mut remaining) }?,
         equation_boxes: unsafe { copy_equation_boxes(report, &mut remaining) }?,
         equation_box_executions: unsafe { copy_equation_box_executions(report, &mut remaining) }?,
@@ -1862,6 +2032,15 @@ unsafe fn copy_pool(
 
 fn option(value: u32) -> Option<u32> {
     (value != NONE).then_some(value)
+}
+
+fn output_role(value: u32) -> Result<ExecutionOutputRole, String> {
+    match value {
+        1 => Ok(ExecutionOutputRole::Content),
+        2 => Ok(ExecutionOutputRole::MarginDecoration),
+        3 => Ok(ExecutionOutputRole::PageDecoration),
+        _ => Err("unknown execution output role".to_owned()),
+    }
 }
 fn node_key(value: u32, nodes: usize, field: &str) -> Result<ExecutionNodeKey, String> {
     if usize::try_from(value).is_ok_and(|key| key < nodes) {
@@ -2258,18 +2437,20 @@ fn convert_report(
         words: word_records,
         atoms: atom_records,
         fragments: fragment_records,
-        fragment_atoms: fragment_atom_records,
         logical_tabs: logical_tab_records,
         flushes: flush_records,
         boundaries: boundary_records,
         controls: control_records,
         geometry: geometry_records,
+        placements: placement_records,
         wrappers: wrapper_records,
         references: reference_records,
         anchors: anchor_records,
         tables: table_records,
         table_rows: table_row_records,
-        table_cells: table_cell_records,
+        table_layout_cells: table_layout_cell_records,
+        table_data_cells: table_data_cell_records,
+        table_cell_invocations: table_cell_invocation_records,
         equations: equation_records,
         equation_boxes: equation_box_records,
         equation_box_executions: equation_box_execution_records,
@@ -2286,7 +2467,9 @@ fn convert_report(
     let reference_count = reference_records.len();
     let table_count = table_records.len();
     let table_row_count = table_row_records.len();
-    let table_cell_count = table_cell_records.len();
+    let table_layout_cell_count = table_layout_cell_records.len();
+    let table_data_cell_count = table_data_cell_records.len();
+    let table_cell_invocation_count = table_cell_invocation_records.len();
     let equation_count = equation_records.len();
     let equation_box_count = equation_box_records.len();
     let equation_invocation_count = equation_box_execution_records.len();
@@ -2297,18 +2480,20 @@ fn convert_report(
         word_count,
         atom_count,
         fragment_count,
-        fragment_atom_records.len(),
         logical_tab_records.len(),
         flush_records.len(),
         boundary_records.len(),
         control_records.len(),
         geometry_records.len(),
+        placement_records.len(),
         wrapper_count,
         reference_count,
         anchor_records.len(),
         table_count,
         table_row_count,
-        table_cell_count,
+        table_layout_cell_count,
+        table_data_cell_count,
+        table_cell_invocation_count,
         equation_count,
         equation_box_count,
         equation_invocation_count,
@@ -2559,6 +2744,10 @@ fn convert_report(
         reserved_filled_vec(false, atom_count, "atom replacement coverage")?;
     for (index, value) in atom_records.iter().copied().enumerate() {
         dense(value.key, index, "atom")?;
+        if value.flags & !ExecutionAtomFlags::NO_FILL != 0 {
+            return Err("invalid execution atom flags".to_owned());
+        }
+        let output_role = output_role(value.output_role)?;
         let kind = match value.kind {
             1 => AtomKind::Glyph,
             2 => AtomKind::BreakableSpace,
@@ -2726,19 +2915,10 @@ fn convert_report(
             wrapper,
             replaced_by: replaced_by.map(AtomKey),
             disposition,
+            flags: ExecutionAtomFlags(value.flags),
+            output_role,
             sequence: value.sequence,
         });
-    }
-    for pair in &fragment_atom_records {
-        if usize::try_from(pair.fragment)
-            .ok()
-            .is_none_or(|key| key >= fragment_count)
-            || usize::try_from(pair.atom)
-                .ok()
-                .is_none_or(|key| key >= atom_count)
-        {
-            return Err("invalid execution fragment-atom reference".to_owned());
-        }
     }
     let mut live_atoms = reserved_vec(atom_count, "live execution atom locations")?;
     live_atoms.extend(
@@ -2782,53 +2962,32 @@ fn convert_report(
         group_start = group_end;
     }
     let live_atoms = current_occupants;
-    let mut fragment_ref_coverage = reserved_filled_vec(
-        false,
-        fragment_atom_records.len(),
-        "fragment reference coverage",
-    )?;
     let mut referenced_atoms = reserved_filled_vec(false, atom_count, "fragment atom coverage")?;
     let mut fragments = reserved_vec(fragment_count, "fragment")?;
     for (index, value) in fragment_records.into_iter().enumerate() {
         dense(value.key, index, "fragment")?;
-        if value.reserved != 0 {
+        if value.reserved != 0 || value.reserved_atom != 0 {
             return Err("non-zero reserved execution fragment field".to_owned());
         }
         if value.start_bu < 0 || value.end_bu < 0 {
             return Err("invalid execution fragment geometry".to_owned());
         }
-        let start = usize::try_from(value.atom_ref_start)
-            .map_err(|_| "fragment atom range overflow".to_owned())?;
-        let end = start
-            .checked_add(
-                usize::try_from(value.atom_ref_length)
-                    .map_err(|_| "fragment atom range overflow".to_owned())?,
-            )
-            .ok_or_else(|| "fragment atom range overflow".to_owned())?;
-        let refs = fragment_atom_records
-            .get(start..end)
-            .ok_or_else(|| "invalid fragment atom range".to_owned())?;
-        if refs.len() != 1 {
-            return Err("execution fragment must have exactly one origin atom".to_owned());
-        }
-        if fragment_ref_coverage[start..end]
-            .iter()
-            .any(|covered| *covered)
-        {
-            return Err("overlapping execution fragment-atom ranges".to_owned());
-        }
-        fragment_ref_coverage[start..end].fill(true);
-        if refs.iter().any(|pair| pair.fragment != value.key) {
-            return Err("fragment atom range contains another fragment".to_owned());
-        }
-        let atom_key = usize::try_from(refs[0].atom)
+        let atom_key = usize::try_from(value.atom)
             .map_err(|_| "execution fragment atom key overflow".to_owned())?;
+        if atom_key >= atom_count {
+            return Err("invalid execution fragment atom key".to_owned());
+        }
         if referenced_atoms[atom_key] {
             return Err("execution atom is referenced by multiple fragments".to_owned());
         }
         referenced_atoms[atom_key] = true;
         let origin_atom = &atom_records[atom_key];
+        let fragment_width = value
+            .end_bu
+            .checked_sub(value.start_bu)
+            .ok_or_else(|| "invalid execution fragment geometry".to_owned())?;
         if origin_atom.disposition != 2
+            || origin_atom.width_bu != fragment_width
             || origin_atom.buffer != value.buffer
             || origin_atom.generation != value.generation
             || origin_atom.buffer_generation != value.buffer_generation
@@ -2872,15 +3031,13 @@ fn convert_report(
             4 => FragmentRole::PageDecoration,
             _ => return Err("unknown execution fragment role".to_owned()),
         };
-        let mut fragment_atoms = reserved_vec(refs.len(), "fragment atom keys")?;
-        fragment_atoms.extend(refs.iter().map(|pair| AtomKey(pair.atom)));
         fragments.push(ExecutionFragment {
             key: FragmentKey(value.key),
             node: optional_node_key(value.node, node_count, "fragment")?,
             buffer,
             generation,
             buffer_generation,
-            atoms: fragment_atoms,
+            atom: AtomKey(value.atom),
             device_line: value.device_line,
             role,
             start_bu: value.start_bu,
@@ -2888,9 +3045,6 @@ fn convert_report(
             wrapper,
             sequence: value.sequence,
         });
-    }
-    if fragment_ref_coverage.iter().any(|covered| !covered) {
-        return Err("unclaimed execution fragment-atom record".to_owned());
     }
     if atoms
         .iter()
@@ -2981,10 +3135,8 @@ fn convert_report(
             return Err("flush contains a fragment from another buffer generation".to_owned());
         }
         if flush_fragments.iter().any(|fragment| {
-            fragment
-                .atoms
-                .first()
-                .and_then(|key| atoms.get(key.0 as usize))
+            atoms
+                .get(fragment.atom.0 as usize)
                 .and_then(|atom| atom.slot)
                 .is_none_or(|slot| slot < value.accepted_start || slot >= value.accepted_end)
         }) {
@@ -3028,7 +3180,6 @@ fn convert_report(
             || value.effective_content_bu < 0
             || value.effective_content_bu < value.content_bu
             || value.logical_forced_break > 1
-            || value.reserved_fit != 0
             || value.field_bu < 0
             || value.target_bu < 0
             || value.offset_bu < 0
@@ -3064,6 +3215,7 @@ fn convert_report(
             4 => FlushOutcome::DeferredColumn,
             _ => return Err("unknown execution flush outcome".to_owned()),
         };
+        let output_role = output_role(value.output_role)?;
         let first_live = live_atoms.partition_point(|&(generation, slot, _)| {
             (generation, slot) < (value.buffer_generation, value.accepted_start)
         });
@@ -3216,6 +3368,7 @@ fn convert_report(
             logical_origin_bu: value.logical_origin_bu,
             effective_content_bu: value.effective_content_bu,
             logical_forced_break: value.logical_forced_break != 0,
+            output_role,
             field_bu: value.field_bu,
             target_bu: value.target_bu,
             offset_bu: value.offset_bu,
@@ -3259,6 +3412,18 @@ fn convert_report(
             2 => BoundaryEffect::EndedLine,
             3 => BoundaryEffect::AddedVerticalSpace,
             _ => return Err("unknown execution boundary effect".to_owned()),
+        };
+        let output_role = output_role(value.output_role)?;
+        let line_commit_cause = match (request, value.line_commit_cause) {
+            (BoundaryRequest::DeviceEndline, 1) => Some(LineCommitCause::DirectDevice),
+            (BoundaryRequest::DeviceEndline, 2) => Some(LineCommitCause::FieldWrap),
+            (BoundaryRequest::DeviceEndline, 3) => Some(LineCommitCause::FieldEnd),
+            (BoundaryRequest::DeviceEndline, 4) => Some(LineCommitCause::VerticalBlank),
+            (BoundaryRequest::DeviceEndline, _) => {
+                return Err("invalid execution line commit cause".to_owned());
+            }
+            (_, 0) => None,
+            (_, _) => return Err("line commit cause on non-device boundary".to_owned()),
         };
         let parent = option(value.parent);
         if parent.is_some_and(|key| usize::try_from(key).ok().is_none_or(|key| key >= index)) {
@@ -3320,6 +3485,8 @@ fn convert_report(
             visual_before: value.visual_before,
             visual_after: value.visual_after,
             direct_device_lines: value.direct_device_lines,
+            line_commit_cause,
+            output_role,
             enter_sequence: value.enter_sequence,
             leave_sequence: value.leave_sequence,
         });
@@ -3357,12 +3524,28 @@ fn convert_report(
             return Err("execution boundary siblings overlap".to_owned());
         }
         *last_leave = boundary.leave_sequence;
-        if boundary.request == BoundaryRequest::DeviceEndline
-            && let Some(parent) = boundary.parent
-        {
-            direct_boundary_lines[parent as usize] = direct_boundary_lines[parent as usize]
-                .checked_add(1)
-                .ok_or_else(|| "execution boundary direct line count overflow".to_owned())?;
+        if boundary.request == BoundaryRequest::DeviceEndline {
+            match (boundary.line_commit_cause, boundary.parent) {
+                (Some(LineCommitCause::DirectDevice), None) => {}
+                (Some(cause), Some(parent)) => {
+                    direct_boundary_lines[parent as usize] = direct_boundary_lines[parent as usize]
+                        .checked_add(1)
+                        .ok_or_else(|| {
+                            "execution boundary direct line count overflow".to_owned()
+                        })?;
+                    let parent_request = boundaries[parent as usize].request;
+                    match cause {
+                        LineCommitCause::VerticalBlank
+                            if parent_request == BoundaryRequest::VerticalSpace => {}
+                        LineCommitCause::FieldWrap | LineCommitCause::FieldEnd
+                            if parent_request == BoundaryRequest::Endline => {}
+                        _ => {
+                            return Err("line commit cause escapes its native boundary".to_owned());
+                        }
+                    }
+                }
+                _ => return Err("line commit cause escapes its native boundary".to_owned()),
+            }
         }
     }
     for boundary in boundaries.iter().rev() {
@@ -3699,13 +3882,9 @@ fn convert_report(
         last_boundary_enter = Some(boundary.enter_sequence);
     }
     let mut geometry = reserved_vec(geometry_records.len(), "geometry")?;
-    let mut glyph_geometry_coverage =
-        reserved_filled_vec(false, fragment_count, "glyph geometry coverage")?;
     for (index, value) in geometry_records.into_iter().enumerate() {
         dense(value.key, index, "geometry")?;
-        if value.reserved != 0 {
-            return Err("non-zero reserved execution geometry field".to_owned());
-        }
+        let output_role = output_role(value.output_role)?;
         let kind = match value.kind {
             1 => GeometryKind::Advance,
             2 => GeometryKind::Glyph,
@@ -3758,40 +3937,7 @@ fn convert_report(
                 }
             }
             GeometryKind::Glyph => {
-                let origin_atom = option(value.origin_key)
-                    .and_then(|key| usize::try_from(key).ok().filter(|key| *key < atom_count));
-                let related_fragment = option(value.related).and_then(|key| {
-                    usize::try_from(key)
-                        .ok()
-                        .filter(|key| *key < fragment_count)
-                });
-                let Some(origin_atom) = origin_atom else {
-                    return Err("invalid execution glyph geometry relationship".to_owned());
-                };
-                let Some(related_fragment) = related_fragment else {
-                    return Err("invalid execution glyph geometry relationship".to_owned());
-                };
-                let fragment = &fragments[related_fragment];
-                let Some(fragment_width) = fragment.end_bu.checked_sub(fragment.start_bu) else {
-                    return Err("invalid execution glyph geometry relationship".to_owned());
-                };
-                if unit != GeometryUnit::Basic
-                    || origin_kind != GeometryOriginKind::Atom
-                    || glyph_geometry_coverage[related_fragment]
-                    || fragment.atoms.as_slice() != [AtomKey(value.origin_key)]
-                    || atoms[origin_atom].disposition != AtomDisposition::Emitted
-                    || node != fragment.node
-                    || value.requested != fragment_width
-                    || value.effective != value.requested
-                    || value.before != fragment.start_bu
-                    || value.after != fragment.end_bu
-                    || value.sequence <= fragment.sequence
-                    || fragment_flush_outcomes[related_fragment]
-                        .is_some_and(|outcome| value.sequence >= outcome)
-                {
-                    return Err("invalid execution glyph geometry relationship".to_owned());
-                }
-                glyph_geometry_coverage[related_fragment] = true;
+                return Err("obsolete execution glyph geometry record".to_owned());
             }
             GeometryKind::Endline => {
                 let boundary = option(value.origin_key)
@@ -3844,15 +3990,13 @@ fn convert_report(
             unit,
             origin_kind,
             origin_key: option(value.origin_key),
+            output_role,
             requested: value.requested,
             effective: value.effective,
             before: value.before,
             after: value.after,
             sequence: value.sequence,
         });
-    }
-    if glyph_geometry_coverage.iter().any(|covered| !covered) {
-        return Err("execution fragment has no unique glyph geometry".to_owned());
     }
     let mut wrappers: Vec<ExecutionWrapper> = reserved_vec(wrapper_count, "wrapper")?;
     let mut heading_nodes = reserved_filled_vec(false, node_count, "heading node ownership")?;
@@ -4275,46 +4419,70 @@ fn convert_report(
         return Err("missing execution man block wrapper".to_owned());
     }
     validate_active_wrapper_owners(&wrappers, &boundaries, &controls)?;
-    // Upstream roff_term_pre_mc() stores an authored margin character and a
-    // later term_newln() emits it inside another node wrapper.  Preserve that
-    // one evidenced delayed-source edge without allowing arbitrary events to
-    // escape their source-node subtree.
-    let mut margin_control_nodes = reserved_filled_vec(false, node_count, "margin controls")?;
-    for control in &controls {
-        if control.request == ExecutionControlRequest::MarginCharacter {
-            margin_control_nodes[control.node.0 as usize] = true;
+    let mut placements = reserved_vec(placement_records.len(), "placement")?;
+    let mut previous_placement_sequence = None;
+    for (index, value) in placement_records.into_iter().enumerate() {
+        dense(value.key, index, "placement")?;
+        let phase = match value.phase {
+            1 => ExecutionPlacementPhase::Enter,
+            2 => ExecutionPlacementPhase::Content,
+            3 => ExecutionPlacementPhase::Head,
+            4 => ExecutionPlacementPhase::Body,
+            5 => ExecutionPlacementPhase::OriginTransition,
+            6 => ExecutionPlacementPhase::Exit,
+            _ => return Err("unknown execution placement phase".to_owned()),
+        };
+        let node = node_key(value.node, node_count, "placement")?;
+        let wrapper = usize::try_from(value.wrapper)
+            .ok()
+            .filter(|wrapper| *wrapper < wrappers.len())
+            .ok_or_else(|| "invalid execution placement wrapper".to_owned())?;
+        let owner = &wrappers[wrapper];
+        let mut origin = Some(node);
+        while origin.is_some() && origin != owner.node {
+            origin = nodes[origin.expect("present placement origin").0 as usize].parent;
         }
-    }
-    for index in 0..node_count {
-        if let Some(parent) = nodes[index].parent {
-            margin_control_nodes[index] |= margin_control_nodes[parent.0 as usize];
+        if !is_structural_wrapper(owner.kind)
+            || origin != owner.node
+            || value.sequence <= owner.enter_sequence
+            || value.sequence >= owner.leave_sequence
+            || value.offset_bu < 0
+            || value.rmargin_bu < 0
+            || value.maxrmargin_bu < 0
+            || value.visual_bu < 0
+            || value.cell_bu <= 0
+            || previous_placement_sequence.is_some_and(|sequence| sequence >= value.sequence)
+        {
+            return Err("invalid execution placement checkpoint".to_owned());
         }
+        previous_placement_sequence = Some(value.sequence);
+        placements.push(ExecutionPlacementCheckpoint {
+            key: value.key,
+            node,
+            wrapper: value.wrapper,
+            phase,
+            offset_bu: value.offset_bu,
+            rmargin_bu: value.rmargin_bu,
+            maxrmargin_bu: value.maxrmargin_bu,
+            visual_bu: value.visual_bu,
+            cell_bu: value.cell_bu,
+            sequence: value.sequence,
+        });
     }
-    let mut margin_atoms = reserved_filled_vec(false, atom_count, "margin atoms")?;
-    for fragment in &fragments {
-        if fragment.role == FragmentRole::MarginDecoration {
-            for atom in &fragment.atoms {
-                margin_atoms[atom.0 as usize] = true;
-            }
-        }
-    }
+    // Source provenance and execution nesting are intentionally independent.
+    // Fixed CVS reuses authored `.Es` delimiter strings while executing a
+    // later `.En` wrapper and retains `.mc` operands until a later boundary.
+    // The C transfer already proves that each source node came from the
+    // parsed tree; this layer validates only that the event itself lies in
+    // the declared execution interval.
     for word in &words {
         if let Some(wrapper_key) = word.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
-            let delayed_margin = word.node.is_some_and(|node| {
-                margin_control_nodes[node.0 as usize]
-                    && !word.atoms.is_empty()
-                    && word.atoms.clone().all(|atom| margin_atoms[atom as usize])
-            });
             if !is_structural_wrapper(wrapper.kind)
                 || word.enter_sequence <= wrapper.enter_sequence
                 || word.leave_sequence >= wrapper.leave_sequence
                 || word.atoms.start < wrapper.enter_atom
                 || word.atoms.end > wrapper.leave_atom
-                || word.node.is_none_or(|node| {
-                    !node_is_within(&nodes, node, wrapper.node.expect("validated node wrapper"))
-                        && !delayed_margin
-                })
             {
                 return Err("execution word is outside its node wrapper".to_owned());
             }
@@ -4323,18 +4491,11 @@ fn convert_report(
     for atom in &atoms {
         if let Some(wrapper_key) = atom.wrapper {
             let wrapper = &wrappers[wrapper_key as usize];
-            let delayed_margin = atom.node.is_some_and(|node| {
-                margin_control_nodes[node.0 as usize] && margin_atoms[atom.key.0 as usize]
-            });
             if !is_structural_wrapper(wrapper.kind)
                 || atom.sequence <= wrapper.enter_sequence
                 || atom.sequence >= wrapper.leave_sequence
                 || atom.key.0 < wrapper.enter_atom
                 || atom.key.0 >= wrapper.leave_atom
-                || atom.node.is_none_or(|node| {
-                    !node_is_within(&nodes, node, wrapper.node.expect("validated node wrapper"))
-                        && !delayed_margin
-                })
             {
                 return Err("execution atom is outside its node wrapper".to_owned());
             }
@@ -4374,7 +4535,8 @@ fn convert_report(
         dense(value.key, index, "reference")?;
         if value.flags != 0
             || value.enter_atom > value.label_start_atom
-            || value.label_start_atom > value.leave_atom
+            || value.label_start_atom > value.label_end_atom
+            || value.label_end_atom > value.leave_atom
             || value.leave_atom as usize > atom_count
             || value.leave_sequence <= value.enter_sequence
             || (index != 0 && references[index - 1].enter_sequence >= value.enter_sequence)
@@ -4392,10 +4554,41 @@ fn convert_report(
             1 => ExecutionAffinity::Inline,
             _ => return Err("invalid execution semantic reference affinity".to_owned()),
         };
+        let presentation = match value.presentation {
+            1 => ExecutionReferencePresentation::Direct,
+            2 => ExecutionReferencePresentation::LabelledSupplement,
+            _ => return Err("unknown execution semantic reference presentation".to_owned()),
+        };
         let owner_node = node_key(value.owner_node, node_count, "reference owner")?;
         let target_node = node_key(value.target_node, node_count, "reference target")?;
         let execution_atoms = value.enter_atom..value.leave_atom;
-        let label_atoms = value.label_start_atom..value.leave_atom;
+        let label_atoms = value.label_start_atom..value.label_end_atom;
+        let (target_atoms, supplement_atoms) = match presentation {
+            ExecutionReferencePresentation::Direct => {
+                if value.target_start_atom != value.label_start_atom
+                    || value.target_end_atom != value.label_end_atom
+                    || value.supplement_start_atom != NONE
+                    || value.supplement_end_atom != NONE
+                {
+                    return Err("invalid direct reference presentation ranges".to_owned());
+                }
+                (value.target_start_atom..value.target_end_atom, None)
+            }
+            ExecutionReferencePresentation::LabelledSupplement => {
+                if value.label_end_atom > value.supplement_start_atom
+                    || value.supplement_start_atom > value.target_start_atom
+                    || value.target_start_atom > value.target_end_atom
+                    || value.target_end_atom > value.supplement_end_atom
+                    || value.supplement_end_atom > value.leave_atom
+                {
+                    return Err("invalid labelled reference presentation ranges".to_owned());
+                }
+                (
+                    value.target_start_atom..value.target_end_atom,
+                    Some(value.supplement_start_atom..value.supplement_end_atom),
+                )
+            }
+        };
         let previous_atom = value
             .enter_atom
             .checked_sub(1)
@@ -4422,7 +4615,9 @@ fn convert_report(
                 })
             || atoms[value.enter_atom as usize..value.label_start_atom as usize]
                 .iter()
-                .any(|atom| atom.role != AtomRole::ImplicitSpace)
+                .any(|atom| {
+                    atom.role != AtomRole::ImplicitSpace && atom.kind != AtomKind::TabReference
+                })
             || atoms
                 .get(value.label_start_atom as usize)
                 .is_some_and(|atom| {
@@ -4480,6 +4675,9 @@ fn convert_report(
             secondary,
             execution_atoms,
             atoms: label_atoms,
+            presentation,
+            target_atoms,
+            supplement_atoms,
             affinity,
             enter_sequence: value.enter_sequence,
             leave_sequence: value.leave_sequence,
@@ -4533,12 +4731,24 @@ fn convert_report(
 
     let mut tables = reserved_vec(table_count, "table")?;
     let mut expected_row_cursor = 0_u32;
-    let mut expected_cell_cursor = 0_u32;
+    let mut expected_layout_cursor = 0_u32;
+    let mut expected_data_cursor = 0_u32;
+    let mut expected_invocation_cursor = 0_u32;
     let mut previous_table_leave = None;
     for (index, value) in table_records.into_iter().enumerate() {
         dense(value.key, index, "table")?;
         let rows = counted_range(value.row_start, value.row_length, "table rows")?;
-        let cells = counted_range(value.cell_start, value.cell_length, "table cells")?;
+        let layout_cells = counted_range(
+            value.layout_start,
+            value.layout_length,
+            "table layout cells",
+        )?;
+        let data_cells = counted_range(value.data_start, value.data_length, "table data cells")?;
+        let cell_invocations = counted_range(
+            value.invocation_start,
+            value.invocation_length,
+            "table cell invocations",
+        )?;
         let table_atoms = range(value.enter_atom, value.leave_atom, "table atoms")?;
         let table_fragments = range(
             value.enter_fragment,
@@ -4550,12 +4760,18 @@ fn convert_report(
             || value.logical_columns == 0
             || rows.is_empty()
             || rows.start != expected_row_cursor
-            || cells.start != expected_cell_cursor
+            || layout_cells.start != expected_layout_cursor
+            || data_cells.start != expected_data_cursor
+            || cell_invocations.start != expected_invocation_cursor
             || rows.end as usize > table_row_count
-            || cells.end as usize > table_cell_count
+            || layout_cells.end as usize > table_layout_cell_count
+            || data_cells.end as usize > table_data_cell_count
+            || cell_invocations.end as usize > table_cell_invocation_count
             || table_atoms.end as usize > atom_count
             || table_fragments.end as usize > fragment_count
             || table_flushes.end as usize > flush_records.len()
+            || value.offset_bu < 0
+            || value.cell_bu <= 0
             || value.enter_sequence >= value.leave_sequence
             || previous_table_leave.is_some_and(|leave| value.enter_sequence <= leave)
             || !exact_sequence_range(
@@ -4567,6 +4783,15 @@ fn convert_report(
             )
         {
             return Err("invalid execution table envelope".to_owned());
+        }
+        let wrapper = option(value.wrapper);
+        if wrapper.is_some_and(|key| {
+            wrappers.get(key as usize).is_none_or(|wrapper| {
+                wrapper.enter_sequence >= value.enter_sequence
+                    || wrapper.leave_sequence <= value.leave_sequence
+            })
+        }) {
+            return Err("execution table wrapper does not enclose the table".to_owned());
         }
         if !exact_sequence_range(
             &fragments,
@@ -4584,30 +4809,42 @@ fn convert_report(
             return Err("execution table cursors do not match its lifetime".to_owned());
         }
         expected_row_cursor = rows.end;
-        expected_cell_cursor = cells.end;
+        expected_layout_cursor = layout_cells.end;
+        expected_data_cursor = data_cells.end;
+        expected_invocation_cursor = cell_invocations.end;
         previous_table_leave = Some(value.leave_sequence);
         tables.push(ExecutionTable {
             key: ExecutionTableKey(value.key),
             first_row_node: node_key(value.first_row_node, node_count, "table first row")?,
             rows,
-            cells,
+            layout_cells,
+            data_cells,
+            cell_invocations,
             logical_columns: value.logical_columns,
+            wrapper,
             flags: value.flags,
             atoms: table_atoms,
             fragments: table_fragments,
             flushes: table_flushes,
+            offset_bu: value.offset_bu,
+            cell_bu: value.cell_bu,
             enter_sequence: value.enter_sequence,
             leave_sequence: value.leave_sequence,
         });
     }
     if expected_row_cursor as usize != table_row_count
-        || expected_cell_cursor as usize != table_cell_count
+        || expected_layout_cursor as usize != table_layout_cell_count
+        || expected_data_cursor as usize != table_data_cell_count
+        || expected_invocation_cursor as usize != table_cell_invocation_count
     {
-        return Err("execution table ranges do not partition rows and cells".to_owned());
+        return Err("execution table ranges do not partition table records".to_owned());
     }
 
     let mut table_rows = reserved_vec(table_row_count, "table-row")?;
-    let mut next_cell_by_table = reserved_filled_vec(0_u32, table_count, "table cell cursor")?;
+    let mut next_layout_by_table = reserved_filled_vec(0_u32, table_count, "table layout cursor")?;
+    let mut next_data_by_table = reserved_filled_vec(0_u32, table_count, "table data cursor")?;
+    let mut next_invocation_by_table =
+        reserved_filled_vec(0_u32, table_count, "table invocation cursor")?;
     let mut next_ordinal_by_table = reserved_filled_vec(0_u32, table_count, "table row ordinal")?;
     let mut previous_row_leave = reserved_filled_vec(None::<u64>, table_count, "table row order")?;
     for (index, value) in table_row_records.into_iter().enumerate() {
@@ -4618,7 +4855,18 @@ fn convert_report(
             .ok_or_else(|| "invalid execution table-row parent".to_owned())?;
         let table = &tables[table_index];
         let node = node_key(value.node, node_count, "table-row node")?;
-        let cells = counted_range(value.cell_start, value.cell_length, "table-row cells")?;
+        let layout_cells = counted_range(
+            value.layout_start,
+            value.layout_length,
+            "table-row layout cells",
+        )?;
+        let data_cells =
+            counted_range(value.data_start, value.data_length, "table-row data cells")?;
+        let cell_invocations = counted_range(
+            value.invocation_start,
+            value.invocation_length,
+            "table-row cell invocations",
+        )?;
         let row_atoms = range(value.enter_atom, value.leave_atom, "table-row atoms")?;
         let row_fragments = range(
             value.enter_fragment,
@@ -4630,14 +4878,20 @@ fn convert_report(
             1 => ExecutionTableRowKind::Data,
             2 => ExecutionTableRowKind::HorizontalRule,
             3 => ExecutionTableRowKind::DoubleHorizontalRule,
+            4 => ExecutionTableRowKind::LayoutRule,
             _ => return Err("unknown execution table-row kind".to_owned()),
         };
         if value.ordinal != next_ordinal_by_table[table_index]
             || value.logical_columns != table.logical_columns
             || value.key < table.rows.start
             || value.key >= table.rows.end
-            || cells.start != next_cell_by_table[table_index].max(table.cells.start)
-            || cells.end > table.cells.end
+            || layout_cells.start != next_layout_by_table[table_index].max(table.layout_cells.start)
+            || data_cells.start != next_data_by_table[table_index].max(table.data_cells.start)
+            || cell_invocations.start
+                != next_invocation_by_table[table_index].max(table.cell_invocations.start)
+            || layout_cells.end > table.layout_cells.end
+            || data_cells.end > table.data_cells.end
+            || cell_invocations.end > table.cell_invocations.end
             || row_atoms.start < table.atoms.start
             || row_atoms.end > table.atoms.end
             || row_fragments.start < table.fragments.start
@@ -4647,7 +4901,12 @@ fn convert_report(
             || value.enter_sequence <= table.enter_sequence
             || value.leave_sequence >= table.leave_sequence
             || previous_row_leave[table_index].is_some_and(|leave| value.enter_sequence <= leave)
-            || (kind != ExecutionTableRowKind::Data && !cells.is_empty())
+            || (matches!(
+                kind,
+                ExecutionTableRowKind::HorizontalRule | ExecutionTableRowKind::DoubleHorizontalRule
+            ) && (!layout_cells.is_empty()
+                || !data_cells.is_empty()
+                || !cell_invocations.is_empty()))
             || nodes[node.0 as usize].kind != crate::NodeKind::Table
             || !exact_sequence_range(
                 &atoms,
@@ -4680,7 +4939,9 @@ fn convert_report(
             .ordinal
             .checked_add(1)
             .ok_or_else(|| "execution table-row ordinal overflow".to_owned())?;
-        next_cell_by_table[table_index] = cells.end;
+        next_layout_by_table[table_index] = layout_cells.end;
+        next_data_by_table[table_index] = data_cells.end;
+        next_invocation_by_table[table_index] = cell_invocations.end;
         previous_row_leave[table_index] = Some(value.leave_sequence);
         table_rows.push(ExecutionTableRow {
             key: ExecutionTableRowKey(value.key),
@@ -4689,7 +4950,9 @@ fn convert_report(
             ordinal: value.ordinal,
             kind,
             logical_columns: value.logical_columns,
-            cells,
+            layout_cells,
+            data_cells,
+            cell_invocations,
             atoms: row_atoms,
             fragments: row_fragments,
             flushes: row_flushes,
@@ -4699,35 +4962,23 @@ fn convert_report(
     }
     for (table_index, table) in tables.iter().enumerate() {
         if next_ordinal_by_table[table_index] != table.rows.end - table.rows.start
-            || next_cell_by_table[table_index].max(table.cells.start) != table.cells.end
+            || next_layout_by_table[table_index].max(table.layout_cells.start)
+                != table.layout_cells.end
+            || next_data_by_table[table_index].max(table.data_cells.start) != table.data_cells.end
+            || next_invocation_by_table[table_index].max(table.cell_invocations.start)
+                != table.cell_invocations.end
         {
             return Err("execution table rows do not fill their parent ranges".to_owned());
         }
     }
 
-    let mut table_cells = reserved_vec(table_cell_count, "table-cell")?;
-    let mut next_ordinal_by_row =
-        reserved_filled_vec(0_u32, table_row_count, "table-cell ordinal")?;
-    let mut next_column_by_row = reserved_filled_vec(0_u32, table_row_count, "table-cell column")?;
-    let mut next_data_ordinal_by_row =
-        reserved_filled_vec(0_u32, table_row_count, "table data-cell ordinal")?;
-    let mut previous_cell_leave =
-        reserved_filled_vec(None::<u64>, table_row_count, "table-cell order")?;
-    let mut generation_cell = reserved_filled_vec(
-        None::<ExecutionTableCellKey>,
-        buffer_generation_count,
-        "table generation owner",
-    )?;
-    for (index, value) in table_cell_records.into_iter().enumerate() {
-        dense(value.key, index, "table-cell")?;
-        let row_index = usize::try_from(value.row)
-            .ok()
-            .filter(|row| *row < table_row_count)
-            .ok_or_else(|| "invalid execution table-cell parent".to_owned())?;
-        let row = &table_rows[row_index];
-        let node = node_key(value.node, node_count, "table-cell node")?;
-        let cell_atoms = range(value.enter_atom, value.leave_atom, "table-cell atoms")?;
-        let layout_kind = match value.layout_kind {
+    let mut table_layout_cells = reserved_vec(table_layout_cell_count, "table-layout-cell")?;
+    for (index, value) in table_layout_cell_records.into_iter().enumerate() {
+        dense(value.key, index, "table-layout-cell")?;
+        let row = table_rows
+            .get(value.row as usize)
+            .ok_or_else(|| "invalid table-layout-cell parent".to_owned())?;
+        let kind = match value.kind {
             1 => ExecutionTableLayoutKind::Center,
             2 => ExecutionTableLayoutKind::Right,
             3 => ExecutionTableLayoutKind::Left,
@@ -4738,15 +4989,6 @@ fn convert_report(
             8 => ExecutionTableLayoutKind::HorizontalRule,
             9 => ExecutionTableLayoutKind::DoubleHorizontalRule,
             _ => return Err("unknown execution table layout kind".to_owned()),
-        };
-        let data_kind = match value.data_kind {
-            1 => ExecutionTableDataKind::None,
-            2 => ExecutionTableDataKind::Text,
-            3 => ExecutionTableDataKind::HorizontalRule,
-            4 => ExecutionTableDataKind::DoubleHorizontalRule,
-            5 => ExecutionTableDataKind::IsolatedHorizontalRule,
-            6 => ExecutionTableDataKind::IsolatedDoubleHorizontalRule,
-            _ => return Err("unknown execution table data kind".to_owned()),
         };
         let alignment = match value.alignment {
             0 => ExecutionTableAlignment::None,
@@ -4764,42 +5006,190 @@ fn convert_report(
             3 => ExecutionFont::BoldUnderline,
             _ => return Err("unknown execution table font".to_owned()),
         };
-        if value.data_ordinal != next_data_ordinal_by_row[row_index] {
-            return Err("non-contiguous execution table data-cell ordinal".to_owned());
+        if value.key < row.layout_cells.start
+            || value.key >= row.layout_cells.end
+            || value.ordinal != value.key - row.layout_cells.start
+            || value.logical_column >= row.logical_columns
+            || value.flags & !0x003f != 0
+            || value.horizontal_continuation > 1
+            || value.reserved != 0
+            || (row.kind == ExecutionTableRowKind::LayoutRule
+                && !matches!(
+                    kind,
+                    ExecutionTableLayoutKind::HorizontalRule
+                        | ExecutionTableLayoutKind::DoubleHorizontalRule
+                ))
+        {
+            return Err("invalid execution table layout cell".to_owned());
         }
-        next_data_ordinal_by_row[row_index] = next_data_ordinal_by_row[row_index]
-            .checked_add(1)
-            .ok_or_else(|| "execution table data-cell ordinal overflow".to_owned())?;
-        let expected_alignment = match layout_kind {
-            ExecutionTableLayoutKind::Left => ExecutionTableAlignment::Left,
-            ExecutionTableLayoutKind::Center => ExecutionTableAlignment::Center,
-            ExecutionTableLayoutKind::Right => ExecutionTableAlignment::Right,
-            ExecutionTableLayoutKind::Numeric => ExecutionTableAlignment::Numeric,
-            ExecutionTableLayoutKind::Long => ExecutionTableAlignment::Long,
-            ExecutionTableLayoutKind::Span
-            | ExecutionTableLayoutKind::Down
-            | ExecutionTableLayoutKind::HorizontalRule
-            | ExecutionTableLayoutKind::DoubleHorizontalRule => ExecutionTableAlignment::None,
+        table_layout_cells.push(ExecutionTableLayoutCell {
+            key: ExecutionTableLayoutCellKey(value.key),
+            row: ExecutionTableRowKey(value.row),
+            ordinal: value.ordinal,
+            logical_column: value.logical_column,
+            kind,
+            alignment,
+            font,
+            flags: ExecutionTableCellFlags(value.flags),
+            horizontal_continuation: value.horizontal_continuation != 0,
+            spacing_en: value.spacing_en,
+            vertical_rule: value.vertical_rule,
+        });
+    }
+
+    let mut table_data_cells = reserved_vec(table_data_cell_count, "table-data-cell")?;
+    for (index, value) in table_data_cell_records.into_iter().enumerate() {
+        dense(value.key, index, "table-data-cell")?;
+        let row = table_rows
+            .get(value.row as usize)
+            .ok_or_else(|| "invalid table-data-cell parent".to_owned())?;
+        let kind = match value.kind {
+            1 => ExecutionTableDataKind::None,
+            2 => ExecutionTableDataKind::Text,
+            3 => ExecutionTableDataKind::HorizontalRule,
+            4 => ExecutionTableDataKind::DoubleHorizontalRule,
+            5 => ExecutionTableDataKind::IsolatedHorizontalRule,
+            6 => ExecutionTableDataKind::IsolatedDoubleHorizontalRule,
+            _ => return Err("unknown execution table data kind".to_owned()),
         };
-        if value.reserved != 0
-            || value.flags & !0x01ff != 0
-            || value.ordinal != next_ordinal_by_row[row_index]
-            || value.key < row.cells.start
-            || value.key >= row.cells.end
-            || value.logical_column < next_column_by_row[row_index]
+        let disposition = match value.disposition {
+            1 => ExecutionTableDataDisposition::Projected,
+            2 => ExecutionTableDataDisposition::SuppressedByLayout,
+            _ => return Err("unknown execution table data disposition".to_owned()),
+        };
+        let equation_delimiters = match value.equation_delimiters {
+            0 if value.equation_opening == 0 && value.equation_closing == 0 => None,
+            1 => {
+                let opening = u8::try_from(value.equation_opening)
+                    .map_err(|_| "invalid execution table data-cell delimiters".to_owned())?;
+                let closing = u8::try_from(value.equation_closing)
+                    .map_err(|_| "invalid execution table data-cell delimiters".to_owned())?;
+                if opening == 0 || closing == 0 {
+                    return Err("invalid execution table data-cell delimiters".to_owned());
+                }
+                Some((opening, closing))
+            }
+            _ => return Err("invalid execution table data-cell delimiters".to_owned()),
+        };
+        let layout = table_layout_cells
+            .get(value.layout as usize)
+            .filter(|layout| layout.row.0 == value.row)
+            .ok_or_else(|| "invalid execution table data-cell layout".to_owned())?;
+        let suppressed_by_layout = matches!(
+            layout.kind,
+            ExecutionTableLayoutKind::HorizontalRule
+                | ExecutionTableLayoutKind::DoubleHorizontalRule
+        );
+        if value.key < row.data_cells.start
+            || value.key >= row.data_cells.end
+            || value.ordinal != value.key - row.data_cells.start
+            || value.layout < row.layout_cells.start
+            || value.layout >= row.layout_cells.end
             || value.column_span == 0
             || value.row_span == 0
-            || value
-                .logical_column
-                .checked_add(value.column_span)
-                .is_none_or(|end| end > row.logical_columns)
-            || alignment != expected_alignment
+            || value.flags & !0x01ff != 0
+            || suppressed_by_layout
+                != (disposition == ExecutionTableDataDisposition::SuppressedByLayout)
+        {
+            return Err("invalid execution table data cell".to_owned());
+        }
+        table_data_cells.push(ExecutionTableDataCell {
+            key: ExecutionTableDataCellKey(value.key),
+            row: ExecutionTableRowKey(value.row),
+            ordinal: value.ordinal,
+            layout: ExecutionTableLayoutCellKey(value.layout),
+            kind,
+            disposition,
+            column_span: value.column_span,
+            row_span: value.row_span,
+            flags: ExecutionTableCellFlags(value.flags),
+            equation_delimiters,
+        });
+    }
+
+    let mut table_cell_invocations =
+        reserved_vec(table_cell_invocation_count, "table-cell-invocation")?;
+    let mut previous_invocation_leave =
+        reserved_filled_vec(None::<u64>, table_row_count, "table invocation order")?;
+    let mut generation_cell = reserved_filled_vec(
+        None::<ExecutionTableCellInvocationKey>,
+        buffer_generation_count,
+        "table generation owner",
+    )?;
+    let mut data_invocation_count =
+        reserved_filled_vec(0_u32, table_data_cell_count, "table data invocation count")?;
+    let mut data_primary_invocation = reserved_filled_vec(
+        None::<ExecutionTableCellInvocationKey>,
+        table_data_cell_count,
+        "table data primary invocation",
+    )?;
+    for (index, value) in table_cell_invocation_records.into_iter().enumerate() {
+        dense(value.key, index, "table-cell-invocation")?;
+        let row_index = usize::try_from(value.row)
+            .ok()
+            .filter(|row| *row < table_row_count)
+            .ok_or_else(|| "invalid execution table-cell-invocation parent".to_owned())?;
+        let row = &table_rows[row_index];
+        let node = node_key(value.node, node_count, "table-cell-invocation node")?;
+        let cell_atoms = range(value.enter_atom, value.leave_atom, "table invocation atoms")?;
+        let layout = table_layout_cells
+            .get(value.layout as usize)
+            .filter(|layout| layout.row.0 == value.row)
+            .ok_or_else(|| "invalid execution table invocation layout".to_owned())?;
+        let data = option(value.data)
+            .map(|key| {
+                table_data_cells
+                    .get(key as usize)
+                    .filter(|data| data.row.0 == value.row)
+                    .map(|_| ExecutionTableDataCellKey(key))
+                    .ok_or_else(|| "invalid execution table invocation data".to_owned())
+            })
+            .transpose()?;
+        let outcome = match value.outcome {
+            1 => ExecutionTableInvocationOutcome::Data,
+            2 => ExecutionTableInvocationOutcome::LayoutRule,
+            3 => ExecutionTableInvocationOutcome::DataRule,
+            4 => ExecutionTableInvocationOutcome::Empty,
+            5 => ExecutionTableInvocationOutcome::Continuation,
+            _ => return Err("unknown execution table invocation outcome".to_owned()),
+        };
+        let expected_outcome = if matches!(
+            layout.kind,
+            ExecutionTableLayoutKind::HorizontalRule
+                | ExecutionTableLayoutKind::DoubleHorizontalRule
+        ) {
+            ExecutionTableInvocationOutcome::LayoutRule
+        } else if let Some(data) = data.and_then(|key| table_data_cells.get(key.0 as usize)) {
+            if data.kind == ExecutionTableDataKind::None {
+                ExecutionTableInvocationOutcome::Empty
+            } else if data.kind != ExecutionTableDataKind::Text {
+                ExecutionTableInvocationOutcome::DataRule
+            } else if matches!(
+                layout.kind,
+                ExecutionTableLayoutKind::Down | ExecutionTableLayoutKind::Span
+            ) || data
+                .flags
+                .contains(ExecutionTableCellFlags::VERTICAL_CONTINUATION)
+            {
+                ExecutionTableInvocationOutcome::Continuation
+            } else {
+                ExecutionTableInvocationOutcome::Data
+            }
+        } else {
+            ExecutionTableInvocationOutcome::Empty
+        };
+        if value.key < row.cell_invocations.start
+            || value.key >= row.cell_invocations.end
+            || value.ordinal != value.key - row.cell_invocations.start
+            || outcome != expected_outcome
+            || value.logical_column != layout.logical_column
             || node != row.node
             || cell_atoms.start < row.atoms.start
             || cell_atoms.end > row.atoms.end
             || value.enter_sequence <= row.enter_sequence
             || value.leave_sequence >= row.leave_sequence
-            || previous_cell_leave[row_index].is_some_and(|leave| value.enter_sequence <= leave)
+            || previous_invocation_leave[row_index]
+                .is_some_and(|leave| value.enter_sequence <= leave)
             || value.offset_bu < 0
             || value.rmargin_bu < value.offset_bu
             || value.coloff_before_bu < 0
@@ -4812,7 +5202,35 @@ fn convert_report(
                 |atom| atom.sequence,
             )
         {
-            return Err("invalid execution table-cell relationship".to_owned());
+            return Err("invalid execution table-cell invocation".to_owned());
+        }
+        if let Some(data) = data {
+            let primary_layout =
+                &table_layout_cells[table_data_cells[data.0 as usize].layout.0 as usize];
+            if layout.key != primary_layout.key
+                && (!layout.horizontal_continuation
+                    || layout.kind != ExecutionTableLayoutKind::Span
+                    || layout.logical_column >= primary_layout.logical_column)
+            {
+                return Err("invalid auxiliary table renderer invocation".to_owned());
+            }
+            let count = data_invocation_count
+                .get_mut(data.0 as usize)
+                .ok_or_else(|| "invalid execution table invocation data".to_owned())?;
+            *count = count
+                .checked_add(1)
+                .ok_or_else(|| "table data invocation count overflow".to_owned())?;
+            if layout.key == table_data_cells[data.0 as usize].layout {
+                let owner = data_primary_invocation
+                    .get_mut(data.0 as usize)
+                    .ok_or_else(|| "invalid execution table invocation data".to_owned())?;
+                if owner.is_some() {
+                    return Err(
+                        "table data cell has multiple primary renderer invocations".to_owned()
+                    );
+                }
+                *owner = Some(ExecutionTableCellInvocationKey(value.key));
+            }
         }
         let buffer = option(value.buffer);
         let buffer_generation = option(value.buffer_generation);
@@ -4837,9 +5255,10 @@ fn convert_report(
                                 || atom.buffer_generation != Some(generation_key)
                         })
                 {
-                    return Err("invalid execution table-cell buffer relationship".to_owned());
+                    return Err("invalid execution table invocation buffer relationship".to_owned());
                 }
-                generation_cell[generation_index] = Some(ExecutionTableCellKey(value.key));
+                generation_cell[generation_index] =
+                    Some(ExecutionTableCellInvocationKey(value.key));
             }
             (None, None) if !cell_atoms.is_empty() => {
                 return Err("table cell with atoms has no buffer generation".to_owned());
@@ -4847,26 +5266,16 @@ fn convert_report(
             (None, None) => {}
             _ => return Err("partial execution table-cell buffer identity".to_owned()),
         }
-        next_ordinal_by_row[row_index] = value
-            .ordinal
-            .checked_add(1)
-            .ok_or_else(|| "execution table-cell ordinal overflow".to_owned())?;
-        next_column_by_row[row_index] = value.logical_column + value.column_span;
-        previous_cell_leave[row_index] = Some(value.leave_sequence);
-        table_cells.push(ExecutionTableCell {
-            key: ExecutionTableCellKey(value.key),
+        previous_invocation_leave[row_index] = Some(value.leave_sequence);
+        table_cell_invocations.push(ExecutionTableCellInvocation {
+            key: ExecutionTableCellInvocationKey(value.key),
             row: ExecutionTableRowKey(value.row),
             node,
             ordinal: value.ordinal,
-            data_ordinal: value.data_ordinal,
+            layout: ExecutionTableLayoutCellKey(value.layout),
+            data,
+            outcome,
             logical_column: value.logical_column,
-            column_span: value.column_span,
-            row_span: value.row_span,
-            layout_kind,
-            data_kind,
-            alignment,
-            font,
-            flags: ExecutionTableCellFlags(value.flags),
             buffer,
             buffer_generation,
             atoms: cell_atoms,
@@ -4878,10 +5287,11 @@ fn convert_report(
             leave_sequence: value.leave_sequence,
         });
     }
-    for (row_index, row) in table_rows.iter().enumerate() {
-        if next_ordinal_by_row[row_index] != row.cells.end - row.cells.start {
-            return Err("execution table cells do not fill their row range".to_owned());
-        }
+    if data_invocation_count.contains(&0) {
+        return Err("table data cell has no renderer invocation".to_owned());
+    }
+    if data_primary_invocation.iter().any(Option::is_none) {
+        return Err("table data cell has no primary renderer invocation".to_owned());
     }
     for flush in &flushes {
         let Some(owner) = generation_cell
@@ -4890,8 +5300,8 @@ fn convert_report(
         else {
             continue;
         };
-        let cell = &table_cells[owner.0 as usize];
-        let row = &table_rows[cell.row.0 as usize];
+        let invocation = &table_cell_invocations[owner.0 as usize];
+        let row = &table_rows[invocation.row.0 as usize];
         let table = &tables[row.table.0 as usize];
         if flush.key < row.flushes.start
             || flush.key >= row.flushes.end
@@ -4909,8 +5319,8 @@ fn convert_report(
         else {
             continue;
         };
-        let cell = &table_cells[owner.0 as usize];
-        let row = &table_rows[cell.row.0 as usize];
+        let invocation = &table_cell_invocations[owner.0 as usize];
+        let row = &table_rows[invocation.row.0 as usize];
         let table = &tables[row.table.0 as usize];
         if fragment.key.0 < row.fragments.start
             || fragment.key.0 >= row.fragments.end
@@ -4931,12 +5341,12 @@ fn convert_report(
             }
             continue;
         };
-        let cell = &table_cells[owner.0 as usize];
-        if atom.key.0 < cell.atoms.start
-            || atom.key.0 >= cell.atoms.end
-            || atom.buffer != cell.buffer
+        let invocation = &table_cell_invocations[owner.0 as usize];
+        if atom.key.0 < invocation.atoms.start
+            || atom.key.0 >= invocation.atoms.end
+            || atom.buffer != invocation.buffer
         {
-            return Err("table-cell atom escapes its cell".to_owned());
+            return Err("table-cell atom escapes its renderer invocation".to_owned());
         }
     }
 
@@ -5395,12 +5805,13 @@ fn convert_report(
         &boundaries,
         &controls,
         &geometry,
+        &placements,
         &wrappers,
         &references,
         &anchors,
         &tables,
         &table_rows,
-        &table_cells,
+        &table_cell_invocations,
         &equations,
         &equation_invocations,
         &equation_parts,
@@ -5412,6 +5823,7 @@ fn convert_report(
         record_count,
         record_bytes: 0,
         buffer_cells,
+        content_indent_columns: 0,
         sources,
         nodes,
         buffer_generations,
@@ -5422,12 +5834,15 @@ fn convert_report(
         boundaries,
         controls,
         geometry,
+        placements,
         wrappers,
         references,
         anchors,
         tables,
         table_rows,
-        table_cells,
+        table_layout_cells,
+        table_data_cells,
+        table_cell_invocations,
         equations,
         equation_boxes,
         equation_invocations,
@@ -5446,12 +5861,13 @@ fn validate_event_sequences(
     boundaries: &[ExecutionBoundary],
     controls: &[ExecutionControl],
     geometry: &[ExecutionGeometry],
+    placements: &[ExecutionPlacementCheckpoint],
     wrappers: &[ExecutionWrapper],
     references: &[ExecutionReference],
     anchors: &[ExecutionAnchor],
     tables: &[ExecutionTable],
     table_rows: &[ExecutionTableRow],
-    table_cells: &[ExecutionTableCell],
+    table_cell_invocations: &[ExecutionTableCellInvocation],
     equations: &[ExecutionEquation],
     equation_invocations: &[ExecutionEquationInvocation],
     equation_parts: &[ExecutionEquationPart],
@@ -5485,7 +5901,7 @@ fn validate_event_sequences(
         .len()
         .checked_mul(2)
         .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
-    let table_cell_sequences = table_cells
+    let table_cell_sequences = table_cell_invocations
         .len()
         .checked_mul(2)
         .ok_or_else(|| "native execution sequence count overflow".to_owned())?;
@@ -5516,6 +5932,7 @@ fn validate_event_sequences(
             .ok_or_else(|| "native execution sequence count overflow".to_owned())?,
         control_sequences,
         geometry.len(),
+        placements.len(),
         wrapper_sequences,
         reference_sequences,
         anchors.len(),
@@ -5551,11 +5968,10 @@ fn validate_event_sequences(
     }
     for fragment in fragments {
         seen.push(fragment.sequence);
-        if fragment.atoms.iter().any(|key| {
-            atoms
-                .get(key.0 as usize)
-                .is_none_or(|atom| atom.sequence >= fragment.sequence)
-        }) {
+        if atoms
+            .get(fragment.atom.0 as usize)
+            .is_none_or(|atom| atom.sequence >= fragment.sequence)
+        {
             return Err("execution fragment precedes one of its atoms".to_owned());
         }
     }
@@ -5573,6 +5989,9 @@ fn validate_event_sequences(
     }
     for fact in geometry {
         seen.push(fact.sequence);
+    }
+    for placement in placements {
+        seen.push(placement.sequence);
     }
     for wrapper in wrappers {
         seen.push(wrapper.enter_sequence);
@@ -5595,9 +6014,9 @@ fn validate_event_sequences(
         seen.push(row.enter_sequence);
         seen.push(row.leave_sequence);
     }
-    for cell in table_cells {
-        seen.push(cell.enter_sequence);
-        seen.push(cell.leave_sequence);
+    for invocation in table_cell_invocations {
+        seen.push(invocation.enter_sequence);
+        seen.push(invocation.leave_sequence);
     }
     for equation in equations {
         seen.push(equation.enter_sequence);
@@ -5673,7 +6092,7 @@ fn word_offsets() -> [usize; 12] {
         offset_of!(CWordRecord, leave_sequence),
     ]
 }
-fn atom_offsets() -> [usize; 19] {
+fn atom_offsets() -> [usize; 21] {
     [
         offset_of!(CAtomRecord, key),
         offset_of!(CAtomRecord, buffer),
@@ -5693,6 +6112,8 @@ fn atom_offsets() -> [usize; 19] {
         offset_of!(CAtomRecord, wrapper),
         offset_of!(CAtomRecord, replaced_by),
         offset_of!(CAtomRecord, disposition),
+        offset_of!(CAtomRecord, flags),
+        offset_of!(CAtomRecord, output_role),
         offset_of!(CAtomRecord, sequence),
     ]
 }
@@ -5703,8 +6124,8 @@ fn fragment_offsets() -> [usize; 14] {
         offset_of!(CFragmentRecord, buffer),
         offset_of!(CFragmentRecord, generation),
         offset_of!(CFragmentRecord, buffer_generation),
-        offset_of!(CFragmentRecord, atom_ref_start),
-        offset_of!(CFragmentRecord, atom_ref_length),
+        offset_of!(CFragmentRecord, atom),
+        offset_of!(CFragmentRecord, reserved_atom),
         offset_of!(CFragmentRecord, device_line),
         offset_of!(CFragmentRecord, role),
         offset_of!(CFragmentRecord, wrapper),
@@ -5712,12 +6133,6 @@ fn fragment_offsets() -> [usize; 14] {
         offset_of!(CFragmentRecord, start_bu),
         offset_of!(CFragmentRecord, end_bu),
         offset_of!(CFragmentRecord, sequence),
-    ]
-}
-fn fragment_atom_offsets() -> [usize; 2] {
-    [
-        offset_of!(CFragmentAtomRecord, fragment),
-        offset_of!(CFragmentAtomRecord, atom),
     ]
 }
 fn logical_tab_offsets() -> [usize; 3] {
@@ -5760,7 +6175,7 @@ fn flush_offsets() -> [usize; 46] {
         offset_of!(CFlushRecord, logical_origin_bu),
         offset_of!(CFlushRecord, effective_content_bu),
         offset_of!(CFlushRecord, logical_forced_break),
-        offset_of!(CFlushRecord, reserved_fit),
+        offset_of!(CFlushRecord, output_role),
         offset_of!(CFlushRecord, field_bu),
         offset_of!(CFlushRecord, target_bu),
         offset_of!(CFlushRecord, offset_bu),
@@ -5777,7 +6192,7 @@ fn flush_offsets() -> [usize; 46] {
         offset_of!(CFlushRecord, outcome_sequence),
     ]
 }
-fn boundary_offsets() -> [usize; 16] {
+fn boundary_offsets() -> [usize; 18] {
     [
         offset_of!(CBoundaryRecord, key),
         offset_of!(CBoundaryRecord, node),
@@ -5793,6 +6208,8 @@ fn boundary_offsets() -> [usize; 16] {
         offset_of!(CBoundaryRecord, visual_after),
         offset_of!(CBoundaryRecord, direct_device_lines),
         offset_of!(CBoundaryRecord, wrapper),
+        offset_of!(CBoundaryRecord, line_commit_cause),
+        offset_of!(CBoundaryRecord, output_role),
         offset_of!(CBoundaryRecord, enter_sequence),
         offset_of!(CBoundaryRecord, leave_sequence),
     ]
@@ -5859,12 +6276,26 @@ fn geometry_offsets() -> [usize; 13] {
         offset_of!(CGeometryRecord, unit),
         offset_of!(CGeometryRecord, origin_kind),
         offset_of!(CGeometryRecord, origin_key),
-        offset_of!(CGeometryRecord, reserved),
+        offset_of!(CGeometryRecord, output_role),
         offset_of!(CGeometryRecord, requested),
         offset_of!(CGeometryRecord, effective),
         offset_of!(CGeometryRecord, before),
         offset_of!(CGeometryRecord, after),
         offset_of!(CGeometryRecord, sequence),
+    ]
+}
+fn placement_offsets() -> [usize; 10] {
+    [
+        offset_of!(CPlacementRecord, key),
+        offset_of!(CPlacementRecord, node),
+        offset_of!(CPlacementRecord, wrapper),
+        offset_of!(CPlacementRecord, phase),
+        offset_of!(CPlacementRecord, offset_bu),
+        offset_of!(CPlacementRecord, rmargin_bu),
+        offset_of!(CPlacementRecord, maxrmargin_bu),
+        offset_of!(CPlacementRecord, visual_bu),
+        offset_of!(CPlacementRecord, cell_bu),
+        offset_of!(CPlacementRecord, sequence),
     ]
 }
 fn wrapper_offsets() -> [usize; 30] {
@@ -5901,7 +6332,7 @@ fn wrapper_offsets() -> [usize; 30] {
         offset_of!(CWrapperRecord, leave_sequence),
     ]
 }
-fn reference_offsets() -> [usize; 16] {
+fn reference_offsets() -> [usize; 22] {
     [
         offset_of!(CReferenceRecord, key),
         offset_of!(CReferenceRecord, parent),
@@ -5914,7 +6345,13 @@ fn reference_offsets() -> [usize; 16] {
         offset_of!(CReferenceRecord, secondary_length),
         offset_of!(CReferenceRecord, enter_atom),
         offset_of!(CReferenceRecord, label_start_atom),
+        offset_of!(CReferenceRecord, label_end_atom),
+        offset_of!(CReferenceRecord, target_start_atom),
+        offset_of!(CReferenceRecord, target_end_atom),
+        offset_of!(CReferenceRecord, supplement_start_atom),
+        offset_of!(CReferenceRecord, supplement_end_atom),
         offset_of!(CReferenceRecord, leave_atom),
+        offset_of!(CReferenceRecord, presentation),
         offset_of!(CReferenceRecord, affinity),
         offset_of!(CReferenceRecord, flags),
         offset_of!(CReferenceRecord, enter_sequence),
@@ -5935,15 +6372,20 @@ fn anchor_offsets() -> [usize; 10] {
         offset_of!(CAnchorRecord, sequence),
     ]
 }
-fn table_offsets() -> [usize; 16] {
+fn table_offsets() -> [usize; 23] {
     [
         offset_of!(CTableRecord, key),
         offset_of!(CTableRecord, first_row_node),
         offset_of!(CTableRecord, row_start),
         offset_of!(CTableRecord, row_length),
-        offset_of!(CTableRecord, cell_start),
-        offset_of!(CTableRecord, cell_length),
+        offset_of!(CTableRecord, layout_start),
+        offset_of!(CTableRecord, layout_length),
+        offset_of!(CTableRecord, data_start),
+        offset_of!(CTableRecord, data_length),
+        offset_of!(CTableRecord, invocation_start),
+        offset_of!(CTableRecord, invocation_length),
         offset_of!(CTableRecord, logical_columns),
+        offset_of!(CTableRecord, wrapper),
         offset_of!(CTableRecord, flags),
         offset_of!(CTableRecord, enter_atom),
         offset_of!(CTableRecord, leave_atom),
@@ -5951,11 +6393,13 @@ fn table_offsets() -> [usize; 16] {
         offset_of!(CTableRecord, leave_fragment),
         offset_of!(CTableRecord, enter_flush),
         offset_of!(CTableRecord, leave_flush),
+        offset_of!(CTableRecord, offset_bu),
+        offset_of!(CTableRecord, cell_bu),
         offset_of!(CTableRecord, enter_sequence),
         offset_of!(CTableRecord, leave_sequence),
     ]
 }
-fn table_row_offsets() -> [usize; 16] {
+fn table_row_offsets() -> [usize; 20] {
     [
         offset_of!(CTableRowRecord, key),
         offset_of!(CTableRowRecord, table),
@@ -5963,8 +6407,12 @@ fn table_row_offsets() -> [usize; 16] {
         offset_of!(CTableRowRecord, ordinal),
         offset_of!(CTableRowRecord, kind),
         offset_of!(CTableRowRecord, logical_columns),
-        offset_of!(CTableRowRecord, cell_start),
-        offset_of!(CTableRowRecord, cell_length),
+        offset_of!(CTableRowRecord, layout_start),
+        offset_of!(CTableRowRecord, layout_length),
+        offset_of!(CTableRowRecord, data_start),
+        offset_of!(CTableRowRecord, data_length),
+        offset_of!(CTableRowRecord, invocation_start),
+        offset_of!(CTableRowRecord, invocation_length),
         offset_of!(CTableRowRecord, enter_atom),
         offset_of!(CTableRowRecord, leave_atom),
         offset_of!(CTableRowRecord, enter_fragment),
@@ -5975,32 +6423,58 @@ fn table_row_offsets() -> [usize; 16] {
         offset_of!(CTableRowRecord, leave_sequence),
     ]
 }
-fn table_cell_offsets() -> [usize; 24] {
+fn table_layout_cell_offsets() -> [usize; 12] {
     [
-        offset_of!(CTableCellRecord, key),
-        offset_of!(CTableCellRecord, row),
-        offset_of!(CTableCellRecord, node),
-        offset_of!(CTableCellRecord, ordinal),
-        offset_of!(CTableCellRecord, data_ordinal),
-        offset_of!(CTableCellRecord, logical_column),
-        offset_of!(CTableCellRecord, column_span),
-        offset_of!(CTableCellRecord, row_span),
-        offset_of!(CTableCellRecord, layout_kind),
-        offset_of!(CTableCellRecord, data_kind),
-        offset_of!(CTableCellRecord, alignment),
-        offset_of!(CTableCellRecord, font),
-        offset_of!(CTableCellRecord, flags),
-        offset_of!(CTableCellRecord, buffer),
-        offset_of!(CTableCellRecord, buffer_generation),
-        offset_of!(CTableCellRecord, reserved),
-        offset_of!(CTableCellRecord, enter_atom),
-        offset_of!(CTableCellRecord, leave_atom),
-        offset_of!(CTableCellRecord, offset_bu),
-        offset_of!(CTableCellRecord, rmargin_bu),
-        offset_of!(CTableCellRecord, coloff_before_bu),
-        offset_of!(CTableCellRecord, coloff_after_bu),
-        offset_of!(CTableCellRecord, enter_sequence),
-        offset_of!(CTableCellRecord, leave_sequence),
+        offset_of!(CTableLayoutCellRecord, key),
+        offset_of!(CTableLayoutCellRecord, row),
+        offset_of!(CTableLayoutCellRecord, ordinal),
+        offset_of!(CTableLayoutCellRecord, logical_column),
+        offset_of!(CTableLayoutCellRecord, kind),
+        offset_of!(CTableLayoutCellRecord, alignment),
+        offset_of!(CTableLayoutCellRecord, font),
+        offset_of!(CTableLayoutCellRecord, flags),
+        offset_of!(CTableLayoutCellRecord, horizontal_continuation),
+        offset_of!(CTableLayoutCellRecord, spacing_en),
+        offset_of!(CTableLayoutCellRecord, vertical_rule),
+        offset_of!(CTableLayoutCellRecord, reserved),
+    ]
+}
+fn table_data_cell_offsets() -> [usize; 12] {
+    [
+        offset_of!(CTableDataCellRecord, key),
+        offset_of!(CTableDataCellRecord, row),
+        offset_of!(CTableDataCellRecord, ordinal),
+        offset_of!(CTableDataCellRecord, layout),
+        offset_of!(CTableDataCellRecord, kind),
+        offset_of!(CTableDataCellRecord, disposition),
+        offset_of!(CTableDataCellRecord, column_span),
+        offset_of!(CTableDataCellRecord, row_span),
+        offset_of!(CTableDataCellRecord, flags),
+        offset_of!(CTableDataCellRecord, equation_delimiters),
+        offset_of!(CTableDataCellRecord, equation_opening),
+        offset_of!(CTableDataCellRecord, equation_closing),
+    ]
+}
+fn table_cell_invocation_offsets() -> [usize; 18] {
+    [
+        offset_of!(CTableCellInvocationRecord, key),
+        offset_of!(CTableCellInvocationRecord, row),
+        offset_of!(CTableCellInvocationRecord, node),
+        offset_of!(CTableCellInvocationRecord, ordinal),
+        offset_of!(CTableCellInvocationRecord, layout),
+        offset_of!(CTableCellInvocationRecord, data),
+        offset_of!(CTableCellInvocationRecord, outcome),
+        offset_of!(CTableCellInvocationRecord, logical_column),
+        offset_of!(CTableCellInvocationRecord, buffer),
+        offset_of!(CTableCellInvocationRecord, buffer_generation),
+        offset_of!(CTableCellInvocationRecord, enter_atom),
+        offset_of!(CTableCellInvocationRecord, leave_atom),
+        offset_of!(CTableCellInvocationRecord, offset_bu),
+        offset_of!(CTableCellInvocationRecord, rmargin_bu),
+        offset_of!(CTableCellInvocationRecord, coloff_before_bu),
+        offset_of!(CTableCellInvocationRecord, coloff_after_bu),
+        offset_of!(CTableCellInvocationRecord, enter_sequence),
+        offset_of!(CTableCellInvocationRecord, leave_sequence),
     ]
 }
 fn equation_offsets() -> [usize; 16] {
@@ -6235,18 +6709,20 @@ body
             words: Vec::new(),
             atoms: Vec::new(),
             fragments: Vec::new(),
-            fragment_atoms: Vec::new(),
             logical_tabs: Vec::new(),
             flushes: Vec::new(),
             boundaries: Vec::new(),
             controls: Vec::new(),
             geometry: Vec::new(),
+            placements: Vec::new(),
             wrappers: Vec::new(),
             references: Vec::new(),
             anchors: Vec::new(),
             tables: Vec::new(),
             table_rows: Vec::new(),
-            table_cells: Vec::new(),
+            table_layout_cells: Vec::new(),
+            table_data_cells: Vec::new(),
+            table_cell_invocations: Vec::new(),
             equations: Vec::new(),
             equation_boxes: Vec::new(),
             equation_box_executions: Vec::new(),
@@ -6275,6 +6751,8 @@ body
             wrapper: NONE,
             replaced_by: NONE,
             disposition: 2,
+            flags: 0,
+            output_role: 1,
             sequence: 1,
         }
     }
@@ -6323,8 +6801,8 @@ body
             buffer: 0,
             generation: 0,
             buffer_generation: 0,
-            atom_ref_start: 0,
-            atom_ref_length: 1,
+            atom: 0,
+            reserved_atom: 0,
             device_line: 0,
             role: 1,
             wrapper: NONE,
@@ -6654,6 +7132,8 @@ body
             visual_after: 0,
             direct_device_lines: 0,
             wrapper: NONE,
+            line_commit_cause: 0,
+            output_role: 1,
             enter_sequence: 1,
             leave_sequence: 2,
         }
@@ -6688,7 +7168,13 @@ body
             secondary_length: 0,
             enter_atom: 0,
             label_start_atom: 0,
+            label_end_atom: 0,
+            target_start_atom: 0,
+            target_end_atom: 0,
+            supplement_start_atom: NONE,
+            supplement_end_atom: NONE,
             leave_atom: 0,
+            presentation: 1,
             affinity: 1,
             flags: 0,
             enter_sequence: 1,
@@ -6744,7 +7230,7 @@ body
             logical_origin_bu: 120,
             effective_content_bu: 48,
             logical_forced_break: 0,
-            reserved_fit: 0,
+            output_role: 1,
             field_bu: 48,
             target_bu: 48,
             offset_bu: 0,
@@ -6762,24 +7248,6 @@ body
         }
     }
 
-    fn glyph_geometry() -> CGeometryRecord {
-        CGeometryRecord {
-            key: 0,
-            node: NONE,
-            related: 0,
-            kind: 2,
-            unit: 1,
-            origin_kind: 1,
-            origin_key: 0,
-            reserved: 0,
-            requested: 24,
-            effective: 24,
-            before: 0,
-            after: 24,
-            sequence: 4,
-        }
-    }
-
     fn records_with_emitted_fragment() -> RawRecords {
         let mut records = raw_records();
         // A completed `term_flushln()` resets its buffer generation.  Keep
@@ -6792,10 +7260,6 @@ body
         let mut fragment = fragment();
         fragment.sequence = 3;
         records.fragments.push(fragment);
-        records.fragment_atoms.push(CFragmentAtomRecord {
-            fragment: 0,
-            atom: 0,
-        });
         let mut flush = flush();
         flush.scan_end = 1;
         flush.accepted_end = 1;
@@ -6808,7 +7272,6 @@ body
         flush.sequence = 2;
         flush.outcome_sequence = 5;
         records.flushes.push(flush);
-        records.geometry.push(glyph_geometry());
         records
     }
 
@@ -6820,7 +7283,6 @@ body
         records.flushes[0].sequence = 4;
         records.flushes[0].outcome_sequence = 7;
         records.fragments[0].sequence = 5;
-        records.geometry[0].sequence = 6;
         let mut reference = reference();
         reference.leave_atom = 1;
         reference.enter_sequence = 1;
@@ -6837,7 +7299,6 @@ body
         records.flushes[0].sequence = 4;
         records.flushes[0].outcome_sequence = 8;
         records.fragments[0].sequence = 5;
-        records.geometry[0].sequence = 6;
         records.words.push(CWordRecord {
             operand_length: 1,
             role: 1,
@@ -6858,9 +7319,14 @@ body
             first_row_node: 0,
             row_start: 0,
             row_length: 1,
-            cell_start: 0,
-            cell_length: 1,
+            layout_start: 0,
+            layout_length: 1,
+            data_start: 0,
+            data_length: 1,
+            invocation_start: 0,
+            invocation_length: 1,
             logical_columns: 1,
+            wrapper: NONE,
             flags: 0,
             enter_atom: 0,
             leave_atom: 0,
@@ -6868,6 +7334,8 @@ body
             leave_fragment: 0,
             enter_flush: 0,
             leave_flush: 0,
+            offset_bu: 0,
+            cell_bu: 24,
             enter_sequence: 1,
             leave_sequence: 6,
         });
@@ -6878,8 +7346,12 @@ body
             ordinal: 0,
             kind: 1,
             logical_columns: 1,
-            cell_start: 0,
-            cell_length: 1,
+            layout_start: 0,
+            layout_length: 1,
+            data_start: 0,
+            data_length: 1,
+            invocation_start: 0,
+            invocation_length: 1,
             enter_atom: 0,
             leave_atom: 0,
             enter_fragment: 0,
@@ -6889,32 +7361,111 @@ body
             enter_sequence: 2,
             leave_sequence: 5,
         });
-        records.table_cells.push(CTableCellRecord {
+        records.table_layout_cells.push(CTableLayoutCellRecord {
             key: 0,
             row: 0,
-            node: 0,
             ordinal: 0,
-            data_ordinal: 0,
             logical_column: 0,
-            column_span: 1,
-            row_span: 1,
-            layout_kind: 3,
-            data_kind: 2,
+            kind: 3,
             alignment: 1,
             font: 0,
             flags: 0,
-            buffer: NONE,
-            buffer_generation: NONE,
+            horizontal_continuation: 0,
+            spacing_en: 3,
+            vertical_rule: 0,
             reserved: 0,
-            enter_atom: 0,
-            leave_atom: 0,
-            offset_bu: 0,
-            rmargin_bu: 24,
-            coloff_before_bu: 0,
-            coloff_after_bu: 24,
-            enter_sequence: 3,
-            leave_sequence: 4,
         });
+        records.table_data_cells.push(CTableDataCellRecord {
+            key: 0,
+            row: 0,
+            ordinal: 0,
+            layout: 0,
+            kind: 2,
+            disposition: 1,
+            column_span: 1,
+            row_span: 1,
+            flags: 0,
+            equation_delimiters: 0,
+            equation_opening: 0,
+            equation_closing: 0,
+        });
+        records
+            .table_cell_invocations
+            .push(CTableCellInvocationRecord {
+                key: 0,
+                row: 0,
+                node: 0,
+                ordinal: 0,
+                layout: 0,
+                data: 0,
+                outcome: 1,
+                logical_column: 0,
+                buffer: NONE,
+                buffer_generation: NONE,
+                enter_atom: 0,
+                leave_atom: 0,
+                offset_bu: 0,
+                rmargin_bu: 24,
+                coloff_before_bu: 0,
+                coloff_after_bu: 24,
+                enter_sequence: 3,
+                leave_sequence: 4,
+            });
+        records
+    }
+
+    fn records_with_leading_span_invocations() -> RawRecords {
+        let mut records = records_with_empty_table_cell();
+        records.tables[0].layout_length = 2;
+        records.tables[0].invocation_length = 2;
+        records.tables[0].logical_columns = 2;
+        records.tables[0].leave_sequence = 8;
+        records.table_rows[0].layout_length = 2;
+        records.table_rows[0].invocation_length = 2;
+        records.table_rows[0].logical_columns = 2;
+        records.table_rows[0].leave_sequence = 7;
+        records.table_layout_cells[0].kind = 5;
+        records.table_layout_cells[0].alignment = 0;
+        records.table_layout_cells[0].horizontal_continuation = 1;
+        records.table_layout_cells.push(CTableLayoutCellRecord {
+            key: 1,
+            row: 0,
+            ordinal: 1,
+            logical_column: 1,
+            kind: 3,
+            alignment: 1,
+            font: 0,
+            flags: 0,
+            horizontal_continuation: 0,
+            spacing_en: 3,
+            vertical_rule: 0,
+            reserved: 0,
+        });
+        records.table_data_cells[0].layout = 1;
+        records.table_cell_invocations[0].outcome = 5;
+        records.table_cell_invocations[0].leave_sequence = 4;
+        records
+            .table_cell_invocations
+            .push(CTableCellInvocationRecord {
+                key: 1,
+                row: 0,
+                node: 0,
+                ordinal: 1,
+                layout: 1,
+                data: 0,
+                outcome: 1,
+                logical_column: 1,
+                buffer: NONE,
+                buffer_generation: NONE,
+                enter_atom: 0,
+                leave_atom: 0,
+                offset_bu: 0,
+                rmargin_bu: 24,
+                coloff_before_bu: 0,
+                coloff_after_bu: 24,
+                enter_sequence: 5,
+                leave_sequence: 6,
+            });
         records
     }
 
@@ -6926,7 +7477,6 @@ body
             records.words.len(),
             records.atoms.len(),
             records.fragments.len(),
-            records.fragment_atoms.len(),
             records.logical_tabs.len(),
             records.flushes.len(),
             records.boundaries.len(),
@@ -6937,7 +7487,9 @@ body
             records.anchors.len(),
             records.tables.len(),
             records.table_rows.len(),
-            records.table_cells.len(),
+            records.table_layout_cells.len(),
+            records.table_data_cells.len(),
+            records.table_cell_invocations.len(),
             records.equations.len(),
             records.equation_boxes.len(),
             records.equation_box_executions.len(),
@@ -7078,14 +7630,10 @@ body
         let mut records = raw_records();
         records.atoms.push(atom());
         let mut value = fragment();
-        value.atom_ref_start = 1;
+        value.atom = 1;
         records.fragments.push(value);
-        records.fragment_atoms.push(CFragmentAtomRecord {
-            fragment: 0,
-            atom: 0,
-        });
 
-        assert_eq!(rejection(records), "invalid fragment atom range");
+        assert_eq!(rejection(records), "invalid execution fragment atom key");
     }
 
     #[test]
@@ -7096,20 +7644,64 @@ body
 
         assert_eq!(report.tables.len(), 1);
         assert_eq!(report.table_rows.len(), 1);
-        assert_eq!(report.table_cells.len(), 1);
-        assert_eq!(report.table_cells[0].buffer, None);
-        assert_eq!(report.table_cells[0].buffer_generation, None);
-        assert_eq!(report.table_cells[0].data_ordinal, 0);
+        assert_eq!(report.table_layout_cells.len(), 1);
+        assert_eq!(report.table_data_cells.len(), 1);
+        assert_eq!(report.table_cell_invocations.len(), 1);
+        assert_eq!(report.table_cell_invocations[0].buffer, None);
+        assert_eq!(report.table_cell_invocations[0].buffer_generation, None);
+        assert_eq!(report.table_data_cells[0].ordinal, 0);
+    }
+
+    #[test]
+    fn convert_report_accepts_auxiliary_and_primary_invocations_for_one_data_cell() {
+        // Fixed CVS `tbl_term.c::term_tbl()` invokes leading `TBL_CELL_SPAN`
+        // and the following real layout cell with the same `tbl_dat`.
+        let records = records_with_leading_span_invocations();
+        let count = record_count(&records);
+        let report = convert_report(b"x".to_vec(), 0, count, 2, records).unwrap();
+
+        assert_eq!(report.table_data_cells.len(), 1);
+        assert_eq!(report.table_cell_invocations.len(), 2);
+        assert!(report.table_layout_cells[0].horizontal_continuation);
+        assert_eq!(
+            report
+                .table_cell_invocations
+                .iter()
+                .filter(|call| call.layout == report.table_data_cells[0].layout)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn convert_report_requires_exactly_one_primary_invocation_per_data_cell() {
+        let mut records = records_with_leading_span_invocations();
+        records.table_cell_invocations[0].layout = 1;
+        records.table_cell_invocations[0].logical_column = 1;
+        records.table_cell_invocations[0].outcome = 1;
+        assert_eq!(
+            rejection(records),
+            "table data cell has multiple primary renderer invocations"
+        );
+
+        let mut records = records_with_leading_span_invocations();
+        records.table_cell_invocations[1].layout = 0;
+        records.table_cell_invocations[1].logical_column = 0;
+        records.table_cell_invocations[1].outcome = 5;
+        assert_eq!(
+            rejection(records),
+            "table data cell has no primary renderer invocation"
+        );
     }
 
     #[test]
     fn convert_report_rejects_partial_table_cell_buffer_identity() {
         for mutate in [
-            |cell: &mut CTableCellRecord| cell.buffer = 0,
-            |cell: &mut CTableCellRecord| cell.buffer_generation = 0,
+            |cell: &mut CTableCellInvocationRecord| cell.buffer = 0,
+            |cell: &mut CTableCellInvocationRecord| cell.buffer_generation = 0,
         ] {
             let mut records = records_with_empty_table_cell();
-            mutate(&mut records.table_cells[0]);
+            mutate(&mut records.table_cell_invocations[0]);
             assert_eq!(
                 rejection(records),
                 "partial execution table-cell buffer identity"
@@ -7120,22 +7712,52 @@ body
     #[test]
     fn convert_report_rejects_malformed_table_relationships() {
         let mut records = records_with_empty_table_cell();
-        records.table_cells[0].data_ordinal = 1;
-        assert_eq!(
-            rejection(records),
-            "non-contiguous execution table data-cell ordinal"
-        );
+        records.table_data_cells[0].ordinal = 1;
+        assert_eq!(rejection(records), "invalid execution table data cell");
 
         let mut records = records_with_empty_table_cell();
-        records.table_cells[0].column_span = 2;
+        records.table_data_cells[0].layout = 1;
         assert_eq!(
             rejection(records),
-            "invalid execution table-cell relationship"
+            "invalid execution table data-cell layout"
         );
 
         let mut records = records_with_empty_table_cell();
         records.table_rows[0].table = 1;
         assert_eq!(rejection(records), "invalid execution table-row parent");
+
+        let mut records = records_with_empty_table_cell();
+        records.table_data_cells[0].disposition = 2;
+        assert_eq!(rejection(records), "invalid execution table data cell");
+
+        let mut records = records_with_empty_table_cell();
+        records.table_cell_invocations[0].outcome = 2;
+        assert_eq!(
+            rejection(records),
+            "invalid execution table-cell invocation"
+        );
+
+        let mut records = records_with_empty_table_cell();
+        records.table_cell_invocations[0].layout = 1;
+        assert_eq!(
+            rejection(records),
+            "invalid execution table invocation layout"
+        );
+
+        let mut records = records_with_empty_table_cell();
+        records.table_cell_invocations[0].data = NONE;
+        records.table_cell_invocations[0].outcome = 4;
+        assert_eq!(
+            rejection(records),
+            "table data cell has no renderer invocation"
+        );
+
+        let mut records = records_with_empty_table_cell();
+        records.tables[0].wrapper = 0;
+        assert_eq!(
+            rejection(records),
+            "execution table wrapper does not enclose the table"
+        );
     }
 
     #[test]
@@ -7145,10 +7767,6 @@ body
         let mut value = fragment();
         value.generation += 1;
         records.fragments.push(value);
-        records.fragment_atoms.push(CFragmentAtomRecord {
-            fragment: 0,
-            atom: 0,
-        });
 
         assert_eq!(
             rejection(records),
@@ -7581,7 +8199,7 @@ body
     }
 
     #[test]
-    fn convert_report_rejects_atoms_from_another_node_wrapper_subtree() {
+    fn convert_report_keeps_source_provenance_independent_from_execution_wrapper() {
         let mut records = records_with_emitted_fragment();
         records.nodes.push(node());
         records.nodes.push(CNodeRecord { key: 1, ..node() });
@@ -7594,8 +8212,6 @@ body
         records.flushes[0].outcome_sequence = 6;
         records.fragments[0].node = 1;
         records.fragments[0].sequence = 4;
-        records.geometry[0].node = 1;
-        records.geometry[0].sequence = 5;
         let mut value = wrapper();
         value.kind = 1;
         value.node = 0;
@@ -7603,10 +8219,10 @@ body
         value.enter_sequence = 1;
         value.leave_sequence = 10;
         records.wrappers.push(value);
-        assert_eq!(
-            rejection(records),
-            "execution atom is outside its node wrapper"
-        );
+        let count = record_count(&records);
+        let report = convert_report(b"x".to_vec(), 2, count, 2, records).unwrap();
+        assert_eq!(report.atoms[0].node, Some(ExecutionNodeKey(1)));
+        assert_eq!(report.atoms[0].wrapper, Some(0));
     }
 
     #[test]
@@ -7623,8 +8239,6 @@ body
         records.fragments[0].node = 1;
         records.fragments[0].wrapper = 0;
         records.fragments[0].sequence = 4;
-        records.geometry[0].node = 1;
-        records.geometry[0].sequence = 5;
         let mut value = wrapper();
         value.kind = 1;
         value.node = 0;
@@ -7684,6 +8298,9 @@ body
         let mut records = records_with_reference_atom();
         records.references[0].enter_atom = 1;
         records.references[0].label_start_atom = 1;
+        records.references[0].label_end_atom = 1;
+        records.references[0].target_start_atom = 1;
+        records.references[0].target_end_atom = 1;
         records.references[0].leave_atom = 1;
         assert_eq!(
             rejection(records),
@@ -7692,6 +8309,9 @@ body
 
         let mut records = records_with_reference_atom();
         records.references[0].label_start_atom = 1;
+        records.references[0].label_end_atom = 1;
+        records.references[0].target_start_atom = 1;
+        records.references[0].target_end_atom = 1;
         assert_eq!(
             rejection(records),
             "invalid execution semantic reference relationship"
@@ -7733,6 +8353,29 @@ body
         assert_eq!(
             rejection(records),
             "invalid execution semantic reference relationship"
+        );
+    }
+
+    #[test]
+    fn convert_report_rejects_invalid_reference_presentations() {
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut value = reference();
+        value.presentation = u32::MAX;
+        records.references.push(value);
+        assert_eq!(
+            rejection(records),
+            "unknown execution semantic reference presentation"
+        );
+
+        let mut records = raw_records();
+        records.nodes.push(node());
+        let mut value = reference();
+        value.supplement_start_atom = 0;
+        records.references.push(value);
+        assert_eq!(
+            rejection(records),
+            "invalid direct reference presentation ranges"
         );
     }
 
@@ -7953,6 +8596,7 @@ body
                 parent: 1,
                 request: 4,
                 effect: 2,
+                line_commit_cause: 4,
                 line_before: 0,
                 line_after: 1,
                 enter_sequence: 3,
@@ -8596,40 +9240,16 @@ body
     #[test]
     fn convert_report_rejects_inexact_fragment_geometry() {
         let mut records = records_with_emitted_fragment();
-        records.geometry.clear();
+        records.fragments[0].end_bu = 23;
         assert_eq!(
             rejection(records),
-            "execution fragment has no unique glyph geometry"
-        );
-
-        let mut records = records_with_emitted_fragment();
-        records.geometry[0].before = 1;
-        assert_eq!(
-            rejection(records),
-            "invalid execution glyph geometry relationship"
+            "fragment atom belongs to another execution origin"
         );
 
         let mut records = records_with_emitted_fragment();
         records.fragments[0].start_bu = i64::MIN;
         records.fragments[0].end_bu = i64::MAX;
         assert_eq!(rejection(records), "invalid execution fragment geometry");
-
-        let mut records = records_with_emitted_fragment();
-        records.geometry[0].sequence = records.flushes[0].outcome_sequence;
-        assert_eq!(
-            rejection(records),
-            "invalid execution glyph geometry relationship"
-        );
-
-        let mut records = records_with_emitted_fragment();
-        let mut duplicate = records.geometry[0];
-        duplicate.key = 1;
-        duplicate.sequence = 6;
-        records.geometry.push(duplicate);
-        assert_eq!(
-            rejection(records),
-            "invalid execution glyph geometry relationship"
-        );
     }
 
     #[test]
@@ -8653,7 +9273,7 @@ body
             unit: 1,
             origin_kind: 2,
             origin_key: 0,
-            reserved: 0,
+            output_role: 1,
             requested: 24,
             effective: 24,
             before: 0,
@@ -8682,6 +9302,8 @@ body
             visual_after: 0,
             direct_device_lines: 0,
             wrapper: NONE,
+            line_commit_cause: 1,
+            output_role: 1,
             enter_sequence: 1,
             leave_sequence: 3,
         });
@@ -8693,7 +9315,7 @@ body
             unit: 3,
             origin_kind: 3,
             origin_key: 0,
-            reserved: 0,
+            output_role: 1,
             requested: 1,
             effective: 1,
             before: 0,
@@ -8724,7 +9346,7 @@ body
             unit: 1,
             origin_kind: 2,
             origin_key: 0,
-            reserved: 0,
+            output_role: 1,
             requested: 0,
             effective: 0,
             before: 0,
@@ -8750,16 +9372,15 @@ body
     }
 
     #[test]
-    fn convert_report_rejects_unclaimed_fragment_references() {
+    fn convert_report_rejects_reserved_fragment_atom_field() {
         let mut records = raw_records();
         records.atoms.push(atom());
-        records.fragment_atoms.push(CFragmentAtomRecord {
-            fragment: 0,
-            atom: 0,
-        });
+        let mut value = fragment();
+        value.reserved_atom = 1;
+        records.fragments.push(value);
         assert_eq!(
             rejection(records),
-            "invalid execution fragment-atom reference"
+            "non-zero reserved execution fragment field"
         );
     }
 

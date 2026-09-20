@@ -28,6 +28,36 @@ fn bounds_distinct_tbl_equation_normalization_work() {
 }
 
 #[test]
+fn table_equation_enhancement_uses_native_cell_state_without_reinterpreting_tbl() {
+    // Pinned CVS renders both cells literally because `roff_parseln()` skips
+    // inline eqn replacement while tbl is active.  ManT's separately bounded
+    // enhancement may annotate only the first cell: its native cell record
+    // snapshots active `%%` delimiters, while the second snapshots `delim off`.
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-inline-equation-state.1"),
+        include_bytes!(
+            "../../../../libmandoc-rs/tests/fixtures/execution/table-inline-equation-state.1"
+        ),
+    )
+    .expect("lower table cells with native delimiter snapshots");
+    let tables = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Table { rows, .. } => Some(rows),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(tables.len(), 2);
+    let first = &tables[0][0].cells[0].blocks[0];
+    let second = &tables[1][0].cells[0].blocks[0];
+    assert!(matches!(first, Block::Paragraph { children, .. }
+            if matches!(children.as_slice(), [Inline::Code { value }] if value == "x")));
+    assert!(matches!(second, Block::Paragraph { children, .. }
+            if inline_text(children) == "%y%"));
+}
+
+#[test]
 fn display_equations_preserve_native_eqn_decorators() {
     let document = parse_manual_bytes(
         std::path::Path::new("eqn-decorators.1"),

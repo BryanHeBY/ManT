@@ -4,7 +4,7 @@ mod error;
 mod source;
 
 use crate::ManualPage;
-use libmandoc_rs::ParseReport;
+use libmandoc_rs::ExecutionReport;
 use mant_codec::{parse_roff_bytes, parse_roff_bytes_with_report, redirect_target};
 use mant_ir::Document;
 use source::{load_manual_source, resolve_manual_redirects};
@@ -38,7 +38,7 @@ pub fn parse_manual_source(path: &Path) -> Result<Document, ManualError> {
 /// Returns [`ManualError`] on source, decompression, redirect or parser failure.
 pub fn parse_manual_source_with_report(
     path: &Path,
-) -> Result<(Document, ParseReport), ManualError> {
+) -> Result<(Document, ExecutionReport), ManualError> {
     let loaded = load_manual_source(path)?;
     reject_standalone_redirect(path, &loaded.source)?;
     parse_roff_bytes_with_report(path, &loaded.source).map_err(ManualError::from)
@@ -51,7 +51,8 @@ pub fn parse_manual_source_with_report(
 ///
 /// # Errors
 ///
-/// Returns [`ManualError`] when libmandoc rejects the input.
+/// Returns [`ManualError`] when native execution or semantic projection rejects
+/// the input.
 pub fn parse_manual_bytes(path: &Path, source: &[u8]) -> Result<Document, ManualError> {
     reject_standalone_redirect(path, source)?;
     parse_roff_bytes(path, source).map_err(ManualError::from)
