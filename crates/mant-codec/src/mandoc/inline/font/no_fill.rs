@@ -138,13 +138,13 @@ pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
     let continues_line = execution
         .source_continuation
         .unwrap_or(source_continuation_fallback);
+    let formatter_cell_occupied = execution.formatter_cell_occupied();
     inline_state.zero_advance = execution.zero_advance;
     inline_state.pending_word_end_break = execution.word_end_break;
     inline_state.continued = continues_line;
     if mant_ir::has_printable_character(&output) {
         inline_state.formatter_cell = NoFillFormatterCell::Visible;
-    } else if execution.formatter_cell_occupied
-        && inline_state.formatter_cell == NoFillFormatterCell::Origin
+    } else if formatter_cell_occupied && inline_state.formatter_cell == NoFillFormatterCell::Origin
     {
         inline_state.formatter_cell = NoFillFormatterCell::Invisible;
     }

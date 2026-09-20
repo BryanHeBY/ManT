@@ -151,7 +151,7 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
-    ) -> (Vec<mant_ir::Inline>, bool, bool) {
+    ) -> (Vec<mant_ir::Inline>, bool, bool, inline::ExecutedTail) {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
@@ -163,6 +163,7 @@ impl<'a> LoweringContext<'a> {
             finished.output,
             finished.definition_field_exited,
             finished.definition_body_gap_consumed,
+            finished.executed_tail,
         )
     }
 

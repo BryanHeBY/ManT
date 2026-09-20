@@ -7,6 +7,7 @@ pub(super) struct FinishedInlineLine {
     pub(super) output: Vec<mant_ir::Inline>,
     pub(super) definition_field_exited: bool,
     pub(super) definition_body_gap_consumed: bool,
+    pub(super) executed_tail: super::inline::ExecutedTail,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -78,12 +79,13 @@ impl FormatterState {
         self.inherit_inline_registers(&builder);
         let definition_field_exited = builder.definition_field_exited();
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
-        let (output, surviving_armed) = builder.finish_formatter_line();
+        let (output, surviving_armed, executed_tail) = builder.finish_formatter_line();
         self.zero_advance_armed = surviving_armed;
         FinishedInlineLine {
             output,
             definition_field_exited,
             definition_body_gap_consumed,
+            executed_tail,
         }
     }
 
@@ -142,7 +144,7 @@ impl FormatterState {
         self.author_flow.execute(mode, authors_section)
     }
 
-    pub(super) const fn author_flow(self) -> AuthorFlow {
+    pub(super) const fn author_flow(&self) -> AuthorFlow {
         self.author_flow
     }
 

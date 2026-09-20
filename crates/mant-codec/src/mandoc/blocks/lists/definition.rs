@@ -366,8 +366,13 @@ pub(super) fn definition_item(
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
-    let (mut term, run_in_execution, definition_field_exited, definition_body_gap_consumed) =
-        lower_definition_head(head, &displaced_equations, context, flow, formatter);
+    let (
+        mut term,
+        run_in_execution,
+        definition_field_exited,
+        definition_body_gap_consumed,
+        executed_head_breaks,
+    ) = lower_definition_head(head, &displaced_equations, context, flow, formatter);
     // CVS executes the `.It`/`.TP` head before its detached body.  Derive the
     // pending-row plan from the resulting formatter state so head-side `.An`,
     // font, spacing, and zero-width controls are visible to the body prefix.
@@ -381,6 +386,9 @@ pub(super) fn definition_item(
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
     if definition_field_exited {
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+    }
+    if executed_head_breaks > 0 {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
     if definition_body_gap_consumed {
@@ -422,6 +430,7 @@ pub(super) fn definition_item(
             formatter,
         )
     };
+    retain_executed_head_breaks(&mut description, executed_head_breaks);
     if flow.shares_pending_term_row
         && let Some(consumption) = pending_head.consumption
     {
@@ -468,6 +477,7 @@ fn lower_definition_head(
     Option<crate::mandoc::inline::PreservedInlineState>,
     bool,
     bool,
+    usize,
 ) {
     let groups = std::iter::once(head).chain(
         displaced_equations
@@ -486,29 +496,60 @@ fn lower_definition_head(
             .chain(displaced_equations.iter().copied())
             .filter_map(latest_source_line)
             .max();
-        return (term, Some(execution), false, false);
+        return (term, Some(execution), false, false, 0);
     }
 
     let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
     let mut definition_field_exited = false;
     let mut definition_body_gap_consumed = false;
+    let mut executed_head_breaks = 0usize;
     for group in groups {
-        let (lowered, field_exited, body_gap_consumed) = context.lower_inline_with_author_break(
-            group,
-            flow.spacing_enabled,
-            formatter,
-            flow.head.author_break_effect(),
-        );
+        let (lowered, field_exited, body_gap_consumed, executed_tail) = context
+            .lower_inline_with_author_break(
+                group,
+                flow.spacing_enabled,
+                formatter,
+                flow.head.author_break_effect(),
+            );
         term_builder.append(lowered);
         definition_field_exited |= field_exited;
         definition_body_gap_consumed |= body_gap_consumed;
+        executed_head_breaks = executed_head_breaks.saturating_add(executed_tail.line_breaks());
     }
     (
         term_builder.finish(),
         None,
         definition_field_exited,
         definition_body_gap_consumed,
+        executed_head_breaks,
     )
+}
+
+/// Project native boundaries executed inside a detached definition head onto
+/// the following body without turning them into additional terms/forms.
+fn retain_executed_head_breaks(blocks: &mut Vec<Block>, count: usize) {
+    if count == 0 {
+        return;
+    }
+    let breaks = std::iter::repeat_n(Inline::LineBreak, count).collect::<Vec<_>>();
+    if let Some(Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) =
+        blocks.first_mut()
+    {
+        let anchor_count = children
+            .iter()
+            .take_while(|child| matches!(child, Inline::Anchor { .. }))
+            .count();
+        children.splice(anchor_count..anchor_count, breaks);
+    } else {
+        blocks.insert(
+            0,
+            Block::Paragraph {
+                children: breaks,
+                layout: mant_ir::LayoutHint::default(),
+                source: None,
+            },
+        );
+    }
 }
 
 fn latest_source_line(node: &Node) -> Option<u32> {

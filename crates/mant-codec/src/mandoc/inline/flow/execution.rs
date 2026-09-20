@@ -1,11 +1,21 @@
 use super::{
-    AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder, KeepPhase,
-    KeepState, PendingBoundary, PreservedInlineState, SourceFragmentState, SpacingMode,
-    TrailingOutput, WordEndBreak, last_visible_character, trim_trailing_breakable_spaces,
-    updated_spacing,
+    AuthorBreakEffect, AuthorExecution, Inline, InlineBuilder, KeepPhase, KeepState,
+    PendingBoundary, PreservedInlineState, SourceFragmentState, SpacingMode, TrailingOutput,
+    WordEndBreak, last_visible_character, trim_trailing_breakable_spaces, updated_spacing,
 };
 
 impl InlineBuilder {
+    pub(in crate::mandoc) fn inherit_formatter_machine(
+        &mut self,
+        machine: super::FormatterMachine,
+    ) {
+        self.formatter_line.inherit(machine);
+    }
+
+    pub(in crate::mandoc) const fn formatter_machine(&self) -> &super::FormatterMachine {
+        &self.formatter_line
+    }
+
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Tight;
     }
@@ -24,23 +34,26 @@ impl InlineBuilder {
         authors_section: bool,
         break_effect: AuthorBreakEffect,
     ) {
+        if let AuthorBreakEffect::Field {
+            gap_cells,
+            body_width_columns,
+            wraps,
+        } = break_effect
+        {
+            self.formatter_line.begin_definition_field(
+                usize::from(gap_cells),
+                usize::from(body_width_columns),
+                wraps,
+            );
+        }
         self.author_execution = Some(AuthorExecution {
             flow,
             authors_section,
             break_effect,
-            field_output_start: self.nodes.len(),
         });
     }
 
     pub(in crate::mandoc) fn execute_author(&mut self, mode: Option<libmandoc_rs::AuthorMode>) {
-        if mode.is_some() && !self.has_formatter_cell() && self.pending_field_spaces > 0 {
-            // A mode-only `.An -split/-nosplit` executes no formatter word,
-            // but the later author pre-handler calls `term_newln()` before
-            // its word.  With no buffered cell that call retains NOSPACE and
-            // discards an unrealized HANG field separator.
-            self.pending_field_spaces = 0;
-            self.boundary = PendingBoundary::Tight;
-        }
         if !self.has_formatter_cell()
             && (self.pending_definition_indent.is_some() || self.pending_line_indent > 0)
         {
@@ -54,35 +67,19 @@ impl InlineBuilder {
             // consumed body gap.
             self.definition_outcome.clear_body_gap_consumed();
         }
-        let Some((break_effect, field_output_start)) =
-            self.author_execution.as_mut().and_then(|execution| {
-                execution
-                    .flow
-                    .execute(mode, execution.authors_section)
-                    .then_some((execution.break_effect, execution.field_output_start))
-            })
-        else {
+        let should_break = self
+            .author_execution
+            .as_mut()
+            .is_some_and(|execution| execution.flow.execute(mode, execution.authors_section));
+        if !should_break {
             return;
-        };
-        match break_effect {
-            AuthorBreakEffect::Line => self.hard_break(),
-            AuthorBreakEffect::Field {
-                gap_cells,
-                body_width_columns,
-                wraps,
-            } => {
-                self.flush_definition_field(
-                    field_output_start,
-                    gap_cells,
-                    body_width_columns,
-                    wraps,
-                    false,
-                );
-            }
         }
-        if let Some(execution) = &mut self.author_execution {
-            execution.field_output_start = self.nodes.len();
-        }
+        // CVS `termp_an_pre()` calls `term_newln()`, not
+        // `roff_term_pre_br()`: the latter would additionally execute BRIND
+        // and corrupt tag/hang geometry.  The current formatter field still
+        // decides whether the request ends a row, including after `.mc` when
+        // the input buffer is empty but the device row remains occupied.
+        self.conditional_line_break();
     }
 
     pub(in crate::mandoc) fn author_flow(&self) -> Option<crate::mandoc::formatter::AuthorFlow> {
@@ -148,7 +145,7 @@ impl InlineBuilder {
                 // next input line starts; flushing after `SourceCursor`
                 // emits its boundary would move the glyph to the new row.
                 self.flush_zero_advance();
-                self.formatter_column = FormatterColumn::Origin;
+                self.formatter_line.end_row();
                 self.word_end_break = WordEndBreak::Clear;
             }
         }
@@ -329,11 +326,10 @@ impl InlineBuilder {
             WordEndBreak::Clear
         };
         self.final_source_continuation = state.source_continuation;
-        if state.formatter_cell_occupied {
-            self.formatter_column = FormatterColumn::Advanced;
-        }
+        self.formatter_line.inherit(state.formatter_line);
         self.pending_line_indent = state.pending_line_indent;
         self.pending_definition_indent = state.pending_definition_indent;
+        self.retain_line_breaks(state.executed_tail.line_breaks);
     }
 
     /// Execute the generated no-break cells between an mdoc inset/diagnostic
@@ -349,7 +345,7 @@ impl InlineBuilder {
         self.zero_advance
             .append_generated_cells(count, &mut projected, self.font.current);
         self.append_word(projected);
-        self.trailing_output = TrailingOutput::FixedBlank;
+        self.trailing_output = TrailingOutput::FixedBlank(count);
         // CVS sets TERMP_NOSPACE again before executing BODY children.
         self.tighten_next_boundary();
         self.final_word_join = Some(false);

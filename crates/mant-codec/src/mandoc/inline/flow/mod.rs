@@ -5,24 +5,35 @@ use mant_ir::{first_visible_character, has_printable_character, last_visible_cha
 
 mod execution;
 mod field;
+mod line;
 mod output;
+
+pub(in crate::mandoc) use line::FormatterMachine;
+use line::{FlushOutcome, PendingSeparators, SeparatorKind};
 
 pub(super) use output::trailing_ascii_spaces;
 use output::trim_trailing_breakable_spaces;
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
+    /// Stable formatter-field ownership parallel to `nodes`.  The owner token,
+    /// rather than a mutable vector index, identifies projection that may need
+    /// geometry applied when CVS eventually flushes the field.
+    node_owners: Vec<u64>,
+    projection_owner: u64,
+    next_projection_owner: u64,
+    deferred_indent_owner: Option<u64>,
+    geometry_stack: Vec<(usize, usize)>,
     boundary: PendingBoundary,
     spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
     // Unlike `has_printable_content`, this is reset at each real formatter
     // row boundary and does not count a pending zero-advance glyph.
-    formatter_column: FormatterColumn,
+    formatter_line: FormatterMachine,
     empty_word: bool,
     trailing_output: TrailingOutput,
     pending_breakable_spaces: usize,
-    pending_field_spaces: usize,
     pending_line_indent: usize,
     pending_definition_indent: Option<usize>,
     word_end_break: WordEndBreak,
@@ -54,7 +65,6 @@ struct AuthorExecution {
     flow: crate::mandoc::formatter::AuthorFlow,
     authors_section: bool,
     break_effect: AuthorBreakEffect,
-    field_output_start: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -91,13 +101,9 @@ impl DefinitionOutcome {
 /// `BRIND`, `HANG`, and the list field geometry for a following request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct NoBreakField {
-    output_end_before_separator: usize,
-    resumed_output_start: usize,
-    resumed_execution_epoch: u64,
     field_width: usize,
     body_width: usize,
     trailspace_cells: usize,
-    separator_cells: usize,
     style: DefinitionFieldStyle,
 }
 
@@ -141,7 +147,7 @@ struct OutputRollback {
     /// rematerializes this boundary explicitly; it is not persistent
     /// formatter execution state.
     pending_breakable_spaces: usize,
-    pending_field_spaces: usize,
+    pending_separators: PendingSeparators,
 }
 
 /// Execution facts at transaction entry.  Replacement output may consult
@@ -160,10 +166,34 @@ pub(in crate::mandoc) struct PreservedInlineState {
     pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
     pub(in crate::mandoc) word_end_break: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
-    pub(in crate::mandoc) formatter_cell_occupied: bool,
+    formatter_line: FormatterMachine,
     pub(in crate::mandoc) pending_line_indent: usize,
     pub(in crate::mandoc) pending_definition_indent: Option<usize>,
     pub(in crate::mandoc) last_executed_source_line: Option<u32>,
+    executed_tail: ExecutedTail,
+}
+
+/// Native layout already executed at the end of an IR-only fragment.
+///
+/// A definition-head `.br` or `.sp` affects the following body, but is not a
+/// second semantic term.  Keep that execution result outside the fragment's
+/// nodes and transfer it to the next projection owner without re-executing
+/// the request.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::mandoc) struct ExecutedTail {
+    line_breaks: usize,
+}
+
+impl ExecutedTail {
+    pub(in crate::mandoc) const fn line_breaks(self) -> usize {
+        self.line_breaks
+    }
+}
+
+impl PreservedInlineState {
+    pub(in crate::mandoc) fn formatter_cell_occupied(&self) -> bool {
+        self.formatter_line.buffer_is_occupied()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -284,12 +314,6 @@ enum WordEndBreak {
     Pending,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum FormatterColumn {
-    Origin,
-    Advanced,
-}
-
 /// The formatter meaning of the final projected cell.
 ///
 /// These states deliberately do not derive meaning from the final Unicode
@@ -304,7 +328,7 @@ pub(in crate::mandoc) enum TrailingOutput {
     BreakableBlank(usize),
     BoundaryBlank,
     FieldBlank(usize),
-    FixedBlank,
+    FixedBlank(usize),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -370,15 +394,19 @@ impl InlineBuilder {
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
             nodes: Vec::new(),
+            node_owners: Vec::new(),
+            projection_owner: 1,
+            next_projection_owner: 2,
+            deferred_indent_owner: None,
+            geometry_stack: Vec::new(),
             boundary: PendingBoundary::Ordinary,
             spacing: SpacingMode::Enabled,
             last_visible_character: None,
             has_printable_content: false,
-            formatter_column: FormatterColumn::Origin,
+            formatter_line: FormatterMachine::new(),
             empty_word: false,
             trailing_output: TrailingOutput::None,
             pending_breakable_spaces: 0,
-            pending_field_spaces: 0,
             pending_line_indent: 0,
             pending_definition_indent: None,
             word_end_break: WordEndBreak::Clear,
@@ -401,15 +429,19 @@ impl InlineBuilder {
     pub(in crate::mandoc) const fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            node_owners: Vec::new(),
+            projection_owner: 1,
+            next_projection_owner: 2,
+            deferred_indent_owner: None,
+            geometry_stack: Vec::new(),
             boundary: PendingBoundary::Ordinary,
             spacing: SpacingMode::from_enabled(spacing_enabled),
             last_visible_character: None,
             has_printable_content: false,
-            formatter_column: FormatterColumn::Origin,
+            formatter_line: FormatterMachine::new(),
             empty_word: false,
             trailing_output: TrailingOutput::None,
             pending_breakable_spaces: 0,
-            pending_field_spaces: 0,
             pending_line_indent: 0,
             pending_definition_indent: None,
             word_end_break: WordEndBreak::Clear,

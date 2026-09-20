@@ -13,7 +13,9 @@ pub(super) use links::lower_man_link;
 mod scopes;
 mod source_cursor;
 mod source_fragment;
-pub(in crate::mandoc) use flow::{AuthorBreakEffect, PreservedInlineState};
+pub(in crate::mandoc) use flow::{
+    AuthorBreakEffect, ExecutedTail, FormatterMachine, PreservedInlineState,
+};
 pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
 

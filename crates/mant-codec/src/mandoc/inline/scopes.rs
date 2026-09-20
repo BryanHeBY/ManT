@@ -17,10 +17,16 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     if node.flags.no_print || node.kind == NodeKind::Comment {
         return;
     }
+    // CVS `print_mdoc_node()` snapshots offset/rmargin for every semantic
+    // node and restores them after its post-handler. Roff requests return
+    // before that restoration, so their geometry effects remain live only
+    // until this surrounding scope ends.
+    builder.push_geometry_scope();
     // Atomic reconstructions own their generated punctuation (references,
     // function declarations, etc.); their output cannot carry a guessed tail
     // effect. Transparent and styled scopes below share the caller's flow.
     if append_atomic(builder, node, name) {
+        builder.pop_geometry_scope();
         return;
     }
     if let Some(anchor) = navigation_anchor(node) {
@@ -54,6 +60,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
             }
         }
     }) {
+        builder.pop_geometry_scope();
         return;
     }
     let children = inline_children(node);
@@ -109,6 +116,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         }
         _ => append_inline_nodes(builder, children, name),
     }
+    builder.pop_geometry_scope();
 }
 
 /// Atomic syntax owns a semantic wrapper, but its visible components still

@@ -289,7 +289,7 @@ fn finish_text_execution(
             let count = trailing_breakable_spaces(events)
                 .min(crate::mandoc::inline::flow::trailing_ascii_spaces(&output));
             if count == 0 {
-                TrailingOutput::FixedBlank
+                TrailingOutput::FixedBlank(1)
             } else {
                 TrailingOutput::BreakableBlank(count)
             }

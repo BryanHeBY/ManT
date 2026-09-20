@@ -1,34 +1,47 @@
 use super::{
-    AuthorBreakEffect, DefinitionFieldStyle, FormatterColumn, Inline, InlineBuilder, NoBreakField,
-    PendingBoundary, TrailingOutput, WordEndBreak, has_printable_character, last_visible_character,
-    trim_trailing_breakable_spaces,
+    AuthorBreakEffect, DefinitionFieldStyle, Inline, InlineBuilder, NoBreakField, PendingBoundary,
+    SeparatorKind, TrailingOutput, WordEndBreak, trim_trailing_breakable_spaces,
 };
 
 impl InlineBuilder {
+    /// Execute CVS `term_newln()` without the additional BRIND transition
+    /// performed by `roff_term_pre_br()`.
+    ///
+    /// In particular, `termp_an_pre()` uses this operation for `.An -split`.
+    /// Keeping it distinct from [`Self::control_line_break`] is required:
+    /// `.An` may flush the current field, but it must not move the next field
+    /// to the definition body margin or clear NOBREAK/BRIND.
+    pub(in crate::mandoc) fn conditional_line_break(&mut self) -> bool {
+        let had_row = self.has_active_formatter_row();
+        if had_row {
+            self.prepare_native_flush();
+        }
+        let outcome = self.formatter_line.term_newline();
+        if had_row {
+            self.reset_projection_after_flush();
+        }
+        if let Some(outcome) = outcome {
+            self.apply_flush_outcome(outcome);
+        }
+        self.boundary = PendingBoundary::Tight;
+        had_row
+    }
+
     /// Execute an explicit formatter line request inside a definition HEAD.
     ///
     /// CVS keeps `LIST_tag/LIST_hang` in a NOBREAK field until `term_newln()`
     /// has settled that field.  A plain `hard_break()` loses BRIND geometry,
     /// so `.br`, `.ti`, and the break phase of `.sp` must use this entrypoint.
     pub(in crate::mandoc) fn control_line_break(&mut self) -> bool {
-        if let Some(field) = self.take_no_break_field() {
-            self.settle_no_break_field_line(field);
-            return true;
-        }
-        let Some((start, gap, body, wraps)) =
+        let Some((body_width_columns, wraps)) =
             self.author_execution
                 .as_ref()
                 .and_then(|execution| match execution.break_effect {
                     AuthorBreakEffect::Field {
-                        gap_cells,
                         body_width_columns,
                         wraps,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        wraps,
-                    )),
+                        ..
+                    } => Some((body_width_columns, wraps)),
                     AuthorBreakEffect::Line => None,
                 })
         else {
@@ -36,12 +49,38 @@ impl InlineBuilder {
             self.hard_break();
             return had_cell;
         };
-        self.flush_definition_field(start, gap, body, wraps, true)
+        let had_row = self.has_active_formatter_row();
+        if had_row {
+            self.prepare_native_flush();
+        }
+        let outcome = self.formatter_line.roff_break();
+        if had_row {
+            self.reset_projection_after_flush();
+        }
+        if let Some(outcome) = outcome {
+            self.apply_flush_outcome(outcome);
+        }
+        if wraps {
+            self.definition_outcome.mark_field_exited();
+            if let Some(execution) = &mut self.author_execution {
+                execution.break_effect = AuthorBreakEffect::Line;
+            }
+        } else {
+            self.definition_outcome.mark_body_gap_consumed();
+            if let Some(execution) = &mut self.author_execution {
+                execution.break_effect = AuthorBreakEffect::Field {
+                    gap_cells: 0,
+                    body_width_columns,
+                    wraps,
+                };
+            }
+        }
+        self.boundary = PendingBoundary::Tight;
+        had_row
     }
 
     pub(super) fn flush_definition_field(
         &mut self,
-        field_output_start: usize,
         gap_cells: u8,
         body_width_columns: u16,
         wraps: bool,
@@ -57,7 +96,6 @@ impl InlineBuilder {
                 self.pending_definition_indent = Some(usize::from(body_width_columns));
                 self.boundary = PendingBoundary::Tight;
                 if let Some(execution) = &mut self.author_execution {
-                    execution.field_output_start = self.nodes.len();
                     if wraps {
                         self.definition_outcome.mark_field_exited();
                         execution.break_effect = AuthorBreakEffect::Line;
@@ -74,9 +112,8 @@ impl InlineBuilder {
             return false;
         }
         self.flush_zero_advance();
-        let field = self.nodes.get(field_output_start..).unwrap_or_default();
-        let field_is_printable = has_printable_character(field);
-        let field_width = mant_ir::geometry::text_width(&super::super::plain_text(field));
+        let field_is_printable = self.formatter_line.buffer_is_visible();
+        let field_width = self.formatter_line.buffer_width();
         let body_width = usize::from(body_width_columns);
         let overruns = field_is_printable
             && wraps
@@ -111,11 +148,14 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Tight;
         self.empty_word = false;
         self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
+        self.formatter_line.clear_separators();
         self.word_end_break = WordEndBreak::Clear;
-        self.formatter_column = FormatterColumn::Origin;
+        if overruns {
+            self.formatter_line.end_row();
+        } else {
+            self.formatter_line.commit_field();
+        }
         if let Some(execution) = &mut self.author_execution {
-            execution.field_output_start = self.nodes.len();
             if exit_field && wraps {
                 self.definition_outcome.mark_field_exited();
                 execution.break_effect = AuthorBreakEffect::Line;
@@ -148,7 +188,7 @@ impl InlineBuilder {
         self.append_projected(vec![Inline::Text {
             value: " ".repeat(count),
         }]);
-        self.trailing_output = TrailingOutput::FixedBlank;
+        self.trailing_output = TrailingOutput::FixedBlank(count);
     }
 
     /// Execute `.ti` through its preceding `roff_term_pre_br()` boundary.
@@ -160,25 +200,10 @@ impl InlineBuilder {
     /// then discard the temporary device position as documented.
     pub(in crate::mandoc) fn temporary_indent(&mut self) {
         if let Some(field) = self.take_no_break_field() {
-            self.restore_no_break_field_projection(field);
-            match field.style {
-                DefinitionFieldStyle::Tag => {
-                    self.force_output_line_break();
-                    self.definition_outcome.mark_field_exited();
-                }
-                DefinitionFieldStyle::Hang => {
-                    // `term_newln()` leaves NOSPACE set.  HANG keeps the
-                    // device row alive, so a following control-only author
-                    // transition must not synthesize an ordinary word blank
-                    // between the prior field and its eventual head text.
-                    self.boundary = PendingBoundary::Tight;
-                    self.pending_field_spaces = 1;
-                }
-            }
-            self.finish_definition_field_control(field, 0, false);
+            self.settle_no_break_field_line(field, false);
             return;
         }
-        let Some((start, gap, body, wraps)) =
+        let Some((gap, body, wraps)) =
             self.author_execution
                 .as_ref()
                 .and_then(|execution| match execution.break_effect {
@@ -186,12 +211,7 @@ impl InlineBuilder {
                         gap_cells,
                         body_width_columns,
                         wraps,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        wraps,
-                    )),
+                    } => Some((gap_cells, body_width_columns, wraps)),
                     AuthorBreakEffect::Line => None,
                 })
         else {
@@ -199,16 +219,15 @@ impl InlineBuilder {
             return;
         };
         if !self.has_formatter_cell() {
-            self.flush_definition_field(start, gap, body, wraps, true);
+            self.flush_definition_field(gap, body, wraps, true);
             return;
         }
         self.flush_zero_advance();
-        let field = self.nodes.get(start..).unwrap_or_default();
-        if !has_printable_character(field) {
-            self.flush_definition_field(start, gap, body, wraps, true);
+        if !self.formatter_line.buffer_is_visible() {
+            self.flush_definition_field(gap, body, wraps, true);
             return;
         }
-        let field_width = mant_ir::geometry::text_width(&super::super::plain_text(field));
+        let field_width = self.formatter_line.buffer_width();
         let overruns = wraps && field_width.saturating_add(usize::from(gap)) > usize::from(body);
         if overruns {
             self.hard_break();
@@ -216,7 +235,6 @@ impl InlineBuilder {
             self.append_fixed_cells(usize::from(gap));
         }
         if let Some(execution) = &mut self.author_execution {
-            execution.field_output_start = self.nodes.len();
             if wraps {
                 self.definition_outcome.mark_field_exited();
                 execution.break_effect = AuthorBreakEffect::Line;
@@ -237,11 +255,11 @@ impl InlineBuilder {
     /// own `roff_term_pre_br()` dispatch.
     pub(in crate::mandoc) fn fill_mode_boundary(&mut self) {
         if let Some(field) = self.take_no_break_field() {
-            self.settle_no_break_field_line(field);
+            self.settle_no_break_field_line(field, true);
             self.definition_outcome.mark_field_exited();
             return;
         }
-        let Some((start, gap, body, wraps)) =
+        let Some((gap, body, wraps)) =
             self.author_execution
                 .as_ref()
                 .and_then(|execution| match execution.break_effect {
@@ -249,12 +267,7 @@ impl InlineBuilder {
                         gap_cells,
                         body_width_columns,
                         wraps,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        wraps,
-                    )),
+                    } => Some((gap_cells, body_width_columns, wraps)),
                     AuthorBreakEffect::Line => None,
                 })
         else {
@@ -265,21 +278,19 @@ impl InlineBuilder {
             return;
         }
         self.flush_zero_advance();
-        let field = self.nodes.get(start..).unwrap_or_default();
-        if !has_printable_character(field) {
-            self.flush_definition_field(start, gap, body, wraps, true);
+        if !self.formatter_line.buffer_is_visible() {
+            self.flush_definition_field(gap, body, wraps, true);
             return;
         }
         if wraps {
             self.hard_break();
             self.pending_definition_indent = Some(usize::from(body));
         } else {
-            let width = mant_ir::geometry::text_width(&super::super::plain_text(field));
+            let width = self.formatter_line.buffer_width();
             self.append_fixed_cells(usize::from(body).saturating_sub(width));
         }
         self.definition_outcome.mark_field_exited();
         if let Some(execution) = &mut self.author_execution {
-            execution.field_output_start = self.nodes.len();
             execution.break_effect = if wraps {
                 AuthorBreakEffect::Line
             } else {
@@ -298,7 +309,10 @@ impl InlineBuilder {
     /// occupied row, then emits `n` empty rows.
     pub(in crate::mandoc) fn vertical_space(&mut self, rows: usize) {
         if let Some(field) = self.take_no_break_field() {
-            self.restore_no_break_field_projection(field);
+            self.flush_zero_advance();
+            let field_accepted = self.formatter_line.commit_field();
+            self.formatter_line
+                .queue_separator(usize::from(field_accepted), SeparatorKind::WordBoundary);
             self.force_output_line_break();
             if field.style == DefinitionFieldStyle::Tag {
                 self.retain_line_breaks(rows);
@@ -344,7 +358,6 @@ impl InlineBuilder {
                 if wraps {
                     self.definition_outcome.mark_field_exited();
                     if let Some(execution) = &mut self.author_execution {
-                        execution.field_output_start = self.nodes.len();
                         execution.break_effect = AuthorBreakEffect::Line;
                     }
                 }
@@ -356,14 +369,8 @@ impl InlineBuilder {
             // BRIND transition. HANG can suppress term_newln(), but the
             // vertical request still ends the row; field padding is trailing
             // geometry and must not leak onto the empty row.
-            let start = self
-                .author_execution
-                .as_ref()
-                .map_or(self.nodes.len(), |execution| execution.field_output_start);
             self.flush_zero_advance();
-            let width = mant_ir::geometry::text_width(&super::super::plain_text(
-                self.nodes.get(start..).unwrap_or_default(),
-            ));
+            let width = self.formatter_line.buffer_width();
             let trailspace = self
                 .author_execution
                 .as_ref()
@@ -381,7 +388,6 @@ impl InlineBuilder {
             });
             self.pending_definition_indent = Some(usize::from(body_width_columns));
             if let Some(execution) = &mut self.author_execution {
-                execution.field_output_start = self.nodes.len();
                 if wraps {
                     self.definition_outcome.mark_field_exited();
                     execution.break_effect = AuthorBreakEffect::Line;
@@ -412,17 +418,16 @@ impl InlineBuilder {
         // roff_term_pre_mc() only calls term_flushln() after the formatter
         // has advanced the current output column. A completed `\zX` glyph
         // has entered the buffer; a bare armed `\z` has not.
-        let executed_field_word = self
-            .no_break_field
-            .is_some_and(|field| self.execution_epoch != field.resumed_execution_epoch);
-        if !self.has_formatter_cell() && !executed_field_word {
+        if !self.formatter_line.cursor_advanced()
+            && !self.zero_advance.has_buffered_glyph()
+            && !self.word_end_break.eq(&WordEndBreak::Pending)
+        {
             return;
         }
-        if let Some(field) = self.take_no_break_field() {
-            self.continue_no_break_definition_field(field);
-            return;
-        }
-        if self.no_break_definition_field() {
+        if self.author_execution.as_ref().is_some_and(|execution| {
+            matches!(execution.break_effect, AuthorBreakEffect::Field { .. })
+        }) {
+            self.no_break_definition_flush();
             return;
         }
         let literal_flow = self.source_cursor.is_some();
@@ -430,18 +435,13 @@ impl InlineBuilder {
         let realizes_literal_word_end_break =
             literal_flow && self.word_end_break == WordEndBreak::Pending && !continued;
         self.flush_zero_advance();
+        let field_was_visible = self.formatter_line.buffer_is_visible();
         // A visible glyph always makes the field printable.  CVS also keeps
         // an otherwise invisible `\&` cell when `\c` suppresses the source
         // line flush; without that continuation, the invisible-only field is
         // discarded before `.mc` and contributes no relative separator.
         if realizes_literal_word_end_break {
-            if !self
-                .nodes
-                .iter()
-                .rev()
-                .take_while(|node| !matches!(node, Inline::LineBreak))
-                .any(|node| has_printable_character(std::slice::from_ref(node)))
-            {
+            if !field_was_visible {
                 self.nodes.push(Inline::Text {
                     value: String::new(),
                 });
@@ -470,12 +470,37 @@ impl InlineBuilder {
         // different formatter geometry: it survives `.Sm off`, `.Ns`, and
         // delimiter flags and replaces the next word's automatic boundary.
         self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = usize::from(!realizes_literal_word_end_break);
         self.word_end_break = WordEndBreak::Clear;
-        self.formatter_column = FormatterColumn::Origin;
+        if realizes_literal_word_end_break {
+            self.formatter_line.end_row();
+        } else {
+            let field_accepted = self
+                .formatter_line
+                .margin_flush()
+                .is_some_and(|outcome| outcome.field_accepted);
+            self.formatter_line
+                .queue_separator(usize::from(field_accepted), SeparatorKind::WordBoundary);
+        }
         // TERMP_NOBREAK only changes this flush; it does not create
         // TERMP_NONEWLINE.  Preserve any already-executed `\c` continuation,
         // while releasing its tight word boundary like CVS clears NOSPACE.
+        self.final_word_join = Some(false);
+    }
+
+    /// Execute `roff_term_pre_mc()` against the live CVS-shaped field state.
+    /// BRIND, HANG, trailspace, minbl and geometry remain in the machine;
+    /// there is no secondary field snapshot to reconstruct later.
+    fn no_break_definition_flush(&mut self) {
+        self.prepare_native_flush();
+        let outcome = self.formatter_line.margin_flush();
+        self.reset_projection_after_flush();
+        if let Some(outcome) = outcome {
+            self.apply_flush_outcome(outcome);
+        }
+        self.boundary = PendingBoundary::Ordinary;
+        self.empty_word = false;
+        self.pending_breakable_spaces = 0;
+        self.word_end_break = WordEndBreak::Clear;
         self.final_word_join = Some(false);
     }
 
@@ -486,54 +511,37 @@ impl InlineBuilder {
     /// `.mc` must not fall back to the ordinary one-cell path merely because
     /// `AuthorBreakEffect` changed after the first flush.
     fn continue_no_break_definition_field(&mut self, mut field: NoBreakField) {
-        let resumed_has_cell = self.restore_no_break_field_projection(field);
+        let resumed_has_cell =
+            self.formatter_line.buffer_is_visible() || self.zero_advance.has_buffered_glyph();
+        self.flush_zero_advance();
         if !resumed_has_cell {
-            // Whitespace-only and zero-width formatter words make
-            // `term_flushln()` run, but `term_fill()` commits no field.
-            // Restore the one separator that was waiting for the next real
-            // field instead of consuming it or manufacturing a second one.
-            field.output_end_before_separator = self.nodes.len();
-            self.append_field_separator(field.separator_cells);
+            // `term_fill()` commits no field for an empty word or `\&`.
+            // `minbl` therefore remains latent for the next real field.
+            self.formatter_line.discard_empty_field();
+            self.pending_breakable_spaces = 0;
+            self.word_end_break = WordEndBreak::Clear;
+            self.trailing_output = TrailingOutput::None;
             self.boundary = PendingBoundary::Tight;
-            field.resumed_output_start = self.nodes.len();
-            field.resumed_execution_epoch = self.execution_epoch;
             self.no_break_field = Some(field);
-            self.reset_after_no_break_field();
-            // The complete native field boundary is already represented by
-            // the retained separator.  Do not let the block/source handoff
-            // append a second ordinary word blank before the next field.
             self.final_word_join = Some(true);
             return;
         }
 
-        let resumed = self
-            .nodes
-            .get(field.resumed_output_start..)
-            .unwrap_or_default();
-        let resumed_width = mant_ir::geometry::text_width(&super::super::plain_text(resumed));
-        let row_width = self.current_formatter_row_width();
+        let resumed_width = self.formatter_line.buffer_width();
+        let row_width = self.formatter_line.row_width();
         let overrun = row_width.saturating_add(field.trailspace_cells) > field.body_width;
-        let output_end_before_separator = self.nodes.len();
-
-        let separator_cells = if field.style == DefinitionFieldStyle::Tag && overrun {
-            self.hard_break();
-            // `roff_term_pre_mc()` clears NOSPACE after the NOBREAK flush,
-            // so the first word on the new device row still owns one normal
-            // formatter boundary at the list origin.
-            1
-        } else if overrun {
-            1
-        } else {
-            field.trailspace_cells.saturating_add(1)
-        };
-        self.append_field_separator(separator_cells);
+        let field_accepted = self.formatter_line.commit_field();
+        if field.style == DefinitionFieldStyle::Tag && overrun {
+            self.force_output_line_break();
+        }
+        let separator_cells = field.trailspace_cells;
+        self.formatter_line
+            .queue_separator(separator_cells, SeparatorKind::FieldMinimum);
+        self.formatter_line
+            .queue_separator(usize::from(field_accepted), SeparatorKind::WordBoundary);
         self.boundary = PendingBoundary::Tight;
 
-        field.output_end_before_separator = output_end_before_separator;
-        field.resumed_output_start = self.nodes.len();
-        field.resumed_execution_epoch = self.execution_epoch;
         field.field_width = resumed_width;
-        field.separator_cells = separator_cells;
         self.no_break_field = Some(field);
         self.reset_after_no_break_field();
     }
@@ -541,30 +549,12 @@ impl InlineBuilder {
     fn reset_after_no_break_field(&mut self) {
         self.empty_word = false;
         self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
         self.word_end_break = WordEndBreak::Clear;
-        self.formatter_column = FormatterColumn::Origin;
         self.final_word_join = Some(false);
     }
 
-    fn current_formatter_row_width(&self) -> usize {
-        let start = self
-            .nodes
-            .iter()
-            .rposition(|node| matches!(node, Inline::LineBreak))
-            .map_or(0, |index| index + 1);
-        mant_ir::geometry::text_width(&super::super::plain_text(&self.nodes[start..]))
-    }
-
-    fn append_field_separator(&mut self, count: usize) {
-        self.append_fixed_cells(count);
-        if count > 0 {
-            self.trailing_output = TrailingOutput::FieldBlank(count);
-        }
-    }
-
     fn no_break_definition_field(&mut self) -> bool {
-        let Some((start, gap, body, wraps)) =
+        let Some((gap, body, wraps)) =
             self.author_execution
                 .as_ref()
                 .and_then(|execution| match execution.break_effect {
@@ -572,36 +562,28 @@ impl InlineBuilder {
                         gap_cells,
                         body_width_columns,
                         wraps,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        wraps,
-                    )),
+                    } => Some((gap_cells, body_width_columns, wraps)),
                     AuthorBreakEffect::Line => None,
                 })
         else {
             return false;
         };
         self.flush_zero_advance();
-        let field = self.nodes.get(start..).unwrap_or_default();
-        let width = mant_ir::geometry::text_width(&super::super::plain_text(field));
+        let width = self.formatter_line.buffer_width();
         let overrun = width.saturating_add(usize::from(gap)) > usize::from(body);
-        let output_end_before_separator = self.nodes.len();
         if wraps {
             if overrun {
                 self.hard_break();
-                // Clearing NOSPACE after `.mc` leaves one ordinary boundary
-                // at the list origin; BRIND is not executed by this request.
-                self.append_field_separator(1);
-                self.boundary = PendingBoundary::Tight;
             } else {
-                self.append_field_separator(usize::from(gap).saturating_add(1));
-                self.boundary = PendingBoundary::Tight;
+                let field_accepted = self.formatter_line.commit_field();
+                self.formatter_line
+                    .queue_separator(usize::from(field_accepted), SeparatorKind::WordBoundary);
             }
+            self.formatter_line
+                .queue_separator(usize::from(gap), SeparatorKind::FieldMinimum);
+            self.boundary = PendingBoundary::Tight;
             self.definition_outcome.mark_field_exited();
             if let Some(execution) = &mut self.author_execution {
-                execution.field_output_start = self.nodes.len();
                 execution.break_effect = AuthorBreakEffect::Line;
             }
         } else {
@@ -609,27 +591,16 @@ impl InlineBuilder {
             // that still has room retains trailspace plus the ordinary next
             // word boundary; an overrun field retains only that boundary.
             self.boundary = PendingBoundary::Ordinary;
-            self.pending_field_spaces = if overrun {
-                1
-            } else {
-                usize::from(gap).saturating_add(1)
-            };
-            if let Some(execution) = &mut self.author_execution {
-                execution.field_output_start = self.nodes.len();
-            }
+            self.formatter_line
+                .queue_separator(usize::from(gap), SeparatorKind::FieldMinimum);
+            let field_accepted = self.formatter_line.commit_field();
+            self.formatter_line
+                .queue_separator(usize::from(field_accepted), SeparatorKind::WordBoundary);
         }
         self.no_break_field = Some(NoBreakField {
-            output_end_before_separator,
-            resumed_output_start: self.nodes.len(),
-            resumed_execution_epoch: self.execution_epoch,
             field_width: width,
             body_width: usize::from(body),
             trailspace_cells: usize::from(gap),
-            separator_cells: if overrun {
-                1
-            } else {
-                usize::from(gap).saturating_add(1)
-            },
             style: if wraps {
                 DefinitionFieldStyle::Tag
             } else {
@@ -639,7 +610,6 @@ impl InlineBuilder {
         self.empty_word = false;
         self.pending_breakable_spaces = 0;
         self.word_end_break = WordEndBreak::Clear;
-        self.formatter_column = FormatterColumn::Origin;
         self.final_word_join = Some(false);
         true
     }
@@ -648,48 +618,11 @@ impl InlineBuilder {
         self.no_break_field.take()
     }
 
-    fn restore_no_break_field_projection(&mut self, field: NoBreakField) -> bool {
-        // A prior `.mc` can leave the device row occupied (`viscol > 0`) even
-        // after the current field buffer was reset.  Every control reaching
-        // this path therefore executes a real `term_flushln()`: settle a
-        // completed zero-advance glyph and, critically, clear a bare
-        // BACKAFTER request before the next word runs.
+    fn settle_no_break_field_line(&mut self, field: NoBreakField, consume_body_gap: bool) {
+        let resumed_visible =
+            self.formatter_line.buffer_is_visible() || self.zero_advance.has_buffered_glyph();
         self.flush_zero_advance();
-        let resumed = self
-            .nodes
-            .get(field.resumed_output_start..)
-            .unwrap_or_default();
-        let resumed_text = super::super::plain_text(resumed);
-        // `term_fill()` commits a fixed/non-breaking blank glyph, but drops
-        // an ordinary whitespace-only formatter word.  Both occupy the Rust
-        // projection, so printable text alone cannot distinguish them.
-        let resumed_has_cell = resumed_text.chars().any(|ch| !ch.is_whitespace())
-            || (has_printable_character(resumed)
-                && self.trailing_output == TrailingOutput::FixedBlank);
-        if !resumed_has_cell {
-            trim_trailing_breakable_spaces(&mut self.nodes, field.separator_cells);
-            let mut index = self.nodes.len();
-            while index > field.output_end_before_separator {
-                index -= 1;
-                if matches!(&self.nodes[index], Inline::Text { value } | Inline::Code { value } if value.chars().all(char::is_whitespace))
-                {
-                    self.nodes.remove(index);
-                }
-            }
-            self.last_visible_character = last_visible_character(&self.nodes);
-            self.trailing_output = if self.last_visible_character.is_some() {
-                TrailingOutput::NonBlank
-            } else {
-                TrailingOutput::None
-            };
-        }
-        self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
-        resumed_has_cell
-    }
-
-    fn settle_no_break_field_line(&mut self, field: NoBreakField) {
-        let resumed_visible = self.restore_no_break_field_projection(field);
+        self.formatter_line.commit_field();
         match field.style {
             DefinitionFieldStyle::Tag => {
                 self.force_output_line_break();
@@ -703,10 +636,12 @@ impl InlineBuilder {
                     self.pending_definition_indent =
                         Some(field.body_width.saturating_sub(field.field_width).max(1));
                 }
+                self.formatter_line
+                    .queue_separator(field.trailspace_cells, SeparatorKind::FieldMinimum);
                 self.boundary = PendingBoundary::Tight;
             }
         }
-        self.finish_definition_field_control(field, 0, true);
+        self.finish_definition_field_control(field, 0, consume_body_gap);
     }
 
     fn finish_definition_field_control(
@@ -719,7 +654,6 @@ impl InlineBuilder {
             self.definition_outcome.mark_body_gap_consumed();
         }
         if let Some(execution) = &mut self.author_execution {
-            execution.field_output_start = self.nodes.len();
             execution.break_effect = match field.style {
                 DefinitionFieldStyle::Tag => AuthorBreakEffect::Line,
                 DefinitionFieldStyle::Hang => AuthorBreakEffect::Field {
@@ -730,7 +664,7 @@ impl InlineBuilder {
             };
         }
         self.word_end_break = WordEndBreak::Clear;
-        self.formatter_column = FormatterColumn::Origin;
+        self.formatter_line.discard_empty_field();
         self.empty_word = false;
         self.final_word_join = Some(false);
     }
@@ -745,7 +679,7 @@ impl InlineBuilder {
         self.trailing_output = TrailingOutput::None;
         self.boundary = PendingBoundary::Ordinary;
         self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
-        self.formatter_column = FormatterColumn::Origin;
+        self.formatter_line.clear_separators();
+        self.formatter_line.end_row();
     }
 }
