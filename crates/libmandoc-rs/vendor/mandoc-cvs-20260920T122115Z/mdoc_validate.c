@@ -304,6 +304,7 @@ mdoc_validate(struct roff_man *mdoc)
 {
 	struct roff_node *n, *np;
 	const v_post *p;
+	uint32_t	  saved_source_key;
 
 	/*
 	 * Translate obsolete macros to modern macros first
@@ -312,6 +313,11 @@ mdoc_validate(struct roff_man *mdoc)
 	 */
 
 	n = mdoc->last;
+	saved_source_key = mandoc_msg_getsourcekey();
+	if (n->flags & NODE_NOSRC)
+		mandoc_msg_setsourcekey(0);
+	else if (n->type != ROFFT_ROOT)
+		mandoc_msg_setsourcekey(n->mant_source_key);
 	switch (n->tok) {
 	case MDOC_Lp:
 		n->tok = MDOC_Pp;
@@ -392,6 +398,7 @@ mdoc_validate(struct roff_man *mdoc)
 			mdoc_state(mdoc, n);
 		break;
 	}
+	mandoc_msg_setsourcekey(saved_source_key);
 }
 
 static void
@@ -2098,6 +2105,7 @@ static void
 post_root(POST_ARGS)
 {
 	struct roff_node *n;
+	uint32_t saved_source_key;
 
 	/* Add missing prologue data. */
 
@@ -2130,10 +2138,13 @@ post_root(POST_ARGS)
 		    n->child->next->next == NULL)
 			n = n->next;
 		n = n->child->next->next;
+		saved_source_key = mandoc_msg_getsourcekey();
+		mandoc_msg_setsourcekey(n->mant_source_key);
 		mandoc_msg(MANDOCERR_ARCH_BAD, n->line, n->pos,
 		    "Dt ... %s %s", mdoc->meta.arch,
 		    mdoc->meta.os_e == MANDOC_OS_OPENBSD ?
 		    "(OpenBSD)" : "(NetBSD)");
+		mandoc_msg_setsourcekey(saved_source_key);
 	}
 
 	/* Check that we begin with a proper `Sh'. */
@@ -2147,9 +2158,13 @@ post_root(POST_ARGS)
 
 	if (n == NULL)
 		mandoc_msg(MANDOCERR_DOC_EMPTY, 0, 0, NULL);
-	else if (n->tok != MDOC_Sh)
+	else if (n->tok != MDOC_Sh) {
+		saved_source_key = mandoc_msg_getsourcekey();
+		mandoc_msg_setsourcekey(n->mant_source_key);
 		mandoc_msg(MANDOCERR_SEC_BEFORE, n->line, n->pos,
 		    "%s", roff_name[n->tok]);
+		mandoc_msg_setsourcekey(saved_source_key);
+	}
 }
 
 static void

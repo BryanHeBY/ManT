@@ -2,6 +2,7 @@
 #[cfg(windows)]
 use super::windows_root;
 use super::{
+    guard::NativeSessionGuard,
     owned::optional_string,
     raw::{self, CDocument},
     session::{BundleSources, DocumentHandle, input_format_code},
@@ -34,6 +35,7 @@ pub(crate) fn render_file(
     html_fragment: bool,
     output_limit: usize,
 ) -> Result<RawRender, NativeRenderError> {
+    let _guard = NativeSessionGuard::enter().map_err(reentry_error)?;
     let pointer = unsafe {
         raw::mant_mandoc_render_file(
             path.as_ptr(),
@@ -64,6 +66,7 @@ pub(crate) fn render_buffer(
     html_fragment: bool,
     output_limit: usize,
 ) -> Result<RawRender, NativeRenderError> {
+    let _guard = NativeSessionGuard::enter().map_err(reentry_error)?;
     let pointer = unsafe {
         raw::mant_mandoc_render_buffer(
             path.as_ptr(),
@@ -98,6 +101,7 @@ pub(crate) fn render_buffer(
     html_fragment: bool,
     output_limit: usize,
 ) -> Result<RawRender, NativeRenderError> {
+    let _guard = NativeSessionGuard::enter().map_err(reentry_error)?;
     let mut resolver = include_root.map(|root| windows_root::RootResolver::new(root, path));
     let (callback, context) = windows_root::callback_parts(resolver.as_mut());
     let pointer = unsafe {
@@ -132,6 +136,7 @@ pub(crate) fn render_bundle(
     html_fragment: bool,
     output_limit: usize,
 ) -> Result<RawRender, NativeRenderError> {
+    let _guard = NativeSessionGuard::enter().map_err(reentry_error)?;
     let storage = BundleSources::new(bundle);
     let sources = storage.as_slice();
     let pointer = unsafe {
@@ -182,4 +187,11 @@ fn copy_render(pointer: *mut CDocument) -> Result<RawRender, NativeRenderError> 
             optional_string(raw::mant_mandoc_document_diagnostics(document)).unwrap_or_default()
         },
     })
+}
+
+fn reentry_error(message: &str) -> NativeRenderError {
+    NativeRenderError {
+        status: 2,
+        message: message.to_owned(),
+    }
 }

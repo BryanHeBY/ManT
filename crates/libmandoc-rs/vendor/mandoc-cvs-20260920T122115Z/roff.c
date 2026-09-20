@@ -917,6 +917,7 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
 	n = mandoc_calloc(1, sizeof(*n));
 	n->line = line;
 	n->pos = pos;
+	n->mant_source_key = mandoc_msg_getsourcekey();
 	n->tok = tok;
 	n->type = type;
 	n->sec = man->lastsec;

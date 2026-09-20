@@ -1,6 +1,6 @@
 //! Raw C ABI declarations. Snapshots are borrowed only for immediate copying.
 use std::os::raw::{c_char, c_void};
-#[cfg(feature = "render")]
+#[cfg(any(feature = "render", feature = "structured"))]
 use unicode_width::UnicodeWidthChar;
 #[repr(C)]
 pub(super) struct CDocument {
@@ -88,7 +88,7 @@ pub(super) struct CResolvedSource {
 pub(super) type CSourceResolver =
     extern "C" fn(*mut c_void, *const c_char, *const c_char, *mut CResolvedSource) -> i32;
 
-#[cfg(feature = "render")]
+#[cfg(any(feature = "render", feature = "structured"))]
 #[unsafe(no_mangle)]
 extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
     u32::try_from(codepoint)

@@ -32,7 +32,10 @@
 #include "mandoc_parse.h"
 
 #include "mant_mandoc_shim.h"
-#ifdef MANT_MANDOC_RENDER
+#ifdef MANT_MANDOC_STRUCTURED
+#include "mant_mandoc_structured.h"
+#endif
+#ifdef MANT_MANDOC_TERM
 #include "main.h"
 #include "manconf.h"
 #include "mant_mandoc_output.h"
@@ -554,8 +557,10 @@ render_document(struct mant_mandoc_document *document,
 	}
 	return status == 0;
 }
+#endif
 
-/* Embedded rendering never creates pager tag files. */
+/* Embedded terminal rendering never creates pager tag files. */
+#ifdef MANT_MANDOC_TERM
 void
 term_tag_write(struct roff_node *node, size_t line)
 {
@@ -576,6 +581,12 @@ mant_mandoc_read_bundle(struct mparse *parser, const char *requested_path)
 	char				*beside;
 	size_t				 prefix_length;
 	int				 error_number, status;
+
+#ifdef MANT_MANDOC_STRUCTURED
+	status = mant_structured_read_bundle(parser, requested_path);
+	if (status != 0)
+		return status;
+#endif
 
 	if (bundle_sources == NULL && source_resolver == NULL)
 		return 0;

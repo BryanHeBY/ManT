@@ -1,4 +1,5 @@
 //! Synchronous native calls and the sole native document drop guard.
+use super::guard::NativeSessionGuard;
 #[cfg(windows)]
 use super::windows_root;
 use super::{owned::copy_document, raw};
@@ -25,6 +26,7 @@ pub(crate) fn parse_file(
     input_format: InputFormat,
     operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
+    let _guard = NativeSessionGuard::enter().map_err(str::to_owned)?;
     let pointer = unsafe {
         raw::mant_mandoc_parse_file(
             path.as_ptr(),
@@ -46,6 +48,7 @@ pub(crate) fn parse_buffer(
     input_format: InputFormat,
     operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
+    let _guard = NativeSessionGuard::enter().map_err(str::to_owned)?;
     let pointer = unsafe {
         raw::mant_mandoc_parse_buffer(
             path.as_ptr(),
@@ -71,6 +74,7 @@ pub(crate) fn parse_buffer(
     input_format: InputFormat,
     operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
+    let _guard = NativeSessionGuard::enter().map_err(str::to_owned)?;
     let mut resolver = include_root.map(|root| windows_root::RootResolver::new(root, path));
     let (callback, context) = windows_root::callback_parts(resolver.as_mut());
     let pointer = unsafe {
@@ -95,6 +99,7 @@ pub(crate) fn parse_bundle(
     input_format: InputFormat,
     operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
+    let _guard = NativeSessionGuard::enter().map_err(str::to_owned)?;
     let storage = BundleSources::new(bundle);
     let sources = storage.as_slice();
     let pointer = unsafe {

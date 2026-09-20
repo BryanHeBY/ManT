@@ -259,6 +259,8 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
 			ln.buf[pos++] = blk.buf[i++];
 		}
 		ln.buf[pos] = '\0';
+		if (start)
+			mandoc_msg_sourceline(curp->line, pos);
 
 		/*
 		 * Maintain a lookaside buffer of all lines.

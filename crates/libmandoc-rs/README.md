@@ -28,6 +28,11 @@ see [`upstream/oracle/README.md`](upstream/oracle/README.md).
 - Concurrent parser calls with thread-local upstream and shim state.
 - An optional `render` feature exposing bounded upstream ASCII, deterministic
   UTF-8, and HTML reference output without writing to process standard output.
+- A default-off `structured` feature compiling the versioned native session
+  boundary independently of the reference renderer. During C02a this is a
+  crate-private preview: metadata-only documents, participating source tables,
+  and source-qualified diagnostics transfer into owned Rust values; body input
+  returns explicit unsupported coverage until the annotated collector lands.
 
 The default crate remains a parser layer only. It intentionally does not
 locate system manual pages, interpret application-specific section models, or
@@ -83,7 +88,10 @@ returns, while the returned report remains fully owned and freely movable.
 Within that private boundary, `ffi::session` owns the native document drop
 guard and keeps bundle paths and source bytes alive for the call;
 `ffi::owned` transfers the syntax tree, while `ffi::render` copies bounded
-reference output using the same guard. A failed native call releases its own
+reference output using the same guard. `ffi::structured` owns the independent
+versioned result handle, validates every view before copying, and frees the
+native parser/tree before any successful result is returned. All three entries
+share a same-thread re-entry guard. A failed native call releases its own
 session without invalidating previously returned reports. Raw declarations
 and the Windows root callback remain private to the FFI boundary; none of
 these internal modules is a consumer-facing API.

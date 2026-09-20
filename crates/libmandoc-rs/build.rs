@@ -49,23 +49,39 @@ const LIBMANDOC_SOURCES: &[&str] = &[
     "tag.c",
 ];
 
-const RENDER_SOURCES: &[&str] = &[
+const TERM_SOURCES: &[&str] = &[
     "out.c",
     "term.c",
     "term_ascii.c",
     "term_tab.c",
     "roff_term.c",
-    "roff_html.c",
     "man_term.c",
     "mdoc_term.c",
     "tbl_term.c",
     "eqn_term.c",
+];
+
+const HTML_SOURCES: &[&str] = &[
     "html.c",
+    "roff_html.c",
     "man_html.c",
     "mdoc_html.c",
     "tbl_html.c",
     "eqn_html.c",
 ];
+
+struct NativeSelection(u8);
+
+impl NativeSelection {
+    const TERMINAL: u8 = 1 << 0;
+    const RENDER: u8 = 1 << 1;
+    const STRUCTURED: u8 = 1 << 2;
+    const MEMORY_ONLY: u8 = 1 << 3;
+
+    const fn has(&self, flag: u8) -> bool {
+        self.0 & flag != 0
+    }
+}
 
 fn main() {
     let crate_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
@@ -78,6 +94,8 @@ fn main() {
     let address_sanitizer = env::var_os("LIBMANDOC_RS_ASAN").is_some();
     let deny_native_warnings = env::var_os("LIBMANDOC_RS_DENY_WARNINGS").is_some();
     let render = env::var_os("CARGO_FEATURE_RENDER").is_some();
+    let structured = env::var_os("CARGO_FEATURE_STRUCTURED").is_some();
+    let terminal = render || structured;
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
 
     assert!(
@@ -153,23 +171,25 @@ fn main() {
         build.define("open", "mant_mandoc_source_open");
     }
 
-    let mut upstream_sources = LIBMANDOC_SOURCES
-        .iter()
-        .chain(compat_sources.iter())
-        .map(|source| vendor_dir.join(source))
-        .collect::<Vec<_>>();
+    if terminal {
+        build.define("MANT_MANDOC_TERM", None);
+    }
     if render {
         build.define("MANT_MANDOC_RENDER", None);
-        upstream_sources.extend(RENDER_SOURCES.iter().map(|source| vendor_dir.join(source)));
     }
-    let mut owned_sources = Vec::new();
-    if render {
-        owned_sources.push(crate_dir.join("shim/mant_mandoc_output.c"));
+    if structured {
+        build.define("MANT_MANDOC_STRUCTURED", None);
     }
-    if memory_only {
-        owned_sources.push(crate_dir.join("shim/windows_compat.c"));
-    }
-    owned_sources.push(crate_dir.join("shim/mant_mandoc_shim.c"));
+    let selection = NativeSelection(
+        (u8::from(terminal) * NativeSelection::TERMINAL)
+            | (u8::from(render) * NativeSelection::RENDER)
+            | (u8::from(structured) * NativeSelection::STRUCTURED)
+            | (u8::from(memory_only) * NativeSelection::MEMORY_ONLY),
+    );
+    let (upstream_sources, owned_sources) =
+        selected_native_sources(&crate_dir, &vendor_dir, compat_sources, &selection);
+
+    assert_unique_native_sources(&upstream_sources, &owned_sources);
 
     compile_native_archive(
         build,
@@ -182,6 +202,41 @@ fn main() {
         // Unix native-file parsing retains libmandoc's gzip transport.
         println!("cargo:rustc-link-lib=z");
     }
+    emit_rerun_directives(&vendor_dir);
+}
+
+fn selected_native_sources(
+    crate_dir: &std::path::Path,
+    vendor_dir: &std::path::Path,
+    compat_sources: &[&str],
+    selection: &NativeSelection,
+) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut upstream = LIBMANDOC_SOURCES
+        .iter()
+        .chain(compat_sources)
+        .map(|source| vendor_dir.join(source))
+        .collect::<Vec<_>>();
+    if selection.has(NativeSelection::TERMINAL) {
+        upstream.extend(TERM_SOURCES.iter().map(|source| vendor_dir.join(source)));
+    }
+    if selection.has(NativeSelection::RENDER) {
+        upstream.extend(HTML_SOURCES.iter().map(|source| vendor_dir.join(source)));
+    }
+    let mut owned = Vec::new();
+    if selection.has(NativeSelection::TERMINAL) {
+        owned.push(crate_dir.join("shim/mant_mandoc_output.c"));
+    }
+    if selection.has(NativeSelection::STRUCTURED) {
+        owned.push(crate_dir.join("shim/mant_mandoc_structured.c"));
+    }
+    if selection.has(NativeSelection::MEMORY_ONLY) {
+        owned.push(crate_dir.join("shim/windows_compat.c"));
+    }
+    owned.push(crate_dir.join("shim/mant_mandoc_shim.c"));
+    (upstream, owned)
+}
+
+fn emit_rerun_directives(vendor_dir: &std::path::Path) {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_DENY_WARNINGS");
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_TSAN");
@@ -193,6 +248,17 @@ fn main() {
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_ASAN");
+}
+
+fn assert_unique_native_sources(upstream_sources: &[PathBuf], owned_sources: &[PathBuf]) {
+    let mut seen = HashSet::new();
+    for source in upstream_sources.iter().chain(owned_sources) {
+        assert!(
+            seen.insert(source),
+            "native source selected more than once: {}",
+            source.display()
+        );
+    }
 }
 
 fn compile_native_archive(

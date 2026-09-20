@@ -1,9 +1,12 @@
 //! Immediate ownership transfer from an opaque native session.
+mod guard;
 mod owned;
 mod raw;
 #[cfg(feature = "render")]
 mod render;
 mod session;
+#[cfg(feature = "structured")]
+mod structured;
 #[cfg(windows)]
 mod windows_root;
 

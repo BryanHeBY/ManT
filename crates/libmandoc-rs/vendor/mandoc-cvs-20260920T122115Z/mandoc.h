@@ -19,6 +19,9 @@
  * Can be used by all code in the mandoc package.
  */
 
+#include <stdarg.h>
+#include <stdint.h>
+
 #define ASCII_NBRSP	 31  /* non-breaking space */
 #define ASCII_NBRZW	 30  /* non-breaking zero-width space */
 #define ASCII_BREAK	 29  /* breakable zero-width space */
@@ -295,6 +298,23 @@ enum	mandocerr {
 	MANDOCERR_MAX
 };
 
+typedef void (*mandoc_msg_observer)(void *, enum mandocerr,
+    enum mandoclevel, uint32_t, int, int, const char *, const char *,
+    va_list *);
+typedef void (*mandoc_line_observer)(void *, uint32_t, int, size_t);
+
+struct mandoc_msg_state {
+	FILE		 *outfile;
+	const char	 *infilename;
+	uint32_t	  sourcekey;
+	mandoc_msg_observer observer;
+	void		 *observer_arg;
+	mandoc_line_observer line_observer;
+	void		 *line_observer_arg;
+	enum mandocerr	  min_type;
+	enum mandoclevel  rc;
+};
+
 enum	mandoc_esc {
 	ESCAPE_EXPAND = 0, /* interpolation and iterative call needed */
 	ESCAPE_ERROR, /* non-fatal error: unparsable escape */
@@ -328,6 +348,13 @@ enum mandoc_esc	  mandoc_escape(const char **, const char **, int *);
 void		  mandoc_msg_setoutfile(FILE *);
 const char	 *mandoc_msg_getinfilename(void);
 void		  mandoc_msg_setinfilename(const char *);
+uint32_t	  mandoc_msg_getsourcekey(void);
+void		  mandoc_msg_setsourcekey(uint32_t);
+void		  mandoc_msg_setobserver(mandoc_msg_observer, void *);
+void		  mandoc_msg_setlineobserver(mandoc_line_observer, void *);
+void		  mandoc_msg_sourceline(int, size_t);
+void		  mandoc_msg_getstate(struct mandoc_msg_state *);
+void		  mandoc_msg_setstate(const struct mandoc_msg_state *);
 enum mandocerr	  mandoc_msg_getmin(void);
 void		  mandoc_msg_setmin(enum mandocerr);
 enum mandoclevel  mandoc_msg_getrc(void);

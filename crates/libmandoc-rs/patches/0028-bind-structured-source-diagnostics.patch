@@ -1,0 +1,305 @@
+Subject: bind structured source identity and diagnostics
+Upstream-Status: Local embedding (not submitted)
+
+Stamp syntax nodes while their source is active and expose a session-local
+diagnostic observer. Validation restores each node's source key because include
+parsing has returned to the root by mparse_end().
+
+--- a/man_validate.c
++++ b/man_validate.c
+@@ -112,6 +112,7 @@ man_validate(struct roff_man *man)
+ {
+ 	struct roff_node *n;
+ 	const v_check	 *cp;
++	uint32_t	  saved_source_key;
+ 
+ 	/*
+ 	 * Iterate over all children, recursing into each one
+@@ -119,6 +120,11 @@ man_validate(struct roff_man *man)
+ 	 */
+ 
+ 	n = man->last;
++	saved_source_key = mandoc_msg_getsourcekey();
++	if (n->flags & NODE_NOSRC)
++		mandoc_msg_setsourcekey(0);
++	else if (n->type != ROFFT_ROOT)
++		mandoc_msg_setsourcekey(n->mant_source_key);
+ 	man->last = man->last->child;
+ 	while (man->last != NULL) {
+ 		man_validate(man);
+@@ -156,6 +162,7 @@ man_validate(struct roff_man *man)
+ 			n->flags |= NODE_VALID;
+ 		break;
+ 	}
++	mandoc_msg_setsourcekey(saved_source_key);
+ }
+ 
+ static void
+--- a/mandoc.h
++++ b/mandoc.h
+@@ -19,6 +19,9 @@
+  * Can be used by all code in the mandoc package.
+  */
+ 
++#include <stdarg.h>
++#include <stdint.h>
++
+ #define ASCII_NBRSP	 31  /* non-breaking space */
+ #define ASCII_NBRZW	 30  /* non-breaking zero-width space */
+ #define ASCII_BREAK	 29  /* breakable zero-width space */
+@@ -295,6 +298,23 @@ enum	mandocerr {
+ 	MANDOCERR_MAX
+ };
+ 
++typedef void (*mandoc_msg_observer)(void *, enum mandocerr,
++    enum mandoclevel, uint32_t, int, int, const char *, const char *,
++    va_list *);
++typedef void (*mandoc_line_observer)(void *, uint32_t, int, size_t);
++
++struct mandoc_msg_state {
++	FILE		 *outfile;
++	const char	 *infilename;
++	uint32_t	  sourcekey;
++	mandoc_msg_observer observer;
++	void		 *observer_arg;
++	mandoc_line_observer line_observer;
++	void		 *line_observer_arg;
++	enum mandocerr	  min_type;
++	enum mandoclevel  rc;
++};
++
+ enum	mandoc_esc {
+ 	ESCAPE_EXPAND = 0, /* interpolation and iterative call needed */
+ 	ESCAPE_ERROR, /* non-fatal error: unparsable escape */
+@@ -328,6 +348,13 @@ enum mandoc_esc	  mandoc_escape(const char **, const char **, int *);
+ void		  mandoc_msg_setoutfile(FILE *);
+ const char	 *mandoc_msg_getinfilename(void);
+ void		  mandoc_msg_setinfilename(const char *);
++uint32_t	  mandoc_msg_getsourcekey(void);
++void		  mandoc_msg_setsourcekey(uint32_t);
++void		  mandoc_msg_setobserver(mandoc_msg_observer, void *);
++void		  mandoc_msg_setlineobserver(mandoc_line_observer, void *);
++void		  mandoc_msg_sourceline(int, size_t);
++void		  mandoc_msg_getstate(struct mandoc_msg_state *);
++void		  mandoc_msg_setstate(const struct mandoc_msg_state *);
+ enum mandocerr	  mandoc_msg_getmin(void);
+ void		  mandoc_msg_setmin(enum mandocerr);
+ enum mandoclevel  mandoc_msg_getrc(void);
+--- a/mandoc_msg.c
++++ b/mandoc_msg.c
+@@ -294,6 +294,11 @@ static	const char *const type_message[MANDOCERR_MAX] = {
+ 
+ MANT_THREAD_LOCAL FILE *fileptr = NULL;
+ MANT_THREAD_LOCAL const char *filename = NULL;
++MANT_THREAD_LOCAL uint32_t sourcekey = 0;
++MANT_THREAD_LOCAL mandoc_msg_observer observer = NULL;
++MANT_THREAD_LOCAL void *observer_arg = NULL;
++MANT_THREAD_LOCAL mandoc_line_observer line_observer = NULL;
++MANT_THREAD_LOCAL void *line_observer_arg = NULL;
+ MANT_THREAD_LOCAL enum mandocerr min_type = MANDOCERR_BADARG;
+ MANT_THREAD_LOCAL enum mandoclevel rc = MANDOCLEVEL_OK;
+ 
+@@ -316,6 +321,67 @@ mandoc_msg_setinfilename(const char *fn)
+ 	filename = fn;
+ }
+ 
++uint32_t
++mandoc_msg_getsourcekey(void)
++{
++	return sourcekey;
++}
++
++void
++mandoc_msg_setsourcekey(uint32_t key)
++{
++	sourcekey = key;
++}
++
++void
++mandoc_msg_setobserver(mandoc_msg_observer fn, void *arg)
++{
++	observer = fn;
++	observer_arg = arg;
++}
++
++void
++mandoc_msg_setlineobserver(mandoc_line_observer fn, void *arg)
++{
++	line_observer = fn;
++	line_observer_arg = arg;
++}
++
++void
++mandoc_msg_sourceline(int line, size_t length)
++{
++	if (line_observer != NULL)
++		line_observer(line_observer_arg, sourcekey, line, length);
++}
++
++void
++mandoc_msg_getstate(struct mandoc_msg_state *state)
++{
++	state->outfile = fileptr;
++	state->infilename = filename;
++	state->sourcekey = sourcekey;
++	state->observer = observer;
++	state->observer_arg = observer_arg;
++	state->line_observer = line_observer;
++	state->line_observer_arg = line_observer_arg;
++	state->min_type = min_type;
++	state->rc = rc;
++}
++
++void
++mandoc_msg_setstate(const struct mandoc_msg_state *state)
++{
++	fileptr = state->outfile;
++	filename = state->infilename;
++	sourcekey = state->sourcekey;
++	observer = state->observer;
++	observer_arg = state->observer_arg;
++	line_observer = state->line_observer;
++	line_observer_arg = state->line_observer_arg;
++	min_type = state->min_type;
++	rc = state->rc;
++}
++
+ enum mandocerr
+ mandoc_msg_getmin(void)
+ {
+@@ -344,7 +410,7 @@ mandoc_msg_setrc(enum mandoclevel level)
+ void
+ mandoc_msg(enum mandocerr t, int line, int col, const char *fmt, ...)
+ {
+-	va_list			 ap;
++	va_list			 ap, observed;
+ 	enum mandoclevel	 level;
+ 
+ 	if (t < min_type)
+@@ -355,6 +421,20 @@ mandoc_msg(enum mandocerr t, int line, int col, const char *fmt, ...)
+ 		level--;
+ 	mandoc_msg_setrc(level);
+ 
++	if (observer != NULL) {
++		if (fmt == NULL)
++			observer(observer_arg, t, level, sourcekey,
++			    line, col, type_message[t], NULL, NULL);
++		else {
++			va_start(ap, fmt);
++			va_copy(observed, ap);
++			observer(observer_arg, t, level, sourcekey,
++			    line, col, type_message[t], fmt, &observed);
++			va_end(observed);
++			va_end(ap);
++		}
++	}
++
+ 	if (fileptr == NULL)
+ 		return;
+ 
+--- a/mdoc_validate.c
++++ b/mdoc_validate.c
+@@ -304,6 +304,7 @@ mdoc_validate(struct roff_man *mdoc)
+ {
+ 	struct roff_node *n, *np;
+ 	const v_post *p;
++	uint32_t	  saved_source_key;
+ 
+ 	/*
+ 	 * Translate obsolete macros to modern macros first
+@@ -312,6 +313,11 @@ mdoc_validate(struct roff_man *mdoc)
+ 	 */
+ 
+ 	n = mdoc->last;
++	saved_source_key = mandoc_msg_getsourcekey();
++	if (n->flags & NODE_NOSRC)
++		mandoc_msg_setsourcekey(0);
++	else if (n->type != ROFFT_ROOT)
++		mandoc_msg_setsourcekey(n->mant_source_key);
+ 	switch (n->tok) {
+ 	case MDOC_Lp:
+ 		n->tok = MDOC_Pp;
+@@ -392,6 +398,7 @@ mdoc_validate(struct roff_man *mdoc)
+ 			mdoc_state(mdoc, n);
+ 		break;
+ 	}
++	mandoc_msg_setsourcekey(saved_source_key);
+ }
+ 
+ static void
+@@ -2099,5 +2106,6 @@ post_root(POST_ARGS)
+ {
+ 	struct roff_node *n;
++	uint32_t saved_source_key;
+ 
+ 	/* Add missing prologue data. */
+ 
+@@ -2130,10 +2138,13 @@ post_root(POST_ARGS)
+ 		    n->child->next->next == NULL)
+ 			n = n->next;
+ 		n = n->child->next->next;
++		saved_source_key = mandoc_msg_getsourcekey();
++		mandoc_msg_setsourcekey(n->mant_source_key);
+ 		mandoc_msg(MANDOCERR_ARCH_BAD, n->line, n->pos,
+ 		    "Dt ... %s %s", mdoc->meta.arch,
+ 		    mdoc->meta.os_e == MANDOC_OS_OPENBSD ?
+ 		    "(OpenBSD)" : "(NetBSD)");
++		mandoc_msg_setsourcekey(saved_source_key);
+ 	}
+ 
+ 	/* Check that we begin with a proper `Sh'. */
+@@ -2147,9 +2158,13 @@ post_root(POST_ARGS)
+ 
+ 	if (n == NULL)
+ 		mandoc_msg(MANDOCERR_DOC_EMPTY, 0, 0, NULL);
+-	else if (n->tok != MDOC_Sh)
++	else if (n->tok != MDOC_Sh) {
++		saved_source_key = mandoc_msg_getsourcekey();
++		mandoc_msg_setsourcekey(n->mant_source_key);
+ 		mandoc_msg(MANDOCERR_SEC_BEFORE, n->line, n->pos,
+ 		    "%s", roff_name[n->tok]);
++		mandoc_msg_setsourcekey(saved_source_key);
++	}
+ }
+ 
+ static void
+--- a/read.c
++++ b/read.c
+@@ -259,6 +259,8 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
+ 			ln.buf[pos++] = blk.buf[i++];
+ 		}
+ 		ln.buf[pos] = '\0';
++		if (start)
++			mandoc_msg_sourceline(curp->line, pos);
+ 
+ 		/*
+ 		 * Maintain a lookaside buffer of all lines.
+--- a/roff.c
++++ b/roff.c
+@@ -917,6 +917,7 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
+ 	n = mandoc_calloc(1, sizeof(*n));
+ 	n->line = line;
+ 	n->pos = pos;
++	n->mant_source_key = mandoc_msg_getsourcekey();
+ 	n->tok = tok;
+ 	n->type = type;
+ 	n->sec = man->lastsec;
+--- a/roff.h
++++ b/roff.h
+@@ -19,6 +19,8 @@
+  * Common data types for all syntax trees and related functions.
+  */
+ 
++#include <stdint.h>
++
+ struct	ohash;
+ struct	mdoc_arg;
+ union	mdoc_data;
+@@ -525,6 +527,7 @@ struct	roff_node {
+ 	struct eqn_box	 *eqn;     /* EQN */
+ 	int		  line;    /* Input file line number. */
+ 	int		  pos;     /* Input file column number. */
++	uint32_t	  mant_source_key; /* Embedding result-local source. */
+ 	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
+ 	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
+ 	int		  flags;

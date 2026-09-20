@@ -89,6 +89,7 @@ numbers, mutable traversal indexes, or public `NodeId`s.
 ```rust
 struct StructuredDocument {
     profile: RenderProfile,
+    metadata: Metadata,
     sources: Vec<SourceRecord>,
     root_source: SourceKey,
     roots: Vec<ContentRoot>,
@@ -724,12 +725,14 @@ enum mant_structured_status {
     MANT_STRUCTURED_BUILDER_ALLOC = 4,
     MANT_STRUCTURED_NATIVE = 5,
     MANT_STRUCTURED_RELATION = 6,
+    MANT_STRUCTURED_UNSUPPORTED = 7,
 };
 
 struct mant_input_source_view {
     uint32_t identity_kind;
     uint32_t format;
     struct mant_bytes_view logical_name;
+    struct mant_bytes_view resolver_name;
     struct mant_bytes_view source_bytes;
     uint32_t reserved;
 };
@@ -769,6 +772,7 @@ struct mant_structured_failure_view {
 };
 
 uint32_t mant_structured_abi_version(void); /* exactly 1 for this contract */
+uint64_t mant_structured_discriminant_fingerprint(void);
 uint32_t mant_structured_render(
     const struct mant_structured_input_view *,
     const struct mant_structured_limits *,
@@ -791,13 +795,19 @@ View-kind IDs are frozen in this order: input source `1`, input `2`, failure
 `3`, limits `4`, result `5`, then source/span/provenance/owner/content root/
 content atom/content ref/content point/link/block/table/table row/table cell/
 fixed view/fixed line/placement/decoration/form/name hint/relation/diagnostic as
-`6..26`. Field IDs are one-based in declaration order; zero is invalid.
+`6..26`, and document metadata as `27`. Field IDs are one-based in declaration
+order; zero is invalid. Metadata was added when the first vertical session
+proved that the parser/tree must be released before result return, leaving no
+sound later source for title, section, date, OS, architecture, name, alias,
+macroset, or `hasBody`.
 `view_size`/`view_align` return zero for an invalid kind and `view_offset`
 returns `SIZE_MAX` for an invalid kind or field. Every ABI record except the
 generic byte/slice views ends with an explicit `uint32_t reserved` field (plus
 compiler-required padding) that producers zero and consumers reject when
 nonzero. The checked-in C header and Rust mirror created in C02a are the
-executable field declarations; changing a field, ID, or discriminant requires
+executable field declarations. A deterministic FNV-1a fingerprint over all
+closed discriminant domains is exported by the C side and independently
+recomputed by the Rust ABI test; changing a field, ID, or discriminant requires
 updating this contract, the ABI version/fingerprint, and F review.
 
 Core discriminants use zero only for invalid/absent and the following nonzero
@@ -811,10 +821,18 @@ values:
 | source coordinates | `decoded-utf8-bytes=1`, `native-normalized-bytes=2` |
 | provenance | `authored=1`, `generated=2`, `unknown=3` |
 | atom | `text=1`, `whitespace=2`, `break-opportunity=3`, `hard-break=4` |
+| style bits | `bold=1<<0`, `italic=1<<1`, `literal=1<<2`, `underline=1<<3` |
+| native role | `flag=1`, `environment-variable=2`, `argument=3`, `command-or-directive=4`, `path=5` |
 | point boundary | `between-atoms=1`, `in-atom=2` |
 | placement target | `content=1`, `point=2` |
 | cell map | `affine=1`, `grapheme-cluster=2`, `overlay=3` |
 | link target | `external=1`, `email=2`, `document=3`, `manual=4`, `section=5` |
+| table cell | `text=1`, `horizontal-rule=2`, `double-horizontal-rule=3`, `isolated-horizontal-rule=4`, `isolated-double-horizontal-rule=5` |
+| table alignment | `left=1`, `center=2`, `right=3`; zero is absent |
+| decoration | `border=1`, `rule=2`, `padding=3` |
+| relation | `alias=1`, `reading-context=2` |
+| diagnostic level | `style=1`, `warning=2`, `error=3`, `unsupported=4` |
+| diagnostic code | pinned native `mandocerr` ordinal plus one, currently `1..210` |
 | native stage | `marshal=1`, `resolve=2`, `parse=3`, `render=4`, `finalize=5`, `check=6` |
 
 Failure `limit_kind` is zero when unrelated to a limit and otherwise is the
@@ -831,8 +849,13 @@ length-delimited UTF-8 and never NUL-terminated. `root_input` and callback
 input values are one-based `InputSourceSlot`s into `sources`; they are
 authorization-table positions, not result `SourceKey`s. Profile is `utf8` or
 explicit test/library `ascii`, and width is positive.
-Each input source contains identity kind, format, logical name bytes, and source
-bytes. The native entry accepts man or mdoc roots; Markdown uses the shared
+Each input source contains identity kind, format, caller-visible logical-name
+bytes, a normalized relative `resolver_name`, and source bytes. `Path` logical
+names may be absolute, `Anonymous` logical names are non-path labels, and only
+`BundleMember` logical names must themselves be normalized relative names; for
+bundle members `logical_name == resolver_name` is required. Resolver names are
+the authorization keys and are never copied into the result identity. The
+native entry accepts man or mdoc roots; Markdown uses the shared
 public source model but is rejected by this native call. All supplied sources
 remain alive through the
 last native resolver callback. If the platform bridge uses a resolver callback,
@@ -858,8 +881,11 @@ renumbering is required.
 every non-OK status, `out_result` is null and the caller-owned failure view
 contains only `status`, `stage`, `limitKind`, `observed`, and `allowed`; it owns
 no pointer. Statuses distinguish invalid input, same-thread re-entry, budget,
-builder allocation, native parse/render, and internal relation failure with the
-numeric values above. C fully cleans partial state before returning an error.
+builder allocation, native parse/render, internal relation failure, and an
+explicit unsupported-coverage status with the numeric values above. C fully
+cleans partial state before returning an error. In C02a, a document with body
+content returns `UNSUPPORTED` rather than a successful empty body; C02b removes
+that restriction only for the body shapes its collector completely covers.
 `result_check` is idempotent, returns `OK` only for a complete internally valid
 handle, and uses the same zero/failure rule. `result_view` rejects a null or
 unchecked handle and zeroes `out`; it never transfers ownership. Invalid
@@ -870,7 +896,7 @@ successful native handle.
 ### Result views and topology
 
 One `mant_structured_result_view` contains, in order, `rootSource`, profile,
-width, then typed `mant_slice_view` fields for `sources`,
+width, the document metadata view, then typed `mant_slice_view` fields for `sources`,
 `spans`, `provenances`, `owners`, `contentRoots`, `contentAtoms`,
 `contentRefs`, `contentPoints`, `links`, `blocks`, `tables`, `tableRows`,
 `tableCells`, `fixedViews`, `fixedLines`, `placements`, `decorations`, `forms`,
@@ -889,6 +915,7 @@ descriptor indexes do not escape as public document identity.
 
 | View | Frozen fields |
 | --- | --- |
+| `metadata` | macroset, presence flags, title, section, volume, operating system, architecture, name, date, alias target, `hasBody` |
 | `source` | `key`, identity kind, `format`, coordinate kind, logical-name bytes, decoded length, hash-present, 32-byte hash |
 | `span` | present flags, `source`, line/column/end values, byte-range-present, `byteStart`, `byteEnd` |
 | `provenance` | kind `authored/generated/unknown`, authored span, optional generated trigger span |
@@ -974,8 +1001,9 @@ or allocation.
 
 Counters use checked `uint64_t` addition/multiplication and reject before growth.
 `maxInputSources` bounds the authorization slice, `maxSources` bounds the dense
-participating result, `maxSourcePathBytes` is aggregate across input logical
-names, and both decoded-byte limits apply simultaneously.
+participating result, and `maxSourcePathBytes` is aggregate across each input's
+identity name plus its distinct resolver name (a bundle member's equal shared
+name is charged once). Both decoded-byte limits apply simultaneously.
 Independently, every table count/key, atom-local byte endpoint, scalar endpoint,
 and terminal column must fit its fixed `uint32_t` field; reaching the sentinel
 space is a budget error. Separator bytes, zero-width connection atoms,
@@ -1187,6 +1215,13 @@ rejection, known-fixture wrong-valid-source detection at the producer/oracle
 boundary, owned mapping after native free, budget/allocation/transfer cleanup,
 re-entry recovery, all ABI sizes/alignments/field offsets/discriminants, and
 independent `structured`/`render` feature builds.
+
+The C02a input requires an explicit man or mdoc format. `Auto` remains an old
+parser convenience and is rejected at the structured boundary; callers must
+carry the already-established source format instead of rescanning roff bytes.
+Until a bounded pre-conversion byte map is implemented, source records use
+`native-normalized-bytes` coordinates and diagnostics expose only their proven
+source-qualified line/column positions, never invented exact byte ranges.
 
 C02b must prove root/include equal line and byte offsets remain distinct,
 nested and repeated bundle includes retain source identity without host

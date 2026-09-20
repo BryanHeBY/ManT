@@ -19,6 +19,8 @@
  * Common data types for all syntax trees and related functions.
  */
 
+#include <stdint.h>
+
 struct	ohash;
 struct	mdoc_arg;
 union	mdoc_data;
@@ -525,6 +527,7 @@ struct	roff_node {
 	struct eqn_box	 *eqn;     /* EQN */
 	int		  line;    /* Input file line number. */
 	int		  pos;     /* Input file column number. */
+	uint32_t	  mant_source_key; /* Embedding result-local source. */
 	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
 	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
 	int		  flags;

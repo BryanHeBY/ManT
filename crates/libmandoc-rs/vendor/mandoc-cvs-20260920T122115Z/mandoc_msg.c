@@ -294,6 +294,11 @@ static	const char *const type_message[MANDOCERR_MAX] = {
 
 MANT_THREAD_LOCAL FILE *fileptr = NULL;
 MANT_THREAD_LOCAL const char *filename = NULL;
+MANT_THREAD_LOCAL uint32_t sourcekey = 0;
+MANT_THREAD_LOCAL mandoc_msg_observer observer = NULL;
+MANT_THREAD_LOCAL void *observer_arg = NULL;
+MANT_THREAD_LOCAL mandoc_line_observer line_observer = NULL;
+MANT_THREAD_LOCAL void *line_observer_arg = NULL;
 MANT_THREAD_LOCAL enum mandocerr min_type = MANDOCERR_BADARG;
 MANT_THREAD_LOCAL enum mandoclevel rc = MANDOCLEVEL_OK;
 
@@ -314,6 +319,67 @@ void
 mandoc_msg_setinfilename(const char *fn)
 {
 	filename = fn;
+}
+
+uint32_t
+mandoc_msg_getsourcekey(void)
+{
+	return sourcekey;
+}
+
+void
+mandoc_msg_setsourcekey(uint32_t key)
+{
+	sourcekey = key;
+}
+
+void
+mandoc_msg_setobserver(mandoc_msg_observer fn, void *arg)
+{
+	observer = fn;
+	observer_arg = arg;
+}
+
+void
+mandoc_msg_setlineobserver(mandoc_line_observer fn, void *arg)
+{
+	line_observer = fn;
+	line_observer_arg = arg;
+}
+
+void
+mandoc_msg_sourceline(int line, size_t length)
+{
+	if (line_observer != NULL)
+		line_observer(line_observer_arg, sourcekey, line, length);
+}
+
+void
+mandoc_msg_getstate(struct mandoc_msg_state *state)
+{
+	state->outfile = fileptr;
+	state->infilename = filename;
+	state->sourcekey = sourcekey;
+	state->observer = observer;
+	state->observer_arg = observer_arg;
+	state->line_observer = line_observer;
+	state->line_observer_arg = line_observer_arg;
+	state->min_type = min_type;
+	state->rc = rc;
+}
+
+void
+mandoc_msg_setstate(const struct mandoc_msg_state *state)
+{
+	fileptr = state->outfile;
+	filename = state->infilename;
+	sourcekey = state->sourcekey;
+	observer = state->observer;
+	observer_arg = state->observer_arg;
+	line_observer = state->line_observer;
+	line_observer_arg = state->line_observer_arg;
+	min_type = state->min_type;
+	rc = state->rc;
 }
 
 enum mandocerr
@@ -344,7 +410,7 @@ mandoc_msg_setrc(enum mandoclevel level)
 void
 mandoc_msg(enum mandocerr t, int line, int col, const char *fmt, ...)
 {
-	va_list			 ap;
+	va_list			 ap, observed;
 	enum mandoclevel	 level;
 
 	if (t < min_type)
@@ -354,6 +420,20 @@ mandoc_msg(enum mandocerr t, int line, int col, const char *fmt, ...)
 	while (t < lowest_type[level])
 		level--;
 	mandoc_msg_setrc(level);
+
+	if (observer != NULL) {
+		if (fmt == NULL)
+			observer(observer_arg, t, level, sourcekey,
+			    line, col, type_message[t], NULL, NULL);
+		else {
+			va_start(ap, fmt);
+			va_copy(observed, ap);
+			observer(observer_arg, t, level, sourcekey,
+			    line, col, type_message[t], fmt, &observed);
+			va_end(observed);
+			va_end(ap);
+		}
+	}
 
 	if (fileptr == NULL)
 		return;
