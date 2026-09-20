@@ -1,0 +1,53 @@
+{
+  "schema": "mant.structured-rendering-performance-baseline/v1",
+  "recordedAt": "2026-09-20T13:00:00Z",
+  "host": {
+    "os": "Linux 6.18.33.2-microsoft-standard-WSL2",
+    "architecture": "x86_64",
+    "rustc": "1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+    "cc": "GCC 16.2.1 20260810"
+  },
+  "fixture": {
+    "path": "tests/fixtures/roff/real/archlinux/gcc.1.gz",
+    "sha256": "8a0bbfaaa5b05a8fcefc6d4741530d09abcfd95b26f8947e9aecbce68cb75b23",
+    "explainEntry": "-Wall"
+  },
+  "method": {
+    "profile": "release",
+    "alternatingRounds": 3,
+    "samplesPerRoundAndOperation": 7,
+    "sampleCountPerRevisionAndOperation": 21,
+    "decompression": "before the measured interval",
+    "resultDestruction": "outside the measured interval",
+    "rssTool": "/usr/bin/time -v; one separate process per revision and operation",
+    "rawTimings": "performance-raw.ndjson"
+  },
+  "revisions": [
+    {
+      "name": "dev-start",
+      "commit": "aa211f7345dd80acd4b8b056e0deef0c368e18c6",
+      "binarySha256": "a425d5829f66006864c9d6e353273547a74672153816cfc9581b6eeca53b9acb",
+      "probeSha256": "f2646d9f4b10858f51303dc519ccfd050bc613f2a8c7de40759d7f46966e9830",
+      "measurements": [
+        {"operation": "load", "minMs": 215.864779, "medianMs": 222.549430, "meanMs": 224.825938, "maxMs": 242.998686, "peakRssKiB": 79240},
+        {"operation": "index", "minMs": 3.704822, "medianMs": 5.073203, "meanMs": 5.037542, "maxMs": 6.713223, "peakRssKiB": 76296},
+        {"operation": "outline", "minMs": 0.850934, "medianMs": 1.288829, "meanMs": 1.361888, "maxMs": 2.551089, "peakRssKiB": 76532},
+        {"operation": "explain", "minMs": 34.970023, "medianMs": 36.754869, "meanMs": 36.940388, "maxMs": 39.899541, "peakRssKiB": 76500}
+      ]
+    },
+    {
+      "name": "c00b",
+      "commit": "6a1469a4",
+      "binarySha256": "00c40299597431cc643cbf098bc9fc3340865d1fd73745163f4c9e26a4961984",
+      "probeSha256": "f5ee57792c8bf87a828b6d950fe54b4075e6fe52d49ea4dd26b149e49536ec6a",
+      "measurements": [
+        {"operation": "load", "minMs": 215.772611, "medianMs": 223.869086, "meanMs": 224.804778, "maxMs": 233.507434, "peakRssKiB": 78600},
+        {"operation": "index", "minMs": 3.910962, "medianMs": 4.533441, "meanMs": 5.038338, "maxMs": 7.727914, "peakRssKiB": 76372},
+        {"operation": "outline", "minMs": 0.901024, "medianMs": 1.497718, "meanMs": 1.535743, "maxMs": 2.888842, "peakRssKiB": 76580},
+        {"operation": "explain", "minMs": 35.316524, "medianMs": 37.204042, "meanMs": 37.284643, "maxMs": 40.571667, "peakRssKiB": 76452}
+      ]
+    }
+  ],
+  "interpretation": "This is a checkpoint, not a pass/fail threshold. The C00 snapshot update did not produce a clear end-to-end load or RSS regression on this host; later stages must repeat the same comparison against dev-start."
+}

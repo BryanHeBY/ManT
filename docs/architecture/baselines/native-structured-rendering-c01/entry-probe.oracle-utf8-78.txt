@@ -1,0 +1,19 @@
+ENTRYPROBE(1)               General Commands Manual              ENTRYPROBE(1)
+
+OOPPTTIIOONNSS
+     --aa,, ----aallll
+            LINK_PAYLOAD.
+
+     --LL_d_i_r  ATTACHED_PAYLOAD.
+
+     --WWaallll  FIXED_NAME_PAYLOAD.
+
+     --OO22    FIXED_DIGIT_PAYLOAD.
+
+CCOOMMMMAANNDDSS
+     llaauunncchh --pp [[--xx]]
+            COMMAND_PAYLOAD.
+
+     [[      LITERAL_COMMAND_PAYLOAD.
+
+                                  2026-09-07                     ENTRYPROBE(1)

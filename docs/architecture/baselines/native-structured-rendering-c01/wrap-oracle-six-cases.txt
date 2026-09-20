@@ -1,0 +1,101 @@
+===== ascii space =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh
+     ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== ascii hyphen =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh-
+     ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== ascii breakop =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh
+     ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== ascii hyphenctrl =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefghijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== ascii protectedhyphen =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh-ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== ascii nbrspace =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== utf8 space =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh
+     ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== utf8 hyphen =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh-
+     ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== utf8 breakop =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefghijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== utf8 hyphenctrl =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefghijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== utf8 protectedhyphen =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh-ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
+===== utf8 nbrspace =====
+WRAP(1)                     General Commands Manual                    WRAP(1)
+
+TTEESSTT
+     abcdefgh ijklmnopqrst
+     uvwxyz
+
+                                  2026-09-20                           WRAP(1)
