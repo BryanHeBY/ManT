@@ -15,6 +15,7 @@ mod tests {
     fn pending_batches_preserve_anchor_order_and_owner_provenance() {
         let source = |line| {
             Some(SourceSpan {
+                source: mant_ir::SourceKey::FIRST,
                 byte_range: None,
                 line,
                 column: 1,

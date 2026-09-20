@@ -88,10 +88,8 @@ fn confirmed_search_moves_across_a_pre_resolved_document_scope() {
         label: name.to_owned(),
         document: Some(Document {
             parser: None,
-            source: DocumentSource {
-                format: SourceFormat::Markdown,
-                path: None,
-            },
+            sources: sources(SourceFormat::Markdown),
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta {
                 title: Some(name.to_owned()),
                 ..DocumentMeta::default()

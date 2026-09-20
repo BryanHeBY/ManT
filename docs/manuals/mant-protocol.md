@@ -709,7 +709,7 @@ For `result.kind = "explain"`, `result.explanation` is a `ScopeExplanation`.
 It owns `query`, `order`, `counts`, aggregate `outcome`, `total`, `returned`,
 optional `nextOffset`, independent `truncation`, BFS `documents`, one globally
 ordered `evidence` list and `failures`. Each readable document report contains
-`address`, `depth`, `label`, optional `producer`, `diagnostics`,
+`address`, `depth`, `label`, required `sourceContext`, optional `producer`, `diagnostics`,
 `semanticsComplete`, `outcome`, `total`, `returned`, `counts` and `truncation`,
 even when it found no evidence or contributed nothing to this page. Reports
 contain no nested query, cursor or evidence/body. Each flat record is
@@ -719,6 +719,10 @@ evidence, not failures. Source-loading failures remain in `scope.unresolved`;
 `failures` is reserved for an otherwise loaded document that cannot be queried.
 If no readable initial source remains, execution fails rather than manufacturing
 a successful empty scope.
+
+Each document group in a scope search likewise carries its own required
+`sourceContext`. Span keys are resolved only against that document record;
+equal numeric keys in two documents never identify the same source.
 
 One global result offset, limit and payload-copy budget apply after ordering
 by evidence class, document BFS position and original IR position. Ordinals
@@ -789,10 +793,14 @@ An abbreviated but structurally valid Markdown result is:
         "version": "0.13"
       }
     },
-    "source": {
+    "sources": [{
+      "key": 1,
+      "identity": {"kind": "path", "name": "guide.md"},
       "format": "markdown",
-      "path": "guide.md"
-    },
+      "decodedByteLength": 0,
+      "coordinates": {"kind": "decoded-utf8-bytes"}
+    }],
+    "rootSource": 1,
     "meta": {
       "title": "Guide"
     },
@@ -818,7 +826,7 @@ to the reusable in-memory IR.
 | --- | --- |
 | `schema` | Exact `mant.document/v0.12` marker |
 | `producer` | ManT version and parser engine |
-| `source` | Original source format and path |
+| `sources`, `rootSource` | Dense source table and the key of the document root source |
 | `meta` | Normalized title, section, date, volume, OS, architecture, names, and alias target |
 | `fragmentAliases` | Optional exact fragments resolving to `document-overview` |
 | `diagnostics` | Optional recoverable parser findings |
@@ -828,8 +836,13 @@ to the reusable in-memory IR.
 `producer.engine` is `libmandoc` for man/mdoc input and `pulldown-cmark` for
 Markdown.
 
-`source.format` is one of `man`, `mdoc`, or `markdown`. Temporary decompression
-paths never replace the original `source.path`.
+Each source `format` is one of `man`, `mdoc`, or `markdown`. Temporary
+decompression paths never replace the caller-visible path identity.
+`SourceKey` values are nonzero, dense, one-based table positions; `rootSource`
+is key 1. Every `SourceSpan.source` must select a record in the same table, and
+exact byte ranges must fit that record's `decodedByteLength`. Real decoding
+rejects empty/non-dense tables, invalid roots, unknown keys, out-of-range spans,
+and the former singular `source` object.
 
 Diagnostic levels are `style`, `warning`, `error`, and `unsupported`.
 A diagnostic can include a stable code and an original `SourceSpan`.
@@ -1063,7 +1076,7 @@ before an agent requests content:
 | `label` | Query label |
 | `displayTitle` | Optional derived visible title; authoritative heading content remains in the IR |
 | `address` | Exact logical address, omitted for direct-file input |
-| `source`, `meta` | Optional document identity |
+| `sourceContext`, `meta` | Optional dense source table/root key and document metadata |
 | `diagnostics` | Optional recoverable parser findings |
 | `semanticsComplete` | Present as `false` when semantic declarations were rejected, native definitions could not be classified without guessing, or shared IR validation found an identity or relationship violation |
 | `nodes` | Recursive addressable tree |
@@ -1167,9 +1180,9 @@ An illustrative response is:
   "entries": {"kind": "all"},
   "label": "tool.md",
   "address": {"kind": "markdown", "path": "tool", "origin": {"kind": "documents"}},
-  "source": {
-    "format": "markdown",
-    "path": "tool.md"
+  "sourceContext": {
+    "sources": [{"key": 1, "identity": {"kind": "path", "name": "tool.md"}, "format": "markdown", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}],
+    "rootSource": 1
   },
   "meta": {},
   "displayTitle": "Tool",
@@ -1521,9 +1534,9 @@ Complete reference inventory example (registered as `documents/linked`):
       "kind": "documents"
     }
   },
-  "source": {
-    "format": "markdown",
-    "path": "linked.md"
+  "sourceContext": {
+    "sources": [{"key": 1, "identity": {"kind": "path", "name": "linked.md"}, "format": "markdown", "decodedByteLength": 135, "coordinates": {"kind": "decoded-utf8-bytes"}}],
+    "rootSource": 1
   },
   "meta": {},
   "nodes": [
@@ -1619,7 +1632,7 @@ sections:
 | `label` | Query label |
 | `address` | Optional logical namespace for references in selected content |
 | `semanticsComplete` | Same document-wide completeness signal as outline; omitted when true |
-| `producer`, `source`, `meta` | Optional document identity |
+| `producer`, `sourceContext`, `meta` | Optional producer, dense source table/root key, and metadata |
 | `diagnostics` | Relevant recoverable findings |
 | `selections` | Selected content in source order |
 
@@ -1691,6 +1704,7 @@ results. There is no strict-explain mode.
 | --- | --- |
 | `schema`, `producer`, `query` | Contract identity, implementation version and normalized literal/options |
 | `label`, `address` | Source label and optional logical document namespace |
+| `sourceContext` | Optional dense source table/root key resolving every returned span |
 | `outcome` | `evidence` or `no-evidence`, evaluated before result pagination |
 | `total`, `returned`, `nextOffset` | Matching owner count, current page size and optional continuation |
 | `truncation` | Separate `candidates`, `relations`, `content` flags; counts are lower bounds when candidate/relation traversal stops |
@@ -1887,7 +1901,7 @@ both structural locations and rendered coordinates.
 | Field | Meaning |
 | --- | --- |
 | `schema` | `mant.search/v0.12` |
-| `label`, `source`, `meta` | Source identity |
+| `label`, `sourceContext`, `meta` | Source identity table/root key and metadata |
 | `query` | Fully normalized search settings |
 | `render` | Coordinate-space descriptor |
 | `total` | All matching rendered-line groups before pagination |

@@ -9,3 +9,7 @@ pub use links::{
     mailto_uri_for_email_address,
 };
 pub use snapshot::DocumentValidation;
+pub use source::{
+    document_has_source_spans, validate_document_sources, validate_source_span_relation,
+    validate_source_table,
+};

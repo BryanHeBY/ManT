@@ -1,8 +1,9 @@
 //! Contract-oriented tests for `CommonMark` structure and escaping.
 
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, Inline,
-    LayoutHint, ListItem, ListKind, NameCase, Section, SourceFormat, TableCell, TableRow,
+    Block, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint,
+    ListItem, ListKind, NameCase, Section, SourceCoordinates, SourceFormat, SourceIdentity,
+    SourceKey, SourceRecord, TableCell, TableRow,
     visit::{Visit, walk_inline},
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
@@ -226,10 +227,17 @@ fn manual(sections: Vec<Section>) -> Document {
     Document {
         heading: None,
         parser: None,
-        source: DocumentSource {
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Anonymous {
+                name: "test".to_owned(),
+            },
             format: SourceFormat::Man,
-            path: None,
-        },
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),

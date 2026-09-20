@@ -1,6 +1,7 @@
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, Inline,
-    LayoutHint, NameCase, ParameterKind, ResolvedContent, Section, SourceFormat,
+    Block, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint,
+    NameCase, ParameterKind, ResolvedContent, Section, SourceCoordinates, SourceFormat,
+    SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_ui::{DocumentView, NavKind};
 
@@ -117,10 +118,17 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         tldr: None,
         document: Some(Document {
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Markdown,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             heading: None,
             fragment_aliases: Vec::new(),

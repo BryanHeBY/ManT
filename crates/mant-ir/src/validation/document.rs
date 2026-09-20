@@ -409,8 +409,9 @@ fn validate_semantic_document_reference(
 #[cfg(test)]
 mod tests {
     use crate::{
-        Block, DefinitionItem, DocumentMeta, DocumentSource, EntryFacts, EntryKind, LayoutHint,
-        NameCase, Section, SourceFormat, TableCell, TableRow, TextRange, TextSize,
+        Block, DefinitionItem, DocumentMeta, EntryFacts, EntryKind, LayoutHint, NameCase, Section,
+        SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, TableCell,
+        TableRow, TextRange, TextSize,
     };
 
     use super::*;
@@ -419,10 +420,17 @@ mod tests {
         Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Markdown,
-                path: None,
-            },
+                decoded_byte_length: u64::MAX,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
@@ -505,6 +513,7 @@ mod tests {
     #[test]
     fn reports_invalid_ids_role_collisions_ranges_tables_and_uris() {
         let source = SourceSpan {
+            source: SourceKey::FIRST,
             byte_range: Some(TextRange {
                 start: TextSize::new(9),
                 end: TextSize::new(3),
@@ -777,6 +786,7 @@ mod tests {
     #[test]
     fn validates_source_spans_owned_by_document_diagnostics() {
         let source = SourceSpan {
+            source: SourceKey::FIRST,
             byte_range: Some(TextRange {
                 start: TextSize::new(8),
                 end: TextSize::new(3),

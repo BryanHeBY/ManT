@@ -24,7 +24,8 @@ pub use walk::visit_child_entries;
 #[cfg(test)]
 mod tests {
     use crate::{
-        DocumentMeta, DocumentSource, EntryFacts, LayoutHint, NameCase, Section, SourceFormat,
+        DocumentMeta, EntryFacts, LayoutHint, NameCase, Section, SourceCoordinates, SourceFormat,
+        SourceIdentity, SourceKey, SourceRecord,
     };
 
     use super::*;
@@ -168,10 +169,17 @@ mod tests {
         let document = Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Mdoc,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),

@@ -2,8 +2,9 @@
 
 use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_options};
 use mant_ir::{
-    Block, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, ResolvedContent, Section,
-    SourceFormat, TldrCommandPart, TldrDocument, TldrExample, TldrOrigin,
+    Block, Document, DocumentMeta, Inline, LayoutHint, ResolvedContent, Section, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrCommandPart, TldrDocument,
+    TldrExample, TldrOrigin,
 };
 use mant_query::{build_outline, select_excerpt};
 use mant_render::{render_excerpt_markdown, render_outline_markdown};
@@ -20,10 +21,17 @@ fn manual(sections: Vec<Section>) -> Document {
     Document {
         heading: None,
         parser: None,
-        source: DocumentSource {
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Anonymous {
+                name: "test".to_owned(),
+            },
             format: SourceFormat::Man,
-            path: None,
-        },
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
@@ -95,7 +103,7 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
 #[test]
 fn renders_and_selects_content_before_the_first_heading() {
     let mut document = manual(vec![section("GUIDE", Vec::new(), Vec::new())]);
-    document.source.format = SourceFormat::Markdown;
+    document.sources[0].format = SourceFormat::Markdown;
     document.blocks = vec![paragraph(vec![Inline::Text {
         value: "Document preface.".to_owned(),
     }])];
@@ -128,7 +136,7 @@ fn renders_and_selects_content_before_the_first_heading() {
 #[test]
 fn uses_markdown_document_title_without_changing_its_logical_label() {
     let mut document = manual(Vec::new());
-    document.source.format = SourceFormat::Markdown;
+    document.sources[0].format = SourceFormat::Markdown;
     document.heading = Some("Actual Doc Title".into());
     document.blocks = vec![paragraph(vec![Inline::Text {
         value: "body".to_owned(),

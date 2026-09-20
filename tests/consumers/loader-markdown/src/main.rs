@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     assert!(content.tldr.is_none());
     let document = content.document.as_ref().ok_or("missing loaded document")?;
-    assert_eq!(document.source.path.as_deref(), Some(path.as_str()));
+    assert_eq!(document.root_path(), Some(path.as_str()));
     assert_eq!(
         document
             .heading

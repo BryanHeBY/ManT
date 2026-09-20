@@ -98,6 +98,7 @@ mod tests {
     fn item() -> DefinitionItem {
         DefinitionItem {
             source: Some(SourceSpan {
+                source: mant_ir::SourceKey::FIRST,
                 line: 12,
                 column: 4,
                 byte_range: None,

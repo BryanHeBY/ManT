@@ -104,7 +104,13 @@ fn profile_request(line: &str) -> Result<Value, String> {
             })
             .parse_file(&path)
             .map_err(|error| error.to_string())?;
-            (lower_mandoc_document(&path, &report), report)
+            let decoded_byte_length = std::fs::metadata(&path)
+                .map_err(|error| error.to_string())?
+                .len();
+            (
+                lower_mandoc_document(&path, &report, decoded_byte_length),
+                report,
+            )
         }
         _ => return Err(format!("unknown profile mode {mode:?}")),
     };

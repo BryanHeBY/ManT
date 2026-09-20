@@ -212,7 +212,13 @@ fn profile_request(line: &str) -> Result<Value, String> {
     // resolver would change the input contract for embedded `.so` trees and
     // can manufacture thousands of false losses on aggregate pages such as
     // zshall(1).
-    let document = lower_mandoc_document(&path, &report);
+    let document = lower_mandoc_document(
+        &path,
+        &report,
+        std::fs::metadata(&path)
+            .map_err(|error| error.to_string())?
+            .len(),
+    );
     let alias = document.meta.alias_target.is_some();
     let observed = observed_targets(&document);
     let observed_spellings = observed.all_spellings();

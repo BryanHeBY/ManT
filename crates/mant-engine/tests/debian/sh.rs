@@ -9,7 +9,7 @@ use crate::fixtures::debian_manual;
 #[test]
 fn preserves_literal_display_spacing_and_closing_delimiters() {
     let document = debian_manual("sh");
-    assert_eq!(document.source.format, SourceFormat::Mdoc);
+    assert_eq!(document.root_format(), Some(SourceFormat::Mdoc));
     assert!(source_path_ends_with(document, "debian/sh.1.gz"));
 
     let functions = block_slice_text(&common::section(document, "Functions").blocks);

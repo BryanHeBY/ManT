@@ -56,7 +56,7 @@ const ROOT_ID: &str = mant_ir::DOCUMENT_ROOT_ID;
 const TLDR_VERTICAL_PADDING_ROWS: u16 = 1;
 
 fn source_kind_label(document: &mant_ir::Document) -> &'static str {
-    if document.source.format == SourceFormat::Markdown {
+    if document.root_format() == Some(SourceFormat::Markdown) {
         "MARKDOWN"
     } else {
         "MANUAL"
@@ -238,7 +238,7 @@ impl DocumentView {
                 bundle
                     .document
                     .as_ref()
-                    .is_none_or(|document| document.source.format != SourceFormat::Markdown),
+                    .is_none_or(|document| document.root_format() != Some(SourceFormat::Markdown)),
             );
             builder.tldr(tldr, bundle.document.is_some(), source_label, document_gap);
         }

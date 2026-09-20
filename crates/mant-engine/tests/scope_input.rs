@@ -1,7 +1,7 @@
 //! Collection query input is caller-owned IR, not a resolver or loading service.
 use mant_ir::{
-    Block, Document, DocumentAddress, DocumentMeta, DocumentSource, Inline, LayoutHint,
-    MarkdownOrigin, ResolvedContent, SourceFormat,
+    Block, Document, DocumentAddress, DocumentMeta, Inline, LayoutHint, MarkdownOrigin,
+    ResolvedContent, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentScope, DocumentSelector, DocumentTraversal,
@@ -25,10 +25,17 @@ fn snapshot() -> (ResolvedDocumentScope, Vec<ResolvedContent>) {
             tldr: None,
             document: Some(Document {
                 parser: None,
-                source: DocumentSource {
+                sources: vec![SourceRecord {
+                    key: SourceKey::FIRST,
+                    identity: SourceIdentity::Anonymous {
+                        name: name.to_owned(),
+                    },
                     format: SourceFormat::Markdown,
-                    path: None,
-                },
+                    decoded_byte_length: 0,
+                    content_sha256: None,
+                    coordinates: SourceCoordinates::DecodedUtf8Bytes,
+                }],
+                root_source: SourceKey::FIRST,
                 meta: DocumentMeta::default(),
                 heading: None,
                 fragment_aliases: vec![],

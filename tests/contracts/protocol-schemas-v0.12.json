@@ -701,11 +701,11 @@
         "description": "False when the selected document has rejected or invalid semantics.\nThis is document-wide, not a claim restricted to the selected range.",
         "type": "boolean"
       },
-      "source": {
+      "sourceContext": {
         "description": "Authoritative document source, when one was loaded.",
         "anyOf": [
           {
-            "$ref": "#/$defs/DocumentSource"
+            "$ref": "#/$defs/SourceContext"
           },
           {
             "type": "null"
@@ -1437,26 +1437,6 @@
               "name"
             ]
           }
-        ]
-      },
-      "DocumentSource": {
-        "description": "Original source identity; temporary decompression paths must not appear.",
-        "type": "object",
-        "properties": {
-          "format": {
-            "description": "Syntax family consumed by the parser.",
-            "$ref": "#/$defs/SourceFormat"
-          },
-          "path": {
-            "description": "Stable caller-facing path, when the source has one.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "format"
         ]
       },
       "Engine": {
@@ -2758,6 +2738,61 @@
           "children"
         ]
       },
+      "SourceContext": {
+        "description": "Closed source table and root identity shared by projected document results.",
+        "type": "object",
+        "properties": {
+          "rootSource": {
+            "description": "Source containing the normalized document root.",
+            "$ref": "#/$defs/SourceKey"
+          },
+          "sources": {
+            "description": "Authored sources participating in this result, in dense key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRecord"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sources",
+          "rootSource"
+        ]
+      },
+      "SourceCoordinates": {
+        "description": "Coordinate domain used by byte ranges in one source record.",
+        "oneOf": [
+          {
+            "description": "Offsets index the complete decoded UTF-8 source buffer.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "decoded-utf8-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Native input was normalized and exact authored byte offsets are unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "native-normalized-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "SourceFormat": {
         "description": "Source format consumed by the normalization engine.",
         "oneOf": [
@@ -2778,8 +2813,127 @@
           }
         ]
       },
+      "SourceIdentity": {
+        "description": "Caller-visible identity of a source participating in one document.",
+        "oneOf": [
+          {
+            "description": "A caller-facing filesystem or virtual path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "name": {
+                "description": "Stable path; never a temporary decompression filename.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A logical member name inside a caller-provided source bundle.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bundle-member"
+              },
+              "name": {
+                "description": "Normalized relative member name using `/` separators.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A stable caller-provided label for source without a path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "anonymous"
+              },
+              "name": {
+                "description": "Nonempty logical label.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "SourceKey": {
+        "description": "Stable document-local key for one entry in [`crate::Document::sources`].\n\nKeys are one-based so zero remains an invalid sentinel at every wire and\nin-memory boundary.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "SourceRecord": {
+        "description": "One source participating in the normalized document.",
+        "type": "object",
+        "properties": {
+          "contentSha256": {
+            "description": "SHA-256 of the complete decoded source buffer, when retained.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          },
+          "coordinates": {
+            "description": "Coordinate domain for spans referencing this source.",
+            "$ref": "#/$defs/SourceCoordinates"
+          },
+          "decodedByteLength": {
+            "description": "Length of the complete buffer in the declared coordinate domain.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "format": {
+            "description": "Syntax family consumed for this source.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "identity": {
+            "description": "Stable caller-facing identity.",
+            "$ref": "#/$defs/SourceIdentity"
+          },
+          "key": {
+            "description": "Dense one-based key, equal to this record's source-table position.",
+            "$ref": "#/$defs/SourceKey"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "identity",
+          "format",
+          "decodedByteLength",
+          "coordinates"
+        ]
+      },
       "SourceSpan": {
-        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "description": "Location in one member of [`crate::Document::sources`].\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nsource coordinate domain supports exact offsets, is the canonical\nmachine-facing boundary.",
         "type": "object",
         "properties": {
           "byteRange": {
@@ -2822,9 +2976,15 @@
             "type": "integer",
             "format": "uint32",
             "minimum": 0
+          },
+          "source": {
+            "description": "Source-table owner of every coordinate in this span.",
+            "$ref": "#/$defs/SourceKey"
           }
         },
+        "additionalProperties": false,
         "required": [
+          "source",
           "line",
           "column"
         ]
@@ -3008,7 +3168,7 @@
         ]
       },
       "TextRange": {
-        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "description": "Half-open byte range (`start..end`) in one source's coordinate domain.",
         "type": "object",
         "properties": {
           "end": {
@@ -3020,15 +3180,16 @@
             "$ref": "#/$defs/TextSize"
           }
         },
+        "additionalProperties": false,
         "required": [
           "start",
           "end"
         ]
       },
       "TextSize": {
-        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "description": "Zero-based byte offset in the coordinate domain declared by a source.",
         "type": "integer",
-        "format": "uint32",
+        "format": "uint64",
         "minimum": 0
       },
       "TldrCommandPart": {
@@ -3316,6 +3477,17 @@
       "semanticsComplete": {
         "description": "Semantic validation coverage, never a recall-completeness claim.",
         "type": "boolean"
+      },
+      "sourceContext": {
+        "description": "Source-qualified document context, when one was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/SourceContext"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "supports": {
         "description": "Source-qualified context shared by the direct owners on this page.",
@@ -6242,8 +6414,202 @@
           "end"
         ]
       },
+      "SourceContext": {
+        "description": "Closed source table and root identity shared by projected document results.",
+        "type": "object",
+        "properties": {
+          "rootSource": {
+            "description": "Source containing the normalized document root.",
+            "$ref": "#/$defs/SourceKey"
+          },
+          "sources": {
+            "description": "Authored sources participating in this result, in dense key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRecord"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sources",
+          "rootSource"
+        ]
+      },
+      "SourceCoordinates": {
+        "description": "Coordinate domain used by byte ranges in one source record.",
+        "oneOf": [
+          {
+            "description": "Offsets index the complete decoded UTF-8 source buffer.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "decoded-utf8-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Native input was normalized and exact authored byte offsets are unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "native-normalized-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "SourceFormat": {
+        "description": "Source format consumed by the normalization engine.",
+        "oneOf": [
+          {
+            "description": "Traditional man(7) macros.",
+            "type": "string",
+            "const": "man"
+          },
+          {
+            "description": "Semantic mdoc(7) macros.",
+            "type": "string",
+            "const": "mdoc"
+          },
+          {
+            "description": "Markdown with `ManT` semantic extensions.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SourceIdentity": {
+        "description": "Caller-visible identity of a source participating in one document.",
+        "oneOf": [
+          {
+            "description": "A caller-facing filesystem or virtual path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "name": {
+                "description": "Stable path; never a temporary decompression filename.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A logical member name inside a caller-provided source bundle.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bundle-member"
+              },
+              "name": {
+                "description": "Normalized relative member name using `/` separators.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A stable caller-provided label for source without a path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "anonymous"
+              },
+              "name": {
+                "description": "Nonempty logical label.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "SourceKey": {
+        "description": "Stable document-local key for one entry in [`crate::Document::sources`].\n\nKeys are one-based so zero remains an invalid sentinel at every wire and\nin-memory boundary.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "SourceRecord": {
+        "description": "One source participating in the normalized document.",
+        "type": "object",
+        "properties": {
+          "contentSha256": {
+            "description": "SHA-256 of the complete decoded source buffer, when retained.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          },
+          "coordinates": {
+            "description": "Coordinate domain for spans referencing this source.",
+            "$ref": "#/$defs/SourceCoordinates"
+          },
+          "decodedByteLength": {
+            "description": "Length of the complete buffer in the declared coordinate domain.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "format": {
+            "description": "Syntax family consumed for this source.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "identity": {
+            "description": "Stable caller-facing identity.",
+            "$ref": "#/$defs/SourceIdentity"
+          },
+          "key": {
+            "description": "Dense one-based key, equal to this record's source-table position.",
+            "$ref": "#/$defs/SourceKey"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "identity",
+          "format",
+          "decodedByteLength",
+          "coordinates"
+        ]
+      },
       "SourceSpan": {
-        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "description": "Location in one member of [`crate::Document::sources`].\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nsource coordinate domain supports exact offsets, is the canonical\nmachine-facing boundary.",
         "type": "object",
         "properties": {
           "byteRange": {
@@ -6286,9 +6652,15 @@
             "type": "integer",
             "format": "uint32",
             "minimum": 0
+          },
+          "source": {
+            "description": "Source-table owner of every coordinate in this span.",
+            "$ref": "#/$defs/SourceKey"
           }
         },
+        "additionalProperties": false,
         "required": [
+          "source",
           "line",
           "column"
         ]
@@ -6472,7 +6844,7 @@
         ]
       },
       "TextRange": {
-        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "description": "Half-open byte range (`start..end`) in one source's coordinate domain.",
         "type": "object",
         "properties": {
           "end": {
@@ -6484,15 +6856,16 @@
             "$ref": "#/$defs/TextSize"
           }
         },
+        "additionalProperties": false,
         "required": [
           "start",
           "end"
         ]
       },
       "TextSize": {
-        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "description": "Zero-based byte offset in the coordinate domain declared by a source.",
         "type": "integer",
-        "format": "uint32",
+        "format": "uint64",
         "minimum": 0
       },
       "ValueDomain": {
@@ -6640,11 +7013,11 @@
         "description": "False when lowering or shared IR validation found incomplete semantics.\n\nThe field is omitted for complete outlines so compact transports pay no\nsteady-state bandwidth cost.",
         "type": "boolean"
       },
-      "source": {
+      "sourceContext": {
         "description": "Authoritative document source, when one was loaded.",
         "anyOf": [
           {
-            "$ref": "#/$defs/DocumentSource"
+            "$ref": "#/$defs/SourceContext"
           },
           {
             "type": "null"
@@ -7311,26 +7684,6 @@
               "name"
             ]
           }
-        ]
-      },
-      "DocumentSource": {
-        "description": "Original source identity; temporary decompression paths must not appear.",
-        "type": "object",
-        "properties": {
-          "format": {
-            "description": "Syntax family consumed by the parser.",
-            "$ref": "#/$defs/SourceFormat"
-          },
-          "path": {
-            "description": "Stable caller-facing path, when the source has one.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "format"
         ]
       },
       "EntryDocumentTarget": {
@@ -8868,6 +9221,61 @@
           }
         ]
       },
+      "SourceContext": {
+        "description": "Closed source table and root identity shared by projected document results.",
+        "type": "object",
+        "properties": {
+          "rootSource": {
+            "description": "Source containing the normalized document root.",
+            "$ref": "#/$defs/SourceKey"
+          },
+          "sources": {
+            "description": "Authored sources participating in this result, in dense key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRecord"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sources",
+          "rootSource"
+        ]
+      },
+      "SourceCoordinates": {
+        "description": "Coordinate domain used by byte ranges in one source record.",
+        "oneOf": [
+          {
+            "description": "Offsets index the complete decoded UTF-8 source buffer.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "decoded-utf8-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Native input was normalized and exact authored byte offsets are unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "native-normalized-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "SourceFormat": {
         "description": "Source format consumed by the normalization engine.",
         "oneOf": [
@@ -8888,8 +9296,127 @@
           }
         ]
       },
+      "SourceIdentity": {
+        "description": "Caller-visible identity of a source participating in one document.",
+        "oneOf": [
+          {
+            "description": "A caller-facing filesystem or virtual path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "name": {
+                "description": "Stable path; never a temporary decompression filename.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A logical member name inside a caller-provided source bundle.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bundle-member"
+              },
+              "name": {
+                "description": "Normalized relative member name using `/` separators.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A stable caller-provided label for source without a path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "anonymous"
+              },
+              "name": {
+                "description": "Nonempty logical label.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "SourceKey": {
+        "description": "Stable document-local key for one entry in [`crate::Document::sources`].\n\nKeys are one-based so zero remains an invalid sentinel at every wire and\nin-memory boundary.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "SourceRecord": {
+        "description": "One source participating in the normalized document.",
+        "type": "object",
+        "properties": {
+          "contentSha256": {
+            "description": "SHA-256 of the complete decoded source buffer, when retained.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          },
+          "coordinates": {
+            "description": "Coordinate domain for spans referencing this source.",
+            "$ref": "#/$defs/SourceCoordinates"
+          },
+          "decodedByteLength": {
+            "description": "Length of the complete buffer in the declared coordinate domain.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "format": {
+            "description": "Syntax family consumed for this source.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "identity": {
+            "description": "Stable caller-facing identity.",
+            "$ref": "#/$defs/SourceIdentity"
+          },
+          "key": {
+            "description": "Dense one-based key, equal to this record's source-table position.",
+            "$ref": "#/$defs/SourceKey"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "identity",
+          "format",
+          "decodedByteLength",
+          "coordinates"
+        ]
+      },
       "SourceSpan": {
-        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "description": "Location in one member of [`crate::Document::sources`].\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nsource coordinate domain supports exact offsets, is the canonical\nmachine-facing boundary.",
         "type": "object",
         "properties": {
           "byteRange": {
@@ -8932,15 +9459,21 @@
             "type": "integer",
             "format": "uint32",
             "minimum": 0
+          },
+          "source": {
+            "description": "Source-table owner of every coordinate in this span.",
+            "$ref": "#/$defs/SourceKey"
           }
         },
+        "additionalProperties": false,
         "required": [
+          "source",
           "line",
           "column"
         ]
       },
       "TextRange": {
-        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "description": "Half-open byte range (`start..end`) in one source's coordinate domain.",
         "type": "object",
         "properties": {
           "end": {
@@ -8952,15 +9485,16 @@
             "$ref": "#/$defs/TextSize"
           }
         },
+        "additionalProperties": false,
         "required": [
           "start",
           "end"
         ]
       },
       "TextSize": {
-        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "description": "Zero-based byte offset in the coordinate domain declared by a source.",
         "type": "integer",
-        "format": "uint32",
+        "format": "uint64",
         "minimum": 0
       },
       "UnloadedFragment": {
@@ -9816,6 +10350,10 @@
             "description": "Process and parser provenance.",
             "$ref": "#/$defs/Producer"
           },
+          "rootSource": {
+            "description": "Source containing the normalized document root.",
+            "$ref": "#/$defs/SourceKey"
+          },
           "schema": {
             "description": "Exact response schema discriminator.",
             "$ref": "#/$defs/DocumentSchema"
@@ -9827,16 +10365,20 @@
               "$ref": "#/$defs/Section"
             }
           },
-          "source": {
-            "description": "Original source identity.",
-            "$ref": "#/$defs/DocumentSource"
+          "sources": {
+            "description": "Authored sources participating in this result, in dense key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRecord"
+            }
           }
         },
         "additionalProperties": false,
         "required": [
           "schema",
           "producer",
-          "source",
+          "sources",
+          "rootSource",
           "meta",
           "sections"
         ]
@@ -9849,26 +10391,6 @@
             "type": "string",
             "const": "mant.document/v0.12"
           }
-        ]
-      },
-      "DocumentSource": {
-        "description": "Original source identity; temporary decompression paths must not appear.",
-        "type": "object",
-        "properties": {
-          "format": {
-            "description": "Syntax family consumed by the parser.",
-            "$ref": "#/$defs/SourceFormat"
-          },
-          "path": {
-            "description": "Stable caller-facing path, when the source has one.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "format"
         ]
       },
       "Engine": {
@@ -10867,6 +11389,39 @@
           "children"
         ]
       },
+      "SourceCoordinates": {
+        "description": "Coordinate domain used by byte ranges in one source record.",
+        "oneOf": [
+          {
+            "description": "Offsets index the complete decoded UTF-8 source buffer.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "decoded-utf8-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Native input was normalized and exact authored byte offsets are unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "native-normalized-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "SourceFormat": {
         "description": "Source format consumed by the normalization engine.",
         "oneOf": [
@@ -10887,8 +11442,127 @@
           }
         ]
       },
+      "SourceIdentity": {
+        "description": "Caller-visible identity of a source participating in one document.",
+        "oneOf": [
+          {
+            "description": "A caller-facing filesystem or virtual path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "name": {
+                "description": "Stable path; never a temporary decompression filename.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A logical member name inside a caller-provided source bundle.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bundle-member"
+              },
+              "name": {
+                "description": "Normalized relative member name using `/` separators.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A stable caller-provided label for source without a path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "anonymous"
+              },
+              "name": {
+                "description": "Nonempty logical label.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "SourceKey": {
+        "description": "Stable document-local key for one entry in [`crate::Document::sources`].\n\nKeys are one-based so zero remains an invalid sentinel at every wire and\nin-memory boundary.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "SourceRecord": {
+        "description": "One source participating in the normalized document.",
+        "type": "object",
+        "properties": {
+          "contentSha256": {
+            "description": "SHA-256 of the complete decoded source buffer, when retained.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          },
+          "coordinates": {
+            "description": "Coordinate domain for spans referencing this source.",
+            "$ref": "#/$defs/SourceCoordinates"
+          },
+          "decodedByteLength": {
+            "description": "Length of the complete buffer in the declared coordinate domain.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "format": {
+            "description": "Syntax family consumed for this source.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "identity": {
+            "description": "Stable caller-facing identity.",
+            "$ref": "#/$defs/SourceIdentity"
+          },
+          "key": {
+            "description": "Dense one-based key, equal to this record's source-table position.",
+            "$ref": "#/$defs/SourceKey"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "identity",
+          "format",
+          "decodedByteLength",
+          "coordinates"
+        ]
+      },
       "SourceSpan": {
-        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "description": "Location in one member of [`crate::Document::sources`].\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nsource coordinate domain supports exact offsets, is the canonical\nmachine-facing boundary.",
         "type": "object",
         "properties": {
           "byteRange": {
@@ -10931,9 +11605,15 @@
             "type": "integer",
             "format": "uint32",
             "minimum": 0
+          },
+          "source": {
+            "description": "Source-table owner of every coordinate in this span.",
+            "$ref": "#/$defs/SourceKey"
           }
         },
+        "additionalProperties": false,
         "required": [
+          "source",
           "line",
           "column"
         ]
@@ -11117,7 +11797,7 @@
         ]
       },
       "TextRange": {
-        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "description": "Half-open byte range (`start..end`) in one source's coordinate domain.",
         "type": "object",
         "properties": {
           "end": {
@@ -11129,15 +11809,16 @@
             "$ref": "#/$defs/TextSize"
           }
         },
+        "additionalProperties": false,
         "required": [
           "start",
           "end"
         ]
       },
       "TextSize": {
-        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "description": "Zero-based byte offset in the coordinate domain declared by a source.",
         "type": "integer",
-        "format": "uint32",
+        "format": "uint64",
         "minimum": 0
       },
       "TldrCommandPart": {
@@ -15645,6 +16326,10 @@
             "description": "Semantic validation, not evidence recall.",
             "type": "boolean"
           },
+          "sourceContext": {
+            "description": "Source table resolving all diagnostic, support, and evidence coordinates.",
+            "$ref": "#/$defs/SourceContext"
+          },
           "supports": {
             "description": "Declaration context pool for evidence with this document index.",
             "type": "array",
@@ -15669,6 +16354,7 @@
           "address",
           "depth",
           "label",
+          "sourceContext",
           "diagnostics",
           "semanticsComplete",
           "outcome",
@@ -15742,11 +16428,16 @@
           "render": {
             "description": "Canonical Markdown coordinate space for this document's hits.",
             "$ref": "#/$defs/SearchRender"
+          },
+          "sourceContext": {
+            "description": "Source table resolving every hit coordinate in this document group.",
+            "$ref": "#/$defs/SourceContext"
           }
         },
         "required": [
           "address",
           "depth",
+          "sourceContext",
           "render",
           "matches"
         ]
@@ -16129,8 +16820,202 @@
           }
         ]
       },
+      "SourceContext": {
+        "description": "Closed source table and root identity shared by projected document results.",
+        "type": "object",
+        "properties": {
+          "rootSource": {
+            "description": "Source containing the normalized document root.",
+            "$ref": "#/$defs/SourceKey"
+          },
+          "sources": {
+            "description": "Authored sources participating in this result, in dense key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRecord"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sources",
+          "rootSource"
+        ]
+      },
+      "SourceCoordinates": {
+        "description": "Coordinate domain used by byte ranges in one source record.",
+        "oneOf": [
+          {
+            "description": "Offsets index the complete decoded UTF-8 source buffer.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "decoded-utf8-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Native input was normalized and exact authored byte offsets are unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "native-normalized-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "SourceFormat": {
+        "description": "Source format consumed by the normalization engine.",
+        "oneOf": [
+          {
+            "description": "Traditional man(7) macros.",
+            "type": "string",
+            "const": "man"
+          },
+          {
+            "description": "Semantic mdoc(7) macros.",
+            "type": "string",
+            "const": "mdoc"
+          },
+          {
+            "description": "Markdown with `ManT` semantic extensions.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SourceIdentity": {
+        "description": "Caller-visible identity of a source participating in one document.",
+        "oneOf": [
+          {
+            "description": "A caller-facing filesystem or virtual path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "name": {
+                "description": "Stable path; never a temporary decompression filename.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A logical member name inside a caller-provided source bundle.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bundle-member"
+              },
+              "name": {
+                "description": "Normalized relative member name using `/` separators.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A stable caller-provided label for source without a path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "anonymous"
+              },
+              "name": {
+                "description": "Nonempty logical label.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "SourceKey": {
+        "description": "Stable document-local key for one entry in [`crate::Document::sources`].\n\nKeys are one-based so zero remains an invalid sentinel at every wire and\nin-memory boundary.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "SourceRecord": {
+        "description": "One source participating in the normalized document.",
+        "type": "object",
+        "properties": {
+          "contentSha256": {
+            "description": "SHA-256 of the complete decoded source buffer, when retained.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          },
+          "coordinates": {
+            "description": "Coordinate domain for spans referencing this source.",
+            "$ref": "#/$defs/SourceCoordinates"
+          },
+          "decodedByteLength": {
+            "description": "Length of the complete buffer in the declared coordinate domain.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "format": {
+            "description": "Syntax family consumed for this source.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "identity": {
+            "description": "Stable caller-facing identity.",
+            "$ref": "#/$defs/SourceIdentity"
+          },
+          "key": {
+            "description": "Dense one-based key, equal to this record's source-table position.",
+            "$ref": "#/$defs/SourceKey"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "identity",
+          "format",
+          "decodedByteLength",
+          "coordinates"
+        ]
+      },
       "SourceSpan": {
-        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "description": "Location in one member of [`crate::Document::sources`].\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nsource coordinate domain supports exact offsets, is the canonical\nmachine-facing boundary.",
         "type": "object",
         "properties": {
           "byteRange": {
@@ -16173,9 +17058,15 @@
             "type": "integer",
             "format": "uint32",
             "minimum": 0
+          },
+          "source": {
+            "description": "Source-table owner of every coordinate in this span.",
+            "$ref": "#/$defs/SourceKey"
           }
         },
+        "additionalProperties": false,
         "required": [
+          "source",
           "line",
           "column"
         ]
@@ -16359,7 +17250,7 @@
         ]
       },
       "TextRange": {
-        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "description": "Half-open byte range (`start..end`) in one source's coordinate domain.",
         "type": "object",
         "properties": {
           "end": {
@@ -16371,15 +17262,16 @@
             "$ref": "#/$defs/TextSize"
           }
         },
+        "additionalProperties": false,
         "required": [
           "start",
           "end"
         ]
       },
       "TextSize": {
-        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "description": "Zero-based byte offset in the coordinate domain declared by a source.",
         "type": "integer",
-        "format": "uint32",
+        "format": "uint64",
         "minimum": 0
       },
       "TraversalLimit": {
@@ -16867,11 +17759,11 @@
         "description": "Exact response schema discriminator.",
         "$ref": "#/$defs/SearchSchema"
       },
-      "source": {
+      "sourceContext": {
         "description": "Authoritative document source, when one was loaded.",
         "anyOf": [
           {
-            "$ref": "#/$defs/DocumentSource"
+            "$ref": "#/$defs/SourceContext"
           },
           {
             "type": "null"
@@ -16962,26 +17854,6 @@
             ]
           }
         }
-      },
-      "DocumentSource": {
-        "description": "Original source identity; temporary decompression paths must not appear.",
-        "type": "object",
-        "properties": {
-          "format": {
-            "description": "Syntax family consumed by the parser.",
-            "$ref": "#/$defs/SourceFormat"
-          },
-          "path": {
-            "description": "Stable caller-facing path, when the source has one.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "format"
-        ]
       },
       "EntryKind": {
         "description": "Semantic category used for outline filtering and nested presentation.",
@@ -17716,6 +18588,61 @@
           }
         ]
       },
+      "SourceContext": {
+        "description": "Closed source table and root identity shared by projected document results.",
+        "type": "object",
+        "properties": {
+          "rootSource": {
+            "description": "Source containing the normalized document root.",
+            "$ref": "#/$defs/SourceKey"
+          },
+          "sources": {
+            "description": "Authored sources participating in this result, in dense key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRecord"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sources",
+          "rootSource"
+        ]
+      },
+      "SourceCoordinates": {
+        "description": "Coordinate domain used by byte ranges in one source record.",
+        "oneOf": [
+          {
+            "description": "Offsets index the complete decoded UTF-8 source buffer.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "decoded-utf8-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Native input was normalized and exact authored byte offsets are unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "native-normalized-bytes"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "SourceFormat": {
         "description": "Source format consumed by the normalization engine.",
         "oneOf": [
@@ -17736,8 +18663,127 @@
           }
         ]
       },
+      "SourceIdentity": {
+        "description": "Caller-visible identity of a source participating in one document.",
+        "oneOf": [
+          {
+            "description": "A caller-facing filesystem or virtual path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "name": {
+                "description": "Stable path; never a temporary decompression filename.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A logical member name inside a caller-provided source bundle.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bundle-member"
+              },
+              "name": {
+                "description": "Normalized relative member name using `/` separators.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A stable caller-provided label for source without a path.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "anonymous"
+              },
+              "name": {
+                "description": "Nonempty logical label.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "SourceKey": {
+        "description": "Stable document-local key for one entry in [`crate::Document::sources`].\n\nKeys are one-based so zero remains an invalid sentinel at every wire and\nin-memory boundary.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "SourceRecord": {
+        "description": "One source participating in the normalized document.",
+        "type": "object",
+        "properties": {
+          "contentSha256": {
+            "description": "SHA-256 of the complete decoded source buffer, when retained.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "maxItems": 32,
+            "minItems": 32
+          },
+          "coordinates": {
+            "description": "Coordinate domain for spans referencing this source.",
+            "$ref": "#/$defs/SourceCoordinates"
+          },
+          "decodedByteLength": {
+            "description": "Length of the complete buffer in the declared coordinate domain.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "format": {
+            "description": "Syntax family consumed for this source.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "identity": {
+            "description": "Stable caller-facing identity.",
+            "$ref": "#/$defs/SourceIdentity"
+          },
+          "key": {
+            "description": "Dense one-based key, equal to this record's source-table position.",
+            "$ref": "#/$defs/SourceKey"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "identity",
+          "format",
+          "decodedByteLength",
+          "coordinates"
+        ]
+      },
       "SourceSpan": {
-        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "description": "Location in one member of [`crate::Document::sources`].\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nsource coordinate domain supports exact offsets, is the canonical\nmachine-facing boundary.",
         "type": "object",
         "properties": {
           "byteRange": {
@@ -17780,15 +18826,21 @@
             "type": "integer",
             "format": "uint32",
             "minimum": 0
+          },
+          "source": {
+            "description": "Source-table owner of every coordinate in this span.",
+            "$ref": "#/$defs/SourceKey"
           }
         },
+        "additionalProperties": false,
         "required": [
+          "source",
           "line",
           "column"
         ]
       },
       "TextRange": {
-        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "description": "Half-open byte range (`start..end`) in one source's coordinate domain.",
         "type": "object",
         "properties": {
           "end": {
@@ -17800,15 +18852,16 @@
             "$ref": "#/$defs/TextSize"
           }
         },
+        "additionalProperties": false,
         "required": [
           "start",
           "end"
         ]
       },
       "TextSize": {
-        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "description": "Zero-based byte offset in the coordinate domain declared by a source.",
         "type": "integer",
-        "format": "uint32",
+        "format": "uint64",
         "minimum": 0
       }
     }

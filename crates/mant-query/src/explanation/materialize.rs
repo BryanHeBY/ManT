@@ -58,6 +58,11 @@ pub(super) fn response(
                 .document
                 .as_ref()
                 .map(mant_protocol::Producer::for_document),
+            source_context: plan
+                .content
+                .document
+                .as_ref()
+                .map(mant_protocol::SourceContext::from),
             query,
             outcome: outcome(total),
             total,

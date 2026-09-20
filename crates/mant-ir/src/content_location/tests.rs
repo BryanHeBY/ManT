@@ -5,7 +5,7 @@ use serde_json::json;
 
 fn document() -> Document {
     serde_json::from_value(json!({
-        "parser":null,"source":{"format":"markdown"},"meta":{},
+        "parser":null,"sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],"rootSource":1,"meta":{},
         "heading":{"content":[{"type":"link","target":{"kind":"document","name":"index"},"children":[]}]},
         "blocks":[{"type":"definition-list","items":[{
             "entry":null,"terms":[[{"type":"link","target":{"kind":"document","name":"term"},"children":[{"type":"code","value":"é名"}]}]],

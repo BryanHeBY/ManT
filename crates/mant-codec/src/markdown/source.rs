@@ -2,7 +2,9 @@
 
 use std::ops::Range;
 
-use mant_ir::{Block, Diagnostic, DiagnosticLevel, LayoutHint, SourceSpan, TextRange, TextSize};
+use mant_ir::{
+    Block, Diagnostic, DiagnosticLevel, LayoutHint, SourceKey, SourceSpan, TextRange, TextSize,
+};
 
 /// Physical `CommonMark` lines, retaining LF, CRLF or CR terminators exactly.
 pub(super) fn physical_lines(mut text: &str) -> impl Iterator<Item = &str> {
@@ -76,6 +78,7 @@ impl<'a> MarkdownSource<'a> {
         let start = self.position(range.start);
         let end = self.position(range.end);
         SourceSpan {
+            source: SourceKey::FIRST,
             byte_range: Some(TextRange::new(
                 TextSize::from_usize_saturating(range.start),
                 TextSize::from_usize_saturating(range.end),
@@ -202,6 +205,7 @@ mod tests {
 
     fn span(line: u32, column: u32, end_line: u32, end_column: u32) -> SourceSpan {
         SourceSpan {
+            source: mant_ir::SourceKey::FIRST,
             byte_range: None,
             line,
             column,

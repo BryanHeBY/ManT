@@ -148,10 +148,10 @@ pub fn build_outline_with_references(
         root,
         label: query.label.clone(),
         address: query.address.clone(),
-        source: query
+        source_context: query
             .document
             .as_ref()
-            .map(|document| document.source.clone()),
+            .map(mant_protocol::SourceContext::from),
         meta: query
             .document
             .as_ref()

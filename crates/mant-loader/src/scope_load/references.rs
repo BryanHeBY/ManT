@@ -55,7 +55,7 @@ impl ScopeTarget<'_> {
 pub(super) struct ScopeReference {
     pub(super) target: DocumentReference,
     pub(super) kind: DocumentEdgeKind,
-    pub(super) source_offset: Option<u32>,
+    pub(super) source_offset: Option<u64>,
     pub(super) sequence: usize,
 }
 
@@ -114,7 +114,7 @@ fn collect_references(
     max_records: usize,
     max_bytes: usize,
 ) -> ScopeReferences {
-    let mut retained = BTreeMap::<ScopeTarget<'_>, (Option<u32>, usize)>::new();
+    let mut retained = BTreeMap::<ScopeTarget<'_>, (Option<u64>, usize)>::new();
     let mut bytes = 0usize;
     let mut sequence = 0;
     let mut retention_limit = None;
@@ -132,7 +132,7 @@ fn collect_references(
                     entry_sets: true,
                 },
                 |event, budget| {
-                    let Some((target, source)) = source_target(event) else {
+                    let Some((target, source)) = source_target(&event) else {
                         return ControlFlow::Continue(());
                     };
                     // Pay for bounded tree comparisons and the eventual owned copy,
@@ -151,8 +151,8 @@ fn collect_references(
                     );
                     sequence += 1;
                     if let Some(previous) = retained.get_mut(&target) {
-                        if (position.0.unwrap_or(u32::MAX), position.1)
-                            < (previous.0.unwrap_or(u32::MAX), previous.1)
+                        if (position.0.unwrap_or(u64::MAX), position.1)
+                            < (previous.0.unwrap_or(u64::MAX), previous.1)
                         {
                             *previous = position;
                         }
@@ -186,7 +186,7 @@ fn collect_references(
         .collect();
     references.sort_by_key(|reference| {
         (
-            reference.source_offset.unwrap_or(u32::MAX),
+            reference.source_offset.unwrap_or(u64::MAX),
             reference.sequence,
         )
     });
@@ -198,7 +198,7 @@ fn collect_references(
 }
 
 fn source_target<'ir>(
-    event: NavigationEvent<'ir, '_>,
+    event: &NavigationEvent<'ir, '_>,
 ) -> Option<(ScopeTarget<'ir>, Option<mant_ir::SourceSpan>)> {
     match event {
         NavigationEvent::Link(link) => {

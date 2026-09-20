@@ -455,8 +455,9 @@ impl EntryContentSlice {
 mod tests {
     use super::*;
     use crate::{
-        Document, DocumentIndex, DocumentMeta, DocumentSource, EntryKind, LayoutHint, ListKind,
-        NameCase, SemanticIndex, SourceFormat, ValueDomain,
+        Document, DocumentIndex, DocumentMeta, EntryKind, LayoutHint, ListKind, NameCase,
+        SemanticIndex, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+        ValueDomain,
     };
 
     fn item(id: &str, kind: EntryKind, name: &str) -> ListItem {
@@ -517,10 +518,17 @@ mod tests {
         Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Markdown,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),

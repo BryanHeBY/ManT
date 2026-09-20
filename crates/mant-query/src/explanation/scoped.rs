@@ -132,6 +132,12 @@ fn source_report(
         address: source.address.clone(),
         depth: source.depth,
         label: plan.content.label.clone(),
+        source_context: mant_protocol::SourceContext::from(
+            plan.content
+                .document
+                .as_ref()
+                .expect("scope explanations contain loaded documents"),
+        ),
         producer: plan
             .content
             .document

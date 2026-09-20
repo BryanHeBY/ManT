@@ -5,6 +5,7 @@ use mant_ir::{
 
 fn span(line: u32) -> SourceSpan {
     SourceSpan {
+        source: mant_ir::SourceKey::FIRST,
         byte_range: None,
         line,
         column: 1,

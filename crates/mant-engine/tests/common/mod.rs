@@ -679,12 +679,14 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
 // ---------------------------------------------------------------------------
 
 pub fn assert_section_topology(name: &str, document: &Document, expected_titles: &[&str]) {
-    assert_eq!(document.source.format, SourceFormat::Man, "fixture {name}");
+    assert_eq!(
+        document.root_format(),
+        Some(SourceFormat::Man),
+        "fixture {name}"
+    );
     assert!(
         document
-            .source
-            .path
-            .as_deref()
+            .root_path()
             .is_some_and(|path| path.replace('\\', "/").contains(name)),
         "fixture {name} must retain its source location",
     );
@@ -710,8 +712,6 @@ pub fn assert_section_topology(name: &str, document: &Document, expected_titles:
 
 pub fn source_path_ends_with(document: &Document, suffix: &str) -> bool {
     document
-        .source
-        .path
-        .as_deref()
+        .root_path()
         .is_some_and(|path| path.replace('\\', "/").ends_with(suffix))
 }

@@ -43,6 +43,10 @@
         {
           "address": { "kind": "manual", "name": "git", "manualSection": "1" },
           "depth": 0,
+          "sourceContext": {
+            "sources": [{"key": 1, "identity": {"kind": "anonymous", "name": "git"}, "format": "man", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}],
+            "rootSource": 1
+          },
           "render": {
             "schema": "mant.markdown/v1",
             "format": "markdown",
@@ -87,6 +91,10 @@
         {
           "address": { "kind": "manual", "name": "git-add", "manualSection": "1" },
           "depth": 1,
+          "sourceContext": {
+            "sources": [{"key": 1, "identity": {"kind": "anonymous", "name": "git-add"}, "format": "man", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}],
+            "rootSource": 1
+          },
           "render": {
             "schema": "mant.markdown/v1",
             "format": "markdown",

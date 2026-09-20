@@ -138,8 +138,11 @@ fn detached_native_ast_keeps_executed_rows_without_source_or_line_numbers() {
             if erase_line_numbers {
                 clear_lines(&mut native.document.root);
             }
-            let document =
-                mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &native);
+            let document = mant_codec::lower_mandoc_document(
+                std::path::Path::new("probe.1"),
+                &native,
+                u64::try_from(source.len()).unwrap(),
+            );
             let text = render_query_text(&mant_ir::ResolvedContent {
                 label: "probe".into(),
                 address: None,

@@ -38,6 +38,72 @@ fn independent_evidence_contract_preserves_ordinary_owners_and_omission_state() 
 }
 
 #[test]
+fn explanation_rejects_unknown_sources_in_previews_and_support_blocks() {
+    let context = serde_json::json!({
+        "sources":[{
+            "key":1,
+            "identity":{"kind":"anonymous","name":"test"},
+            "format":"markdown",
+            "decodedByteLength":0,
+            "coordinates":{"kind":"decoded-utf8-bytes"}
+        }],
+        "rootSource":1
+    });
+    let mut preview: Value = serde_json::from_str(EXPLANATION).unwrap();
+    preview["sourceContext"] = context.clone();
+    preview["evidence"][0]["previews"] = serde_json::json!([{
+        "blockPath":"root/b0",
+        "source":{"source":2,"line":1,"column":1},
+        "text":"x",
+        "matchStartChar":0,
+        "matchEndChar":1,
+        "contentRanges":[],
+        "clippedBefore":false,
+        "clippedAfter":false
+    }]);
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(preview).is_err());
+
+    let mut support: Value = serde_json::from_str(EXPLANATION).unwrap();
+    support["sourceContext"] = context;
+    support["supports"] = serde_json::json!([{
+        "kind":"owned-entry",
+        "block":{
+            "type":"definition-list",
+            "source":{"source":2,"line":1,"column":1},
+            "items":[{
+                "entry":{"id":"command-example","kind":{"kind":"command"},
+                    "case":"sensitive","names":[],"forms":[]},
+                "terms":[],"description":[]
+            }]
+        }
+    }]);
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(support).is_err());
+}
+
+#[test]
+fn scope_results_validate_spans_against_each_document_context() {
+    let mut search: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    search["result"]["search"]["documents"][0]["matches"][0]["nodeSource"] =
+        serde_json::json!({"source":2,"line":1,"column":1});
+    assert!(serde_json::from_value::<ScopeQueryResponse>(search).is_err());
+
+    let mut explanation: Value = serde_json::from_str(SCOPE_EXPLAIN).unwrap();
+    explanation["result"]["explanation"]["documents"][0]["supports"] = serde_json::json!([{
+        "kind":"owned-entry",
+        "block":{
+            "type":"definition-list",
+            "source":{"source":2,"line":1,"column":1},
+            "items":[{
+                "entry":{"id":"command-example","kind":{"kind":"command"},
+                    "case":"sensitive","names":[],"forms":[]},
+                "terms":[],"description":[]
+            }]
+        }
+    }]);
+    assert!(serde_json::from_value::<ScopeQueryResponse>(explanation).is_err());
+}
+
+#[test]
 fn classified_explanations_have_required_closed_shapes() {
     let expected: Value = serde_json::from_str(EXPLANATION).unwrap();
     for field in [
@@ -90,7 +156,7 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
     assert_eq!(query.schema, QuerySchema::V0Dot12);
     assert_eq!(query.label, "ls");
     let manual = query.document.as_ref().expect("manual document");
-    assert_eq!(manual.source.format, SourceFormat::Man);
+    assert_eq!(manual.source_context.sources[0].format, SourceFormat::Man);
     assert_eq!(manual.sections[0].heading.plain_text(), "NAME");
     assert_eq!(manual.sections[1].id, "options-1");
     assert!(matches!(

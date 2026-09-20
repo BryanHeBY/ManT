@@ -4,11 +4,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
-    Block, Diagnostic, DocumentAddress, DocumentMeta, DocumentReference, DocumentSource, EntryKind,
-    EntrySummary, NameCase, NodeId, Section, TldrDocument,
+    Block, Diagnostic, DocumentAddress, DocumentMeta, DocumentReference, EntryKind, EntrySummary,
+    NameCase, NodeId, Section, TldrDocument,
 };
 
-use crate::{ContentSelector, NodePath, Producer};
+use crate::{ContentSelector, NodePath, Producer, SourceContext};
 
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -94,7 +94,7 @@ impl From<OutlineDetail> for EntryProjection {
 }
 
 /// A block-free tree used to discover selectable query content.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:outline:v0.12"))]
 pub struct QueryOutline {
@@ -117,7 +117,7 @@ pub struct QueryOutline {
     pub address: Option<DocumentAddress>,
     /// Authoritative document source, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<DocumentSource>,
+    pub source_context: Option<SourceContext>,
     /// Document metadata, when an authoritative document was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<DocumentMeta>,
@@ -132,6 +132,40 @@ pub struct QueryOutline {
     pub semantics_complete: bool,
     /// Addressable nodes in document order.
     pub nodes: Vec<OutlineNode>,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "QueryOutline", rename_all = "camelCase", deny_unknown_fields)]
+struct QueryOutlineWire {
+    pub schema: OutlineSchema,
+    pub entries: EntryProjection,
+    pub root: Option<ContentSelector>,
+    pub references: crate::ReferenceInventory,
+    pub label: String,
+    pub display_title: Option<String>,
+    pub address: Option<DocumentAddress>,
+    pub source_context: Option<SourceContext>,
+    pub meta: Option<DocumentMeta>,
+    #[serde(default)]
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(default = "default_true")]
+    pub semantics_complete: bool,
+    pub nodes: Vec<OutlineNode>,
+}
+
+impl<'de> Deserialize<'de> for QueryOutline {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = QueryOutlineWire::deserialize(deserializer)?;
+        crate::document::validate_optional_source_spans(
+            value.source_context.as_ref(),
+            value
+                .diagnostics
+                .iter()
+                .filter_map(|diagnostic| diagnostic.source),
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// One exact cross-document destination declared by a semantic entry term.
@@ -335,7 +369,7 @@ impl ExcerptSchema {
 }
 
 /// One or more independently selected nodes from a complete query.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:excerpt:v0.12"))]
 pub struct QueryExcerpt {
@@ -358,7 +392,7 @@ pub struct QueryExcerpt {
     pub producer: Option<Producer>,
     /// Authoritative document source, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<DocumentSource>,
+    pub source_context: Option<SourceContext>,
     /// Document metadata, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<DocumentMeta>,
@@ -367,6 +401,88 @@ pub struct QueryExcerpt {
     pub diagnostics: Vec<Diagnostic>,
     /// Selected nodes in canonical source order after duplicate selectors are removed.
     pub selections: Vec<ExcerptSelection>,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "QueryExcerpt", rename_all = "camelCase", deny_unknown_fields)]
+struct QueryExcerptWire {
+    pub schema: ExcerptSchema,
+    pub label: String,
+    pub display_title: Option<String>,
+    pub address: Option<DocumentAddress>,
+    #[serde(default = "default_true")]
+    pub semantics_complete: bool,
+    pub producer: Option<Producer>,
+    pub source_context: Option<SourceContext>,
+    pub meta: Option<DocumentMeta>,
+    #[serde(default)]
+    pub diagnostics: Vec<Diagnostic>,
+    pub selections: Vec<ExcerptSelection>,
+}
+
+impl<'de> Deserialize<'de> for QueryExcerpt {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = QueryExcerptWire::deserialize(deserializer)?;
+        crate::document::validate_optional_source_spans(
+            value.source_context.as_ref(),
+            value
+                .diagnostics
+                .iter()
+                .filter_map(|diagnostic| diagnostic.source),
+        )
+        .map_err(serde::de::Error::custom)?;
+        let fallback = mant_ir::SourceRecord {
+            key: mant_ir::SourceKey::FIRST,
+            identity: mant_ir::SourceIdentity::Anonymous {
+                name: "validation".to_owned(),
+            },
+            format: mant_ir::SourceFormat::Markdown,
+            decoded_byte_length: u64::MAX,
+            content_sha256: None,
+            coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
+        };
+        let mut document = mant_ir::Document {
+            parser: None,
+            sources: value
+                .source_context
+                .as_ref()
+                .map_or_else(|| vec![fallback], |context| context.sources.clone()),
+            root_source: value
+                .source_context
+                .as_ref()
+                .map_or(mant_ir::SourceKey::FIRST, |context| context.root_source),
+            meta: value.meta.clone().unwrap_or_default(),
+            heading: None,
+            fragment_aliases: Vec::new(),
+            diagnostics: value.diagnostics.clone(),
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        };
+        for selection in &value.selections {
+            match selection {
+                ExcerptSelection::DocumentRoot {
+                    heading, blocks, ..
+                } => {
+                    document.heading.clone_from(heading);
+                    document.blocks.extend(blocks.clone());
+                }
+                ExcerptSelection::DocumentSection { section, .. } => {
+                    document.sections.push(section.clone());
+                }
+                ExcerptSelection::DocumentEntry { entry, .. } => {
+                    document.blocks.push(entry.clone());
+                }
+                ExcerptSelection::Tldr { .. } => {}
+            }
+        }
+        if value.source_context.is_none() && mant_ir::document_has_source_spans(&document) {
+            return Err(serde::de::Error::custom(
+                "source-qualified excerpt content requires a source context",
+            ));
+        }
+        mant_ir::validate_document_sources(&document).map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// One selected document node together with its location in the complete outline.

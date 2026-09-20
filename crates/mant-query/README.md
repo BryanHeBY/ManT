@@ -18,7 +18,14 @@ use mant_query::build_outline;
 
 // The caller already has IR: no source parser or loader is needed here.
 let document: Document = serde_json::from_value(serde_json::json!({
-    "source": { "format": "markdown" },
+    "sources": [{
+        "key": 1,
+        "identity": { "kind": "anonymous", "name": "demo" },
+        "format": "markdown",
+        "decodedByteLength": 0,
+        "coordinates": { "kind": "decoded-utf8-bytes" }
+    }],
+    "rootSource": 1,
     "meta": {},
     "sections": [{
         "id": "usage",

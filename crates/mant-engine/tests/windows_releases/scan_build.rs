@@ -20,7 +20,7 @@ const SCAN_BUILD_SECTIONS: &[&str] = &[
 #[test]
 fn keeps_the_analyzer_options_checkers_and_archive_metadata() {
     let document = windows_release_manual("scan-build");
-    assert_eq!(document.source.format, SourceFormat::Mdoc);
+    assert_eq!(document.root_format(), Some(SourceFormat::Mdoc));
     assert!(common::source_path_ends_with(
         document,
         "windows-releases/scan-build.1.zst"

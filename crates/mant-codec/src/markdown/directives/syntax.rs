@@ -3,7 +3,9 @@ use super::{
     AttachedValuePolicy, DomainDeclaration, EntryDeclaration, domain_diagnostic,
     semantic_diagnostic,
 };
-use mant_ir::{Diagnostic, DocumentReference, EntryKind, NameCase, SourceSpan, ValueDomain};
+use mant_ir::{
+    Diagnostic, DocumentReference, EntryKind, NameCase, SourceKey, SourceSpan, ValueDomain,
+};
 pub(super) fn is_semantic_directive(raw: &str, name: &str) -> bool {
     raw.trim()
         .strip_prefix("<!--")
@@ -33,6 +35,7 @@ pub(super) fn read_declaration(
         .find("-->")
         .map(|relative| comment_start + relative + 3);
     let source = SourceSpan {
+        source: SourceKey::FIRST,
         byte_range: Some(mant_ir::TextRange::new(
             mant_ir::TextSize::from_usize_saturating(offset + comment_start),
             mant_ir::TextSize::from_usize_saturating(offset + comment_end.unwrap_or(line.len())),
@@ -113,6 +116,7 @@ pub(super) fn directive_source(line: &str, offset: usize, line_number: u32) -> S
         .find("-->")
         .map(|relative| comment_start + relative + 3);
     SourceSpan {
+        source: SourceKey::FIRST,
         byte_range: Some(mant_ir::TextRange::new(
             mant_ir::TextSize::from_usize_saturating(offset + comment_start),
             mant_ir::TextSize::from_usize_saturating(offset + comment_end.unwrap_or(line.len())),

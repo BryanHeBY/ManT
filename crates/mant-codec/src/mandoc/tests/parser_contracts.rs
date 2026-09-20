@@ -22,7 +22,12 @@ fn retained_man_paragraph_macro_names_reset_persistent_font_state() {
         // macro names directly so the codec contract is independent of that
         // native normalization and covers the CVS parser's owned AST shape.
         retain_paragraph_name(&mut report.document.root, name);
-        let document = lower_mandoc_document(std::path::Path::new("paragraph-font.1"), &report);
+        let document = lower_mandoc_document(
+            std::path::Path::new("paragraph-font.1"),
+            &report,
+            u64::try_from(b".TH PROBE 1\n.SH DESCRIPTION\n.ft B\nBEFORE\n.PP\nAFTER\n".len())
+                .unwrap(),
+        );
         let paragraphs = document.sections[0]
             .blocks
             .iter()
@@ -57,10 +62,7 @@ fn byte_codec_never_opens_the_source_label_or_embedded_include() {
     let (document, native) = result.expect("embedded include is a recoverable denied request");
     assert_eq!(document.meta.title.as_deref(), Some("INMEMORY"));
     assert_eq!(native.document.metadata.title.as_deref(), Some("INMEMORY"));
-    assert_eq!(
-        document.source.path.as_deref(),
-        Some(path.to_string_lossy().as_ref())
-    );
+    assert_eq!(document.root_path(), Some(path.to_string_lossy().as_ref()));
     let text = visible_document_text(&document);
     assert!(text.contains("BEFORE") && text.contains("AFTER"));
     assert!(!text.contains("DISK_SECRET"));
@@ -92,7 +94,15 @@ fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
     assert!(replace_first_text(&mut second_body, "second_argument"));
     block.children.push(second_body);
 
-    let document = lower_mandoc_document(std::path::Path::new("future-structure.1"), &report);
+    let document = lower_mandoc_document(
+        std::path::Path::new("future-structure.1"),
+        &report,
+        u64::try_from(
+            b".Dd August 17, 2026\n.Dt FUTURE 1\n.Os\n.Sh SYNOPSIS\n.Fo future_call\n.Fa argument\n.Fc\n"
+                .len(),
+        )
+        .unwrap(),
+    );
 
     assert!(document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("manual.unhandled-structural-parts")

@@ -5,8 +5,9 @@ use super::{
 };
 use crate::{ManualPage, ManualRequest};
 use mant_ir::{
-    Block, Diagnostic, DiagnosticLevel, Document, DocumentAddress, DocumentMeta, DocumentSource,
-    Inline, LayoutHint, MarkdownOrigin, Section, SourceFormat, TldrDocument, TldrOrigin,
+    Block, Diagnostic, DiagnosticLevel, Document, DocumentAddress, DocumentMeta, Inline,
+    LayoutHint, MarkdownOrigin, Section, SourceCoordinates, SourceFormat, SourceIdentity,
+    SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{InputFormat, MAX_DOCUMENT_SELECTOR_CHARS, ScopeTextError};
 use mant_sources::BUILTIN_CONTENT_PRIORITY;
@@ -219,7 +220,17 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
     Document {
         heading: None,
         parser: None,
-        source: DocumentSource { format, path: None },
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Anonymous {
+                name: "test".to_owned(),
+            },
+            format,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: unsupported
@@ -379,10 +390,10 @@ fn unavailable_native_backend_preserves_markdown_precedence_and_tldr_policy() {
     let content = super::load_with(spec, LoadPolicy::Combined, &host).unwrap();
     let document = content.document.unwrap();
     // A Markdown H1 is a visible heading, not native TH/Dt metadata.
-    assert_eq!(document.heading.unwrap().plain_text(), "Fallback");
+    assert_eq!(document.heading.as_ref().unwrap().plain_text(), "Fallback");
     assert_eq!(document.meta.title, None);
-    assert_eq!(document.source.format, SourceFormat::Markdown);
-    assert_eq!(document.source.path.as_deref(), Some("fallback.md"));
+    assert_eq!(document.root_format(), Some(SourceFormat::Markdown));
+    assert_eq!(document.root_path(), Some("fallback.md"));
     assert_eq!(
         *host.calls.lock().unwrap(),
         ["name", "tldr", "fallback", "markdown"]
@@ -422,8 +433,8 @@ fn ordinary_manual_uses_the_native_parser() {
 
     assert_eq!(result.label, "tool");
     assert_eq!(
-        result.document.expect("manual").source.format,
-        SourceFormat::Man
+        result.document.expect("manual").root_format(),
+        Some(SourceFormat::Man)
     );
     assert_eq!(
         *host.calls.lock().expect("calls lock"),
@@ -643,8 +654,8 @@ fn complete_direct_document_survives_an_unsupported_finding() {
     let result = load_request(&request(), LoadPolicy::default(), &host).expect("query");
 
     assert_eq!(
-        result.document.expect("manual").source.format,
-        SourceFormat::Man
+        result.document.expect("manual").root_format(),
+        Some(SourceFormat::Man)
     );
     assert_eq!(
         *host.calls.lock().expect("calls lock"),
@@ -662,8 +673,8 @@ fn manual_only_bypasses_registered_markdown() {
         load_request(&request(), LoadPolicy::ManualOnly, &host).expect("manual-only query");
 
     assert_eq!(
-        result.document.as_ref().expect("manual").source.format,
-        SourceFormat::Man
+        result.document.as_ref().expect("manual").root_format(),
+        Some(SourceFormat::Man)
     );
     assert!(result.tldr.is_none(), "manual-only must not attach tldr");
     assert_eq!(
@@ -731,8 +742,8 @@ fn readable_best_effort_document_survives_parser_findings() {
     let host = host(Ok(document(SourceFormat::Mdoc, true, true)));
     let result = load_request(&request(), LoadPolicy::default(), &host).expect("query");
     assert_eq!(
-        result.document.expect("manual").source.format,
-        SourceFormat::Mdoc
+        result.document.expect("manual").root_format(),
+        Some(SourceFormat::Mdoc)
     );
 }
 
@@ -987,8 +998,8 @@ fn registered_markdown_shadows_an_unqualified_manual_name() {
     assert_eq!(result.label, "tool");
     assert!(result.tldr.is_none());
     let document = result.document.expect("registered document");
-    assert_eq!(document.source.format, SourceFormat::Markdown);
-    assert_eq!(document.source.path.as_deref(), Some("/data/mant/tool.md"));
+    assert_eq!(document.root_format(), Some(SourceFormat::Markdown));
+    assert_eq!(document.root_path(), Some("/data/mant/tool.md"));
     assert_eq!(
         *host.calls.lock().expect("calls lock"),
         ["name", "markdown"],
@@ -1007,8 +1018,8 @@ fn positive_source_priority_shadows_a_native_manual() {
         load_request(&request(), LoadPolicy::default(), &host).expect("positive-priority Markdown");
 
     assert_eq!(
-        result.document.expect("document").source.format,
-        SourceFormat::Markdown
+        result.document.expect("document").root_format(),
+        Some(SourceFormat::Markdown)
     );
     assert_eq!(*host.calls.lock().expect("calls"), ["name", "markdown"]);
 }
@@ -1023,8 +1034,8 @@ fn native_manual_wins_a_zero_priority_tie() {
     let result = load_request(&request(), LoadPolicy::default(), &host).expect("native manual");
 
     assert_eq!(
-        result.document.expect("document").source.format,
-        SourceFormat::Man
+        result.document.expect("document").root_format(),
+        Some(SourceFormat::Man)
     );
     assert_eq!(
         *host.calls.lock().expect("calls"),
@@ -1043,8 +1054,8 @@ fn non_positive_source_priority_falls_back_when_the_manual_is_unavailable() {
     let result = load_request(&request(), LoadPolicy::default(), &host).expect("Markdown fallback");
 
     assert_eq!(
-        result.document.expect("document").source.format,
-        SourceFormat::Markdown
+        result.document.expect("document").root_format(),
+        Some(SourceFormat::Markdown)
     );
     assert_eq!(
         *host.calls.lock().expect("calls"),
@@ -1065,7 +1076,7 @@ fn windows_suffix_fallback_can_resolve_registered_markdown() {
 
     assert_eq!(result.label, "tool");
     assert_eq!(
-        result.document.expect("document").source.path.as_deref(),
+        result.document.expect("document").root_path(),
         Some("/data/mant/tool.exe.md")
     );
     assert_eq!(
@@ -1091,8 +1102,8 @@ fn windows_suffix_fallback_can_resolve_a_native_manual() {
 
     assert_eq!(result.label, "tool");
     assert_eq!(
-        result.document.expect("manual").source.format,
-        SourceFormat::Man
+        result.document.expect("manual").root_format(),
+        Some(SourceFormat::Man)
     );
     assert_eq!(
         *host.calls.lock().expect("calls lock"),
@@ -1111,7 +1122,7 @@ fn exact_names_win_before_windows_suffix_fallback() {
         load_request(&request(), LoadPolicy::default(), &host).expect("exact registered document");
 
     assert_eq!(
-        result.document.expect("document").source.path.as_deref(),
+        result.document.expect("document").root_path(),
         Some("/data/mant/tool.md")
     );
     assert_eq!(
@@ -1139,8 +1150,8 @@ fn markdown_files_bypass_manual_and_tldr_sources() {
     assert_eq!(result.label, "tool.md");
     assert!(result.tldr.is_none());
     let document = result.document.expect("document");
-    assert_eq!(document.source.format, SourceFormat::Markdown);
-    assert_eq!(document.source.path.as_deref(), Some("docs/tool.md"));
+    assert_eq!(document.root_format(), Some(SourceFormat::Markdown));
+    assert_eq!(document.root_path(), Some("docs/tool.md"));
     assert_eq!(
         *host.calls.lock().expect("calls lock"),
         ["markdown"],
@@ -1156,7 +1167,7 @@ fn in_memory_markdown_is_available_without_a_protocol_content_field() {
     assert!(result.tldr.is_none());
     let document = result.document.expect("document");
     assert_eq!(document.display_title().as_deref(), Some("Piped"));
-    assert_eq!(document.source.path, None);
+    assert_eq!(document.root_path(), None);
 }
 
 #[test]

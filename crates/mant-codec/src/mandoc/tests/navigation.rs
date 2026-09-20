@@ -17,7 +17,7 @@ Paragraph before a target request.\n\
     let report = Parser::default()
         .parse_bytes(path, source)
         .expect("parse owned native tree");
-    let without_source = lower_mandoc_document(path, &report);
+    let without_source = lower_mandoc_document(path, &report, u64::try_from(source.len()).unwrap());
 
     let with_source_index = mant_ir::DocumentIndex::build(&with_source);
     let without_source_index = mant_ir::DocumentIndex::build(&without_source);

@@ -1,8 +1,9 @@
 //! Read-only AST part and source-coordinate access.
-use super::{Node, SourceSpan};
+use super::{Node, SourceKey, SourceSpan};
 
 pub(super) fn source_span(node: &Node) -> Option<SourceSpan> {
     (node.line > 0).then_some(SourceSpan {
+        source: SourceKey::FIRST,
         byte_range: None,
         line: node.line,
         column: node.column.max(1),

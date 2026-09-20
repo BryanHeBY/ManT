@@ -21,7 +21,7 @@ fn lowers_man_sections_fonts_definitions_and_literal_blocks() {
     let document = parse_manual_source(&path).expect("lower man source");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    assert_eq!(document.source.format, SourceFormat::Man);
+    assert_eq!(document.root_format(), Some(SourceFormat::Man));
     assert_eq!(
         document
             .sections
@@ -68,7 +68,7 @@ fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
     let document = parse_manual_source(&path).expect("lower mdoc source");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    assert_eq!(document.source.format, SourceFormat::Mdoc);
+    assert_eq!(document.root_format(), Some(SourceFormat::Mdoc));
     assert_eq!(
         document.sections[0].children[0].heading.plain_text(),
         "Details"

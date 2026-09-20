@@ -47,7 +47,7 @@ fn assert_builtin_evidence(query: &mant_ir::ResolvedContent, name: &str) {
 #[test]
 fn parses_the_real_bash_backed_shell_manual() {
     let document = fedora44_manual("sh");
-    assert_eq!(document.source.format, SourceFormat::Man);
+    assert_eq!(document.root_format(), Some(SourceFormat::Man));
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert!(source_path_ends_with(document, "fedora44/sh.1.zst"));
 

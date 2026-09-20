@@ -6,7 +6,8 @@ use mant_protocol::{ScopeSearch, ScopedSearchDocument, SearchQuery};
 /// No loading or parsing occurs; coverage remains in the supplied graph.
 ///
 /// # Errors
-/// Returns invalid search bounds or matcher errors.
+/// Returns invalid search bounds, matcher errors, or a missing source table for
+/// a matching document.
 pub fn search_scope(
     input: QueryScopeView<'_>,
     query: &SearchQuery,
@@ -36,9 +37,16 @@ pub fn search_scope(
         }
         remaining_take =
             remaining_take.saturating_sub(u32::try_from(hits.len()).unwrap_or(u32::MAX));
+        let source_context =
+            local
+                .source_context
+                .ok_or_else(|| ScopeExecutionError::MissingSourceContext {
+                    address: scoped.address.clone(),
+                })?;
         groups.push(ScopedSearchDocument {
             address: scoped.address.clone(),
             depth: scoped.depth,
+            source_context,
             render: local.render,
             matches: hits,
         });

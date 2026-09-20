@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     DocumentAddress, SearchCase, SearchHit, SearchQuery, SearchRender, SearchScope, SearchSyntax,
-    default_search_limit,
+    SourceContext, default_search_limit,
 };
 
 /// Maximum number of initial documents accepted by the native scope contract.
@@ -356,18 +356,46 @@ pub struct ScopeReferenceLimit {
 }
 
 /// One document's search hits inside a globally paginated scope result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScopedSearchDocument {
     /// Stable logical document identity.
     pub address: DocumentAddress,
     /// Distance retained from the resolved scope.
     pub depth: u16,
+    /// Source table resolving every hit coordinate in this document group.
+    pub source_context: SourceContext,
     /// Canonical Markdown coordinate space for this document's hits.
     pub render: SearchRender,
     /// Matching line groups retained from the globally paginated result set.
     /// Their ordinals are global across all documents in the scope.
     pub matches: Vec<SearchHit>,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    remote = "ScopedSearchDocument",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ScopedSearchDocumentWire {
+    pub address: DocumentAddress,
+    pub depth: u16,
+    pub source_context: SourceContext,
+    pub render: SearchRender,
+    pub matches: Vec<SearchHit>,
+}
+
+impl<'de> Deserialize<'de> for ScopedSearchDocument {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopedSearchDocumentWire::deserialize(deserializer)?;
+        crate::document::validate_optional_source_spans(
+            Some(&value.source_context),
+            value.matches.iter().filter_map(|hit| hit.node_source),
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// Globally paginated search over a resolved document scope.
@@ -392,7 +420,7 @@ pub struct ScopeSearch {
 }
 
 /// One readable document's contribution to the evidence result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopedExplanation {
     /// Declaration context pool for evidence with this document index.
@@ -403,6 +431,8 @@ pub struct ScopedExplanation {
     pub depth: u16,
     /// Selected source label, independent of catalog identity.
     pub label: String,
+    /// Source table resolving all diagnostic, support, and evidence coordinates.
+    pub source_context: SourceContext,
     /// Parser and process provenance when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer: Option<crate::Producer>,
@@ -420,6 +450,42 @@ pub struct ScopedExplanation {
     pub counts: crate::EvidenceCounts,
     /// Local collection and copy truncation.
     pub truncation: crate::ExplanationTruncation,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    remote = "ScopedExplanation",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ScopedExplanationWire {
+    pub supports: Vec<crate::ExplanationSupport>,
+    pub address: DocumentAddress,
+    pub depth: u16,
+    pub label: String,
+    pub source_context: SourceContext,
+    pub producer: Option<crate::Producer>,
+    pub diagnostics: Vec<mant_ir::Diagnostic>,
+    pub semantics_complete: bool,
+    pub outcome: crate::ExplanationOutcome,
+    pub total: u32,
+    pub returned: u32,
+    pub counts: crate::EvidenceCounts,
+    pub truncation: crate::ExplanationTruncation,
+}
+
+impl<'de> Deserialize<'de> for ScopedExplanation {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopedExplanationWire::deserialize(deserializer)?;
+        crate::explanation::validate_explanation_sources(
+            Some(&value.source_context),
+            &value.diagnostics,
+            &value.supports,
+            std::iter::empty(),
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// One global evidence record with an explicit source-report reference.
@@ -533,6 +599,19 @@ impl<'de> Deserialize<'de> for ScopeExplanation {
         value
             .validate_references()
             .map_err(serde::de::Error::custom)?;
+        for (index, document) in value.documents.iter().enumerate() {
+            crate::explanation::validate_explanation_sources(
+                Some(&document.source_context),
+                &document.diagnostics,
+                &document.supports,
+                value
+                    .evidence
+                    .iter()
+                    .filter(|evidence| evidence.document_index == index)
+                    .map(|evidence| &evidence.evidence),
+            )
+            .map_err(serde::de::Error::custom)?;
+        }
         Ok(value)
     }
 }

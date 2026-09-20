@@ -3,7 +3,7 @@ mod classification;
 mod locations;
 mod matches;
 mod support;
-use crate::{OutlineTrail, Producer};
+use crate::{OutlineTrail, Producer, SourceContext};
 pub use classification::*;
 pub use locations::ExplanationTextRoot;
 use mant_ir::{
@@ -327,6 +327,9 @@ pub struct QueryExplanation {
     /// Parser/process provenance, when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer: Option<Producer>,
+    /// Source-qualified document context, when one was loaded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_context: Option<SourceContext>,
     /// Evidence versus no-evidence before page slicing.
     pub outcome: ExplanationOutcome,
     /// Number of collected matching owners before pagination; a lower bound
@@ -378,6 +381,8 @@ struct QueryExplanationWire {
     pub address: Option<DocumentAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer: Option<Producer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_context: Option<SourceContext>,
     pub outcome: ExplanationOutcome,
     pub total: u32,
     pub returned: u32,
@@ -394,6 +399,87 @@ impl<'de> Deserialize<'de> for QueryExplanation {
         value
             .validate_references()
             .map_err(serde::de::Error::custom)?;
+        validate_explanation_sources(
+            value.source_context.as_ref(),
+            &value.diagnostics,
+            &value.supports,
+            value.evidence.iter(),
+        )
+        .map_err(serde::de::Error::custom)?;
         Ok(value)
     }
+}
+
+pub(crate) fn validate_explanation_sources<'a>(
+    source_context: Option<&SourceContext>,
+    diagnostics: &[Diagnostic],
+    supports: &[ExplanationSupport],
+    evidence: impl IntoIterator<Item = &'a ExplanationEvidence>,
+) -> Result<(), String> {
+    let evidence = evidence.into_iter().collect::<Vec<_>>();
+    crate::document::validate_optional_source_spans(
+        source_context,
+        diagnostics
+            .iter()
+            .filter_map(|diagnostic| diagnostic.source)
+            .chain(evidence.iter().filter_map(|evidence| evidence.source))
+            .chain(
+                evidence
+                    .iter()
+                    .flat_map(|evidence| evidence.previews.iter())
+                    .filter_map(|preview| preview.source),
+            ),
+    )?;
+    let fallback = mant_ir::SourceRecord {
+        key: mant_ir::SourceKey::FIRST,
+        identity: mant_ir::SourceIdentity::Anonymous {
+            name: "validation".to_owned(),
+        },
+        format: mant_ir::SourceFormat::Markdown,
+        decoded_byte_length: u64::MAX,
+        content_sha256: None,
+        coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
+    };
+    let mut document = mant_ir::Document {
+        parser: None,
+        sources: source_context
+            .as_ref()
+            .map_or_else(|| vec![fallback], |context| context.sources.clone()),
+        root_source: source_context
+            .as_ref()
+            .map_or(mant_ir::SourceKey::FIRST, |context| context.root_source),
+        meta: mant_ir::DocumentMeta::default(),
+        heading: None,
+        fragment_aliases: Vec::new(),
+        diagnostics: diagnostics.to_vec(),
+        blocks: Vec::new(),
+        sections: Vec::new(),
+    };
+    for support in supports {
+        match support {
+            ExplanationSupport::OwnedEntry { block }
+            | ExplanationSupport::DeclarationGroup { block, .. } => {
+                document.blocks.push(block.clone());
+            }
+            ExplanationSupport::ContainedDeclarationGroup { .. } => {}
+        }
+    }
+    for evidence in evidence {
+        if let Some(ExplanationContent::Entry { block } | ExplanationContent::Block { block }) =
+            &evidence.content
+        {
+            document.blocks.push(block.clone());
+        }
+        for form in evidence.entry.iter().flat_map(|entry| entry.forms.iter()) {
+            document.blocks.push(mant_ir::Block::Paragraph {
+                children: form.clone(),
+                layout: mant_ir::LayoutHint::default(),
+                source: None,
+            });
+        }
+    }
+    if source_context.is_none() && mant_ir::document_has_source_spans(&document) {
+        return Err("source-qualified explanation content requires a source context".to_owned());
+    }
+    mant_ir::validate_document_sources(&document).map_err(|error| error.to_string())
 }

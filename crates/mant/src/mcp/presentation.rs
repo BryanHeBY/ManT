@@ -303,7 +303,7 @@ fn char_offset_to_byte(text: &str, offset: usize, total_chars: usize) -> usize {
 
 fn prepare_excerpt(excerpt: &mut QueryExcerpt) {
     excerpt.diagnostics.clear();
-    discard_document_source_path(&mut excerpt.source);
+    discard_document_source_paths(&mut excerpt.source_context);
     for selection in &mut excerpt.selections {
         if let mant_protocol::ExcerptSelection::Tldr { document, .. } = selection {
             document.source_path.clear();
@@ -313,7 +313,7 @@ fn prepare_excerpt(excerpt: &mut QueryExcerpt) {
 
 fn prepare_outline(outline: &mut QueryOutline) {
     outline.diagnostics.clear();
-    discard_document_source_path(&mut outline.source);
+    discard_document_source_paths(&mut outline.source_context);
 }
 
 fn prepare_scope(response: &mut ScopeQueryResponse) {
@@ -333,9 +333,15 @@ fn prepare_scope(response: &mut ScopeQueryResponse) {
     }
 }
 
-fn discard_document_source_path(source: &mut Option<mant_ir::DocumentSource>) {
-    if let Some(source) = source {
-        source.path = None;
+fn discard_document_source_paths(source_context: &mut Option<mant_protocol::SourceContext>) {
+    if let Some(source_context) = source_context {
+        for source in &mut source_context.sources {
+            if matches!(source.identity, mant_ir::SourceIdentity::Path { .. }) {
+                source.identity = mant_ir::SourceIdentity::Anonymous {
+                    name: "<redacted>".to_owned(),
+                };
+            }
+        }
     }
 }
 

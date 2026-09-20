@@ -11,10 +11,19 @@
         "version": "1.14.6"
       }
     },
-    "source": {
-      "format": "man",
-      "path": "/usr/share/man/man1/ls.1.gz"
-    },
+    "sources": [
+      {
+        "key": 1,
+        "identity": {
+          "kind": "path",
+          "name": "/usr/share/man/man1/ls.1.gz"
+        },
+        "format": "man",
+        "decodedByteLength": 0,
+        "coordinates": { "kind": "native-normalized-bytes" }
+      }
+    ],
+    "rootSource": 1,
     "meta": {
       "title": "LS",
       "manualSection": "1",

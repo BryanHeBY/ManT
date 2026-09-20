@@ -549,7 +549,8 @@ fn check_section_excerpts(
         let reparsed = parse_markdown(&markdown, None).map_err(|error| error.to_string())?;
         let expected_document = Document {
             heading: None,
-            source: document.source.clone(),
+            sources: document.sources.clone(),
+            root_source: document.root_source,
             meta: document.meta.clone(),
             parser: document.parser.clone(),
             fragment_aliases: Vec::new(),

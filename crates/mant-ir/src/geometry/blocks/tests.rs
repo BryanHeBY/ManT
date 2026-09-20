@@ -6,6 +6,7 @@ use crate::{
 
 fn source() -> SourceSpan {
     SourceSpan {
+        source: crate::SourceKey::FIRST,
         byte_range: Some(TextRange::new(
             crate::TextSize::new(7),
             crate::TextSize::new(21),

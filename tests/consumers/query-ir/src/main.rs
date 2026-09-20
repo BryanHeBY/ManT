@@ -2,9 +2,9 @@
 
 use mant_ir::{
     Block, DefinitionItem, DefinitionLayout, Document, DocumentAddress, DocumentMeta,
-    DocumentSource, EntryFacts, EntryForm, EntryKind, EntryNameBinding, EntryNameEvidence, Inline,
-    LayoutHint, LinkTarget, MarkdownOrigin, NameCase, ReferenceScope, ResolvedContent,
-    SourceFormat,
+    EntryFacts, EntryForm, EntryKind, EntryNameBinding, EntryNameEvidence, Inline, LayoutHint,
+    LinkTarget, MarkdownOrigin, NameCase, ReferenceScope, ResolvedContent, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_protocol::{
     ContentSelector, DocumentEdge, DocumentEdgeKind, DocumentScope, DocumentSelector,
@@ -49,11 +49,18 @@ fn content(name: &str, links: bool) -> ResolvedContent {
         tldr: None,
         document: Some(Document {
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Path {
+                    // This label is provenance, not permission to read a physical path.
+                    name: format!("not-loaded/{name}.md"),
+                },
                 format: SourceFormat::Markdown,
-                // This label is provenance, not permission to read a physical path.
-                path: Some(format!("not-loaded/{name}.md")),
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             heading: Some(name.into()),
             fragment_aliases: vec![],

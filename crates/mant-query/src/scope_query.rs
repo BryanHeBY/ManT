@@ -18,6 +18,11 @@ pub enum ScopeExecutionError {
         /// Per-document content failures in the supplied stable order.
         reasons: Vec<String>,
     },
+    /// A matching loaded snapshot has no source table for its coordinates.
+    MissingSourceContext {
+        /// Address of the snapshot that cannot be projected safely.
+        address: mant_ir::DocumentAddress,
+    },
 }
 
 impl fmt::Display for ScopeExecutionError {
@@ -32,6 +37,9 @@ impl fmt::Display for ScopeExecutionError {
                 }
                 Ok(())
             }
+            Self::MissingSourceContext { address } => {
+                write!(f, "matching document {address:?} has no source context")
+            }
         }
     }
 }
@@ -41,7 +49,7 @@ impl Error for ScopeExecutionError {
         match self {
             Self::Explanation(error) => Some(error),
             Self::Search(error) => Some(error),
-            Self::NoReadableDocuments { .. } => None,
+            Self::NoReadableDocuments { .. } | Self::MissingSourceContext { .. } => None,
         }
     }
 }

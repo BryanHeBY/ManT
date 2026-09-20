@@ -6,7 +6,20 @@ use mant_protocol::{
 use serde_json::{Value, json};
 
 fn document(children: Vec<Value>) -> Document {
-    let mut value = json!({"parser":null,"source":{"format":"markdown"},"meta":{},"sections":[],"blocks":[{"type":"paragraph","children":[]}]});
+    let mut value = json!({
+        "parser": null,
+        "sources": [{
+            "key": 1,
+            "identity": {"kind": "anonymous", "name": "test"},
+            "format": "markdown",
+            "decodedByteLength": 0,
+            "coordinates": {"kind": "decoded-utf8-bytes"}
+        }],
+        "rootSource": 1,
+        "meta": {},
+        "sections": [],
+        "blocks": [{"type": "paragraph", "children": []}]
+    });
     value["blocks"][0]["children"] = children.into();
     serde_json::from_value(value).unwrap()
 }

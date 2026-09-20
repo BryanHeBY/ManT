@@ -54,6 +54,10 @@
           },
           "depth": 0,
           "label": "git",
+          "sourceContext": {
+            "sources": [{"key": 1, "identity": {"kind": "anonymous", "name": "git"}, "format": "man", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}],
+            "rootSource": 1
+          },
           "diagnostics": [],
           "semanticsComplete": true,
           "outcome": "no-evidence",

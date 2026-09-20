@@ -8,9 +8,9 @@ use std::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ir::{
-    Block as AstBlock, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts,
-    EntryKind, Inline, LayoutHint, NameCase, ResolvedContent, Section, SourceFormat, TldrDocument,
-    TldrOrigin,
+    Block as AstBlock, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline,
+    LayoutHint, NameCase, ResolvedContent, Section, SourceCoordinates, SourceFormat,
+    SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     CatalogSchema, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin,
@@ -30,6 +30,19 @@ use crate::{
     layout::{CONTENT_SCROLLBAR_GAP, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_SPLITTER_WIDTH},
     theme,
 };
+
+fn sources(format: SourceFormat) -> Vec<SourceRecord> {
+    vec![SourceRecord {
+        key: SourceKey::FIRST,
+        identity: SourceIdentity::Anonymous {
+            name: "test".to_owned(),
+        },
+        format,
+        decoded_byte_length: 0,
+        content_sha256: None,
+        coordinates: SourceCoordinates::DecodedUtf8Bytes,
+    }]
+}
 
 fn click_document_cell(app: &mut App, column: usize, row: usize) {
     let column = app.geometry.content.x + u16::try_from(column).expect("document column");
@@ -88,10 +101,8 @@ fn navigation_bundle() -> ResolvedContent {
         label: "demo".to_owned(),
         document: Some(Document {
             parser: None,
-            source: DocumentSource {
-                format: SourceFormat::Man,
-                path: None,
-            },
+            sources: sources(SourceFormat::Man),
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             heading: None,
             fragment_aliases: Vec::new(),

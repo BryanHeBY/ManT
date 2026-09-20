@@ -50,6 +50,7 @@ fn definitions(items: Vec<DefinitionItem>) -> Block {
             ..Default::default()
         },
         source: Some(SourceSpan {
+            source: crate::SourceKey::FIRST,
             byte_range: None,
             line: 3,
             column: 1,
@@ -184,6 +185,7 @@ fn invalid_names_remain_addressable_and_location_only_scan_skips_names() {
     );
     invalid.entry.as_mut().unwrap().name_bindings.clear();
     invalid.source = Some(SourceSpan {
+        source: crate::SourceKey::FIRST,
         byte_range: None,
         line: 8,
         column: 2,
@@ -221,10 +223,17 @@ fn borrowed_locations_and_semantic_index_share_root_and_section_owners() {
     let document = crate::Document {
         heading: None,
         parser: None,
-        source: crate::DocumentSource {
+        sources: vec![crate::SourceRecord {
+            key: crate::SourceKey::FIRST,
+            identity: crate::SourceIdentity::Anonymous {
+                name: "test".to_owned(),
+            },
             format: crate::SourceFormat::Markdown,
-            path: None,
-        },
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: crate::SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: crate::SourceKey::FIRST,
         meta: crate::DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),

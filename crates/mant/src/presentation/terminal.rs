@@ -254,7 +254,7 @@ pub(super) fn render_full_query(
                     "manual page is unavailable; --format man cannot render tldr-only content",
                 ));
             };
-            if document.source.format == SourceFormat::Markdown {
+            if document.root_format() == Some(SourceFormat::Markdown) {
                 return Err(Failure::usage(
                     "--format man applies only to roff manual pages",
                 ));

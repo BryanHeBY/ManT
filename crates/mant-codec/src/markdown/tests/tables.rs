@@ -32,7 +32,7 @@ fn main() {}
 ";
     let document = parse_document(markdown, Some("/docs/tool.md".to_owned()));
 
-    assert_eq!(document.source.format, SourceFormat::Markdown);
+    assert_eq!(document.root_format(), Some(SourceFormat::Markdown));
     assert_eq!(document.display_title().as_deref(), Some("Tool"));
     assert_eq!(document.blocks.len(), 2);
     assert_eq!(document.sections.len(), 1);

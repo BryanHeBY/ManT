@@ -43,7 +43,14 @@ fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
         assert_eq!(owner.facts().unwrap().names, ["--exclude"]);
         let envelope = serde_json::json!({
             "schema":"mant.document/v0.12", "producer":{"name":"test","version":"0"},
-            "source":{"format":"markdown"}, "meta":{}, "sections":[], "blocks":[value.clone()]
+            "sources":[{
+                "key":1,
+                "identity":{"kind":"anonymous","name":"test"},
+                "format":"markdown",
+                "decodedByteLength":0,
+                "coordinates":{"kind":"decoded-utf8-bytes"}
+            }],
+            "rootSource":1, "meta":{}, "sections":[], "blocks":[value.clone()]
         });
         let response: mant_protocol::DocumentResponse = serde_json::from_value(envelope).unwrap();
         assert_eq!(response.blocks, [block]);

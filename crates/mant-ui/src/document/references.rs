@@ -107,7 +107,7 @@ impl ReferenceNavigation {
                         .saturating_sub(64)
                         / 9,
                 );
-                let Some(label) = display_label(occurrence, budget, label_limit) else {
+                let Some(label) = display_label(&occurrence, budget, label_limit) else {
                     result.limited = true;
                     return ControlFlow::Break(());
                 };
@@ -122,7 +122,7 @@ impl ReferenceNavigation {
                 // to this immutable view; it is not a public selector or wire ID.
                 let id: Arc<str> = format!("reference:{location:?}").into();
                 let (attachment, limited) =
-                    reference_attachment(occurrence, budget, &location, semantic_owner.is_some());
+                    reference_attachment(&occurrence, budget, &location, semantic_owner.is_some());
                 result.limited |= limited;
                 result.origins.insert(
                     std::ptr::from_ref(occurrence.target).addr(),
@@ -287,12 +287,12 @@ impl ReferenceNavigation {
 }
 
 fn reference_attachment(
-    occurrence: mant_ir::LinkOccurrenceRef<'_, '_>,
+    occurrence: &mant_ir::LinkOccurrenceRef<'_, '_>,
     budget: &mut mant_ir::ReferenceWorkBudget,
     location: &ContentLocation,
     valid_owner: bool,
 ) -> (mant_render::ReferenceAttachment, bool) {
-    let association = mant_ir::reference_form_associations(occurrence, budget);
+    let association = mant_ir::reference_form_associations(*occurrence, budget);
     let forms = (valid_owner
         && association.state == mant_ir::ReferenceFormAssociationState::Complete)
         .then_some(association.forms.as_slice());
@@ -440,7 +440,7 @@ fn append_owner_navigation(
 }
 
 fn display_label(
-    occurrence: mant_ir::LinkOccurrenceRef<'_, '_>,
+    occurrence: &mant_ir::LinkOccurrenceRef<'_, '_>,
     budget: &mut mant_ir::ReferenceWorkBudget,
     limit: usize,
 ) -> Option<String> {

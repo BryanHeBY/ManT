@@ -128,7 +128,7 @@ pub fn select_excerpt(
         semantics_complete: document
             .is_none_or(|document| semantics_complete(&document.diagnostics)),
         producer: document.map(mant_protocol::Producer::for_document),
-        source: document.map(|document| document.source.clone()),
+        source_context: document.map(mant_protocol::SourceContext::from),
         meta: document.map(|document| document.meta.clone()),
         diagnostics: document
             .map(|document| document.diagnostics.clone())

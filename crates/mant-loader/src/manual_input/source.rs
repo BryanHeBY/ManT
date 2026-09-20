@@ -419,10 +419,7 @@ mod tests {
 
         assert_eq!(document.meta.title.as_deref(), Some("ROOT-TARGET"));
         assert_eq!(document.meta.alias_target.as_deref(), Some("man1/target.1"));
-        assert_eq!(
-            document.source.path.as_deref(),
-            Some(alias.to_string_lossy().as_ref())
-        );
+        assert_eq!(document.root_path(), Some(alias.to_string_lossy().as_ref()));
     }
 
     #[test]
@@ -665,7 +662,7 @@ mod tests {
         assert_eq!(document.meta.title.as_deref(), Some("FINAL"));
         assert_eq!(document.meta.alias_target.as_deref(), Some("page-1.1"));
         assert_eq!(
-            document.source.path.as_deref(),
+            document.root_path(),
             Some(original.to_string_lossy().as_ref())
         );
     }

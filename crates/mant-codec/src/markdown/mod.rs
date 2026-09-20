@@ -27,8 +27,9 @@ use mant_ir::DOCUMENT_ROOT_ID;
 use std::{error::Error, fmt};
 
 use mant_ir::{
-    Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, Section,
-    SourceFormat, TldrDocument, TldrOrigin, validate_document,
+    Diagnostic, DiagnosticLevel, Document, DocumentMeta, ParserInfo, Section, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
+    validate_document,
 };
 #[cfg(test)]
 use pulldown_cmark::Parser;
@@ -240,10 +241,20 @@ fn parse_document_with_entries(
     ids.retain_targets(retained_targets);
     let mut document = Document {
         parser: Some(markdown_parser()),
-        source: DocumentSource {
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: source_path.map_or_else(
+                || SourceIdentity::Anonymous {
+                    name: "<stdin>".to_owned(),
+                },
+                |name| SourceIdentity::Path { name },
+            ),
             format: SourceFormat::Markdown,
-            path: source_path,
-        },
+            decoded_byte_length: u64::try_from(source_text.len()).unwrap_or(u64::MAX),
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
         meta: DocumentMeta::default(),
         heading,
         fragment_aliases: document_fragment_aliases,

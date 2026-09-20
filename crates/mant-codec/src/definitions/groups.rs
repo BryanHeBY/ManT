@@ -387,6 +387,7 @@ mod tests {
     fn item(line: u32, column: u32, name: &str, description: bool) -> DefinitionItem {
         DefinitionItem {
             source: Some(SourceSpan {
+                source: mant_ir::SourceKey::FIRST,
                 line,
                 column,
                 byte_range: None,

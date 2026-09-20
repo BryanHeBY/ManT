@@ -11,7 +11,8 @@ fn definition() -> Value {
 
 fn document(item: &Value) -> Value {
     json!({"schema":"mant.document/v0.12","producer":{"name":"test","version":"0"},
-        "source":{"format":"markdown"},"meta":{},"sections":[],
+        "sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],
+        "rootSource":1,"meta":{},"sections":[],
         "blocks":[{"type":"definition-list","items":[item]}]})
 }
 
@@ -68,6 +69,43 @@ fn document_and_query_envelopes_reject_legacy_nested_facts() {
         item["entry"][field] = Value::Null;
         assert!(serde_json::from_value::<DocumentResponse>(document(&item)).is_err());
     }
+}
+
+#[test]
+fn source_context_rejects_unknown_and_out_of_range_nested_spans() {
+    let mut unknown = document(&definition());
+    unknown["blocks"][0]["source"] = json!({"source":2,"line":1,"column":1});
+    assert!(serde_json::from_value::<DocumentResponse>(unknown).is_err());
+
+    let mut out_of_range = document(&definition());
+    out_of_range["blocks"][0]["source"] =
+        json!({"source":1,"byteRange":{"start":0,"end":1},"line":1,"column":1});
+    assert!(serde_json::from_value::<DocumentResponse>(out_of_range).is_err());
+
+    let excerpt = json!({
+        "schema":"mant.excerpt/v0.12",
+        "label":"test",
+        "sourceContext":{
+            "sources":[{
+                "key":1,
+                "identity":{"kind":"anonymous","name":"test"},
+                "format":"markdown",
+                "decodedByteLength":0,
+                "coordinates":{"kind":"decoded-utf8-bytes"}
+            }],
+            "rootSource":1
+        },
+        "selections":[{
+            "kind":"document-root",
+            "outline":{"node":{"kind":"document-root","path":"root","id":"root","title":"root"}},
+            "blocks":[{
+                "type":"paragraph",
+                "children":[],
+                "source":{"source":2,"line":1,"column":1}
+            }]
+        }]
+    });
+    assert!(serde_json::from_value::<QueryExcerpt>(excerpt).is_err());
 }
 
 #[test]

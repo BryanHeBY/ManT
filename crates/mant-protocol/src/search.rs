@@ -3,9 +3,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use mant_ir::{DocumentMeta, DocumentSource, SourceSpan};
+use mant_ir::{DocumentMeta, SourceSpan};
 
-use crate::OutlineTrail;
+use crate::{OutlineTrail, SourceContext};
 
 /// Default maximum number of matching line groups returned in one page.
 pub const DEFAULT_SEARCH_LIMIT: u32 = 100;
@@ -141,7 +141,7 @@ pub struct SearchRender {
 }
 
 /// Complete, paginatable search result returned to agents and scripts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("$id" = "urn:mant:search:v0.12"))]
 pub struct QuerySearch {
@@ -151,7 +151,7 @@ pub struct QuerySearch {
     pub label: String,
     /// Authoritative document source, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<DocumentSource>,
+    pub source_context: Option<SourceContext>,
     /// Document metadata, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<DocumentMeta>,
@@ -172,6 +172,35 @@ pub struct QuerySearch {
     pub next_offset: Option<u32>,
     /// Matching line groups in render order.
     pub matches: Vec<SearchHit>,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "QuerySearch", rename_all = "camelCase", deny_unknown_fields)]
+struct QuerySearchWire {
+    pub schema: SearchSchema,
+    pub label: String,
+    pub source_context: Option<SourceContext>,
+    pub meta: Option<DocumentMeta>,
+    pub query: SearchQuery,
+    pub render: SearchRender,
+    pub total: u32,
+    pub returned: u32,
+    pub offset: u32,
+    pub truncated: bool,
+    pub next_offset: Option<u32>,
+    pub matches: Vec<SearchHit>,
+}
+
+impl<'de> Deserialize<'de> for QuerySearch {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = QuerySearchWire::deserialize(deserializer)?;
+        crate::document::validate_optional_source_spans(
+            value.source_context.as_ref(),
+            value.matches.iter().filter_map(|hit| hit.node_source),
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// One rendered line or line span containing one or more exact occurrences.

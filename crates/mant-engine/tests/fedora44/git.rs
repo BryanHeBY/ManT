@@ -10,7 +10,7 @@ use mant_query::build_outline_with_detail;
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("git");
-    assert_eq!(document.source.format, SourceFormat::Man);
+    assert_eq!(document.root_format(), Some(SourceFormat::Man));
     assert_eq!(document.sections.len(), 24);
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.os.as_deref(), Some("Git 2.53.0"));

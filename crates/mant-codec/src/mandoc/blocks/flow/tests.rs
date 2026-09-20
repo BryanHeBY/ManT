@@ -11,6 +11,7 @@ fn text(value: &str) -> Vec<Inline> {
 
 const fn source(line: u32) -> SourceSpan {
     SourceSpan {
+        source: mant_ir::SourceKey::FIRST,
         byte_range: None,
         line,
         column: 1,

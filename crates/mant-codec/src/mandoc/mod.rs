@@ -34,8 +34,8 @@ use libmandoc_rs::{
     ParseOptions, ParseReport, Parser,
 };
 use mant_ir::{
-    Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, SourceFormat,
-    SourceSpan, validate_document,
+    Diagnostic, DiagnosticLevel, Document, DocumentMeta, ParserInfo, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord, SourceSpan, validate_document,
 };
 
 use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
@@ -67,7 +67,12 @@ pub fn parse_plain_manual_report(
     })
     .parse_bytes(path, source.as_ref())?;
     let source_text = String::from_utf8_lossy(source.as_ref());
-    let mut document = lower_mandoc_document_with_source(path, &report, Some(&source_text));
+    let mut document = lower_mandoc_document_with_source(
+        path,
+        &report,
+        Some(&source_text),
+        u64::try_from(source.as_ref().len()).unwrap_or(u64::MAX),
+    );
     if masked_controls > 0 {
         document.diagnostics.insert(
             0,
@@ -85,14 +90,19 @@ pub fn parse_plain_manual_report(
 
 /// Convert a completed low-level parse into the stable document contract.
 #[must_use]
-pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
-    lower_mandoc_document_with_source(path, report, None)
+pub fn lower_mandoc_document(
+    path: &Path,
+    report: &ParseReport,
+    decoded_byte_length: u64,
+) -> Document {
+    lower_mandoc_document_with_source(path, report, None, decoded_byte_length)
 }
 
 fn lower_mandoc_document_with_source(
     path: &Path,
     report: &ParseReport,
     source: Option<&str>,
+    decoded_byte_length: u64,
 ) -> Document {
     let parsed: &MandocDocument = &report.document;
     let target_plan = targets::NativeTargetPlan::build(&parsed.root);
@@ -134,13 +144,20 @@ fn lower_mandoc_document_with_source(
             name: "libmandoc".to_owned(),
             version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
         }),
-        source: DocumentSource {
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Path {
+                name: path.to_string_lossy().into_owned(),
+            },
             format: match parsed.macro_set {
                 MacroSet::Mdoc => SourceFormat::Mdoc,
                 MacroSet::Man | MacroSet::None => SourceFormat::Man,
             },
-            path: Some(path.to_string_lossy().into_owned()),
-        },
+            decoded_byte_length,
+            content_sha256: None,
+            coordinates: SourceCoordinates::NativeNormalizedBytes,
+        }],
+        root_source: SourceKey::FIRST,
         meta: DocumentMeta {
             title: normalize_metadata(parsed.metadata.title.as_deref()),
             manual_section: normalize_metadata(parsed.metadata.section.as_deref()),

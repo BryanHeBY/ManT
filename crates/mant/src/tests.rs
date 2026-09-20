@@ -8,8 +8,9 @@ use mant_sources::{
 };
 
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, Inline,
-    LayoutHint, NameCase, Section, SourceFormat, TldrDocument, TldrOrigin,
+    Block, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint,
+    NameCase, Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     CatalogSchema, DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport,
@@ -680,10 +681,17 @@ fn manual() -> Document {
     Document {
         heading: None,
         parser: None,
-        source: DocumentSource {
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Path {
+                name: "/man/demo.1".to_owned(),
+            },
             format: SourceFormat::Man,
-            path: Some("/man/demo.1".to_owned()),
-        },
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
         meta: DocumentMeta {
             manual_section: Some("1".to_owned()),
             ..DocumentMeta::default()

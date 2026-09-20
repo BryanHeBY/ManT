@@ -1,7 +1,7 @@
 use crate::ResolvedContent;
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, Inline,
-    LayoutHint, NameCase, Section, SourceFormat,
+    Block, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint,
+    NameCase, Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_protocol::{MAX_SEARCH_PATTERN_CHARS, SearchCase, SearchQuery, SearchScope, SearchSyntax};
 
@@ -17,10 +17,17 @@ fn query() -> ResolvedContent {
         document: Some(Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Man,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()
@@ -436,7 +443,7 @@ fn semantic_entry_ownership_ends_before_a_following_section_paragraph() {
 fn root_content_search_resolves_to_an_addressable_document_root() {
     let mut query = query();
     let document = query.document.as_mut().expect("document");
-    document.source.format = SourceFormat::Markdown;
+    document.sources[0].format = SourceFormat::Markdown;
     document.blocks.push(Block::Paragraph {
         children: vec![Inline::Text {
             value: "Read the preface needle first.".to_owned(),

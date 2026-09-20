@@ -125,10 +125,10 @@ fn search_with_matcher(
     Ok(QuerySearch {
         schema: SearchSchema::V0Dot12,
         label: query.label.clone(),
-        source: query
+        source_context: query
             .document
             .as_ref()
-            .map(|document| document.source.clone()),
+            .map(mant_protocol::SourceContext::from),
         meta: query
             .document
             .as_ref()

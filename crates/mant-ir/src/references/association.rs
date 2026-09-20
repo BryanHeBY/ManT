@@ -66,7 +66,7 @@ pub fn reference_form_associations(
     ) {
         return empty(ReferenceFormAssociationState::Limited(reason));
     }
-    let relative = local_link_root(occurrence);
+    let relative = local_link_root(&occurrence);
     let mut forms = Vec::new();
     for (index, form) in facts.forms.iter().enumerate() {
         if let Err(reason) = budget.consume(depth, 1, 0) {
@@ -127,7 +127,7 @@ fn empty(state: ReferenceFormAssociationState) -> ReferenceFormAssociations {
 }
 
 fn local_link_root<'a>(
-    occurrence: LinkOccurrenceRef<'_, 'a>,
+    occurrence: &LinkOccurrenceRef<'_, 'a>,
 ) -> Option<(EntryInlineRoot, &'a [u32])> {
     let context = occurrence.semantic_owner?;
     let ContentLocationRef::Content {
@@ -224,7 +224,7 @@ mod tests {
     use std::ops::ControlFlow;
 
     fn document(forms: serde_json::Value) -> Document {
-        let mut value = json!({"parser":null,"source":{"format":"markdown"},"meta":{},"sections":[],"blocks":[{
+        let mut value = json!({"parser":null,"sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],"rootSource":1,"meta":{},"sections":[],"blocks":[{
             "type":"list","kind":{"kind":"bullet"},"items":[{
                 "entry":{"id":"entry","kind":{"kind":"command"},"case":"sensitive","names":[],"valueDomain":null},
                 "blocks":[{"type":"paragraph","children":[

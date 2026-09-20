@@ -3,12 +3,12 @@
 use std::cell::RefCell;
 
 use mant_ir::{
-    Block, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, LinkTarget, ResolvedContent,
-    Section, SourceFormat,
+    Block, Document, DocumentMeta, Inline, LayoutHint, LinkTarget, ResolvedContent, Section,
+    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_protocol::{
     EntryProjection, ExcerptSchema, ExcerptSelection, OutlineNode, OutlineNodeReference,
-    OutlineSchema, OutlineTrail, QueryBundle, QueryExcerpt, QueryOutline,
+    OutlineSchema, OutlineTrail, QueryBundle, QueryExcerpt, QueryOutline, SourceContext,
 };
 use mant_render::{
     TextRole, render_excerpt_json, render_excerpt_markdown, render_excerpt_text,
@@ -16,11 +16,23 @@ use mant_render::{
     render_query_text, render_query_text_with,
 };
 
-fn source() -> DocumentSource {
-    DocumentSource {
+fn source() -> SourceRecord {
+    SourceRecord {
+        key: SourceKey::FIRST,
+        identity: SourceIdentity::Path {
+            name: "not-opened/独立 source.md".into(),
+        },
         format: SourceFormat::Markdown,
-        // Provenance is opaque to the renderer, never a file to open.
-        path: Some("not-opened/独立 source.md".into()),
+        decoded_byte_length: 0,
+        content_sha256: None,
+        coordinates: SourceCoordinates::DecodedUtf8Bytes,
+    }
+}
+
+fn source_context() -> SourceContext {
+    SourceContext {
+        sources: vec![source()],
+        root_source: SourceKey::FIRST,
     }
 }
 
@@ -84,7 +96,8 @@ fn content() -> ResolvedContent {
         tldr: None,
         document: Some(Document {
             parser: None,
-            source: source(),
+            sources: vec![source()],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             heading: Some("Render specimen".into()),
             fragment_aliases: vec![],
@@ -104,7 +117,7 @@ fn outline() -> QueryOutline {
         label: "specimen".into(),
         display_title: Some("Render specimen".into()),
         address: None,
-        source: Some(source()),
+        source_context: Some(source_context()),
         meta: None,
         diagnostics: vec![],
         semantics_complete: true,
@@ -126,7 +139,7 @@ fn excerpt() -> QueryExcerpt {
         address: None,
         semantics_complete: true,
         producer: None,
-        source: Some(source()),
+        source_context: Some(source_context()),
         meta: None,
         diagnostics: vec![],
         selections: vec![ExcerptSelection::DocumentSection {
@@ -199,7 +212,7 @@ fn check_source_rendering() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(serde_json::to_value(document)?, original);
     assert_eq!(document.sections[0].blocks.as_ptr(), source_blocks);
     assert_eq!(
-        document.source.path.as_deref(),
+        document.root_path(),
         Some("not-opened/独立 source.md")
     );
     for pretty in [false, true] {

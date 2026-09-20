@@ -1,8 +1,8 @@
 use crate::ResolvedContent;
 use mant_ir::{
-    Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource,
-    EntryFacts, EntryKind, Inline, LayoutHint, NameCase, ParameterKind, Section, SourceFormat,
-    TldrDocument, TldrOrigin,
+    Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentMeta, EntryFacts,
+    EntryKind, Inline, LayoutHint, NameCase, ParameterKind, Section, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{ContentSelector, EntryProjection, ExcerptSelection, OutlineNode};
 
@@ -27,10 +27,17 @@ fn query() -> ResolvedContent {
         document: Some(Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Path {
+                    name: "/man/demo.1".to_owned(),
+                },
                 format: SourceFormat::Man,
-                path: Some("/man/demo.1".to_owned()),
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()
@@ -531,7 +538,7 @@ fn custom_producer_impact_reaches_outline_and_excerpt_without_known_codes() {
 fn addresses_document_content_before_the_first_heading_as_root() {
     let mut query = query();
     let document = query.document.as_mut().expect("document");
-    document.source.format = SourceFormat::Markdown;
+    document.sources[0].format = SourceFormat::Markdown;
     document.blocks.push(Block::Paragraph {
         children: vec![Inline::Text {
             value: "Document preface.".to_owned(),
@@ -563,7 +570,11 @@ fn addresses_document_content_before_the_first_heading_as_root() {
             if outline.path() == "root" && blocks.len() == 1
     ));
     assert_eq!(
-        excerpt.source.as_ref().map(|source| source.format),
+        excerpt
+            .source_context
+            .as_ref()
+            .and_then(|context| context.sources.first())
+            .map(|source| source.format),
         Some(SourceFormat::Markdown)
     );
 }
@@ -689,7 +700,7 @@ fn selects_tldr_by_zero_or_id_and_supports_tldr_only_outlines() {
     let outline = build_outline(&tldr_only).expect("tldr-only outline");
     assert_eq!(outline.nodes.len(), 1);
     assert_eq!(outline.nodes[0].path(), "0");
-    assert!(outline.source.is_none());
+    assert!(outline.source_context.is_none());
     assert!(outline.meta.is_none());
 }
 

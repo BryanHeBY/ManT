@@ -59,6 +59,7 @@ mod tests {
     #[test]
     fn prepending_heads_preserves_unknown_sources_without_inventing_a_range() {
         let later_source = Some(mant_ir::SourceSpan {
+            source: mant_ir::SourceKey::FIRST,
             byte_range: None,
             line: 9,
             column: 1,

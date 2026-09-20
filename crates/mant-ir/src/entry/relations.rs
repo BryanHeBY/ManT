@@ -297,8 +297,9 @@ fn single_subject(facts: &EntryFacts) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        Block, DefinitionItem, DocumentMeta, DocumentSource, EntryForm, EntryInlineRoot, EntryKind,
-        EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceFormat,
+        Block, DefinitionItem, DocumentMeta, EntryForm, EntryInlineRoot, EntryKind,
+        EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceCoordinates, SourceFormat,
+        SourceIdentity, SourceKey, SourceRecord,
     };
 
     fn entry(id: &str, names: &[&str]) -> DefinitionItem {
@@ -358,10 +359,17 @@ mod tests {
         Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Markdown,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),

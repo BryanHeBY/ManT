@@ -166,6 +166,7 @@ fn warn_incomplete_option_list(
         semantic_diagnostic(
             diagnostics,
             source.unwrap_or(SourceSpan {
+                source: mant_ir::SourceKey::FIRST,
                 byte_range: None,
                 line: 1,
                 column: 1,

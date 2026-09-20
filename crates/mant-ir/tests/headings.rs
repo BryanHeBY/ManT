@@ -3,7 +3,8 @@ use mant_ir::{Document, DocumentIndex, Heading, Inline, LinkTarget, Section};
 
 fn document() -> Document {
     serde_json::from_value(serde_json::json!({
-        "source": {"format": "markdown"}, "meta": {},
+        "sources": [{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],
+        "rootSource": 1, "meta": {},
         "heading": {"content": [{"type":"link", "target":{"kind":"document", "name":"catalog"}, "children": [{"type":"code", "value":"Catalog"}]}]},
         "sections": [{"id":"topic", "heading":{"content":[{"type":"link", "target":{"kind":"section", "id":"topic"}, "children":[{"type":"emphasis", "children":[{"type":"text", "value":"Topic"}]}]}]}, "blocks":[], "children":[]}]
     })).unwrap()

@@ -29,6 +29,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
             }),
             message: diagnostic.message.clone(),
             source: diagnostic.location.map(|location| mant_ir::SourceSpan {
+                source: mant_ir::SourceKey::FIRST,
                 byte_range: None,
                 line: location.line,
                 column: location.column,
@@ -71,6 +72,7 @@ impl LoweringContext<'_> {
                 "more than {MAX_INLINE_EQUATION_NORMALIZATIONS} distinct inline table equations; later source spellings were retained without normalization"
             ),
             source: Some(SourceSpan {
+                source: mant_ir::SourceKey::FIRST,
                 byte_range: None,
                 line,
                 column: 1,

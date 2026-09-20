@@ -8,7 +8,7 @@ use crate::fixtures::archlinux_manual;
 #[test]
 fn parses_the_posix_shell_manual_from_its_real_section() {
     let document = archlinux_manual("sh");
-    assert_eq!(document.source.format, SourceFormat::Man);
+    assert_eq!(document.root_format(), Some(SourceFormat::Man));
     assert_eq!(document.meta.manual_section.as_deref(), Some("1P"));
     assert!(source_path_ends_with(document, "archlinux/sh.1p.gz"));
 

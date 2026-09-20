@@ -98,7 +98,9 @@ fn entry_search_sources_point_into_original_bytes_for_each_line_ending() {
         let span = hit.node_source.unwrap();
         assert_eq!(span.line, 8);
         let bytes = span.byte_range.unwrap();
-        let original = &source[bytes.start.get() as usize..bytes.end.get() as usize];
+        let start = usize::try_from(bytes.start.get()).unwrap();
+        let end = usize::try_from(bytes.end.get()).unwrap();
+        let original = &source[start..end];
         assert!(original.contains("`run`: OWNEDPAYLOAD"), "{original:?}");
         assert!(!original.contains("OUTSIDE"));
     }

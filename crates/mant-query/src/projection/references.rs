@@ -136,7 +136,7 @@ pub fn project_references_with_limits(
                 return ControlFlow::Continue(());
             }
             match materialize(
-                occurrence,
+                &occurrence,
                 source_address,
                 source_bytes,
                 budget,
@@ -217,7 +217,7 @@ fn finish_inventory(
 }
 
 fn materialize(
-    occurrence: LinkOccurrenceRef<'_, '_>,
+    occurrence: &LinkOccurrenceRef<'_, '_>,
     source_address: Option<&DocumentAddress>,
     source_bytes: usize,
     budget: &mut ReferenceWorkBudget,
@@ -283,7 +283,7 @@ fn materialize(
     .map_err(|_| ReferencePageLimit::Scan)?;
     let label_truncated = label.truncated;
     let label = label.text;
-    let association = reference_form_associations(occurrence, budget);
+    let association = reference_form_associations(*occurrence, budget);
     let association = match association.state {
         ReferenceFormAssociationState::Unrecorded => ReferenceAssociation::Unrecorded {},
         ReferenceFormAssociationState::Complete => ReferenceAssociation::Valid {

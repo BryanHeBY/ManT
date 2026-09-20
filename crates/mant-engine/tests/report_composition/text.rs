@@ -1,8 +1,9 @@
 //! Query projection and plain report rendering compose over the same content.
 
 use mant_ir::{
-    Block, Document, DocumentMeta, DocumentSource, EntryKind, Inline, LayoutHint, ResolvedContent,
-    Section, SourceFormat, TldrDocument, TldrOrigin,
+    Block, Document, DocumentMeta, EntryKind, Inline, LayoutHint, ResolvedContent, Section,
+    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument,
+    TldrOrigin,
 };
 use mant_protocol::EntryProjection;
 use mant_query::{build_outline, build_outline_projection, select_excerpt};
@@ -15,10 +16,17 @@ fn query() -> ResolvedContent {
         document: Some(Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Man,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()

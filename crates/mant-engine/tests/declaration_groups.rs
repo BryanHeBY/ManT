@@ -38,7 +38,11 @@ fn declaration_boundaries_follow_executed_requests_not_physical_source_lines() {
         let native = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source.as_bytes())
             .unwrap();
-        let detached = mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &native);
+        let detached = mant_codec::lower_mandoc_document(
+            std::path::Path::new("probe.1"),
+            &native,
+            u64::try_from(source.len()).unwrap(),
+        );
         let detached = mant_ir::ResolvedContent {
             label: "probe".into(),
             address: None,
@@ -475,6 +479,7 @@ fn scope_supports_are_document_local_even_when_node_ids_coincide() {
             },
             depth: 0,
             label: r.label.clone(),
+            source_context: r.source_context.clone().unwrap(),
             producer: None,
             diagnostics: r.diagnostics.clone(),
             semantics_complete: r.semantics_complete,

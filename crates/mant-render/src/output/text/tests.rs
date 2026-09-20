@@ -1,10 +1,23 @@
 use mant_ir::ResolvedContent;
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section,
-    SourceFormat, TldrDocument, TldrOrigin,
+    Block, DefinitionItem, Document, DocumentMeta, Inline, LayoutHint, Section, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 
 use super::{render_query_man, render_query_text};
+
+fn sources(format: SourceFormat) -> Vec<SourceRecord> {
+    vec![SourceRecord {
+        key: SourceKey::FIRST,
+        identity: SourceIdentity::Anonymous {
+            name: "test".to_owned(),
+        },
+        format,
+        decoded_byte_length: 0,
+        content_sha256: None,
+        coordinates: SourceCoordinates::DecodedUtf8Bytes,
+    }]
+}
 
 #[test]
 fn explicit_spacing_overrides_the_definition_join_default_even_at_zero() {
@@ -38,10 +51,8 @@ fn query() -> ResolvedContent {
         document: Some(Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
-                format: SourceFormat::Man,
-                path: None,
-            },
+            sources: sources(SourceFormat::Man),
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()
@@ -173,10 +184,8 @@ fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
             document: Some(Document {
                 heading: None,
                 parser: None,
-                source: DocumentSource {
-                    format: SourceFormat::Man,
-                    path: None,
-                },
+                sources: sources(SourceFormat::Man),
+                root_source: SourceKey::FIRST,
                 meta: DocumentMeta {
                     manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
@@ -243,10 +252,8 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
         document: Some(Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
-                format: SourceFormat::Man,
-                path: None,
-            },
+            sources: sources(SourceFormat::Man),
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()
@@ -335,10 +342,8 @@ fn man_format_keeps_inline_definitions_tight() {
         document: Some(Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
-                format: SourceFormat::Man,
-                path: None,
-            },
+            sources: sources(SourceFormat::Man),
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()

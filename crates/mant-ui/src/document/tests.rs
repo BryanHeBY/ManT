@@ -1,6 +1,7 @@
 use mant_ir::{
-    DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, LayoutHint,
-    ListItem, NameCase, SourceFormat, TableCell, TableRow, TldrDocument, TldrExample,
+    DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, LayoutHint, ListItem, NameCase,
+    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, TableCell, TableRow,
+    TldrDocument, TldrExample,
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -12,10 +13,17 @@ fn bundle() -> ResolvedContent {
         label: "demo".to_owned(),
         document: Some(Document {
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Markdown,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             heading: None,
             fragment_aliases: Vec::new(),
@@ -331,7 +339,7 @@ fn tldr_is_rendered_as_a_bordered_full_width_panel() {
 #[test]
 fn manual_children_keep_the_same_gaps_as_the_established_layout() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").source.format = SourceFormat::Man;
+    bundle.document.as_mut().expect("document").sources[0].format = SourceFormat::Man;
     bundle.tldr = Some(TldrDocument {
         title: "demo".to_owned(),
         description: vec!["Quick reference".to_owned()],

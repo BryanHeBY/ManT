@@ -1,20 +1,29 @@
 //! Locks the public JSON shapes used for outline discovery and excerpts.
 
 use mant_ir::{
-    Block, DefinitionItem, DocumentAddress, DocumentMeta, DocumentReference, DocumentSource,
-    EntryFacts, EntryKind, EntrySummary, Inline, LayoutHint, NameCase, ParameterKind, Section,
-    SourceFormat, TldrDocument, TldrOrigin,
+    Block, DefinitionItem, DocumentAddress, DocumentMeta, DocumentReference, EntryFacts, EntryKind,
+    EntrySummary, Inline, LayoutHint, NameCase, ParameterKind, Section, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     EntryDocumentTarget, EntryProjection, EntryValueDomain, ExcerptSchema, ExcerptSelection,
     OutlineNode, OutlineNodeReference, OutlineReference, OutlineSchema, OutlineTrail, Producer,
-    QueryExcerpt, QueryOutline,
+    QueryExcerpt, QueryOutline, SourceContext,
 };
 
-fn source() -> DocumentSource {
-    DocumentSource {
-        format: SourceFormat::Man,
-        path: Some("/man/demo.1".to_owned()),
+fn source(format: SourceFormat, name: &str) -> SourceContext {
+    SourceContext {
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Path {
+                name: name.to_owned(),
+            },
+            format,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
     }
 }
 
@@ -31,7 +40,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
             name: "demo".to_owned(),
             manual_section: "1".to_owned(),
         }),
-        source: Some(source()),
+        source_context: Some(source(SourceFormat::Man, "/man/demo.1")),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
         semantics_complete: true,
@@ -141,7 +150,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
             version: "1".to_owned(),
             engine: None,
         }),
-        source: Some(source()),
+        source_context: Some(source(SourceFormat::Man, "/man/demo.1")),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentSection {
@@ -205,7 +214,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         address: None,
         semantics_complete: true,
         producer: None,
-        source: Some(source()),
+        source_context: Some(source(SourceFormat::Man, "/man/demo.1")),
         meta: None,
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentEntry {
@@ -257,10 +266,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         root: None,
         label: "guide.md".to_owned(),
         address: None,
-        source: Some(DocumentSource {
-            format: SourceFormat::Markdown,
-            path: Some("guide.md".to_owned()),
-        }),
+        source_context: Some(source(SourceFormat::Markdown, "guide.md")),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
         semantics_complete: true,
@@ -279,7 +285,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         address: None,
         semantics_complete: true,
         producer: None,
-        source: outline.source.clone(),
+        source_context: outline.source_context.clone(),
         meta: outline.meta.clone(),
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentRoot {
@@ -327,7 +333,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         root: None,
         label: "demo".to_owned(),
         address: None,
-        source: None,
+        source_context: None,
         meta: None,
         diagnostics: Vec::new(),
         semantics_complete: true,
@@ -344,7 +350,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         address: None,
         semantics_complete: true,
         producer: None,
-        source: None,
+        source_context: None,
         meta: None,
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::Tldr {
@@ -364,7 +370,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
     let excerpt = serde_json::to_value(excerpt).expect("tldr excerpt JSON");
     assert_eq!(outline["nodes"][0]["kind"], "tldr");
     assert_eq!(outline["nodes"][0]["path"], "0");
-    assert!(outline.get("source").is_none());
+    assert!(outline.get("sourceContext").is_none());
     assert_eq!(excerpt["selections"][0]["kind"], "tldr");
     assert_eq!(excerpt["selections"][0]["document"]["title"], "demo");
     assert!(excerpt.get("producer").is_none());

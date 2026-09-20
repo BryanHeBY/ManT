@@ -1,5 +1,8 @@
 use super::*;
-use mant_ir::{DocumentAddress, MarkdownOrigin};
+use mant_ir::{
+    DocumentAddress, MarkdownOrigin, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey,
+    SourceRecord,
+};
 use mant_protocol::{
     DocumentScope, DocumentTraversal, EvidenceCounts, EvidenceOrder, ExplanationOptions,
     ExplanationOutcome, ExplanationQuery, ExplanationTruncation, MarkdownSchema,
@@ -11,6 +14,21 @@ fn address(path: &str) -> DocumentAddress {
     DocumentAddress::Markdown {
         path: path.into(),
         origin: MarkdownOrigin::Documents,
+    }
+}
+fn source_context() -> mant_protocol::SourceContext {
+    mant_protocol::SourceContext {
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Anonymous {
+                name: "test".into(),
+            },
+            format: SourceFormat::Markdown,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
     }
 }
 fn response(result: ScopeQueryResult) -> ScopeQueryResponse {
@@ -70,6 +88,7 @@ fn search() -> ScopeSearch {
             .map(|path| ScopedSearchDocument {
                 address: address(path),
                 depth: 0,
+                source_context: source_context(),
                 matches: vec![],
                 render: SearchRender {
                     schema: MarkdownSchema::V1,

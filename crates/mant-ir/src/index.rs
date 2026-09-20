@@ -214,7 +214,10 @@ impl<'ir> Visit<'ir> for IndexBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::{DocumentMeta, DocumentSource, EntryFacts, EntryKind, NameCase, SourceFormat};
+    use crate::{
+        DocumentMeta, EntryFacts, EntryKind, NameCase, SourceCoordinates, SourceFormat,
+        SourceIdentity, SourceKey, SourceRecord,
+    };
 
     use super::*;
 
@@ -224,10 +227,17 @@ mod tests {
         let document = Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Markdown,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
@@ -294,10 +304,17 @@ mod tests {
         let document = Document {
             heading: None,
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "test".to_owned(),
+                },
                 format: SourceFormat::Markdown,
-                path: None,
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),

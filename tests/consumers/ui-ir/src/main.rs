@@ -1,8 +1,8 @@
 //! Embed the reader around authored IR without any loader or process lifecycle.
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use mant_ir::{
-    Block, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, ResolvedContent, Section,
-    SourceFormat,
+    Block, Document, DocumentMeta, Inline, LayoutHint, ResolvedContent, Section, SourceCoordinates,
+    SourceFormat, SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_ui::{App, ReaderOptions, ReaderServices};
 use ratatui::{Terminal, backend::TestBackend};
@@ -15,11 +15,17 @@ fn content() -> ResolvedContent {
         tldr: None,
         document: Some(Document {
             parser: None,
-            source: DocumentSource {
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Path {
+                    name: "does-not-exist/私有 source.md".into(),
+                },
                 format: SourceFormat::Markdown,
-                // Provenance is never interpreted as a path to open by the UI.
-                path: Some("does-not-exist/私有 source.md".into()),
-            },
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
             heading: Some("Independent reader".into()),
             fragment_aliases: vec![],
