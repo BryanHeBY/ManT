@@ -49,10 +49,21 @@ mod tests {
     };
 
     #[test]
+    #[allow(clippy::too_many_lines)] // One byte-for-byte fixture covers all CLI presentation modes.
     fn cli_scope_adapter_preserves_existing_search_ansi_and_terminal_markdown_bytes() {
         let local: QuerySearch = serde_json::from_value(serde_json::json!({
             "schema": "mant.search/v0.12",
             "label": " odd\u{1b} ",
+            "sourceContext": {
+                "sources": [{
+                    "key": 1,
+                    "identity": {"kind": "anonymous", "name": "scope-fixture"},
+                    "format": "markdown",
+                    "decodedByteLength": 0,
+                    "coordinates": {"kind": "decoded-utf8-bytes"}
+                }],
+                "rootSource": 1
+            },
             "query": {"pattern": "needle"},
             "render": {
                 "schema": "mant.markdown/v1", "format": "markdown", "scope": "full",

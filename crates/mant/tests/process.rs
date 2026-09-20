@@ -1223,8 +1223,11 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
     assert_eq!(value["label"], "stdin");
-    assert_eq!(value["document"]["source"]["format"], "markdown");
-    assert!(value["document"]["source"].get("path").is_none());
+    assert_eq!(value["document"]["sources"][0]["format"], "markdown");
+    assert_eq!(
+        value["document"]["sources"][0]["identity"]["kind"],
+        "anonymous"
+    );
     assert!(value.get("tldr").is_none());
     assert_eq!(
         value["document"]["sections"][0]["blocks"][0]["items"][0]["entry"]["names"][0],
@@ -1254,7 +1257,7 @@ fn explicit_roff_files_and_stdin_use_the_native_parser() {
     assert!(file.status.success(), "{file:?}");
     assert!(file.stderr.is_empty());
     let file: serde_json::Value = serde_json::from_slice(&file.stdout).expect("roff file JSON");
-    assert_eq!(file["document"]["source"]["format"], "man");
+    assert_eq!(file["document"]["sources"][0]["format"], "man");
     assert_eq!(file["document"]["meta"]["manualSection"], "1");
 
     let mut child = Command::new(executable())
@@ -1283,7 +1286,7 @@ fn explicit_roff_files_and_stdin_use_the_native_parser() {
     assert!(stdin.stderr.is_empty());
     let stdin: serde_json::Value = serde_json::from_slice(&stdin.stdout).expect("roff stdin JSON");
     assert_eq!(stdin["label"], "DIRECT-ROFF");
-    assert_eq!(stdin["document"]["source"]["format"], "man");
+    assert_eq!(stdin["document"]["sources"][0]["format"], "man");
 }
 
 #[test]
@@ -1503,7 +1506,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     let value: serde_json::Value = serde_json::from_slice(&direct.stdout).expect("query JSON");
     assert_eq!(value["document"]["heading"]["content"][0]["value"], "Local");
     assert_eq!(
-        value["document"]["source"]["path"],
+        value["document"]["sources"][0]["identity"]["name"],
         path.to_str().expect("UTF-8 path")
     );
     assert!(value.get("tldr").is_none());
@@ -1545,7 +1548,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
                 .expect("UTF-8 filename")
         )
     );
-    assert_eq!(value["document"]["source"]["format"], "markdown");
+    assert_eq!(value["document"]["sources"][0]["format"], "markdown");
 }
 
 #[test]
@@ -1758,8 +1761,8 @@ fn unqualified_names_prefer_registered_markdown() {
         value["document"]["heading"]["content"][0]["value"],
         "Registered"
     );
-    assert_eq!(value["document"]["source"]["format"], "markdown");
-    let source_path = value["document"]["source"]["path"]
+    assert_eq!(value["document"]["sources"][0]["format"], "markdown");
+    let source_path = value["document"]["sources"][0]["identity"]["name"]
         .as_str()
         .expect("registered source path");
     assert_eq!(
@@ -2262,7 +2265,7 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
     assert!(registered.status.success(), "{registered:?}");
     let registered: serde_json::Value =
         serde_json::from_slice(&registered.stdout).expect("registered JSON");
-    assert_eq!(registered["document"]["source"]["format"], "markdown");
+    assert_eq!(registered["document"]["sources"][0]["format"], "markdown");
 
     #[cfg(feature = "roff")]
     {
@@ -2271,7 +2274,7 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
         assert!(manual.stderr.is_empty());
         let manual: serde_json::Value =
             serde_json::from_slice(&manual.stdout).expect("manual JSON");
-        assert_eq!(manual["document"]["source"]["format"], "man");
+        assert_eq!(manual["document"]["sources"][0]["format"], "man");
         assert_eq!(manual["document"]["meta"]["manualSection"], "1");
         assert!(manual["tldr"].is_null());
     }
@@ -2326,14 +2329,14 @@ fn document_and_quick_reference_policies_remain_orthogonal() {
         assert!(combined.status.success(), "{combined:?}");
         let combined: serde_json::Value =
             serde_json::from_slice(&combined.stdout).expect("combined JSON");
-        assert_eq!(combined["document"]["source"]["format"], "man");
+        assert_eq!(combined["document"]["sources"][0]["format"], "man");
         assert!(!combined["tldr"].is_null());
 
         let manual_only = run(&["--manual", "--format", "json", "--compact"]);
         assert!(manual_only.status.success(), "{manual_only:?}");
         let manual_only: serde_json::Value =
             serde_json::from_slice(&manual_only.stdout).expect("manual-only JSON");
-        assert_eq!(manual_only["document"]["source"]["format"], "man");
+        assert_eq!(manual_only["document"]["sources"][0]["format"], "man");
         assert!(manual_only["tldr"].is_null());
 
         let selected_section = run(&["--man-section", "1", "--format", "json", "--compact"]);
@@ -2477,7 +2480,7 @@ fn manual_queries_use_native_paths_without_a_man_executable() {
         let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
         assert_eq!(value["label"], "native-only");
         assert_eq!(value["document"]["meta"]["manualSection"], "1");
-        assert_eq!(value["document"]["source"]["format"], "man");
+        assert_eq!(value["document"]["sources"][0]["format"], "man");
     } else {
         assert_eq!(output.status.code(), Some(1));
         assert!(String::from_utf8_lossy(&output.stderr).contains("requires the 'roff' feature"));
@@ -2511,7 +2514,7 @@ fn manual_queries_accept_flat_user_man_roots() {
         assert!(output.status.success(), "{output:?}");
         let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
         assert_eq!(value["document"]["meta"]["manualSection"], "1");
-        assert_eq!(value["document"]["source"]["format"], "man");
+        assert_eq!(value["document"]["sources"][0]["format"], "man");
 
         let canonical = Command::new(executable())
             .args(["manual/1/flat-native", "--format", "json", "--compact"])
