@@ -4,6 +4,166 @@ use mant_ir::{
     visit::{self, Visit},
 };
 use mant_protocol::{EntryProjection, EvidenceBasis, ExplanationOptions, ExplanationQuery};
+use std::ops::ControlFlow;
+
+#[test]
+fn one_native_link_remains_one_final_ir_occurrence_across_style_and_wrap() {
+    // This exact source was run through the pinned reference first.
+    // `man_term.c::pre_UR/post_UR` keeps the UR body inside one link while
+    // `term.c::term_flushln` may partially consume the field at 18 columns;
+    // `man_term.c::pre_MR` keeps its trailing comma outside the reference.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "links.1",
+            b".TH LINKS 1\n.SH TARGET\n.ll 18n\n.UR https://example.test/very/long/target\nplain\n.B bold\n.I italic\n.UE\n.MR printf 3 ,\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("links.1", &bundle, InputFormat::Man)
+        .expect("native links lower to semantic IR");
+
+    let mut links = Vec::new();
+    let report = mant_ir::scan_references(
+        &document,
+        mant_ir::ReferenceScanLimits::default(),
+        |occurrence| {
+            let location = occurrence
+                .location
+                .to_owned()
+                .expect("link location is bounded");
+            assert!(std::ptr::eq(
+                location
+                    .resolve_link(&document)
+                    .expect("link location resolves"),
+                occurrence.link,
+            ));
+            links.push((
+                occurrence.target.clone(),
+                mant_ir::inline_plain_text(occurrence.label),
+            ));
+            ControlFlow::Continue(())
+        },
+    );
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(report.occurrences, 2, "{links:#?}");
+    assert_eq!(
+        links[0].0,
+        mant_ir::LinkTarget::External {
+            uri: "https://example.test/very/long/target".to_owned(),
+        }
+    );
+    assert_eq!(
+        links[0].1,
+        "plain bold italic <https://example.test/very/long/target>"
+    );
+    assert_eq!(
+        links[1].0,
+        mant_ir::LinkTarget::Manual {
+            name: "printf".to_owned(),
+            manual_section: Some("3".to_owned()),
+        }
+    );
+    assert_eq!(links[1].1.trim(), "printf(3)");
+}
+
+#[test]
+fn repeated_native_target_remains_two_authored_occurrences() {
+    // This exact source was run through the pinned reference first.
+    // Each `UR` block is a distinct execution of `man_term.c::pre_UR` and
+    // `post_UR`, even though both destinations have the same spelling.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "repeated-links.1",
+            b".TH LINKS 1\n.SH TARGET\n.UR https://example.test/same\nfirst\n.UE\n.UR https://example.test/same\nsecond\n.UE\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("repeated-links.1", &bundle, InputFormat::Man)
+        .expect("repeated native links lower independently");
+    let mut labels = Vec::new();
+    let report = mant_ir::scan_references(
+        &document,
+        mant_ir::ReferenceScanLimits::default(),
+        |occurrence| {
+            labels.push(mant_ir::inline_plain_text(occurrence.label));
+            ControlFlow::Continue(())
+        },
+    );
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(report.occurrences, 2, "{labels:#?}");
+    assert!(labels[0].trim_start().starts_with("first "), "{labels:#?}");
+    assert!(labels[1].trim_start().starts_with("second "), "{labels:#?}");
+}
+
+#[test]
+fn hard_break_inside_native_link_keeps_one_occurrence() {
+    // This exact source was run through the pinned reference first.
+    // `roff_term.c::roff_term_pre_br` calls `term_newln` while the surrounding
+    // `man_term.c::pre_UR/post_UR` block remains the same logical link.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "hard-break-link.1",
+            b".TH LINKS 1\n.SH TARGET\n.UR https://example.test/hard-break\nbefore\n.br\n.B after\n.UE\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("hard-break-link.1", &bundle, InputFormat::Man)
+        .expect("hard break inside native link lowers");
+    let mut labels = Vec::new();
+    let report = mant_ir::scan_references(
+        &document,
+        mant_ir::ReferenceScanLimits::default(),
+        |occurrence| {
+            labels.push(mant_ir::inline_plain_text(occurrence.label));
+            ControlFlow::Continue(())
+        },
+    );
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(report.occurrences, 1, "{labels:#?}");
+    assert_eq!(labels[0], "before\nafter <https://example.test/hard-break>");
+}
+
+#[test]
+fn break_opportunity_does_not_split_native_link_occurrence() {
+    // This exact source was run through the pinned reference first.
+    // `term.c::term_fill` treats ASCII_HYPH as visible `-` followed by a
+    // zero-width break opportunity, not as a link wrapper boundary.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "break-opportunity-link.1",
+            b".TH LINKS 1\n.SH TARGET\n.UR https://example.test/break\na-b\n.UE\n".to_vec(),
+        )
+        .unwrap();
+    let projection = super::super::projection::project_native_prose(
+        "break-opportunity-link.1",
+        &bundle,
+        InputFormat::Man,
+    )
+    .expect("native break opportunity projects");
+    assert!(projection.document().content_atoms().iter().any(|atom| {
+        matches!(
+            atom.kind(),
+            libmandoc_rs::structured::ContentAtomKind::BreakOpportunity
+        )
+    }));
+    let document = lower_projection(&projection).expect("break opportunity link lowers");
+    let mut labels = Vec::new();
+    let report = mant_ir::scan_references(
+        &document,
+        mant_ir::ReferenceScanLimits::default(),
+        |occurrence| {
+            labels.push(mant_ir::inline_plain_text(occurrence.label));
+            ControlFlow::Continue(())
+        },
+    );
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(report.occurrences, 1, "{labels:#?}");
+    assert_eq!(labels[0], "a-b <https://example.test/break>");
+}
 
 #[test]
 fn cross_wrapper_terms_reach_real_entry_facts_without_body_borrowing() {
