@@ -12,7 +12,7 @@ use mant_ir::{
     visit::{self, Visit, VisitMut},
 };
 
-type SectionTargets = HashMap<String, Option<String>>;
+pub(super) type SectionTargets = HashMap<String, Option<String>>;
 
 pub(super) fn resolve_navigation(
     root_blocks: &mut [Block],
@@ -374,19 +374,23 @@ fn resolve_inlines(
 /// (Field Splitting)`.  Accept that form only when it identifies one target;
 /// every other prefix remains unresolved rather than becoming a surprising
 /// navigation jump.
-fn resolve_section_target(targets: &SectionTargets, reference: &str) -> Option<String> {
+pub(super) fn resolve_section_target(targets: &SectionTargets, reference: &str) -> Option<String> {
     match targets.get(reference) {
         Some(Some(section_id)) => return Some(section_id.clone()),
         Some(None) => return None,
         None => {}
     }
-    let mut candidates = targets.iter().filter_map(|(title, section_id)| {
-        is_parenthetical_section_qualification(reference, title)
-            .then_some(section_id.as_deref())
-            .flatten()
-    });
-    let candidate = candidates.next()?;
-    candidates.next().is_none().then(|| candidate.to_owned())
+    let mut candidate = None;
+    for (title, section_id) in targets {
+        if !is_parenthetical_section_qualification(reference, title) {
+            continue;
+        }
+        let section_id = section_id.as_deref()?;
+        if candidate.replace(section_id).is_some() {
+            return None;
+        }
+    }
+    candidate.map(ToOwned::to_owned)
 }
 
 fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool {
@@ -490,6 +494,22 @@ mod tests {
             (
                 "Examples (advanced)".to_owned(),
                 Some("examples-advanced-3".to_owned()),
+            ),
+        ]);
+
+        assert_eq!(resolve_section_target(&targets, "Examples"), None);
+    }
+
+    #[test]
+    fn duplicated_qualified_title_keeps_the_parenthetical_fallback_ambiguous() {
+        // A `None` row represents duplicate authored headings. It is still a
+        // candidate and must not disappear merely because a different
+        // qualified title happens to have one destination.
+        let targets: SectionTargets = HashMap::from([
+            ("Examples (basic)".to_owned(), None),
+            (
+                "Examples (advanced)".to_owned(),
+                Some("examples-advanced".to_owned()),
             ),
         ]);
 

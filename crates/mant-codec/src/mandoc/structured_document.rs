@@ -1,8 +1,6 @@
 //! Direct native structured-document lowering for the C03 vertical slice.
 
-use std::collections::HashSet;
-
-use libmandoc_rs::structured::{NativeBlockKind, NativeTargetOrigin};
+use libmandoc_rs::structured::NativeBlockKind;
 use libmandoc_rs::{InputFormat, SourceBundle};
 #[cfg(test)]
 use mant_ir::{Block, Inline, ListKind};
@@ -11,11 +9,13 @@ use mant_ir::{Document, DocumentMeta, ParserInfo, validate_document};
 use super::projection::{NativeProjectionError, NativeProseProjection, project_native_prose};
 use crate::definitions::NativeHeadEvidence;
 
+mod address;
 mod blocks;
 mod content;
 mod evidence;
 mod index;
 
+use address::AddressPlan;
 use blocks::{lower_block, lower_section, push_lowered_block};
 use content::lower_diagnostics;
 use index::NativeLoweringIndex;
@@ -33,14 +33,7 @@ pub(crate) fn project_native_manual(
 fn lower_projection(projection: &NativeProseProjection) -> Result<Document, NativeProjectionError> {
     let native = projection.document();
     let index = NativeLoweringIndex::new(native)?;
-    let mut used_ids = HashSet::new();
-    let explicit_targets = native
-        .items()
-        .iter()
-        .filter(|item| item.target_origin() == Some(NativeTargetOrigin::Authored))
-        .filter_map(|item| item.target().map(ToOwned::to_owned))
-        .collect::<HashSet<_>>();
-    used_ids.extend(explicit_targets.iter().cloned());
+    let addresses = AddressPlan::build(projection)?;
 
     let mut root_blocks = Vec::new();
     let mut sections = Vec::new();
@@ -52,25 +45,20 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
                 projection,
                 &index,
                 block,
-                &mut used_ids,
+                &addresses,
                 &mut evidence,
             )?);
         } else {
             push_lowered_block(
                 &mut root_blocks,
-                lower_block(projection, &index, block, None, &mut evidence)?,
+                lower_block(projection, &index, &addresses, block, None, &mut evidence)?,
             );
         }
     }
-    super::navigation::normalize_generated_anchors(
-        &mut root_blocks,
-        &mut sections,
-        &explicit_targets,
-    );
     crate::definitions::identify_definitions_with_evidence(
         &mut root_blocks,
         &mut sections,
-        &explicit_targets,
+        addresses.reserved(),
         native.metadata().name(),
         &evidence,
     );
@@ -99,6 +87,9 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
         blocks: root_blocks,
         sections,
     };
+    document
+        .diagnostics
+        .extend_from_slice(addresses.diagnostics());
     document
         .diagnostics
         .extend(crate::definitions::manual_discovery_diagnostics(

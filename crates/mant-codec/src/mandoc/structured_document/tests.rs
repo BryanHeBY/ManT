@@ -127,6 +127,96 @@ fn hard_break_inside_native_link_keeps_one_occurrence() {
 }
 
 #[test]
+fn authored_heading_phrase_drives_section_identity_and_sx_resolution() {
+    // This exact source was run through the pinned reference first.
+    // `mdoc_validate.c::post_section` derives `White Space` before terminal
+    // `.Sm off` joins the displayed heading, and `mdoc_html.c::mdoc_sx_pre`
+    // links `.Sx White Space` through that authored identity domain.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "heading-sx.1",
+            b".Dd September 21, 2026\n.Dt LINKS 1\n.Os\n.Sm off\n.Sh White Space\n.Sm on\n.Pp\n.Sx White Space\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("heading-sx.1", &bundle, InputFormat::Mdoc)
+        .expect("authored heading evidence lowers");
+
+    assert_eq!(document.sections[0].id.as_str(), "white-space");
+    assert_eq!(document.sections[0].heading.plain_text(), "WhiteSpace");
+    let mut links = Vec::new();
+    let report = mant_ir::scan_references(
+        &document,
+        mant_ir::ReferenceScanLimits::default(),
+        |occurrence| {
+            links.push((
+                occurrence.target.clone(),
+                mant_ir::inline_plain_text(occurrence.label),
+            ));
+            ControlFlow::Continue(())
+        },
+    );
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(
+        links,
+        [(
+            mant_ir::LinkTarget::Section {
+                id: "white-space".into(),
+            },
+            "White Space".to_owned(),
+        )]
+    );
+}
+
+#[test]
+fn ambiguous_and_missing_sx_occurrences_downgrade_without_dangling_links() {
+    // This exact source was run through the pinned reference first.
+    // Both headings receive native section tags, while the two Sx labels stay
+    // visible. Codec must not guess which duplicate owns the first reference.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "ambiguous-sx.1",
+            b".Dd September 21, 2026\n.Dt LINKS 1\n.Os\n.Sh DUPLICATE\nfirst\n.Sh DUPLICATE\n.Sx DUPLICATE\n.Sx MISSING\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("ambiguous-sx.1", &bundle, InputFormat::Mdoc)
+        .expect("unresolved section occurrences downgrade atomically");
+
+    assert_eq!(document.sections[0].id.as_str(), "duplicate");
+    assert_eq!(document.sections[1].id.as_str(), "duplicate-2");
+    let report =
+        mant_ir::scan_references(&document, mant_ir::ReferenceScanLimits::default(), |_| {
+            panic!("an ambiguous or missing Sx must not remain a link")
+        });
+    assert_eq!(report.occurrences, 0, "{report:?}");
+    assert_eq!(
+        document
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.code.as_deref() == Some("unresolved-section-reference")
+            })
+            .count(),
+        2,
+        "{:#?}",
+        document.diagnostics
+    );
+    let visible = document.sections[1]
+        .blocks
+        .iter()
+        .map(|block| match block {
+            Block::Paragraph { children, .. } => mant_ir::inline_plain_text(children),
+            _ => String::new(),
+        })
+        .collect::<String>();
+    assert!(visible.contains("DUPLICATE"), "{visible:?}");
+    assert!(visible.contains("MISSING"), "{visible:?}");
+}
+
+#[test]
 fn break_opportunity_does_not_split_native_link_occurrence() {
     // This exact source was run through the pinned reference first.
     // `term.c::term_fill` treats ASCII_HYPH as visible `-` followed by a
