@@ -30,6 +30,18 @@ utf8_boundary(struct mant_bytes_view view, uint32_t offset)
 	return offset == view.len || (view.ptr[offset] & 0xc0) != 0x80;
 }
 
+static uint64_t
+utf8_scalar_count(struct mant_bytes_view view, uint64_t length)
+{
+	uint64_t count, index;
+
+	count = 0;
+	for (index = 0; index < length; index++)
+		if ((view.ptr[index] & 0xc0) != 0x80)
+			count++;
+	return count;
+}
+
 static int
 allocation_fits(uint32_t count, size_t item_size)
 {
@@ -59,7 +71,7 @@ prepare_validation_scratch(const struct mant_structured_result *result,
     struct structured_session *session)
 {
 	struct mant_structured_result *mutable_result;
-	uint32_t root_slots, block_slots;
+	uint32_t root_slots, block_slots, root_offset_slots;
 
 	if (result->validation_ready != 0)
 		return result->validation_owner_count == result->owner_count &&
@@ -75,11 +87,16 @@ prepare_validation_scratch(const struct mant_structured_result *result,
 	root_slots = result->owner_count > result->content_root_count ?
 	    result->owner_count : result->content_root_count;
 	block_slots = result->block_count + 1;
-	if (block_slots == 0 ||
+	root_offset_slots = result->content_root_count + 1;
+	if (block_slots == 0 || root_offset_slots == 0 ||
 	    !allocation_fits(root_slots, sizeof(uint32_t)) ||
 	    !allocation_fits(block_slots, sizeof(uint32_t)) ||
 	    !allocation_fits(result->list_count, sizeof(uint32_t)) ||
-	    !allocation_fits(result->content_atom_count, sizeof(uint8_t)))
+	    !allocation_fits(result->content_atom_count, sizeof(uint8_t)) ||
+	    !allocation_fits(root_offset_slots, sizeof(uint32_t)) ||
+	    !allocation_fits(result->content_atom_count, sizeof(uint32_t)) ||
+	    !allocation_fits(result->content_atom_count, sizeof(uint64_t)) ||
+	    !allocation_fits(result->content_root_count, sizeof(uint64_t)))
 		return 0;
 	mutable_result = (struct mant_structured_result *)result;
 	mutable_result->validation_root_slots = root_slots;
@@ -101,11 +118,33 @@ prepare_validation_scratch(const struct mant_structured_result *result,
 	    NULL : mant_structured_allocate(session,
 	    (uint64_t)result->content_atom_count * sizeof(uint8_t), 1,
 	    MANT_STRUCTURED_STAGE_CHECK);
+	mutable_result->validation_root_atom_offsets = mant_structured_allocate(
+	    session, (uint64_t)root_offset_slots * sizeof(uint32_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
+	mutable_result->validation_root_atoms = result->content_atom_count == 0 ?
+	    NULL : mant_structured_allocate(session,
+	    (uint64_t)result->content_atom_count * sizeof(uint32_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
+	mutable_result->validation_atom_scalar_offsets =
+	    result->content_atom_count == 0 ? NULL :
+	    mant_structured_allocate(session,
+	    (uint64_t)result->content_atom_count * sizeof(uint64_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
+	mutable_result->validation_root_scalar_totals =
+	    result->content_root_count == 0 ? NULL :
+	    mant_structured_allocate(session,
+	    (uint64_t)result->content_root_count * sizeof(uint64_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
 	if ((root_slots != 0 && result->validation_roots == NULL) ||
 	    result->validation_blocks == NULL ||
 	    (result->list_count != 0 && result->validation_lists == NULL) ||
 	    (result->content_atom_count != 0 &&
-	    result->validation_atoms == NULL))
+	    (result->validation_atoms == NULL ||
+	    result->validation_root_atoms == NULL ||
+	    result->validation_atom_scalar_offsets == NULL)) ||
+	    result->validation_root_atom_offsets == NULL ||
+	    (result->content_root_count != 0 &&
+	    result->validation_root_scalar_totals == NULL))
 		return 0;
 	mutable_result->validation_owner_count = result->owner_count;
 	mutable_result->validation_content_root_count =
@@ -164,7 +203,11 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 	const struct mant_structured_content_root_view *root;
 	const struct mant_structured_content_atom_view *atom;
 	const struct mant_structured_content_ref_view *content_ref;
+	const struct mant_structured_content_point_view *point;
 	const struct mant_structured_link_view *link;
+	const struct mant_structured_link_label_part_view *label_part;
+	const struct mant_structured_anchor_view *anchor;
+	const struct mant_structured_heading_evidence_view *heading;
 	const struct mant_structured_block_view *block;
 	const struct mant_structured_list_view *list;
 	const struct mant_structured_item_view *item;
@@ -179,6 +222,7 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		MANT_METADATA_DATE_PRESENT, MANT_METADATA_ALIAS_PRESENT };
 	uint32_t i, expected_ordinal, previous_root, next_form;
 	uint32_t previous_hint_form, previous_item_owner, list_index;
+	uint64_t next_label_part;
 
 	if (result == NULL || result->magic != MANT_STRUCTURED_MAGIC ||
 	    result->root_source != 1 ||
@@ -197,7 +241,14 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 	    (result->content_atoms != NULL) ||
 	    (result->content_ref_count != 0) !=
 	    (result->content_refs != NULL) ||
+	    (result->content_point_count != 0) !=
+	    (result->content_points != NULL) ||
 	    (result->link_count != 0) != (result->links != NULL) ||
+	    (result->link_label_part_count != 0) !=
+	    (result->link_label_parts != NULL) ||
+	    (result->anchor_count != 0) != (result->anchors != NULL) ||
+	    (result->heading_evidence_count != 0) !=
+	    (result->heading_evidence != NULL) ||
 	    (result->block_count != 0) != (result->blocks != NULL) ||
 	    (result->list_count != 0) != (result->lists != NULL) ||
 	    (result->item_count != 0) != (result->items != NULL) ||
@@ -370,7 +421,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 			if (atom->text.ptr != NULL || atom->text.len != 0 ||
 			    atom->whitespace_breakable != 0 ||
 			    atom->style_flags != 0 || atom->role != 0 ||
-			    atom->link != 0 || atom->display_override_present != 0)
+			    (atom->kind == MANT_ATOM_BREAK_OPPORTUNITY &&
+			    atom->link != 0) || atom->display_override_present != 0)
 				return 0;
 		} else
 			return 0;
@@ -390,11 +442,122 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    content_ref->byte_end))
 			return 0;
 	}
+	if (result->validation_root_slots != 0)
+		memset(result->validation_roots, 0,
+		    (size_t)result->validation_root_slots * sizeof(uint32_t));
+	for (i = 0; i < result->content_atom_count; i++)
+		result->validation_roots[result->content_atoms[i].root - 1]++;
+	if (result->content_root_count != 0)
+		memset(result->validation_root_scalar_totals, 0,
+		    (size_t)result->content_root_count * sizeof(uint64_t));
+	result->validation_root_atom_offsets[0] = 0;
+	for (i = 0; i < result->content_root_count; i++)
+		result->validation_root_atom_offsets[i + 1] =
+		    result->validation_root_atom_offsets[i] +
+		    result->validation_roots[i];
+	if (result->validation_root_slots != 0)
+		memset(result->validation_roots, 0,
+		    (size_t)result->validation_root_slots * sizeof(uint32_t));
+	for (i = 0; i < result->content_atom_count; i++) {
+		uint32_t root_index, slot;
+		uint64_t scalar_count;
+
+		atom = result->content_atoms + i;
+		root_index = atom->root - 1;
+		slot = result->validation_root_atom_offsets[root_index] +
+		    result->validation_roots[root_index]++;
+		result->validation_root_atoms[slot] = i + 1;
+		result->validation_atom_scalar_offsets[i] =
+		    result->validation_root_scalar_totals[root_index];
+		scalar_count = atom->kind == MANT_ATOM_TEXT ||
+		    atom->kind == MANT_ATOM_WHITESPACE ?
+		    utf8_scalar_count(atom->text, atom->text.len) :
+		    atom->kind == MANT_ATOM_HARD_BREAK ? 1 : 0;
+		if (UINT64_MAX - result->validation_root_scalar_totals[root_index] <
+		    scalar_count)
+			return 0;
+		result->validation_root_scalar_totals[root_index] += scalar_count;
+	}
+	if (result->validation_root_slots != 0)
+		memset(result->validation_roots, 0,
+		    (size_t)result->validation_root_slots * sizeof(uint32_t));
+	for (i = 0; i < result->content_point_count; i++) {
+		uint32_t root_index, root_atom_count;
+		uint64_t expected_scalar;
+
+		point = result->content_points + i;
+		root_index = point->root == 0 ? UINT32_MAX : point->root - 1;
+		if (point->key != i + 1 || point->root == 0 ||
+		    point->root > result->content_root_count ||
+		    point->owner != result->content_roots[point->root - 1].owner ||
+		    point->ordinal != result->validation_roots[root_index]++ ||
+		    point->provenance == 0 ||
+		    point->provenance > result->provenance_count ||
+		    point->reserved != 0)
+			return 0;
+		root_atom_count = result->validation_root_atom_offsets[root_index + 1] -
+		    result->validation_root_atom_offsets[root_index];
+		if (point->boundary_kind == MANT_POINT_BETWEEN_ATOMS) {
+			if (point->atom != 0 || point->byte_offset != 0)
+				return 0;
+			if (point->atom_boundary > root_atom_count)
+				return 0;
+			if (point->atom_boundary == root_atom_count)
+				expected_scalar =
+				    result->validation_root_scalar_totals[root_index];
+			else {
+				uint32_t atom_key = result->validation_root_atoms[
+				    result->validation_root_atom_offsets[root_index] +
+				    point->atom_boundary];
+				expected_scalar =
+				    result->validation_atom_scalar_offsets[atom_key - 1];
+			}
+		} else if (point->boundary_kind == MANT_POINT_IN_ATOM) {
+			if (point->atom_boundary != 0 || point->atom == 0 ||
+			    point->atom > result->content_atom_count)
+				return 0;
+			atom = result->content_atoms + point->atom - 1;
+			if (atom->root != point->root ||
+			    (atom->kind != MANT_ATOM_TEXT &&
+			    atom->kind != MANT_ATOM_WHITESPACE) ||
+			    point->byte_offset > atom->text.len ||
+			    !utf8_boundary(atom->text, point->byte_offset))
+				return 0;
+			expected_scalar =
+			    result->validation_atom_scalar_offsets[point->atom - 1] +
+			    utf8_scalar_count(atom->text, point->byte_offset);
+		} else
+			return 0;
+		if (expected_scalar > UINT32_MAX ||
+		    point->scalar_boundary != expected_scalar)
+			return 0;
+	}
+	for (i = 0; i < result->anchor_count; i++) {
+		anchor = result->anchors + i;
+		if (anchor->key != i + 1 || anchor->owner == 0 ||
+		    anchor->owner > result->owner_count || anchor->point == 0 ||
+		    anchor->point > result->content_point_count ||
+		    result->content_points[anchor->point - 1].owner != anchor->owner ||
+		    (anchor->origin != MANT_TARGET_ORIGIN_GENERATED &&
+		    anchor->origin != MANT_TARGET_ORIGIN_AUTHORED) ||
+		    !valid_string(anchor->target) || anchor->target.len == 0 ||
+		    anchor->provenance == 0 ||
+		    anchor->provenance > result->provenance_count ||
+		    anchor->reserved != 0)
+			return 0;
+		provenance = result->provenances + anchor->provenance - 1;
+		if ((anchor->origin == MANT_TARGET_ORIGIN_GENERATED &&
+		    provenance->kind != MANT_PROVENANCE_GENERATED) ||
+		    (anchor->origin == MANT_TARGET_ORIGIN_AUTHORED &&
+		    provenance->kind != MANT_PROVENANCE_AUTHORED))
+			return 0;
+	}
 	if (result->validation_atom_slots != 0)
 		memset(result->validation_atoms, 0,
 		    (size_t)result->validation_atom_slots * sizeof(uint8_t));
+	next_label_part = 1;
 	for (i = 0; i < result->link_count; i++) {
-		uint32_t ref_index, previous_atom;
+		uint32_t part_index, previous_atom;
 
 		link = result->links + i;
 		if (link->key != i + 1 || link->owner == 0 ||
@@ -414,11 +577,12 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    (link->title_present == 0 ?
 		    link->title.ptr != NULL || link->title.len != 0 :
 		    !valid_string(link->title)) ||
-		    link->first_label_ref == 0 ||
-		    link->label_ref_count == 0 ||
-		    link->first_label_ref > result->content_ref_count ||
-		    link->label_ref_count > result->content_ref_count -
-		    link->first_label_ref + 1 || link->provenance == 0 ||
+		    link->first_label_ref != 0 || link->label_ref_count != 0 ||
+		    link->first_label_part != next_label_part ||
+		    link->label_part_count == 0 ||
+		    link->first_label_part > result->link_label_part_count ||
+		    link->label_part_count > result->link_label_part_count -
+		    link->first_label_part + 1 || link->provenance == 0 ||
 		    link->provenance > result->provenance_count ||
 		    link->reserved != 0)
 			return 0;
@@ -426,21 +590,39 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    (link->target_b_present != 0))
 			return 0;
 		previous_atom = 0;
-		for (ref_index = 0; ref_index < link->label_ref_count;
-		    ref_index++) {
-			content_ref = result->content_refs +
-			    link->first_label_ref - 1 + ref_index;
-			atom = result->content_atoms + content_ref->atom - 1;
-			if (atom->link != link->key || atom->owner != link->owner ||
-			    content_ref->byte_start != 0 ||
-			    content_ref->byte_end != atom->text.len ||
-			    content_ref->atom <= previous_atom ||
-			    result->validation_atoms[content_ref->atom - 1] != 0)
+		for (part_index = 0; part_index < link->label_part_count;
+		    part_index++) {
+			label_part = result->link_label_parts +
+			    link->first_label_part - 1 + part_index;
+			if (label_part->reserved != 0 || label_part->atom == 0 ||
+			    label_part->atom > result->content_atom_count)
 				return 0;
-			result->validation_atoms[content_ref->atom - 1] = 1;
-			previous_atom = content_ref->atom;
+			atom = result->content_atoms + label_part->atom - 1;
+			if (atom->link != link->key || atom->owner != link->owner ||
+			    label_part->atom <= previous_atom ||
+			    result->validation_atoms[label_part->atom - 1] != 0)
+				return 0;
+			if (label_part->kind == MANT_LINK_LABEL_CONTENT) {
+				if ((atom->kind != MANT_ATOM_TEXT &&
+				    atom->kind != MANT_ATOM_WHITESPACE) ||
+				    label_part->byte_start != 0 ||
+				    label_part->byte_end != atom->text.len)
+					return 0;
+			} else if (label_part->kind ==
+			    MANT_LINK_LABEL_HARD_BREAK) {
+				if (atom->kind != MANT_ATOM_HARD_BREAK ||
+				    label_part->byte_start != 0 ||
+				    label_part->byte_end != 0)
+					return 0;
+			} else
+				return 0;
+			result->validation_atoms[label_part->atom - 1] = 1;
+			previous_atom = label_part->atom;
 		}
+		next_label_part += link->label_part_count;
 	}
+	if (next_label_part != result->link_label_part_count + 1)
+		return 0;
 	for (i = 0; i < result->content_atom_count; i++) {
 		atom = result->content_atoms + i;
 		if ((atom->link != 0) != (result->validation_atoms[i] == 1))
@@ -468,6 +650,34 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    (root != NULL && root->owner != block->owner))
 			return 0;
 	}
+	memset(result->validation_blocks, 0,
+	    (size_t)result->validation_block_slots * sizeof(uint32_t));
+	for (i = 0; i < result->heading_evidence_count; i++) {
+		heading = result->heading_evidence + i;
+		if (heading->key != i + 1 || heading->block == 0 ||
+		    heading->block > result->block_count ||
+		    result->blocks[heading->block - 1].kind != MANT_BLOCK_HEADING ||
+		    heading->owner == 0 || heading->owner > result->owner_count ||
+		    result->blocks[heading->block - 1].owner != heading->owner ||
+		    heading->authored_phrase_present > 1 ||
+		    !zero_bytes(heading->authored_phrase_reserved_bytes,
+		    sizeof(heading->authored_phrase_reserved_bytes)) ||
+		    (heading->authored_phrase_present == 0 ?
+		    heading->authored_phrase.ptr != NULL ||
+		    heading->authored_phrase.len != 0 :
+		    !valid_string(heading->authored_phrase) ||
+		    heading->authored_phrase.len == 0) ||
+		    heading->provenance == 0 ||
+		    heading->provenance > result->provenance_count ||
+		    heading->reserved != 0)
+			return 0;
+		if (result->validation_blocks[heading->block]++ != 0)
+			return 0;
+	}
+	for (i = 0; i < result->block_count; i++)
+		if ((result->blocks[i].kind == MANT_BLOCK_HEADING) !=
+		    (result->validation_blocks[i + 1] == 1))
+			return 0;
 	for (i = 0; i < result->list_count; i++) {
 		list = result->lists + i;
 		if (list->key != i + 1 || list->block == 0 ||
@@ -515,15 +725,12 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    item->owner > result->owner_count || item->ordinal > i ||
 		    item->owner <= previous_item_owner ||
 		    result->owners[item->owner - 1].kind != expected_owner_kind ||
-		    item->target_present > 1 ||
+		    item->target_present != 0 ||
 		    !zero_bytes(item->target_reserved_bytes,
 		    sizeof(item->target_reserved_bytes)) ||
-		    (item->target_present == 0 ? item->target.ptr != NULL ||
-		    item->target.len != 0 || item->target_origin !=
-		    MANT_TARGET_ORIGIN_ABSENT : (!valid_string(item->target) ||
-		    item->target.len == 0 || (item->target_origin !=
-		    MANT_TARGET_ORIGIN_GENERATED && item->target_origin !=
-		    MANT_TARGET_ORIGIN_AUTHORED))) || item->provenance == 0 ||
+		    item->target.ptr != NULL || item->target.len != 0 ||
+		    item->target_origin != MANT_TARGET_ORIGIN_ABSENT ||
+		    item->provenance == 0 ||
 		    item->provenance > result->provenance_count ||
 		    item->reserved != 0 ||
 		    (item->form_count == 0 ? item->first_form != 0 :
@@ -677,7 +884,8 @@ mant_structured_result_view(const struct mant_structured_result *result,
 	    result->content_atom_count);
 	view->content_refs = SLICE(result->content_refs,
 	    result->content_ref_count);
-	view->content_points = EMPTY_SLICE(struct mant_structured_content_point_view);
+	view->content_points = SLICE(result->content_points,
+	    result->content_point_count);
 	view->links = SLICE(result->links, result->link_count);
 	view->blocks = SLICE(result->blocks, result->block_count);
 	view->lists = SLICE(result->lists, result->list_count);
@@ -693,6 +901,11 @@ mant_structured_result_view(const struct mant_structured_result *result,
 	view->name_hints = SLICE(result->name_hints, result->name_hint_count);
 	view->relations = EMPTY_SLICE(struct mant_structured_relation_view);
 	view->diagnostics = SLICE(result->diagnostics, result->diagnostic_count);
+	view->anchors = SLICE(result->anchors, result->anchor_count);
+	view->heading_evidence = SLICE(result->heading_evidence,
+	    result->heading_evidence_count);
+	view->link_label_parts = SLICE(result->link_label_parts,
+	    result->link_label_part_count);
 	return MANT_STRUCTURED_OK;
 }
 
@@ -722,6 +935,11 @@ mant_structured_result_free(struct mant_structured_result *result)
 		mant_structured_free_bytes(result->links[i].target_b);
 		mant_structured_free_bytes(result->links[i].title);
 	}
+	for (i = 0; i < result->anchor_count; i++)
+		mant_structured_free_bytes(result->anchors[i].target);
+	for (i = 0; i < result->heading_evidence_count; i++)
+		mant_structured_free_bytes(
+		    result->heading_evidence[i].authored_phrase);
 	for (i = 0; i < result->item_count; i++)
 		mant_structured_free_bytes(result->items[i].target);
 	for (i = 0; i < result->source_map_count; i++)
@@ -741,7 +959,11 @@ mant_structured_result_free(struct mant_structured_result *result)
 	free(result->content_roots);
 	free(result->content_atoms);
 	free(result->content_refs);
+	free(result->content_points);
 	free(result->links);
+	free(result->link_label_parts);
+	free(result->anchors);
+	free(result->heading_evidence);
 	free(result->blocks);
 	free(result->lists);
 	free(result->items);
@@ -753,6 +975,10 @@ mant_structured_result_free(struct mant_structured_result *result)
 	free(result->validation_blocks);
 	free(result->validation_lists);
 	free(result->validation_atoms);
+	free(result->validation_root_atom_offsets);
+	free(result->validation_root_atoms);
+	free(result->validation_atom_scalar_offsets);
+	free(result->validation_root_scalar_totals);
 	result->magic = 0;
 	free(result);
 }

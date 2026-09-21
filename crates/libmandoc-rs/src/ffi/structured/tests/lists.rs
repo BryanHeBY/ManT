@@ -21,6 +21,18 @@ fn ref_text(document: &OwnedStructuredDocument, first: u32, count: u32) -> Strin
         .collect()
 }
 
+fn owner_anchor<'a>(
+    document: &'a OwnedStructuredDocument,
+    owner: u32,
+    target: &str,
+) -> &'a OwnedAnchor {
+    document
+        .anchors
+        .iter()
+        .find(|anchor| anchor.owner == owner && anchor.target == target)
+        .unwrap_or_else(|| panic!("missing {target:?} for owner {owner}: {document:#?}"))
+}
+
 #[test]
 fn man_tp_tq_forms_share_one_owner_without_borrowing_an_empty_body() {
     // Oracle run first with UTF-8 output at width 78. Pinned
@@ -83,7 +95,7 @@ Body B.
 }
 
 #[test]
-fn mdoc_lists_preserve_kind_nesting_ordinals_and_item_targets() {
+fn mdoc_lists_preserve_kind_nesting_ordinals_and_item_anchors() {
     // Oracle run first with this exact source. Pinned
     // `mdoc_term.c::termp_bl_pre/termp_it_pre` owns list traversal and
     // `tag.c::tag_move_id` transfers Tg identity to the target item part.
@@ -130,7 +142,10 @@ Nested two.
     assert_eq!(document.items[1].ordinal, 1);
     assert_eq!(document.items[2].ordinal, 0);
     assert_eq!(document.items[3].ordinal, 1);
-    assert_eq!(document.items[1].target.as_deref(), Some("item-target"));
+    assert_eq!(
+        owner_anchor(&document, document.items[1].owner, "item-target").origin,
+        u32::from(TARGET_ORIGIN_AUTHORED)
+    );
 
     let outer_block = document.lists[0].block;
     let nested_block = document.lists[1].block;
@@ -593,7 +608,7 @@ fn native_check_rejects_a_form_crossing_tq_term_roots() {
 }
 
 #[test]
-fn empty_mdoc_item_receives_preceding_tg_target() {
+fn empty_mdoc_item_receives_preceding_tg_anchor() {
     // The pinned `mdoc_validate.c::post_tg` keeps Tg on its zero-width node
     // when the following bullet item has no body child; `tag.c` does not move
     // that target into nonexistent content.
@@ -613,7 +628,10 @@ fn empty_mdoc_item_receives_preceding_tg_target() {
         &Limits::default(),
     )
     .expect("empty native item retains its pending target");
-    assert_eq!(document.items[0].target.as_deref(), Some("empty-target"));
+    assert_eq!(
+        owner_anchor(&document, document.items[0].owner, "empty-target").origin,
+        u32::from(TARGET_ORIGIN_AUTHORED)
+    );
 }
 
 #[test]
@@ -641,17 +659,21 @@ fn nested_empty_mdoc_item_uses_its_own_list_target_scope() {
     assert_eq!(document.lists.len(), 2, "{document:#?}");
     assert_eq!(document.items.len(), 2, "{document:#?}");
     assert_eq!(document.items[0].list, document.lists[0].key);
-    assert_eq!(document.items[0].target.as_deref(), Some("outer"));
-    assert_eq!(document.items[0].target_origin, TARGET_ORIGIN_GENERATED);
+    assert_eq!(
+        owner_anchor(&document, document.items[0].owner, "outer").origin,
+        u32::from(TARGET_ORIGIN_GENERATED)
+    );
     assert_eq!(document.items[1].list, document.lists[1].key);
-    assert_eq!(document.items[1].target.as_deref(), Some("nested-target"));
-    assert_eq!(document.items[1].target_origin, TARGET_ORIGIN_AUTHORED);
+    assert_eq!(
+        owner_anchor(&document, document.items[1].owner, "nested-target").origin,
+        u32::from(TARGET_ORIGIN_AUTHORED)
+    );
     let nested_block = &document.blocks[document.lists[1].block as usize - 1];
     assert_eq!(nested_block.owner, document.items[0].owner);
 }
 
 #[test]
-fn native_item_targets_distinguish_generated_and_authored_origins() {
+fn native_item_anchors_distinguish_generated_and_authored_origins() {
     // These exact mdoc and man sources were run through the pinned reference
     // first. `tag_put(TAG_MANUAL)` owns Mixed.Target; the Ev and TP targets
     // are formatter-generated even though their spellings need normalization.
@@ -670,10 +692,14 @@ fn native_item_targets_distinguish_generated_and_authored_origins() {
         &Limits::default(),
     )
     .expect("native target origins survive collection");
-    assert_eq!(document.items[0].target.as_deref(), Some("DEMO_HOME"));
-    assert_eq!(document.items[0].target_origin, TARGET_ORIGIN_GENERATED);
-    assert_eq!(document.items[1].target.as_deref(), Some("Mixed.Target"));
-    assert_eq!(document.items[1].target_origin, TARGET_ORIGIN_AUTHORED);
+    assert_eq!(
+        owner_anchor(&document, document.items[0].owner, "DEMO_HOME").origin,
+        u32::from(TARGET_ORIGIN_GENERATED)
+    );
+    assert_eq!(
+        owner_anchor(&document, document.items[1].owner, "Mixed.Target").origin,
+        u32::from(TARGET_ORIGIN_AUTHORED)
+    );
 
     let mut man = SourceBundle::new();
     man.insert(
@@ -689,8 +715,10 @@ fn native_item_targets_distinguish_generated_and_authored_origins() {
         &Limits::default(),
     )
     .expect("man target origin survives collection");
-    assert_eq!(man_document.items[0].target.as_deref(), Some("set=KEY"));
-    assert_eq!(man_document.items[0].target_origin, TARGET_ORIGIN_GENERATED);
+    assert_eq!(
+        owner_anchor(&man_document, man_document.items[0].owner, "set=KEY").origin,
+        u32::from(TARGET_ORIGIN_GENERATED)
+    );
 }
 
 #[test]
@@ -710,18 +738,18 @@ fn manual_targets_win_native_tag_priority_collisions() {
         let document = render_prelude(name, &bundle, InputFormat::Mdoc, 78, &Limits::default())
             .expect("manual target wins native tag priority collision");
         assert_eq!(document.items.len(), 2, "{document:#?}");
-        assert_eq!(document.items[manual_item].target.as_deref(), Some("DUP"));
         assert_eq!(
-            document.items[manual_item].target_origin,
-            TARGET_ORIGIN_AUTHORED
+            owner_anchor(&document, document.items[manual_item].owner, "DUP").origin,
+            u32::from(TARGET_ORIGIN_AUTHORED)
         );
-        assert_eq!(document.items[1 - manual_item].target, None);
-        assert_eq!(document.items[1 - manual_item].target_origin, 0);
+        assert!(!document.anchors.iter().any(|anchor| anchor.owner
+            == document.items[1 - manual_item].owner
+            && anchor.target == "DUP"));
     }
 }
 
 #[test]
-fn native_checks_reject_unknown_item_target_origins() {
+fn native_checks_reject_nonzero_legacy_item_target_fields() {
     let mut bundle = SourceBundle::new();
     bundle
         .insert(
@@ -747,7 +775,7 @@ fn native_checks_reject_unknown_item_target_origins() {
             view.items.count as usize,
         )
     };
-    assert_eq!(items[0].target_origin, TARGET_ORIGIN_GENERATED);
+    assert_eq!(items[0].target_origin, 0);
     items[0].target_origin = 3;
     let mut failure = FailureView::default();
     assert_eq!(
@@ -757,26 +785,27 @@ fn native_checks_reject_unknown_item_target_origins() {
     assert!(copy_structured_document(&handle, &view, &limits).is_err());
 
     items[0].target_origin = 0;
-    assert_eq!(
-        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
-        STATUS_RELATION,
-        "a present target requires an origin"
-    );
-    assert!(copy_structured_document(&handle, &view, &limits).is_err());
-
-    let target = items[0].target;
-    items[0].target_present = 0;
-    items[0].target = BytesView::default();
-    items[0].target_origin = TARGET_ORIGIN_GENERATED;
-    assert_eq!(
-        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
-        STATUS_RELATION,
-        "an absent target cannot retain an origin"
-    );
-    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+    let anchors = unsafe {
+        std::slice::from_raw_parts(
+            view.anchors.ptr.cast::<AnchorView>(),
+            view.anchors.count as usize,
+        )
+    };
+    let target = anchors
+        .iter()
+        .find(|anchor| anchor.owner == items[0].owner)
+        .expect("generated item anchor exists")
+        .target;
     items[0].target_present = 1;
     items[0].target = target;
-    items[0].target_origin = TARGET_ORIGIN_GENERATED;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "legacy item target transport stays empty"
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+    items[0].target_present = 0;
+    items[0].target = BytesView::default();
 }
 
 #[test]
@@ -803,16 +832,16 @@ fn sibling_nested_lists_keep_independent_pending_targets() {
     assert_eq!(document.lists.len(), 3, "{document:#?}");
     assert_eq!(document.items.len(), 3, "{document:#?}");
     assert_eq!(document.items[1].list, document.lists[1].key);
-    assert_eq!(document.items[1].target.as_deref(), Some("first-target"));
+    owner_anchor(&document, document.items[1].owner, "first-target");
     assert_eq!(document.items[2].list, document.lists[2].key);
-    assert_eq!(document.items[2].target.as_deref(), Some("second-target"));
+    owner_anchor(&document, document.items[2].owner, "second-target");
 }
 
 #[test]
-fn distinct_pending_targets_fail_closed_until_items_can_retain_all_anchors() {
+fn distinct_pending_targets_share_one_item_point_without_loss() {
     // These exact sources were run through the pinned reference first. The Tg
-    // nodes retain NODE_ID values. The current item ABI has one target slot,
-    // so silently overwriting either distinct authored target is invalid.
+    // nodes retain NODE_ID values. Anchor evidence keeps both identities at
+    // the same item-local point without using the legacy one-target slot.
     let mut bundle = SourceBundle::new();
     bundle
         .insert(
@@ -821,15 +850,18 @@ fn distinct_pending_targets_fail_closed_until_items_can_retain_all_anchors() {
                 .to_vec(),
         )
         .unwrap();
-    let error = render_prelude(
+    let multiple = render_prelude(
         "multiple-targets.1",
         &bundle,
         InputFormat::Mdoc,
         78,
         &Limits::default(),
     )
-    .expect_err("one target slot cannot represent two distinct authored anchors");
-    assert_eq!(error.status, STATUS_UNSUPPORTED);
+    .expect("address evidence retains multiple authored anchors");
+    let owner = multiple.items[0].owner;
+    let first = owner_anchor(&multiple, owner, "first-target");
+    let second = owner_anchor(&multiple, owner, "second-target");
+    assert_eq!(first.point, second.point);
 
     let mut duplicate_bundle = SourceBundle::new();
     duplicate_bundle
@@ -847,7 +879,7 @@ fn distinct_pending_targets_fail_closed_until_items_can_retain_all_anchors() {
         &Limits::default(),
     )
     .expect("identical pending targets fit the one-target contract");
-    assert_eq!(duplicate.items[0].target.as_deref(), Some("same-target"));
+    owner_anchor(&duplicate, duplicate.items[0].owner, "same-target");
 
     let mut moved_bundle = SourceBundle::new();
     moved_bundle
@@ -857,15 +889,17 @@ fn distinct_pending_targets_fail_closed_until_items_can_retain_all_anchors() {
                 .to_vec(),
         )
         .unwrap();
-    let moved_error = render_prelude(
+    let moved = render_prelude(
         "pending-and-moved.1",
         &moved_bundle,
         InputFormat::Mdoc,
         78,
         &Limits::default(),
     )
-    .expect_err("a moved target cannot overwrite a pending authored target");
-    assert_eq!(moved_error.status, STATUS_UNSUPPORTED);
+    .expect("moved targets remain independent anchor evidence");
+    let moved_owner = moved.items[0].owner;
+    owner_anchor(&moved, moved_owner, "first-target");
+    owner_anchor(&moved, moved_owner, "second-target");
 
     let mut precedence_bundle = SourceBundle::new();
     precedence_bundle
@@ -884,8 +918,8 @@ fn distinct_pending_targets_fail_closed_until_items_can_retain_all_anchors() {
     )
     .expect("an automatic inline tag cannot displace the authored target");
     assert_eq!(
-        precedence.items[0].target.as_deref(),
-        Some("explicit-target")
+        owner_anchor(&precedence, precedence.items[0].owner, "explicit-target").origin,
+        u32::from(TARGET_ORIGIN_AUTHORED)
     );
 }
 

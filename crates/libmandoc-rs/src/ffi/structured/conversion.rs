@@ -4,11 +4,11 @@ use super::{
     ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_DEFINITION_LIST,
     BLOCK_FIXED_DISPLAY, BLOCK_HEADING, BLOCK_INDENTED, BLOCK_LIST, BLOCK_PARAGRAPH, BLOCK_TABLE,
     BLOCK_THEMATIC_BREAK, BLOCK_VERTICAL_SPACE, COORD_NATIVE_NORMALIZED_BYTES, FORMAT_MAN,
-    FORMAT_MDOC, IDENTITY_BUNDLE_MEMBER, LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER,
-    LIST_ORDERED, LIST_PLAIN, Limits, NativeStructuredError, OwnedMetadata, OwnedProvenance,
-    OwnedStructuredDocument, PROFILE_ASCII, PROFILE_UTF8, STATUS_BUDGET, STATUS_BUILDER_ALLOC,
-    STATUS_INVALID_INPUT, STATUS_NATIVE, STATUS_REENTRANT, STATUS_RELATION, STATUS_UNSUPPORTED,
-    TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED,
+    FORMAT_MDOC, IDENTITY_BUNDLE_MEMBER, LINK_LABEL_CONTENT, LINK_LABEL_HARD_BREAK, LIST_BULLET,
+    LIST_DEFINITION, LIST_NATIVE_MARKER, LIST_ORDERED, LIST_PLAIN, Limits, NativeStructuredError,
+    OwnedMetadata, OwnedProvenance, OwnedStructuredDocument, PROFILE_ASCII, PROFILE_UTF8,
+    STATUS_BUDGET, STATUS_BUILDER_ALLOC, STATUS_INVALID_INPUT, STATUS_NATIVE, STATUS_REENTRANT,
+    STATUS_RELATION, STATUS_UNSUPPORTED, TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -16,14 +16,16 @@ pub(super) fn semantic_document(
     raw: OwnedStructuredDocument,
 ) -> Result<crate::structured::StructuredDocument, crate::structured::StructuredError> {
     use crate::structured::{
-        ContentAtom, ContentAtomKey, ContentAtomKind, ContentOwner, ContentOwnerKind, ContentRef,
-        ContentRoot, ContentRootKey, ContentRootKind, LineColumn, LineColumns, LinkOccurrence,
-        LinkOccurrenceKey, NativeBlock, NativeBlockKey, NativeBlockKind, NativeDiagnostic,
-        NativeForm, NativeFormKey, NativeItem, NativeItemKey, NativeLinkTarget, NativeList,
-        NativeListKey, NativeListKind, NativeNameHint, NativeNameHintKey, NativeRole, OwnerKey,
-        Provenance, ProvenanceKey, SourceCoordinates, SourceIdentity, SourceKey, SourceRecord,
-        SourceSpan, SpanKey, StructuredDiagnosticCode, StructuredDiagnosticLevel,
-        StructuredDocument, StructuredMetadata, StructuredProfile, StructuredStyle,
+        AnchorEvidence, AnchorEvidenceKey, ContentAtom, ContentAtomKey, ContentAtomKind,
+        ContentOwner, ContentOwnerKind, ContentPoint, ContentPointKey, ContentRef, ContentRoot,
+        ContentRootKey, ContentRootKind, HeadingEvidence, HeadingEvidenceKey, LineColumn,
+        LineColumns, LinkLabelPart, LinkOccurrence, LinkOccurrenceKey, NativeBlock, NativeBlockKey,
+        NativeBlockKind, NativeDiagnostic, NativeForm, NativeFormKey, NativeItem, NativeItemKey,
+        NativeLinkTarget, NativeList, NativeListKey, NativeListKind, NativeNameHint,
+        NativeNameHintKey, NativeRole, NativeTargetOrigin, OwnerKey, PointBoundary, Provenance,
+        ProvenanceKey, SourceCoordinates, SourceIdentity, SourceKey, SourceRecord, SourceSpan,
+        SpanKey, StructuredDiagnosticCode, StructuredDiagnosticLevel, StructuredDocument,
+        StructuredMetadata, StructuredProfile, StructuredStyle,
     };
 
     let OwnedStructuredDocument {
@@ -38,7 +40,11 @@ pub(super) fn semantic_document(
         content_roots,
         content_atoms,
         content_refs,
+        content_points,
         links,
+        link_label_parts,
+        anchors,
+        heading_evidence,
         blocks,
         lists,
         items,
@@ -283,6 +289,54 @@ pub(super) fn semantic_document(
         });
     }
 
+    let mut typed_points = Vec::new();
+    typed_points
+        .try_reserve_exact(content_points.len())
+        .map_err(semantic_allocation)?;
+    for point in content_points {
+        let boundary = match (point.boundary_kind, point.atom) {
+            (1, None) => PointBoundary::BetweenAtoms {
+                atom_boundary: point.atom_boundary,
+            },
+            (2, Some(atom)) => PointBoundary::InAtom {
+                atom: ContentAtomKey::new(atom)
+                    .ok_or_else(|| semantic_invalid("native point atom key is absent"))?,
+                byte_offset: point.byte_offset,
+            },
+            _ => return Err(semantic_invalid("native content point boundary is invalid")),
+        };
+        typed_points.push(ContentPoint {
+            key: ContentPointKey::new(point.key)
+                .ok_or_else(|| semantic_invalid("native content point key is absent"))?,
+            root: ContentRootKey::new(point.root)
+                .ok_or_else(|| semantic_invalid("native content point root key is absent"))?,
+            ordinal: point.ordinal,
+            owner: OwnerKey::new(point.owner)
+                .ok_or_else(|| semantic_invalid("native content point owner key is absent"))?,
+            boundary,
+            scalar_boundary: point.scalar_boundary,
+            provenance: ProvenanceKey::new(point.provenance)
+                .ok_or_else(|| semantic_invalid("native content point provenance is absent"))?,
+        });
+    }
+
+    let mut typed_label_parts = Vec::new();
+    typed_label_parts
+        .try_reserve_exact(link_label_parts.len())
+        .map_err(semantic_allocation)?;
+    for part in link_label_parts {
+        let atom = ContentAtomKey::new(part.atom)
+            .ok_or_else(|| semantic_invalid("native link label atom key is absent"))?;
+        typed_label_parts.push(match part.kind {
+            LINK_LABEL_CONTENT => LinkLabelPart::Content(ContentRef {
+                atom,
+                bytes: part.bytes,
+            }),
+            LINK_LABEL_HARD_BREAK => LinkLabelPart::HardBreak(atom),
+            _ => return Err(semantic_invalid("native link label part kind is unknown")),
+        });
+    }
+
     let mut typed_links = Vec::new();
     typed_links
         .try_reserve_exact(links.len())
@@ -300,12 +354,12 @@ pub(super) fn semantic_document(
             _ => return Err(semantic_invalid("native link target shape is invalid")),
         };
         let first = link
-            .first_label_ref
+            .first_label_part
             .checked_sub(1)
-            .ok_or_else(|| semantic_invalid("native link label reference key is absent"))?;
+            .ok_or_else(|| semantic_invalid("native link label part key is absent"))?;
         let start = usize::try_from(first)
             .map_err(|_| semantic_invalid("native link label start does not fit usize"))?;
-        let count = usize::try_from(link.label_ref_count)
+        let count = usize::try_from(link.label_part_count)
             .map_err(|_| semantic_invalid("native link label count does not fit usize"))?;
         let end = start
             .checked_add(count)
@@ -317,9 +371,51 @@ pub(super) fn semantic_document(
                 .ok_or_else(|| semantic_invalid("native link owner key is absent"))?,
             target,
             title: link.title,
-            label_refs: start..end,
+            label_parts: start..end,
             provenance: ProvenanceKey::new(link.provenance)
                 .ok_or_else(|| semantic_invalid("native link provenance key is absent"))?,
+        });
+    }
+
+    let mut typed_anchors = Vec::new();
+    typed_anchors
+        .try_reserve_exact(anchors.len())
+        .map_err(semantic_allocation)?;
+    for anchor in anchors {
+        let origin = match anchor.origin {
+            value if value == u32::from(TARGET_ORIGIN_GENERATED) => NativeTargetOrigin::Generated,
+            value if value == u32::from(TARGET_ORIGIN_AUTHORED) => NativeTargetOrigin::Authored,
+            _ => return Err(semantic_invalid("native anchor target origin is unknown")),
+        };
+        typed_anchors.push(AnchorEvidence {
+            key: AnchorEvidenceKey::new(anchor.key)
+                .ok_or_else(|| semantic_invalid("native anchor evidence key is absent"))?,
+            owner: OwnerKey::new(anchor.owner)
+                .ok_or_else(|| semantic_invalid("native anchor owner key is absent"))?,
+            point: ContentPointKey::new(anchor.point)
+                .ok_or_else(|| semantic_invalid("native anchor point key is absent"))?,
+            target: anchor.target,
+            origin,
+            provenance: ProvenanceKey::new(anchor.provenance)
+                .ok_or_else(|| semantic_invalid("native anchor provenance key is absent"))?,
+        });
+    }
+
+    let mut typed_heading_evidence = Vec::new();
+    typed_heading_evidence
+        .try_reserve_exact(heading_evidence.len())
+        .map_err(semantic_allocation)?;
+    for heading in heading_evidence {
+        typed_heading_evidence.push(HeadingEvidence {
+            key: HeadingEvidenceKey::new(heading.key)
+                .ok_or_else(|| semantic_invalid("native heading evidence key is absent"))?,
+            block: NativeBlockKey::new(heading.block)
+                .ok_or_else(|| semantic_invalid("native heading block key is absent"))?,
+            owner: OwnerKey::new(heading.owner)
+                .ok_or_else(|| semantic_invalid("native heading owner key is absent"))?,
+            authored_phrase: heading.authored_phrase,
+            provenance: ProvenanceKey::new(heading.provenance)
+                .ok_or_else(|| semantic_invalid("native heading provenance key is absent"))?,
         });
     }
 
@@ -398,17 +494,6 @@ pub(super) fn semantic_document(
         .map_err(semantic_allocation)?;
     for item in items {
         let forms = semantic_range(item.first_form, item.form_count, "item form")?;
-        let target_origin = match item.target_origin {
-            0 => None,
-            TARGET_ORIGIN_GENERATED => Some(crate::structured::NativeTargetOrigin::Generated),
-            TARGET_ORIGIN_AUTHORED => Some(crate::structured::NativeTargetOrigin::Authored),
-            _ => return Err(semantic_invalid("native item target origin is unknown")),
-        };
-        if item.target.is_some() != target_origin.is_some() {
-            return Err(semantic_invalid(
-                "native item target and origin presence disagree",
-            ));
-        }
         typed_items.push(NativeItem {
             key: NativeItemKey::new(item.key)
                 .ok_or_else(|| semantic_invalid("native item key is absent"))?,
@@ -418,8 +503,6 @@ pub(super) fn semantic_document(
                 .ok_or_else(|| semantic_invalid("native item owner key is absent"))?,
             ordinal: item.ordinal,
             forms,
-            target: item.target,
-            target_origin,
             provenance: ProvenanceKey::new(item.provenance)
                 .ok_or_else(|| semantic_invalid("native item provenance key is absent"))?,
         });
@@ -508,7 +591,11 @@ pub(super) fn semantic_document(
         content_roots: typed_roots,
         content_atoms: typed_atoms,
         content_refs: typed_refs,
+        content_points: typed_points,
         links: typed_links,
+        link_label_parts: typed_label_parts,
+        anchors: typed_anchors,
+        heading_evidence: typed_heading_evidence,
         blocks: typed_blocks,
         lists: typed_lists,
         items: typed_items,
@@ -655,6 +742,9 @@ pub(super) fn semantic_error(error: &NativeStructuredError) -> crate::structured
         34 => Some(StructuredLimitKind::TransferBytes),
         35 => Some(StructuredLimitKind::NestingDepth),
         36 => Some(StructuredLimitKind::IncludeDepth),
+        37 => Some(StructuredLimitKind::AnchorEvidence),
+        38 => Some(StructuredLimitKind::HeadingEvidence),
+        39 => Some(StructuredLimitKind::LinkLabelParts),
         _ => return semantic_invalid("native failure limit discriminator is unknown"),
     };
     StructuredError::new(
@@ -705,6 +795,9 @@ pub(super) fn raw_limits(limits: &crate::structured::StructuredLimits) -> Limits
         max_transfer_bytes: limits.max_transfer_bytes,
         max_nesting_depth: limits.max_nesting_depth,
         max_include_depth: limits.max_include_depth,
+        max_anchor_evidence: limits.max_anchor_evidence,
+        max_heading_evidence: limits.max_heading_evidence,
+        max_link_label_parts: limits.max_link_label_parts,
         reserved: 0,
     }
 }

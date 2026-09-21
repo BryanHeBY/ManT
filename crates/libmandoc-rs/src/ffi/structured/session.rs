@@ -1,6 +1,7 @@
 //! Native call sequencing, re-entry protection, and handle orchestration.
 
 use super::super::guard::NativeSessionGuard;
+use super::raw::LIMIT_KIND_LAST;
 use super::{
     FailureView, InputStorage, Limits, NativeStructuredError, OwnedStructuredDocument,
     PROFILE_ASCII, PROFILE_UTF8, ResultHandle, ResultView, STATUS_BUDGET, STATUS_INVALID_INPUT,
@@ -39,7 +40,7 @@ pub(super) fn render_prelude_profile(
         observed: 0,
         allowed: 0,
     })?;
-    if unsafe { mant_structured_abi_version() } != 3 {
+    if unsafe { mant_structured_abi_version() } != 4 {
         return Err(relation_error());
     }
     let storage = InputStorage::new(root, bundle, format, limits)?;
@@ -157,7 +158,7 @@ pub(super) fn error_from_failure(
     if !(STATUS_INVALID_INPUT..=STATUS_UNSUPPORTED).contains(&status)
         || failure.status != status
         || !(1..=6).contains(&failure.stage)
-        || failure.limit_kind > 36
+        || failure.limit_kind > LIMIT_KIND_LAST
         || failure.reserved != 0
         || (status == STATUS_BUDGET
             && (failure.limit_kind == 0 || failure.observed <= failure.allowed))

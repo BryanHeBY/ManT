@@ -11,15 +11,16 @@ mod validation;
 use conversion::{raw_limits, semantic_document, semantic_error};
 use input::InputStorage;
 use raw::{
-    ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_DEFINITION_LIST,
-    BLOCK_FIXED_DISPLAY, BLOCK_HEADING, BLOCK_INDENTED, BLOCK_LIST, BLOCK_PARAGRAPH, BLOCK_TABLE,
-    BLOCK_THEMATIC_BREAK, BLOCK_VERTICAL_SPACE, BlockView, BytesView,
+    ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, AnchorView,
+    BLOCK_DEFINITION_LIST, BLOCK_FIXED_DISPLAY, BLOCK_HEADING, BLOCK_INDENTED, BLOCK_LIST,
+    BLOCK_PARAGRAPH, BLOCK_TABLE, BLOCK_THEMATIC_BREAK, BLOCK_VERTICAL_SPACE, BlockView, BytesView,
     COORD_NATIVE_NORMALIZED_BYTES, ContentAtomView, ContentPointView, ContentRefView,
     ContentRootView, DIAGNOSTIC_CODE_NATIVE_LAST, DIAGNOSTIC_STYLE, DIAGNOSTIC_UNSUPPORTED,
     DecorationView, DiagnosticView, FORMAT_MAN, FORMAT_MDOC, FailureView, FixedLineView, FixedView,
-    FormView, IDENTITY_BUNDLE_MEMBER, InputSourceView, InputView, ItemView, LIST_BULLET,
-    LIST_DEFINITION, LIST_NATIVE_MARKER, LIST_ORDERED, LIST_PLAIN, Limits, LinkView, ListView,
-    MetadataView, NameHintView, OWNER_DEFINITION_ITEM, OWNER_KIND_LAST, OWNER_LIST_ITEM, OwnerView,
+    FormView, HeadingEvidenceView, IDENTITY_BUNDLE_MEMBER, InputSourceView, InputView, ItemView,
+    LINK_LABEL_CONTENT, LINK_LABEL_HARD_BREAK, LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER,
+    LIST_ORDERED, LIST_PLAIN, Limits, LinkLabelPartView, LinkView, ListView, MetadataView,
+    NameHintView, OWNER_DEFINITION_ITEM, OWNER_KIND_LAST, OWNER_LIST_ITEM, OwnerView,
     PROFILE_ASCII, PROFILE_UTF8, PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN,
     PlacementView, ProvenanceView, ROOT_BODY, ROOT_HEADING, ROOT_KIND_LAST, ROOT_TERM,
     RelationView, ResultHandleRaw, ResultView, STATUS_BUDGET, STATUS_BUILDER_ALLOC,
@@ -30,8 +31,9 @@ use raw::{
     mant_structured_result_view,
 };
 use transfer::{
-    OwnedBlock, OwnedContentAtom, OwnedContentRef, OwnedContentRoot, OwnedDiagnostic, OwnedForm,
-    OwnedItem, OwnedLink, OwnedList, OwnedMetadata, OwnedNameHint, OwnedOwner, OwnedProvenance,
+    OwnedAnchor, OwnedBlock, OwnedContentAtom, OwnedContentPoint, OwnedContentRef,
+    OwnedContentRoot, OwnedDiagnostic, OwnedForm, OwnedHeadingEvidence, OwnedItem, OwnedLink,
+    OwnedLinkLabelPart, OwnedList, OwnedMetadata, OwnedNameHint, OwnedOwner, OwnedProvenance,
     OwnedSource, OwnedSpan, OwnedStructuredDocument, ResultHandle, StructuredSlices,
     copy_structured_document,
 };

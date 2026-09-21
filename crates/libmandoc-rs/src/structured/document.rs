@@ -1,11 +1,12 @@
 //! Structured document metadata, diagnostics, and table ownership.
 
 use super::{
-    ContentAtom, ContentAtomKey, ContentAtomKind, ContentOwner, ContentRef, ContentRoot,
-    ContentRootKey, LinkOccurrence, LinkOccurrenceKey, NativeBlock, NativeBlockKey, NativeForm,
-    NativeFormKey, NativeItem, NativeItemKey, NativeList, NativeListKey, NativeNameHint,
-    NativeNameHintKey, OwnerKey, Provenance, ProvenanceKey, SourceFormat, SourceKey, SourceRecord,
-    SourceSpan, SpanKey, StructuredProfile,
+    AnchorEvidence, AnchorEvidenceKey, ContentAtom, ContentAtomKey, ContentAtomKind, ContentOwner,
+    ContentPoint, ContentPointKey, ContentRef, ContentRoot, ContentRootKey, HeadingEvidence,
+    HeadingEvidenceKey, LinkLabelPart, LinkOccurrence, LinkOccurrenceKey, NativeBlock,
+    NativeBlockKey, NativeForm, NativeFormKey, NativeItem, NativeItemKey, NativeList,
+    NativeListKey, NativeNameHint, NativeNameHintKey, OwnerKey, Provenance, ProvenanceKey,
+    SourceFormat, SourceKey, SourceRecord, SourceSpan, SpanKey, StructuredProfile,
 };
 use std::num::NonZeroU32;
 
@@ -144,7 +145,11 @@ pub struct StructuredDocument {
     pub(crate) content_roots: Vec<ContentRoot>,
     pub(crate) content_atoms: Vec<ContentAtom>,
     pub(crate) content_refs: Vec<ContentRef>,
+    pub(crate) content_points: Vec<ContentPoint>,
     pub(crate) links: Vec<LinkOccurrence>,
+    pub(crate) link_label_parts: Vec<LinkLabelPart>,
+    pub(crate) anchors: Vec<AnchorEvidence>,
+    pub(crate) heading_evidence: Vec<HeadingEvidence>,
     pub(crate) blocks: Vec<NativeBlock>,
     pub(crate) lists: Vec<NativeList>,
     pub(crate) items: Vec<NativeItem>,
@@ -199,8 +204,24 @@ impl StructuredDocument {
         &self.content_refs
     }
     #[must_use]
+    pub fn content_points(&self) -> &[ContentPoint] {
+        &self.content_points
+    }
+    #[must_use]
     pub fn links(&self) -> &[LinkOccurrence] {
         &self.links
+    }
+    #[must_use]
+    pub fn link_label_parts(&self) -> &[LinkLabelPart] {
+        &self.link_label_parts
+    }
+    #[must_use]
+    pub fn anchors(&self) -> &[AnchorEvidence] {
+        &self.anchors
+    }
+    #[must_use]
+    pub fn heading_evidence(&self) -> &[HeadingEvidence] {
+        &self.heading_evidence
     }
     #[must_use]
     pub fn blocks(&self) -> &[NativeBlock] {
@@ -252,8 +273,20 @@ impl StructuredDocument {
         self.content_atoms.get(key.get() as usize - 1)
     }
     #[must_use]
+    pub fn content_point(&self, key: ContentPointKey) -> Option<&ContentPoint> {
+        self.content_points.get(key.get() as usize - 1)
+    }
+    #[must_use]
     pub fn link(&self, key: LinkOccurrenceKey) -> Option<&LinkOccurrence> {
         self.links.get(key.get() as usize - 1)
+    }
+    #[must_use]
+    pub fn anchor(&self, key: AnchorEvidenceKey) -> Option<&AnchorEvidence> {
+        self.anchors.get(key.get() as usize - 1)
+    }
+    #[must_use]
+    pub fn heading(&self, key: HeadingEvidenceKey) -> Option<&HeadingEvidence> {
+        self.heading_evidence.get(key.get() as usize - 1)
     }
     #[must_use]
     pub fn block(&self, key: NativeBlockKey) -> Option<&NativeBlock> {
@@ -288,7 +321,7 @@ impl StructuredDocument {
     }
 
     #[must_use]
-    pub fn link_label(&self, link: &LinkOccurrence) -> Option<&[ContentRef]> {
-        self.content_refs.get(link.label_refs.clone())
+    pub fn link_label(&self, link: &LinkOccurrence) -> Option<&[LinkLabelPart]> {
+        self.link_label_parts.get(link.label_parts.clone())
     }
 }

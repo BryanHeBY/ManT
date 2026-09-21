@@ -1,8 +1,9 @@
 //! Owned-transfer object, edge, and byte budget preflight.
 
 use super::super::{
-    BytesView, Limits, NativeStructuredError, OwnedBlock, OwnedContentAtom, OwnedContentRef,
-    OwnedContentRoot, OwnedDiagnostic, OwnedForm, OwnedItem, OwnedLink, OwnedList, OwnedNameHint,
+    BytesView, Limits, NativeStructuredError, OwnedAnchor, OwnedBlock, OwnedContentAtom,
+    OwnedContentPoint, OwnedContentRef, OwnedContentRoot, OwnedDiagnostic, OwnedForm,
+    OwnedHeadingEvidence, OwnedItem, OwnedLink, OwnedLinkLabelPart, OwnedList, OwnedNameHint,
     OwnedOwner, OwnedProvenance, OwnedSource, OwnedSpan, PROVENANCE_AUTHORED, PROVENANCE_GENERATED,
     ResultView, STATUS_BUDGET, StructuredSlices, relation_error,
 };
@@ -42,6 +43,9 @@ pub(in super::super) fn transfer_preflight(
         slices.name_hints.len(),
         slices.relations.len(),
         slices.diagnostics.len(),
+        slices.anchors.len(),
+        slices.heading_evidence.len(),
+        slices.link_label_parts.len(),
     ] {
         objects = objects
             .checked_add(u64::try_from(count).map_err(|_| relation_error())?)
@@ -70,10 +74,20 @@ pub(in super::super) fn transfer_preflight(
             .count(),
     )?;
     add_edges(&mut edges, slices.content_refs.len())?; // atom
+    for point in slices.content_points {
+        add_edges(&mut edges, 3 + usize::from(point.atom != 0))?;
+    }
     add_edges(&mut edges, slices.links.len())?; // owner
     add_edges(&mut edges, slices.links.len())?; // provenance
     for link in slices.links {
-        add_edges(&mut edges, link.label_ref_count as usize)?;
+        add_edges(&mut edges, link.label_part_count as usize)?;
+    }
+    add_edges(&mut edges, slices.link_label_parts.len())?; // atom
+    for _ in slices.anchors {
+        add_edges(&mut edges, 3)?; // owner, point, provenance
+    }
+    for _ in slices.heading_evidence {
+        add_edges(&mut edges, 3)?; // block, owner, provenance
     }
     add_edges(&mut edges, slices.blocks.len())?; // owner
     add_edges(&mut edges, slices.blocks.len())?; // provenance
@@ -145,9 +159,25 @@ pub(in super::super) fn transfer_preflight(
         &mut bytes,
         slices.content_refs,
     )?;
+    add_transfer_table_bytes::<OwnedContentPoint, crate::structured::ContentPoint, _>(
+        &mut bytes,
+        slices.content_points,
+    )?;
+    add_transfer_table_bytes::<OwnedLinkLabelPart, crate::structured::LinkLabelPart, _>(
+        &mut bytes,
+        slices.link_label_parts,
+    )?;
     add_transfer_table_bytes::<OwnedLink, crate::structured::LinkOccurrence, _>(
         &mut bytes,
         slices.links,
+    )?;
+    add_transfer_table_bytes::<OwnedAnchor, crate::structured::AnchorEvidence, _>(
+        &mut bytes,
+        slices.anchors,
+    )?;
+    add_transfer_table_bytes::<OwnedHeadingEvidence, crate::structured::HeadingEvidence, _>(
+        &mut bytes,
+        slices.heading_evidence,
     )?;
     add_transfer_table_bytes::<OwnedBlock, crate::structured::NativeBlock, _>(
         &mut bytes,
@@ -222,10 +252,15 @@ pub(in super::super) fn transfer_preflight(
             })
             .ok_or_else(relation_error)?;
     }
-    for item in slices.items {
-        if item.target_present == 1 {
+    for anchor in slices.anchors {
+        bytes = bytes
+            .checked_add(validate_utf8_view(anchor.target)?)
+            .ok_or_else(relation_error)?;
+    }
+    for heading in slices.heading_evidence {
+        if heading.authored_phrase_present == 1 {
             bytes = bytes
-                .checked_add(validate_utf8_view(item.target)?)
+                .checked_add(validate_utf8_view(heading.authored_phrase)?)
                 .ok_or_else(relation_error)?;
         }
     }

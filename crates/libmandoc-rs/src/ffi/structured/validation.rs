@@ -9,11 +9,12 @@ use super::{
     ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_DEFINITION_LIST,
     BLOCK_HEADING, BLOCK_LIST, BLOCK_PARAGRAPH, BytesView, COORD_NATIVE_NORMALIZED_BYTES,
     DIAGNOSTIC_CODE_NATIVE_LAST, DIAGNOSTIC_STYLE, DIAGNOSTIC_UNSUPPORTED, FORMAT_MAN, FORMAT_MDOC,
-    LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER, LIST_ORDERED, LIST_PLAIN, MetadataView,
-    NativeStructuredError, OWNER_DEFINITION_ITEM, OWNER_KIND_LAST, OWNER_LIST_ITEM,
-    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_HEADING,
-    ROOT_KIND_LAST, ROOT_TERM, ResultHandle, ResultView, STYLE_MASK, SliceView, SpanView,
-    StructuredSlices, TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED, alloc_error, relation_error,
+    LINK_LABEL_CONTENT, LINK_LABEL_HARD_BREAK, LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER,
+    LIST_ORDERED, LIST_PLAIN, MetadataView, NativeStructuredError, OWNER_DEFINITION_ITEM,
+    OWNER_KIND_LAST, OWNER_LIST_ITEM, PROVENANCE_AUTHORED, PROVENANCE_GENERATED,
+    PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_HEADING, ROOT_KIND_LAST, ROOT_TERM, ResultHandle,
+    ResultView, STYLE_MASK, SliceView, SpanView, StructuredSlices, TARGET_ORIGIN_AUTHORED,
+    TARGET_ORIGIN_GENERATED, alloc_error, relation_error,
 };
 
 pub(super) fn validate_metadata(metadata: MetadataView) -> Result<(), NativeStructuredError> {
@@ -70,13 +71,24 @@ pub(super) fn utf8_boundary(view: BytesView, offset: u32) -> bool {
     std::str::from_utf8(bytes).is_ok_and(|text| text.is_char_boundary(offset))
 }
 
+fn utf8_scalar_count(view: BytesView, end: u64) -> Option<u32> {
+    let length = usize::try_from(view.len).ok()?;
+    let end = usize::try_from(end).ok()?;
+    if view.ptr.is_null() || end > length {
+        return None;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(view.ptr, length) };
+    let text = std::str::from_utf8(bytes).ok()?;
+    let prefix = text.get(..end)?;
+    u32::try_from(prefix.chars().count()).ok()
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn validate_structured_relations(
     view: &ResultView,
     slices: &StructuredSlices<'_>,
 ) -> Result<(), NativeStructuredError> {
-    if !slices.content_points.is_empty()
-        || !slices.tables.is_empty()
+    if !slices.tables.is_empty()
         || !slices.table_rows.is_empty()
         || !slices.table_cells.is_empty()
         || !slices.fixed_views.is_empty()
@@ -176,13 +188,23 @@ pub(super) fn validate_structured_relations(
             .ok_or_else(relation_error)?;
     }
 
-    let mut previous_root = 0_u32;
-    let mut expected_atom_ordinal = 0_u32;
+    let mut root_atom_counts = Vec::new();
+    root_atom_counts
+        .try_reserve_exact(slices.content_roots.len())
+        .map_err(alloc_error)?;
+    root_atom_counts.resize(slices.content_roots.len(), 0_u32);
+    let mut root_scalar_totals = Vec::new();
+    root_scalar_totals
+        .try_reserve_exact(slices.content_roots.len())
+        .map_err(alloc_error)?;
+    root_scalar_totals.resize(slices.content_roots.len(), 0_u32);
+    let mut atom_scalar_starts = Vec::new();
+    atom_scalar_starts
+        .try_reserve_exact(slices.content_atoms.len())
+        .map_err(alloc_error)?;
     for (index, atom) in slices.content_atoms.iter().enumerate() {
-        let root = atom
-            .root
-            .checked_sub(1)
-            .and_then(|index| slices.content_roots.get(index as usize));
+        let root_index = atom.root.checked_sub(1).map(|index| index as usize);
+        let root = root_index.and_then(|index| slices.content_roots.get(index));
         let text_length = validate_utf8_view(atom.text)?;
         let display_valid = match atom.display_override_present {
             0 => atom.display_override.ptr.is_null() && atom.display_override.len == 0,
@@ -200,14 +222,12 @@ pub(super) fn validate_structured_relations(
                     && atom.whitespace_breakable == 0
                     && atom.style_flags == 0
                     && atom.role == 0
-                    && atom.link == 0
+                    && (atom.kind != ATOM_BREAK_OPPORTUNITY || atom.link == 0)
             }
             _ => false,
         };
-        if atom.root != previous_root {
-            previous_root = atom.root;
-            expected_atom_ordinal = 0;
-        }
+        let expected_atom_ordinal = root_index.and_then(|index| root_atom_counts.get_mut(index));
+        let scalar_total = root_index.and_then(|index| root_scalar_totals.get_mut(index));
         if atom.key != dense_key(index)?
             || root.is_none()
             || root.is_some_and(|root| root.owner != atom.owner)
@@ -220,13 +240,66 @@ pub(super) fn validate_structured_relations(
             || atom.reserved_bytes != [0; 3]
             || !valid_required_key(atom.provenance, slices.provenances.len())
             || atom.reserved != 0
-            || atom.ordinal != expected_atom_ordinal
+            || expected_atom_ordinal
+                .as_ref()
+                .is_none_or(|expected| atom.ordinal != **expected)
+            || scalar_total.is_none()
         {
             return Err(relation_error());
         }
-        expected_atom_ordinal = expected_atom_ordinal
+        let expected_atom_ordinal = expected_atom_ordinal.expect("validated atom root");
+        *expected_atom_ordinal = expected_atom_ordinal
             .checked_add(1)
             .ok_or_else(relation_error)?;
+        let scalar_total = scalar_total.expect("validated atom scalar root");
+        atom_scalar_starts.push(*scalar_total);
+        let added_scalars = match atom.kind {
+            ATOM_TEXT | ATOM_WHITESPACE => {
+                utf8_scalar_count(atom.text, atom.text.len).ok_or_else(relation_error)?
+            }
+            ATOM_HARD_BREAK => 1,
+            ATOM_BREAK_OPPORTUNITY => 0,
+            _ => unreachable!("atom kind validated above"),
+        };
+        *scalar_total = scalar_total
+            .checked_add(added_scalars)
+            .ok_or_else(relation_error)?;
+    }
+
+    let mut root_atom_offsets = Vec::new();
+    root_atom_offsets
+        .try_reserve_exact(slices.content_roots.len() + 1)
+        .map_err(alloc_error)?;
+    root_atom_offsets.push(0_usize);
+    for count in &root_atom_counts {
+        let next = root_atom_offsets
+            .last()
+            .copied()
+            .expect("root atom offset seed")
+            .checked_add(*count as usize)
+            .ok_or_else(relation_error)?;
+        root_atom_offsets.push(next);
+    }
+    if root_atom_offsets.last().copied() != Some(slices.content_atoms.len()) {
+        return Err(relation_error());
+    }
+    let mut root_atoms = Vec::new();
+    root_atoms
+        .try_reserve_exact(slices.content_atoms.len())
+        .map_err(alloc_error)?;
+    root_atoms.resize(slices.content_atoms.len(), (0_u32, 0_u32));
+    for (index, atom) in slices.content_atoms.iter().enumerate() {
+        let root_index = atom.root as usize - 1;
+        let position = root_atom_offsets[root_index]
+            .checked_add(atom.ordinal as usize)
+            .ok_or_else(relation_error)?;
+        let Some(slot) = root_atoms.get_mut(position) else {
+            return Err(relation_error());
+        };
+        if slot.0 != 0 {
+            return Err(relation_error());
+        }
+        *slot = (atom.key, atom_scalar_starts[index]);
     }
 
     for content_ref in slices.content_refs {
@@ -247,15 +320,117 @@ pub(super) fn validate_structured_relations(
             return Err(relation_error());
         }
     }
+    let mut point_ordinals = Vec::new();
+    point_ordinals
+        .try_reserve_exact(slices.content_roots.len())
+        .map_err(alloc_error)?;
+    point_ordinals.resize(slices.content_roots.len(), 0_u32);
+    for (index, point) in slices.content_points.iter().enumerate() {
+        let root = point
+            .root
+            .checked_sub(1)
+            .and_then(|root| slices.content_roots.get(root as usize));
+        let expected = point
+            .root
+            .checked_sub(1)
+            .and_then(|root| point_ordinals.get_mut(root as usize));
+        let scalar_boundary = match point.boundary_kind {
+            1 => {
+                let root_index = point.root.checked_sub(1).map(|root| root as usize);
+                let count = root_index
+                    .and_then(|root| root_atom_counts.get(root))
+                    .copied();
+                let boundary = point.atom_boundary as usize;
+                if point.atom != 0
+                    || point.byte_offset != 0
+                    || count.is_none_or(|count| point.atom_boundary > count)
+                {
+                    None
+                } else if point.atom_boundary == count.expect("validated point atom boundary") {
+                    root_index
+                        .and_then(|root| root_scalar_totals.get(root))
+                        .copied()
+                } else {
+                    root_index
+                        .and_then(|root| root_atom_offsets.get(root))
+                        .and_then(|offset| offset.checked_add(boundary))
+                        .and_then(|index| root_atoms.get(index))
+                        .map(|(_, scalar)| *scalar)
+                }
+            }
+            2 => {
+                let atom_index = point.atom.checked_sub(1).map(|atom| atom as usize);
+                let atom = atom_index.and_then(|atom| slices.content_atoms.get(atom));
+                if point.atom_boundary != 0
+                    || atom.is_none_or(|atom| {
+                        atom.root != point.root
+                            || !matches!(atom.kind, ATOM_TEXT | ATOM_WHITESPACE)
+                            || u64::from(point.byte_offset) > atom.text.len
+                            || !utf8_boundary(atom.text, point.byte_offset)
+                    })
+                {
+                    None
+                } else {
+                    atom_index
+                        .and_then(|atom| atom_scalar_starts.get(atom))
+                        .copied()
+                        .and_then(|start| {
+                            utf8_scalar_count(
+                                atom.expect("validated point atom").text,
+                                u64::from(point.byte_offset),
+                            )
+                            .and_then(|prefix| start.checked_add(prefix))
+                        })
+                }
+            }
+            _ => None,
+        };
+        if point.key != dense_key(index)?
+            || root.is_none()
+            || root.is_some_and(|root| root.owner != point.owner)
+            || expected
+                .as_ref()
+                .is_none_or(|expected| point.ordinal != **expected)
+            || scalar_boundary != Some(point.scalar_boundary)
+            || !valid_required_key(point.provenance, slices.provenances.len())
+            || point.reserved != 0
+        {
+            return Err(relation_error());
+        }
+        let expected = expected.expect("validated point root");
+        *expected = expected.checked_add(1).ok_or_else(relation_error)?;
+    }
+    for (index, anchor) in slices.anchors.iter().enumerate() {
+        let point = anchor
+            .point
+            .checked_sub(1)
+            .and_then(|point| slices.content_points.get(point as usize));
+        if anchor.key != dense_key(index)?
+            || !valid_required_key(anchor.owner, slices.owners.len())
+            || point.is_none_or(|point| point.owner != anchor.owner)
+            || !matches!(
+                anchor.origin,
+                value if value == u32::from(TARGET_ORIGIN_GENERATED)
+                    || value == u32::from(TARGET_ORIGIN_AUTHORED)
+            )
+            || validate_utf8_view(anchor.target).is_err()
+            || anchor.target.len == 0
+            || !valid_required_key(anchor.provenance, slices.provenances.len())
+            || anchor.reserved != 0
+        {
+            return Err(relation_error());
+        }
+    }
     let mut linked_atom_refs = Vec::new();
     linked_atom_refs
         .try_reserve_exact(slices.content_atoms.len())
         .map_err(alloc_error)?;
     linked_atom_refs.resize(slices.content_atoms.len(), 0_u32);
+    let mut next_label_part = 0_usize;
     for (index, link) in slices.links.iter().enumerate() {
-        let label_start = link.first_label_ref.checked_sub(1).map(|key| key as usize);
+        let label_start = link.first_label_part.checked_sub(1).map(|key| key as usize);
         let label_end =
-            label_start.and_then(|start| start.checked_add(link.label_ref_count as usize));
+            label_start.and_then(|start| start.checked_add(link.label_part_count as usize));
         let target_b_valid = match link.target_b_present {
             0 => link.target_b.ptr.is_null() && link.target_b.len == 0 && link.target_kind != 4,
             1 => {
@@ -279,29 +454,50 @@ pub(super) fn validate_structured_relations(
             || !title_valid
             || link.target_b_reserved_bytes != [0; 7]
             || link.title_reserved_bytes != [0; 7]
-            || link.label_ref_count == 0
-            || label_start.is_none()
-            || label_end.is_none_or(|end| end > slices.content_refs.len())
+            || link.first_label_ref != 0
+            || link.label_ref_count != 0
+            || link.label_part_count == 0
+            || label_start != Some(next_label_part)
+            || label_end.is_none_or(|end| end > slices.link_label_parts.len())
             || !valid_required_key(link.provenance, slices.provenances.len())
             || link.reserved != 0
         {
             return Err(relation_error());
         }
         let mut previous_atom = 0;
-        for content_ref in &slices.content_refs[label_start.unwrap()..label_end.unwrap()] {
-            let atom = &slices.content_atoms[content_ref.atom as usize - 1];
+        for part in &slices.link_label_parts[label_start.unwrap()..label_end.unwrap()] {
+            let atom = part
+                .atom
+                .checked_sub(1)
+                .and_then(|atom| slices.content_atoms.get(atom as usize))
+                .ok_or_else(relation_error)?;
+            let part_valid = match part.kind {
+                LINK_LABEL_CONTENT => {
+                    matches!(atom.kind, ATOM_TEXT | ATOM_WHITESPACE)
+                        && part.byte_start == 0
+                        && u64::from(part.byte_end) == atom.text.len
+                }
+                LINK_LABEL_HARD_BREAK => {
+                    atom.kind == ATOM_HARD_BREAK && part.byte_start == 0 && part.byte_end == 0
+                }
+                _ => false,
+            };
             if atom.link != link.key
                 || atom.owner != link.owner
-                || content_ref.byte_start != 0
-                || u64::from(content_ref.byte_end) != atom.text.len
-                || content_ref.atom <= previous_atom
+                || part.atom <= previous_atom
+                || part.reserved != 0
+                || !part_valid
             {
                 return Err(relation_error());
             }
-            let seen = &mut linked_atom_refs[content_ref.atom as usize - 1];
+            let seen = &mut linked_atom_refs[part.atom as usize - 1];
             *seen = seen.checked_add(1).ok_or_else(relation_error)?;
-            previous_atom = content_ref.atom;
+            previous_atom = part.atom;
         }
+        next_label_part = label_end.expect("validated link label part range");
+    }
+    if next_label_part != slices.link_label_parts.len() {
+        return Err(relation_error());
     }
     if slices
         .content_atoms
@@ -365,6 +561,45 @@ pub(super) fn validate_structured_relations(
             return Err(relation_error());
         }
     }
+    let mut evidenced_headings = Vec::new();
+    evidenced_headings
+        .try_reserve_exact(slices.blocks.len())
+        .map_err(alloc_error)?;
+    evidenced_headings.resize(slices.blocks.len(), false);
+    for (index, heading) in slices.heading_evidence.iter().enumerate() {
+        let block_index = heading.block.checked_sub(1).map(|block| block as usize);
+        let block = block_index.and_then(|block| slices.blocks.get(block));
+        let phrase_valid = match heading.authored_phrase_present {
+            0 => heading.authored_phrase.ptr.is_null() && heading.authored_phrase.len == 0,
+            1 => {
+                heading.authored_phrase.len != 0
+                    && validate_utf8_view(heading.authored_phrase).is_ok()
+            }
+            _ => false,
+        };
+        if heading.key != dense_key(index)?
+            || block.is_none_or(|block| block.kind != BLOCK_HEADING || block.owner != heading.owner)
+            || !valid_required_key(heading.owner, slices.owners.len())
+            || block_index
+                .and_then(|block| evidenced_headings.get(block))
+                .is_none_or(|evidenced| *evidenced)
+            || !phrase_valid
+            || heading.authored_phrase_reserved_bytes != [0; 7]
+            || !valid_required_key(heading.provenance, slices.provenances.len())
+            || heading.reserved != 0
+        {
+            return Err(relation_error());
+        }
+        evidenced_headings[block_index.expect("validated heading block")] = true;
+    }
+    if slices
+        .blocks
+        .iter()
+        .enumerate()
+        .any(|(index, block)| (block.kind == BLOCK_HEADING) != evidenced_headings[index])
+    {
+        return Err(relation_error());
+    }
 
     let mut list_blocks = Vec::new();
     list_blocks
@@ -423,18 +658,10 @@ pub(super) fn validate_structured_relations(
                 slices.forms.get(start..end)
             })
         };
-        let target_valid = match item.target_present {
-            0 => item.target.ptr.is_null() && item.target.len == 0 && item.target_origin == 0,
-            1 => {
-                item.target.len != 0
-                    && validate_utf8_view(item.target).is_ok()
-                    && matches!(
-                        item.target_origin,
-                        TARGET_ORIGIN_GENERATED | TARGET_ORIGIN_AUTHORED
-                    )
-            }
-            _ => false,
-        };
+        let legacy_target_is_zero = item.target_present == 0
+            && item.target.ptr.is_null()
+            && item.target.len == 0
+            && item.target_origin == 0;
         let expected_owner_kind = list_index
             .and_then(|list| slices.lists.get(list))
             .map(|list| {
@@ -461,7 +688,7 @@ pub(super) fn validate_structured_relations(
                 .is_none_or(|used| *used)
             || (item.form_count != 0 && first_form != Some(next_form))
             || forms.is_none_or(|forms| forms.iter().any(|form| form.owner != item.owner))
-            || !target_valid
+            || !legacy_target_is_zero
             || item.target_reserved_bytes != [0; 6]
             || !valid_required_key(item.provenance, slices.provenances.len())
             || item.reserved != 0

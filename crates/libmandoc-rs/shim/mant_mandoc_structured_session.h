@@ -7,6 +7,7 @@
 struct roff_node;
 struct structured_token;
 struct structured_column;
+struct structured_anchor_state;
 
 enum structured_content_part {
 	STRUCTURED_PART_FLOW,
@@ -32,6 +33,12 @@ struct structured_node_context {
 	uint8_t restore_man_state;
 };
 
+struct structured_anchor_queue {
+	uint32_t head;
+	uint32_t tail;
+	uint32_t last_root;
+};
+
 struct structured_root_atoms {
 	/*
 	 * Formatter head execution emits each term root as one atom interval.
@@ -42,14 +49,17 @@ struct structured_root_atoms {
 	uint32_t first;
 	uint32_t count;
 	uint32_t item;
+	uint32_t point_count;
+	uint64_t scalar_count;
+	struct structured_anchor_queue pending_anchors;
 	uint8_t closed;
 	uint8_t finalized;
 };
 
 struct structured_list_state {
-	/* Active item ordinals and pre-item Tg ownership share one list scope. */
+	/* Active item ordinals are local to one list scope. */
 	uint32_t item_count;
-	const struct roff_node *pending_item_target;
+	struct structured_anchor_queue pending_anchors;
 };
 
 struct structured_session {
@@ -103,14 +113,19 @@ struct structured_session {
 	uint32_t output_depth;
 	uint32_t current_root;
 	uint32_t current_owner;
-	uint32_t current_root_atom_count;
 	uint32_t section_owner;
 	uint32_t section_heading_block;
-	uint32_t section_root_count;
-	uint32_t section_child_block_count;
 	uint32_t top_level_block_count;
 	uint32_t pending_break_provenance;
 	uint32_t pending_break_root;
+	uint32_t pending_break_link;
+	uint64_t pending_break_sequence;
+	struct structured_anchor_state *anchor_states;
+	uint32_t anchor_state_capacity;
+	struct structured_anchor_queue unowned_anchors;
+	struct structured_anchor_queue *owner_anchor_queues;
+	uint32_t owner_anchor_queue_capacity;
+	uint8_t force_atom_split;
 	struct structured_token *tokens;
 	uint32_t token_slot_count;
 	uint32_t token_capacity;

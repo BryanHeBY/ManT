@@ -17,6 +17,7 @@
 #include "term.h"
 
 #include "mant_mandoc_structured_source.h"
+#include "mant_mandoc_structured_address.h"
 #include "mant_mandoc_structured_buffer.h"
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_output.h"
@@ -135,6 +136,8 @@ supported_token(enum roff_tok tok)
 	case MDOC_Ns:
 	case MDOC_Pf:
 	case MDOC_Sy:
+	case MDOC_Sm:
+	case MDOC_Sx:
 	case MDOC_Lk:
 	case MDOC_Mt:
 	case MAN_TH:
@@ -348,6 +351,9 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		}
 		if (session.status != MANT_STRUCTURED_OK)
 			goto native_cleanup;
+		mant_structured_address_finish(&session);
+		if (session.status != MANT_STRUCTURED_OK)
+			goto native_cleanup;
 	}
 	result->magic = MANT_STRUCTURED_MAGIC;
 
@@ -411,6 +417,7 @@ cleanup:
 	free(session.root_atoms);
 	free(session.block_child_counts);
 	free(session.list_states);
+	mant_structured_address_release(&session);
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;
 	structured_active = 0;

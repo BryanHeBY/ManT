@@ -213,19 +213,31 @@ fn external_link_labels_reference_shared_atoms() {
     assert_eq!(owned.links.len(), 1, "{owned:?}");
     assert_eq!(owned.links[0].target_kind, 1);
     assert_eq!(owned.links[0].target_a, "https://example.com");
-    let label_start = owned.links[0].first_label_ref as usize - 1;
-    let label_end = label_start + owned.links[0].label_ref_count as usize;
-    assert!(!owned.content_refs[label_start..label_end].is_empty());
+    let OwnedProvenance::Authored { span } =
+        owned.provenances[owned.links[0].provenance as usize - 1]
+    else {
+        panic!("link destination must retain authored provenance: {owned:#?}");
+    };
+    assert_eq!(
+        owned.spans[span as usize - 1]
+            .line_columns
+            .map(|coordinates| coordinates.0),
+        Some(3),
+        "the URL operand, not the first body label atom, owns the occurrence"
+    );
+    let label_start = owned.links[0].first_label_part as usize - 1;
+    let label_end = label_start + owned.links[0].label_part_count as usize;
+    assert!(!owned.link_label_parts[label_start..label_end].is_empty());
     assert!(
-        owned.content_refs[label_start..label_end]
+        owned.link_label_parts[label_start..label_end]
             .iter()
-            .all(|content_ref| {
-                owned.content_atoms[content_ref.atom as usize - 1].link == Some(owned.links[0].key)
+            .all(|part| {
+                owned.content_atoms[part.atom as usize - 1].link == Some(owned.links[0].key)
             })
     );
-    let label_styles = owned.content_refs[label_start..label_end]
+    let label_styles = owned.link_label_parts[label_start..label_end]
         .iter()
-        .map(|content_ref| owned.content_atoms[content_ref.atom as usize - 1].style_flags)
+        .map(|part| owned.content_atoms[part.atom as usize - 1].style_flags)
         .collect::<Vec<_>>();
     assert!(label_styles.contains(&0), "{owned:?}");
     assert!(label_styles.iter().any(|style| style & 1 != 0), "{owned:?}");
@@ -253,7 +265,7 @@ fn external_link_labels_reference_shared_atoms() {
 }
 
 #[test]
-fn native_check_rejects_empty_partial_and_split_utf8_link_refs() {
+fn native_check_rejects_empty_partial_and_split_utf8_link_parts() {
     // Oracle: registered C02b UTF-8/78 `.UR` probe renders the authored
     // `café` label.  Pinned `term.c::encode1` retains é as one scalar;
     // label references therefore cannot start inside its UTF-8 encoding.
@@ -266,7 +278,7 @@ fn native_check_rejects_empty_partial_and_split_utf8_link_refs() {
                 .to_vec(),
         )
         .unwrap();
-    for mutation in ["empty", "partial", "split-utf8"] {
+    for mutation in ["empty", "partial", "split-utf8", "legacy-ref"] {
         let limits = Limits::default();
         let storage = InputStorage::new("link.1", &bundle, InputFormat::Man, &limits).unwrap();
         let (status, pointer, failure) = raw_render(&storage.view(78, PROFILE_UTF8), &limits);
@@ -277,10 +289,13 @@ fn native_check_rejects_empty_partial_and_split_utf8_link_refs() {
             unsafe { mant_structured_result_view(handle.0.as_ptr(), &raw mut view) },
             STATUS_OK
         );
-        let refs = unsafe {
+        let parts = unsafe {
             std::slice::from_raw_parts_mut(
-                view.content_refs.ptr.cast::<ContentRefView>().cast_mut(),
-                view.content_refs.count as usize,
+                view.link_label_parts
+                    .ptr
+                    .cast::<LinkLabelPartView>()
+                    .cast_mut(),
+                view.link_label_parts.count as usize,
             )
         };
         let atoms = unsafe {
@@ -289,30 +304,46 @@ fn native_check_rejects_empty_partial_and_split_utf8_link_refs() {
                 view.content_atoms.count as usize,
             )
         };
-        let content_ref = refs
-            .iter_mut()
-            .find(|content_ref| {
-                let atom = &atoms[content_ref.atom as usize - 1];
-                let bytes = unsafe {
-                    std::slice::from_raw_parts(
-                        atom.text.ptr,
-                        usize::try_from(atom.text.len).expect("test atom fits this platform"),
-                    )
-                };
-                std::str::from_utf8(bytes).is_ok_and(|text| text.contains("café"))
-            })
-            .expect("authored UTF-8 label reference");
-        match mutation {
-            "empty" => content_ref.byte_start = content_ref.byte_end,
-            "partial" => content_ref.byte_start = 1,
-            "split-utf8" => content_ref.byte_start = content_ref.byte_end - 1,
-            _ => unreachable!(),
+        if mutation == "legacy-ref" {
+            let links = unsafe {
+                std::slice::from_raw_parts_mut(
+                    view.links.ptr.cast::<LinkView>().cast_mut(),
+                    view.links.count as usize,
+                )
+            };
+            links[0].first_label_ref = 1;
+        } else {
+            let part = parts
+                .iter_mut()
+                .find(|part| {
+                    let atom = &atoms[part.atom as usize - 1];
+                    let bytes = unsafe {
+                        std::slice::from_raw_parts(
+                            atom.text.ptr,
+                            usize::try_from(atom.text.len).expect("test atom fits this platform"),
+                        )
+                    };
+                    part.kind == LINK_LABEL_CONTENT
+                        && std::str::from_utf8(bytes).is_ok_and(|text| match mutation {
+                            "split-utf8" => text.contains('é'),
+                            "partial" => text.len() > 1,
+                            _ => true,
+                        })
+                })
+                .expect("matching authored label part");
+            match mutation {
+                "empty" => part.byte_start = part.byte_end,
+                "partial" => part.byte_start = 1,
+                "split-utf8" => part.byte_start = part.byte_end - 1,
+                _ => unreachable!(),
+            }
         }
         let mut failure = FailureView::default();
         assert_eq!(
             unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
             STATUS_RELATION
         );
+        assert!(copy_structured_document(&handle, &view, &limits).is_err());
     }
 }
 

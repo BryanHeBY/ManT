@@ -64,6 +64,9 @@ pub enum StructuredLimitKind {
     TransferBytes,
     NestingDepth,
     IncludeDepth,
+    AnchorEvidence,
+    HeadingEvidence,
+    LinkLabelParts,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -191,6 +194,9 @@ pub struct StructuredLimits {
     pub max_transfer_bytes: u64,
     pub max_nesting_depth: u64,
     pub max_include_depth: u64,
+    pub max_anchor_evidence: u64,
+    pub max_heading_evidence: u64,
+    pub max_link_label_parts: u64,
 }
 
 impl Default for StructuredLimits {
@@ -232,6 +238,9 @@ impl Default for StructuredLimits {
             max_transfer_bytes: 512 * 1024 * 1024,
             max_nesting_depth: 256,
             max_include_depth: 64,
+            max_anchor_evidence: 1_048_576,
+            max_heading_evidence: 1_048_576,
+            max_link_label_parts: 8_388_608,
         }
     }
 }

@@ -71,7 +71,10 @@ enum mant_structured_view_kind {
 	MANT_VIEW_DIAGNOSTIC = 26,
 	MANT_VIEW_METADATA = 27,
 	MANT_VIEW_LIST = 28,
-	MANT_VIEW_ITEM = 29
+	MANT_VIEW_ITEM = 29,
+	MANT_VIEW_ANCHOR = 30,
+	MANT_VIEW_HEADING_EVIDENCE = 31,
+	MANT_VIEW_LINK_LABEL_PART = 32
 };
 
 enum mant_structured_identity_kind {
@@ -185,6 +188,11 @@ enum mant_structured_link_target_kind {
 	MANT_LINK_DOCUMENT = 3,
 	MANT_LINK_MANUAL = 4,
 	MANT_LINK_SECTION = 5
+};
+
+enum mant_structured_link_label_part_kind {
+	MANT_LINK_LABEL_CONTENT = 1,
+	MANT_LINK_LABEL_HARD_BREAK = 2
 };
 
 enum mant_structured_point_boundary_kind {
@@ -327,6 +335,9 @@ struct mant_structured_limits {
 	uint64_t max_transfer_bytes;
 	uint64_t max_nesting_depth;
 	uint64_t max_include_depth;
+	uint64_t max_anchor_evidence;
+	uint64_t max_heading_evidence;
+	uint64_t max_link_label_parts;
 	uint32_t reserved;
 };
 
@@ -420,7 +431,27 @@ struct mant_structured_link_view {
 	uint8_t title_present;
 	uint8_t title_reserved_bytes[7];
 	struct mant_bytes_view title;
-	uint32_t first_label_ref, label_ref_count, provenance, reserved;
+	uint32_t first_label_ref, label_ref_count, provenance;
+	uint32_t first_label_part, label_part_count;
+	uint32_t reserved;
+};
+
+struct mant_structured_anchor_view {
+	uint32_t key, owner, point, origin;
+	struct mant_bytes_view target;
+	uint32_t provenance, reserved;
+};
+
+struct mant_structured_heading_evidence_view {
+	uint32_t key, block, owner;
+	uint8_t authored_phrase_present;
+	uint8_t authored_phrase_reserved_bytes[7];
+	struct mant_bytes_view authored_phrase;
+	uint32_t provenance, reserved;
+};
+
+struct mant_structured_link_label_part_view {
+	uint32_t kind, atom, byte_start, byte_end, reserved;
 };
 struct mant_structured_block_view {
 	uint32_t key, owner, kind, parent, ordinal, provenance;
@@ -507,6 +538,9 @@ struct mant_structured_result_view {
 	struct mant_slice_view name_hints;
 	struct mant_slice_view relations;
 	struct mant_slice_view diagnostics;
+	struct mant_slice_view anchors;
+	struct mant_slice_view heading_evidence;
+	struct mant_slice_view link_label_parts;
 	uint32_t reserved;
 };
 

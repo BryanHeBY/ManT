@@ -5,6 +5,7 @@ use crate::{InputFormat, SourceBundle};
 use std::{ffi::c_void, ptr::NonNull};
 
 mod abi;
+mod addresses;
 mod content;
 mod list_lifecycle;
 mod list_markers;

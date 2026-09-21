@@ -94,6 +94,9 @@ fn prose_transfer_preserves_descriptor_keys_and_owned_text() {
     let empty_forms: [FormView; 0] = [];
     let empty_hints: [NameHintView; 0] = [];
     let empty_relations: [RelationView; 0] = [];
+    let empty_anchors: [AnchorView; 0] = [];
+    let empty_headings: [HeadingEvidenceView; 0] = [];
+    let empty_label_parts: [LinkLabelPartView; 0] = [];
     let view = ResultView {
         root_source: 1,
         profile: PROFILE_UTF8,
@@ -126,6 +129,9 @@ fn prose_transfer_preserves_descriptor_keys_and_owned_text() {
         name_hints: abi_slice(&empty_hints),
         relations: abi_slice(&empty_relations),
         diagnostics: abi_slice(&diagnostics),
+        anchors: abi_slice(&empty_anchors),
+        heading_evidence: abi_slice(&empty_headings),
+        link_label_parts: abi_slice(&empty_label_parts),
         reserved: 0,
     };
     let handle = std::mem::ManuallyDrop::new(ResultHandle(NonNull::dangling()));

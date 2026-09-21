@@ -88,7 +88,7 @@ fn line_ends_and_hard_breaks_have_no_numeric_sentinels() {
 }
 
 #[test]
-fn item_target_origins_cross_the_typed_boundary() {
+fn point_backed_anchor_origins_cross_the_typed_boundary() {
     let mut bundle = SourceBundle::new();
     bundle
         .insert(
@@ -98,14 +98,30 @@ fn item_target_origins_cross_the_typed_boundary() {
         )
         .unwrap();
     let document = render_bundle("target-origins.1", &bundle, InputFormat::Mdoc).unwrap();
-    assert_eq!(
-        document.items()[0].target_origin(),
-        Some(NativeTargetOrigin::Generated)
-    );
-    assert_eq!(
-        document.items()[1].target_origin(),
-        Some(NativeTargetOrigin::Authored)
-    );
+    // Pinned CVS tag.c:tag_put()/tag_postprocess() moves both automatic and
+    // explicit destinations to their landing owner; mdoc_validate.c:post_tg()
+    // keeps `.Tg` authored identity distinct from the generated `Ev` tag.
+    // ABI v4 carries both through point-backed evidence, never item fields.
+    let generated = document
+        .anchors()
+        .iter()
+        .find(|anchor| anchor.target() == "DEMO_HOME")
+        .unwrap();
+    assert_eq!(generated.origin(), NativeTargetOrigin::Generated);
+    assert!(matches!(
+        document.provenances()[generated.provenance().get() as usize - 1],
+        Provenance::Generated { trigger: Some(_) }
+    ));
+    let authored = document
+        .anchors()
+        .iter()
+        .find(|anchor| anchor.target() == "Mixed.Target")
+        .unwrap();
+    assert_eq!(authored.origin(), NativeTargetOrigin::Authored);
+    assert!(matches!(
+        document.provenances()[authored.provenance().get() as usize - 1],
+        Provenance::Authored { .. }
+    ));
 }
 
 fn test_document(content_atoms: Vec<ContentAtom>) -> StructuredDocument {
@@ -132,7 +148,11 @@ fn test_document(content_atoms: Vec<ContentAtom>) -> StructuredDocument {
         content_roots: Vec::new(),
         content_atoms,
         content_refs: Vec::new(),
+        content_points: Vec::new(),
         links: Vec::new(),
+        link_label_parts: Vec::new(),
+        anchors: Vec::new(),
+        heading_evidence: Vec::new(),
         blocks: Vec::new(),
         lists: Vec::new(),
         items: Vec::new(),

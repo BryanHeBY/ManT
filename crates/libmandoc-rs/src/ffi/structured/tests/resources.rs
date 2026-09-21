@@ -73,6 +73,42 @@ fn controlled_builder_failure_and_budget_exhaustion_recover() {
 }
 
 #[test]
+fn c04_evidence_budget_kind_survives_failure_mapping_and_recovers() {
+    // The exact two-target input was run through the fixed reference first;
+    // pinned tag.c moves each ID to its following paragraph. The generated
+    // heading target and the two explicit targets all count as AnchorEvidence
+    // rows. The dedicated budget reports limit kind 37, and the failure cannot
+    // poison the next same-thread session.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "anchors.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh TARGETS\n.Tg first\n.Pp\none\n.Tg second\n.Pp\ntwo\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let limits = Limits {
+        max_anchor_evidence: 1,
+        ..Limits::default()
+    };
+    let error = render_prelude("anchors.1", &bundle, InputFormat::Mdoc, 78, &limits)
+        .expect_err("second anchor exceeds its dedicated evidence budget");
+    assert_eq!(error.status, STATUS_BUDGET, "{error:?}");
+    assert_eq!(error.limit_kind, 37, "{error:?}");
+    assert!(error.observed > error.allowed, "{error:?}");
+
+    let recovered = render_prelude(
+        "anchors.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("a following session recovers after the evidence budget failure");
+    assert_eq!(recovered.anchors.len(), 3, "{recovered:#?}");
+}
+
+#[test]
 fn native_input_relations_and_transfer_budget_fail_cleanly() {
     let mut bundle = SourceBundle::new();
     bundle

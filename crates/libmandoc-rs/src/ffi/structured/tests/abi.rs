@@ -5,6 +5,7 @@ use super::*;
 #[test]
 #[allow(clippy::too_many_lines)] // One exhaustive native ABI fingerprint table.
 fn all_frozen_view_sizes_and_alignments_match() {
+    assert_eq!(unsafe { mant_structured_abi_version() }, 4);
     let layouts: &[(u32, usize, usize)] = &[
         (
             1,
@@ -63,6 +64,17 @@ fn all_frozen_view_sizes_and_alignments_match() {
         (27, size_of::<MetadataView>(), align_of::<MetadataView>()),
         (28, size_of::<ListView>(), align_of::<ListView>()),
         (29, size_of::<ItemView>(), align_of::<ItemView>()),
+        (30, size_of::<AnchorView>(), align_of::<AnchorView>()),
+        (
+            31,
+            size_of::<HeadingEvidenceView>(),
+            align_of::<HeadingEvidenceView>(),
+        ),
+        (
+            32,
+            size_of::<LinkLabelPartView>(),
+            align_of::<LinkLabelPartView>(),
+        ),
     ];
     for &(kind, size, align) in layouts {
         assert_eq!(
@@ -106,12 +118,13 @@ fn all_frozen_view_sizes_and_alignments_match() {
         max_name_hints, max_relations, max_connection_atoms, max_annotation_runs,
         max_annotation_mutations, max_relation_edges, max_diagnostics,
         max_transfer_objects, max_transfer_edges, max_transfer_bytes,
-        max_nesting_depth, max_include_depth, reserved);
+        max_nesting_depth, max_include_depth, max_anchor_evidence,
+        max_heading_evidence, max_link_label_parts, reserved);
     offsets!(5, ResultView; root_source, profile, width, metadata, sources, spans,
         provenances, owners, content_roots, content_atoms, content_refs,
         content_points, links, blocks, lists, items, tables, table_rows, table_cells,
         fixed_views, fixed_lines, placements, decorations, forms, name_hints,
-        relations, diagnostics, reserved);
+        relations, diagnostics, anchors, heading_evidence, link_label_parts, reserved);
     offsets!(6, SourceView; key, identity_kind, format, coordinate_kind,
         logical_name, decoded_length, hash_present, hash, reserved_bytes, reserved);
     offsets!(7, SpanView; line_column_present, byte_range_present, reserved_bytes, source,
@@ -126,8 +139,8 @@ fn all_frozen_view_sizes_and_alignments_match() {
     offsets!(13, ContentPointView; key, root, ordinal, owner, boundary_kind,
         atom_boundary, atom, byte_offset, scalar_boundary, provenance, reserved);
     offsets!(14, LinkView; key, owner, target_kind, target_a, target_b_present,
-        target_b_reserved_bytes, target_b, title_present, title_reserved_bytes, title, first_label_ref, label_ref_count,
-        provenance, reserved);
+        target_b_reserved_bytes, target_b, title_present, title_reserved_bytes, title,
+        first_label_ref, label_ref_count, provenance, first_label_part, label_part_count, reserved);
     offsets!(15, BlockView; key, owner, kind, parent, ordinal, provenance,
         root, table, fixed_view, reserved);
     offsets!(16, TableView; key, block, fixed_view, provenance, reserved);
@@ -150,12 +163,16 @@ fn all_frozen_view_sizes_and_alignments_match() {
     offsets!(28, ListView; key, block, kind, compact, start, provenance, reserved);
     offsets!(29, ItemView; key, list, owner, ordinal, first_form, form_count,
         target_present, target_origin, target_reserved_bytes, target, provenance, reserved);
+    offsets!(30, AnchorView; key, owner, point, origin, target, provenance, reserved);
+    offsets!(31, HeadingEvidenceView; key, block, owner, authored_phrase_present,
+        authored_phrase_reserved_bytes, authored_phrase, provenance, reserved);
+    offsets!(32, LinkLabelPartView; kind, atom, byte_start, byte_end, reserved);
 
     let discriminants: &[u32] = &[
         0, 1, 2, 3, 4, 5, 6, 7, // status
         0, 1, 2, 3, 4, 5, 6, // stage
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-        25, 26, 27, 28, 29, // view
+        25, 26, 27, 28, 29, 30, 31, 32, // view
         0, 1, 2, 3, // identity
         0, 1, 2, 3, // format
         0, 1, 2, // profile
@@ -171,6 +188,7 @@ fn all_frozen_view_sizes_and_alignments_match() {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, // block
         0, 1, 2, 3, 4, 5, // list
         0, 1, 2, 3, 4, 5, // link target
+        0, 1, 2, // link-label part
         0, 1, 2, // point boundary
         0, 1, 2, // placement target
         0, 1, 2, 3, // cell map

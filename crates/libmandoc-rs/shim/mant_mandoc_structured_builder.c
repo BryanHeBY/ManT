@@ -319,7 +319,6 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 	}
 	session->current_owner = owner_key;
 	session->current_root = root->key;
-	session->current_root_atom_count = 0;
 	if (heading) {
 		session->section_owner = owner_key;
 		session->section_heading_block = block;
@@ -579,10 +578,22 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 	struct mant_structured_content_atom_view *atoms, *atom;
 	const struct mant_structured_content_root_view *content_root;
 	uint8_t *grown_text;
-	uint64_t required, new_capacity, added;
+	uint64_t required, new_capacity, added, scalar_delta;
+	size_t scalar_index;
 
 	if (root == 0 || root > session->result->content_root_count)
 		return 0;
+	scalar_delta = kind == MANT_ATOM_HARD_BREAK ? 1 : 0;
+	if (kind == MANT_ATOM_TEXT || kind == MANT_ATOM_WHITESPACE)
+		for (scalar_index = 0; scalar_index < length; scalar_index++)
+			if ((bytes[scalar_index] & 0xc0) != 0x80)
+				scalar_delta++;
+	if (session->root_atoms[root - 1].scalar_count >
+	    UINT64_MAX - scalar_delta) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
+		    MANT_STRUCTURED_STAGE_RENDER, 15, UINT64_MAX, UINT32_MAX);
+		return 0;
+	}
 	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER))
@@ -594,7 +605,8 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 	    display_length, session->limits->max_content_bytes, 10,
 	    MANT_STRUCTURED_STAGE_RENDER)))
 		return 0;
-	if (length != 0 && session->result->content_atom_count != 0) {
+	if (length != 0 && session->force_atom_split == 0 &&
+	    session->result->content_atom_count != 0) {
 		atom = session->result->content_atoms +
 		    session->result->content_atom_count - 1;
 		if (atom->root == root && atom->provenance == provenance &&
@@ -697,9 +709,11 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 				    atom->display_override.len, display, display_length);
 				atom->display_override.len = required;
 			}
+			session->root_atoms[root - 1].scalar_count += scalar_delta;
 			return 1;
 		}
 	}
+	session->force_atom_split = 0;
 	if (!mant_structured_charge(session, &session->annotation_runs, 1,
 	    session->limits->max_annotation_runs, 28,
 	    MANT_STRUCTURED_STAGE_RENDER))
@@ -771,6 +785,6 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 	if (session->root_atoms[root - 1].count == 0)
 		session->root_atoms[root - 1].first = atom->key - 1;
 	session->root_atoms[root - 1].count++;
-	session->current_root_atom_count++;
+	session->root_atoms[root - 1].scalar_count += scalar_delta;
 	return 1;
 }

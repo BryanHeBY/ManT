@@ -27,6 +27,9 @@ pub(super) const ATOM_TEXT: u32 = 1;
 pub(super) const ATOM_WHITESPACE: u32 = 2;
 pub(super) const ATOM_BREAK_OPPORTUNITY: u32 = 3;
 pub(super) const ATOM_HARD_BREAK: u32 = 4;
+pub(super) const LINK_LABEL_CONTENT: u32 = 1;
+pub(super) const LINK_LABEL_HARD_BREAK: u32 = 2;
+pub(super) const LIMIT_KIND_LAST: u32 = 39;
 pub(super) const STYLE_MASK: u32 = 1 | 2 | 4 | 8;
 pub(super) const OWNER_KIND_LAST: u32 = 7;
 pub(super) const OWNER_LIST_ITEM: u32 = 4;
@@ -169,6 +172,9 @@ pub(super) struct Limits {
     pub(super) max_transfer_bytes: u64,
     pub(super) max_nesting_depth: u64,
     pub(super) max_include_depth: u64,
+    pub(super) max_anchor_evidence: u64,
+    pub(super) max_heading_evidence: u64,
+    pub(super) max_link_label_parts: u64,
     pub(super) reserved: u32,
 }
 
@@ -211,6 +217,9 @@ impl Default for Limits {
             max_transfer_bytes: 512 * 1024 * 1024,
             max_nesting_depth: 256,
             max_include_depth: 64,
+            max_anchor_evidence: 1_048_576,
+            max_heading_evidence: 1_048_576,
+            max_link_label_parts: 8_388_608,
             reserved: 0,
         }
     }
@@ -255,6 +264,9 @@ impl Limits {
             self.max_transfer_bytes,
             self.max_nesting_depth,
             self.max_include_depth,
+            self.max_anchor_evidence,
+            self.max_heading_evidence,
+            self.max_link_label_parts,
         ];
         self.reserved == 0
             && values.iter().all(|value| *value != 0)
@@ -398,6 +410,40 @@ pub(super) struct LinkView {
     pub(super) first_label_ref: u32,
     pub(super) label_ref_count: u32,
     pub(super) provenance: u32,
+    pub(super) first_label_part: u32,
+    pub(super) label_part_count: u32,
+    pub(super) reserved: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(super) struct AnchorView {
+    pub(super) key: u32,
+    pub(super) owner: u32,
+    pub(super) point: u32,
+    pub(super) origin: u32,
+    pub(super) target: BytesView,
+    pub(super) provenance: u32,
+    pub(super) reserved: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(super) struct HeadingEvidenceView {
+    pub(super) key: u32,
+    pub(super) block: u32,
+    pub(super) owner: u32,
+    pub(super) authored_phrase_present: u8,
+    pub(super) authored_phrase_reserved_bytes: [u8; 7],
+    pub(super) authored_phrase: BytesView,
+    pub(super) provenance: u32,
+    pub(super) reserved: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(super) struct LinkLabelPartView {
+    pub(super) kind: u32,
+    pub(super) atom: u32,
+    pub(super) byte_start: u32,
+    pub(super) byte_end: u32,
     pub(super) reserved: u32,
 }
 #[repr(C)]
@@ -596,6 +642,9 @@ pub(super) struct ResultView {
     pub(super) name_hints: SliceView,
     pub(super) relations: SliceView,
     pub(super) diagnostics: SliceView,
+    pub(super) anchors: SliceView,
+    pub(super) heading_evidence: SliceView,
+    pub(super) link_label_parts: SliceView,
     pub(super) reserved: u32,
 }
 

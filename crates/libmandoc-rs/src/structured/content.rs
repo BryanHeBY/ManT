@@ -1,8 +1,9 @@
 //! Logical content, ownership, roles, links, and block records.
 
 use super::{
-    ContentAtomKey, ContentRootKey, LinkOccurrenceKey, NativeBlockKey, NativeFormKey,
-    NativeItemKey, NativeListKey, NativeNameHintKey, OwnerKey, ProvenanceKey,
+    AnchorEvidenceKey, ContentAtomKey, ContentPointKey, ContentRootKey, HeadingEvidenceKey,
+    LinkOccurrenceKey, NativeBlockKey, NativeFormKey, NativeItemKey, NativeListKey,
+    NativeNameHintKey, OwnerKey, ProvenanceKey,
 };
 use std::ops::Range;
 
@@ -299,6 +300,65 @@ impl ContentRef {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PointBoundary {
+    BetweenAtoms {
+        atom_boundary: u32,
+    },
+    InAtom {
+        atom: ContentAtomKey,
+        byte_offset: u32,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContentPoint {
+    pub(crate) key: ContentPointKey,
+    pub(crate) root: ContentRootKey,
+    pub(crate) ordinal: u32,
+    pub(crate) owner: OwnerKey,
+    pub(crate) boundary: PointBoundary,
+    pub(crate) scalar_boundary: u32,
+    pub(crate) provenance: ProvenanceKey,
+}
+
+impl ContentPoint {
+    #[must_use]
+    pub const fn key(&self) -> ContentPointKey {
+        self.key
+    }
+    #[must_use]
+    pub const fn root(&self) -> ContentRootKey {
+        self.root
+    }
+    #[must_use]
+    pub const fn ordinal(&self) -> u32 {
+        self.ordinal
+    }
+    #[must_use]
+    pub const fn owner(&self) -> OwnerKey {
+        self.owner
+    }
+    #[must_use]
+    pub const fn boundary(&self) -> &PointBoundary {
+        &self.boundary
+    }
+    #[must_use]
+    pub const fn scalar_boundary(&self) -> u32 {
+        self.scalar_boundary
+    }
+    #[must_use]
+    pub const fn provenance(&self) -> ProvenanceKey {
+        self.provenance
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LinkLabelPart {
+    Content(ContentRef),
+    HardBreak(ContentAtomKey),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NativeLinkTarget {
     External(String),
     Email(String),
@@ -313,7 +373,7 @@ pub struct LinkOccurrence {
     pub(crate) owner: OwnerKey,
     pub(crate) target: NativeLinkTarget,
     pub(crate) title: Option<String>,
-    pub(crate) label_refs: Range<usize>,
+    pub(crate) label_parts: Range<usize>,
     pub(crate) provenance: ProvenanceKey,
 }
 
@@ -335,8 +395,83 @@ impl LinkOccurrence {
         self.title.as_deref()
     }
     #[must_use]
-    pub const fn label_refs(&self) -> &Range<usize> {
-        &self.label_refs
+    pub const fn label_parts(&self) -> &Range<usize> {
+        &self.label_parts
+    }
+    #[must_use]
+    pub const fn provenance(&self) -> ProvenanceKey {
+        self.provenance
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeTargetOrigin {
+    Generated,
+    Authored,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AnchorEvidence {
+    pub(crate) key: AnchorEvidenceKey,
+    pub(crate) owner: OwnerKey,
+    pub(crate) point: ContentPointKey,
+    pub(crate) target: String,
+    pub(crate) origin: NativeTargetOrigin,
+    pub(crate) provenance: ProvenanceKey,
+}
+
+impl AnchorEvidence {
+    #[must_use]
+    pub const fn key(&self) -> AnchorEvidenceKey {
+        self.key
+    }
+    #[must_use]
+    pub const fn owner(&self) -> OwnerKey {
+        self.owner
+    }
+    #[must_use]
+    pub const fn point(&self) -> ContentPointKey {
+        self.point
+    }
+    #[must_use]
+    pub fn target(&self) -> &str {
+        &self.target
+    }
+    #[must_use]
+    pub const fn origin(&self) -> NativeTargetOrigin {
+        self.origin
+    }
+    #[must_use]
+    pub const fn provenance(&self) -> ProvenanceKey {
+        self.provenance
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HeadingEvidence {
+    pub(crate) key: HeadingEvidenceKey,
+    pub(crate) block: NativeBlockKey,
+    pub(crate) owner: OwnerKey,
+    pub(crate) authored_phrase: Option<String>,
+    pub(crate) provenance: ProvenanceKey,
+}
+
+impl HeadingEvidence {
+    #[must_use]
+    pub const fn key(&self) -> HeadingEvidenceKey {
+        self.key
+    }
+    #[must_use]
+    pub const fn block(&self) -> NativeBlockKey {
+        self.block
+    }
+    #[must_use]
+    pub const fn owner(&self) -> OwnerKey {
+        self.owner
+    }
+    #[must_use]
+    pub fn authored_phrase(&self) -> Option<&str> {
+        self.authored_phrase.as_deref()
     }
     #[must_use]
     pub const fn provenance(&self) -> ProvenanceKey {
@@ -445,12 +580,6 @@ impl NativeList {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NativeTargetOrigin {
-    Generated,
-    Authored,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NativeItem {
     pub(crate) key: NativeItemKey,
@@ -458,8 +587,6 @@ pub struct NativeItem {
     pub(crate) owner: OwnerKey,
     pub(crate) ordinal: u32,
     pub(crate) forms: Range<usize>,
-    pub(crate) target: Option<String>,
-    pub(crate) target_origin: Option<NativeTargetOrigin>,
     pub(crate) provenance: ProvenanceKey,
 }
 
@@ -483,14 +610,6 @@ impl NativeItem {
     #[must_use]
     pub const fn forms(&self) -> &Range<usize> {
         &self.forms
-    }
-    #[must_use]
-    pub fn target(&self) -> Option<&str> {
-        self.target.as_deref()
-    }
-    #[must_use]
-    pub const fn target_origin(&self) -> Option<NativeTargetOrigin> {
-        self.target_origin
     }
     #[must_use]
     pub const fn provenance(&self) -> ProvenanceKey {

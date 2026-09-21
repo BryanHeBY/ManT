@@ -2,6 +2,7 @@
 #include "config.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "mandoc.h"
@@ -18,6 +19,7 @@ mant_structured_link_node(const struct roff_node *node)
 		case MDOC_Lk:
 		case MDOC_Mt:
 		case MDOC_Xr:
+		case MDOC_Sx:
 		case MAN_MR:
 			if (node->type == ROFFT_ELEM)
 				return node;
@@ -53,13 +55,41 @@ copy_link_target(struct structured_session *session,
 	return 1;
 }
 
+static int
+copy_deroff_target(struct structured_session *session,
+    struct mant_bytes_view *out, const struct roff_node *node)
+{
+	char *target;
+	size_t length;
+	int ok;
+
+	target = NULL;
+	deroff(&target, node);
+	if (target == NULL || target[0] == '\0') {
+		free(target);
+		return 0;
+	}
+	length = strlen(target);
+	ok = mant_structured_valid_utf8((const uint8_t *)target, length);
+	if (ok) {
+		out->ptr = mant_structured_copy_bytes(session,
+		    (const uint8_t *)target, length, 1,
+		    MANT_STRUCTURED_STAGE_RENDER);
+		ok = out->ptr != NULL;
+		if (ok)
+			out->len = length;
+	}
+	free(target);
+	return ok;
+}
+
 uint32_t
 mant_structured_ensure_link(struct structured_session *session,
-    const struct roff_node *node, uint32_t owner, uint32_t provenance)
+    const struct roff_node *node, uint32_t owner)
 {
 	const struct roff_node *canonical, *first, *second;
 	struct mant_structured_link_view *links, *link = NULL;
-	uint32_t kind;
+	uint32_t kind, provenance;
 
 	canonical = mant_structured_link_node(node);
 	if (canonical == NULL)
@@ -84,6 +114,10 @@ mant_structured_ensure_link(struct structured_session *session,
 		first = canonical->child;
 		second = first == NULL ? NULL : first->next;
 		break;
+	case MDOC_Sx:
+		kind = MANT_LINK_SECTION;
+		first = canonical->child;
+		break;
 	case MAN_UR:
 		kind = MANT_LINK_EXTERNAL;
 		first = canonical->head == NULL ? NULL : canonical->head->child;
@@ -102,6 +136,11 @@ mant_structured_ensure_link(struct structured_session *session,
 	}
 	if (first == NULL || (kind == MANT_LINK_MANUAL && second == NULL))
 		goto unsupported;
+	/* The occurrence belongs to its authored destination operand.  Label
+	 * atoms retain their independent provenance and must not replace it. */
+	provenance = mant_structured_append_provenance(session, first, 1);
+	if (provenance == 0)
+		return 0;
 	if (!mant_structured_charge(session, &session->relation_edges, 2,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
@@ -120,7 +159,9 @@ mant_structured_ensure_link(struct structured_session *session,
 	link->owner = owner;
 	link->target_kind = kind;
 	link->provenance = provenance;
-	if (!copy_link_target(session, &link->target_a, first))
+	if (!(canonical->tok == MDOC_Sx ?
+	    copy_deroff_target(session, &link->target_a, canonical) :
+	    copy_link_target(session, &link->target_a, first)))
 		goto unsupported;
 	if (kind == MANT_LINK_MANUAL) {
 		link->target_b_present = 1;
@@ -145,29 +186,37 @@ unsupported:
 }
 
 void
-mant_structured_record_link_ref(struct structured_session *session,
+mant_structured_record_link_part(struct structured_session *session,
     uint32_t link_key)
 {
-	struct mant_structured_content_ref_view *refs, *ref;
+	struct mant_structured_link_label_part_view *parts, *part;
 	struct mant_structured_content_atom_view *atom;
 	struct mant_structured_link_view *link;
+	uint32_t part_kind;
 
 	if (link_key == 0 || session->result->content_atom_count == 0)
 		return;
 	atom = session->result->content_atoms +
 	    session->result->content_atom_count - 1;
+	if (atom->kind == MANT_ATOM_TEXT || atom->kind == MANT_ATOM_WHITESPACE)
+		part_kind = MANT_LINK_LABEL_CONTENT;
+	else if (atom->kind == MANT_ATOM_HARD_BREAK)
+		part_kind = MANT_LINK_LABEL_HARD_BREAK;
+	else
+		return;
 	link = session->result->links + link_key - 1;
-	if (link->label_ref_count != 0) {
-		ref = session->result->content_refs + link->first_label_ref - 1 +
-		    link->label_ref_count - 1;
-		if (ref->atom == atom->key) {
-			ref->byte_end = (uint32_t)atom->text.len;
+	if (link->label_part_count != 0) {
+		part = session->result->link_label_parts +
+		    link->first_label_part - 1 + link->label_part_count - 1;
+		if (part->atom == atom->key) {
+			if (part_kind == MANT_LINK_LABEL_CONTENT)
+				part->byte_end = (uint32_t)atom->text.len;
 			return;
 		}
 	}
-	if (atom->text.len > UINT32_MAX) {
+	if (part_kind == MANT_LINK_LABEL_CONTENT && atom->text.len > UINT32_MAX) {
 		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
-		    MANT_STRUCTURED_STAGE_RENDER, 14,
+		    MANT_STRUCTURED_STAGE_RENDER, 39,
 		    atom->text.len, UINT32_MAX);
 		return;
 	}
@@ -175,21 +224,25 @@ mant_structured_record_link_ref(struct structured_session *session,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return;
-	refs = mant_structured_grow_array(session, session->result->content_refs,
-	    session->result->content_ref_count,
-	    &session->result->content_ref_capacity,
-	    mant_structured_limit_u32(session->limits->max_content_refs), sizeof(*refs),
-	    session->limits->max_builder_allocated_bytes, 14,
+	parts = mant_structured_grow_array(session,
+	    session->result->link_label_parts,
+	    session->result->link_label_part_count,
+	    &session->result->link_label_part_capacity,
+	    mant_structured_limit_u32(session->limits->max_link_label_parts),
+	    sizeof(*parts), session->limits->max_builder_allocated_bytes, 39,
 	    MANT_STRUCTURED_STAGE_RENDER);
-	if (refs == NULL)
+	if (parts == NULL)
 		return;
-	session->result->content_refs = refs;
-	ref = refs + session->result->content_ref_count;
-	memset(ref, 0, sizeof(*ref));
-	ref->atom = atom->key;
-	ref->byte_end = (uint32_t)atom->text.len;
-	if (link->label_ref_count == 0)
-		link->first_label_ref = session->result->content_ref_count + 1;
-	link->label_ref_count++;
-	session->result->content_ref_count++;
+	session->result->link_label_parts = parts;
+	part = parts + session->result->link_label_part_count;
+	memset(part, 0, sizeof(*part));
+	part->kind = part_kind;
+	part->atom = atom->key;
+	if (part_kind == MANT_LINK_LABEL_CONTENT)
+		part->byte_end = (uint32_t)atom->text.len;
+	if (link->label_part_count == 0)
+		link->first_label_part =
+		    session->result->link_label_part_count + 1;
+	link->label_part_count++;
+	session->result->link_label_part_count++;
 }

@@ -1,13 +1,14 @@
 //! Handle-bound borrowed views and the private owned transfer model.
 
 use super::{
-    BlockView, BytesView, ContentAtomView, ContentPointView, ContentRefView, ContentRootView,
-    DecorationView, DiagnosticView, FixedLineView, FixedView, FormView, ItemView, Limits, LinkView,
-    ListView, MetadataView, NameHintView, NativeStructuredError, OwnerView, PROFILE_ASCII,
-    PROFILE_UTF8, PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, PlacementView,
-    ProvenanceView, RelationView, ResultHandleRaw, ResultView, SourceView, SpanView, TableCellView,
-    TableRowView, TableView, alloc_error, checked_slice, mant_structured_result_free,
-    relation_error, transfer_preflight, validate_metadata, validate_structured_relations,
+    AnchorView, BlockView, BytesView, ContentAtomView, ContentPointView, ContentRefView,
+    ContentRootView, DecorationView, DiagnosticView, FixedLineView, FixedView, FormView,
+    HeadingEvidenceView, ItemView, Limits, LinkLabelPartView, LinkView, ListView, MetadataView,
+    NameHintView, NativeStructuredError, OwnerView, PROFILE_ASCII, PROFILE_UTF8,
+    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, PlacementView, ProvenanceView,
+    RelationView, ResultHandleRaw, ResultView, SourceView, SpanView, TableCellView, TableRowView,
+    TableView, alloc_error, checked_slice, mant_structured_result_free, relation_error,
+    transfer_preflight, validate_metadata, validate_structured_relations,
 };
 use std::ptr::NonNull;
 
@@ -83,6 +84,27 @@ pub(crate) struct OwnedContentRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedContentPoint {
+    pub(crate) key: u32,
+    pub(crate) root: u32,
+    pub(crate) ordinal: u32,
+    pub(crate) owner: u32,
+    pub(crate) boundary_kind: u32,
+    pub(crate) atom_boundary: u32,
+    pub(crate) atom: Option<u32>,
+    pub(crate) byte_offset: u32,
+    pub(crate) scalar_boundary: u32,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedLinkLabelPart {
+    pub(crate) kind: u32,
+    pub(crate) atom: u32,
+    pub(crate) bytes: std::ops::Range<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OwnedLink {
     pub(crate) key: u32,
     pub(crate) owner: u32,
@@ -90,8 +112,27 @@ pub(crate) struct OwnedLink {
     pub(crate) target_a: String,
     pub(crate) target_b: Option<String>,
     pub(crate) title: Option<String>,
-    pub(crate) first_label_ref: u32,
-    pub(crate) label_ref_count: u32,
+    pub(crate) first_label_part: u32,
+    pub(crate) label_part_count: u32,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedAnchor {
+    pub(crate) key: u32,
+    pub(crate) owner: u32,
+    pub(crate) point: u32,
+    pub(crate) origin: u32,
+    pub(crate) target: String,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedHeadingEvidence {
+    pub(crate) key: u32,
+    pub(crate) block: u32,
+    pub(crate) owner: u32,
+    pub(crate) authored_phrase: Option<String>,
     pub(crate) provenance: u32,
 }
 
@@ -126,8 +167,6 @@ pub(crate) struct OwnedItem {
     pub(crate) ordinal: u32,
     pub(crate) first_form: Option<u32>,
     pub(crate) form_count: u32,
-    pub(crate) target: Option<String>,
-    pub(crate) target_origin: u8,
     pub(crate) provenance: u32,
 }
 
@@ -186,7 +225,11 @@ pub(crate) struct OwnedStructuredDocument {
     pub(crate) content_roots: Vec<OwnedContentRoot>,
     pub(crate) content_atoms: Vec<OwnedContentAtom>,
     pub(crate) content_refs: Vec<OwnedContentRef>,
+    pub(crate) content_points: Vec<OwnedContentPoint>,
     pub(crate) links: Vec<OwnedLink>,
+    pub(crate) link_label_parts: Vec<OwnedLinkLabelPart>,
+    pub(crate) anchors: Vec<OwnedAnchor>,
+    pub(crate) heading_evidence: Vec<OwnedHeadingEvidence>,
     pub(crate) blocks: Vec<OwnedBlock>,
     pub(crate) lists: Vec<OwnedList>,
     pub(crate) items: Vec<OwnedItem>,
@@ -219,6 +262,9 @@ pub(super) struct StructuredSlices<'a> {
     pub(super) name_hints: &'a [NameHintView],
     pub(super) relations: &'a [RelationView],
     pub(super) diagnostics: &'a [DiagnosticView],
+    pub(super) anchors: &'a [AnchorView],
+    pub(super) heading_evidence: &'a [HeadingEvidenceView],
+    pub(super) link_label_parts: &'a [LinkLabelPartView],
 }
 #[allow(clippy::too_many_lines)] // Keeps the frozen C-to-owned transfer audit in one sequence.
 pub(super) fn copy_structured_document(
@@ -256,6 +302,9 @@ pub(super) fn copy_structured_document(
         name_hints: checked_slice::<NameHintView>(view.name_hints, handle)?,
         relations: checked_slice::<RelationView>(view.relations, handle)?,
         diagnostics: checked_slice::<DiagnosticView>(view.diagnostics, handle)?,
+        anchors: checked_slice::<AnchorView>(view.anchors, handle)?,
+        heading_evidence: checked_slice::<HeadingEvidenceView>(view.heading_evidence, handle)?,
+        link_label_parts: checked_slice::<LinkLabelPartView>(view.link_label_parts, handle)?,
     };
     validate_metadata(view.metadata)?;
     transfer_preflight(view, &slices, limits)?;
@@ -268,7 +317,11 @@ pub(super) fn copy_structured_document(
     let mut owned_roots = Vec::new();
     let mut owned_atoms = Vec::new();
     let mut owned_refs = Vec::new();
+    let mut owned_points = Vec::new();
     let mut owned_links = Vec::new();
+    let mut owned_link_label_parts = Vec::new();
+    let mut owned_anchors = Vec::new();
+    let mut owned_heading_evidence = Vec::new();
     let mut owned_blocks = Vec::new();
     let mut owned_lists = Vec::new();
     let mut owned_items = Vec::new();
@@ -296,8 +349,20 @@ pub(super) fn copy_structured_document(
     owned_refs
         .try_reserve_exact(slices.content_refs.len())
         .map_err(alloc_error)?;
+    owned_points
+        .try_reserve_exact(slices.content_points.len())
+        .map_err(alloc_error)?;
     owned_links
         .try_reserve_exact(slices.links.len())
+        .map_err(alloc_error)?;
+    owned_link_label_parts
+        .try_reserve_exact(slices.link_label_parts.len())
+        .map_err(alloc_error)?;
+    owned_anchors
+        .try_reserve_exact(slices.anchors.len())
+        .map_err(alloc_error)?;
+    owned_heading_evidence
+        .try_reserve_exact(slices.heading_evidence.len())
         .map_err(alloc_error)?;
     owned_blocks
         .try_reserve_exact(slices.blocks.len())
@@ -399,6 +464,27 @@ pub(super) fn copy_structured_document(
             bytes: content_ref.byte_start..content_ref.byte_end,
         });
     }
+    for point in slices.content_points {
+        owned_points.push(OwnedContentPoint {
+            key: point.key,
+            root: point.root,
+            ordinal: point.ordinal,
+            owner: point.owner,
+            boundary_kind: point.boundary_kind,
+            atom_boundary: point.atom_boundary,
+            atom: (point.atom != 0).then_some(point.atom),
+            byte_offset: point.byte_offset,
+            scalar_boundary: point.scalar_boundary,
+            provenance: point.provenance,
+        });
+    }
+    for part in slices.link_label_parts {
+        owned_link_label_parts.push(OwnedLinkLabelPart {
+            kind: part.kind,
+            atom: part.atom,
+            bytes: part.byte_start..part.byte_end,
+        });
+    }
     for link in slices.links {
         owned_links.push(OwnedLink {
             key: link.key,
@@ -411,9 +497,30 @@ pub(super) fn copy_structured_document(
             title: (link.title_present == 1)
                 .then(|| copy_string(link.title))
                 .transpose()?,
-            first_label_ref: link.first_label_ref,
-            label_ref_count: link.label_ref_count,
+            first_label_part: link.first_label_part,
+            label_part_count: link.label_part_count,
             provenance: link.provenance,
+        });
+    }
+    for anchor in slices.anchors {
+        owned_anchors.push(OwnedAnchor {
+            key: anchor.key,
+            owner: anchor.owner,
+            point: anchor.point,
+            origin: anchor.origin,
+            target: copy_string(anchor.target)?,
+            provenance: anchor.provenance,
+        });
+    }
+    for heading in slices.heading_evidence {
+        owned_heading_evidence.push(OwnedHeadingEvidence {
+            key: heading.key,
+            block: heading.block,
+            owner: heading.owner,
+            authored_phrase: (heading.authored_phrase_present == 1)
+                .then(|| copy_string(heading.authored_phrase))
+                .transpose()?,
+            provenance: heading.provenance,
         });
     }
     for block in slices.blocks {
@@ -447,10 +554,6 @@ pub(super) fn copy_structured_document(
             ordinal: item.ordinal,
             first_form: (item.first_form != 0).then_some(item.first_form),
             form_count: item.form_count,
-            target: (item.target_present == 1)
-                .then(|| copy_string(item.target))
-                .transpose()?,
-            target_origin: item.target_origin,
             provenance: item.provenance,
         });
     }
@@ -510,7 +613,11 @@ pub(super) fn copy_structured_document(
         content_roots: owned_roots,
         content_atoms: owned_atoms,
         content_refs: owned_refs,
+        content_points: owned_points,
         links: owned_links,
+        link_label_parts: owned_link_label_parts,
+        anchors: owned_anchors,
+        heading_evidence: owned_heading_evidence,
         blocks: owned_blocks,
         lists: owned_lists,
         items: owned_items,

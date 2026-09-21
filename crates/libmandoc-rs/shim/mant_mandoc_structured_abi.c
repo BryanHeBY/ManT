@@ -7,7 +7,7 @@
 uint32_t
 mant_structured_abi_version(void)
 {
-	return 3;
+	return 4;
 }
 
 uint64_t
@@ -32,6 +32,8 @@ mant_structured_discriminant_fingerprint(void)
 		MANT_VIEW_PLACEMENT, MANT_VIEW_DECORATION, MANT_VIEW_FORM,
 		MANT_VIEW_NAME_HINT, MANT_VIEW_RELATION, MANT_VIEW_DIAGNOSTIC,
 		MANT_VIEW_METADATA, MANT_VIEW_LIST, MANT_VIEW_ITEM,
+		MANT_VIEW_ANCHOR, MANT_VIEW_HEADING_EVIDENCE,
+		MANT_VIEW_LINK_LABEL_PART,
 		/* identity */ 0, MANT_IDENTITY_PATH, MANT_IDENTITY_BUNDLE_MEMBER,
 		MANT_IDENTITY_ANONYMOUS,
 		/* format */ 0, MANT_FORMAT_MAN, MANT_FORMAT_MDOC,
@@ -67,6 +69,8 @@ mant_structured_discriminant_fingerprint(void)
 		MANT_LIST_PLAIN, MANT_LIST_DEFINITION, MANT_LIST_NATIVE_MARKER,
 		/* link target */ 0, MANT_LINK_EXTERNAL, MANT_LINK_EMAIL,
 		MANT_LINK_DOCUMENT, MANT_LINK_MANUAL, MANT_LINK_SECTION,
+		/* link-label part */ 0, MANT_LINK_LABEL_CONTENT,
+		MANT_LINK_LABEL_HARD_BREAK,
 		/* point boundary */ 0, MANT_POINT_BETWEEN_ATOMS,
 		MANT_POINT_IN_ATOM,
 		/* placement target */ 0, MANT_PLACEMENT_CONTENT,
@@ -144,6 +148,11 @@ mant_structured_view_size(uint32_t kind)
 	VIEW_CASE(MANT_VIEW_METADATA, struct mant_structured_metadata_view);
 	VIEW_CASE(MANT_VIEW_LIST, struct mant_structured_list_view);
 	VIEW_CASE(MANT_VIEW_ITEM, struct mant_structured_item_view);
+	VIEW_CASE(MANT_VIEW_ANCHOR, struct mant_structured_anchor_view);
+	VIEW_CASE(MANT_VIEW_HEADING_EVIDENCE,
+	    struct mant_structured_heading_evidence_view);
+	VIEW_CASE(MANT_VIEW_LINK_LABEL_PART,
+	    struct mant_structured_link_label_part_view);
 	default: return 0;
 	}
 }
@@ -183,6 +192,11 @@ mant_structured_view_align(uint32_t kind)
 	VIEW_CASE(MANT_VIEW_METADATA, struct mant_structured_metadata_view);
 	VIEW_CASE(MANT_VIEW_LIST, struct mant_structured_list_view);
 	VIEW_CASE(MANT_VIEW_ITEM, struct mant_structured_item_view);
+	VIEW_CASE(MANT_VIEW_ANCHOR, struct mant_structured_anchor_view);
+	VIEW_CASE(MANT_VIEW_HEADING_EVIDENCE,
+	    struct mant_structured_heading_evidence_view);
+	VIEW_CASE(MANT_VIEW_LINK_LABEL_PART,
+	    struct mant_structured_link_label_part_view);
 	default: return 0;
 	}
 }
@@ -253,6 +267,9 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_limits, max_transfer_bytes),
 		FIELD(struct mant_structured_limits, max_nesting_depth),
 		FIELD(struct mant_structured_limits, max_include_depth),
+		FIELD(struct mant_structured_limits, max_anchor_evidence),
+		FIELD(struct mant_structured_limits, max_heading_evidence),
+		FIELD(struct mant_structured_limits, max_link_label_parts),
 		FIELD(struct mant_structured_limits, reserved) };
 	static const size_t result[] = {
 		FIELD(struct mant_structured_result_view, root_source),
@@ -282,6 +299,9 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_result_view, name_hints),
 		FIELD(struct mant_structured_result_view, relations),
 		FIELD(struct mant_structured_result_view, diagnostics),
+		FIELD(struct mant_structured_result_view, anchors),
+		FIELD(struct mant_structured_result_view, heading_evidence),
+		FIELD(struct mant_structured_result_view, link_label_parts),
 		FIELD(struct mant_structured_result_view, reserved) };
 	static const size_t source[] = {
 		FIELD(struct mant_structured_source_view, key),
@@ -371,6 +391,8 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_link_view, first_label_ref),
 		FIELD(struct mant_structured_link_view, label_ref_count),
 		FIELD(struct mant_structured_link_view, provenance),
+		FIELD(struct mant_structured_link_view, first_label_part),
+		FIELD(struct mant_structured_link_view, label_part_count),
 		FIELD(struct mant_structured_link_view, reserved) };
 	static const size_t block[] = {
 		FIELD(struct mant_structured_block_view, key),
@@ -509,6 +531,31 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_item_view, target),
 		FIELD(struct mant_structured_item_view, provenance),
 		FIELD(struct mant_structured_item_view, reserved) };
+	static const size_t anchor[] = {
+		FIELD(struct mant_structured_anchor_view, key),
+		FIELD(struct mant_structured_anchor_view, owner),
+		FIELD(struct mant_structured_anchor_view, point),
+		FIELD(struct mant_structured_anchor_view, origin),
+		FIELD(struct mant_structured_anchor_view, target),
+		FIELD(struct mant_structured_anchor_view, provenance),
+		FIELD(struct mant_structured_anchor_view, reserved) };
+	static const size_t heading_evidence[] = {
+		FIELD(struct mant_structured_heading_evidence_view, key),
+		FIELD(struct mant_structured_heading_evidence_view, block),
+		FIELD(struct mant_structured_heading_evidence_view, owner),
+		FIELD(struct mant_structured_heading_evidence_view,
+		    authored_phrase_present),
+		FIELD(struct mant_structured_heading_evidence_view,
+		    authored_phrase_reserved_bytes),
+		FIELD(struct mant_structured_heading_evidence_view, authored_phrase),
+		FIELD(struct mant_structured_heading_evidence_view, provenance),
+		FIELD(struct mant_structured_heading_evidence_view, reserved) };
+	static const size_t link_label_part[] = {
+		FIELD(struct mant_structured_link_label_part_view, kind),
+		FIELD(struct mant_structured_link_label_part_view, atom),
+		FIELD(struct mant_structured_link_label_part_view, byte_start),
+		FIELD(struct mant_structured_link_label_part_view, byte_end),
+		FIELD(struct mant_structured_link_label_part_view, reserved) };
 
 	if (field == 0)
 		return SIZE_MAX;
@@ -542,6 +589,9 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 	case MANT_VIEW_METADATA: return PICK(metadata);
 	case MANT_VIEW_LIST: return PICK(list);
 	case MANT_VIEW_ITEM: return PICK(item);
+	case MANT_VIEW_ANCHOR: return PICK(anchor);
+	case MANT_VIEW_HEADING_EVIDENCE: return PICK(heading_evidence);
+	case MANT_VIEW_LINK_LABEL_PART: return PICK(link_label_part);
 	default: return SIZE_MAX;
 	}
 }

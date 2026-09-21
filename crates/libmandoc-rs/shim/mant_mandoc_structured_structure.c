@@ -9,6 +9,7 @@
 #include "mdoc.h"
 #include "tag.h"
 
+#include "mant_mandoc_structured_address.h"
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_structured_marker.h"
 #include "mant_mandoc_structured_structure.h"
@@ -127,83 +128,6 @@ append_list(struct structured_session *session,
 	return list->key;
 }
 
-static int
-set_item_target(struct structured_session *session, uint32_t item_key,
-    const struct roff_node *node)
-{
-	struct mant_structured_item_view *item;
-	size_t target_length;
-	uint8_t origin;
-
-	if (item_key == 0 || item_key > session->result->item_count ||
-	    node == NULL || (node->flags & NODE_ID) == 0 || node->tag == NULL ||
-	    node->tag[0] == '\0')
-		return 1;
-	item = session->result->items + item_key - 1;
-	target_length = strlen(node->tag);
-	if (!mant_structured_valid_utf8((const uint8_t *)node->tag,
-	    target_length))
-		return 1;
-	origin = tag_is_manual(node->tag) ? MANT_TARGET_ORIGIN_AUTHORED :
-	    MANT_TARGET_ORIGIN_GENERATED;
-	if (item->target_present != 0) {
-		if (item->target.len == target_length &&
-		    memcmp(item->target.ptr, node->tag, target_length) == 0) {
-			if (origin == MANT_TARGET_ORIGIN_AUTHORED)
-				item->target_origin = origin;
-			return 1;
-		}
-		if (item->target_origin == MANT_TARGET_ORIGIN_AUTHORED &&
-		    origin == MANT_TARGET_ORIGIN_AUTHORED) {
-			mant_structured_set_failure(session,
-			    MANT_STRUCTURED_UNSUPPORTED,
-			    MANT_STRUCTURED_STAGE_RENDER, 0, 2, 1);
-			return 0;
-		}
-		if (origin != MANT_TARGET_ORIGIN_AUTHORED)
-			return 1;
-		mant_structured_free_bytes(item->target);
-		memset(&item->target, 0, sizeof(item->target));
-		item->target_present = 0;
-		item->target_origin = MANT_TARGET_ORIGIN_ABSENT;
-	}
-	item->target.ptr = mant_structured_copy_bytes(session,
-	    (const uint8_t *)node->tag, target_length, 1,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (item->target.ptr == NULL)
-		return 0;
-	item->target.len = target_length;
-	item->target_present = 1;
-	item->target_origin = origin;
-	return 1;
-}
-
-static int
-remember_item_target(struct structured_session *session, uint32_t list_key,
-    const struct roff_node *node)
-{
-	struct structured_list_state *state;
-
-	if (list_key == 0 || list_key > session->result->list_count ||
-	    node == NULL || node->tag == NULL || node->tag[0] == '\0') {
-		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
-		    MANT_STRUCTURED_STAGE_RENDER, 0, list_key,
-		    session->result->list_count);
-		return 0;
-	}
-	state = session->list_states + list_key - 1;
-	if (state->pending_item_target == NULL) {
-		state->pending_item_target = node;
-		return 1;
-	}
-	if (strcmp(state->pending_item_target->tag, node->tag) == 0)
-		return 1;
-	/* One item target cannot silently discard a second authored Tg. */
-	mant_structured_set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
-	    MANT_STRUCTURED_STAGE_RENDER, 0, 2, 1);
-	return 0;
-}
-
 static uint32_t
 append_item(struct structured_session *session,
     struct structured_node_context *context, const struct roff_node *node,
@@ -247,14 +171,7 @@ append_item(struct structured_session *session,
 	item->owner = owner;
 	item->ordinal = state->item_count++;
 	item->provenance = provenance;
-	if (state->pending_item_target != NULL) {
-		if (!set_item_target(session, item->key,
-		    state->pending_item_target))
-			return 0;
-		state->pending_item_target = NULL;
-	}
-	if (!set_item_target(session, item->key, node))
-		return 0;
+	mant_structured_address_bind_item(session, list_key, owner);
 	context->owner = owner;
 	context->item = item->key;
 	context->list = list_key;
@@ -395,10 +312,6 @@ mant_structured_enter_node(struct structured_session *session,
 		    MANT_LIST_DEFINITION;
 		return 1;
 	}
-	if (node->tok == MDOC_Tg && (node->flags & NODE_ID) != 0 &&
-	    context->list != 0 && context->item == 0 &&
-	    !remember_item_target(session, context->list, node))
-		return 0;
 	if ((node->tok == MAN_PP || node->tok == MAN_LP || node->tok == MAN_P ||
 	    node->tok == MAN_IP || node->tok == MAN_TP) &&
 	    node->type != ROFFT_HEAD && node->type != ROFFT_BODY)
@@ -420,10 +333,7 @@ mant_structured_enter_node(struct structured_session *session,
 	    node->tok == MAN_TP || node->tok == MAN_TQ)) {
 		session->current_root = 0;
 		session->current_owner = 0;
-		session->current_root_atom_count = 0;
 	}
-	if (!set_item_target(session, context->item, node))
-		return 0;
 	return 1;
 }
 
@@ -434,13 +344,33 @@ mant_structured_leave_node(struct structured_session *session,
 	struct structured_node_context *context;
 
 	context = mant_structured_current_context(session);
+	if (context != NULL && node != NULL && node->type == ROFFT_BLOCK &&
+	    node->tok == MDOC_It && context->item != 0 &&
+	    mant_structured_address_owner_needs_root(session, context->owner)) {
+		uint32_t provenance;
+
+		provenance = mant_structured_append_provenance(session, node, 1);
+		if (provenance != 0) {
+			int has_root = 0;
+			uint32_t index;
+
+			for (index = 0; index < session->result->content_root_count;
+			    index++)
+				if (session->result->content_roots[index].owner ==
+				    context->owner) {
+					has_root = 1;
+					break;
+				}
+			if (!has_root && mant_structured_open_content_root(session, 0,
+			    provenance))
+				mant_structured_address_root_opened(session, node, 0);
+			mant_structured_address_finish_owner(session, context->owner);
+		}
+	}
 	if (context != NULL && node != NULL && node->type == ROFFT_HEAD &&
 	    context->part == STRUCTURED_PART_TERM && context->term_root != 0)
 		mant_structured_close_term_root(session, context->term_root,
 		    context->item);
-	if (context != NULL && node != NULL && node->type == ROFFT_BLOCK &&
-	    node->tok == MDOC_Bl && context->list != 0)
-		session->list_states[context->list - 1].pending_item_target = NULL;
 	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MAN_RS) {
 		session->man_continuation_pending = 0;
 		if (context != NULL && context->restore_man_state != 0) {
@@ -470,6 +400,5 @@ mant_structured_leave_node(struct structured_session *session,
 	    node->tok == MAN_TQ)))) {
 		session->current_root = 0;
 		session->current_owner = 0;
-		session->current_root_atom_count = 0;
 	}
 }

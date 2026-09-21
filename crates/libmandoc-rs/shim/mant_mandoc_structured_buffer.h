@@ -8,6 +8,7 @@
 
 struct structured_token {
 	const struct roff_node *node;
+	uint64_t sequence;
 	uint32_t provenance;
 	uint32_t root;
 	uint32_t role;
