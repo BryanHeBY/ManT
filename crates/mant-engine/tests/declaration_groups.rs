@@ -479,7 +479,7 @@ fn scope_supports_are_document_local_even_when_node_ids_coincide() {
             },
             depth: 0,
             label: r.label.clone(),
-            source_context: r.source_context.clone().unwrap(),
+            source_context: r.source_context.clone(),
             producer: None,
             diagnostics: r.diagnostics.clone(),
             semantics_complete: r.semantics_complete,

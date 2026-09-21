@@ -88,7 +88,7 @@ fn search() -> ScopeSearch {
             .map(|path| ScopedSearchDocument {
                 address: address(path),
                 depth: 0,
-                source_context: source_context(),
+                source_context: Some(source_context()),
                 matches: vec![],
                 render: SearchRender {
                     schema: MarkdownSchema::V1,

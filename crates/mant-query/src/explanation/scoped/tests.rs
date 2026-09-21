@@ -142,3 +142,41 @@ fn source_indices_refer_to_readable_reports_not_the_loading_graph() {
     assert_eq!(result.evidence[1].document_index, 1);
     assert_eq!(result.documents[1].address.catalog_path(), "documents/c");
 }
+
+#[test]
+fn tldr_only_content_is_a_readable_zero_evidence_report_without_a_source_table() {
+    let (mut graph, mut documents) = loaded();
+    graph.documents.truncate(1);
+    documents.truncate(1);
+    let quick_reference = crate::query_fixture::markdown(
+        "<!-- mant:tldr:start -->\n# a\n\n> Quick reference.\n\n- Run it:\n\n`a`\n<!-- mant:tldr:end -->\n",
+        Some("a.md".to_owned()),
+    )
+    .unwrap()
+    .tldr
+    .unwrap();
+    documents[0].document = None;
+    documents[0].tldr = Some(quick_reference);
+
+    let result = super::explain(
+        crate::QueryScopeView::new(&graph, &documents).unwrap(),
+        &ExplanationQuery {
+            entry: "--help".into(),
+            options: ExplanationOptions {
+                offset: 7,
+                limit: 1,
+                ..ExplanationOptions::default()
+            },
+        },
+    )
+    .unwrap();
+
+    assert_eq!(result.total, 0);
+    assert_eq!(result.returned, 0);
+    assert!(result.failures.is_empty());
+    assert_eq!(result.documents.len(), 1);
+    assert!(result.documents[0].source_context.is_none());
+    let decoded: mant_protocol::ScopeExplanation =
+        serde_json::from_value(serde_json::to_value(result).unwrap()).unwrap();
+    assert!(decoded.documents[0].source_context.is_none());
+}

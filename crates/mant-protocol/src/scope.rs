@@ -363,8 +363,9 @@ pub struct ScopedSearchDocument {
     pub address: DocumentAddress,
     /// Distance retained from the resolved scope.
     pub depth: u16,
-    /// Source table resolving every hit coordinate in this document group.
-    pub source_context: SourceContext,
+    /// Source table resolving authored hit coordinates, when present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_context: Option<SourceContext>,
     /// Canonical Markdown coordinate space for this document's hits.
     pub render: SearchRender,
     /// Matching line groups retained from the globally paginated result set.
@@ -381,7 +382,7 @@ pub struct ScopedSearchDocument {
 struct ScopedSearchDocumentWire {
     pub address: DocumentAddress,
     pub depth: u16,
-    pub source_context: SourceContext,
+    pub source_context: Option<SourceContext>,
     pub render: SearchRender,
     pub matches: Vec<SearchHit>,
 }
@@ -390,7 +391,7 @@ impl<'de> Deserialize<'de> for ScopedSearchDocument {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = ScopedSearchDocumentWire::deserialize(deserializer)?;
         crate::document::validate_optional_source_spans(
-            Some(&value.source_context),
+            value.source_context.as_ref(),
             value.matches.iter().filter_map(|hit| hit.node_source),
         )
         .map_err(serde::de::Error::custom)?;
@@ -431,8 +432,9 @@ pub struct ScopedExplanation {
     pub depth: u16,
     /// Selected source label, independent of catalog identity.
     pub label: String,
-    /// Source table resolving all diagnostic, support, and evidence coordinates.
-    pub source_context: SourceContext,
+    /// Source table resolving authored coordinates, when present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_context: Option<SourceContext>,
     /// Parser and process provenance when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer: Option<crate::Producer>,
@@ -463,7 +465,7 @@ struct ScopedExplanationWire {
     pub address: DocumentAddress,
     pub depth: u16,
     pub label: String,
-    pub source_context: SourceContext,
+    pub source_context: Option<SourceContext>,
     pub producer: Option<crate::Producer>,
     pub diagnostics: Vec<mant_ir::Diagnostic>,
     pub semantics_complete: bool,
@@ -478,7 +480,7 @@ impl<'de> Deserialize<'de> for ScopedExplanation {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = ScopedExplanationWire::deserialize(deserializer)?;
         crate::explanation::validate_explanation_sources(
-            Some(&value.source_context),
+            value.source_context.as_ref(),
             &value.diagnostics,
             &value.supports,
             std::iter::empty(),
@@ -601,7 +603,7 @@ impl<'de> Deserialize<'de> for ScopeExplanation {
             .map_err(serde::de::Error::custom)?;
         for (index, document) in value.documents.iter().enumerate() {
             crate::explanation::validate_explanation_sources(
-                Some(&document.source_context),
+                document.source_context.as_ref(),
                 &document.diagnostics,
                 &document.supports,
                 value

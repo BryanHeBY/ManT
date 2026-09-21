@@ -87,6 +87,15 @@ fn scope_results_validate_spans_against_each_document_context() {
         serde_json::json!({"source":2,"line":1,"column":1});
     assert!(serde_json::from_value::<ScopeQueryResponse>(search).is_err());
 
+    let mut missing_search_context: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    missing_search_context["result"]["search"]["documents"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("sourceContext");
+    missing_search_context["result"]["search"]["documents"][0]["matches"][0]["nodeSource"] =
+        serde_json::json!({"source":1,"line":1,"column":1});
+    assert!(serde_json::from_value::<ScopeQueryResponse>(missing_search_context).is_err());
+
     let mut explanation: Value = serde_json::from_str(SCOPE_EXPLAIN).unwrap();
     explanation["result"]["explanation"]["documents"][0]["supports"] = serde_json::json!([{
         "kind":"owned-entry",
@@ -101,6 +110,19 @@ fn scope_results_validate_spans_against_each_document_context() {
         }
     }]);
     assert!(serde_json::from_value::<ScopeQueryResponse>(explanation).is_err());
+
+    let mut missing_explanation_context: Value = serde_json::from_str(SCOPE_EXPLAIN).unwrap();
+    missing_explanation_context["result"]["explanation"]["documents"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("sourceContext");
+    missing_explanation_context["result"]["explanation"]["documents"][0]["diagnostics"] = serde_json::json!([{
+        "severity":"warning",
+        "message":"source-qualified warning",
+        "source":{"source":1,"line":1,"column":1},
+        "impact":{"kind":"informational"}
+    }]);
+    assert!(serde_json::from_value::<ScopeQueryResponse>(missing_explanation_context).is_err());
 }
 
 #[test]

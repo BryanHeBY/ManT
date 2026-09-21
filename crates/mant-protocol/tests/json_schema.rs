@@ -136,7 +136,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     let scoped_document = &scope["$defs"]["ScopedSearchDocument"];
     assert_eq!(
         required(scoped_document),
-        ["address", "depth", "sourceContext", "render", "matches"]
+        ["address", "depth", "render", "matches"]
     );
     for local_pagination_field in [
         "query",

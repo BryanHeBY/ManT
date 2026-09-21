@@ -709,7 +709,7 @@ For `result.kind = "explain"`, `result.explanation` is a `ScopeExplanation`.
 It owns `query`, `order`, `counts`, aggregate `outcome`, `total`, `returned`,
 optional `nextOffset`, independent `truncation`, BFS `documents`, one globally
 ordered `evidence` list and `failures`. Each readable document report contains
-`address`, `depth`, `label`, required `sourceContext`, optional `producer`, `diagnostics`,
+`address`, `depth`, `label`, optional `sourceContext`, optional `producer`, `diagnostics`,
 `semanticsComplete`, `outcome`, `total`, `returned`, `counts` and `truncation`,
 even when it found no evidence or contributed nothing to this page. Reports
 contain no nested query, cursor or evidence/body. Each flat record is
@@ -720,9 +720,10 @@ evidence, not failures. Source-loading failures remain in `scope.unresolved`;
 If no readable initial source remains, execution fails rather than manufacturing
 a successful empty scope.
 
-Each document group in a scope search likewise carries its own required
-`sourceContext`. Span keys are resolved only against that document record;
-equal numeric keys in two documents never identify the same source.
+Each document group in a scope search likewise carries its own optional
+`sourceContext`. Tldr-only reports without authored spans omit it; any returned
+authored span requires it. Span keys are resolved only against that document
+record; equal numeric keys in two documents never identify the same source.
 
 One global result offset, limit and payload-copy budget apply after ordering
 by evidence class, document BFS position and original IR position. Ordinals

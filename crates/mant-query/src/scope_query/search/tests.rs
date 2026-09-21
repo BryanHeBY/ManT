@@ -1,0 +1,130 @@
+use mant_ir::{DocumentAddress, MarkdownOrigin, ResolvedContent};
+use mant_protocol::{
+    DocumentScope, DocumentTraversal, ResolvedDocumentScope, ScopedDocument, SearchCase,
+    SearchQuery, SearchScope, SearchSyntax,
+};
+
+fn address(path: &str) -> DocumentAddress {
+    DocumentAddress::Markdown {
+        path: path.into(),
+        origin: MarkdownOrigin::Documents,
+    }
+}
+
+fn manual(path: &str) -> ResolvedContent {
+    let mut content = crate::query_fixture::markdown(
+        "# Manual\n\nA manual needle appears here.\n",
+        Some(format!("{path}.md")),
+    )
+    .unwrap();
+    content.address = Some(address(path));
+    content
+}
+
+fn tldr_only(path: &str) -> ResolvedContent {
+    let mut content = crate::query_fixture::markdown(
+        "<!-- mant:tldr:start -->\n# quick\n\n> A quick needle appears here.\n\n- Run it:\n\n`quick`\n<!-- mant:tldr:end -->\n",
+        Some(format!("{path}.md")),
+    )
+    .unwrap();
+    content.address = Some(address(path));
+    content.document = None;
+    content
+}
+
+fn scope(contents: &[ResolvedContent]) -> ResolvedDocumentScope {
+    ResolvedDocumentScope {
+        query: DocumentScope {
+            documents: Vec::new(),
+            traversal: DocumentTraversal::default(),
+        },
+        documents: contents
+            .iter()
+            .map(|content| ScopedDocument {
+                address: content.address.clone().unwrap(),
+                depth: 0,
+                root_indices: Vec::new(),
+                reached_from: Vec::new(),
+            })
+            .collect(),
+        edges: Vec::new(),
+        frontier: Vec::new(),
+        unresolved: Vec::new(),
+        reference_limits: Vec::new(),
+    }
+}
+
+fn query(pattern: &str) -> SearchQuery {
+    SearchQuery {
+        pattern: pattern.into(),
+        syntax: SearchSyntax::Literal,
+        case: SearchCase::Insensitive,
+        scope: SearchScope::Visible,
+        word: false,
+        context_lines: 0,
+        limit: 100,
+        offset: 0,
+    }
+}
+
+#[test]
+fn tldr_only_hits_omit_authored_source_context() {
+    let contents = vec![tldr_only("quick")];
+    let graph = scope(&contents);
+    let result = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &query("quick needle"),
+    )
+    .unwrap();
+
+    assert_eq!(result.total, 1);
+    assert_eq!(result.documents.len(), 1);
+    assert!(result.documents[0].source_context.is_none());
+    assert!(result.documents[0].matches[0].node_source.is_none());
+    let decoded: mant_protocol::ScopeSearch =
+        serde_json::from_value(serde_json::to_value(result).unwrap()).unwrap();
+    assert!(decoded.documents[0].source_context.is_none());
+}
+
+#[test]
+fn zero_hit_tldr_only_search_stays_empty() {
+    let contents = vec![tldr_only("quick")];
+    let graph = scope(&contents);
+    let result = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &query("absent"),
+    )
+    .unwrap();
+
+    assert_eq!(result.total, 0);
+    assert!(result.documents.is_empty());
+}
+
+#[test]
+fn mixed_manual_and_tldr_pages_keep_stable_global_pagination() {
+    let contents = vec![manual("manual"), tldr_only("quick")];
+    let graph = scope(&contents);
+    let mut request = query("needle");
+    request.limit = 1;
+
+    let first = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &request,
+    )
+    .unwrap();
+    assert_eq!(first.total, 2);
+    assert_eq!(first.next_offset, Some(1));
+    assert!(first.documents[0].source_context.is_some());
+    assert_eq!(first.documents[0].matches[0].ordinal, 1);
+
+    request.offset = 1;
+    let second = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &request,
+    )
+    .unwrap();
+    assert_eq!(second.total, 2);
+    assert_eq!(second.next_offset, None);
+    assert!(second.documents[0].source_context.is_none());
+    assert_eq!(second.documents[0].matches[0].ordinal, 2);
+}

@@ -327,7 +327,7 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
             },
             depth: 0,
             label: format!("doc{index}"),
-            source_context: result.source_context.clone().unwrap(),
+            source_context: result.source_context.clone(),
             producer: None,
             diagnostics: vec![],
             semantics_complete: true,

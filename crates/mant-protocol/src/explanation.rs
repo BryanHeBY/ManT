@@ -430,21 +430,11 @@ pub(crate) fn validate_explanation_sources<'a>(
                     .filter_map(|preview| preview.source),
             ),
     )?;
-    let fallback = mant_ir::SourceRecord {
-        key: mant_ir::SourceKey::FIRST,
-        identity: mant_ir::SourceIdentity::Anonymous {
-            name: "validation".to_owned(),
-        },
-        format: mant_ir::SourceFormat::Markdown,
-        decoded_byte_length: u64::MAX,
-        content_sha256: None,
-        coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
-    };
     let mut document = mant_ir::Document {
         parser: None,
         sources: source_context
             .as_ref()
-            .map_or_else(|| vec![fallback], |context| context.sources.clone()),
+            .map_or_else(Vec::new, |context| context.sources.clone()),
         root_source: source_context
             .as_ref()
             .map_or(mant_ir::SourceKey::FIRST, |context| context.root_source),
@@ -481,5 +471,8 @@ pub(crate) fn validate_explanation_sources<'a>(
     if source_context.is_none() && mant_ir::document_has_source_spans(&document) {
         return Err("source-qualified explanation content requires a source context".to_owned());
     }
-    mant_ir::validate_document_sources(&document).map_err(|error| error.to_string())
+    match source_context {
+        Some(_) => mant_ir::validate_document_sources(&document).map_err(|error| error.to_string()),
+        None => Ok(()),
+    }
 }

@@ -198,7 +198,6 @@ fn scope_execution_failure(error: ScopeExecutionError) -> Failure {
             }
             Failure::operational(message)
         }
-        missing @ ScopeExecutionError::MissingSourceContext { .. } => Failure::operational(missing),
     }
 }
 

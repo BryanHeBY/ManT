@@ -16327,8 +16327,15 @@
             "type": "boolean"
           },
           "sourceContext": {
-            "description": "Source table resolving all diagnostic, support, and evidence coordinates.",
-            "$ref": "#/$defs/SourceContext"
+            "description": "Source table resolving authored coordinates, when present.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "supports": {
             "description": "Declaration context pool for evidence with this document index.",
@@ -16354,7 +16361,6 @@
           "address",
           "depth",
           "label",
-          "sourceContext",
           "diagnostics",
           "semanticsComplete",
           "outcome",
@@ -16430,14 +16436,20 @@
             "$ref": "#/$defs/SearchRender"
           },
           "sourceContext": {
-            "description": "Source table resolving every hit coordinate in this document group.",
-            "$ref": "#/$defs/SourceContext"
+            "description": "Source table resolving authored hit coordinates, when present.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "address",
           "depth",
-          "sourceContext",
           "render",
           "matches"
         ]

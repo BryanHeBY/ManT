@@ -100,7 +100,7 @@ mod tests {
                     documents: vec![ScopedSearchDocument {
                         address: address.clone(),
                         depth: 0,
-                        source_context: local.source_context.clone().unwrap(),
+                        source_context: local.source_context.clone(),
                         render: local.render.clone(),
                         matches: vec![],
                     }],

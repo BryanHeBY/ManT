@@ -145,8 +145,10 @@ report label. Root excerpts include the real heading even without body blocks.
 Scoped search has one pagination coordinate system. `ScopeSearch` owns the
 global total, offset, truncation flag, and continuation offset; each
 `ScopedSearchDocument` carries only its logical address, depth, canonical
-Markdown render descriptor, and globally numbered hits. Consumers must never
-derive a continuation cursor from an individual document group.
+Markdown render descriptor, optional authored-source context, and globally
+numbered hits. Consumers must never derive a continuation cursor from an
+individual document group. A tldr-only group omits source context unless it
+also carries an authored source span.
 
 Explanation is a separate `QueryExplanation` contract, not an excerpt wrapper.
 `ExplanationQuery` supplies a literal and bounded `ExplanationOptions` (50
