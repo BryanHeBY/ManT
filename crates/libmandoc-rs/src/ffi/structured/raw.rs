@@ -29,7 +29,10 @@ pub(super) const ATOM_BREAK_OPPORTUNITY: u32 = 3;
 pub(super) const ATOM_HARD_BREAK: u32 = 4;
 pub(super) const STYLE_MASK: u32 = 1 | 2 | 4 | 8;
 pub(super) const OWNER_KIND_LAST: u32 = 7;
+pub(super) const OWNER_LIST_ITEM: u32 = 4;
+pub(super) const OWNER_DEFINITION_ITEM: u32 = 5;
 pub(super) const ROOT_HEADING: u32 = 1;
+pub(super) const ROOT_TERM: u32 = 2;
 pub(super) const ROOT_BODY: u32 = 3;
 pub(super) const ROOT_KIND_LAST: u32 = 5;
 pub(super) const BLOCK_HEADING: u32 = 1;
@@ -41,6 +44,11 @@ pub(super) const BLOCK_INDENTED: u32 = 6;
 pub(super) const BLOCK_FIXED_DISPLAY: u32 = 7;
 pub(super) const BLOCK_VERTICAL_SPACE: u32 = 8;
 pub(super) const BLOCK_THEMATIC_BREAK: u32 = 9;
+pub(super) const LIST_BULLET: u32 = 1;
+pub(super) const LIST_ORDERED: u32 = 2;
+pub(super) const LIST_PLAIN: u32 = 3;
+pub(super) const LIST_DEFINITION: u32 = 4;
+pub(super) const LIST_NATIVE_MARKER: u32 = 5;
 pub(super) const RESOLVE_NOT_FOUND: u32 = 1;
 pub(super) const RESOLVE_DENIED: u32 = 2;
 pub(super) const RESOLVE_PANIC: u32 = 4;
@@ -406,6 +414,32 @@ pub(super) struct BlockView {
 }
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub(super) struct ListView {
+    pub(super) key: u32,
+    pub(super) block: u32,
+    pub(super) kind: u32,
+    pub(super) compact: u32,
+    pub(super) start: u32,
+    pub(super) provenance: u32,
+    pub(super) reserved: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(super) struct ItemView {
+    pub(super) key: u32,
+    pub(super) list: u32,
+    pub(super) owner: u32,
+    pub(super) ordinal: u32,
+    pub(super) first_form: u32,
+    pub(super) form_count: u32,
+    pub(super) target_present: u8,
+    pub(super) target_reserved_bytes: [u8; 7],
+    pub(super) target: BytesView,
+    pub(super) provenance: u32,
+    pub(super) reserved: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub(super) struct TableView {
     pub(super) key: u32,
     pub(super) block: u32,
@@ -546,6 +580,8 @@ pub(super) struct ResultView {
     pub(super) content_points: SliceView,
     pub(super) links: SliceView,
     pub(super) blocks: SliceView,
+    pub(super) lists: SliceView,
+    pub(super) items: SliceView,
     pub(super) tables: SliceView,
     pub(super) table_rows: SliceView,
     pub(super) table_cells: SliceView,

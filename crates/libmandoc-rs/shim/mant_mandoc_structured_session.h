@@ -8,6 +8,21 @@ struct roff_node;
 struct structured_token;
 struct structured_column;
 
+enum structured_content_part {
+	STRUCTURED_PART_FLOW,
+	STRUCTURED_PART_TERM,
+	STRUCTURED_PART_BODY
+};
+
+struct structured_node_context {
+	uint32_t owner;
+	uint32_t list;
+	uint32_t item;
+	uint32_t container_block;
+	uint32_t term_root;
+	uint8_t part;
+};
+
 struct structured_session {
 	const struct mant_structured_input_view *input;
 	const struct mant_input_source_view *inputs;
@@ -37,6 +52,17 @@ struct structured_session {
 	const struct roff_node **node_stack;
 	uint32_t node_depth;
 	uint32_t node_capacity;
+	struct structured_node_context *node_contexts;
+	uint32_t node_context_capacity;
+	uint32_t *owner_root_counts;
+	uint32_t owner_root_capacity;
+	uint32_t *block_child_counts;
+	uint32_t block_child_capacity;
+	uint32_t *list_item_counts;
+	uint32_t list_item_capacity;
+	uint32_t last_man_item;
+	uint32_t last_man_list;
+	uint32_t last_man_parent_block;
 	uint32_t output_depth;
 	uint32_t current_root;
 	uint32_t current_owner;

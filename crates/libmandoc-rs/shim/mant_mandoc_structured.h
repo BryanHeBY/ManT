@@ -69,7 +69,9 @@ enum mant_structured_view_kind {
 	MANT_VIEW_NAME_HINT = 24,
 	MANT_VIEW_RELATION = 25,
 	MANT_VIEW_DIAGNOSTIC = 26,
-	MANT_VIEW_METADATA = 27
+	MANT_VIEW_METADATA = 27,
+	MANT_VIEW_LIST = 28,
+	MANT_VIEW_ITEM = 29
 };
 
 enum mant_structured_identity_kind {
@@ -161,6 +163,14 @@ enum mant_structured_block_kind {
 	MANT_BLOCK_FIXED_DISPLAY = 7,
 	MANT_BLOCK_VERTICAL_SPACE = 8,
 	MANT_BLOCK_THEMATIC_BREAK = 9
+};
+
+enum mant_structured_list_kind {
+	MANT_LIST_BULLET = 1,
+	MANT_LIST_ORDERED = 2,
+	MANT_LIST_PLAIN = 3,
+	MANT_LIST_DEFINITION = 4,
+	MANT_LIST_NATIVE_MARKER = 5
 };
 
 enum mant_structured_link_target_kind {
@@ -410,6 +420,16 @@ struct mant_structured_block_view {
 	uint32_t key, owner, kind, parent, ordinal, provenance;
 	uint32_t root, table, fixed_view, reserved;
 };
+struct mant_structured_list_view {
+	uint32_t key, block, kind, compact, start, provenance, reserved;
+};
+struct mant_structured_item_view {
+	uint32_t key, list, owner, ordinal, first_form, form_count;
+	uint8_t target_present;
+	uint8_t target_reserved_bytes[7];
+	struct mant_bytes_view target;
+	uint32_t provenance, reserved;
+};
 struct mant_structured_table_view {
 	uint32_t key, block, fixed_view, provenance, reserved;
 };
@@ -467,6 +487,8 @@ struct mant_structured_result_view {
 	struct mant_slice_view content_points;
 	struct mant_slice_view links;
 	struct mant_slice_view blocks;
+	struct mant_slice_view lists;
+	struct mant_slice_view items;
 	struct mant_slice_view tables;
 	struct mant_slice_view table_rows;
 	struct mant_slice_view table_cells;

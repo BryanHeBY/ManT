@@ -61,6 +61,8 @@ fn all_frozen_view_sizes_and_alignments_match() {
             align_of::<DiagnosticView>(),
         ),
         (27, size_of::<MetadataView>(), align_of::<MetadataView>()),
+        (28, size_of::<ListView>(), align_of::<ListView>()),
+        (29, size_of::<ItemView>(), align_of::<ItemView>()),
     ];
     for &(kind, size, align) in layouts {
         assert_eq!(
@@ -107,7 +109,7 @@ fn all_frozen_view_sizes_and_alignments_match() {
         max_nesting_depth, max_include_depth, reserved);
     offsets!(5, ResultView; root_source, profile, width, metadata, sources, spans,
         provenances, owners, content_roots, content_atoms, content_refs,
-        content_points, links, blocks, tables, table_rows, table_cells,
+        content_points, links, blocks, lists, items, tables, table_rows, table_cells,
         fixed_views, fixed_lines, placements, decorations, forms, name_hints,
         relations, diagnostics, reserved);
     offsets!(6, SourceView; key, identity_kind, format, coordinate_kind,
@@ -145,12 +147,15 @@ fn all_frozen_view_sizes_and_alignments_match() {
     offsets!(26, DiagnosticView; level, code, message, span, owner, reserved);
     offsets!(27, MetadataView; macroset, presence_flags, title, section, volume, operating_system,
         architecture, name, date, alias_target, has_body, reserved_bytes, reserved);
+    offsets!(28, ListView; key, block, kind, compact, start, provenance, reserved);
+    offsets!(29, ItemView; key, list, owner, ordinal, first_form, form_count,
+        target_present, target_reserved_bytes, target, provenance, reserved);
 
     let discriminants: &[u32] = &[
         0, 1, 2, 3, 4, 5, 6, 7, // status
         0, 1, 2, 3, 4, 5, 6, // stage
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-        25, 26, 27, // view
+        25, 26, 27, 28, 29, // view
         0, 1, 2, 3, // identity
         0, 1, 2, 3, // format
         0, 1, 2, // profile
@@ -163,6 +168,7 @@ fn all_frozen_view_sizes_and_alignments_match() {
         0, 1, 2, 3, 4, 5, 6, 7, // owner
         0, 1, 2, 3, 4, 5, // root
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, // block
+        0, 1, 2, 3, 4, 5, // list
         0, 1, 2, 3, 4, 5, // link target
         0, 1, 2, // point boundary
         0, 1, 2, // placement target

@@ -2,9 +2,10 @@
 
 use super::{
     ContentAtom, ContentAtomKey, ContentAtomKind, ContentOwner, ContentRef, ContentRoot,
-    ContentRootKey, LinkOccurrence, LinkOccurrenceKey, NativeBlock, NativeBlockKey, OwnerKey,
-    Provenance, ProvenanceKey, SourceFormat, SourceKey, SourceRecord, SourceSpan, SpanKey,
-    StructuredProfile,
+    ContentRootKey, LinkOccurrence, LinkOccurrenceKey, NativeBlock, NativeBlockKey, NativeForm,
+    NativeFormKey, NativeItem, NativeItemKey, NativeList, NativeListKey, NativeNameHint,
+    NativeNameHintKey, OwnerKey, Provenance, ProvenanceKey, SourceFormat, SourceKey, SourceRecord,
+    SourceSpan, SpanKey, StructuredProfile,
 };
 use std::num::NonZeroU32;
 
@@ -145,6 +146,10 @@ pub struct StructuredDocument {
     pub(crate) content_refs: Vec<ContentRef>,
     pub(crate) links: Vec<LinkOccurrence>,
     pub(crate) blocks: Vec<NativeBlock>,
+    pub(crate) lists: Vec<NativeList>,
+    pub(crate) items: Vec<NativeItem>,
+    pub(crate) forms: Vec<NativeForm>,
+    pub(crate) name_hints: Vec<NativeNameHint>,
     pub(crate) diagnostics: Vec<NativeDiagnostic>,
 }
 
@@ -202,6 +207,22 @@ impl StructuredDocument {
         &self.blocks
     }
     #[must_use]
+    pub fn lists(&self) -> &[NativeList] {
+        &self.lists
+    }
+    #[must_use]
+    pub fn items(&self) -> &[NativeItem] {
+        &self.items
+    }
+    #[must_use]
+    pub fn forms(&self) -> &[NativeForm] {
+        &self.forms
+    }
+    #[must_use]
+    pub fn name_hints(&self) -> &[NativeNameHint] {
+        &self.name_hints
+    }
+    #[must_use]
     pub fn diagnostics(&self) -> &[NativeDiagnostic] {
         &self.diagnostics
     }
@@ -237,6 +258,22 @@ impl StructuredDocument {
     #[must_use]
     pub fn block(&self, key: NativeBlockKey) -> Option<&NativeBlock> {
         self.blocks.get(key.get() as usize - 1)
+    }
+    #[must_use]
+    pub fn list(&self, key: NativeListKey) -> Option<&NativeList> {
+        self.lists.get(key.get() as usize - 1)
+    }
+    #[must_use]
+    pub fn item(&self, key: NativeItemKey) -> Option<&NativeItem> {
+        self.items.get(key.get() as usize - 1)
+    }
+    #[must_use]
+    pub fn form(&self, key: NativeFormKey) -> Option<&NativeForm> {
+        self.forms.get(key.get() as usize - 1)
+    }
+    #[must_use]
+    pub fn name_hint(&self, key: NativeNameHintKey) -> Option<&NativeNameHint> {
+        self.name_hints.get(key.get() as usize - 1)
     }
 
     /// Resolve a content reference without allocating or copying its atom text.

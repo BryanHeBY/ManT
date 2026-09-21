@@ -12,6 +12,7 @@
 #include "term.h"
 
 #include "mant_mandoc_structured_builder.h"
+#include "mant_mandoc_structured_structure.h"
 
 int
 mant_structured_copy_metadata(struct structured_session *session,
@@ -80,6 +81,9 @@ append_span_for_node(struct structured_session *session,
 		return session->last_span;
 	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !mant_structured_charge(session, &session->relation_edges, 1,
+	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
 	grown = mant_structured_grow_array(session, session->result->spans,
@@ -146,35 +150,131 @@ mant_structured_limit_u32(uint64_t value)
 	return value > UINT32_MAX ? UINT32_MAX : (uint32_t)value;
 }
 
+uint32_t
+mant_structured_append_owner(struct structured_session *session, uint32_t kind,
+    uint32_t provenance)
+{
+	struct mant_structured_owner_view *owners, *owner;
+	uint32_t *counts;
+
+	owners = mant_structured_grow_array(session, session->result->owners,
+	    session->result->owner_count, &session->result->owner_capacity,
+	    mant_structured_limit_u32(session->limits->max_owners), sizeof(*owners),
+	    session->limits->max_builder_allocated_bytes, 11,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (owners == NULL)
+		return 0;
+	session->result->owners = owners;
+	counts = mant_structured_grow_array(session, session->owner_root_counts,
+	    session->result->owner_count, &session->owner_root_capacity,
+	    mant_structured_limit_u32(session->limits->max_owners), sizeof(*counts),
+	    session->limits->max_builder_allocated_bytes, 11,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (counts == NULL)
+		return 0;
+	session->owner_root_counts = counts;
+	counts[session->result->owner_count] = 0;
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !mant_structured_charge(session, &session->relation_edges, 1,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	owner = owners + session->result->owner_count;
+	memset(owner, 0, sizeof(*owner));
+	owner->key = ++session->result->owner_count;
+	owner->kind = kind;
+	owner->provenance = provenance;
+	return owner->key;
+}
+
+uint32_t
+mant_structured_append_block(struct structured_session *session, uint32_t owner,
+    uint32_t kind, uint32_t parent, uint32_t provenance, uint32_t root)
+{
+	struct mant_structured_block_view *blocks, *block;
+	uint32_t *counts, ordinal;
+
+	blocks = mant_structured_grow_array(session, session->result->blocks,
+	    session->result->block_count, &session->result->block_capacity,
+	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*blocks),
+	    session->limits->max_builder_allocated_bytes, 12,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (blocks == NULL)
+		return 0;
+	session->result->blocks = blocks;
+	counts = mant_structured_grow_array(session, session->block_child_counts,
+	    session->result->block_count, &session->block_child_capacity,
+	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*counts),
+	    session->limits->max_builder_allocated_bytes, 12,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (counts == NULL)
+		return 0;
+	session->block_child_counts = counts;
+	counts[session->result->block_count] = 0;
+	if (parent == 0)
+		ordinal = session->top_level_block_count++;
+	else if (parent <= session->result->block_count)
+		ordinal = counts[parent - 1]++;
+	else {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, parent,
+		    session->result->block_count);
+		return 0;
+	}
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !mant_structured_charge(session, &session->relation_edges,
+	    2 + (parent != 0) + (root != 0),
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	block = blocks + session->result->block_count;
+	memset(block, 0, sizeof(*block));
+	block->key = ++session->result->block_count;
+	block->owner = owner;
+	block->kind = kind;
+	block->parent = parent;
+	block->ordinal = ordinal;
+	block->provenance = provenance;
+	block->root = root;
+	return block->key;
+}
+
 int
 mant_structured_open_content_root(struct structured_session *session, int heading,
     uint32_t provenance)
 {
-	struct mant_structured_owner_view *owners, *owner = NULL;
 	struct mant_structured_content_root_view *roots, *root;
-	struct mant_structured_block_view *blocks, *block;
-	uint32_t owner_key, operations;
-	int new_owner;
+	struct structured_node_context *context;
+	uint32_t owner_key, root_kind, block_kind, parent, block;
 
-	new_owner = heading || session->section_owner == 0;
-	if (new_owner) {
-		owners = mant_structured_grow_array(session, session->result->owners,
-		    session->result->owner_count,
-		    &session->result->owner_capacity,
-		    mant_structured_limit_u32(session->limits->max_owners), sizeof(*owners),
-		    session->limits->max_builder_allocated_bytes, 11,
-		    MANT_STRUCTURED_STAGE_RENDER);
-		if (owners == NULL)
-			return 0;
-		session->result->owners = owners;
-		owner = owners + session->result->owner_count;
-		memset(owner, 0, sizeof(*owner));
-		owner->key = ++session->result->owner_count;
-		owner->kind = heading ? MANT_OWNER_SECTION : MANT_OWNER_DOCUMENT;
-		owner->provenance = provenance;
-		owner_key = owner->key;
-	} else
+	context = mant_structured_current_context(session);
+	if (heading) {
+		owner_key = mant_structured_append_owner(session, MANT_OWNER_SECTION,
+		    provenance);
+		root_kind = MANT_ROOT_HEADING;
+		block_kind = MANT_BLOCK_HEADING;
+		parent = 0;
+	} else if (context != NULL && context->item != 0) {
+		owner_key = context->owner;
+		root_kind = context->part == STRUCTURED_PART_TERM ?
+		    MANT_ROOT_TERM : MANT_ROOT_BODY;
+		block_kind = MANT_BLOCK_PARAGRAPH;
+		parent = context->container_block;
+	} else {
+		if (session->section_owner == 0)
+			session->section_owner = mant_structured_append_owner(session,
+			    MANT_OWNER_DOCUMENT, provenance);
 		owner_key = session->section_owner;
+		root_kind = MANT_ROOT_BODY;
+		block_kind = MANT_BLOCK_PARAGRAPH;
+		parent = session->section_heading_block;
+	}
+	if (owner_key == 0)
+		return 0;
 	roots = mant_structured_grow_array(session, session->result->content_roots,
 	    session->result->content_root_count,
 	    &session->result->content_root_capacity,
@@ -184,19 +284,10 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 	if (roots == NULL)
 		return 0;
 	session->result->content_roots = roots;
-	blocks = mant_structured_grow_array(session, session->result->blocks,
-	    session->result->block_count, &session->result->block_capacity,
-	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*blocks),
-	    session->limits->max_builder_allocated_bytes, 12,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (blocks == NULL)
-		return 0;
-	session->result->blocks = blocks;
-	operations = new_owner ? 3 : 2;
-	if (!mant_structured_charge(session, &session->builder_operations, operations,
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER) ||
-	    !mant_structured_charge(session, &session->relation_edges, 6,
+	    !mant_structured_charge(session, &session->relation_edges, 2,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
@@ -204,35 +295,144 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 	memset(root, 0, sizeof(*root));
 	root->key = ++session->result->content_root_count;
 	root->owner = owner_key;
-	root->ordinal = heading ? 0 :
-	    session->section_owner != 0 ? session->section_root_count : 0;
-	root->kind = heading ? MANT_ROOT_HEADING : MANT_ROOT_BODY;
+	root->ordinal = session->owner_root_counts[owner_key - 1]++;
+	root->kind = root_kind;
 	root->provenance = provenance;
-	block = blocks + session->result->block_count;
-	memset(block, 0, sizeof(*block));
-	block->key = ++session->result->block_count;
-	block->owner = owner_key;
-	block->kind = heading ? MANT_BLOCK_HEADING : MANT_BLOCK_PARAGRAPH;
-	block->parent = heading ? 0 : session->section_heading_block;
-	block->ordinal = block->parent == 0 ?
-	    session->top_level_block_count : session->section_child_block_count;
-	block->provenance = provenance;
-	block->root = root->key;
+	block = 0;
+	if (root_kind != MANT_ROOT_TERM) {
+		block = mant_structured_append_block(session, owner_key, block_kind,
+		    parent, provenance, root->key);
+		if (block == 0)
+			return 0;
+	}
 	session->current_owner = owner_key;
 	session->current_root = root->key;
 	session->current_root_atom_count = 0;
 	if (heading) {
-		session->top_level_block_count++;
 		session->section_owner = owner_key;
-		session->section_heading_block = block->key;
-		session->section_root_count = 1;
-		session->section_child_block_count = 0;
-	} else if (session->section_owner != 0) {
-		session->section_root_count++;
-		session->section_child_block_count++;
-	} else
-		session->top_level_block_count++;
+		session->section_heading_block = block;
+	} else if (root_kind == MANT_ROOT_TERM && context != NULL) {
+		uint32_t index;
+		for (index = session->node_depth; index > 0; index--)
+			if (session->node_contexts[index - 1].item == context->item &&
+			    session->node_contexts[index - 1].part ==
+			    STRUCTURED_PART_TERM) {
+				session->node_contexts[index - 1].term_root = root->key;
+			}
+	}
 	return 1;
+}
+
+int
+mant_structured_finalize_term_root(struct structured_session *session,
+    uint32_t root_key, uint32_t item_key)
+{
+	struct mant_structured_content_ref_view *refs, *ref;
+	struct mant_structured_form_view *forms, *form;
+	struct mant_structured_name_hint_view *hints, *hint;
+	struct mant_structured_item_view *item;
+	const struct mant_structured_content_atom_view *atom;
+	uint32_t first_ref, first_hint, hint_count, i, role;
+
+	if (root_key == 0 || root_key > session->result->content_root_count ||
+	    item_key == 0 || item_key > session->result->item_count)
+		return 1;
+	first_ref = session->result->content_ref_count + 1;
+	first_hint = hint_count = role = 0;
+	for (i = 0; i < session->result->content_atom_count; i++) {
+		atom = session->result->content_atoms + i;
+		if (atom->root != root_key ||
+		    (atom->kind != MANT_ATOM_TEXT &&
+		    atom->kind != MANT_ATOM_WHITESPACE))
+			continue;
+		if (atom->text.len == 0 || atom->text.len > UINT32_MAX)
+			continue;
+		refs = mant_structured_grow_array(session,
+		    session->result->content_refs,
+		    session->result->content_ref_count,
+		    &session->result->content_ref_capacity,
+		    mant_structured_limit_u32(session->limits->max_content_refs),
+		    sizeof(*refs), session->limits->max_builder_allocated_bytes, 14,
+		    MANT_STRUCTURED_STAGE_RENDER);
+		if (refs == NULL)
+			return 0;
+		session->result->content_refs = refs;
+		ref = refs + session->result->content_ref_count++;
+		memset(ref, 0, sizeof(*ref));
+		ref->atom = atom->key;
+		ref->byte_end = (uint32_t)atom->text.len;
+		if (atom->role != 0) {
+			if (role == 0)
+				role = atom->role;
+			else if (role != atom->role)
+				role = UINT32_MAX;
+		}
+		if (atom->role == MANT_ROLE_FLAG ||
+		    atom->role == MANT_ROLE_ENVIRONMENT_VARIABLE ||
+		    atom->role == MANT_ROLE_COMMAND_OR_DIRECTIVE ||
+		    atom->role == MANT_ROLE_PATH) {
+			if (first_hint == 0)
+				first_hint = session->result->content_ref_count;
+			if (first_hint + hint_count ==
+			    session->result->content_ref_count)
+				hint_count++;
+		}
+	}
+	if (session->result->content_ref_count < first_ref)
+		return 1;
+	forms = mant_structured_grow_array(session, session->result->forms,
+	    session->result->form_count, &session->result->form_capacity,
+	    mant_structured_limit_u32(session->limits->max_forms), sizeof(*forms),
+	    session->limits->max_builder_allocated_bytes, 24,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (forms == NULL)
+		return 0;
+	session->result->forms = forms;
+	form = forms + session->result->form_count;
+	memset(form, 0, sizeof(*form));
+	form->key = ++session->result->form_count;
+	form->owner = session->result->content_roots[root_key - 1].owner;
+	form->role = role == UINT32_MAX ? 0 : role;
+	form->first_ref = first_ref;
+	form->ref_count = session->result->content_ref_count - first_ref + 1;
+	form->provenance = session->result->content_roots[root_key - 1].provenance;
+	item = session->result->items + item_key - 1;
+	if (item->form_count == 0)
+		item->first_form = form->key;
+	item->form_count++;
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !mant_structured_charge(session, &session->relation_edges,
+	    (uint64_t)form->ref_count + 3,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	if (first_hint == 0 || hint_count == 0)
+		return 1;
+	hints = mant_structured_grow_array(session, session->result->name_hints,
+	    session->result->name_hint_count,
+	    &session->result->name_hint_capacity,
+	    mant_structured_limit_u32(session->limits->max_name_hints),
+	    sizeof(*hints), session->limits->max_builder_allocated_bytes, 25,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (hints == NULL)
+		return 0;
+	session->result->name_hints = hints;
+	hint = hints + session->result->name_hint_count;
+	memset(hint, 0, sizeof(*hint));
+	hint->key = ++session->result->name_hint_count;
+	hint->form = form->key;
+	hint->first_ref = first_hint;
+	hint->ref_count = hint_count;
+	hint->provenance = form->provenance;
+	return mant_structured_charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) &&
+	    mant_structured_charge(session, &session->relation_edges,
+	    (uint64_t)hint_count + 2,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER);
 }
 
 int

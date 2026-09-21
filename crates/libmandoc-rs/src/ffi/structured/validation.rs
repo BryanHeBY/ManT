@@ -1,14 +1,16 @@
 //! Transfer budgets, ABI ranges, keys, and relation validation.
 
 use super::{
-    ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_HEADING,
-    BLOCK_PARAGRAPH, BytesView, COORD_NATIVE_NORMALIZED_BYTES, DIAGNOSTIC_CODE_NATIVE_LAST,
-    DIAGNOSTIC_STYLE, DIAGNOSTIC_UNSUPPORTED, FORMAT_MAN, FORMAT_MDOC, Limits, MetadataView,
-    NativeStructuredError, OWNER_KIND_LAST, OwnedBlock, OwnedContentAtom, OwnedContentRef,
-    OwnedContentRoot, OwnedDiagnostic, OwnedLink, OwnedOwner, OwnedProvenance, OwnedSource,
-    OwnedSpan, PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, ROOT_BODY,
-    ROOT_HEADING, ROOT_KIND_LAST, ResultHandle, ResultView, STATUS_BUDGET, STYLE_MASK, SliceView,
-    SpanView, StructuredSlices, relation_error,
+    ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_DEFINITION_LIST,
+    BLOCK_HEADING, BLOCK_LIST, BLOCK_PARAGRAPH, BytesView, COORD_NATIVE_NORMALIZED_BYTES,
+    DIAGNOSTIC_CODE_NATIVE_LAST, DIAGNOSTIC_STYLE, DIAGNOSTIC_UNSUPPORTED, FORMAT_MAN, FORMAT_MDOC,
+    LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER, LIST_ORDERED, LIST_PLAIN, Limits,
+    MetadataView, NativeStructuredError, OWNER_DEFINITION_ITEM, OWNER_KIND_LAST, OWNER_LIST_ITEM,
+    OwnedBlock, OwnedContentAtom, OwnedContentRef, OwnedContentRoot, OwnedDiagnostic, OwnedLink,
+    OwnedOwner, OwnedProvenance, OwnedSource, OwnedSpan, PROVENANCE_AUTHORED, PROVENANCE_GENERATED,
+    PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_HEADING, ROOT_KIND_LAST, ROOT_TERM, ResultHandle,
+    ResultView, STATUS_BUDGET, STYLE_MASK, SliceView, SpanView, StructuredSlices, alloc_error,
+    relation_error,
 };
 
 pub(super) fn validate_metadata(metadata: MetadataView) -> Result<(), NativeStructuredError> {
@@ -78,8 +80,6 @@ pub(super) fn validate_structured_relations(
         || !slices.fixed_lines.is_empty()
         || !slices.placements.is_empty()
         || !slices.decorations.is_empty()
-        || !slices.forms.is_empty()
-        || !slices.name_hints.is_empty()
         || !slices.relations.is_empty()
     {
         return Err(relation_error());
@@ -148,26 +148,27 @@ pub(super) fn validate_structured_relations(
         }
     }
 
-    let mut previous_owner = 0_u32;
-    let mut expected_root_ordinal = 0_u32;
+    let mut root_ordinals = Vec::new();
+    root_ordinals
+        .try_reserve_exact(slices.owners.len())
+        .map_err(alloc_error)?;
+    root_ordinals.resize(slices.owners.len(), 0_u32);
     for (index, root) in slices.content_roots.iter().enumerate() {
-        if root.owner != previous_owner {
-            if root.owner < previous_owner {
-                return Err(relation_error());
-            }
-            previous_owner = root.owner;
-            expected_root_ordinal = 0;
-        }
+        let owner_index = root.owner.checked_sub(1).map(|owner| owner as usize);
+        let expected_root_ordinal = owner_index.and_then(|owner| root_ordinals.get_mut(owner));
         if root.key != dense_key(index)?
             || !valid_required_key(root.owner, slices.owners.len())
             || !(1..=ROOT_KIND_LAST).contains(&root.kind)
             || !valid_required_key(root.provenance, slices.provenances.len())
             || root.reserved != 0
-            || root.ordinal != expected_root_ordinal
+            || expected_root_ordinal
+                .as_ref()
+                .is_none_or(|expected| root.ordinal != **expected)
         {
             return Err(relation_error());
         }
-        expected_root_ordinal = expected_root_ordinal
+        let expected_root_ordinal = expected_root_ordinal.expect("validated owner ordinal");
+        *expected_root_ordinal = (*expected_root_ordinal)
             .checked_add(1)
             .ok_or_else(relation_error)?;
     }
@@ -243,8 +244,6 @@ pub(super) fn validate_structured_relations(
             return Err(relation_error());
         }
     }
-    let mut next_label_ref = 0_usize;
-    let mut previous_label_atom = 0_u32;
     for (index, link) in slices.links.iter().enumerate() {
         let label_start = link.first_label_ref.checked_sub(1).map(|key| key as usize);
         let label_end =
@@ -273,7 +272,7 @@ pub(super) fn validate_structured_relations(
             || link.target_b_reserved_bytes != [0; 7]
             || link.title_reserved_bytes != [0; 7]
             || link.label_ref_count == 0
-            || label_start != Some(next_label_ref)
+            || label_start.is_none()
             || label_end.is_none_or(|end| end > slices.content_refs.len())
             || !valid_required_key(link.provenance, slices.provenances.len())
             || link.reserved != 0
@@ -281,70 +280,49 @@ pub(super) fn validate_structured_relations(
             return Err(relation_error());
         }
         for content_ref in &slices.content_refs[label_start.unwrap()..label_end.unwrap()] {
-            if content_ref.atom <= previous_label_atom
-                || slices.content_atoms[content_ref.atom as usize - 1].link != link.key
-            {
+            if slices.content_atoms[content_ref.atom as usize - 1].link != link.key {
                 return Err(relation_error());
             }
-            previous_label_atom = content_ref.atom;
         }
-        next_label_ref = label_end.unwrap();
-    }
-    if next_label_ref != slices.content_refs.len() {
-        return Err(relation_error());
-    }
-    let mut refs = slices.content_refs.iter();
-    for atom in slices.content_atoms.iter().filter(|atom| atom.link != 0) {
-        if refs
-            .next()
-            .is_none_or(|content_ref| content_ref.atom != atom.key)
-        {
-            return Err(relation_error());
-        }
-    }
-    if refs.next().is_some() {
-        return Err(relation_error());
     }
 
-    if slices.blocks.len() != slices.content_roots.len() {
-        return Err(relation_error());
-    }
     let mut top_level_ordinal = 0_u32;
-    let mut current_parent = 0_u32;
-    let mut child_ordinal = 0_u32;
+    let mut child_ordinals = Vec::new();
+    child_ordinals
+        .try_reserve_exact(slices.blocks.len())
+        .map_err(alloc_error)?;
+    child_ordinals.resize(slices.blocks.len(), 0_u32);
     for (index, block) in slices.blocks.iter().enumerate() {
-        let parent = (block.parent != 0)
-            .then(|| slices.blocks.get(block.parent as usize - 1))
+        let block_root = (block.root != 0)
+            .then(|| slices.content_roots.get(block.root as usize - 1))
             .flatten();
-        let block_root = &slices.content_roots[index];
         let expected_ordinal = if block.parent == 0 {
             let ordinal = top_level_ordinal;
             top_level_ordinal = top_level_ordinal
                 .checked_add(1)
                 .ok_or_else(relation_error)?;
-            current_parent = block.key;
-            child_ordinal = 0;
             ordinal
         } else {
-            if block.parent != current_parent {
-                return Err(relation_error());
-            }
-            let ordinal = child_ordinal;
-            child_ordinal = child_ordinal.checked_add(1).ok_or_else(relation_error)?;
+            let count = child_ordinals
+                .get_mut(block.parent as usize - 1)
+                .ok_or_else(relation_error)?;
+            let ordinal = *count;
+            *count = (*count).checked_add(1).ok_or_else(relation_error)?;
             ordinal
         };
         let payload_valid = match block.kind {
             BLOCK_HEADING => {
-                block_root.kind == ROOT_HEADING
-                    && block.root == block_root.key
+                block_root.is_some_and(|root| root.kind == ROOT_HEADING)
                     && block.table == 0
                     && block.fixed_view == 0
             }
             BLOCK_PARAGRAPH => {
-                block_root.kind == ROOT_BODY
-                    && block.root == block_root.key
+                block_root.is_some_and(|root| root.kind == ROOT_BODY)
                     && block.table == 0
                     && block.fixed_view == 0
+            }
+            BLOCK_LIST | BLOCK_DEFINITION_LIST => {
+                block.root == 0 && block.table == 0 && block.fixed_view == 0
             }
             _ => false,
         };
@@ -352,12 +330,186 @@ pub(super) fn validate_structured_relations(
             || !valid_required_key(block.owner, slices.owners.len())
             || !valid_required_key(block.provenance, slices.provenances.len())
             || block.parent as usize > slices.blocks.len()
-            || block.parent == block.key
-            || parent.is_some_and(|parent| parent.owner != block.owner)
-            || block_root.owner != block.owner
+            || block.parent >= block.key
+            || block_root.is_some_and(|root| root.owner != block.owner)
             || !payload_valid
             || block.reserved != 0
             || block.ordinal != expected_ordinal
+        {
+            return Err(relation_error());
+        }
+    }
+
+    let mut list_blocks = Vec::new();
+    list_blocks
+        .try_reserve_exact(slices.blocks.len())
+        .map_err(alloc_error)?;
+    list_blocks.resize(slices.blocks.len(), false);
+    for (index, list) in slices.lists.iter().enumerate() {
+        let block = list
+            .block
+            .checked_sub(1)
+            .and_then(|block| slices.blocks.get(block as usize));
+        let kind_valid = match list.kind {
+            LIST_BULLET | LIST_PLAIN => {
+                list.start == 0 && block.is_some_and(|block| block.kind == BLOCK_LIST)
+            }
+            LIST_ORDERED => list.start != 0 && block.is_some_and(|block| block.kind == BLOCK_LIST),
+            LIST_DEFINITION | LIST_NATIVE_MARKER => {
+                list.start == 0 && block.is_some_and(|block| block.kind == BLOCK_DEFINITION_LIST)
+            }
+            _ => false,
+        };
+        if list.key != dense_key(index)?
+            || !kind_valid
+            || list_blocks
+                .get(list.block as usize - 1)
+                .is_none_or(|used| *used)
+            || list.compact > 1
+            || !valid_required_key(list.provenance, slices.provenances.len())
+            || list.reserved != 0
+        {
+            return Err(relation_error());
+        }
+        list_blocks[list.block as usize - 1] = true;
+    }
+    let mut item_ordinals = Vec::new();
+    item_ordinals
+        .try_reserve_exact(slices.lists.len())
+        .map_err(alloc_error)?;
+    item_ordinals.resize(slices.lists.len(), 0_u32);
+    let mut item_owners = Vec::new();
+    item_owners
+        .try_reserve_exact(slices.owners.len())
+        .map_err(alloc_error)?;
+    item_owners.resize(slices.owners.len(), false);
+    let mut next_form = 0_usize;
+    for (index, item) in slices.items.iter().enumerate() {
+        let list_index = item.list.checked_sub(1).map(|list| list as usize);
+        let expected = list_index.and_then(|list| item_ordinals.get_mut(list));
+        let forms = if item.form_count == 0 {
+            (item.first_form == 0).then_some(&[][..])
+        } else {
+            item.first_form.checked_sub(1).and_then(|first| {
+                let start = first as usize;
+                let end = start.checked_add(item.form_count as usize)?;
+                slices.forms.get(start..end)
+            })
+        };
+        let target_valid = match item.target_present {
+            0 => item.target.ptr.is_null() && item.target.len == 0,
+            1 => item.target.len != 0 && validate_utf8_view(item.target).is_ok(),
+            _ => false,
+        };
+        let expected_owner_kind = list_index
+            .and_then(|list| slices.lists.get(list))
+            .map(|list| {
+                if matches!(list.kind, LIST_DEFINITION | LIST_NATIVE_MARKER) {
+                    OWNER_DEFINITION_ITEM
+                } else {
+                    OWNER_LIST_ITEM
+                }
+            });
+        let owner_index = item.owner.checked_sub(1).map(|owner| owner as usize);
+        let first_form = item.first_form.checked_sub(1).map(|form| form as usize);
+        if item.key != dense_key(index)?
+            || !valid_required_key(item.list, slices.lists.len())
+            || !valid_required_key(item.owner, slices.owners.len())
+            || expected
+                .as_ref()
+                .is_none_or(|expected| item.ordinal != **expected)
+            || owner_index
+                .and_then(|owner| slices.owners.get(owner))
+                .is_none_or(|owner| Some(owner.kind) != expected_owner_kind)
+            || owner_index
+                .and_then(|owner| item_owners.get(owner))
+                .is_none_or(|used| *used)
+            || (item.form_count != 0 && first_form != Some(next_form))
+            || forms.is_none_or(|forms| forms.iter().any(|form| form.owner != item.owner))
+            || !target_valid
+            || item.target_reserved_bytes != [0; 7]
+            || !valid_required_key(item.provenance, slices.provenances.len())
+            || item.reserved != 0
+        {
+            return Err(relation_error());
+        }
+        item_owners[owner_index.expect("validated item owner")] = true;
+        next_form = next_form
+            .checked_add(item.form_count as usize)
+            .ok_or_else(relation_error)?;
+        let expected = expected.expect("validated item ordinal");
+        *expected = (*expected).checked_add(1).ok_or_else(relation_error)?;
+    }
+    if next_form != slices.forms.len()
+        || slices.blocks.iter().enumerate().any(|(index, block)| {
+            matches!(block.kind, BLOCK_LIST | BLOCK_DEFINITION_LIST) && !list_blocks[index]
+        })
+    {
+        return Err(relation_error());
+    }
+    let mut term_roots = Vec::new();
+    term_roots
+        .try_reserve_exact(slices.content_roots.len())
+        .map_err(alloc_error)?;
+    term_roots.resize(slices.content_roots.len(), false);
+    for (index, form) in slices.forms.iter().enumerate() {
+        let start = form.first_ref.checked_sub(1).map(|first| first as usize);
+        let end = start.and_then(|start| start.checked_add(form.ref_count as usize));
+        if form.key != dense_key(index)?
+            || !valid_required_key(form.owner, slices.owners.len())
+            || form.role > 5
+            || form.ref_count == 0
+            || end.is_none_or(|end| end > slices.content_refs.len())
+            || !valid_required_key(form.provenance, slices.provenances.len())
+            || form.reserved != 0
+        {
+            return Err(relation_error());
+        }
+        let mut form_root = None;
+        for content_ref in &slices.content_refs[start.unwrap()..end.unwrap()] {
+            let atom = &slices.content_atoms[content_ref.atom as usize - 1];
+            let root_index = atom.root as usize - 1;
+            if atom.owner != form.owner
+                || slices.content_roots[root_index].kind != ROOT_TERM
+                || form_root.is_some_and(|root| root != root_index)
+            {
+                return Err(relation_error());
+            }
+            form_root = Some(root_index);
+        }
+        let form_root = form_root.ok_or_else(relation_error)?;
+        if term_roots[form_root] {
+            return Err(relation_error());
+        }
+        term_roots[form_root] = true;
+    }
+    if slices
+        .content_roots
+        .iter()
+        .enumerate()
+        .any(|(index, root)| (root.kind == ROOT_TERM) != term_roots[index])
+    {
+        return Err(relation_error());
+    }
+    for (index, hint) in slices.name_hints.iter().enumerate() {
+        let form = hint
+            .form
+            .checked_sub(1)
+            .and_then(|form| slices.forms.get(form as usize));
+        let hint_end = hint.first_ref.checked_add(hint.ref_count);
+        if hint.key != dense_key(index)?
+            || form.is_none()
+            || hint.ref_count == 0
+            || hint_end.is_none()
+            || form.is_some_and(|form| {
+                let Some(form_end) = form.first_ref.checked_add(form.ref_count) else {
+                    return true;
+                };
+                hint.first_ref < form.first_ref
+                    || hint_end.is_none_or(|hint_end| hint_end > form_end)
+            })
+            || !valid_required_key(hint.provenance, slices.provenances.len())
+            || hint.reserved != 0
         {
             return Err(relation_error());
         }
@@ -422,6 +574,8 @@ pub(super) fn transfer_preflight(
         slices.content_points.len(),
         slices.links.len(),
         slices.blocks.len(),
+        slices.lists.len(),
+        slices.items.len(),
         slices.tables.len(),
         slices.table_rows.len(),
         slices.table_cells.len(),
@@ -488,6 +642,20 @@ pub(super) fn transfer_preflight(
     ] {
         add_edges(&mut edges, count)?;
     }
+    add_edges(&mut edges, slices.lists.len())?; // block
+    add_edges(&mut edges, slices.lists.len())?; // provenance
+    for item in slices.items {
+        add_edges(&mut edges, 3)?; // list, owner, provenance
+        add_edges(&mut edges, item.form_count as usize)?;
+    }
+    for form in slices.forms {
+        add_edges(&mut edges, 2)?; // owner, provenance
+        add_edges(&mut edges, form.ref_count as usize)?;
+    }
+    for hint in slices.name_hints {
+        add_edges(&mut edges, 2)?; // form, provenance
+        add_edges(&mut edges, hint.ref_count as usize)?;
+    }
     for diagnostic in slices.diagnostics {
         add_edges(
             &mut edges,
@@ -529,6 +697,22 @@ pub(super) fn transfer_preflight(
     add_transfer_table_bytes::<OwnedBlock, crate::structured::NativeBlock, _>(
         &mut bytes,
         slices.blocks,
+    )?;
+    add_transfer_table_bytes::<super::OwnedList, crate::structured::NativeList, _>(
+        &mut bytes,
+        slices.lists,
+    )?;
+    add_transfer_table_bytes::<super::OwnedItem, crate::structured::NativeItem, _>(
+        &mut bytes,
+        slices.items,
+    )?;
+    add_transfer_table_bytes::<super::OwnedForm, crate::structured::NativeForm, _>(
+        &mut bytes,
+        slices.forms,
+    )?;
+    add_transfer_table_bytes::<super::OwnedNameHint, crate::structured::NativeNameHint, _>(
+        &mut bytes,
+        slices.name_hints,
     )?;
     add_transfer_table_bytes::<OwnedDiagnostic, crate::structured::NativeDiagnostic, _>(
         &mut bytes,
@@ -582,6 +766,13 @@ pub(super) fn transfer_preflight(
                 })
             })
             .ok_or_else(relation_error)?;
+    }
+    for item in slices.items {
+        if item.target_present == 1 {
+            bytes = bytes
+                .checked_add(validate_utf8_view(item.target)?)
+                .ok_or_else(relation_error)?;
+        }
     }
     for diagnostic in slices.diagnostics {
         bytes = bytes

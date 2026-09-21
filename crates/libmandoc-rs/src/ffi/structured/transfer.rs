@@ -2,12 +2,12 @@
 
 use super::{
     BlockView, BytesView, ContentAtomView, ContentPointView, ContentRefView, ContentRootView,
-    DecorationView, DiagnosticView, FixedLineView, FixedView, FormView, Limits, LinkView,
-    MetadataView, NameHintView, NativeStructuredError, OwnerView, PROFILE_ASCII, PROFILE_UTF8,
-    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, PlacementView, ProvenanceView,
-    RelationView, ResultHandleRaw, ResultView, SourceView, SpanView, TableCellView, TableRowView,
-    TableView, alloc_error, checked_slice, mant_structured_result_free, relation_error,
-    transfer_preflight, validate_metadata, validate_structured_relations,
+    DecorationView, DiagnosticView, FixedLineView, FixedView, FormView, ItemView, Limits, LinkView,
+    ListView, MetadataView, NameHintView, NativeStructuredError, OwnerView, PROFILE_ASCII,
+    PROFILE_UTF8, PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, PlacementView,
+    ProvenanceView, RelationView, ResultHandleRaw, ResultView, SourceView, SpanView, TableCellView,
+    TableRowView, TableView, alloc_error, checked_slice, mant_structured_result_free,
+    relation_error, transfer_preflight, validate_metadata, validate_structured_relations,
 };
 use std::ptr::NonNull;
 
@@ -109,6 +109,47 @@ pub(crate) struct OwnedBlock {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedList {
+    pub(crate) key: u32,
+    pub(crate) block: u32,
+    pub(crate) kind: u32,
+    pub(crate) compact: bool,
+    pub(crate) start: Option<u32>,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedItem {
+    pub(crate) key: u32,
+    pub(crate) list: u32,
+    pub(crate) owner: u32,
+    pub(crate) ordinal: u32,
+    pub(crate) first_form: Option<u32>,
+    pub(crate) form_count: u32,
+    pub(crate) target: Option<String>,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedForm {
+    pub(crate) key: u32,
+    pub(crate) owner: u32,
+    pub(crate) role: Option<u32>,
+    pub(crate) first_ref: u32,
+    pub(crate) ref_count: u32,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedNameHint {
+    pub(crate) key: u32,
+    pub(crate) form: u32,
+    pub(crate) first_ref: u32,
+    pub(crate) ref_count: u32,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OwnedDiagnostic {
     pub(crate) level: u32,
     pub(crate) code: u32,
@@ -146,6 +187,10 @@ pub(crate) struct OwnedStructuredDocument {
     pub(crate) content_refs: Vec<OwnedContentRef>,
     pub(crate) links: Vec<OwnedLink>,
     pub(crate) blocks: Vec<OwnedBlock>,
+    pub(crate) lists: Vec<OwnedList>,
+    pub(crate) items: Vec<OwnedItem>,
+    pub(crate) forms: Vec<OwnedForm>,
+    pub(crate) name_hints: Vec<OwnedNameHint>,
     pub(crate) diagnostics: Vec<OwnedDiagnostic>,
 }
 
@@ -160,6 +205,8 @@ pub(super) struct StructuredSlices<'a> {
     pub(super) content_points: &'a [ContentPointView],
     pub(super) links: &'a [LinkView],
     pub(super) blocks: &'a [BlockView],
+    pub(super) lists: &'a [ListView],
+    pub(super) items: &'a [ItemView],
     pub(super) tables: &'a [TableView],
     pub(super) table_rows: &'a [TableRowView],
     pub(super) table_cells: &'a [TableCellView],
@@ -195,6 +242,8 @@ pub(super) fn copy_structured_document(
         content_points: checked_slice::<ContentPointView>(view.content_points, handle)?,
         links: checked_slice::<LinkView>(view.links, handle)?,
         blocks: checked_slice::<BlockView>(view.blocks, handle)?,
+        lists: checked_slice::<ListView>(view.lists, handle)?,
+        items: checked_slice::<ItemView>(view.items, handle)?,
         tables: checked_slice::<TableView>(view.tables, handle)?,
         table_rows: checked_slice::<TableRowView>(view.table_rows, handle)?,
         table_cells: checked_slice::<TableCellView>(view.table_cells, handle)?,
@@ -220,6 +269,10 @@ pub(super) fn copy_structured_document(
     let mut owned_refs = Vec::new();
     let mut owned_links = Vec::new();
     let mut owned_blocks = Vec::new();
+    let mut owned_lists = Vec::new();
+    let mut owned_items = Vec::new();
+    let mut owned_forms = Vec::new();
+    let mut owned_name_hints = Vec::new();
     let mut owned_diagnostics = Vec::new();
     owned_sources
         .try_reserve_exact(slices.sources.len())
@@ -247,6 +300,18 @@ pub(super) fn copy_structured_document(
         .map_err(alloc_error)?;
     owned_blocks
         .try_reserve_exact(slices.blocks.len())
+        .map_err(alloc_error)?;
+    owned_lists
+        .try_reserve_exact(slices.lists.len())
+        .map_err(alloc_error)?;
+    owned_items
+        .try_reserve_exact(slices.items.len())
+        .map_err(alloc_error)?;
+    owned_forms
+        .try_reserve_exact(slices.forms.len())
+        .map_err(alloc_error)?;
+    owned_name_hints
+        .try_reserve_exact(slices.name_hints.len())
         .map_err(alloc_error)?;
     owned_diagnostics
         .try_reserve_exact(slices.diagnostics.len())
@@ -363,6 +428,49 @@ pub(super) fn copy_structured_document(
             fixed_view: (block.fixed_view != 0).then_some(block.fixed_view),
         });
     }
+    for list in slices.lists {
+        owned_lists.push(OwnedList {
+            key: list.key,
+            block: list.block,
+            kind: list.kind,
+            compact: list.compact == 1,
+            start: (list.start != 0).then_some(list.start),
+            provenance: list.provenance,
+        });
+    }
+    for item in slices.items {
+        owned_items.push(OwnedItem {
+            key: item.key,
+            list: item.list,
+            owner: item.owner,
+            ordinal: item.ordinal,
+            first_form: (item.first_form != 0).then_some(item.first_form),
+            form_count: item.form_count,
+            target: (item.target_present == 1)
+                .then(|| copy_string(item.target))
+                .transpose()?,
+            provenance: item.provenance,
+        });
+    }
+    for form in slices.forms {
+        owned_forms.push(OwnedForm {
+            key: form.key,
+            owner: form.owner,
+            role: (form.role != 0).then_some(form.role),
+            first_ref: form.first_ref,
+            ref_count: form.ref_count,
+            provenance: form.provenance,
+        });
+    }
+    for hint in slices.name_hints {
+        owned_name_hints.push(OwnedNameHint {
+            key: hint.key,
+            form: hint.form,
+            first_ref: hint.first_ref,
+            ref_count: hint.ref_count,
+            provenance: hint.provenance,
+        });
+    }
     for diagnostic in slices.diagnostics {
         owned_diagnostics.push(OwnedDiagnostic {
             level: diagnostic.level,
@@ -402,6 +510,10 @@ pub(super) fn copy_structured_document(
         content_refs: owned_refs,
         links: owned_links,
         blocks: owned_blocks,
+        lists: owned_lists,
+        items: owned_items,
+        forms: owned_forms,
+        name_hints: owned_name_hints,
         diagnostics: owned_diagnostics,
     })
 }

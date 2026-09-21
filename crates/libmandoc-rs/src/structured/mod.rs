@@ -48,6 +48,10 @@ key_type!(ContentRootKey);
 key_type!(ContentAtomKey);
 key_type!(LinkOccurrenceKey);
 key_type!(NativeBlockKey);
+key_type!(NativeListKey);
+key_type!(NativeItemKey);
+key_type!(NativeFormKey);
+key_type!(NativeNameHintKey);
 
 #[cfg(test)]
 mod tests;

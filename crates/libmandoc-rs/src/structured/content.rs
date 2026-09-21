@@ -1,7 +1,8 @@
 //! Logical content, ownership, roles, links, and block records.
 
 use super::{
-    ContentAtomKey, ContentRootKey, LinkOccurrenceKey, NativeBlockKey, OwnerKey, ProvenanceKey,
+    ContentAtomKey, ContentRootKey, LinkOccurrenceKey, NativeBlockKey, NativeFormKey,
+    NativeItemKey, NativeListKey, NativeNameHintKey, OwnerKey, ProvenanceKey,
 };
 use std::ops::Range;
 
@@ -395,5 +396,152 @@ impl NativeBlock {
     #[must_use]
     pub const fn root(&self) -> Option<ContentRootKey> {
         self.root
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeListKind {
+    Bullet,
+    Ordered,
+    Plain,
+    Definition,
+    NativeMarker,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeList {
+    pub(crate) key: NativeListKey,
+    pub(crate) block: NativeBlockKey,
+    pub(crate) kind: NativeListKind,
+    pub(crate) compact: bool,
+    pub(crate) start: Option<u32>,
+    pub(crate) provenance: ProvenanceKey,
+}
+
+impl NativeList {
+    #[must_use]
+    pub const fn key(&self) -> NativeListKey {
+        self.key
+    }
+    #[must_use]
+    pub const fn block(&self) -> NativeBlockKey {
+        self.block
+    }
+    #[must_use]
+    pub const fn kind(&self) -> NativeListKind {
+        self.kind
+    }
+    #[must_use]
+    pub const fn compact(&self) -> bool {
+        self.compact
+    }
+    #[must_use]
+    pub const fn start(&self) -> Option<u32> {
+        self.start
+    }
+    #[must_use]
+    pub const fn provenance(&self) -> ProvenanceKey {
+        self.provenance
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeItem {
+    pub(crate) key: NativeItemKey,
+    pub(crate) list: NativeListKey,
+    pub(crate) owner: OwnerKey,
+    pub(crate) ordinal: u32,
+    pub(crate) forms: Range<usize>,
+    pub(crate) target: Option<String>,
+    pub(crate) provenance: ProvenanceKey,
+}
+
+impl NativeItem {
+    #[must_use]
+    pub const fn key(&self) -> NativeItemKey {
+        self.key
+    }
+    #[must_use]
+    pub const fn list(&self) -> NativeListKey {
+        self.list
+    }
+    #[must_use]
+    pub const fn owner(&self) -> OwnerKey {
+        self.owner
+    }
+    #[must_use]
+    pub const fn ordinal(&self) -> u32 {
+        self.ordinal
+    }
+    #[must_use]
+    pub const fn forms(&self) -> &Range<usize> {
+        &self.forms
+    }
+    #[must_use]
+    pub fn target(&self) -> Option<&str> {
+        self.target.as_deref()
+    }
+    #[must_use]
+    pub const fn provenance(&self) -> ProvenanceKey {
+        self.provenance
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeForm {
+    pub(crate) key: NativeFormKey,
+    pub(crate) owner: OwnerKey,
+    pub(crate) role: Option<NativeRole>,
+    pub(crate) refs: Range<usize>,
+    pub(crate) provenance: ProvenanceKey,
+}
+
+impl NativeForm {
+    #[must_use]
+    pub const fn key(&self) -> NativeFormKey {
+        self.key
+    }
+    #[must_use]
+    pub const fn owner(&self) -> OwnerKey {
+        self.owner
+    }
+    #[must_use]
+    pub const fn role(&self) -> Option<NativeRole> {
+        self.role
+    }
+    #[must_use]
+    pub const fn refs(&self) -> &Range<usize> {
+        &self.refs
+    }
+    #[must_use]
+    pub const fn provenance(&self) -> ProvenanceKey {
+        self.provenance
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeNameHint {
+    pub(crate) key: NativeNameHintKey,
+    pub(crate) form: NativeFormKey,
+    pub(crate) refs: Range<usize>,
+    pub(crate) provenance: ProvenanceKey,
+}
+
+impl NativeNameHint {
+    #[must_use]
+    pub const fn key(&self) -> NativeNameHintKey {
+        self.key
+    }
+    #[must_use]
+    pub const fn form(&self) -> NativeFormKey {
+        self.form
+    }
+    #[must_use]
+    pub const fn refs(&self) -> &Range<usize> {
+        &self.refs
+    }
+    #[must_use]
+    pub const fn provenance(&self) -> ProvenanceKey {
+        self.provenance
     }
 }

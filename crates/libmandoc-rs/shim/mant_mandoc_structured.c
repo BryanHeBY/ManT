@@ -20,6 +20,7 @@
 #include "mant_mandoc_structured_source.h"
 #include "mant_mandoc_structured_buffer.h"
 #include "mant_mandoc_structured_builder.h"
+#include "mant_mandoc_structured_structure.h"
 #include "mant_mandoc_output.h"
 
 
@@ -616,6 +617,8 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 				return;
 			session->node_stack = stack;
 			session->node_stack[session->node_depth++] = event->node;
+			if (!mant_structured_enter_node(session, event->node))
+				return;
 			if (event->node != NULL && (event->node->tok == MAN_SH ||
 			    event->node->tok == MDOC_Sh ||
 			    event->node->tok == MAN_PP ||
@@ -633,6 +636,7 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 				return;
 			}
+			mant_structured_leave_node(session, event->node);
 			session->node_depth--;
 		}
 		return;

@@ -113,6 +113,12 @@ supported_token(enum roff_tok tok)
 	case MDOC_Os:
 	case MDOC_Sh:
 	case MDOC_Pp:
+	case MDOC_Bl:
+	case MDOC_El:
+	case MDOC_It:
+	case MDOC_Tg:
+	case MDOC_Xo:
+	case MDOC_Xc:
 	case MDOC_Ar:
 	case MDOC_Cm:
 	case MDOC_Ev:
@@ -135,6 +141,11 @@ supported_token(enum roff_tok tok)
 	case MAN_LP:
 	case MAN_PP:
 	case MAN_P:
+	case MAN_IP:
+	case MAN_TP:
+	case MAN_TQ:
+	case MAN_RS:
+	case MAN_RE:
 	case MAN_SM:
 	case MAN_SB:
 	case MAN_BI:
@@ -388,6 +399,10 @@ cleanup:
 			free(session.source_maps[source].lines);
 	free(session.source_maps);
 	free(session.node_stack);
+	free(session.node_contexts);
+	free(session.owner_root_counts);
+	free(session.block_child_counts);
+	free(session.list_item_counts);
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;
 	structured_active = 0;

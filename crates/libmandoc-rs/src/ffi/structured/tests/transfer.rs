@@ -82,6 +82,8 @@ fn prose_transfer_preserves_descriptor_keys_and_owned_text() {
     let empty_refs: [ContentRefView; 0] = [];
     let empty_points: [ContentPointView; 0] = [];
     let empty_links: [LinkView; 0] = [];
+    let empty_lists: [ListView; 0] = [];
+    let empty_items: [ItemView; 0] = [];
     let empty_tables: [TableView; 0] = [];
     let empty_rows: [TableRowView; 0] = [];
     let empty_cells: [TableCellView; 0] = [];
@@ -111,6 +113,8 @@ fn prose_transfer_preserves_descriptor_keys_and_owned_text() {
         content_points: abi_slice(&empty_points),
         links: abi_slice(&empty_links),
         blocks: abi_slice(&blocks),
+        lists: abi_slice(&empty_lists),
+        items: abi_slice(&empty_items),
         tables: abi_slice(&empty_tables),
         table_rows: abi_slice(&empty_rows),
         table_cells: abi_slice(&empty_cells),

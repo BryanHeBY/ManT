@@ -112,6 +112,10 @@ fn test_document(content_atoms: Vec<ContentAtom>) -> StructuredDocument {
         content_refs: Vec::new(),
         links: Vec::new(),
         blocks: Vec::new(),
+        lists: Vec::new(),
+        items: Vec::new(),
+        forms: Vec::new(),
+        name_hints: Vec::new(),
         diagnostics: Vec::new(),
     }
 }

@@ -4,10 +4,10 @@ use super::{
     ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_DEFINITION_LIST,
     BLOCK_FIXED_DISPLAY, BLOCK_HEADING, BLOCK_INDENTED, BLOCK_LIST, BLOCK_PARAGRAPH, BLOCK_TABLE,
     BLOCK_THEMATIC_BREAK, BLOCK_VERTICAL_SPACE, COORD_NATIVE_NORMALIZED_BYTES, FORMAT_MAN,
-    FORMAT_MDOC, IDENTITY_BUNDLE_MEMBER, Limits, NativeStructuredError, OwnedMetadata,
-    OwnedProvenance, OwnedStructuredDocument, PROFILE_ASCII, PROFILE_UTF8, STATUS_BUDGET,
-    STATUS_BUILDER_ALLOC, STATUS_INVALID_INPUT, STATUS_NATIVE, STATUS_REENTRANT, STATUS_RELATION,
-    STATUS_UNSUPPORTED,
+    FORMAT_MDOC, IDENTITY_BUNDLE_MEMBER, LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER,
+    LIST_ORDERED, LIST_PLAIN, Limits, NativeStructuredError, OwnedMetadata, OwnedProvenance,
+    OwnedStructuredDocument, PROFILE_ASCII, PROFILE_UTF8, STATUS_BUDGET, STATUS_BUILDER_ALLOC,
+    STATUS_INVALID_INPUT, STATUS_NATIVE, STATUS_REENTRANT, STATUS_RELATION, STATUS_UNSUPPORTED,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -18,10 +18,11 @@ pub(super) fn semantic_document(
         ContentAtom, ContentAtomKey, ContentAtomKind, ContentOwner, ContentOwnerKind, ContentRef,
         ContentRoot, ContentRootKey, ContentRootKind, LineColumn, LineColumns, LinkOccurrence,
         LinkOccurrenceKey, NativeBlock, NativeBlockKey, NativeBlockKind, NativeDiagnostic,
-        NativeLinkTarget, NativeRole, OwnerKey, Provenance, ProvenanceKey, SourceCoordinates,
-        SourceIdentity, SourceKey, SourceRecord, SourceSpan, SpanKey, StructuredDiagnosticCode,
-        StructuredDiagnosticLevel, StructuredDocument, StructuredMetadata, StructuredProfile,
-        StructuredStyle,
+        NativeForm, NativeFormKey, NativeItem, NativeItemKey, NativeLinkTarget, NativeList,
+        NativeListKey, NativeListKind, NativeNameHint, NativeNameHintKey, NativeRole, OwnerKey,
+        Provenance, ProvenanceKey, SourceCoordinates, SourceIdentity, SourceKey, SourceRecord,
+        SourceSpan, SpanKey, StructuredDiagnosticCode, StructuredDiagnosticLevel,
+        StructuredDocument, StructuredMetadata, StructuredProfile, StructuredStyle,
     };
 
     let OwnedStructuredDocument {
@@ -38,6 +39,10 @@ pub(super) fn semantic_document(
         content_refs,
         links,
         blocks,
+        lists,
+        items,
+        forms,
+        name_hints,
         diagnostics,
     } = raw;
 
@@ -360,6 +365,90 @@ pub(super) fn semantic_document(
         });
     }
 
+    let mut typed_lists = Vec::new();
+    typed_lists
+        .try_reserve_exact(lists.len())
+        .map_err(semantic_allocation)?;
+    for list in lists {
+        let kind = match list.kind {
+            LIST_BULLET => NativeListKind::Bullet,
+            LIST_ORDERED => NativeListKind::Ordered,
+            LIST_PLAIN => NativeListKind::Plain,
+            LIST_DEFINITION => NativeListKind::Definition,
+            LIST_NATIVE_MARKER => NativeListKind::NativeMarker,
+            _ => return Err(semantic_invalid("native list kind is unknown")),
+        };
+        typed_lists.push(NativeList {
+            key: NativeListKey::new(list.key)
+                .ok_or_else(|| semantic_invalid("native list key is absent"))?,
+            block: NativeBlockKey::new(list.block)
+                .ok_or_else(|| semantic_invalid("native list block key is absent"))?,
+            kind,
+            compact: list.compact,
+            start: list.start,
+            provenance: ProvenanceKey::new(list.provenance)
+                .ok_or_else(|| semantic_invalid("native list provenance key is absent"))?,
+        });
+    }
+
+    let mut typed_items = Vec::new();
+    typed_items
+        .try_reserve_exact(items.len())
+        .map_err(semantic_allocation)?;
+    for item in items {
+        let forms = semantic_range(item.first_form, item.form_count, "item form")?;
+        typed_items.push(NativeItem {
+            key: NativeItemKey::new(item.key)
+                .ok_or_else(|| semantic_invalid("native item key is absent"))?,
+            list: NativeListKey::new(item.list)
+                .ok_or_else(|| semantic_invalid("native item list key is absent"))?,
+            owner: OwnerKey::new(item.owner)
+                .ok_or_else(|| semantic_invalid("native item owner key is absent"))?,
+            ordinal: item.ordinal,
+            forms,
+            target: item.target,
+            provenance: ProvenanceKey::new(item.provenance)
+                .ok_or_else(|| semantic_invalid("native item provenance key is absent"))?,
+        });
+    }
+
+    let mut typed_forms = Vec::new();
+    typed_forms
+        .try_reserve_exact(forms.len())
+        .map_err(semantic_allocation)?;
+    for form in forms {
+        typed_forms.push(NativeForm {
+            key: NativeFormKey::new(form.key)
+                .ok_or_else(|| semantic_invalid("native form key is absent"))?,
+            owner: OwnerKey::new(form.owner)
+                .ok_or_else(|| semantic_invalid("native form owner key is absent"))?,
+            role: semantic_role(form.role)?,
+            refs: semantic_range(
+                Some(form.first_ref),
+                form.ref_count,
+                "form content reference",
+            )?,
+            provenance: ProvenanceKey::new(form.provenance)
+                .ok_or_else(|| semantic_invalid("native form provenance key is absent"))?,
+        });
+    }
+
+    let mut typed_name_hints = Vec::new();
+    typed_name_hints
+        .try_reserve_exact(name_hints.len())
+        .map_err(semantic_allocation)?;
+    for hint in name_hints {
+        typed_name_hints.push(NativeNameHint {
+            key: NativeNameHintKey::new(hint.key)
+                .ok_or_else(|| semantic_invalid("native name hint key is absent"))?,
+            form: NativeFormKey::new(hint.form)
+                .ok_or_else(|| semantic_invalid("native name hint form key is absent"))?,
+            refs: semantic_range(Some(hint.first_ref), hint.ref_count, "name hint reference")?,
+            provenance: ProvenanceKey::new(hint.provenance)
+                .ok_or_else(|| semantic_invalid("native name hint provenance key is absent"))?,
+        });
+    }
+
     let mut typed_diagnostics = Vec::new();
     typed_diagnostics
         .try_reserve_exact(diagnostics.len())
@@ -408,8 +497,53 @@ pub(super) fn semantic_document(
         content_refs: typed_refs,
         links: typed_links,
         blocks: typed_blocks,
+        lists: typed_lists,
+        items: typed_items,
+        forms: typed_forms,
+        name_hints: typed_name_hints,
         diagnostics: typed_diagnostics,
     })
+}
+
+fn semantic_range(
+    first: Option<u32>,
+    count: u32,
+    label: &str,
+) -> Result<std::ops::Range<usize>, crate::structured::StructuredError> {
+    if count == 0 {
+        return if first.is_none() {
+            Ok(0..0)
+        } else {
+            Err(semantic_invalid(&format!(
+                "native {label} empty range has a first key"
+            )))
+        };
+    }
+    let first = first
+        .and_then(|first| first.checked_sub(1))
+        .ok_or_else(|| semantic_invalid(&format!("native {label} first key is absent")))?;
+    let start = usize::try_from(first)
+        .map_err(|_| semantic_invalid(&format!("native {label} start does not fit usize")))?;
+    let count = usize::try_from(count)
+        .map_err(|_| semantic_invalid(&format!("native {label} count does not fit usize")))?;
+    let end = start
+        .checked_add(count)
+        .ok_or_else(|| semantic_invalid(&format!("native {label} range overflows usize")))?;
+    Ok(start..end)
+}
+
+fn semantic_role(
+    role: Option<u32>,
+) -> Result<Option<crate::structured::NativeRole>, crate::structured::StructuredError> {
+    role.map(|role| match role {
+        1 => Ok(crate::structured::NativeRole::Flag),
+        2 => Ok(crate::structured::NativeRole::EnvironmentVariable),
+        3 => Ok(crate::structured::NativeRole::Argument),
+        4 => Ok(crate::structured::NativeRole::CommandOrDirective),
+        5 => Ok(crate::structured::NativeRole::Path),
+        _ => Err(semantic_invalid("native content role is unknown")),
+    })
+    .transpose()
 }
 
 pub(super) fn semantic_source_format(

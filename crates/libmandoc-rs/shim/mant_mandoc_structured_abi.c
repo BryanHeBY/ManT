@@ -31,7 +31,7 @@ mant_structured_discriminant_fingerprint(void)
 		MANT_VIEW_TABLE_CELL, MANT_VIEW_FIXED_VIEW, MANT_VIEW_FIXED_LINE,
 		MANT_VIEW_PLACEMENT, MANT_VIEW_DECORATION, MANT_VIEW_FORM,
 		MANT_VIEW_NAME_HINT, MANT_VIEW_RELATION, MANT_VIEW_DIAGNOSTIC,
-		MANT_VIEW_METADATA,
+		MANT_VIEW_METADATA, MANT_VIEW_LIST, MANT_VIEW_ITEM,
 		/* identity */ 0, MANT_IDENTITY_PATH, MANT_IDENTITY_BUNDLE_MEMBER,
 		MANT_IDENTITY_ANONYMOUS,
 		/* format */ 0, MANT_FORMAT_MAN, MANT_FORMAT_MDOC,
@@ -61,6 +61,8 @@ mant_structured_discriminant_fingerprint(void)
 		MANT_BLOCK_LIST, MANT_BLOCK_DEFINITION_LIST, MANT_BLOCK_TABLE,
 		MANT_BLOCK_INDENTED, MANT_BLOCK_FIXED_DISPLAY,
 		MANT_BLOCK_VERTICAL_SPACE, MANT_BLOCK_THEMATIC_BREAK,
+		/* list */ 0, MANT_LIST_BULLET, MANT_LIST_ORDERED,
+		MANT_LIST_PLAIN, MANT_LIST_DEFINITION, MANT_LIST_NATIVE_MARKER,
 		/* link target */ 0, MANT_LINK_EXTERNAL, MANT_LINK_EMAIL,
 		MANT_LINK_DOCUMENT, MANT_LINK_MANUAL, MANT_LINK_SECTION,
 		/* point boundary */ 0, MANT_POINT_BETWEEN_ATOMS,
@@ -138,6 +140,8 @@ mant_structured_view_size(uint32_t kind)
 	VIEW_CASE(MANT_VIEW_RELATION, struct mant_structured_relation_view);
 	VIEW_CASE(MANT_VIEW_DIAGNOSTIC, struct mant_structured_diagnostic_view);
 	VIEW_CASE(MANT_VIEW_METADATA, struct mant_structured_metadata_view);
+	VIEW_CASE(MANT_VIEW_LIST, struct mant_structured_list_view);
+	VIEW_CASE(MANT_VIEW_ITEM, struct mant_structured_item_view);
 	default: return 0;
 	}
 }
@@ -175,6 +179,8 @@ mant_structured_view_align(uint32_t kind)
 	VIEW_CASE(MANT_VIEW_RELATION, struct mant_structured_relation_view);
 	VIEW_CASE(MANT_VIEW_DIAGNOSTIC, struct mant_structured_diagnostic_view);
 	VIEW_CASE(MANT_VIEW_METADATA, struct mant_structured_metadata_view);
+	VIEW_CASE(MANT_VIEW_LIST, struct mant_structured_list_view);
+	VIEW_CASE(MANT_VIEW_ITEM, struct mant_structured_item_view);
 	default: return 0;
 	}
 }
@@ -261,6 +267,8 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_result_view, content_points),
 		FIELD(struct mant_structured_result_view, links),
 		FIELD(struct mant_structured_result_view, blocks),
+		FIELD(struct mant_structured_result_view, lists),
+		FIELD(struct mant_structured_result_view, items),
 		FIELD(struct mant_structured_result_view, tables),
 		FIELD(struct mant_structured_result_view, table_rows),
 		FIELD(struct mant_structured_result_view, table_cells),
@@ -478,6 +486,26 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_metadata_view, has_body),
 		FIELD(struct mant_structured_metadata_view, reserved_bytes),
 		FIELD(struct mant_structured_metadata_view, reserved) };
+	static const size_t list[] = {
+		FIELD(struct mant_structured_list_view, key),
+		FIELD(struct mant_structured_list_view, block),
+		FIELD(struct mant_structured_list_view, kind),
+		FIELD(struct mant_structured_list_view, compact),
+		FIELD(struct mant_structured_list_view, start),
+		FIELD(struct mant_structured_list_view, provenance),
+		FIELD(struct mant_structured_list_view, reserved) };
+	static const size_t item[] = {
+		FIELD(struct mant_structured_item_view, key),
+		FIELD(struct mant_structured_item_view, list),
+		FIELD(struct mant_structured_item_view, owner),
+		FIELD(struct mant_structured_item_view, ordinal),
+		FIELD(struct mant_structured_item_view, first_form),
+		FIELD(struct mant_structured_item_view, form_count),
+		FIELD(struct mant_structured_item_view, target_present),
+		FIELD(struct mant_structured_item_view, target_reserved_bytes),
+		FIELD(struct mant_structured_item_view, target),
+		FIELD(struct mant_structured_item_view, provenance),
+		FIELD(struct mant_structured_item_view, reserved) };
 
 	if (field == 0)
 		return SIZE_MAX;
@@ -509,6 +537,8 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 	case MANT_VIEW_RELATION: return PICK(relation);
 	case MANT_VIEW_DIAGNOSTIC: return PICK(diagnostic);
 	case MANT_VIEW_METADATA: return PICK(metadata);
+	case MANT_VIEW_LIST: return PICK(list);
+	case MANT_VIEW_ITEM: return PICK(item);
 	default: return SIZE_MAX;
 	}
 }

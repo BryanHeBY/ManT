@@ -1,0 +1,309 @@
+/* Native list/item ownership derived from balanced formatter node phases. */
+#include "config.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "mandoc.h"
+#include "roff.h"
+#include "mdoc.h"
+
+#include "mant_mandoc_structured_builder.h"
+#include "mant_mandoc_structured_structure.h"
+
+static uint32_t
+context_parent(const struct structured_session *session,
+    const struct structured_node_context *context)
+{
+	if (context != NULL && context->container_block != 0)
+		return context->container_block;
+	return session->section_heading_block;
+}
+
+static uint32_t
+context_owner(struct structured_session *session,
+    const struct structured_node_context *context, uint32_t provenance)
+{
+	if (context != NULL && context->item != 0)
+		return context->owner;
+	if (session->section_owner == 0)
+		session->section_owner = mant_structured_append_owner(session,
+		    MANT_OWNER_DOCUMENT, provenance);
+	return session->section_owner;
+}
+
+static int
+mdoc_list_kind(const struct roff_node *node, uint32_t *kind,
+    uint32_t *block_kind)
+{
+	if (node->norm == NULL)
+		return 0;
+	switch (node->norm->Bl.type) {
+	case LIST_bullet:
+	case LIST_dash:
+	case LIST_hyphen:
+		*kind = MANT_LIST_BULLET;
+		*block_kind = MANT_BLOCK_LIST;
+		return 1;
+	case LIST_enum:
+		*kind = MANT_LIST_ORDERED;
+		*block_kind = MANT_BLOCK_LIST;
+		return 1;
+	case LIST_item:
+		*kind = MANT_LIST_PLAIN;
+		*block_kind = MANT_BLOCK_LIST;
+		return 1;
+	case LIST_diag:
+	case LIST_hang:
+	case LIST_inset:
+	case LIST_ohang:
+	case LIST_tag:
+		*kind = MANT_LIST_DEFINITION;
+		*block_kind = MANT_BLOCK_DEFINITION_LIST;
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static uint32_t
+append_list(struct structured_session *session,
+    struct structured_node_context *context, const struct roff_node *node,
+    uint32_t kind, uint32_t block_kind, int compact)
+{
+	struct mant_structured_list_view *lists, *list;
+	uint32_t *counts, owner, parent, provenance, block;
+
+	provenance = mant_structured_append_provenance(session, node, 1);
+	owner = context_owner(session, context, provenance);
+	parent = context_parent(session, context);
+	if (provenance == 0 || owner == 0)
+		return 0;
+	block = mant_structured_append_block(session, owner, block_kind, parent,
+	    provenance, 0);
+	if (block == 0)
+		return 0;
+	lists = mant_structured_grow_array(session, session->result->lists,
+	    session->result->list_count, &session->result->list_capacity,
+	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*lists),
+	    session->limits->max_builder_allocated_bytes, 12,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (lists == NULL)
+		return 0;
+	session->result->lists = lists;
+	counts = mant_structured_grow_array(session, session->list_item_counts,
+	    session->result->list_count, &session->list_item_capacity,
+	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*counts),
+	    session->limits->max_builder_allocated_bytes, 12,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (counts == NULL)
+		return 0;
+	session->list_item_counts = counts;
+	counts[session->result->list_count] = 0;
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !mant_structured_charge(session, &session->relation_edges, 2,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	list = lists + session->result->list_count;
+	memset(list, 0, sizeof(*list));
+	list->key = ++session->result->list_count;
+	list->block = block;
+	list->kind = kind;
+	list->compact = compact != 0;
+	list->start = kind == MANT_LIST_ORDERED ? 1 : 0;
+	list->provenance = provenance;
+	context->list = list->key;
+	context->container_block = block;
+	return list->key;
+}
+
+static int
+set_item_target(struct structured_session *session, uint32_t item_key,
+    const struct roff_node *node)
+{
+	struct mant_structured_item_view *item;
+	size_t target_length;
+
+	if (item_key == 0 || item_key > session->result->item_count ||
+	    node == NULL || (node->flags & NODE_ID) == 0 || node->tag == NULL ||
+	    node->tag[0] == '\0')
+		return 1;
+	item = session->result->items + item_key - 1;
+	if (item->target_present != 0)
+		return 1;
+	target_length = strlen(node->tag);
+	if (!mant_structured_valid_utf8((const uint8_t *)node->tag,
+	    target_length))
+		return 1;
+	item->target.ptr = mant_structured_copy_bytes(session,
+	    (const uint8_t *)node->tag, target_length, 1,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (item->target.ptr == NULL)
+		return 0;
+	item->target.len = target_length;
+	item->target_present = 1;
+	return 1;
+}
+
+static uint32_t
+append_item(struct structured_session *session,
+    struct structured_node_context *context, const struct roff_node *node,
+    uint32_t list_key)
+{
+	struct mant_structured_item_view *items, *item;
+	const struct mant_structured_list_view *list;
+	uint32_t kind, owner, provenance;
+
+	if (list_key == 0 || list_key > session->result->list_count)
+		return 0;
+	list = session->result->lists + list_key - 1;
+	provenance = mant_structured_append_provenance(session, node, 1);
+	kind = list->kind == MANT_LIST_DEFINITION ||
+	    list->kind == MANT_LIST_NATIVE_MARKER ?
+	    MANT_OWNER_DEFINITION_ITEM : MANT_OWNER_LIST_ITEM;
+	owner = mant_structured_append_owner(session, kind, provenance);
+	if (provenance == 0 || owner == 0)
+		return 0;
+	items = mant_structured_grow_array(session, session->result->items,
+	    session->result->item_count, &session->result->item_capacity,
+	    mant_structured_limit_u32(session->limits->max_owners), sizeof(*items),
+	    session->limits->max_builder_allocated_bytes, 11,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (items == NULL)
+		return 0;
+	session->result->items = items;
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !mant_structured_charge(session, &session->relation_edges, 3,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	item = items + session->result->item_count;
+	memset(item, 0, sizeof(*item));
+	item->key = ++session->result->item_count;
+	item->list = list_key;
+	item->owner = owner;
+	item->ordinal = session->list_item_counts[list_key - 1]++;
+	item->provenance = provenance;
+	if (!set_item_target(session, item->key, node))
+		return 0;
+	context->owner = owner;
+	context->item = item->key;
+	context->list = list_key;
+	context->container_block = list->block;
+	return item->key;
+}
+
+struct structured_node_context *
+mant_structured_current_context(struct structured_session *session)
+{
+	return session->node_depth == 0 ? NULL :
+	    session->node_contexts + session->node_depth - 1;
+}
+
+int
+mant_structured_enter_node(struct structured_session *session,
+    const struct roff_node *node)
+{
+	struct structured_node_context inherited, *contexts, *context;
+	uint32_t block_kind, kind, list;
+
+	memset(&inherited, 0, sizeof(inherited));
+	if (session->node_depth > 1)
+		inherited = session->node_contexts[session->node_depth - 2];
+	contexts = mant_structured_grow_array(session, session->node_contexts,
+	    session->node_depth - 1, &session->node_context_capacity,
+	    mant_structured_limit_u32(session->limits->max_nesting_depth),
+	    sizeof(*contexts), session->limits->max_builder_allocated_bytes, 35,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (contexts == NULL)
+		return 0;
+	session->node_contexts = contexts;
+	context = contexts + session->node_depth - 1;
+	*context = inherited;
+	context->term_root = 0;
+	if (node == NULL)
+		return 1;
+	if (node->type == ROFFT_BLOCK && node->tok == MDOC_Bl) {
+		if (!mdoc_list_kind(node, &kind, &block_kind))
+			return 1;
+		return append_list(session, context, node, kind, block_kind,
+		    node->norm->Bl.comp) != 0;
+	}
+	if (node->type == ROFFT_BLOCK && node->tok == MDOC_It) {
+		list = context->list;
+		return append_item(session, context, node, list) != 0;
+	}
+	if (node->type == ROFFT_BLOCK &&
+	    (node->tok == MAN_IP || node->tok == MAN_TP ||
+	    node->tok == MAN_TQ)) {
+		if (node->tok == MAN_TQ && session->last_man_item != 0 &&
+		    session->last_man_parent_block == context_parent(session, context)) {
+			context->item = session->last_man_item;
+			context->list = session->last_man_list;
+			context->owner = session->result->items[
+			    context->item - 1].owner;
+			context->container_block = session->result->lists[
+			    context->list - 1].block;
+			return 1;
+		}
+		kind = node->tok == MAN_IP ? MANT_LIST_NATIVE_MARKER :
+		    MANT_LIST_DEFINITION;
+		block_kind = MANT_BLOCK_DEFINITION_LIST;
+		list = append_list(session, context, node, kind, block_kind, 0);
+		if (list == 0 || append_item(session, context, node, list) == 0)
+			return 0;
+		session->last_man_item = context->item;
+		session->last_man_list = context->list;
+		session->last_man_parent_block = context_parent(session,
+		    session->node_depth > 1 ?
+		    session->node_contexts + session->node_depth - 2 : NULL);
+		return 1;
+	}
+	if (context->item != 0 && node->type == ROFFT_HEAD &&
+	    (node->tok == MDOC_It || node->tok == MAN_IP ||
+	    node->tok == MAN_TP || node->tok == MAN_TQ))
+		context->part = STRUCTURED_PART_TERM;
+	else if (context->item != 0 && node->type == ROFFT_BODY &&
+	    (node->tok == MDOC_It || node->tok == MAN_IP ||
+	    node->tok == MAN_TP || node->tok == MAN_TQ))
+		context->part = STRUCTURED_PART_BODY;
+	if (context->item != 0 && (node->type == ROFFT_HEAD ||
+	    node->type == ROFFT_BODY) &&
+	    (node->tok == MDOC_It || node->tok == MAN_IP ||
+	    node->tok == MAN_TP || node->tok == MAN_TQ)) {
+		session->current_root = 0;
+		session->current_owner = 0;
+		session->current_root_atom_count = 0;
+	}
+	if (!set_item_target(session, context->item, node))
+		return 0;
+	return 1;
+}
+
+void
+mant_structured_leave_node(struct structured_session *session,
+    const struct roff_node *node)
+{
+	struct structured_node_context *context;
+
+	context = mant_structured_current_context(session);
+	if (context != NULL && node != NULL && node->type == ROFFT_HEAD &&
+	    context->part == STRUCTURED_PART_TERM && context->term_root != 0)
+		mant_structured_finalize_term_root(session, context->term_root,
+		    context->item);
+	if (node != NULL && (node->type == ROFFT_HEAD ||
+	    node->type == ROFFT_BODY ||
+	    (node->type == ROFFT_BLOCK &&
+	    (node->tok == MDOC_Bl || node->tok == MDOC_It ||
+	    node->tok == MAN_IP || node->tok == MAN_TP ||
+	    node->tok == MAN_TQ)))) {
+		session->current_root = 0;
+		session->current_owner = 0;
+		session->current_root_atom_count = 0;
+	}
+}

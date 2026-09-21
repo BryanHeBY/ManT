@@ -52,6 +52,18 @@ struct mant_structured_result {
 	struct mant_structured_block_view *blocks;
 	uint32_t block_count;
 	uint32_t block_capacity;
+	struct mant_structured_list_view *lists;
+	uint32_t list_count;
+	uint32_t list_capacity;
+	struct mant_structured_item_view *items;
+	uint32_t item_count;
+	uint32_t item_capacity;
+	struct mant_structured_form_view *forms;
+	uint32_t form_count;
+	uint32_t form_capacity;
+	struct mant_structured_name_hint_view *name_hints;
+	uint32_t name_hint_count;
+	uint32_t name_hint_capacity;
 	struct mant_structured_diagnostic_view *diagnostics;
 	uint32_t diagnostic_count;
 	uint32_t diagnostic_capacity;
