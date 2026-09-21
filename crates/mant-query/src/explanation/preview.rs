@@ -9,8 +9,8 @@ pub(super) struct LiteralHit<'a> {
     pub range: Range<usize>,
 }
 impl LiteralHit<'_> {
-    pub(super) fn preview(&self) -> ExplanationPreview {
-        let text = super::literal::block_text(self.block).expect("matched text block");
+    pub(super) fn preview(&self, content: mant_ir::ContentContext<'_>) -> ExplanationPreview {
+        let text = super::literal::block_text(content, self.block).expect("matched text block");
         let match_start = text[..self.range.start].chars().count();
         let match_len = text[self.range.clone()].chars().count();
         let total = text.chars().count();

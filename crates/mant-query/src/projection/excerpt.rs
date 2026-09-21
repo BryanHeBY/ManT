@@ -53,8 +53,9 @@ pub fn select_excerpt(
     }
     let mut located = Vec::new();
     if let Some(manual) = &query.document {
-        collect_root_entries(&manual.blocks, &mut located);
-        collect_sections(&manual.sections, &[], &[], &mut located);
+        let content = manual.content();
+        collect_root_entries(content, &manual.blocks, &mut located);
+        collect_sections(content, &manual.sections, &[], &[], &mut located);
     }
     let index = DocumentSelectorIndex::new(&located);
 
@@ -101,6 +102,8 @@ pub fn select_excerpt(
         });
     }
     if let (true, Some(document)) = (document_root_selected, query.document.as_ref()) {
+        // Heading and blocks intentionally remain owned response copies until
+        // the protocol ContentProjection cutover can remap them atomically.
         selections.push(ExcerptSelection::DocumentRoot {
             outline: OutlineTrail {
                 ancestors: Vec::new(),
@@ -172,11 +175,15 @@ fn resolve_excerpt_candidates<'a>(
 
 impl LocatedNode<'_> {
     pub(crate) fn selection(&self) -> ExcerptSelection {
+        // Complete selected section and entry content intentionally remain
+        // detached response copies. Replacing these clones requires the
+        // protocol ContentProjection and inline-reference cutover together.
         match self {
             Self::Section {
                 path,
                 breadcrumbs,
                 section,
+                title,
                 ..
             } => ExcerptSelection::DocumentSection {
                 outline: OutlineTrail {
@@ -184,7 +191,7 @@ impl LocatedNode<'_> {
                     node: OutlineNodeReference::DocumentSection {
                         path: path.to_string().into(),
                         id: section.id.clone(),
-                        title: section.heading.single_line_text(),
+                        title: title.clone(),
                     },
                 },
                 section: (*section).clone(),

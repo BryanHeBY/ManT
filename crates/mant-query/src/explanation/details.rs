@@ -1,10 +1,11 @@
 //! Budgeted copies of matched facts and independently available entry metadata.
 use super::{Candidate, materialize::Budget};
-use mant_ir::{EntryForms, EntryOwner};
+use mant_ir::{ContentContext, EntryForms, EntryOwner};
 use mant_protocol::{EvidenceBasis, ExplanationEntry, ExplanationFormMatch, ExplanationNameMatch};
 use serde::Serialize;
 
 pub(super) fn matched(
+    content: ContentContext<'_>,
     candidate: &Candidate<'_>,
     owner: Option<EntryOwner<'_>>,
     budget: &mut Budget,
@@ -28,7 +29,10 @@ pub(super) fn matched(
             }
             EvidenceBasis::Form { matches } => {
                 for &index in &candidate.matched.forms {
-                    let Some(form) = owner.form(&facts.forms[index]) else {
+                    let Some(form) = content
+                        .entry_form(owner, &facts.forms[index])
+                        .expect("document entry form resolves in its own content store")
+                    else {
                         omitted = true;
                         continue;
                     };
@@ -38,7 +42,9 @@ pub(super) fn matched(
                     };
                     let record = ExplanationFormMatch {
                         source_form_index,
-                        text: mant_ir::inline_plain_text(&form),
+                        text: content
+                            .plain_text(&form)
+                            .expect("document entry form resolves in its own content store"),
                         occurrences: Vec::new(),
                     };
                     omitted |= !append(matches, record, budget);
@@ -87,14 +93,24 @@ struct EntryDetails<'a, 'b> {
 }
 
 pub(super) fn entry(
+    content: ContentContext<'_>,
     owner: EntryOwner<'_>,
     rejected: &std::collections::BTreeSet<mant_ir::NodeId>,
     budget: &mut Budget,
 ) -> Option<ExplanationEntry> {
     let facts = owner.facts()?;
-    let names = owner.validated_names().unwrap_or_default();
-    let forms = owner.forms().unwrap_or_default();
-    let alias_groups = owner.validated_alias_groups().unwrap_or_default();
+    let names = content
+        .entry_validated_names(owner)
+        .expect("document entry names resolve in their own content store")
+        .unwrap_or_default();
+    let forms = content
+        .entry_forms(owner)
+        .expect("document entry forms resolve in their own content store")
+        .unwrap_or_default();
+    let alias_groups = content
+        .entry_validated_alias_groups(owner)
+        .expect("document entry aliases resolve in their own content store")
+        .unwrap_or_default();
     let alias_of = facts
         .alias_of
         .as_ref()
@@ -109,6 +125,9 @@ pub(super) fn entry(
         alias_of,
         value_domain: facts.value_domain.as_ref(),
     };
+    // The protocol response still owns detached forms. ContentProjection will
+    // replace this copy at the response-boundary cutover, not in this read-only
+    // consumer migration.
     budget.take(&details).then(|| ExplanationEntry {
         kind: facts.kind,
         case: facts.case,

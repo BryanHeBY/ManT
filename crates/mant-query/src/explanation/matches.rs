@@ -1,5 +1,5 @@
 //! Retain bounded source ordinals at the point of matching, before page copying.
-use mant_ir::EntryOwner;
+use mant_ir::{ContentContext, EntryOwner};
 use mant_protocol::{EvidenceBasis, MAX_EXPLANATION_MATCH_RECORDS};
 
 #[derive(Default)]
@@ -11,6 +11,7 @@ pub(super) struct MatchPlan {
 
 impl MatchPlan {
     pub(super) fn collect(
+        content: ContentContext<'_>,
         owner: EntryOwner<'_>,
         names: &[String],
         query: &str,
@@ -35,9 +36,15 @@ impl MatchPlan {
             });
         }
         let mut has_form = false;
-        if let Some(forms) = owner.forms() {
+        if let Some(forms) = content
+            .entry_forms(owner)
+            .expect("document entry forms resolve in their own content store")
+        {
             for (index, form) in forms.iter().enumerate() {
-                if super::same(&mant_ir::inline_plain_text(form), query, case) {
+                let text = content
+                    .plain_text(form)
+                    .expect("document entry form resolves in its own content store");
+                if super::same(&text, query, case) {
                     has_form = true;
                     if plan.names.len() + plan.forms.len() < MAX_EXPLANATION_MATCH_RECORDS {
                         plan.forms.push(index);

@@ -12,6 +12,7 @@ pub(super) fn collect<'a>(
     _validation: Option<&mant_ir::DocumentValidation<'_>>,
 ) -> (Candidates<'a>, Vec<usize>, super::support::SupportIndex<'a>) {
     let mut scan = Scan {
+        content: content.document.as_ref().map(mant_ir::Document::content),
         query,
         located,
         owners: located
@@ -42,6 +43,7 @@ pub(super) fn collect<'a>(
 }
 
 struct Scan<'a, 'b> {
+    content: Option<mant_ir::ContentContext<'a>>,
     supports: super::support::SupportIndex<'a>,
     query: &'b str,
     located: &'b [LocatedNode<'a>],
@@ -71,8 +73,12 @@ impl<'a> Scan<'a, '_> {
         let LocatedNode::Entry { entry, .. } = &self.located[index] else {
             unreachable!("owner location")
         };
-        let (matched, mut bases) =
-            super::matches::MatchPlan::collect(owner, entry.names(), self.query);
+        let (matched, mut bases) = super::matches::MatchPlan::collect(
+            self.content.expect("entry scan belongs to a document"),
+            owner,
+            entry.names(),
+            self.query,
+        );
         if is_identity(&self.located[index], self.query) {
             let mut fields = Vec::new();
             if self.located[index].id() == self.query {
@@ -159,7 +165,10 @@ impl<'a> Scan<'a, '_> {
                     }
                 }
                 _ => {
-                    let Some(text) = super::literal::block_text(block) else {
+                    let Some(text) = super::literal::block_text(
+                        self.content.expect("block scan belongs to a document"),
+                        block,
+                    ) else {
                         continue;
                     };
                     let Some(range) = super::literal::first_match(&text, self.query) else {

@@ -85,6 +85,7 @@ pub fn project_references_with_limits(
     let mut occurrences = 0usize;
     let mut retained_bytes = 0usize;
     let source_bytes = source_address.map_or(0, address_bytes);
+    let content = document.content();
     let report = scan_navigation_scope_with_budget(
         document,
         scope,
@@ -136,6 +137,7 @@ pub fn project_references_with_limits(
                 return ControlFlow::Continue(());
             }
             match materialize(
+                content,
                 &occurrence,
                 source_address,
                 source_bytes,
@@ -217,6 +219,7 @@ fn finish_inventory(
 }
 
 fn materialize(
+    content: mant_ir::ContentContext<'_>,
     occurrence: &LinkOccurrenceRef<'_, '_>,
     source_address: Option<&DocumentAddress>,
     source_bytes: usize,
@@ -274,13 +277,14 @@ fn materialize(
         Some(owner) => Some(owner.to_owned().ok_or(ReferencePageLimit::Position)?),
         None => None,
     };
-    let label = mant_ir::reference_label(
-        occurrence.label,
-        occurrence.location.depth(),
-        budget,
-        4096.min(limit.saturating_sub(*retained).saturating_sub(bytes)),
-    )
-    .map_err(|_| ReferencePageLimit::Scan)?;
+    let label = content
+        .reference_label(
+            occurrence.label,
+            occurrence.location.depth(),
+            budget,
+            4096.min(limit.saturating_sub(*retained).saturating_sub(bytes)),
+        )
+        .map_err(|_| ReferencePageLimit::Scan)?;
     let label_truncated = label.truncated;
     let label = label.text;
     let association = reference_form_associations(*occurrence, budget);

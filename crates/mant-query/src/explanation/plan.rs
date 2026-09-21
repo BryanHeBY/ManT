@@ -15,6 +15,16 @@ pub(super) struct CollectionPlan<'a> {
     pub rejected_aliases: std::collections::BTreeSet<mant_ir::NodeId>,
     pub truncation: ExplanationTruncation,
 }
+
+impl CollectionPlan<'_> {
+    pub(super) fn document_content(&self) -> mant_ir::ContentContext<'_> {
+        self.content
+            .document
+            .as_ref()
+            .expect("evidence candidate belongs to a document")
+            .content()
+    }
+}
 impl Candidate<'_> {
     pub(super) fn class(&self) -> EvidenceClass {
         if self.located.is_none() {

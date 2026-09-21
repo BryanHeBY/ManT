@@ -90,7 +90,10 @@ fn search_with_matcher(
     let artifact = render_addressable_markdown(query);
     let markdown = artifact.text();
     let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
-    let owners = OwnerIndex::new(&artifact);
+    let owners = OwnerIndex::new(
+        &artifact,
+        query.document.as_ref().map(mant_ir::Document::content),
+    );
     let searchable = SearchableText::new(markdown, request.scope);
     let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
     let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);

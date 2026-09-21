@@ -1,12 +1,13 @@
 //! Coordinate translation from source slices into an excerpted owner.
 use super::Domain;
-use mant_ir::{Block, EntryForm, EntryInlineRoot, EntryOwner, project_content_slice};
+use mant_ir::{Block, ContentContext, EntryForm, EntryInlineRoot, EntryOwner};
 use mant_protocol::{
     ExplanationBlockStep as Step, ExplanationContentRange as ContentRange, ExplanationFormRange,
     ExplanationOccurrence, MAX_EXPLANATION_FRAGMENTS,
 };
 
 pub(super) fn occurrence(
+    content: ContentContext<'_>,
     owner: EntryOwner<'_>,
     form: &EntryForm,
     domain: Domain,
@@ -16,7 +17,7 @@ pub(super) fn occurrence(
     }
     let mut result = ExplanationOccurrence::default();
     for part in &form.parts {
-        let range = project_content_slice(owner, part)?;
+        let range = content.project_content_slice(owner, part).ok()??;
         if range.chars.is_empty() {
             continue;
         }
@@ -50,7 +51,7 @@ pub(super) fn occurrence(
                 for (index, source_form) in owner.facts()?.forms.iter().enumerate() {
                     let mut offset = 0;
                     for source_part in &source_form.parts {
-                        let source = project_content_slice(owner, source_part)?;
+                        let source = content.project_content_slice(owner, source_part).ok()??;
                         if source.root == range.root
                             && source.chars.start <= range.chars.start
                             && range.chars.end <= source.chars.end
@@ -91,6 +92,7 @@ fn owner_step(owner: EntryOwner<'_>) -> Step {
 }
 
 pub(in crate::explanation) fn preview_range(
+    content: ContentContext<'_>,
     owner: Option<EntryOwner<'_>>,
     hit: &crate::explanation::preview::LiteralHit<'_>,
 ) -> Option<ContentRange> {
@@ -103,7 +105,7 @@ pub(in crate::explanation) fn preview_range(
     } else {
         Vec::new()
     };
-    let text = crate::explanation::literal::block_text(hit.block)?;
+    let text = crate::explanation::literal::block_text(content, hit.block)?;
     Some(ContentRange::BlockText {
         path,
         start_char: u32::try_from(text.get(..hit.range.start)?.chars().count()).ok()?,

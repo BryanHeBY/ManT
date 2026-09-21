@@ -89,6 +89,7 @@ pub fn build_outline_with_references(
         });
     }
     if let Some(manual) = &query.document {
+        let content = manual.content();
         // Compact outlines inspect borrowed facts only. Forms and names are
         // materialized exclusively when entry rows are actually requested.
         let index = (!matches!(
@@ -113,7 +114,7 @@ pub fn build_outline_with_references(
                 entry_summary: if index.is_some() {
                     projected_summary(root_entries, &materialized_entries)
                 } else {
-                    borrowed_summary(&manual.blocks, &materialized_entries)
+                    borrowed_summary(content, &manual.blocks, &materialized_entries)
                 },
                 children,
             };
@@ -124,6 +125,7 @@ pub fn build_outline_with_references(
             }
         }
         nodes.extend(outline_nodes(
+            content,
             &manual.sections,
             &[],
             index.as_ref(),
@@ -229,6 +231,7 @@ fn reference_inventory(
 }
 
 fn outline_nodes(
+    content: mant_ir::ContentContext<'_>,
     sections: &[Section],
     parent: &[usize],
     index: Option<&SemanticIndex>,
@@ -259,6 +262,7 @@ fn outline_nodes(
                 &|path| index?.owner_at(path).cloned(),
             );
             children.extend(outline_nodes(
+                content,
                 &section.children,
                 &coordinates,
                 index,
@@ -268,11 +272,13 @@ fn outline_nodes(
             let node = OutlineNode::DocumentSection {
                 path: path.to_string().into(),
                 id: section.id.clone(),
-                title: section.heading.single_line_text(),
+                title: content
+                    .heading_single_line_text(&section.heading)
+                    .expect("document heading resolves in its own content store"),
                 entry_summary: if index.is_some() {
                     projected_summary(semantic_entries, entries)
                 } else {
-                    borrowed_summary(&section.blocks, entries)
+                    borrowed_summary(content, &section.blocks, entries)
                 },
                 children,
             };
@@ -295,19 +301,28 @@ fn projected_summary(
 }
 
 fn borrowed_summary(
+    content: mant_ir::ContentContext<'_>,
     blocks: &[mant_ir::Block],
     projection: &EntryProjection,
 ) -> Option<EntrySummary> {
-    fn collect(blocks: &[mant_ir::Block], direct: bool, summary: &mut EntrySummary) {
+    fn collect(
+        content: mant_ir::ContentContext<'_>,
+        blocks: &[mant_ir::Block],
+        direct: bool,
+        summary: &mut EntrySummary,
+    ) {
         mant_ir::visit_child_entries(blocks, &mut |owner| {
             if let Some(facts) = owner.facts() {
                 record_projected_summary(
                     summary,
                     facts.kind,
-                    owner.validated_form_count().unwrap_or(0),
+                    content
+                        .entry_validated_form_count(owner)
+                        .expect("document entry forms resolve in their own content store")
+                        .unwrap_or(0),
                     direct,
                 );
-                collect(owner.blocks(), false, summary);
+                collect(content, owner.blocks(), false, summary);
             }
         });
     }
@@ -315,7 +330,7 @@ fn borrowed_summary(
         return None;
     }
     let mut summary = EntrySummary::default();
-    collect(blocks, true, &mut summary);
+    collect(content, blocks, true, &mut summary);
     (!summary.is_empty()).then_some(summary)
 }
 
@@ -522,8 +537,14 @@ fn resolve_outline_root(
             selector: selector.to_string(),
         });
     };
-    let mut metadata =
-        SemanticEntry::from_owner_shallow(entry.owner()).expect("located semantic owner");
+    let content = query
+        .document
+        .as_ref()
+        .expect("selected manual owner belongs to a document")
+        .content();
+    let mut metadata = SemanticEntry::from_owner_shallow_with_content(entry.owner(), content)
+        .expect("document entry resolves in its own content store")
+        .expect("located semantic owner");
     if metadata.alias_of.is_some()
         && query.document.as_ref().is_some_and(|document| {
             mant_ir::entry_relation_issues(document)
@@ -567,7 +588,7 @@ fn resolve_outline_root(
     } = &mut node
     {
         *path = selected.path().to_string().into();
-        *entry_summary = borrowed_summary(entry.owner().blocks(), entries);
+        *entry_summary = borrowed_summary(content, entry.owner().blocks(), entries);
     }
     Ok(node)
 }

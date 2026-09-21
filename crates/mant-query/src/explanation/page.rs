@@ -27,8 +27,10 @@ pub(super) fn materialize(
         .map(|&(doc, index, ordinal)| {
             let plan = &plans[doc];
             let candidate = &plan.candidates[index];
+            let content = plan.document_content();
             let mut deferred = Budget(0);
             let record = materialize::prepare(
+                content,
                 ordinal,
                 candidate,
                 &plan.located,
@@ -96,11 +98,14 @@ pub(super) fn materialize(
     for (&(doc, index, ordinal), result) in selected.iter().zip(&mut evidence) {
         let plan = &plans[doc];
         let candidate = &plan.candidates[index];
+        let content = plan.document_content();
         if candidate.class() != EvidenceClass::DirectEntry {
-            result.evidence = materialize::prepare(ordinal, candidate, &plan.located, budget);
+            result.evidence =
+                materialize::prepare(content, ordinal, candidate, &plan.located, budget);
             materialize::body(&mut result.evidence, candidate, &plan.located, budget);
         }
         materialize::materialize(
+            content,
             &mut result.evidence,
             candidate,
             &plan.located,

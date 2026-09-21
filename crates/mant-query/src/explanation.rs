@@ -104,8 +104,9 @@ fn collection_plan<'a>(
     }
     let mut located = Vec::new();
     if let Some(document) = &content.document {
-        collect_root_entries(&document.blocks, &mut located);
-        collect_sections(&document.sections, &[], &[], &mut located);
+        let content = document.content();
+        collect_root_entries(content, &document.blocks, &mut located);
+        collect_sections(content, &document.sections, &[], &[], &mut located);
     }
     let validation = content
         .document

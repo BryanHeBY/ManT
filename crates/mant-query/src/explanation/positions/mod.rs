@@ -1,7 +1,7 @@
 //! Bound location domains only after their response targets are accepted.
 mod projection;
 use super::materialize::Budget;
-use mant_ir::EntryOwner;
+use mant_ir::{ContentContext, EntryOwner};
 use mant_protocol::{
     EvidenceBasis, ExplanationEntry, ExplanationNameBinding, ExplanationOccurrence,
     MAX_EXPLANATION_NAME_BINDINGS, MAX_EXPLANATION_OCCURRENCES, MAX_EXPLANATION_POSITIONS,
@@ -30,11 +30,16 @@ impl PositionBudget {
 
 /// Add only bounded ordinary binding records; original names/forms stay intact.
 pub(super) fn ordinary(
+    content: ContentContext<'_>,
     owner: EntryOwner<'_>,
     entry: &mut ExplanationEntry,
     budget: &mut Budget,
 ) -> bool {
-    if owner.validated_names().is_none() {
+    if content
+        .entry_validated_names(owner)
+        .expect("document entry names resolve in their own content store")
+        .is_none()
+    {
         return false;
     }
     let facts = owner.facts().expect("entry metadata has owner");
@@ -63,6 +68,7 @@ pub(super) fn ordinary(
 }
 
 pub(super) fn attach(
+    content: ContentContext<'_>,
     owner: EntryOwner<'_>,
     bases: &mut [EvidenceBasis],
     entry: Option<&mut ExplanationEntry>,
@@ -86,6 +92,7 @@ pub(super) fn attach(
                         continue;
                     };
                     matched_omitted |= attach_occurrences(
+                        content,
                         owner,
                         &binding.occurrences,
                         &mut record.occurrences,
@@ -111,7 +118,7 @@ pub(super) fn attach(
                             }],
                             ..Default::default()
                         }),
-                        Domain::Content => projection::occurrence(owner, form, domain),
+                        Domain::Content => projection::occurrence(content, owner, form, domain),
                     };
                     matched_omitted |= !attach_one(
                         &mut record.occurrences,
@@ -137,6 +144,7 @@ pub(super) fn attach(
                 continue;
             };
             names_omitted |= attach_occurrences(
+                content,
                 owner,
                 &binding.occurrences,
                 &mut record.occurrences,
@@ -150,6 +158,7 @@ pub(super) fn attach(
 }
 
 fn attach_occurrences(
+    content: ContentContext<'_>,
     owner: EntryOwner<'_>,
     source: &[mant_ir::EntryForm],
     target: &mut Vec<ExplanationOccurrence>,
@@ -162,7 +171,7 @@ fn attach_occurrences(
         let projected = if positions.remaining() == 0 {
             None
         } else {
-            projection::occurrence(owner, form, domain)
+            projection::occurrence(content, owner, form, domain)
         };
         omitted |= !attach_one(
             target,

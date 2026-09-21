@@ -1,8 +1,8 @@
 //! Borrowed semantic locations and source-order breadcrumbs, without DTOs.
 use super::DOCUMENT_ROOT_TITLE;
 use mant_ir::{
-    Block, ContentEntry, DOCUMENT_ROOT_ID, EntryFacts, EntryOwner, NodeId, OutlinePath, Section,
-    SourceSpan, content_entries, content_entry_locations,
+    Block, ContentContext, ContentEntry, DOCUMENT_ROOT_ID, EntryFacts, EntryOwner, NodeId,
+    OutlinePath, Section, SourceSpan, content_entries, content_entry_locations,
 };
 #[derive(Clone)]
 pub(crate) struct LocatedBreadcrumb {
@@ -17,6 +17,7 @@ pub(crate) enum LocatedNode<'a> {
         coordinates: Vec<usize>,
         path: OutlinePath,
         breadcrumbs: Vec<LocatedBreadcrumb>,
+        title: String,
         section: &'a Section,
     },
     Entry {
@@ -82,22 +83,30 @@ impl LocatedNode<'_> {
 }
 
 pub(crate) fn collect_sections<'a>(
+    content: ContentContext<'a>,
     sections: &'a [Section],
     parent_coordinates: &[usize],
     breadcrumbs: &[LocatedBreadcrumb],
     output: &mut Vec<LocatedNode<'a>>,
 ) {
-    collect_sections_impl::<true>(sections, parent_coordinates, breadcrumbs, output);
+    collect_sections_impl::<true>(
+        Some(content),
+        sections,
+        parent_coordinates,
+        breadcrumbs,
+        output,
+    );
 }
 
 pub(crate) fn collect_selection_sections<'a>(
     sections: &'a [Section],
     output: &mut Vec<LocatedNode<'a>>,
 ) {
-    collect_sections_impl::<false>(sections, &[], &[], output);
+    collect_sections_impl::<false>(None, sections, &[], &[], output);
 }
 
 fn collect_sections_impl<'a, const DETAILS: bool>(
+    content: Option<ContentContext<'a>>,
     sections: &'a [Section],
     parent_coordinates: &[usize],
     breadcrumbs: &[LocatedBreadcrumb],
@@ -114,6 +123,11 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
             coordinates: coordinates.clone(),
             path: path.clone(),
             breadcrumbs: breadcrumbs.to_vec(),
+            title: content.map_or_else(String::new, |content| {
+                content
+                    .heading_single_line_text(&section.heading)
+                    .expect("document heading resolves in its own content store")
+            }),
             section,
         });
         let mut child_breadcrumbs = breadcrumbs.to_vec();
@@ -121,7 +135,10 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
             child_breadcrumbs.push(LocatedBreadcrumb {
                 path: path.clone(),
                 id: section.id.clone(),
-                title: section.heading.single_line_text(),
+                title: content
+                    .expect("detailed collection has document content")
+                    .heading_single_line_text(&section.heading)
+                    .expect("document heading resolves in its own content store"),
             });
         }
         for located in if DETAILS {
@@ -133,6 +150,7 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
             let mut entry_breadcrumbs = child_breadcrumbs.clone();
             if DETAILS {
                 append_entry_breadcrumbs(
+                    content.expect("detailed collection has document content"),
                     &mut entry_breadcrumbs,
                     Some(&coordinates),
                     located.indices(),
@@ -145,7 +163,11 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
                 path: OutlinePath::nested_entry(Some(&coordinates), located.indices())
                     .expect("enumerated entry paths are one-based"),
                 title: if DETAILS {
-                    definition_title(entry, located.names())
+                    definition_title(
+                        content.expect("detailed collection has document content"),
+                        entry,
+                        located.names(),
+                    )
                 } else {
                     String::new()
                 },
@@ -155,6 +177,7 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
             });
         }
         collect_sections_impl::<DETAILS>(
+            content,
             &section.children,
             &coordinates,
             &child_breadcrumbs,
@@ -163,18 +186,23 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
     }
 }
 
-pub(crate) fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a>>) {
-    collect_root_entries_impl::<true>(blocks, output);
+pub(crate) fn collect_root_entries<'a>(
+    content: ContentContext<'a>,
+    blocks: &'a [Block],
+    output: &mut Vec<LocatedNode<'a>>,
+) {
+    collect_root_entries_impl::<true>(Some(content), blocks, output);
 }
 
 pub(crate) fn collect_selection_root_entries<'a>(
     blocks: &'a [Block],
     output: &mut Vec<LocatedNode<'a>>,
 ) {
-    collect_root_entries_impl::<false>(blocks, output);
+    collect_root_entries_impl::<false>(None, blocks, output);
 }
 
 fn collect_root_entries_impl<'a, const DETAILS: bool>(
+    content: Option<ContentContext<'a>>,
     blocks: &'a [Block],
     output: &mut Vec<LocatedNode<'a>>,
 ) {
@@ -196,6 +224,7 @@ fn collect_root_entries_impl<'a, const DETAILS: bool>(
         let mut entry_breadcrumbs = breadcrumbs.clone();
         if DETAILS {
             append_entry_breadcrumbs(
+                content.expect("detailed collection has document content"),
                 &mut entry_breadcrumbs,
                 None,
                 located.indices(),
@@ -208,7 +237,11 @@ fn collect_root_entries_impl<'a, const DETAILS: bool>(
             path: OutlinePath::nested_entry(None, located.indices())
                 .expect("enumerated entry paths are one-based"),
             title: if DETAILS {
-                definition_title(entry, located.names())
+                definition_title(
+                    content.expect("detailed collection has document content"),
+                    entry,
+                    located.names(),
+                )
             } else {
                 String::new()
             },
@@ -220,6 +253,7 @@ fn collect_root_entries_impl<'a, const DETAILS: bool>(
 }
 
 fn append_entry_breadcrumbs(
+    content: ContentContext<'_>,
     breadcrumbs: &mut Vec<LocatedBreadcrumb>,
     section: Option<&[usize]>,
     indices: &[usize],
@@ -234,13 +268,29 @@ fn append_entry_breadcrumbs(
         breadcrumbs.push(LocatedBreadcrumb {
             path: path.clone(),
             id: identity.id.clone(),
-            title: definition_title(*ancestor, ancestor.validated_names().unwrap_or_default()),
+            title: definition_title(
+                content,
+                *ancestor,
+                content
+                    .entry_validated_names(*ancestor)
+                    .expect("document entry names resolve in their own content store")
+                    .unwrap_or_default(),
+            ),
         });
     }
 }
 
-fn definition_title(entry: EntryOwner<'_>, names: &[String]) -> String {
-    crate::entry_presentation::owner_label(entry, names, mant_protocol::EntryLabelMode::Compact)
+fn definition_title(
+    content: ContentContext<'_>,
+    entry: EntryOwner<'_>,
+    names: &[String],
+) -> String {
+    crate::entry_presentation::owner_label(
+        content,
+        entry,
+        names,
+        mant_protocol::EntryLabelMode::Compact,
+    )
 }
 
 #[cfg(test)]

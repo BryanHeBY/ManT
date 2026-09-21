@@ -1,10 +1,15 @@
 //! Finite literal boundaries, not an executable argv grammar or fuzzy matcher.
 use std::ops::Range;
 
-pub(super) fn block_text(block: &mant_ir::Block) -> Option<String> {
+pub(super) fn block_text(
+    content: mant_ir::ContentContext<'_>,
+    block: &mant_ir::Block,
+) -> Option<String> {
     let raw = match block {
         mant_ir::Block::Paragraph { children, .. }
-        | mant_ir::Block::Preformatted { children, .. } => mant_ir::inline_plain_text(children),
+        | mant_ir::Block::Preformatted { children, .. } => content
+            .plain_text(children)
+            .expect("document block resolves in its own content store"),
         mant_ir::Block::Equation { value, .. }
         | mant_ir::Block::Unsupported { text: value, .. } => value.clone(),
         _ => return None,

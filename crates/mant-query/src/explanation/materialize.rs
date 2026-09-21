@@ -89,6 +89,7 @@ pub(super) fn omitted(evidence: &ExplanationEvidence) -> bool {
 }
 
 pub(super) fn prepare(
+    content: mant_ir::ContentContext<'_>,
     ordinal: u32,
     candidate: &Candidate<'_>,
     located: &[LocatedNode<'_>],
@@ -99,7 +100,7 @@ pub(super) fn prepare(
     let owner = candidate
         .located
         .and_then(|index| super::owner(&located[index]));
-    let (bases, match_details_omitted) = super::details::matched(candidate, owner, budget);
+    let (bases, match_details_omitted) = super::details::matched(content, candidate, owner, budget);
     ExplanationEvidence {
         support: None,
         support_omitted: false,
@@ -121,6 +122,7 @@ pub(super) fn prepare(
 }
 
 pub(super) fn materialize(
+    content_context: mant_ir::ContentContext<'_>,
     record: &mut ExplanationEvidence,
     candidate: &Candidate<'_>,
     located: &[LocatedNode<'_>],
@@ -135,13 +137,15 @@ pub(super) fn materialize(
     // Page facts were reserved before any optional payload. References keep
     // owner-local positions while avoiding a second copy of the group body.
     let content = record.content.take();
-    let mut entry = owner.and_then(|owner| super::details::entry(owner, rejected_aliases, budget));
+    let mut entry = owner
+        .and_then(|owner| super::details::entry(content_context, owner, rejected_aliases, budget));
     let details_omitted = owner.is_some() && entry.is_none();
     let mut name_bindings_omitted = false;
     let mut positions = super::positions::PositionBudget::default();
     if let (Some(owner), Some(entry)) = (owner, entry.as_mut()) {
-        name_bindings_omitted = super::positions::ordinary(owner, entry, budget);
+        name_bindings_omitted = super::positions::ordinary(content_context, owner, entry, budget);
         let (matched, names) = super::positions::attach(
+            content_context,
             owner,
             &mut bases,
             Some(entry),
@@ -155,7 +159,7 @@ pub(super) fn materialize(
     let mut previews = Vec::new();
     let mut previews_omitted = false;
     for hit in &candidate.hits {
-        let preview = hit.preview();
+        let preview = hit.preview(content_context);
         if budget.take(&preview) {
             previews.push(preview);
         } else {
@@ -168,6 +172,7 @@ pub(super) fn materialize(
     if content.is_some() {
         if let Some(owner) = owner {
             let (matched, names) = super::positions::attach(
+                content_context,
                 owner,
                 &mut bases,
                 entry.as_mut(),
@@ -184,7 +189,7 @@ pub(super) fn materialize(
                 .iter()
                 .find(|hit| hit.path == preview.block_path)
                 .expect("retained representative hit");
-            if let Some(range) = super::positions::preview_range(owner, hit) {
+            if let Some(range) = super::positions::preview_range(content_context, owner, hit) {
                 let ranges = vec![range];
                 if positions.remaining() > 0 && budget.take_growth(&preview.content_ranges, &ranges)
                 {
@@ -225,6 +230,9 @@ fn copy_body(
     located: &[LocatedNode<'_>],
     budget: &mut Budget,
 ) -> Option<ExplanationContent> {
+    // This remains the response-projection boundary: complete blocks are
+    // cloned only after budget admission until protocol ContentProjection is
+    // introduced atomically with store-backed response inlines.
     #[derive(serde::Serialize)]
     struct Body<'a, T: serde::Serialize> {
         kind: &'static str,
@@ -261,6 +269,7 @@ pub(super) fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
         LocatedNode::Section {
             section,
             path,
+            title,
             breadcrumbs,
             ..
         } => (
@@ -268,7 +277,7 @@ pub(super) fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
             OutlineNodeReference::DocumentSection {
                 path: path.to_string().into(),
                 id: section.id.clone(),
-                title: section.heading.single_line_text(),
+                title: title.clone(),
             },
         ),
         LocatedNode::Entry {

@@ -16,6 +16,7 @@ pub(super) struct Owner {
 /// Offset index for manual sections, definition entries, and optional TLDR.
 pub(super) struct OwnerIndex<'map, 'src> {
     artifact: &'map MarkdownArtifact<'src>,
+    content: Option<mant_ir::ContentContext<'src>>,
     #[cfg(test)]
     materialized: std::cell::Cell<usize>,
     sections: Vec<Owner>,
@@ -27,7 +28,10 @@ pub(super) struct OwnerIndex<'map, 'src> {
 }
 
 impl<'map, 'src> OwnerIndex<'map, 'src> {
-    pub(super) fn new(artifact: &'map MarkdownArtifact<'src>) -> Self {
+    pub(super) fn new(
+        artifact: &'map MarkdownArtifact<'src>,
+        content: Option<mant_ir::ContentContext<'src>>,
+    ) -> Self {
         let mut sections = Vec::new();
         let mut entries = Vec::new();
         let mut root = None;
@@ -57,6 +61,7 @@ impl<'map, 'src> OwnerIndex<'map, 'src> {
             .collect();
         Self {
             artifact,
+            content,
             #[cfg(test)]
             materialized: std::cell::Cell::new(0),
             sections,
@@ -72,7 +77,11 @@ impl<'map, 'src> OwnerIndex<'map, 'src> {
     pub(super) fn trail(&self, key: usize) -> OutlineTrail {
         #[cfg(test)]
         self.materialized.set(self.materialized.get() + 1);
-        trail(self.artifact, self.artifact.nodes()[key].node())
+        trail(
+            self.artifact,
+            self.content,
+            self.artifact.nodes()[key].node(),
+        )
     }
 
     pub(super) fn owner(&self, offset: usize) -> Option<&Owner> {
@@ -137,7 +146,11 @@ fn owner_from_range(key: usize, mapped: &MarkdownNodeRange<'_>) -> Owner {
     }
 }
 
-fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTrail {
+fn trail(
+    artifact: &MarkdownArtifact<'_>,
+    content: Option<mant_ir::ContentContext<'_>>,
+    node: &MarkdownNode<'_>,
+) -> OutlineTrail {
     match node {
         MarkdownNode::Tldr => OutlineTrail {
             ancestors: Vec::new(),
@@ -160,11 +173,14 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
                 .section(*section)
                 .expect("artifact-owned section slot");
             OutlineTrail {
-                ancestors: section_ancestors(artifact, section.parent()),
+                ancestors: section_ancestors(artifact, content, section.parent()),
                 node: OutlineNodeReference::DocumentSection {
                     path: section.path().to_string().into(),
                     id: section.section().id.clone(),
-                    title: section.section().heading.single_line_text(),
+                    title: content
+                        .expect("manual section has document content")
+                        .heading_single_line_text(&section.section().heading)
+                        .expect("document heading resolves in its own content store"),
                 },
             }
         }
@@ -177,7 +193,7 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
         } => {
             let facts = owner.facts().expect("mapped semantic owner");
             let ancestors = if section.is_some() {
-                section_ancestors(artifact, *section)
+                section_ancestors(artifact, content, *section)
             } else {
                 vec![mant_protocol::OutlineReference {
                     path: "root".into(),
@@ -191,6 +207,7 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
                     path: path.to_string().into(),
                     id: facts.id.clone(),
                     title: crate::entry_presentation::owner_label(
+                        content.expect("manual entry has document content"),
                         *owner,
                         names,
                         mant_protocol::EntryLabelMode::Compact,
@@ -206,6 +223,7 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
 
 fn section_ancestors(
     artifact: &MarkdownArtifact<'_>,
+    content: Option<mant_ir::ContentContext<'_>>,
     mut slot: Option<usize>,
 ) -> Vec<mant_protocol::OutlineReference> {
     let mut ancestors = Vec::new();
@@ -213,18 +231,26 @@ fn section_ancestors(
         let section = artifact
             .section(current)
             .expect("artifact-owned parent slot");
-        ancestors.push(section_reference(section));
+        ancestors.push(section_reference(
+            content.expect("manual section has document content"),
+            section,
+        ));
         slot = section.parent();
     }
     ancestors.reverse();
     ancestors
 }
 
-fn section_reference(section: &MarkdownSection<'_>) -> mant_protocol::OutlineReference {
+fn section_reference(
+    content: mant_ir::ContentContext<'_>,
+    section: &MarkdownSection<'_>,
+) -> mant_protocol::OutlineReference {
     mant_protocol::OutlineReference {
         path: section.path().to_string().into(),
         id: section.section().id.clone(),
-        title: section.section().heading.single_line_text(),
+        title: content
+            .heading_single_line_text(&section.section().heading)
+            .expect("document heading resolves in its own content store"),
     }
 }
 
@@ -241,7 +267,10 @@ mod tests {
         }
         let query = crate::query_fixture::markdown(&source, None).unwrap();
         let artifact = mant_codec::encode::render_addressable_markdown(&query);
-        let index = OwnerIndex::new(&artifact);
+        let index = OwnerIndex::new(
+            &artifact,
+            query.document.as_ref().map(mant_ir::Document::content),
+        );
         assert_eq!(index.entries.len(), 1000);
         assert_eq!(index.materialized.get(), 0);
         for entry in &index.entries {
