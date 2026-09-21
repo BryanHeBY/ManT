@@ -3,8 +3,8 @@
 use std::{collections::HashSet, ops::Range};
 
 use libmandoc_rs::structured::{
-    ContentAtomKind, ContentRootKey, NativeBlock, NativeBlockKind, NativeItem, NativeLinkTarget,
-    NativeListKind, NativeRole, ProvenanceKey, StructuredDocument,
+    ContentAtomKey, ContentAtomKind, ContentRootKey, NativeBlock, NativeBlockKind, NativeItem,
+    NativeLinkTarget, NativeListKind, NativeRole, ProvenanceKey, StructuredDocument,
 };
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{
@@ -18,6 +18,61 @@ use crate::definitions::{
     NativeContentRange, NativeDeclarationEvidence, NativeHeadEvidence, NativeHeadRole,
 };
 
+struct NativeLoweringIndex {
+    block_children: Vec<Vec<usize>>,
+    list_by_block: Vec<Option<usize>>,
+    items_by_list: Vec<Vec<usize>>,
+}
+
+impl NativeLoweringIndex {
+    fn new(native: &StructuredDocument) -> Result<Self, NativeProjectionError> {
+        let mut block_children = vec![Vec::new(); native.blocks().len() + 1];
+        for (index, block) in native.blocks().iter().enumerate() {
+            let parent = block.parent().map_or(0, |parent| parent.get() as usize);
+            block_children
+                .get_mut(parent)
+                .ok_or(NativeProjectionError::InvalidRelation(
+                    "block parent is outside the lowering index",
+                ))?
+                .push(index);
+        }
+        let mut list_by_block = vec![None; native.blocks().len()];
+        for (index, list) in native.lists().iter().enumerate() {
+            let block = list.block().get() as usize - 1;
+            let slot =
+                list_by_block
+                    .get_mut(block)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "list block is outside the lowering index",
+                    ))?;
+            if slot.replace(index).is_some() {
+                return Err(NativeProjectionError::InvalidRelation(
+                    "list block is duplicated in the lowering index",
+                ));
+            }
+        }
+        let mut items_by_list = vec![Vec::new(); native.lists().len()];
+        for (index, item) in native.items().iter().enumerate() {
+            items_by_list
+                .get_mut(item.list().get() as usize - 1)
+                .ok_or(NativeProjectionError::InvalidRelation(
+                    "item list is outside the lowering index",
+                ))?
+                .push(index);
+        }
+        Ok(Self {
+            block_children,
+            list_by_block,
+            items_by_list,
+        })
+    }
+
+    fn block_children(&self, parent: Option<libmandoc_rs::structured::NativeBlockKey>) -> &[usize] {
+        let index = parent.map_or(0, |parent| parent.get() as usize);
+        self.block_children.get(index).map_or(&[], Vec::as_slice)
+    }
+}
+
 /// Run the private C03 entry from native execution through stable semantic IR.
 pub(crate) fn project_native_manual(
     root: &str,
@@ -30,6 +85,7 @@ pub(crate) fn project_native_manual(
 
 fn lower_projection(projection: &NativeProseProjection) -> Result<Document, NativeProjectionError> {
     let native = projection.document();
+    let index = NativeLoweringIndex::new(native)?;
     let mut used_ids = HashSet::new();
     let mut reserved_targets = native
         .items()
@@ -41,14 +97,12 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
     let mut root_blocks = Vec::new();
     let mut sections = Vec::new();
     let mut evidence = NativeHeadEvidence::default();
-    for block in native
-        .blocks()
-        .iter()
-        .filter(|block| block.parent().is_none())
-    {
+    for &block_index in index.block_children(None) {
+        let block = &native.blocks()[block_index];
         if block.kind() == NativeBlockKind::Heading {
             sections.push(lower_section(
                 projection,
+                &index,
                 block,
                 &mut used_ids,
                 &mut evidence,
@@ -56,7 +110,7 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
         } else {
             push_lowered_block(
                 &mut root_blocks,
-                lower_block(projection, block, None, &mut evidence)?,
+                lower_block(projection, &index, block, None, &mut evidence)?,
             );
         }
     }
@@ -106,12 +160,13 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
 
 fn lower_section(
     projection: &NativeProseProjection,
+    index: &NativeLoweringIndex,
     block: &NativeBlock,
     used_ids: &mut HashSet<String>,
     evidence: &mut NativeHeadEvidence,
 ) -> Result<Section, NativeProjectionError> {
     let heading_content = root_inlines(
-        projection.document(),
+        projection,
         block.root().ok_or(NativeProjectionError::InvalidRelation(
             "heading block has no root",
         ))?,
@@ -120,13 +175,12 @@ fn lower_section(
     let base = crate::definitions::document_id_slug(&label);
     let id = unique_id(if base.is_empty() { "section" } else { &base }, used_ids);
     let mut blocks = Vec::new();
-    for child in projection
-        .document()
-        .blocks()
-        .iter()
-        .filter(|child| child.parent() == Some(block.key()))
-    {
-        push_lowered_block(&mut blocks, lower_block(projection, child, None, evidence)?);
+    for &child_index in index.block_children(Some(block.key())) {
+        let child = &projection.document().blocks()[child_index];
+        push_lowered_block(
+            &mut blocks,
+            lower_block(projection, index, child, None, evidence)?,
+        );
     }
     Ok(Section {
         id: NodeId::new(id),
@@ -144,6 +198,7 @@ fn lower_section(
 
 fn lower_block(
     projection: &NativeProseProjection,
+    index: &NativeLoweringIndex,
     block: &NativeBlock,
     owner: Option<libmandoc_rs::structured::OwnerKey>,
     evidence: &mut NativeHeadEvidence,
@@ -156,7 +211,7 @@ fn lower_block(
     match block.kind() {
         NativeBlockKind::Paragraph => Ok(Block::Paragraph {
             children: root_inlines(
-                projection.document(),
+                projection,
                 block.root().ok_or(NativeProjectionError::InvalidRelation(
                     "paragraph block has no root",
                 ))?,
@@ -165,7 +220,7 @@ fn lower_block(
             source: source_for(projection, block.provenance()),
         }),
         NativeBlockKind::List | NativeBlockKind::DefinitionList => {
-            lower_list(projection, block, evidence)
+            lower_list(projection, index, block, evidence)
         }
         kind => Err(NativeProjectionError::UnsupportedBlock(kind)),
     }
@@ -173,17 +228,20 @@ fn lower_block(
 
 fn lower_list(
     projection: &NativeProseProjection,
+    index: &NativeLoweringIndex,
     block: &NativeBlock,
     evidence: &mut NativeHeadEvidence,
 ) -> Result<Block, NativeProjectionError> {
     let native = projection.document();
-    let list = native
-        .lists()
-        .iter()
-        .find(|list| list.block() == block.key())
+    let list_index = index
+        .list_by_block
+        .get(block.key().get() as usize - 1)
+        .copied()
+        .flatten()
         .ok_or(NativeProjectionError::InvalidRelation(
             "list block has no list record",
         ))?;
+    let list = &native.lists()[list_index];
     if list.kind() == NativeListKind::NativeMarker {
         return Err(NativeProjectionError::InvalidRelation(
             "native marker list reached the codec without source classification",
@@ -191,12 +249,14 @@ fn lower_list(
     }
     if list.kind() == NativeListKind::Definition {
         let mut items = Vec::new();
-        for item in native
-            .items()
-            .iter()
-            .filter(|item| item.list() == list.key())
-        {
-            items.push(lower_definition_item(projection, block, item, evidence)?);
+        for &item_index in &index.items_by_list[list_index] {
+            items.push(lower_definition_item(
+                projection,
+                index,
+                block,
+                &native.items()[item_index],
+                evidence,
+            )?);
         }
         return Ok(Block::DefinitionList {
             items,
@@ -216,12 +276,14 @@ fn lower_list(
         NativeListKind::Definition | NativeListKind::NativeMarker => unreachable!(),
     };
     let mut items = Vec::new();
-    for item in native
-        .items()
-        .iter()
-        .filter(|item| item.list() == list.key())
-    {
-        items.push(lower_list_item(projection, block, item, evidence)?);
+    for &item_index in &index.items_by_list[list_index] {
+        items.push(lower_list_item(
+            projection,
+            index,
+            block,
+            &native.items()[item_index],
+            evidence,
+        )?);
     }
     Ok(Block::List {
         kind,
@@ -234,6 +296,7 @@ fn lower_list(
 
 fn lower_definition_item(
     projection: &NativeProseProjection,
+    index: &NativeLoweringIndex,
     list_block: &NativeBlock,
     item: &NativeItem,
     evidence: &mut NativeHeadEvidence,
@@ -242,7 +305,7 @@ fn lower_definition_item(
     let source = source_for(projection, item.provenance());
     let mut terms = Vec::new();
     for root in item_term_roots(native, item)? {
-        terms.push(root_inlines(native, root)?);
+        terms.push(root_inlines(projection, root)?);
     }
     if let Some(target) = item.target() {
         let anchor = Inline::anchor_at(target, source);
@@ -256,24 +319,25 @@ fn lower_definition_item(
         source,
         entry: None,
         terms,
-        description: item_blocks(projection, list_block, item, evidence)?,
+        description: item_blocks(projection, index, list_block, item, evidence)?,
         layout: DefinitionLayout::default(),
     };
     if let Some(role) = evidence_role(native, item) {
         evidence.record(&lowered, role);
     }
-    evidence.record_declaration(&lowered, native_declaration_evidence(native, item)?);
+    evidence.record_declaration(&lowered, native_declaration_evidence(projection, item)?);
     Ok(lowered)
 }
 
 fn lower_list_item(
     projection: &NativeProseProjection,
+    index: &NativeLoweringIndex,
     list_block: &NativeBlock,
     item: &NativeItem,
     evidence: &mut NativeHeadEvidence,
 ) -> Result<ListItem, NativeProjectionError> {
     let source = source_for(projection, item.provenance());
-    let mut blocks = item_blocks(projection, list_block, item, evidence)?;
+    let mut blocks = item_blocks(projection, index, list_block, item, evidence)?;
     if let Some(target) = item.target() {
         prepend_anchor(&mut blocks, Inline::anchor_at(target, source));
     }
@@ -287,19 +351,20 @@ fn lower_list_item(
 
 fn item_blocks(
     projection: &NativeProseProjection,
+    index: &NativeLoweringIndex,
     list_block: &NativeBlock,
     item: &NativeItem,
     evidence: &mut NativeHeadEvidence,
 ) -> Result<Vec<Block>, NativeProjectionError> {
     let mut blocks = Vec::new();
-    for child in
-        projection.document().blocks().iter().filter(|child| {
-            child.parent() == Some(list_block.key()) && child.owner() == item.owner()
-        })
-    {
+    for &child_index in index.block_children(Some(list_block.key())) {
+        let child = &projection.document().blocks()[child_index];
+        if child.owner() != item.owner() {
+            continue;
+        }
         push_lowered_block(
             &mut blocks,
-            lower_block(projection, child, Some(item.owner()), evidence)?,
+            lower_block(projection, index, child, Some(item.owner()), evidence)?,
         );
     }
     Ok(blocks)
@@ -331,10 +396,18 @@ fn item_term_roots(
 }
 
 fn native_declaration_evidence(
-    document: &StructuredDocument,
+    projection: &NativeProseProjection,
     item: &NativeItem,
 ) -> Result<NativeDeclarationEvidence, NativeProjectionError> {
+    let document = projection.document();
     let roots = item_term_roots(document, item)?;
+    let mut root_offsets = Vec::new();
+    root_offsets
+        .try_reserve_exact(roots.len())
+        .map_err(|_| NativeProjectionError::InvalidRelation("term offset allocation"))?;
+    for root in &roots {
+        root_offsets.push(root_atom_offsets(projection, *root)?);
+    }
     let forms = document.forms().get(item.forms().clone()).ok_or(
         NativeProjectionError::InvalidRelation("item form range is invalid"),
     )?;
@@ -343,18 +416,35 @@ fn native_declaration_evidence(
         form_ranges.push(content_range_for_refs(
             document,
             &roots,
+            &root_offsets,
             form.refs().clone(),
         )?);
     }
     let mut name_hints = Vec::new();
-    for hint in document
-        .name_hints()
-        .iter()
-        .filter(|hint| forms.iter().any(|form| form.key() == hint.form()))
-    {
+    if forms.is_empty() {
+        return Ok(NativeDeclarationEvidence {
+            forms: form_ranges,
+            name_hints,
+        });
+    }
+    let first_form = forms
+        .first()
+        .ok_or(NativeProjectionError::InvalidRelation("item has no forms"))?
+        .key()
+        .get();
+    let last_form = forms
+        .last()
+        .ok_or(NativeProjectionError::InvalidRelation("item has no forms"))?
+        .key()
+        .get();
+    let hints = document.name_hints();
+    let hint_start = hints.partition_point(|hint| hint.form().get() < first_form);
+    let hint_end = hints.partition_point(|hint| hint.form().get() <= last_form);
+    for hint in &hints[hint_start..hint_end] {
         name_hints.push(content_range_for_refs(
             document,
             &roots,
+            &root_offsets,
             hint.refs().clone(),
         )?);
     }
@@ -367,6 +457,7 @@ fn native_declaration_evidence(
 fn content_range_for_refs(
     document: &StructuredDocument,
     roots: &[ContentRootKey],
+    root_offsets: &[Vec<(ContentAtomKey, usize)>],
     refs: Range<usize>,
 ) -> Result<NativeContentRange, NativeProjectionError> {
     let references =
@@ -393,22 +484,11 @@ fn content_range_for_refs(
         .ok_or(NativeProjectionError::InvalidRelation(
             "declaration content is outside the item term roots",
         ))?;
-    let mut offset = 0_usize;
-    let mut atom_offsets = Vec::new();
-    for atom in document
-        .content_atoms()
-        .iter()
-        .filter(|atom| atom.root() == root)
-    {
-        atom_offsets.push((atom.key(), offset));
-        offset += match atom.kind() {
-            ContentAtomKind::Text { text, .. } | ContentAtomKind::Whitespace { text, .. } => {
-                text.len()
-            }
-            ContentAtomKind::HardBreak => 1,
-            ContentAtomKind::BreakOpportunity => 0,
-        };
-    }
+    let atom_offsets = root_offsets
+        .get(term)
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "term root has no atom offset index",
+        ))?;
     let mut parts: Vec<Range<usize>> = Vec::new();
     for reference in references {
         let atom = document.content_atom(reference.atom()).ok_or(
@@ -422,8 +502,9 @@ fn content_range_for_refs(
             ));
         }
         let atom_offset = atom_offsets
-            .iter()
-            .find_map(|(key, offset)| (*key == atom.key()).then_some(*offset))
+            .binary_search_by_key(&atom.key(), |(key, _)| *key)
+            .ok()
+            .map(|index| atom_offsets[index].1)
             .ok_or(NativeProjectionError::InvalidRelation(
                 "declaration atom has no root-relative offset",
             ))?;
@@ -440,16 +521,54 @@ fn content_range_for_refs(
     Ok(NativeContentRange { term, parts })
 }
 
+fn root_atom_offsets(
+    projection: &NativeProseProjection,
+    root: ContentRootKey,
+) -> Result<Vec<(ContentAtomKey, usize)>, NativeProjectionError> {
+    let projected = projection
+        .root(root)
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "term root has no projected leaves",
+        ))?;
+    let mut offsets = Vec::new();
+    offsets
+        .try_reserve_exact(projected.leaves.len())
+        .map_err(|_| NativeProjectionError::InvalidRelation("term atom offset allocation"))?;
+    let mut offset = 0_usize;
+    for leaf in &projected.leaves {
+        let atom = projection.document().content_atom(leaf.atom()).ok_or(
+            NativeProjectionError::InvalidRelation("projected leaf references an unknown atom"),
+        )?;
+        offsets.push((atom.key(), offset));
+        offset += match atom.kind() {
+            ContentAtomKind::Text { text, .. } | ContentAtomKind::Whitespace { text, .. } => {
+                text.len()
+            }
+            ContentAtomKind::HardBreak => 1,
+            ContentAtomKind::BreakOpportunity => 0,
+        };
+    }
+    Ok(offsets)
+}
+
 fn root_inlines(
-    document: &StructuredDocument,
+    projection: &NativeProseProjection,
     root: ContentRootKey,
 ) -> Result<Vec<Inline>, NativeProjectionError> {
+    let document = projection.document();
+    let projected = projection
+        .root(root)
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "content root has no projected leaves",
+        ))?;
     let mut inlines = Vec::new();
-    for atom in document
-        .content_atoms()
-        .iter()
-        .filter(|atom| atom.root() == root)
-    {
+    for leaf in &projected.leaves {
+        let atom =
+            document
+                .content_atom(leaf.atom())
+                .ok_or(NativeProjectionError::InvalidRelation(
+                    "projected leaf references an unknown atom",
+                ))?;
         let leaf = match atom.kind() {
             ContentAtomKind::Text { text, .. } | ContentAtomKind::Whitespace { text, .. } => {
                 if atom.style().is_literal() {
@@ -585,42 +704,7 @@ fn prepend_anchor(blocks: &mut Vec<Block>, anchor: Inline) {
 }
 
 fn push_lowered_block(blocks: &mut Vec<Block>, block: Block) {
-    let merge = match (blocks.last(), &block) {
-        (
-            Some(Block::List {
-                kind: prior_kind,
-                items: prior_items,
-                ..
-            }),
-            Block::List { kind, .. },
-        ) => match (prior_kind, kind) {
-            (ListKind::Bullet, ListKind::Bullet) | (ListKind::Plain, ListKind::Plain) => true,
-            (ListKind::Ordered { start: Some(prior) }, ListKind::Ordered { start: Some(next) }) => {
-                prior
-                    .checked_add(prior_items.len() as u64)
-                    .is_some_and(|expected| expected == *next)
-            }
-            _ => false,
-        },
-        _ => false,
-    };
-    if merge {
-        let Some(Block::List {
-            compact: prior_compact,
-            items: prior_items,
-            ..
-        }) = blocks.last_mut()
-        else {
-            unreachable!()
-        };
-        let Block::List { compact, items, .. } = block else {
-            unreachable!()
-        };
-        *prior_compact &= compact;
-        prior_items.extend(items);
-    } else {
-        blocks.push(block);
-    }
+    blocks.push(block);
 }
 
 fn unique_id(base: &str, used: &mut HashSet<String>) -> String {

@@ -68,7 +68,7 @@ pub(crate) enum NativeInlineLeaf {
 }
 
 impl NativeInlineLeaf {
-    const fn atom(self) -> ContentAtomKey {
+    pub(crate) const fn atom(self) -> ContentAtomKey {
         match self {
             Self::Text(atom)
             | Self::Whitespace(atom)
@@ -176,6 +176,11 @@ impl NativeProseProjection {
 
     pub(crate) fn roots(&self) -> &[NativeProseRoot] {
         &self.roots
+    }
+
+    pub(crate) fn root(&self, key: ContentRootKey) -> Option<&NativeProseRoot> {
+        let index = usize::try_from(key.get()).ok()?.checked_sub(1)?;
+        self.roots.get(index).filter(|root| root.key == key)
     }
 
     pub(crate) fn blocks(&self) -> &[NativeProseBlock] {

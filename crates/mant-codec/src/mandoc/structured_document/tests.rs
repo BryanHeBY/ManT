@@ -198,7 +198,7 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
     bundle
         .insert(
             "markers.1",
-            b".TH MARKERS 1\n.SH STEPS\n.IP \\(bu\nBullet.\n.IP \"*\"\nStar.\n.IP 3.\nThird.\n.IP 4.\nFourth.\n.IP 9.\nNinth.\n.IP \"(1)\"\nParenthesized.\n"
+            b".TH MARKERS 1\n.SH STEPS\n.IP \\(bu\nBullet.\n.IP \"*\"\nStar.\n.IP 3.\nThird.\n.IP 4.\nFourth.\n.IP 9.\nNinth.\n.IP \"(1)\"\nParenthesized.\n.IP 1.\nDot.\n.IP 2)\nParen.\n"
                 .to_vec(),
         )
         .unwrap();
@@ -240,6 +240,90 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
             ..
         } if items.len() == 1
     ));
+    assert!(matches!(
+        &document.sections[0].blocks[5],
+        Block::List {
+            kind: ListKind::Ordered { start: Some(1) },
+            items,
+            ..
+        } if items.len() == 1
+    ));
+    assert!(matches!(
+        &document.sections[0].blocks[6],
+        Block::List {
+            kind: ListKind::Ordered { start: Some(2) },
+            items,
+            ..
+        } if items.len() == 1
+    ));
+}
+
+#[test]
+fn independent_mdoc_lists_keep_their_container_boundaries() {
+    // This exact source was run through the pinned reference first. The two
+    // Bl/El containers remain independent even though their visible bullets
+    // are adjacent in terminal output.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "separate-lists.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bl -bullet\n.It\nONE\n.El\n.Bl -bullet -compact\n.It\nTWO\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("separate-lists.1", &bundle, InputFormat::Mdoc)
+        .expect("authored mdoc containers remain distinct");
+    assert_eq!(document.sections[0].blocks.len(), 2, "{document:#?}");
+    assert!(matches!(
+        &document.sections[0].blocks[0],
+        Block::List { compact: false, items, .. } if items.len() == 1
+    ));
+    assert!(matches!(
+        &document.sections[0].blocks[1],
+        Block::List { compact: true, items, .. } if items.len() == 1
+    ));
+}
+
+#[test]
+fn one_native_form_keeps_hint_evidence_without_widening_names() {
+    // The exact source was run through the pinned reference first. Native Fl
+    // evidence on both sides of an authored slash remains two occurrences
+    // inside one form.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "hint-runs.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bl -tag\n.It Fl a No / Fl b\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("hint-runs.1", &bundle, InputFormat::Mdoc)
+        .expect("multiple hint runs reach EntryFacts");
+    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        panic!("tag list retained")
+    };
+    let facts = items[0].entry.as_ref().expect("option facts discovered");
+    assert_eq!(facts.names, ["-a"]);
+    assert_eq!(facts.forms.len(), 1);
+    assert!(facts.name_bindings.iter().all(|binding| {
+        binding.evidence == EntryNameEvidence::NativeMarkup && binding.occurrences.len() == 1
+    }));
+}
+
+#[test]
+fn literal_separator_definition_keeps_its_term() {
+    // The exact source was run through the pinned reference first; the pipe
+    // is a literal label rather than a declaration separator without sides.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert("operator.1", b".TH X 1\n.SH D\n.TP\n|\nBODY\n".to_vec())
+        .unwrap();
+    let document = project_native_manual("operator.1", &bundle, InputFormat::Man)
+        .expect("literal operator lowers as a definition term");
+    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        panic!("definition list retained")
+    };
+    assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), "|");
 }
 
 #[test]
