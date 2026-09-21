@@ -289,6 +289,8 @@ pub(super) fn validate_structured_relations(
             let atom = &slices.content_atoms[content_ref.atom as usize - 1];
             if atom.link != link.key
                 || atom.owner != link.owner
+                || content_ref.byte_start != 0
+                || u64::from(content_ref.byte_end) != atom.text.len
                 || content_ref.atom <= previous_atom
             {
                 return Err(relation_error());
@@ -405,6 +407,7 @@ pub(super) fn validate_structured_relations(
         .map_err(alloc_error)?;
     item_owners.resize(slices.owners.len(), false);
     let mut next_form = 0_usize;
+    let mut previous_item_owner = 0_u32;
     for (index, item) in slices.items.iter().enumerate() {
         let list_index = item.list.checked_sub(1).map(|list| list as usize);
         let expected = list_index.and_then(|list| item_ordinals.get_mut(list));
@@ -436,6 +439,7 @@ pub(super) fn validate_structured_relations(
         if item.key != dense_key(index)?
             || !valid_required_key(item.list, slices.lists.len())
             || !valid_required_key(item.owner, slices.owners.len())
+            || item.owner <= previous_item_owner
             || expected
                 .as_ref()
                 .is_none_or(|expected| item.ordinal != **expected)
@@ -455,6 +459,7 @@ pub(super) fn validate_structured_relations(
             return Err(relation_error());
         }
         item_owners[owner_index.expect("validated item owner")] = true;
+        previous_item_owner = item.owner;
         next_form = next_form
             .checked_add(item.form_count as usize)
             .ok_or_else(relation_error)?;
@@ -509,6 +514,7 @@ pub(super) fn validate_structured_relations(
     {
         return Err(relation_error());
     }
+    let mut previous_hint_form = 0_u32;
     for (index, hint) in slices.name_hints.iter().enumerate() {
         let form = hint
             .form
@@ -519,6 +525,7 @@ pub(super) fn validate_structured_relations(
             || form.is_none()
             || hint.ref_count == 0
             || hint_end.is_none()
+            || hint.form < previous_hint_form
             || form.is_some_and(|form| {
                 let Some(form_end) = form.first_ref.checked_add(form.ref_count) else {
                     return true;
@@ -531,6 +538,7 @@ pub(super) fn validate_structured_relations(
         {
             return Err(relation_error());
         }
+        previous_hint_form = hint.form;
     }
 
     for diagnostic in slices.diagnostics {

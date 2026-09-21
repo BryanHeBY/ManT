@@ -69,6 +69,22 @@ struct mant_structured_result {
 	uint32_t diagnostic_capacity;
 	struct structured_source_map *source_maps;
 	uint32_t source_map_count;
+	/* Retained, budgeted scratch keeps repeated handle validation linear. */
+	uint32_t *validation_roots;
+	uint32_t validation_root_slots;
+	uint32_t *validation_blocks;
+	uint32_t validation_block_slots;
+	uint32_t *validation_lists;
+	uint32_t validation_list_slots;
+	uint8_t *validation_atoms;
+	uint32_t validation_atom_slots;
+	uint32_t validation_owner_count;
+	uint32_t validation_content_root_count;
+	uint32_t validation_block_count;
+	uint32_t validation_list_count;
+	uint32_t validation_item_count;
+	uint32_t validation_content_atom_count;
+	uint8_t validation_ready;
 };
 
 void mant_structured_clear_failure(struct mant_structured_failure_view *);

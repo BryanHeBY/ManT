@@ -332,15 +332,55 @@ form_separator(const struct mant_structured_content_atom_view *atom)
 }
 
 static int
+form_range_has_content(const struct mant_structured_result *result,
+    uint32_t begin, uint32_t end)
+{
+	for (; begin < end; begin++)
+		if (result->content_atoms[begin].kind != MANT_ATOM_WHITESPACE)
+			return 1;
+	return 0;
+}
+
+static int
+append_name_hint(struct structured_session *session, uint32_t form_key,
+    uint32_t first_ref, uint32_t ref_count, uint32_t provenance)
+{
+	struct mant_structured_name_hint_view *hints, *hint;
+
+	hints = mant_structured_grow_array(session, session->result->name_hints,
+	    session->result->name_hint_count,
+	    &session->result->name_hint_capacity,
+	    mant_structured_limit_u32(session->limits->max_name_hints),
+	    sizeof(*hints), session->limits->max_builder_allocated_bytes, 25,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (hints == NULL)
+		return 0;
+	session->result->name_hints = hints;
+	hint = hints + session->result->name_hint_count;
+	memset(hint, 0, sizeof(*hint));
+	hint->key = ++session->result->name_hint_count;
+	hint->form = form_key;
+	hint->first_ref = first_ref;
+	hint->ref_count = ref_count;
+	hint->provenance = provenance;
+	return mant_structured_charge(session, &session->builder_operations, 1,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) &&
+	    mant_structured_charge(session, &session->relation_edges,
+	    (uint64_t)ref_count + 2,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER);
+}
+
+static int
 append_term_form(struct structured_session *session, uint32_t root_key,
     uint32_t item_key, uint32_t begin, uint32_t end)
 {
 	struct mant_structured_content_ref_view *refs, *ref;
 	struct mant_structured_form_view *forms, *form;
-	struct mant_structured_name_hint_view *hints, *hint;
 	struct mant_structured_item_view *item;
 	const struct mant_structured_content_atom_view *atom;
-	uint32_t first_ref, first_hint, hint_count, i, role;
+	uint32_t first_ref, i, role, run_count, run_first, run_role;
 
 	while (begin < end && session->result->content_atoms[begin].kind ==
 	    MANT_ATOM_WHITESPACE)
@@ -349,7 +389,7 @@ append_term_form(struct structured_session *session, uint32_t root_key,
 	    MANT_ATOM_WHITESPACE)
 		end--;
 	first_ref = session->result->content_ref_count + 1;
-	first_hint = hint_count = role = 0;
+	role = 0;
 	for (i = begin; i < end; i++) {
 		atom = session->result->content_atoms + i;
 		if (atom->kind != MANT_ATOM_TEXT &&
@@ -371,18 +411,12 @@ append_term_form(struct structured_session *session, uint32_t root_key,
 		memset(ref, 0, sizeof(*ref));
 		ref->atom = atom->key;
 		ref->byte_end = (uint32_t)atom->text.len;
-		if (atom->role != 0 && atom->role != MANT_ROLE_ARGUMENT) {
+		if (atom->kind == MANT_ATOM_TEXT && atom->role != 0 &&
+		    atom->role != MANT_ROLE_ARGUMENT) {
 			if (role == 0)
 				role = atom->role;
 			else if (role != atom->role)
 				role = UINT32_MAX;
-		}
-		if (atom->role != 0 && atom->role != MANT_ROLE_ARGUMENT) {
-			if (first_hint == 0)
-				first_hint = session->result->content_ref_count;
-			if (first_hint + hint_count ==
-			    session->result->content_ref_count)
-				hint_count++;
 		}
 	}
 	if (session->result->content_ref_count < first_ref)
@@ -415,31 +449,32 @@ append_term_form(struct structured_session *session, uint32_t root_key,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
-	if (first_hint == 0 || hint_count == 0 || role == UINT32_MAX)
-		return 1;
-	hints = mant_structured_grow_array(session, session->result->name_hints,
-	    session->result->name_hint_count,
-	    &session->result->name_hint_capacity,
-	    mant_structured_limit_u32(session->limits->max_name_hints),
-	    sizeof(*hints), session->limits->max_builder_allocated_bytes, 25,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (hints == NULL)
-		return 0;
-	session->result->name_hints = hints;
-	hint = hints + session->result->name_hint_count;
-	memset(hint, 0, sizeof(*hint));
-	hint->key = ++session->result->name_hint_count;
-	hint->form = form->key;
-	hint->first_ref = first_hint;
-	hint->ref_count = hint_count;
-	hint->provenance = form->provenance;
-	return mant_structured_charge(session, &session->builder_operations, 1,
-	    session->limits->max_builder_operations, 8,
-	    MANT_STRUCTURED_STAGE_RENDER) &&
-	    mant_structured_charge(session, &session->relation_edges,
-	    (uint64_t)hint_count + 2,
-	    session->limits->max_relation_edges, 30,
-	    MANT_STRUCTURED_STAGE_RENDER);
+	run_first = run_count = run_role = 0;
+	for (i = 0; i < form->ref_count; i++) {
+		ref = session->result->content_refs + form->first_ref - 1 + i;
+		atom = session->result->content_atoms + ref->atom - 1;
+		if (atom->kind == MANT_ATOM_TEXT && atom->role != 0 &&
+		    atom->role != MANT_ROLE_ARGUMENT) {
+			if (run_count != 0 && run_role != atom->role) {
+				if (!append_name_hint(session, form->key, run_first,
+				    run_count, form->provenance))
+					return 0;
+				run_count = 0;
+			}
+			if (run_count == 0) {
+				run_first = form->first_ref + i;
+				run_role = atom->role;
+			}
+			run_count++;
+		} else if (run_count != 0) {
+			if (!append_name_hint(session, form->key, run_first,
+			    run_count, form->provenance))
+				return 0;
+			run_count = 0;
+		}
+	}
+	return run_count == 0 || append_name_hint(session, form->key,
+	    run_first, run_count, form->provenance);
 }
 
 int
@@ -465,7 +500,9 @@ mant_structured_finalize_term_root(struct structured_session *session,
 		return 1;
 	for (i = begin; i < end; i++) {
 		atom = session->result->content_atoms + i;
-		if (!form_separator(atom))
+		if (!form_separator(atom) ||
+		    !form_range_has_content(session->result, begin, i) ||
+		    !form_range_has_content(session->result, i + 1, end))
 			continue;
 		if (!append_term_form(session, root_key, item_key, begin, i))
 			return 0;

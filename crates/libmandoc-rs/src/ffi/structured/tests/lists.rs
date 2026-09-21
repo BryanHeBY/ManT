@@ -231,7 +231,6 @@ fn man_ip_markers_retain_source_classification_and_ordered_boundaries() {
             (LIST_BULLET, None),
             (LIST_DEFINITION, None),
             (LIST_ORDERED, Some(3)),
-            (LIST_ORDERED, Some(4)),
             (LIST_ORDERED, Some(9)),
             (LIST_ORDERED, Some(1)),
         ]
@@ -249,6 +248,36 @@ fn man_ip_markers_retain_source_classification_and_ordered_boundaries() {
         })
         .collect::<Vec<_>>();
     assert_eq!(markers, ["•", "*", "3.", "4.", "9.", "(1)"]);
+}
+
+#[test]
+fn man_tp_markers_use_the_same_source_classification_as_ip() {
+    // This exact source was run through the pinned reference first.
+    // `man_term.c::pre_TP` executes the next-line head through the same
+    // visible marker contract as IP.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "tp-markers.1",
+            b".TH X 1\n.SH D\n.TP\n\\(bu\nBULLET\n.TP\n2.\nSECOND\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "tp-markers.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("TP marker source is classified natively");
+    assert_eq!(
+        document
+            .lists
+            .iter()
+            .map(|list| (list.kind, list.start))
+            .collect::<Vec<_>>(),
+        [(LIST_BULLET, None), (LIST_ORDERED, Some(2))]
+    );
 }
 
 #[test]
@@ -283,6 +312,52 @@ fn tq_continuation_expires_after_body_or_paragraph_boundary() {
 }
 
 #[test]
+fn tq_continuation_expires_across_relative_indent_scope() {
+    // The exact input was run through the pinned reference first. Pinned
+    // `man_term.c::pre_RS/post_RS` pushes and restores a distinct scope, so
+    // a TQ outside it cannot continue an empty TP inside it.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "tq-rs.1",
+            b".TH X 1\n.SH D\n.RS\n.TP\nINNER\n.RE\n.TQ\nOUTER\nBODY\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude("tq-rs.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("TQ outside RS owns a separate item");
+    assert_eq!(document.items.len(), 2, "{document:#?}");
+    assert_ne!(document.items[0].owner, document.items[1].owner);
+}
+
+#[test]
+fn literal_separator_terms_retain_their_form() {
+    // The exact TP/IP input was run through the pinned reference first; each
+    // literal operator is a visible definition label, not an empty separator.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "operators.1",
+            b".TH X 1\n.SH D\n.TP\n|\nBODY\n.IP \"|\"\nIPBODY\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "operators.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("literal separators remain native forms");
+    assert_eq!(document.forms.len(), 2, "{document:#?}");
+    assert!(
+        document
+            .forms
+            .iter()
+            .all(|form| { ref_text(&document, form.first_ref, form.ref_count) == "|" })
+    );
+}
+
+#[test]
 fn consecutive_tq_heads_remain_one_definition_item() {
     // This exact source was run through the pinned reference first. The local
     // continued-head patch follows `man_macro.c::blk_imp`: each empty TQ body
@@ -312,6 +387,42 @@ fn consecutive_tq_heads_remain_one_definition_item() {
             .map(|form| ref_text(&document, form.first_ref, form.ref_count))
             .collect::<Vec<_>>(),
         ["--one", "--two", "--three"]
+    );
+}
+
+#[test]
+fn native_check_rejects_a_form_crossing_tq_term_roots() {
+    // The exact TP/TQ source was run through the pinned reference first.
+    // Each head is a distinct term root even though both belong to one item.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "cross-root.1",
+            b".TH X 1\n.SH D\n.TP\nONE\n.TQ\nTWO\nBODY\n".to_vec(),
+        )
+        .unwrap();
+    let limits = Limits::default();
+    let storage = InputStorage::new("cross-root.1", &bundle, InputFormat::Man, &limits).unwrap();
+    let (status, pointer, failure) = raw_render(&storage.view(78, PROFILE_UTF8), &limits);
+    assert_eq!(status, STATUS_OK, "{failure:?}");
+    let handle = ResultHandle(NonNull::new(pointer).unwrap());
+    let mut view = ResultView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_view(handle.0.as_ptr(), &raw mut view) },
+        STATUS_OK
+    );
+    let forms = unsafe {
+        std::slice::from_raw_parts_mut(
+            view.forms.ptr.cast::<FormView>().cast_mut(),
+            view.forms.count as usize,
+        )
+    };
+    assert_eq!(forms.len(), 2);
+    forms[0].ref_count = 2;
+    let mut failure = FailureView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION
     );
 }
 
@@ -367,6 +478,39 @@ fn mdoc_multiple_labels_produce_independent_forms_and_hints() {
             .forms
             .iter()
             .map(|form| ref_text(&document, form.first_ref, form.ref_count))
+            .collect::<Vec<_>>(),
+        ["-a", "-b"]
+    );
+}
+
+#[test]
+fn one_mdoc_form_retains_each_native_name_hint() {
+    // This exact source was run through the pinned reference first.
+    // `mdoc_term.c::termp_it_pre` executes both Fl nodes even though an Ar
+    // occurrence keeps the complete head in one authored form.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "hint-runs.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bl -tag\n.It Fl a Ar file Fl b\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "hint-runs.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("one form retains multiple native hint runs");
+    assert_eq!(document.forms.len(), 1, "{document:#?}");
+    assert_eq!(document.name_hints.len(), 2, "{document:#?}");
+    assert_eq!(
+        document
+            .name_hints
+            .iter()
+            .map(|hint| ref_text(&document, hint.first_ref, hint.ref_count))
             .collect::<Vec<_>>(),
         ["-a", "-b"]
     );

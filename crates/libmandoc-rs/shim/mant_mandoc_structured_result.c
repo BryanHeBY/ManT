@@ -37,89 +37,101 @@ allocation_fits(uint32_t count, size_t item_size)
 }
 
 static int
-valid_dense_ordinals(const struct mant_structured_result *result,
+prepare_validation_scratch(const struct mant_structured_result *result,
     struct structured_session *session)
 {
-	uint32_t *owner_roots, *parent_children, *list_items;
-	uint32_t i, j, expected, owner_slots, parent_slots, list_slots;
-	int valid;
+	struct mant_structured_result *mutable_result;
+	uint32_t root_slots, block_slots;
 
-	if (session == NULL) {
-		for (i = 0; i < result->content_root_count; i++) {
-			expected = 0;
-			for (j = 0; j < i; j++)
-				if (result->content_roots[j].owner ==
-				    result->content_roots[i].owner)
-					expected++;
-			if (result->content_roots[i].ordinal != expected)
-				return 0;
-		}
-		for (i = 0; i < result->block_count; i++) {
-			expected = 0;
-			for (j = 0; j < i; j++)
-				if (result->blocks[j].parent == result->blocks[i].parent)
-					expected++;
-			if (result->blocks[i].ordinal != expected)
-				return 0;
-		}
-		for (i = 0; i < result->item_count; i++) {
-			expected = 0;
-			for (j = 0; j < i; j++)
-				if (result->items[j].list == result->items[i].list)
-					expected++;
-			if (result->items[i].ordinal != expected)
-				return 0;
-		}
-		return 1;
-	}
-	owner_slots = result->owner_count;
-	parent_slots = result->block_count + 1;
-	list_slots = result->list_count;
-	if (parent_slots == 0 ||
-	    !allocation_fits(owner_slots, sizeof(*owner_roots)) ||
-	    !allocation_fits(parent_slots, sizeof(*parent_children)) ||
-	    !allocation_fits(list_slots, sizeof(*list_items)))
+	if (result->validation_ready != 0)
+		return result->validation_owner_count == result->owner_count &&
+		    result->validation_content_root_count ==
+		    result->content_root_count &&
+		    result->validation_block_count == result->block_count &&
+		    result->validation_list_count == result->list_count &&
+		    result->validation_item_count == result->item_count &&
+		    result->validation_content_atom_count ==
+		    result->content_atom_count;
+	if (session == NULL)
 		return 0;
-	owner_roots = owner_slots == 0 ? NULL : mant_structured_allocate(session,
-	    (uint64_t)owner_slots * sizeof(*owner_roots), 1,
-	    MANT_STRUCTURED_STAGE_CHECK);
-	parent_children = mant_structured_allocate(session,
-	    (uint64_t)parent_slots * sizeof(*parent_children), 1,
-	    MANT_STRUCTURED_STAGE_CHECK);
-	list_items = list_slots == 0 ? NULL : mant_structured_allocate(session,
-	    (uint64_t)list_slots * sizeof(*list_items), 1,
-	    MANT_STRUCTURED_STAGE_CHECK);
-	if ((owner_slots != 0 && owner_roots == NULL) ||
-	    parent_children == NULL ||
-	    (list_slots != 0 && list_items == NULL)) {
-		free(owner_roots);
-		free(parent_children);
-		free(list_items);
+	root_slots = result->owner_count > result->content_root_count ?
+	    result->owner_count : result->content_root_count;
+	block_slots = result->block_count + 1;
+	if (block_slots == 0 ||
+	    !allocation_fits(root_slots, sizeof(uint32_t)) ||
+	    !allocation_fits(block_slots, sizeof(uint32_t)) ||
+	    !allocation_fits(result->list_count, sizeof(uint32_t)) ||
+	    !allocation_fits(result->content_atom_count, sizeof(uint8_t)))
 		return 0;
-	}
-	valid = 1;
+	mutable_result = (struct mant_structured_result *)result;
+	mutable_result->validation_root_slots = root_slots;
+	mutable_result->validation_block_slots = block_slots;
+	mutable_result->validation_list_slots = result->list_count;
+	mutable_result->validation_atom_slots = result->content_atom_count;
+	mutable_result->validation_roots = root_slots == 0 ? NULL :
+	    mant_structured_allocate(session,
+	    (uint64_t)root_slots * sizeof(uint32_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
+	mutable_result->validation_blocks = mant_structured_allocate(session,
+	    (uint64_t)block_slots * sizeof(uint32_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
+	mutable_result->validation_lists = result->list_count == 0 ? NULL :
+	    mant_structured_allocate(session,
+	    (uint64_t)result->list_count * sizeof(uint32_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
+	mutable_result->validation_atoms = result->content_atom_count == 0 ?
+	    NULL : mant_structured_allocate(session,
+	    (uint64_t)result->content_atom_count * sizeof(uint8_t), 1,
+	    MANT_STRUCTURED_STAGE_CHECK);
+	if ((root_slots != 0 && result->validation_roots == NULL) ||
+	    result->validation_blocks == NULL ||
+	    (result->list_count != 0 && result->validation_lists == NULL) ||
+	    (result->content_atom_count != 0 &&
+	    result->validation_atoms == NULL))
+		return 0;
+	mutable_result->validation_owner_count = result->owner_count;
+	mutable_result->validation_content_root_count =
+	    result->content_root_count;
+	mutable_result->validation_block_count = result->block_count;
+	mutable_result->validation_list_count = result->list_count;
+	mutable_result->validation_item_count = result->item_count;
+	mutable_result->validation_content_atom_count =
+	    result->content_atom_count;
+	mutable_result->validation_ready = 1;
+	return 1;
+}
+
+static int
+valid_dense_ordinals(const struct mant_structured_result *result)
+{
+	uint32_t i;
+
+	if (result->validation_root_slots != 0)
+		memset(result->validation_roots, 0,
+		    (size_t)result->validation_root_slots * sizeof(uint32_t));
+	memset(result->validation_blocks, 0,
+	    (size_t)result->validation_block_slots * sizeof(uint32_t));
+	if (result->validation_list_slots != 0)
+		memset(result->validation_lists, 0,
+		    (size_t)result->validation_list_slots * sizeof(uint32_t));
 	for (i = 0; i < result->content_root_count; i++) {
 		const struct mant_structured_content_root_view *root =
 		    result->content_roots + i;
-		if (root->ordinal != owner_roots[root->owner - 1]++) {
-			valid = 0;
-			break;
-		}
+		if (root->ordinal !=
+		    result->validation_roots[root->owner - 1]++)
+			return 0;
 	}
-	for (i = 0; valid && i < result->block_count; i++) {
+	for (i = 0; i < result->block_count; i++) {
 		const struct mant_structured_block_view *block = result->blocks + i;
-		if (block->ordinal != parent_children[block->parent]++)
-			valid = 0;
+		if (block->ordinal != result->validation_blocks[block->parent]++)
+			return 0;
 	}
-	for (i = 0; valid && i < result->item_count; i++) {
+	for (i = 0; i < result->item_count; i++) {
 		const struct mant_structured_item_view *item = result->items + i;
-		if (item->ordinal != list_items[item->list - 1]++)
-			valid = 0;
+		if (item->ordinal != result->validation_lists[item->list - 1]++)
+			return 0;
 	}
-	free(owner_roots);
-	free(parent_children);
-	free(list_items);
-	return valid;
+	return 1;
 }
 
 int
@@ -148,7 +160,7 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		MANT_METADATA_ARCH_PRESENT, MANT_METADATA_NAME_PRESENT,
 		MANT_METADATA_DATE_PRESENT, MANT_METADATA_ALIAS_PRESENT };
 	uint32_t i, expected_ordinal, previous_root, next_form;
-	uint32_t previous_item_owner, list_index;
+	uint32_t previous_hint_form, previous_item_owner, list_index;
 
 	if (result == NULL || result->magic != MANT_STRUCTURED_MAGIC ||
 	    result->root_source != 1 ||
@@ -176,6 +188,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 	    (result->diagnostic_count != 0) != (result->diagnostics != NULL) ||
 	    result->source_maps == NULL ||
 	    result->source_map_count < result->source_count)
+		return 0;
+	if (!prepare_validation_scratch(result, session))
 		return 0;
 	metadata = &result->metadata;
 	if ((metadata->macroset != MANT_FORMAT_MAN &&
@@ -358,6 +372,9 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    content_ref->byte_end))
 			return 0;
 	}
+	if (result->validation_atom_slots != 0)
+		memset(result->validation_atoms, 0,
+		    (size_t)result->validation_atom_slots * sizeof(uint8_t));
 	for (i = 0; i < result->link_count; i++) {
 		uint32_t ref_index, previous_atom;
 
@@ -397,27 +414,18 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 			    link->first_label_ref - 1 + ref_index;
 			atom = result->content_atoms + content_ref->atom - 1;
 			if (atom->link != link->key || atom->owner != link->owner ||
-			    content_ref->atom <= previous_atom)
+			    content_ref->byte_start != 0 ||
+			    content_ref->byte_end != atom->text.len ||
+			    content_ref->atom <= previous_atom ||
+			    result->validation_atoms[content_ref->atom - 1] != 0)
 				return 0;
+			result->validation_atoms[content_ref->atom - 1] = 1;
 			previous_atom = content_ref->atom;
 		}
 	}
 	for (i = 0; i < result->content_atom_count; i++) {
-		uint32_t found, ref_index;
-
 		atom = result->content_atoms + i;
-		if (atom->link == 0)
-			continue;
-		link = result->links + atom->link - 1;
-		found = 0;
-		for (ref_index = 0; ref_index < link->label_ref_count;
-		    ref_index++) {
-			content_ref = result->content_refs +
-			    link->first_label_ref - 1 + ref_index;
-			if (content_ref->atom == atom->key)
-				found++;
-		}
-		if (found != 1)
+		if ((atom->link != 0) != (result->validation_atoms[i] == 1))
 			return 0;
 	}
 	for (i = 0; i < result->block_count; i++) {
@@ -512,8 +520,13 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 	}
 	if (next_form != result->form_count + 1)
 		return 0;
+	if (result->content_root_count != 0)
+		memset(result->validation_roots, 0,
+		    (size_t)result->content_root_count * sizeof(uint32_t));
 	for (i = 0; i < result->form_count; i++) {
-		uint32_t ref_index;
+		uint32_t form_root, ref_index;
+
+		form_root = 0;
 		form = result->forms + i;
 		if (form->key != i + 1 || form->owner == 0 ||
 		    form->owner > result->owner_count || form->role > MANT_ROLE_PATH ||
@@ -527,13 +540,22 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		for (ref_index = 0; ref_index < form->ref_count; ref_index++) {
 			content_ref = result->content_refs + form->first_ref - 1 +
 			    ref_index;
-			if (result->content_atoms[content_ref->atom - 1].owner !=
-			    form->owner || result->content_roots[
-			    result->content_atoms[content_ref->atom - 1].root - 1].kind !=
-			    MANT_ROOT_TERM)
+			atom = result->content_atoms + content_ref->atom - 1;
+			if (atom->owner != form->owner || result->content_roots[
+			    atom->root - 1].kind != MANT_ROOT_TERM ||
+			    (form_root != 0 && form_root != atom->root))
 				return 0;
+			form_root = atom->root;
 		}
+		if (form_root == 0)
+			return 0;
+		result->validation_roots[form_root - 1] = 1;
 	}
+	for (i = 0; i < result->content_root_count; i++)
+		if ((result->content_roots[i].kind == MANT_ROOT_TERM) !=
+		    (result->validation_roots[i] == 1))
+			return 0;
+	previous_hint_form = 0;
 	for (i = 0; i < result->name_hint_count; i++) {
 		uint32_t relative_ref;
 
@@ -542,7 +564,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    hint->form > result->form_count || hint->first_ref == 0 ||
 		    hint->ref_count == 0 || hint->provenance == 0 ||
 		    hint->provenance > result->provenance_count ||
-		    hint->reserved != 0 || hint->first_ref <
+		    hint->reserved != 0 || hint->form < previous_hint_form ||
+		    hint->first_ref <
 		    result->forms[hint->form - 1].first_ref)
 			return 0;
 		relative_ref = hint->first_ref -
@@ -551,8 +574,9 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    hint->ref_count >
 		    result->forms[hint->form - 1].ref_count - relative_ref)
 			return 0;
+		previous_hint_form = hint->form;
 	}
-	if (!valid_dense_ordinals(result, session))
+	if (!valid_dense_ordinals(result))
 		return 0;
 	for (i = 0; i < result->diagnostic_count; i++) {
 		diagnostic = result->diagnostics + i;
@@ -690,6 +714,10 @@ mant_structured_result_free(struct mant_structured_result *result)
 	free(result->name_hints);
 	free(result->diagnostics);
 	free(result->source_maps);
+	free(result->validation_roots);
+	free(result->validation_blocks);
+	free(result->validation_lists);
+	free(result->validation_atoms);
 	result->magic = 0;
 	free(result);
 }

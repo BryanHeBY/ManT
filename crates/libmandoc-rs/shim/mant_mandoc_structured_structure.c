@@ -11,6 +11,14 @@
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_structured_structure.h"
 
+enum man_marker_style {
+	MAN_MARKER_NONE,
+	MAN_MARKER_BULLET,
+	MAN_MARKER_DOT,
+	MAN_MARKER_PAREN_SUFFIX,
+	MAN_MARKER_PAREN_PAIR
+};
+
 static uint32_t
 context_parent(const struct structured_session *session,
     const struct structured_node_context *context)
@@ -124,7 +132,7 @@ man_named_bullet(const struct roff_node *node)
 }
 
 static uint32_t
-man_ordinal_start(const struct roff_node *node)
+man_ordinal_start(const struct roff_node *node, uint32_t *style)
 {
 	const struct roff_node *text_node;
 	const char *text;
@@ -149,10 +157,15 @@ man_ordinal_start(const struct roff_node *node)
 	if (parenthesized) {
 		if (*text++ != ')')
 			return 0;
-	} else if (*text != '.' && *text != ')')
-		return 0;
-	else
+		*style = MAN_MARKER_PAREN_PAIR;
+	} else if (*text == '.') {
+		*style = MAN_MARKER_DOT;
 		text++;
+	} else if (*text == ')') {
+		*style = MAN_MARKER_PAREN_SUFFIX;
+		text++;
+	} else
+		return 0;
 	return *skip_marker_decoration(text) == '\0' && value != 0 ?
 	    (uint32_t)value : 0;
 }
@@ -307,7 +320,8 @@ mant_structured_enter_node(struct structured_session *session,
     const struct roff_node *node)
 {
 	struct structured_node_context inherited, *contexts, *context;
-	uint32_t block_kind, kind, list;
+	uint32_t block_kind, kind, list, marker_style, start;
+	int marker;
 
 	memset(&inherited, 0, sizeof(inherited));
 	if (session->node_depth > 1)
@@ -349,24 +363,43 @@ mant_structured_enter_node(struct structured_session *session,
 			    context->list - 1].block;
 			return 1;
 		}
-		if (node->tok == MAN_IP && man_named_bullet(node)) {
+		marker = 0;
+		marker_style = MAN_MARKER_NONE;
+		start = 0;
+		if (node->tok != MAN_TQ && man_named_bullet(node)) {
 			kind = MANT_LIST_BULLET;
 			block_kind = MANT_BLOCK_LIST;
-			list = append_list(session, context, node, kind, block_kind,
-			    0, 0);
-		} else if (node->tok == MAN_IP &&
-		    (kind = man_ordinal_start(node)) != 0) {
+			marker_style = MAN_MARKER_BULLET;
+			marker = 1;
+		} else if (node->tok != MAN_TQ &&
+		    (start = man_ordinal_start(node, &marker_style)) != 0) {
+			kind = MANT_LIST_ORDERED;
 			block_kind = MANT_BLOCK_LIST;
-			list = append_list(session, context, node, MANT_LIST_ORDERED,
-			    block_kind, kind, 0);
+			marker = 1;
 		} else {
 			kind = MANT_LIST_DEFINITION;
 			block_kind = MANT_BLOCK_DEFINITION_LIST;
-			list = append_list(session, context, node, kind, block_kind,
-			    0, 0);
 		}
+		if (marker && session->last_man_marker_node != NULL &&
+		    session->last_man_marker_node->next == node &&
+		    session->last_man_marker_kind == kind &&
+		    session->last_man_marker_style == marker_style &&
+		    (kind != MANT_LIST_ORDERED ||
+		    session->next_man_marker_ordinal == start))
+			list = session->last_man_marker_list;
+		else
+			list = append_list(session, context, node, kind, block_kind,
+			    start, 0);
 		if (list == 0 || append_item(session, context, node, list) == 0)
 			return 0;
+		if (marker) {
+			session->last_man_marker_node = node;
+			session->last_man_marker_list = list;
+			session->last_man_marker_kind = kind;
+			session->last_man_marker_style = marker_style;
+			session->next_man_marker_ordinal = kind == MANT_LIST_ORDERED &&
+			    start != UINT32_MAX ? start + 1 : 0;
+		}
 		session->last_man_item = context->item;
 		session->last_man_list = context->list;
 		session->last_man_parent_block = context_parent(session,
@@ -380,6 +413,9 @@ mant_structured_enter_node(struct structured_session *session,
 		session->pending_item_target = node;
 	if ((node->tok == MAN_PP || node->tok == MAN_LP || node->tok == MAN_P ||
 	    node->tok == MAN_IP || node->tok == MAN_TP) &&
+	    node->type != ROFFT_HEAD && node->type != ROFFT_BODY)
+		session->man_continuation_pending = 0;
+	if ((node->tok == MAN_RS || node->tok == MAN_RE) &&
 	    node->type != ROFFT_HEAD && node->type != ROFFT_BODY)
 		session->man_continuation_pending = 0;
 	if (context->item != 0 && node->type == ROFFT_HEAD &&
@@ -416,6 +452,8 @@ mant_structured_leave_node(struct structured_session *session,
 		    context->item);
 	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MDOC_Bl)
 		session->pending_item_target = NULL;
+	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MAN_RS)
+		session->man_continuation_pending = 0;
 	if (node != NULL && (((node->type == ROFFT_HEAD ||
 	    node->type == ROFFT_BODY) &&
 	    (node->tok == MDOC_It || node->tok == MAN_IP ||

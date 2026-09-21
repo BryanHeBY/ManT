@@ -38,6 +38,41 @@ fn inline_link_head_and_body_phases_do_not_split_the_surrounding_root() {
 }
 
 #[test]
+fn inline_mail_head_and_body_phases_do_not_split_the_surrounding_root() {
+    // The exact source was run through the pinned reference first.
+    // `man_term.c::print_man_node` traverses MT/ME in the surrounding flow,
+    // with the same non-structural head/body boundary rule as UR/UE.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "inline-mail.1",
+            b".TH X 1\n.SH D\nBefore\n.MT user@example.test\nlabel\n.ME\nafter.\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "inline-mail.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("inline mail remains in one native prose root");
+    let body_roots = document
+        .content_roots
+        .iter()
+        .filter(|root| root.kind == ROOT_BODY)
+        .collect::<Vec<_>>();
+    assert_eq!(body_roots.len(), 1, "{document:#?}");
+    let text = document
+        .content_atoms
+        .iter()
+        .filter(|atom| atom.root == body_roots[0].key)
+        .map(|atom| atom.text.as_str())
+        .collect::<String>();
+    assert_eq!(text, "Before label <user@example.test> after.");
+}
+
+#[test]
 fn body_is_collected_into_heading_and_section_owned_prose() {
     // The registered oracle renders `body` from this exact input.
     // Pinned `man_term.c::print_man_node` supplies exact authored nodes;
@@ -218,7 +253,7 @@ fn external_link_labels_reference_shared_atoms() {
 }
 
 #[test]
-fn native_check_rejects_empty_and_split_utf8_content_refs() {
+fn native_check_rejects_empty_partial_and_split_utf8_link_refs() {
     // Oracle: registered C02b UTF-8/78 `.UR` probe renders the authored
     // `café` label.  Pinned `term.c::encode1` retains é as one scalar;
     // label references therefore cannot start inside its UTF-8 encoding.
@@ -231,7 +266,7 @@ fn native_check_rejects_empty_and_split_utf8_content_refs() {
                 .to_vec(),
         )
         .unwrap();
-    for split_utf8 in [false, true] {
+    for mutation in ["empty", "partial", "split-utf8"] {
         let limits = Limits::default();
         let storage = InputStorage::new("link.1", &bundle, InputFormat::Man, &limits).unwrap();
         let (status, pointer, failure) = raw_render(&storage.view(78, PROFILE_UTF8), &limits);
@@ -267,10 +302,11 @@ fn native_check_rejects_empty_and_split_utf8_content_refs() {
                 std::str::from_utf8(bytes).is_ok_and(|text| text.contains("café"))
             })
             .expect("authored UTF-8 label reference");
-        if split_utf8 {
-            content_ref.byte_start = content_ref.byte_end - 1;
-        } else {
-            content_ref.byte_start = content_ref.byte_end;
+        match mutation {
+            "empty" => content_ref.byte_start = content_ref.byte_end,
+            "partial" => content_ref.byte_start = 1,
+            "split-utf8" => content_ref.byte_start = content_ref.byte_end - 1,
+            _ => unreachable!(),
         }
         let mut failure = FailureView::default();
         assert_eq!(
