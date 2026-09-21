@@ -24,9 +24,10 @@ use raw::{
     PlacementView, ProvenanceView, ROOT_BODY, ROOT_HEADING, ROOT_KIND_LAST, ROOT_TERM,
     RelationView, ResultHandleRaw, ResultView, STATUS_BUDGET, STATUS_BUILDER_ALLOC,
     STATUS_INVALID_INPUT, STATUS_NATIVE, STATUS_OK, STATUS_REENTRANT, STATUS_RELATION,
-    STATUS_UNSUPPORTED, STYLE_MASK, SliceView, SourceView, SpanView, TableCellView, TableRowView,
-    TableView, mant_structured_abi_version, mant_structured_render, mant_structured_result_check,
-    mant_structured_result_free, mant_structured_result_view,
+    STATUS_UNSUPPORTED, STYLE_MASK, SliceView, SourceView, SpanView, TARGET_ORIGIN_AUTHORED,
+    TARGET_ORIGIN_GENERATED, TableCellView, TableRowView, TableView, mant_structured_abi_version,
+    mant_structured_render, mant_structured_result_check, mant_structured_result_free,
+    mant_structured_result_view,
 };
 use transfer::{
     OwnedBlock, OwnedContentAtom, OwnedContentRef, OwnedContentRoot, OwnedDiagnostic, OwnedForm,

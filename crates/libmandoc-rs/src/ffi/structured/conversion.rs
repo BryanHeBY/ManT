@@ -8,6 +8,7 @@ use super::{
     LIST_ORDERED, LIST_PLAIN, Limits, NativeStructuredError, OwnedMetadata, OwnedProvenance,
     OwnedStructuredDocument, PROFILE_ASCII, PROFILE_UTF8, STATUS_BUDGET, STATUS_BUILDER_ALLOC,
     STATUS_INVALID_INPUT, STATUS_NATIVE, STATUS_REENTRANT, STATUS_RELATION, STATUS_UNSUPPORTED,
+    TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -397,6 +398,17 @@ pub(super) fn semantic_document(
         .map_err(semantic_allocation)?;
     for item in items {
         let forms = semantic_range(item.first_form, item.form_count, "item form")?;
+        let target_origin = match item.target_origin {
+            0 => None,
+            TARGET_ORIGIN_GENERATED => Some(crate::structured::NativeTargetOrigin::Generated),
+            TARGET_ORIGIN_AUTHORED => Some(crate::structured::NativeTargetOrigin::Authored),
+            _ => return Err(semantic_invalid("native item target origin is unknown")),
+        };
+        if item.target.is_some() != target_origin.is_some() {
+            return Err(semantic_invalid(
+                "native item target and origin presence disagree",
+            ));
+        }
         typed_items.push(NativeItem {
             key: NativeItemKey::new(item.key)
                 .ok_or_else(|| semantic_invalid("native item key is absent"))?,
@@ -407,6 +419,7 @@ pub(super) fn semantic_document(
             ordinal: item.ordinal,
             forms,
             target: item.target,
+            target_origin,
             provenance: ProvenanceKey::new(item.provenance)
                 .ok_or_else(|| semantic_invalid("native item provenance key is absent"))?,
         });

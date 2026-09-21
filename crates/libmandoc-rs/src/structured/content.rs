@@ -445,6 +445,12 @@ impl NativeList {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeTargetOrigin {
+    Generated,
+    Authored,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NativeItem {
     pub(crate) key: NativeItemKey,
@@ -453,6 +459,7 @@ pub struct NativeItem {
     pub(crate) ordinal: u32,
     pub(crate) forms: Range<usize>,
     pub(crate) target: Option<String>,
+    pub(crate) target_origin: Option<NativeTargetOrigin>,
     pub(crate) provenance: ProvenanceKey,
 }
 
@@ -480,6 +487,10 @@ impl NativeItem {
     #[must_use]
     pub fn target(&self) -> Option<&str> {
         self.target.as_deref()
+    }
+    #[must_use]
+    pub const fn target_origin(&self) -> Option<NativeTargetOrigin> {
+        self.target_origin
     }
     #[must_use]
     pub const fn provenance(&self) -> ProvenanceKey {

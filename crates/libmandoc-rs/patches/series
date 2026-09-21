@@ -27,3 +27,4 @@
 0027-bound-escape-parser-depth.patch
 0028-bind-structured-source-diagnostics.patch
 0029-observe-terminal-structure.patch
+0030-expose-manual-tag-origin.patch

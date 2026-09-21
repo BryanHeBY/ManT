@@ -39,7 +39,7 @@ pub(super) fn render_prelude_profile(
         observed: 0,
         allowed: 0,
     })?;
-    if unsafe { mant_structured_abi_version() } != 2 {
+    if unsafe { mant_structured_abi_version() } != 3 {
         return Err(relation_error());
     }
     let storage = InputStorage::new(root, bundle, format, limits)?;

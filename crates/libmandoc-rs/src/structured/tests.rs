@@ -1,6 +1,7 @@
 //! Public structured-model invariants.
 
 use super::*;
+use crate::{InputFormat, SourceBundle};
 
 #[test]
 fn keys_reject_the_absent_sentinel() {
@@ -83,6 +84,27 @@ fn line_ends_and_hard_breaks_have_no_numeric_sentinels() {
             bytes: 0..1,
         }),
         None
+    );
+}
+
+#[test]
+fn item_target_origins_cross_the_typed_boundary() {
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "target-origins.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag\n.It Ev DEMO_HOME\nBODY\n.El\n.Sh OPTIONS\n.Bl -tag\n.Tg Mixed.Target\n.It Fl mixed\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_bundle("target-origins.1", &bundle, InputFormat::Mdoc).unwrap();
+    assert_eq!(
+        document.items()[0].target_origin(),
+        Some(NativeTargetOrigin::Generated)
+    );
+    assert_eq!(
+        document.items()[1].target_origin(),
+        Some(NativeTargetOrigin::Authored)
     );
 }
 

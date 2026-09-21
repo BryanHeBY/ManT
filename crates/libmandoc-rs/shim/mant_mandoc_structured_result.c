@@ -519,8 +519,11 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    !zero_bytes(item->target_reserved_bytes,
 		    sizeof(item->target_reserved_bytes)) ||
 		    (item->target_present == 0 ? item->target.ptr != NULL ||
-		    item->target.len != 0 : !valid_string(item->target) ||
-		    item->target.len == 0) || item->provenance == 0 ||
+		    item->target.len != 0 || item->target_origin !=
+		    MANT_TARGET_ORIGIN_ABSENT : (!valid_string(item->target) ||
+		    item->target.len == 0 || (item->target_origin !=
+		    MANT_TARGET_ORIGIN_GENERATED && item->target_origin !=
+		    MANT_TARGET_ORIGIN_AUTHORED))) || item->provenance == 0 ||
 		    item->provenance > result->provenance_count ||
 		    item->reserved != 0 ||
 		    (item->form_count == 0 ? item->first_form != 0 :

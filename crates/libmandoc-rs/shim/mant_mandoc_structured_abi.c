@@ -7,7 +7,7 @@
 uint32_t
 mant_structured_abi_version(void)
 {
-	return 2;
+	return 3;
 }
 
 uint64_t
@@ -51,6 +51,8 @@ mant_structured_discriminant_fingerprint(void)
 		MANT_STYLE_LITERAL, MANT_STYLE_UNDERLINE,
 		/* role */ 0, MANT_ROLE_FLAG, MANT_ROLE_ENVIRONMENT_VARIABLE,
 		MANT_ROLE_ARGUMENT, MANT_ROLE_COMMAND_OR_DIRECTIVE, MANT_ROLE_PATH,
+		/* target origin */ MANT_TARGET_ORIGIN_ABSENT,
+		MANT_TARGET_ORIGIN_GENERATED, MANT_TARGET_ORIGIN_AUTHORED,
 		/* owner */ 0, MANT_OWNER_DOCUMENT, MANT_OWNER_SECTION,
 		MANT_OWNER_PARAGRAPH, MANT_OWNER_LIST_ITEM,
 		MANT_OWNER_DEFINITION_ITEM, MANT_OWNER_TABLE_CELL,
@@ -502,6 +504,7 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_item_view, first_form),
 		FIELD(struct mant_structured_item_view, form_count),
 		FIELD(struct mant_structured_item_view, target_present),
+		FIELD(struct mant_structured_item_view, target_origin),
 		FIELD(struct mant_structured_item_view, target_reserved_bytes),
 		FIELD(struct mant_structured_item_view, target),
 		FIELD(struct mant_structured_item_view, provenance),

@@ -7,6 +7,7 @@
 #include "mandoc.h"
 #include "roff.h"
 #include "mdoc.h"
+#include "tag.h"
 
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_structured_structure.h"
@@ -388,6 +389,7 @@ set_item_target(struct structured_session *session, uint32_t item_key,
 {
 	struct mant_structured_item_view *item;
 	size_t target_length;
+	uint8_t origin;
 
 	if (item_key == 0 || item_key > session->result->item_count ||
 	    node == NULL || (node->flags & NODE_ID) == 0 || node->tag == NULL ||
@@ -398,23 +400,28 @@ set_item_target(struct structured_session *session, uint32_t item_key,
 	if (!mant_structured_valid_utf8((const uint8_t *)node->tag,
 	    target_length))
 		return 1;
+	origin = tag_is_manual(node->tag) ? MANT_TARGET_ORIGIN_AUTHORED :
+	    MANT_TARGET_ORIGIN_GENERATED;
 	if (item->target_present != 0) {
 		if (item->target.len == target_length &&
-		    memcmp(item->target.ptr, node->tag, target_length) == 0)
+		    memcmp(item->target.ptr, node->tag, target_length) == 0) {
+			if (origin == MANT_TARGET_ORIGIN_AUTHORED)
+				item->target_origin = origin;
 			return 1;
-		/*
-		 * Inline automatic tags are recoverable from native markup, but a
-		 * Tg retained on itself or moved onto an It owner is not.  Until the
-		 * item ABI carries multiple authored targets, fail rather than drop it.
-		 */
-		if (node->tok == MDOC_Tg || (node->tok == MDOC_It &&
-		    (node->type == ROFFT_HEAD || node->type == ROFFT_BODY))) {
+		}
+		if (item->target_origin == MANT_TARGET_ORIGIN_AUTHORED &&
+		    origin == MANT_TARGET_ORIGIN_AUTHORED) {
 			mant_structured_set_failure(session,
 			    MANT_STRUCTURED_UNSUPPORTED,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, 2, 1);
 			return 0;
 		}
-		return 1;
+		if (origin != MANT_TARGET_ORIGIN_AUTHORED)
+			return 1;
+		mant_structured_free_bytes(item->target);
+		memset(&item->target, 0, sizeof(item->target));
+		item->target_present = 0;
+		item->target_origin = MANT_TARGET_ORIGIN_ABSENT;
 	}
 	item->target.ptr = mant_structured_copy_bytes(session,
 	    (const uint8_t *)node->tag, target_length, 1,
@@ -423,6 +430,7 @@ set_item_target(struct structured_session *session, uint32_t item_key,
 		return 0;
 	item->target.len = target_length;
 	item->target_present = 1;
+	item->target_origin = origin;
 	return 1;
 }
 

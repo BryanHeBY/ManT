@@ -149,7 +149,7 @@ fn all_frozen_view_sizes_and_alignments_match() {
         architecture, name, date, alias_target, has_body, reserved_bytes, reserved);
     offsets!(28, ListView; key, block, kind, compact, start, provenance, reserved);
     offsets!(29, ItemView; key, list, owner, ordinal, first_form, form_count,
-        target_present, target_reserved_bytes, target, provenance, reserved);
+        target_present, target_origin, target_reserved_bytes, target, provenance, reserved);
 
     let discriminants: &[u32] = &[
         0, 1, 2, 3, 4, 5, 6, 7, // status
@@ -165,6 +165,7 @@ fn all_frozen_view_sizes_and_alignments_match() {
         0, 1, 2, 3, 4, // atom
         0, 1, 2, 4, 8, // style bits
         0, 1, 2, 3, 4, 5, // role
+        0, 1, 2, // target origin
         0, 1, 2, 3, 4, 5, 6, 7, // owner
         0, 1, 2, 3, 4, 5, // root
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, // block

@@ -49,6 +49,8 @@ pub(super) const LIST_ORDERED: u32 = 2;
 pub(super) const LIST_PLAIN: u32 = 3;
 pub(super) const LIST_DEFINITION: u32 = 4;
 pub(super) const LIST_NATIVE_MARKER: u32 = 5;
+pub(super) const TARGET_ORIGIN_GENERATED: u8 = 1;
+pub(super) const TARGET_ORIGIN_AUTHORED: u8 = 2;
 pub(super) const RESOLVE_NOT_FOUND: u32 = 1;
 pub(super) const RESOLVE_DENIED: u32 = 2;
 pub(super) const RESOLVE_PANIC: u32 = 4;
@@ -433,7 +435,8 @@ pub(super) struct ItemView {
     pub(super) first_form: u32,
     pub(super) form_count: u32,
     pub(super) target_present: u8,
-    pub(super) target_reserved_bytes: [u8; 7],
+    pub(super) target_origin: u8,
+    pub(super) target_reserved_bytes: [u8; 6],
     pub(super) target: BytesView,
     pub(super) provenance: u32,
     pub(super) reserved: u32,

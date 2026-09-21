@@ -127,6 +127,7 @@ pub(crate) struct OwnedItem {
     pub(crate) first_form: Option<u32>,
     pub(crate) form_count: u32,
     pub(crate) target: Option<String>,
+    pub(crate) target_origin: u8,
     pub(crate) provenance: u32,
 }
 
@@ -449,6 +450,7 @@ pub(super) fn copy_structured_document(
             target: (item.target_present == 1)
                 .then(|| copy_string(item.target))
                 .transpose()?,
+            target_origin: item.target_origin,
             provenance: item.provenance,
         });
     }

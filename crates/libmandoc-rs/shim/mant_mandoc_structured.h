@@ -135,6 +135,12 @@ enum mant_structured_role {
 	MANT_ROLE_PATH = 5
 };
 
+enum mant_structured_target_origin {
+	MANT_TARGET_ORIGIN_ABSENT = 0,
+	MANT_TARGET_ORIGIN_GENERATED = 1,
+	MANT_TARGET_ORIGIN_AUTHORED = 2
+};
+
 enum mant_structured_owner_kind {
 	MANT_OWNER_DOCUMENT = 1,
 	MANT_OWNER_SECTION = 2,
@@ -426,7 +432,8 @@ struct mant_structured_list_view {
 struct mant_structured_item_view {
 	uint32_t key, list, owner, ordinal, first_form, form_count;
 	uint8_t target_present;
-	uint8_t target_reserved_bytes[7];
+	uint8_t target_origin;
+	uint8_t target_reserved_bytes[6];
 	struct mant_bytes_view target;
 	uint32_t provenance, reserved;
 };

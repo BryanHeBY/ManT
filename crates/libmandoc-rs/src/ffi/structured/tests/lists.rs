@@ -642,10 +642,141 @@ fn nested_empty_mdoc_item_uses_its_own_list_target_scope() {
     assert_eq!(document.items.len(), 2, "{document:#?}");
     assert_eq!(document.items[0].list, document.lists[0].key);
     assert_eq!(document.items[0].target.as_deref(), Some("outer"));
+    assert_eq!(document.items[0].target_origin, TARGET_ORIGIN_GENERATED);
     assert_eq!(document.items[1].list, document.lists[1].key);
     assert_eq!(document.items[1].target.as_deref(), Some("nested-target"));
+    assert_eq!(document.items[1].target_origin, TARGET_ORIGIN_AUTHORED);
     let nested_block = &document.blocks[document.lists[1].block as usize - 1];
     assert_eq!(nested_block.owner, document.items[0].owner);
+}
+
+#[test]
+fn native_item_targets_distinguish_generated_and_authored_origins() {
+    // These exact mdoc and man sources were run through the pinned reference
+    // first. `tag_put(TAG_MANUAL)` owns Mixed.Target; the Ev and TP targets
+    // are formatter-generated even though their spellings need normalization.
+    let mut mdoc = SourceBundle::new();
+    mdoc.insert(
+        "target-origins.1",
+        b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag\n.It Ev DEMO_HOME\nBODY\n.El\n.Sh OPTIONS\n.Bl -tag\n.Tg Mixed.Target\n.It Fl mixed\nBODY\n.El\n"
+            .to_vec(),
+    )
+    .unwrap();
+    let document = render_prelude(
+        "target-origins.1",
+        &mdoc,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("native target origins survive collection");
+    assert_eq!(document.items[0].target.as_deref(), Some("DEMO_HOME"));
+    assert_eq!(document.items[0].target_origin, TARGET_ORIGIN_GENERATED);
+    assert_eq!(document.items[1].target.as_deref(), Some("Mixed.Target"));
+    assert_eq!(document.items[1].target_origin, TARGET_ORIGIN_AUTHORED);
+
+    let mut man = SourceBundle::new();
+    man.insert(
+        "target-origin.1",
+        b".TH X 1\n.SH OPTIONS\n.TP\n--set=KEY\nBODY\n".to_vec(),
+    )
+    .unwrap();
+    let man_document = render_prelude(
+        "target-origin.1",
+        &man,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("man target origin survives collection");
+    assert_eq!(man_document.items[0].target.as_deref(), Some("set=KEY"));
+    assert_eq!(man_document.items[0].target_origin, TARGET_ORIGIN_GENERATED);
+}
+
+#[test]
+fn manual_targets_win_native_tag_priority_collisions() {
+    // These exact sources were run through the pinned reference first.
+    // `tag.c::tag_put` removes NODE_ID from the lower-priority generated tag
+    // when a manual Tg with the same spelling arrives, regardless of order.
+    let generated_first = b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bl -tag\n.It Ev DUP\nFIRST\n.Tg DUP\n.It Fl next\nSECOND\n.El\n";
+    let manual_first = b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bl -tag\n.Tg DUP\n.It Fl first\nFIRST\n.It Ev DUP\nSECOND\n.El\n";
+
+    for (name, source, manual_item) in [
+        ("generated-first.1", generated_first.as_slice(), 1),
+        ("manual-first.1", manual_first.as_slice(), 0),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.to_vec()).unwrap();
+        let document = render_prelude(name, &bundle, InputFormat::Mdoc, 78, &Limits::default())
+            .expect("manual target wins native tag priority collision");
+        assert_eq!(document.items.len(), 2, "{document:#?}");
+        assert_eq!(document.items[manual_item].target.as_deref(), Some("DUP"));
+        assert_eq!(
+            document.items[manual_item].target_origin,
+            TARGET_ORIGIN_AUTHORED
+        );
+        assert_eq!(document.items[1 - manual_item].target, None);
+        assert_eq!(document.items[1 - manual_item].target_origin, 0);
+    }
+}
+
+#[test]
+fn native_checks_reject_unknown_item_target_origins() {
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "target-origin-check.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bl -tag\n.It Ev DEMO_HOME\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let limits = Limits::default();
+    let storage =
+        InputStorage::new("target-origin-check.1", &bundle, InputFormat::Mdoc, &limits).unwrap();
+    let (status, pointer, failure) = raw_render(&storage.view(78, PROFILE_UTF8), &limits);
+    assert_eq!(status, STATUS_OK, "{failure:?}");
+    let handle = ResultHandle(NonNull::new(pointer).unwrap());
+    let mut view = ResultView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_view(handle.0.as_ptr(), &raw mut view) },
+        STATUS_OK
+    );
+    let items = unsafe {
+        std::slice::from_raw_parts_mut(
+            view.items.ptr.cast::<ItemView>().cast_mut(),
+            view.items.count as usize,
+        )
+    };
+    assert_eq!(items[0].target_origin, TARGET_ORIGIN_GENERATED);
+    items[0].target_origin = 3;
+    let mut failure = FailureView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+
+    items[0].target_origin = 0;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "a present target requires an origin"
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+
+    let target = items[0].target;
+    items[0].target_present = 0;
+    items[0].target = BytesView::default();
+    items[0].target_origin = TARGET_ORIGIN_GENERATED;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "an absent target cannot retain an origin"
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+    items[0].target_present = 1;
+    items[0].target = target;
+    items[0].target_origin = TARGET_ORIGIN_GENERATED;
 }
 
 #[test]

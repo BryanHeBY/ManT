@@ -13,7 +13,7 @@ use super::{
     NativeStructuredError, OWNER_DEFINITION_ITEM, OWNER_KIND_LAST, OWNER_LIST_ITEM,
     PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_HEADING,
     ROOT_KIND_LAST, ROOT_TERM, ResultHandle, ResultView, STYLE_MASK, SliceView, SpanView,
-    StructuredSlices, alloc_error, relation_error,
+    StructuredSlices, TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED, alloc_error, relation_error,
 };
 
 pub(super) fn validate_metadata(metadata: MetadataView) -> Result<(), NativeStructuredError> {
@@ -424,8 +424,15 @@ pub(super) fn validate_structured_relations(
             })
         };
         let target_valid = match item.target_present {
-            0 => item.target.ptr.is_null() && item.target.len == 0,
-            1 => item.target.len != 0 && validate_utf8_view(item.target).is_ok(),
+            0 => item.target.ptr.is_null() && item.target.len == 0 && item.target_origin == 0,
+            1 => {
+                item.target.len != 0
+                    && validate_utf8_view(item.target).is_ok()
+                    && matches!(
+                        item.target_origin,
+                        TARGET_ORIGIN_GENERATED | TARGET_ORIGIN_AUTHORED
+                    )
+            }
             _ => false,
         };
         let expected_owner_kind = list_index
@@ -455,7 +462,7 @@ pub(super) fn validate_structured_relations(
             || (item.form_count != 0 && first_form != Some(next_form))
             || forms.is_none_or(|forms| forms.iter().any(|form| form.owner != item.owner))
             || !target_valid
-            || item.target_reserved_bytes != [0; 7]
+            || item.target_reserved_bytes != [0; 6]
             || !valid_required_key(item.provenance, slices.provenances.len())
             || item.reserved != 0
         {

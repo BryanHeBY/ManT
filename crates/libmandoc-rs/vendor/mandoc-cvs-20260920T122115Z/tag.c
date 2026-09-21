@@ -241,6 +241,23 @@ tag_exists(const char *tag)
 }
 
 /*
+ * Report whether the retained owner for this exact target came from .Tg.
+ * The embedding collector calls this while the parser and tag table are
+ * still alive; generated targets with the same spelling have already lost
+ * NODE_ID when TAG_MANUAL won priority in tag_put().
+ */
+int
+tag_is_manual(const char *tag)
+{
+	struct tag_entry *entry;
+
+	if (tag == NULL)
+		return 0;
+	entry = ohash_find(&tag_data, ohash_qlookup(&tag_data, tag));
+	return entry != NULL && entry->prio == TAG_MANUAL;
+}
+
+/*
  * For in-line elements, move the link target
  * to the enclosing paragraph when appropriate.
  */
