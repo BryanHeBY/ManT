@@ -11,6 +11,16 @@ fn root_text(document: &OwnedStructuredDocument, root: u32) -> String {
         .collect()
 }
 
+fn ref_text(document: &OwnedStructuredDocument, first: u32, count: u32) -> String {
+    document.content_refs[first as usize - 1..first as usize - 1 + count as usize]
+        .iter()
+        .map(|reference| {
+            let atom = &document.content_atoms[reference.atom as usize - 1];
+            &atom.text[reference.bytes.start as usize..reference.bytes.end as usize]
+        })
+        .collect()
+}
+
 #[test]
 fn man_tp_tq_forms_share_one_owner_without_borrowing_an_empty_body() {
     // Oracle run first with UTF-8 output at width 78. Pinned
@@ -44,8 +54,8 @@ Body B.
 
     assert_eq!(document.lists.len(), 4, "{document:#?}");
     assert_eq!(document.items.len(), 4, "{document:#?}");
-    assert_eq!(document.forms.len(), 5, "{document:#?}");
-    assert_eq!(document.items[0].form_count, 2);
+    assert_eq!(document.forms.len(), 6, "{document:#?}");
+    assert_eq!(document.items[0].form_count, 3);
     assert_eq!(document.items[1].form_count, 1);
     assert_eq!(document.items[1].owner + 1, document.items[2].owner);
     assert_eq!(document.items[2].owner + 1, document.items[3].owner);
@@ -57,6 +67,13 @@ Body B.
         .map(|root| root_text(&document, root.key))
         .collect::<Vec<_>>();
     assert_eq!(first_terms, ["--output, -o=FILE", "-O"]);
+    assert_eq!(
+        document.forms[..3]
+            .iter()
+            .map(|form| ref_text(&document, form.first_ref, form.ref_count))
+            .collect::<Vec<_>>(),
+        ["--output", "-o=FILE", "-O"]
+    );
     let empty_bodies = document
         .content_roots
         .iter()
@@ -185,7 +202,7 @@ Body B.
 }
 
 #[test]
-fn man_ip_ordinals_are_retained_as_native_markers() {
+fn man_ip_markers_retain_source_classification_and_ordered_boundaries() {
     // Reference output for this source displays 3., 4., and 9. in order.
     // Pinned `man_term.c::pre_IP` passes the marker through the native field;
     // the collector records it as term content instead of recreating spacing.
@@ -193,7 +210,7 @@ fn man_ip_ordinals_are_retained_as_native_markers() {
     bundle
         .insert(
             "ordered.1",
-            b".TH ORDERED 1\n.SH STEPS\n.IP 3.\nThird.\n.IP 4.\nFourth.\n.IP 9.\nNinth.\n".to_vec(),
+            b".TH ORDERED 1\n.SH STEPS\n.IP \\(bu\nBullet.\n.IP \"*\"\nStar.\n.IP 3.\nThird.\n.IP 4.\nFourth.\n.IP 9.\nNinth.\n.IP \"(1)\"\nParenthesized.\n".to_vec(),
         )
         .unwrap();
     let document = render_prelude(
@@ -204,12 +221,20 @@ fn man_ip_ordinals_are_retained_as_native_markers() {
         &Limits::default(),
     )
     .expect("man IP markers are collected");
-    assert_eq!(document.lists.len(), 3);
-    assert!(
+    assert_eq!(
         document
             .lists
             .iter()
-            .all(|list| list.kind == LIST_NATIVE_MARKER)
+            .map(|list| (list.kind, list.start))
+            .collect::<Vec<_>>(),
+        [
+            (LIST_BULLET, None),
+            (LIST_DEFINITION, None),
+            (LIST_ORDERED, Some(3)),
+            (LIST_ORDERED, Some(4)),
+            (LIST_ORDERED, Some(9)),
+            (LIST_ORDERED, Some(1)),
+        ]
     );
     let markers = document
         .items
@@ -223,5 +248,150 @@ fn man_ip_ordinals_are_retained_as_native_markers() {
                 .unwrap()
         })
         .collect::<Vec<_>>();
-    assert_eq!(markers, ["3.", "4.", "9."]);
+    assert_eq!(markers, ["•", "*", "3.", "4.", "9.", "(1)"]);
+}
+
+#[test]
+fn tq_continuation_expires_after_body_or_paragraph_boundary() {
+    // Both exact inputs were run through the pinned reference first.
+    // `man_macro.c::blk_imp` and the local continued-head patch retain only
+    // an immediately pending empty TP/TQ head.
+    for (body, separator) in [("FIRST BODY\n", ""), ("", ".PP\nBOUNDARY\n")] {
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "tq-state.1",
+                format!(
+                    ".TH STATE 1\n.SH D\n.TP\nFIRST\n{body}{separator}.TQ\nSECOND\nSECOND BODY\n"
+                )
+                .into_bytes(),
+            )
+            .unwrap();
+        let document = render_prelude(
+            "tq-state.1",
+            &bundle,
+            InputFormat::Man,
+            78,
+            &Limits::default(),
+        )
+        .expect("non-contiguous TQ remains an independent owner");
+        assert_eq!(document.items.len(), 2, "{document:#?}");
+        assert_ne!(document.items[0].owner, document.items[1].owner);
+        assert_eq!(document.items[0].form_count, 1);
+        assert_eq!(document.items[1].form_count, 1);
+    }
+}
+
+#[test]
+fn consecutive_tq_heads_remain_one_definition_item() {
+    // This exact source was run through the pinned reference first. The local
+    // continued-head patch follows `man_macro.c::blk_imp`: each empty TQ body
+    // keeps the next immediately adjacent TQ eligible for the same item.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "tq-chain.1",
+            b".TH C03 1\n.SH OPTIONS\n.TP\n.B --one\n.TQ\n.B --two\n.TQ\n.B --three\nBody.\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "tq-chain.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("adjacent TQ heads remain a single native definition item");
+    assert_eq!(document.items.len(), 1, "{document:#?}");
+    assert_eq!(document.items[0].form_count, 3);
+    assert_eq!(
+        document
+            .forms
+            .iter()
+            .map(|form| ref_text(&document, form.first_ref, form.ref_count))
+            .collect::<Vec<_>>(),
+        ["--one", "--two", "--three"]
+    );
+}
+
+#[test]
+fn empty_mdoc_item_receives_preceding_tg_target() {
+    // The pinned `mdoc_validate.c::post_tg` keeps Tg on its zero-width node
+    // when the following bullet item has no body child; `tag.c` does not move
+    // that target into nonexistent content.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "target.1",
+            b".Dd September 21, 2026\n.Dt TARGET 1\n.Os\n.Sh D\n.Bl -bullet\n.Tg empty-target\n.It\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "target.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("empty native item retains its pending target");
+    assert_eq!(document.items[0].target.as_deref(), Some("empty-target"));
+}
+
+#[test]
+fn mdoc_multiple_labels_produce_independent_forms_and_hints() {
+    // The exact source was checked against the pinned reference. Pinned
+    // `mdoc_term.c::termp_it_pre` executes both Fl nodes around punctuation;
+    // the collector retains two source-marked declaration occurrences.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "labels.1",
+            b".Dd September 21, 2026\n.Dt LABELS 1\n.Os\n.Sh D\n.Bl -tag\n.It Fl a , Fl b\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "labels.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("mdoc labels retain forms and native hints");
+    assert_eq!(document.items[0].form_count, 2);
+    assert_eq!(document.name_hints.len(), 2);
+    assert_eq!(
+        document
+            .forms
+            .iter()
+            .map(|form| ref_text(&document, form.first_ref, form.ref_count))
+            .collect::<Vec<_>>(),
+        ["-a", "-b"]
+    );
+}
+
+#[test]
+fn mdoc_column_lists_fail_closed_until_table_structure_lands() {
+    // The exact input was run through the pinned reference first. Pinned
+    // `mdoc_term.c::termp_it_pre` has a distinct LIST_column field path, so
+    // C03 must not flatten it through ordinary list ownership.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "column.1",
+            b".Dd September 21, 2026\n.Dt COLUMN 1\n.Os\n.Sh D\n.Bl -column one\n.It A\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let error = render_prelude(
+        "column.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect_err("column layout belongs to the later table slice");
+    assert_eq!(error.status, STATUS_UNSUPPORTED);
 }

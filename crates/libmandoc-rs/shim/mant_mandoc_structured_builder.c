@@ -323,9 +323,17 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 	return 1;
 }
 
-int
-mant_structured_finalize_term_root(struct structured_session *session,
-    uint32_t root_key, uint32_t item_key)
+static int
+form_separator(const struct mant_structured_content_atom_view *atom)
+{
+	return atom->kind == MANT_ATOM_TEXT && atom->role == 0 &&
+	    atom->text.len == 1 &&
+	    (atom->text.ptr[0] == ',' || atom->text.ptr[0] == '|');
+}
+
+static int
+append_term_form(struct structured_session *session, uint32_t root_key,
+    uint32_t item_key, uint32_t begin, uint32_t end)
 {
 	struct mant_structured_content_ref_view *refs, *ref;
 	struct mant_structured_form_view *forms, *form;
@@ -334,16 +342,18 @@ mant_structured_finalize_term_root(struct structured_session *session,
 	const struct mant_structured_content_atom_view *atom;
 	uint32_t first_ref, first_hint, hint_count, i, role;
 
-	if (root_key == 0 || root_key > session->result->content_root_count ||
-	    item_key == 0 || item_key > session->result->item_count)
-		return 1;
+	while (begin < end && session->result->content_atoms[begin].kind ==
+	    MANT_ATOM_WHITESPACE)
+		begin++;
+	while (end > begin && session->result->content_atoms[end - 1].kind ==
+	    MANT_ATOM_WHITESPACE)
+		end--;
 	first_ref = session->result->content_ref_count + 1;
 	first_hint = hint_count = role = 0;
-	for (i = 0; i < session->result->content_atom_count; i++) {
+	for (i = begin; i < end; i++) {
 		atom = session->result->content_atoms + i;
-		if (atom->root != root_key ||
-		    (atom->kind != MANT_ATOM_TEXT &&
-		    atom->kind != MANT_ATOM_WHITESPACE))
+		if (atom->kind != MANT_ATOM_TEXT &&
+		    atom->kind != MANT_ATOM_WHITESPACE)
 			continue;
 		if (atom->text.len == 0 || atom->text.len > UINT32_MAX)
 			continue;
@@ -361,16 +371,13 @@ mant_structured_finalize_term_root(struct structured_session *session,
 		memset(ref, 0, sizeof(*ref));
 		ref->atom = atom->key;
 		ref->byte_end = (uint32_t)atom->text.len;
-		if (atom->role != 0) {
+		if (atom->role != 0 && atom->role != MANT_ROLE_ARGUMENT) {
 			if (role == 0)
 				role = atom->role;
 			else if (role != atom->role)
 				role = UINT32_MAX;
 		}
-		if (atom->role == MANT_ROLE_FLAG ||
-		    atom->role == MANT_ROLE_ENVIRONMENT_VARIABLE ||
-		    atom->role == MANT_ROLE_COMMAND_OR_DIRECTIVE ||
-		    atom->role == MANT_ROLE_PATH) {
+		if (atom->role != 0 && atom->role != MANT_ROLE_ARGUMENT) {
 			if (first_hint == 0)
 				first_hint = session->result->content_ref_count;
 			if (first_hint + hint_count ==
@@ -408,7 +415,7 @@ mant_structured_finalize_term_root(struct structured_session *session,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
-	if (first_hint == 0 || hint_count == 0)
+	if (first_hint == 0 || hint_count == 0 || role == UINT32_MAX)
 		return 1;
 	hints = mant_structured_grow_array(session, session->result->name_hints,
 	    session->result->name_hint_count,
@@ -433,6 +440,38 @@ mant_structured_finalize_term_root(struct structured_session *session,
 	    (uint64_t)hint_count + 2,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER);
+}
+
+int
+mant_structured_finalize_term_root(struct structured_session *session,
+    uint32_t root_key, uint32_t item_key)
+{
+	const struct mant_structured_content_atom_view *atom;
+	uint32_t begin, end, i;
+
+	if (root_key == 0 || root_key > session->result->content_root_count ||
+	    item_key == 0 || item_key > session->result->item_count)
+		return 1;
+	begin = end = 0;
+	for (i = 0; i < session->result->content_atom_count; i++) {
+		atom = session->result->content_atoms + i;
+		if (atom->root == root_key) {
+			if (end == 0)
+				begin = i;
+			end = i + 1;
+		}
+	}
+	if (end == 0)
+		return 1;
+	for (i = begin; i < end; i++) {
+		atom = session->result->content_atoms + i;
+		if (!form_separator(atom))
+			continue;
+		if (!append_term_form(session, root_key, item_key, begin, i))
+			return 0;
+		begin = i + 1;
+	}
+	return append_term_form(session, root_key, item_key, begin, end);
 }
 
 int
@@ -590,6 +629,12 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 		return 0;
 	session->result->content_atoms = atoms;
 	content_root = session->result->content_roots + root - 1;
+	if (session->man_continuation_pending != 0 &&
+	    session->last_man_item != 0 &&
+	    content_root->kind == MANT_ROOT_BODY &&
+	    content_root->owner == session->result->items[
+	    session->last_man_item - 1].owner)
+		session->man_continuation_pending = 0;
 	atom = atoms + session->result->content_atom_count;
 	memset(atom, 0, sizeof(*atom));
 	atom->key = ++session->result->content_atom_count;

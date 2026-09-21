@@ -8,6 +8,7 @@
 
 #include "mandoc.h"
 #include "roff.h"
+#include "mdoc.h"
 #include "tbl.h"
 #include "out.h"
 #include "mandoc_parse.h"
@@ -174,6 +175,8 @@ supported_tree(const struct roff_node *node)
 	for (; node != NULL; node = node->next) {
 		if ((node->flags & NODE_NOFILL) != 0 ||
 		    node->type == ROFFT_TBL || node->type == ROFFT_EQN ||
+		    (node->tok == MDOC_Bl && node->norm != NULL &&
+		    node->norm->Bl.type == LIST_column) ||
 		    !supported_token(node->tok) || !supported_tree(node->child))
 			return 0;
 	}
@@ -369,7 +372,7 @@ native_cleanup:
 			result->source_maps = session.source_maps;
 			result->source_map_count = input->sources.count;
 			session.source_maps = NULL;
-			if (!mant_structured_result_is_valid(result))
+			if (!mant_structured_result_is_valid(result, &session))
 				mant_structured_set_failure(&session, MANT_STRUCTURED_RELATION,
 				    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
 			else

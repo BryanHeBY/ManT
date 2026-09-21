@@ -3,6 +3,41 @@
 use super::*;
 
 #[test]
+fn inline_link_head_and_body_phases_do_not_split_the_surrounding_root() {
+    // The exact source was run through the pinned reference first. In
+    // `man_term.c::print_man_node`, UR head/body enter/leave phases surround
+    // one inline formatter flow; they are not paragraph boundaries.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "inline-link.1",
+            b".TH X 1\n.SH D\nBefore\n.UR https://example.test\nlabel\n.UE\nafter.\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "inline-link.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("inline link remains in one native prose root");
+    let body_roots = document
+        .content_roots
+        .iter()
+        .filter(|root| root.kind == ROOT_BODY)
+        .collect::<Vec<_>>();
+    assert_eq!(body_roots.len(), 1, "{document:#?}");
+    let text = document
+        .content_atoms
+        .iter()
+        .filter(|atom| atom.root == body_roots[0].key)
+        .map(|atom| atom.text.as_str())
+        .collect::<String>();
+    assert_eq!(text, "Before label <https://example.test> after.");
+}
+
+#[test]
 fn body_is_collected_into_heading_and_section_owned_prose() {
     // The registered oracle renders `body` from this exact input.
     // Pinned `man_term.c::print_man_node` supplies exact authored nodes;

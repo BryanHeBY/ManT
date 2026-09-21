@@ -244,6 +244,11 @@ pub(super) fn validate_structured_relations(
             return Err(relation_error());
         }
     }
+    let mut linked_atom_refs = Vec::new();
+    linked_atom_refs
+        .try_reserve_exact(slices.content_atoms.len())
+        .map_err(alloc_error)?;
+    linked_atom_refs.resize(slices.content_atoms.len(), 0_u32);
     for (index, link) in slices.links.iter().enumerate() {
         let label_start = link.first_label_ref.checked_sub(1).map(|key| key as usize);
         let label_end =
@@ -279,11 +284,27 @@ pub(super) fn validate_structured_relations(
         {
             return Err(relation_error());
         }
+        let mut previous_atom = 0;
         for content_ref in &slices.content_refs[label_start.unwrap()..label_end.unwrap()] {
-            if slices.content_atoms[content_ref.atom as usize - 1].link != link.key {
+            let atom = &slices.content_atoms[content_ref.atom as usize - 1];
+            if atom.link != link.key
+                || atom.owner != link.owner
+                || content_ref.atom <= previous_atom
+            {
                 return Err(relation_error());
             }
+            let seen = &mut linked_atom_refs[content_ref.atom as usize - 1];
+            *seen = seen.checked_add(1).ok_or_else(relation_error)?;
+            previous_atom = content_ref.atom;
         }
+    }
+    if slices
+        .content_atoms
+        .iter()
+        .zip(&linked_atom_refs)
+        .any(|(atom, seen)| (atom.link != 0) != (*seen == 1))
+    {
+        return Err(relation_error());
     }
 
     let mut top_level_ordinal = 0_u32;
@@ -478,9 +499,6 @@ pub(super) fn validate_structured_relations(
             form_root = Some(root_index);
         }
         let form_root = form_root.ok_or_else(relation_error)?;
-        if term_roots[form_root] {
-            return Err(relation_error());
-        }
         term_roots[form_root] = true;
     }
     if slices

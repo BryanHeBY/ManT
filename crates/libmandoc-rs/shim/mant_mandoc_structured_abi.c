@@ -7,7 +7,7 @@
 uint32_t
 mant_structured_abi_version(void)
 {
-	return 1;
+	return 2;
 }
 
 uint64_t

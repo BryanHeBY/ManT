@@ -78,7 +78,9 @@ int mant_structured_valid_identity_name(uint32_t, struct mant_bytes_view);
 int mant_structured_source_position_in_maps(
     const struct structured_source_map *, uint32_t, uint32_t, uint32_t,
     uint32_t);
-int mant_structured_result_is_valid(const struct mant_structured_result *);
+struct structured_session;
+int mant_structured_result_is_valid(const struct mant_structured_result *,
+    struct structured_session *);
 void mant_structured_free_bytes(struct mant_bytes_view);
 
 #endif

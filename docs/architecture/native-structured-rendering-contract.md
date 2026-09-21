@@ -792,7 +792,7 @@ struct mant_structured_failure_view {
     uint32_t reserved;
 };
 
-uint32_t mant_structured_abi_version(void); /* exactly 1 for this contract */
+uint32_t mant_structured_abi_version(void); /* exactly 2 for this contract */
 uint64_t mant_structured_discriminant_fingerprint(void);
 uint32_t mant_structured_render(
     const struct mant_structured_input_view *,
@@ -816,7 +816,7 @@ View-kind IDs are frozen in this order: input source `1`, input `2`, failure
 `3`, limits `4`, result `5`, then source/span/provenance/owner/content root/
 content atom/content ref/content point/link/block/table/table row/table cell/
 fixed view/fixed line/placement/decoration/form/name hint/relation/diagnostic as
-`6..26`, and document metadata as `27`. Field IDs are one-based in declaration
+`6..26`, document metadata as `27`, list as `28`, and item as `29`. Field IDs are one-based in declaration
 order; zero is invalid. Metadata was added when the first vertical session
 proved that the parser/tree must be released before result return, leaving no
 sound later source for title, section, date, OS, architecture, name, alias,
@@ -844,6 +844,7 @@ values:
 | atom | `text=1`, `whitespace=2`, `break-opportunity=3`, `hard-break=4` |
 | style bits | `bold=1<<0`, `italic=1<<1`, `literal=1<<2`, `underline=1<<3` |
 | native role | `flag=1`, `environment-variable=2`, `argument=3`, `command-or-directive=4`, `path=5` |
+| list | `bullet=1`, `ordered=2`, `plain=3`, `definition=4`, `native-marker=5` |
 | point boundary | `between-atoms=1`, `in-atom=2` |
 | placement target | `content=1`, `point=2` |
 | cell map | `affine=1`, `grapheme-cluster=2`, `overlay=3` |
@@ -919,7 +920,7 @@ successful native handle.
 One `mant_structured_result_view` contains, in order, `rootSource`, profile,
 width, the document metadata view, then typed `mant_slice_view` fields for `sources`,
 `spans`, `provenances`, `owners`, `contentRoots`, `contentAtoms`,
-`contentRefs`, `contentPoints`, `links`, `blocks`, `tables`, `tableRows`,
+`contentRefs`, `contentPoints`, `links`, `blocks`, `lists`, `items`, `tables`, `tableRows`,
 `tableCells`, `fixedViews`, `fixedLines`, `placements`, `decorations`, `forms`,
 `nameHints`, `relations`, and `diagnostics`, followed by its reserved word. These
 are result-owned immutable
@@ -947,6 +948,8 @@ descriptor indexes do not escape as public document identity.
 | `content_point` | `key`, `root`, root-local ordinal, `owner`, boundary kind, `atomBoundary` or `atom/byteOffset`, `scalarBoundary`, provenance |
 | `link` | `key`, `owner`, target kind, `targetA`, target-B-present/`targetB`, title-present/title, `firstLabelRef/labelRefCount`, provenance |
 | `block` | `key`, `owner`, block kind, parent key, ordinal, provenance, optional root/table/fixed key |
+| `list` | `key`, owning block, list kind, compact flag, optional ordered start, provenance |
+| `item` | `key`, list key, owner, list-local ordinal, contiguous form range, optional target, provenance |
 | `table` | `key`, owning block, optional fixed-view key, provenance |
 | `table_row` | `key`, table key, table-local ordinal, provenance |
 | `table_cell` | `key`, row key, row-local column ordinal, owner, kind/alignment, row/column span, provenance |

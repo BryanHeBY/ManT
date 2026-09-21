@@ -63,6 +63,8 @@ struct structured_session {
 	uint32_t last_man_item;
 	uint32_t last_man_list;
 	uint32_t last_man_parent_block;
+	uint8_t man_continuation_pending;
+	const struct roff_node *pending_item_target;
 	uint32_t output_depth;
 	uint32_t current_root;
 	uint32_t current_owner;
