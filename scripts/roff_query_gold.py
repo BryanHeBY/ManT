@@ -37,6 +37,11 @@ def compact(value: object) -> str:
     return " ".join(visible(value).split())
 
 
+def expected_source(value: dict) -> dict:
+    """Bind legacy single-source gold coordinates to the root SourceKey."""
+    return {**value, "source": value.get("source", 1)}
+
+
 def support_items(support: dict, pool: list) -> list:
     """Resolve typed returned fragments; never rediscover a body by its text."""
     if support.get("kind") == "declaration-group":
@@ -130,7 +135,8 @@ def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
     used = set()
     for want in expected:
         matches = [(i, got) for i, got in enumerate(actual)
-                   if got["source"] == want["source"] and got["forms"] == want["forms"] and i not in used]
+                   if got["source"] == expected_source(want["source"])
+                   and got["forms"] == want["forms"] and i not in used]
         if len(matches) != 1:
             errors.append(f"source owner {want['source']}: expected exactly one, found {len(matches)}")
             continue
@@ -164,7 +170,12 @@ def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
         if len(groups) != len(expected_supports):
             errors.append(f"support count: {len(groups)} != {len(expected_supports)}")
         for want in expected_supports:
-            matches = [s for s in groups if [item.get("source") for item in support_items(s, supports)] == want["memberSources"]]
+            member_sources = [expected_source(source) for source in want["memberSources"]]
+            matches = [
+                support for support in groups
+                if [item.get("source")
+                    for item in support_items(support, supports)] == member_sources
+            ]
             if len(matches) != 1:
                 errors.append(f"support member sources: expected one match for {want['memberSources']}")
                 continue
@@ -293,7 +304,8 @@ def run(manifest: Path, profiler: Path, timeout: int, root_overrides: list[str] 
 
 def self_check() -> None:
     body = {"type": "paragraph", "children": [{"type": "text", "value": "BODY"}]}
-    evidence = {"class": "direct-entry", "source": {"line": 4, "column": 2},
+    evidence = {"class": "direct-entry",
+                "source": {"source": 1, "line": 4, "column": 2},
                 "outline": {"node": {"id": "x", "path": "1/e1"}},
                 "entry": {"kind": {"kind": "command"}, "names": ["x"],
                           "forms": [[{"type": "text", "value": "x ARG"}]]},
@@ -304,13 +316,19 @@ def self_check() -> None:
     response = {"explanation": {"counts": {"directEntry": {"total": 1}}, "evidence": [evidence]}}
     assert compare(probe, response)[0] == "passed"
     support = {"kind": "declaration-group", "block": {"items": [
-        {"source": {"line": 2, "column": 2}, "terms": [[{"type": "text", "value": "y ARG"}]], "description": []},
-        {"source": want["source"], "terms": evidence["entry"]["forms"], "description": [body]},
+        {"source": {"source": 1, "line": 2, "column": 2},
+         "terms": [[{"type": "text", "value": "y ARG"}]], "description": []},
+        {"source": {**want["source"], "source": 1},
+         "terms": evidence["entry"]["forms"], "description": [body]},
     ]}}
     supported = copy.deepcopy(response)
     supported["explanation"]["supports"] = [support]
     supported["explanation"]["evidence"][0]["content"] = {"kind": "declaration-member", "support": 0, "itemIndex": 1}
-    support_gold = {**probe, "expectedSupports": [{"memberSources": [i["source"] for i in support["block"]["items"]], "memberForms": [["y ARG"], ["x ARG"]], "bodyIncludes": ["BODY"], "requiredTypes": ["paragraph"]}]}
+    support_gold = {**probe, "expectedSupports": [{
+        "memberSources": [{"line": 2, "column": 2}, want["source"]],
+        "memberForms": [["y ARG"], ["x ARG"]],
+        "bodyIncludes": ["BODY"], "requiredTypes": ["paragraph"],
+    }]}
     assert compare(support_gold, supported)[0] == "passed"
     for changed in ("missing", "tail", "owner", "duplicate", "alias"):
         wrong = copy.deepcopy(supported)
@@ -328,6 +346,9 @@ def self_check() -> None:
         changed["explanation"]["evidence"][0][field] = value
         assert compare(probe, changed)[0] == "failure", field
     assert compare({**probe, "expected": [want, want]}, response)[0] == "failure"
+    wrong_source = copy.deepcopy(response)
+    wrong_source["explanation"]["evidence"][0]["source"]["source"] = 2
+    assert compare(probe, wrong_source)[0] == "failure"
     assert compare({**probe, "expected": []}, response)[0] == "failure"
     assert compare({**probe, "forbiddenNames": ["x"]}, response)[0] == "failure"
     assert compare({**probe, "expected": [{**want, "bodyIncludes": ["OTHER"]}]}, response)[0] == "failure"
