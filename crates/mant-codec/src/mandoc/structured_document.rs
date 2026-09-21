@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use libmandoc_rs::structured::NativeBlockKind;
+use libmandoc_rs::structured::{NativeBlockKind, NativeTargetOrigin};
 use libmandoc_rs::{InputFormat, SourceBundle};
 #[cfg(test)]
 use mant_ir::{Block, Inline, ListKind};
@@ -34,12 +34,13 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
     let native = projection.document();
     let index = NativeLoweringIndex::new(native)?;
     let mut used_ids = HashSet::new();
-    let mut reserved_targets = native
+    let explicit_targets = native
         .items()
         .iter()
+        .filter(|item| item.target_origin() == Some(NativeTargetOrigin::Authored))
         .filter_map(|item| item.target().map(ToOwned::to_owned))
         .collect::<HashSet<_>>();
-    used_ids.extend(reserved_targets.iter().cloned());
+    used_ids.extend(explicit_targets.iter().cloned());
 
     let mut root_blocks = Vec::new();
     let mut sections = Vec::new();
@@ -61,13 +62,15 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
             );
         }
     }
-    for section in &sections {
-        reserved_targets.insert(section.id.to_string());
-    }
+    super::navigation::normalize_generated_anchors(
+        &mut root_blocks,
+        &mut sections,
+        &explicit_targets,
+    );
     crate::definitions::identify_definitions_with_evidence(
         &mut root_blocks,
         &mut sections,
-        &reserved_targets,
+        &explicit_targets,
         native.metadata().name(),
         &evidence,
     );

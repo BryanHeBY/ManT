@@ -1,5 +1,8 @@
 use super::*;
-use mant_ir::{EntryKind, EntryNameEvidence, EntryOwner, ParameterKind, ResolvedContent};
+use mant_ir::{
+    EntryKind, EntryNameEvidence, EntryOwner, ParameterKind, ResolvedContent,
+    visit::{self, Visit},
+};
 use mant_protocol::{EntryProjection, EvidenceBasis, ExplanationOptions, ExplanationQuery};
 
 #[test]
@@ -187,6 +190,121 @@ fn mdoc_multiple_labels_bind_native_markup_to_exact_forms() {
         }),
         "{facts:#?}"
     );
+}
+
+#[test]
+fn native_targets_use_normalized_ids_and_only_authored_aliases() {
+    // These exact mdoc and man sources were run through the pinned reference
+    // first. `tag_put(TAG_MANUAL)` retains Mixed.Target as an authored target;
+    // Ev and TP contribute formatter-generated targets.
+    let mut mdoc = SourceBundle::new();
+    mdoc.insert(
+        "target-identities.1",
+        b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag\n.It Ev DEMO_HOME\nBODY\n.El\n.Sh OPTIONS\n.Bl -tag\n.Tg Mixed.Target\n.It Fl mixed\nBODY\n.El\n"
+            .to_vec(),
+    )
+    .unwrap();
+    let document = project_native_manual("target-identities.1", &mdoc, InputFormat::Mdoc)
+        .expect("native targets lower to valid document identities");
+    let anchors = anchor_identities(&document);
+    assert!(
+        anchors.contains(&("demo-home".to_owned(), Vec::new())),
+        "{anchors:#?}"
+    );
+    assert!(
+        anchors.contains(&("mixed-target".to_owned(), vec!["Mixed.Target".to_owned()])),
+        "{anchors:#?}"
+    );
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code.as_deref() != Some("ir.invalid-identity")),
+        "{:#?}",
+        document.diagnostics
+    );
+
+    let mut man = SourceBundle::new();
+    man.insert(
+        "target-identity.1",
+        b".TH X 1\n.SH OPTIONS\n.TP\n--set=KEY\nBODY\n".to_vec(),
+    )
+    .unwrap();
+    let document = project_native_manual("target-identity.1", &man, InputFormat::Man)
+        .expect("man target lowers to a normalized generated identity");
+    let anchors = anchor_identities(&document);
+    assert!(
+        anchors.contains(&("set-key".to_owned(), Vec::new())),
+        "{anchors:#?}"
+    );
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code.as_deref() != Some("ir.invalid-identity")),
+        "{:#?}",
+        document.diagnostics
+    );
+}
+
+#[test]
+fn authored_target_collision_keeps_alias_and_unique_internal_id() {
+    // This exact source was run through the pinned reference first.
+    // `tag.c::tag_put` retains both the Sh target and the manual Tg target;
+    // their distinct authored fragment spellings must remain addressable.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "target-collision.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh Mixed Target\n.Bl -tag\n.Tg Mixed.Target\n.It Fl mixed\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("target-collision.1", &bundle, InputFormat::Mdoc)
+        .expect("authored target collision receives a unique normalized identity");
+    assert_eq!(document.sections[0].id.as_str(), "mixed-target");
+    let anchors = anchor_identities(&document);
+    assert!(
+        anchors.contains(&("mixed-target-2".to_owned(), vec!["Mixed.Target".to_owned()])),
+        "{anchors:#?}"
+    );
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code.as_deref() != Some("ir.invalid-identity")),
+        "{:#?}",
+        document.diagnostics
+    );
+}
+
+fn anchor_identities(document: &Document) -> Vec<(String, Vec<String>)> {
+    #[derive(Default)]
+    struct Collector {
+        identities: Vec<(String, Vec<String>)>,
+    }
+
+    impl<'ir> Visit<'ir> for Collector {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Anchor {
+                id,
+                fragment_aliases,
+                ..
+            } = inline
+            {
+                self.identities.push((
+                    id.to_string(),
+                    fragment_aliases.iter().map(ToString::to_string).collect(),
+                ));
+            } else {
+                visit::walk_inline(self, inline);
+            }
+        }
+    }
+
+    let mut collector = Collector::default();
+    collector.visit_document(document);
+    collector.identities
 }
 
 #[test]
