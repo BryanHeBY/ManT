@@ -95,6 +95,8 @@ shim/mant_mandoc_structured_source.c    bundle/include and source provenance
 shim/mant_mandoc_structured_budget.c    charging and controlled allocation
 shim/mant_mandoc_structured_builder.c   final result construction
 shim/mant_mandoc_structured_link.c      link identity, targets, and label refs
+shim/mant_mandoc_structured_marker.c    read-only man list-marker evidence
+shim/mant_mandoc_structured_structure.c list/item ownership and node phases
 shim/mant_mandoc_structured_result.c    result check, view, transfer, and free
 shim/mant_mandoc_structured_abi.c       size, alignment, and offset probes
 ```
