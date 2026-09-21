@@ -15,6 +15,7 @@ pub(super) fn native_name_bindings(
     item: &DefinitionItem,
     names: &[String],
     recognized: &[Vec<super::RecognizedName>],
+    native: Option<&super::NativeDeclarationEvidence>,
 ) -> Vec<EntryNameBinding> {
     let terms = item
         .terms
@@ -31,12 +32,19 @@ pub(super) fn native_name_bindings(
         .enumerate()
         .map(|(name, spelling)| {
             let mut occurrences = Vec::new();
+            let mut native_markup = false;
             if !spelling.is_empty() {
                 for (index, ((_, leaves), candidates)) in terms.iter().zip(recognized).enumerate() {
                     for candidate in candidates
                         .iter()
                         .filter(|candidate| candidate.name == *spelling)
                     {
+                        native_markup |= native.is_some_and(|native| {
+                            native
+                                .name_hints
+                                .iter()
+                                .any(|hint| hint.term == index && hint.parts == candidate.parts)
+                        });
                         let parts = candidate
                             .parts
                             .iter()
@@ -50,8 +58,42 @@ pub(super) fn native_name_bindings(
             EntryNameBinding {
                 name,
                 occurrences,
-                evidence: EntryNameEvidence::Lexical,
+                evidence: if native_markup {
+                    EntryNameEvidence::NativeMarkup
+                } else {
+                    EntryNameEvidence::Lexical
+                },
             }
+        })
+        .collect()
+}
+
+pub(super) fn native_forms(
+    item: &DefinitionItem,
+    native: &super::NativeDeclarationEvidence,
+) -> Vec<EntryForm> {
+    let terms = item
+        .terms
+        .iter()
+        .map(|term| {
+            let mut text = String::new();
+            let mut leaves = Vec::new();
+            collect(term, &mut Vec::new(), &mut text, &mut leaves);
+            leaves
+        })
+        .collect::<Vec<_>>();
+    native
+        .forms
+        .iter()
+        .filter_map(|form| {
+            let leaves = terms.get(form.term)?;
+            let parts = form
+                .parts
+                .iter()
+                .cloned()
+                .flat_map(|range| slices(leaves, form.term, range))
+                .collect::<Vec<_>>();
+            (!parts.is_empty()).then_some(EntryForm { parts })
         })
         .collect()
 }

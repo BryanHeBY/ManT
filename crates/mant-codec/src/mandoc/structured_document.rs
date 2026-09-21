@@ -1,10 +1,10 @@
 //! Direct native structured-document lowering for the C03 vertical slice.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Range};
 
 use libmandoc_rs::structured::{
     ContentAtomKind, ContentRootKey, NativeBlock, NativeBlockKind, NativeItem, NativeLinkTarget,
-    NativeList, NativeListKind, NativeRole, ProvenanceKey, StructuredDocument,
+    NativeListKind, NativeRole, ProvenanceKey, StructuredDocument,
 };
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{
@@ -14,7 +14,9 @@ use mant_ir::{
 };
 
 use super::projection::{NativeProjectionError, NativeProseProjection, project_native_prose};
-use crate::definitions::{NativeHeadEvidence, NativeHeadRole};
+use crate::definitions::{
+    NativeContentRange, NativeDeclarationEvidence, NativeHeadEvidence, NativeHeadRole,
+};
 
 /// Run the private C03 entry from native execution through stable semantic IR.
 pub(crate) fn project_native_manual(
@@ -52,7 +54,10 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
                 &mut evidence,
             )?);
         } else {
-            root_blocks.push(lower_block(projection, block, None, &mut evidence)?);
+            push_lowered_block(
+                &mut root_blocks,
+                lower_block(projection, block, None, &mut evidence)?,
+            );
         }
     }
     for section in &sections {
@@ -121,7 +126,7 @@ fn lower_section(
         .iter()
         .filter(|child| child.parent() == Some(block.key()))
     {
-        blocks.push(lower_block(projection, child, None, evidence)?);
+        push_lowered_block(&mut blocks, lower_block(projection, child, None, evidence)?);
     }
     Ok(Section {
         id: NodeId::new(id),
@@ -180,7 +185,9 @@ fn lower_list(
             "list block has no list record",
         ))?;
     if list.kind() == NativeListKind::NativeMarker {
-        return lower_native_marker_list(projection, block, list, evidence);
+        return Err(NativeProjectionError::InvalidRelation(
+            "native marker list reached the codec without source classification",
+        ));
     }
     if list.kind() == NativeListKind::Definition {
         let mut items = Vec::new();
@@ -189,11 +196,7 @@ fn lower_list(
             .iter()
             .filter(|item| item.list() == list.key())
         {
-            let lowered = lower_definition_item(projection, block, item, evidence)?;
-            if let Some(role) = evidence_role(native, item) {
-                evidence.record(&lowered, role);
-            }
-            items.push(lowered);
+            items.push(lower_definition_item(projection, block, item, evidence)?);
         }
         return Ok(Block::DefinitionList {
             items,
@@ -229,70 +232,6 @@ fn lower_list(
     })
 }
 
-fn lower_native_marker_list(
-    projection: &NativeProseProjection,
-    block: &NativeBlock,
-    list: &NativeList,
-    evidence: &mut NativeHeadEvidence,
-) -> Result<Block, NativeProjectionError> {
-    let native = projection.document();
-    let items = native
-        .items()
-        .iter()
-        .filter(|item| item.list() == list.key())
-        .collect::<Vec<_>>();
-    let marker = items
-        .first()
-        .and_then(|item| item_term_roots(native, item).ok()?.into_iter().next())
-        .and_then(|root| {
-            root_inlines(native, root)
-                .ok()
-                .map(|inlines| mant_ir::inline_plain_text(&inlines))
-        });
-    let marker = marker.as_deref().map_or("", str::trim);
-    if let Some(start) = ordinal_marker(marker) {
-        let mut lowered = Vec::new();
-        for item in items {
-            lowered.push(lower_list_item(projection, block, item, evidence)?);
-        }
-        return Ok(Block::List {
-            kind: ListKind::Ordered { start: Some(start) },
-            compact: list.compact(),
-            items: lowered,
-            layout: LayoutHint::default(),
-            source: source_for(projection, list.provenance()),
-        });
-    }
-    if matches!(marker, "*" | "-" | "•") {
-        let mut lowered = Vec::new();
-        for item in items {
-            lowered.push(lower_list_item(projection, block, item, evidence)?);
-        }
-        return Ok(Block::List {
-            kind: ListKind::Bullet,
-            compact: list.compact(),
-            items: lowered,
-            layout: LayoutHint::default(),
-            source: source_for(projection, list.provenance()),
-        });
-    }
-    let mut lowered = Vec::new();
-    for item in items {
-        let definition = lower_definition_item(projection, block, item, evidence)?;
-        if let Some(role) = evidence_role(native, item) {
-            evidence.record(&definition, role);
-        }
-        lowered.push(definition);
-    }
-    Ok(Block::DefinitionList {
-        items: lowered,
-        declaration_groups: Vec::new(),
-        compact: list.compact(),
-        layout: LayoutHint::default(),
-        source: source_for(projection, list.provenance()),
-    })
-}
-
 fn lower_definition_item(
     projection: &NativeProseProjection,
     list_block: &NativeBlock,
@@ -313,13 +252,18 @@ fn lower_definition_item(
             terms.push(vec![anchor]);
         }
     }
-    Ok(DefinitionItem {
+    let lowered = DefinitionItem {
         source,
         entry: None,
         terms,
         description: item_blocks(projection, list_block, item, evidence)?,
         layout: DefinitionLayout::default(),
-    })
+    };
+    if let Some(role) = evidence_role(native, item) {
+        evidence.record(&lowered, role);
+    }
+    evidence.record_declaration(&lowered, native_declaration_evidence(native, item)?);
+    Ok(lowered)
 }
 
 fn lower_list_item(
@@ -353,12 +297,10 @@ fn item_blocks(
             child.parent() == Some(list_block.key()) && child.owner() == item.owner()
         })
     {
-        blocks.push(lower_block(
-            projection,
-            child,
-            Some(item.owner()),
-            evidence,
-        )?);
+        push_lowered_block(
+            &mut blocks,
+            lower_block(projection, child, Some(item.owner()), evidence)?,
+        );
     }
     Ok(blocks)
 }
@@ -381,9 +323,121 @@ fn item_term_roots(
                 "form references an unknown atom",
             ))?
             .root();
-        roots.push(root);
+        if roots.last() != Some(&root) {
+            roots.push(root);
+        }
     }
     Ok(roots)
+}
+
+fn native_declaration_evidence(
+    document: &StructuredDocument,
+    item: &NativeItem,
+) -> Result<NativeDeclarationEvidence, NativeProjectionError> {
+    let roots = item_term_roots(document, item)?;
+    let forms = document.forms().get(item.forms().clone()).ok_or(
+        NativeProjectionError::InvalidRelation("item form range is invalid"),
+    )?;
+    let mut form_ranges = Vec::new();
+    for form in forms {
+        form_ranges.push(content_range_for_refs(
+            document,
+            &roots,
+            form.refs().clone(),
+        )?);
+    }
+    let mut name_hints = Vec::new();
+    for hint in document
+        .name_hints()
+        .iter()
+        .filter(|hint| forms.iter().any(|form| form.key() == hint.form()))
+    {
+        name_hints.push(content_range_for_refs(
+            document,
+            &roots,
+            hint.refs().clone(),
+        )?);
+    }
+    Ok(NativeDeclarationEvidence {
+        forms: form_ranges,
+        name_hints,
+    })
+}
+
+fn content_range_for_refs(
+    document: &StructuredDocument,
+    roots: &[ContentRootKey],
+    refs: Range<usize>,
+) -> Result<NativeContentRange, NativeProjectionError> {
+    let references =
+        document
+            .content_refs()
+            .get(refs)
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "declaration content range is invalid",
+            ))?;
+    let first = references
+        .first()
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "declaration content range is empty",
+        ))?;
+    let root = document
+        .content_atom(first.atom())
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "declaration content references an unknown atom",
+        ))?
+        .root();
+    let term = roots
+        .iter()
+        .position(|candidate| *candidate == root)
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "declaration content is outside the item term roots",
+        ))?;
+    let mut offset = 0_usize;
+    let mut atom_offsets = Vec::new();
+    for atom in document
+        .content_atoms()
+        .iter()
+        .filter(|atom| atom.root() == root)
+    {
+        atom_offsets.push((atom.key(), offset));
+        offset += match atom.kind() {
+            ContentAtomKind::Text { text, .. } | ContentAtomKind::Whitespace { text, .. } => {
+                text.len()
+            }
+            ContentAtomKind::HardBreak => 1,
+            ContentAtomKind::BreakOpportunity => 0,
+        };
+    }
+    let mut parts: Vec<Range<usize>> = Vec::new();
+    for reference in references {
+        let atom = document.content_atom(reference.atom()).ok_or(
+            NativeProjectionError::InvalidRelation(
+                "declaration content references an unknown atom",
+            ),
+        )?;
+        if atom.root() != root {
+            return Err(NativeProjectionError::InvalidRelation(
+                "one declaration range crosses term roots",
+            ));
+        }
+        let atom_offset = atom_offsets
+            .iter()
+            .find_map(|(key, offset)| (*key == atom.key()).then_some(*offset))
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "declaration atom has no root-relative offset",
+            ))?;
+        let range = atom_offset + reference.bytes().start as usize
+            ..atom_offset + reference.bytes().end as usize;
+        if let Some(previous) = parts.last_mut()
+            && previous.end == range.start
+        {
+            previous.end = range.end;
+        } else {
+            parts.push(range);
+        }
+    }
+    Ok(NativeContentRange { term, parts })
 }
 
 fn root_inlines(
@@ -530,13 +584,43 @@ fn prepend_anchor(blocks: &mut Vec<Block>, anchor: Inline) {
     }
 }
 
-fn ordinal_marker(marker: &str) -> Option<u64> {
-    let digits = marker
-        .strip_suffix('.')
-        .or_else(|| marker.strip_suffix(')'))?;
-    (!digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()))
-        .then(|| digits.parse().ok())
-        .flatten()
+fn push_lowered_block(blocks: &mut Vec<Block>, block: Block) {
+    let merge = match (blocks.last(), &block) {
+        (
+            Some(Block::List {
+                kind: prior_kind,
+                items: prior_items,
+                ..
+            }),
+            Block::List { kind, .. },
+        ) => match (prior_kind, kind) {
+            (ListKind::Bullet, ListKind::Bullet) | (ListKind::Plain, ListKind::Plain) => true,
+            (ListKind::Ordered { start: Some(prior) }, ListKind::Ordered { start: Some(next) }) => {
+                prior
+                    .checked_add(prior_items.len() as u64)
+                    .is_some_and(|expected| expected == *next)
+            }
+            _ => false,
+        },
+        _ => false,
+    };
+    if merge {
+        let Some(Block::List {
+            compact: prior_compact,
+            items: prior_items,
+            ..
+        }) = blocks.last_mut()
+        else {
+            unreachable!()
+        };
+        let Block::List { compact, items, .. } = block else {
+            unreachable!()
+        };
+        *prior_compact &= compact;
+        prior_items.extend(items);
+    } else {
+        blocks.push(block);
+    }
 }
 
 fn unique_id(base: &str, used: &mut HashSet<String>) -> String {

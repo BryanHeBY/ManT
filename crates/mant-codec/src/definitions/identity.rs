@@ -48,6 +48,7 @@ pub(super) struct IdentityPlan {
     occurrences: Vec<Vec<super::RecognizedName>>,
     pub(super) value_domain: Option<ValueDomain>,
     pub(super) preferred: String,
+    pub(super) native_declaration: Option<super::NativeDeclarationEvidence>,
 }
 
 pub(super) fn identity_plan(
@@ -134,6 +135,7 @@ pub(super) fn identity_plan(
         occurrences,
         value_domain,
         preferred,
+        native_declaration: None,
     }
 }
 
@@ -197,6 +199,7 @@ pub(super) fn identify_item(
         occurrences,
         value_domain,
         mut preferred,
+        native_declaration,
     } = plan;
 
     let mut anchors = Vec::new();
@@ -237,13 +240,25 @@ pub(super) fn identify_item(
         term.insert(0, Inline::anchor(id.clone()));
     }
     retained.insert(id.clone());
+    let forms = native_declaration
+        .as_ref()
+        .map(|declaration| super::binding::native_forms(item, declaration))
+        .filter(|forms| !forms.is_empty())
+        .unwrap_or_else(|| {
+            (0..item.terms.len())
+                .map(mant_ir::EntryForm::term)
+                .collect()
+        });
     item.entry = Some(EntryFacts {
-        name_bindings: super::binding::native_name_bindings(item, &names, &occurrences),
+        name_bindings: super::binding::native_name_bindings(
+            item,
+            &names,
+            &occurrences,
+            native_declaration.as_ref(),
+        ),
         alias_groups: Vec::new(),
         alias_of: None,
-        forms: (0..item.terms.len())
-            .map(mant_ir::EntryForm::term)
-            .collect(),
+        forms,
         id: id.into(),
         kind,
         case,

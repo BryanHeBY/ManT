@@ -18,7 +18,9 @@ mod syntax;
 use context::DefinitionContext;
 #[cfg(feature = "roff")]
 pub(crate) use diagnostics::manual_discovery_diagnostics;
-pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
+pub(crate) use evidence::{
+    NativeContentRange, NativeDeclarationEvidence, NativeHeadEvidence, NativeHeadRole,
+};
 #[cfg(feature = "roff")]
 pub(crate) use groups::mark_native_definition_owner;
 pub(crate) use groups::{

@@ -1,5 +1,5 @@
 use super::*;
-use mant_ir::{EntryKind, ParameterKind, ResolvedContent};
+use mant_ir::{EntryKind, EntryNameEvidence, EntryOwner, ParameterKind, ResolvedContent};
 use mant_protocol::{EntryProjection, EvidenceBasis, ExplanationOptions, ExplanationQuery};
 
 #[test]
@@ -45,6 +45,26 @@ Body B.
         }
     );
     assert_eq!(facts.names, ["--output", "-o", "-O"]);
+    assert_eq!(facts.forms.len(), 3);
+    assert_eq!(
+        facts
+            .forms
+            .iter()
+            .map(|form| {
+                EntryOwner::Definition(&items[0])
+                    .form(form)
+                    .map(|form| mant_ir::inline_plain_text(&form))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>(),
+        ["--output", "-o=FILE", "-O"]
+    );
+    assert!(
+        facts
+            .name_bindings
+            .iter()
+            .all(|binding| binding.evidence == EntryNameEvidence::Lexical)
+    );
     assert_eq!(items[0].description.len(), 1);
 
     let definition_items = document.sections[0]
@@ -62,6 +82,10 @@ Body B.
     assert_eq!(definition_items[3].description.len(), 1);
     assert_ne!(definition_items[2].source, definition_items[3].source);
 
+    assert_real_query_consumers(document);
+}
+
+fn assert_real_query_consumers(document: Document) {
     let query = ResolvedContent {
         label: "c03(1)".to_owned(),
         address: None,
@@ -87,12 +111,135 @@ Body B.
     let evidence = &explanation.evidence[0];
     let entry = evidence.entry.as_ref().expect("semantic facts retained");
     assert_eq!(entry.names, ["--output", "-o", "-O"]);
+    assert_eq!(
+        entry
+            .forms
+            .iter()
+            .map(|form| mant_ir::inline_plain_text(form))
+            .collect::<Vec<_>>(),
+        ["--output", "-o=FILE", "-O"]
+    );
     assert!(evidence.bases.iter().any(|basis| matches!(
         basis,
         EvidenceBasis::Name { matches }
             if matches.iter().any(|matched| matched.name == "-o")
     )));
     assert_eq!(entry.name_bindings.len(), 3);
+
+    let empty = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "--empty".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .expect("the empty native owner remains independently queryable");
+    assert_eq!(empty.total, 1);
+    let duplicate = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "--same".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .expect("duplicate native owners remain independently queryable");
+    assert_eq!(duplicate.total, 2);
+}
+
+#[test]
+fn mdoc_multiple_labels_bind_native_markup_to_exact_forms() {
+    // The exact source was run through the pinned reference before this
+    // assertion. `mdoc_term.c::termp_it_pre` preserves both Fl occurrences
+    // around the authored separator.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "labels.1",
+            b".Dd September 21, 2026\n.Dt LABELS 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Fl b\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("labels.1", &bundle, InputFormat::Mdoc)
+        .expect("native label evidence lowers to semantic IR");
+    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        panic!("tag list retained")
+    };
+    let facts = items[0].entry.as_ref().expect("option facts discovered");
+    assert_eq!(facts.names, ["-a", "-b"]);
+    assert_eq!(facts.forms.len(), 2);
+    assert_eq!(
+        facts
+            .forms
+            .iter()
+            .map(|form| {
+                EntryOwner::Definition(&items[0])
+                    .form(form)
+                    .map(|form| mant_ir::inline_plain_text(&form))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>(),
+        ["-a", "-b"]
+    );
+    assert_eq!(facts.name_bindings.len(), 2);
+    assert!(
+        facts.name_bindings.iter().all(|binding| {
+            binding.evidence == EntryNameEvidence::NativeMarkup && binding.occurrences.len() == 1
+        }),
+        "{facts:#?}"
+    );
+}
+
+#[test]
+fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
+    // The exact input was run through the pinned reference first. Pinned
+    // `man_term.c::pre_IP` renders each authored marker; only the named roff
+    // bullet is structural evidence, while consecutive ordinals form one run.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "markers.1",
+            b".TH MARKERS 1\n.SH STEPS\n.IP \\(bu\nBullet.\n.IP \"*\"\nStar.\n.IP 3.\nThird.\n.IP 4.\nFourth.\n.IP 9.\nNinth.\n.IP \"(1)\"\nParenthesized.\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("markers.1", &bundle, InputFormat::Man)
+        .expect("man marker evidence lowers without text guessing");
+    assert!(matches!(
+        &document.sections[0].blocks[0],
+        Block::List {
+            kind: ListKind::Bullet,
+            items,
+            ..
+        } if items.len() == 1
+    ));
+    assert!(matches!(
+        &document.sections[0].blocks[1],
+        Block::DefinitionList { items, .. } if items.len() == 1
+    ));
+    assert!(matches!(
+        &document.sections[0].blocks[2],
+        Block::List {
+            kind: ListKind::Ordered { start: Some(3) },
+            items,
+            ..
+        } if items.len() == 2
+    ));
+    assert!(matches!(
+        &document.sections[0].blocks[3],
+        Block::List {
+            kind: ListKind::Ordered { start: Some(9) },
+            items,
+            ..
+        } if items.len() == 1
+    ));
+    assert!(matches!(
+        &document.sections[0].blocks[4],
+        Block::List {
+            kind: ListKind::Ordered { start: Some(1) },
+            items,
+            ..
+        } if items.len() == 1
+    ));
 }
 
 #[test]

@@ -114,7 +114,8 @@ impl PreparedDefinitions {
                     *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
                     crate::definitions::remove_native_definition_owner_markers_from_items(items);
                     for item in items.iter_mut() {
-                        let identity = identity_plan(item, item_context, evidence.role(item));
+                        let mut identity = identity_plan(item, item_context, evidence.role(item));
+                        identity.native_declaration = evidence.declaration(item).cloned();
                         if has_semantic_spelling(item, &identity) {
                             *self
                                 .preferred_counts
