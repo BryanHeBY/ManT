@@ -1,0 +1,735 @@
+//! Prose, connection, width, and collector behavior checks.
+
+use super::*;
+
+#[test]
+fn body_is_collected_into_heading_and_section_owned_prose() {
+    // The registered oracle renders `body` from this exact input.
+    // Pinned `man_term.c::print_man_node` supplies exact authored nodes;
+    // `term.c::term_field/term_flushln` commits surviving buffer content.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "body.1",
+            b".TH BODY 1 \"2026-09-20\"\n.SH NAME\nbody\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude("body.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("C02b collects supported prose");
+    assert_eq!(document.owners.len(), 1);
+    assert_eq!(document.content_roots.len(), 2);
+    assert_eq!(document.content_roots[0].kind, ROOT_HEADING);
+    assert_eq!(document.content_roots[1].kind, ROOT_BODY);
+    assert_eq!(document.blocks[1].parent, Some(document.blocks[0].key));
+    assert!(
+        document
+            .content_atoms
+            .iter()
+            .any(|atom| atom.text == "body")
+    );
+}
+
+#[test]
+fn input_limits_reject_before_descriptor_materialization() {
+    let mut bundle = SourceBundle::new();
+    bundle.insert("root.1", b".TH ROOT 1\n".to_vec()).unwrap();
+    bundle
+        .insert("included.1", b".TH INCLUDED 1\n".to_vec())
+        .unwrap();
+    let limits = Limits {
+        max_input_sources: 1,
+        ..Limits::default()
+    };
+    let error = InputStorage::new("root.1", &bundle, InputFormat::Man, &limits)
+        .err()
+        .expect("source count is checked before allocating descriptors");
+    assert_eq!(error.status, STATUS_BUDGET);
+    assert_eq!((error.limit_kind, error.observed, error.allowed), (1, 2, 1));
+
+    for invalid_limits in [
+        Limits {
+            max_input_sources: 0,
+            ..Limits::default()
+        },
+        Limits {
+            max_sources: u64::from(u32::MAX) + 1,
+            ..Limits::default()
+        },
+    ] {
+        let error = InputStorage::new("root.1", &bundle, InputFormat::Man, &invalid_limits)
+            .err()
+            .expect("invalid limits are rejected before budget comparisons");
+        assert_eq!(error.status, STATUS_INVALID_INPUT);
+        assert_eq!(error.limit_kind, 0);
+    }
+}
+
+#[test]
+fn top_level_heading_ordinals_define_document_order() {
+    // Exact UTF-8/78 oracle run before this assertion rendered FIRST/body
+    // before SECOND/body. Pinned `man_term.c::print_man_node` visits SH
+    // blocks in document order; each `term.c::term_field/term_flushln`
+    // sequence commits the corresponding heading and paragraph roots.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "order.1",
+            b".TH ORDER 1 \"2026-09-21\"\n.SH FIRST\nfirst body\n.SH SECOND\nsecond body\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude("order.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("multiple sections retain explicit document order");
+    assert_eq!(document.blocks.len(), 4);
+    assert_eq!(document.blocks[0].kind, BLOCK_HEADING);
+    assert_eq!(document.blocks[0].parent, None);
+    assert_eq!(document.blocks[0].ordinal, 0);
+    assert_eq!(document.blocks[1].parent, Some(document.blocks[0].key));
+    assert_eq!(document.blocks[1].ordinal, 0);
+    assert_eq!(document.blocks[2].kind, BLOCK_HEADING);
+    assert_eq!(document.blocks[2].parent, None);
+    assert_eq!(document.blocks[2].ordinal, 1);
+    assert_eq!(document.blocks[3].parent, Some(document.blocks[2].key));
+    assert_eq!(document.blocks[3].ordinal, 0);
+
+    let storage =
+        InputStorage::new("order.1", &bundle, InputFormat::Man, &Limits::default()).unwrap();
+    let (status, pointer, failure) =
+        raw_render(&storage.view(78, PROFILE_UTF8), &Limits::default());
+    assert_eq!(status, STATUS_OK, "{failure:?}");
+    let handle = ResultHandle(NonNull::new(pointer).unwrap());
+    let mut view = ResultView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_view(handle.0.as_ptr(), &raw mut view) },
+        STATUS_OK
+    );
+    let blocks = view.blocks.ptr.cast::<BlockView>().cast_mut();
+    unsafe { (*blocks.add(2)).ordinal = 0 };
+    let mut failure = FailureView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "a duplicate top-level ordinal must be rejected"
+    );
+    assert!(copy_structured_document(&handle, &view, &Limits::default()).is_err());
+
+    unsafe {
+        (*blocks).ordinal = 1;
+        (*blocks.add(2)).ordinal = 0;
+    }
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "out-of-order top-level ordinals must be rejected"
+    );
+    assert!(copy_structured_document(&handle, &view, &Limits::default()).is_err());
+}
+
+#[test]
+fn external_link_labels_reference_shared_atoms() {
+    // Oracle: registered C02b UTF-8/78 `.UR` probe, run before this
+    // assertion.  `man_term.c::pre_UR/post_UR` traverses the body label
+    // and emits the head target wrapper during the same native render.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "link.1",
+            b".TH LINK 1 \"2026-09-20\"\n.SH NAME\n.UR https://example.com\nplain\n.B bold\n.I italic\n.UE\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let owned = render_prelude("link.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("supported external link");
+    assert_eq!(owned.links.len(), 1, "{owned:?}");
+    assert_eq!(owned.links[0].target_kind, 1);
+    assert_eq!(owned.links[0].target_a, "https://example.com");
+    let label_start = owned.links[0].first_label_ref as usize - 1;
+    let label_end = label_start + owned.links[0].label_ref_count as usize;
+    assert!(!owned.content_refs[label_start..label_end].is_empty());
+    assert!(
+        owned.content_refs[label_start..label_end]
+            .iter()
+            .all(|content_ref| {
+                owned.content_atoms[content_ref.atom as usize - 1].link == Some(owned.links[0].key)
+            })
+    );
+    let label_styles = owned.content_refs[label_start..label_end]
+        .iter()
+        .map(|content_ref| owned.content_atoms[content_ref.atom as usize - 1].style_flags)
+        .collect::<Vec<_>>();
+    assert!(label_styles.contains(&0), "{owned:?}");
+    assert!(label_styles.iter().any(|style| style & 1 != 0), "{owned:?}");
+    assert!(label_styles.iter().any(|style| style & 2 != 0), "{owned:?}");
+
+    // Oracle: registered C02b UTF-8/78 `.Lk` probe, with traversal in
+    // `mdoc_term.c::termp_lk_pre`.
+    let mut mdoc = SourceBundle::new();
+    mdoc.insert(
+        "link.1",
+        b".Dd September 20, 2026\n.Dt LINK 1\n.Os\n.Sh NAME\n.Nm link\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.com label\n"
+            .to_vec(),
+    )
+    .unwrap();
+    let owned = render_prelude("link.1", &mdoc, InputFormat::Mdoc, 78, &Limits::default())
+        .expect("supported mdoc external link");
+    assert_eq!(owned.links.len(), 1, "mdoc link: {owned:?}");
+    assert_eq!(owned.links[0].target_a, "https://example.com");
+    assert!(
+        owned
+            .content_atoms
+            .iter()
+            .any(|atom| atom.link == Some(1) && atom.style_flags & 2 != 0)
+    );
+}
+
+#[test]
+fn native_check_rejects_empty_and_split_utf8_content_refs() {
+    // Oracle: registered C02b UTF-8/78 `.UR` probe renders the authored
+    // `café` label.  Pinned `term.c::encode1` retains é as one scalar;
+    // label references therefore cannot start inside its UTF-8 encoding.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "link.1",
+            ".TH LINK 1\n.SH TEST\n.UR https://example.com\ncafé\n.UE\n"
+                .as_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+    for split_utf8 in [false, true] {
+        let limits = Limits::default();
+        let storage = InputStorage::new("link.1", &bundle, InputFormat::Man, &limits).unwrap();
+        let (status, pointer, failure) = raw_render(&storage.view(78, PROFILE_UTF8), &limits);
+        assert_eq!(status, STATUS_OK, "{failure:?}");
+        let handle = ResultHandle(NonNull::new(pointer).unwrap());
+        let mut view = ResultView::default();
+        assert_eq!(
+            unsafe { mant_structured_result_view(handle.0.as_ptr(), &raw mut view) },
+            STATUS_OK
+        );
+        let refs = unsafe {
+            std::slice::from_raw_parts_mut(
+                view.content_refs.ptr.cast::<ContentRefView>().cast_mut(),
+                view.content_refs.count as usize,
+            )
+        };
+        let atoms = unsafe {
+            std::slice::from_raw_parts(
+                view.content_atoms.ptr.cast::<ContentAtomView>(),
+                view.content_atoms.count as usize,
+            )
+        };
+        let content_ref = refs
+            .iter_mut()
+            .find(|content_ref| {
+                let atom = &atoms[content_ref.atom as usize - 1];
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(
+                        atom.text.ptr,
+                        usize::try_from(atom.text.len).expect("test atom fits this platform"),
+                    )
+                };
+                std::str::from_utf8(bytes).is_ok_and(|text| text.contains("café"))
+            })
+            .expect("authored UTF-8 label reference");
+        if split_utf8 {
+            content_ref.byte_start = content_ref.byte_end - 1;
+        } else {
+            content_ref.byte_start = content_ref.byte_end;
+        }
+        let mut failure = FailureView::default();
+        assert_eq!(
+            unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+            STATUS_RELATION
+        );
+    }
+}
+
+#[test]
+fn profile_specific_connections_keep_one_logical_model() {
+    // Oracle: registered C02b ASCII/UTF-8 width-78 six-connection probe.
+    // Pinned `term.c::term_word/term_fill/term_flushln/term_field` keeps
+    // `\~` nonbreaking; ASCII only projects it as a display space.  `\:`
+    // is an ASCII break sentinel but a UTF-8 zero-width nonbreak marker.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "connections.1",
+            b".TH CONNECTIONS 1\n.SH TEST\n.ll 18n\nabcdefgh ijklmnopqrst uvwxyz\nabcdefgh-ijklmnopqrst uvwxyz\nabcdefgh\\:ijklmnopqrst uvwxyz\nabcdefgh\\%ijklmnopqrst uvwxyz\nabcdefgh\\&-ijklmnopqrst uvwxyz\nabcdefgh\\~ijklmnopqrst uvwxyz\n.B abcdefgh-ijklmnopqrst\none  two\naveryveryveryverylongword\nleft\\[em]right\n".to_vec(),
+        )
+        .unwrap();
+    let utf8 = render_prelude_profile(
+        "connections.1",
+        &bundle,
+        InputFormat::Man,
+        PROFILE_UTF8,
+        78,
+        &Limits::default(),
+    )
+    .expect("UTF-8 connections");
+    let ascii = render_prelude_profile(
+        "connections.1",
+        &bundle,
+        InputFormat::Man,
+        2,
+        78,
+        &Limits::default(),
+    )
+    .expect("ASCII connections");
+    let utf8_nbsp = utf8
+        .content_atoms
+        .iter()
+        .find(|atom| atom.text == "\u{a0}")
+        .expect("UTF-8 logical NBSP");
+    let ascii_nbsp = ascii
+        .content_atoms
+        .iter()
+        .find(|atom| atom.text == "\u{a0}")
+        .expect("ASCII logical NBSP");
+    assert!(!utf8_nbsp.whitespace_breakable && !ascii_nbsp.whitespace_breakable);
+    assert_eq!(utf8_nbsp.display_override, None);
+    assert_eq!(ascii_nbsp.display_override.as_deref(), Some(" "));
+    let ascii_em_dash = ascii
+        .content_atoms
+        .iter()
+        .find(|atom| atom.text == "\u{2014}")
+        .expect("ASCII profile retains the logical em dash");
+    assert_eq!(ascii_em_dash.display_override.as_deref(), Some("--"));
+    assert!(
+        utf8.content_atoms
+            .iter()
+            .any(|atom| atom.text.contains('\u{2014}') && atom.display_override.is_none())
+    );
+    let utf8_text = utf8
+        .content_atoms
+        .iter()
+        .map(|atom| atom.text.as_str())
+        .collect::<String>();
+    let ascii_text = ascii
+        .content_atoms
+        .iter()
+        .map(|atom| atom.text.as_str())
+        .collect::<String>();
+    for logical in [&utf8_text, &ascii_text] {
+        assert!(logical.contains("abcdefgh ijklmnopqrst uvwxyz"));
+        assert!(logical.contains("abcdefgh-ijklmnopqrst uvwxyz"));
+        assert!(logical.contains("abcdefghijklmnopqrst uvwxyz"));
+        assert!(logical.contains("abcdefgh\u{a0}ijklmnopqrst uvwxyz"));
+        assert!(logical.contains("one  two"));
+        assert!(logical.contains("averyveryveryverylongword"));
+    }
+    assert!(
+        utf8.content_atoms
+            .iter()
+            .any(|atom| { atom.style_flags & 1 != 0 && atom.text.contains("abcdefgh") })
+    );
+    let utf8_breaks = utf8
+        .content_atoms
+        .iter()
+        .filter(|atom| atom.kind == ATOM_BREAK_OPPORTUNITY)
+        .count();
+    let ascii_breaks = ascii
+        .content_atoms
+        .iter()
+        .filter(|atom| atom.kind == ATOM_BREAK_OPPORTUNITY)
+        .count();
+    assert_eq!(ascii_breaks, utf8_breaks + 1);
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // Six exact connection cases share one assertion matrix.
+fn each_connection_has_its_exact_logical_boundary() {
+    // Oracle: registered C02b ASCII/UTF-8 width-78 probes were run for
+    // each row before these assertions.  Pinned `roff.c::roff_parseln`
+    // marks only authored in-word hyphens as `ASCII_HYPH`; `term_word`
+    // maps `\:` by device, while `\%` and `\&` are ignored controls.
+    for (source, expected, utf8_breaks, ascii_breaks, has_nbsp, plain_space) in [
+        (
+            "abcdefgh ijklmnopqrst uvwxyz",
+            "abcdefgh ijklmnopqrst uvwxyz",
+            0,
+            0,
+            false,
+            true,
+        ),
+        (
+            "abcdefgh-ijklmnopqrst uvwxyz",
+            "abcdefgh-ijklmnopqrst uvwxyz",
+            1,
+            1,
+            false,
+            false,
+        ),
+        (
+            "abcdefgh\\:ijklmnopqrst uvwxyz",
+            "abcdefghijklmnopqrst uvwxyz",
+            0,
+            1,
+            false,
+            false,
+        ),
+        (
+            "abcdefgh\\%ijklmnopqrst uvwxyz",
+            "abcdefghijklmnopqrst uvwxyz",
+            0,
+            0,
+            false,
+            false,
+        ),
+        (
+            "abcdefgh\\&-ijklmnopqrst uvwxyz",
+            "abcdefgh-ijklmnopqrst uvwxyz",
+            0,
+            0,
+            false,
+            false,
+        ),
+        (
+            "abcdefgh\\~ijklmnopqrst uvwxyz",
+            "abcdefgh\u{a0}ijklmnopqrst uvwxyz",
+            0,
+            0,
+            true,
+            false,
+        ),
+    ] {
+        let input = format!(".TH CONNECTION 1\n.SH TEST\n.ll 18n\n{source}\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert("connection.1", input.into_bytes()).unwrap();
+        for (profile, break_count) in [(PROFILE_UTF8, utf8_breaks), (PROFILE_ASCII, ascii_breaks)] {
+            let owned = render_prelude_profile(
+                "connection.1",
+                &bundle,
+                InputFormat::Man,
+                profile,
+                78,
+                &Limits::default(),
+            )
+            .expect("supported connection");
+            let body_atoms = owned
+                .content_atoms
+                .iter()
+                .filter(|atom| owned.content_roots[atom.root as usize - 1].kind == ROOT_BODY)
+                .collect::<Vec<_>>();
+            let logical = body_atoms
+                .iter()
+                .filter(|atom| atom.kind != ATOM_BREAK_OPPORTUNITY)
+                .map(|atom| atom.text.as_str())
+                .collect::<String>();
+            assert_eq!(logical, expected, "profile={profile}, source={source}");
+            assert_eq!(
+                body_atoms
+                    .iter()
+                    .filter(|atom| atom.kind == ATOM_BREAK_OPPORTUNITY)
+                    .count(),
+                break_count,
+                "profile={profile}, source={source}"
+            );
+            if plain_space {
+                let mut logical_offset = 0;
+                let target = body_atoms
+                    .iter()
+                    .filter(|atom| atom.kind != ATOM_BREAK_OPPORTUNITY)
+                    .find(|atom| {
+                        let starts_at_boundary = logical_offset == "abcdefgh".len();
+                        logical_offset += atom.text.len();
+                        starts_at_boundary
+                    })
+                    .expect("the tested connection has an atom at its exact boundary");
+                assert_eq!(target.kind, ATOM_WHITESPACE);
+                assert_eq!(target.text, " ");
+                assert!(target.whitespace_breakable);
+            }
+            assert_eq!(
+                body_atoms
+                    .iter()
+                    .filter(|atom| atom.text == "\u{a0}" && !atom.whitespace_breakable)
+                    .count(),
+                usize::from(has_nbsp),
+                "profile={profile}, source={source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn ascii_projection_tracks_surviving_overwritten_slots() {
+    // Oracle: registered C02b ASCII/78 `\(em\h'-1m'X` prints `-X`.
+    // Pinned `term.c::encode1/buffer_write` first writes both em-dash
+    // projection cells, then the horizontal motion lets X overwrite the
+    // second cell.  The sidecar must discard that projection fragment.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "projection.1",
+            b".TH PROJECTION 1\n.SH TEST\n\\(em\\h'-1m'X\n".to_vec(),
+        )
+        .unwrap();
+    let owned = render_prelude_profile(
+        "projection.1",
+        &bundle,
+        InputFormat::Man,
+        PROFILE_ASCII,
+        78,
+        &Limits::default(),
+    )
+    .expect("supported overwritten ASCII projection");
+    let em_dash = owned
+        .content_atoms
+        .iter()
+        .find(|atom| atom.text == "\u{2014}")
+        .expect("logical em dash survives one physical cell");
+    assert_eq!(em_dash.display_override.as_deref(), Some("-"));
+    assert!(owned.content_atoms.iter().any(|atom| atom.text == "X"));
+}
+
+#[test]
+fn logical_breaks_commit_after_surviving_buffer_content() {
+    // Oracle: registered C02b UTF-8/78 `.br`/`\p` probe.  In pinned
+    // `term.c::term_word/term_fill/term_flushln`, `\p` marks a buffered
+    // break after the word; it is not a break at the escape source byte.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "break.1",
+            b".TH BREAK 1 \"2026-09-20\"\n.SH NAME\nbefore\\pafter\nmid\n.br\ntail\n".to_vec(),
+        )
+        .unwrap();
+    let owned = render_prelude("break.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("supported logical breaks");
+    let body_atoms = owned
+        .content_atoms
+        .iter()
+        .filter(|atom| owned.content_roots[atom.root as usize - 1].kind == ROOT_BODY)
+        .collect::<Vec<_>>();
+    let before_after = body_atoms
+        .iter()
+        .position(|atom| atom.text == "beforeafter")
+        .expect("sidecar coalesces the surviving word");
+    // Pinned `term.c::term_flushln` consumes the automatically inserted
+    // separator before it emits the delayed line end, so that separator
+    // remains exactly one logical whitespace atom.
+    assert_eq!(
+        body_atoms[before_after + 1].kind,
+        ATOM_WHITESPACE,
+        "{owned:?}"
+    );
+    assert_eq!(body_atoms[before_after + 1].text, " ");
+    assert_eq!(body_atoms[before_after + 2].kind, ATOM_HARD_BREAK);
+    assert!(
+        body_atoms
+            .iter()
+            .filter(|atom| atom.kind == ATOM_HARD_BREAK)
+            .count()
+            >= 2,
+        "{owned:?}"
+    );
+}
+
+#[test]
+fn delayed_breaks_remain_with_the_flushed_root_at_new_block_boundaries() {
+    // Oracle: registered C02b UTF-8/78 probes run before these assertions.
+    // Pinned `man_term.c::print_man_node/pre_PP/print_bvspace` and
+    // `mdoc_term.c::print_mdoc_node/termp_pp_pre` enter the new node before
+    // flushing the preceding buffered root, so the delayed `\p` retains
+    // the root carried by its logical token.
+    for (name, format, source) in [
+        (
+            "boundary.1",
+            InputFormat::Man,
+            b".TH T 1\n.SH A\nfoo\\p\n.PP\nbar\n".as_slice(),
+        ),
+        (
+            "boundary.1",
+            InputFormat::Mdoc,
+            b".Dd September 21, 2026\n.Dt T 1\n.Os\n.Sh A\nfoo\\p\n.Pp\nbar\n".as_slice(),
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.to_vec()).unwrap();
+        let owned = render_prelude(name, &bundle, format, 78, &Limits::default())
+            .expect("the new block flushes the preceding root");
+        let foo = owned
+            .content_atoms
+            .iter()
+            .position(|atom| atom.text == "foo")
+            .expect("old root text");
+        let hard_break = owned
+            .content_atoms
+            .iter()
+            .position(|atom| atom.kind == ATOM_HARD_BREAK)
+            .expect("delayed break");
+        let bar = owned
+            .content_atoms
+            .iter()
+            .position(|atom| atom.text == "bar")
+            .expect("new root text");
+        assert_eq!(
+            owned.content_atoms[hard_break].root,
+            owned.content_atoms[foo].root
+        );
+        assert_ne!(
+            owned.content_atoms[hard_break].root,
+            owned.content_atoms[bar].root
+        );
+        assert!(foo < hard_break && hard_break < bar, "{owned:?}");
+    }
+}
+
+#[test]
+fn explicit_native_widths_preserve_one_logical_prose_model() {
+    // Oracle: registered C02b UTF-8 probes at widths 60/78/100/120 were
+    // run before this assertion.  Pinned `term.c::term_flushln` changes
+    // physical rows at each width while the collector retains the same
+    // authored spaces and word order.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "width.1",
+            b".TH WIDTH 1\n.SH TEST\nalpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let expected = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau";
+    for width in [60, 78, 100, 120] {
+        let owned = render_prelude(
+            "width.1",
+            &bundle,
+            InputFormat::Man,
+            width,
+            &Limits::default(),
+        )
+        .expect("supported width-specific render");
+        let logical = owned
+            .content_atoms
+            .iter()
+            .map(|atom| atom.text.as_str())
+            .collect::<String>();
+        assert!(logical.contains(expected), "width={width}: {owned:?}");
+    }
+}
+
+#[test]
+fn unsupported_geometry_still_exercises_sidecar_mutations() {
+    // Oracle: registered C02b UTF-8 table (width 20), overstrike, and no-fill
+    // probes were run before these assertions.  Pinned `term_flushln`
+    // partially consumes multicolumn fields, while `term_word` truncates
+    // the trailing overstrike backspace/blank pair.  The phase probe runs
+    // that exact renderer but never publishes an incomplete document.
+    let mut table = SourceBundle::new();
+    table
+        .insert(
+            "table.1",
+            b".TH TABLE 1\n.SH TEST\n.TS\ntab(:);\nl l.\nleft-side-with-many-words:right-side-with-many-words\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let table_metrics =
+        probe_structured("table.1", &table, InputFormat::Man, 20, &Limits::default())
+            .expect("table probe executes then discards the unsupported result");
+    assert!(table_metrics.peak_columns > 1, "{table_metrics:?}");
+    assert!(table_metrics.consumes > 0, "{table_metrics:?}");
+    assert!(table_metrics.partial_consumes > 0, "{table_metrics:?}");
+    assert!(table_metrics.continued_consumes > 0, "{table_metrics:?}");
+
+    let mut overstrike = SourceBundle::new();
+    overstrike
+        .insert(
+            "over.1",
+            b".TH OVER 1\n.SH TEST\nbefore \\o'ab ' after\n".to_vec(),
+        )
+        .unwrap();
+    let overstrike_metrics = probe_structured(
+        "over.1",
+        &overstrike,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("overstrike probe executes then discards the unsupported result");
+    assert!(overstrike_metrics.truncates > 0, "{overstrike_metrics:?}");
+    let overstrike_owned = render_prelude(
+        "over.1",
+        &overstrike,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("the surviving logical prose remains supported");
+    let overstrike_text = overstrike_owned
+        .content_atoms
+        .iter()
+        .filter(|atom| atom.kind != ATOM_BREAK_OPPORTUNITY)
+        .map(|atom| atom.text.as_str())
+        .collect::<String>();
+    assert!(
+        overstrike_text.contains("before ab after"),
+        "{overstrike_owned:?}"
+    );
+
+    let mut nofill = SourceBundle::new();
+    nofill
+        .insert(
+            "nofill.1",
+            b".TH NOFILL 1\n.SH TEST\n.nf\none  two\nthree\n.fi\n".to_vec(),
+        )
+        .unwrap();
+    let nofill_metrics = probe_structured(
+        "nofill.1",
+        &nofill,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("no-fill probe executes then discards the unsupported result");
+    assert!(nofill_metrics.resets > 0, "{nofill_metrics:?}");
+    assert!(nofill_metrics.logical_events > 0, "{nofill_metrics:?}");
+}
+
+#[test]
+fn unsupported_structural_shapes_fail_whole_result() {
+    // Oracle preflight covered `.SS`, no-fill, and both equation forms;
+    // C02b intentionally has no complete hierarchy/fixed-view/equation
+    // representation for these shapes.  Pinned
+    // `eqn_term.c::term_eqn` still executes in the phase probe.
+    for (name, source) in [
+        (
+            "subsection.1",
+            b".TH UNSUP 1\n.SH TOP\n.SS CHILD\ntext\n".as_slice(),
+        ),
+        (
+            "nofill.1",
+            b".TH UNSUP 1\n.SH TOP\n.nf\ntext\n.fi\n".as_slice(),
+        ),
+        (
+            "standalone-eqn.1",
+            b".TH EQN 1\n.SH TEST\n.EQ\nx sup 2\n.EN\n".as_slice(),
+        ),
+        (
+            "inline-eqn.1",
+            b".TH EQN 1\n.SH TEST\n.EQ\ndelim $$\n.EN\nbefore $x sup 2$ after\n".as_slice(),
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.to_vec()).unwrap();
+        if name.contains("eqn") {
+            let metrics = probe_structured(name, &bundle, InputFormat::Man, 78, &Limits::default())
+                .expect("equation renderer executes in the discarded phase probe");
+            assert!(metrics.logical_events > 0 && metrics.buffer_writes > 0);
+        }
+        let error = render_prelude(name, &bundle, InputFormat::Man, 78, &Limits::default())
+            .expect_err("unsupported shape must not return a partial document");
+        assert_eq!((error.status, error.stage), (STATUS_UNSUPPORTED, 4));
+    }
+    let mut recovered = SourceBundle::new();
+    recovered
+        .insert("ok.1", b".TH OK 1\n.SH NAME\nrecovered\n".to_vec())
+        .unwrap();
+    let document = render_prelude("ok.1", &recovered, InputFormat::Man, 78, &Limits::default())
+        .expect("unsupported render cleanup restores the next session");
+    assert!(
+        document
+            .content_atoms
+            .iter()
+            .any(|atom| atom.text == "recovered")
+    );
+}
