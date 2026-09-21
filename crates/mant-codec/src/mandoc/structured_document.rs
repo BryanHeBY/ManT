@@ -20,23 +20,39 @@ use crate::definitions::{
 
 struct NativeLoweringIndex {
     block_children: Vec<Vec<usize>>,
+    blocks_by_owner: Vec<Vec<usize>>,
     list_by_block: Vec<Option<usize>>,
     items_by_list: Vec<Vec<usize>>,
 }
 
 impl NativeLoweringIndex {
     fn new(native: &StructuredDocument) -> Result<Self, NativeProjectionError> {
-        let mut block_children = vec![Vec::new(); native.blocks().len() + 1];
+        let mut block_children = empty_index_buckets(native.blocks().len() + 1)?;
+        let mut blocks_by_owner = empty_index_buckets(native.owners().len() + 1)?;
         for (index, block) in native.blocks().iter().enumerate() {
             let parent = block.parent().map_or(0, |parent| parent.get() as usize);
-            block_children
-                .get_mut(parent)
-                .ok_or(NativeProjectionError::InvalidRelation(
-                    "block parent is outside the lowering index",
-                ))?
-                .push(index);
+            push_index(
+                block_children
+                    .get_mut(parent)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "block parent is outside the lowering index",
+                    ))?,
+                index,
+            )?;
+            push_index(
+                blocks_by_owner
+                    .get_mut(block.owner().get() as usize)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "block owner is outside the lowering index",
+                    ))?,
+                index,
+            )?;
         }
-        let mut list_by_block = vec![None; native.blocks().len()];
+        let mut list_by_block = Vec::new();
+        list_by_block
+            .try_reserve_exact(native.blocks().len())
+            .map_err(|_| NativeProjectionError::InvalidRelation("list index allocation"))?;
+        list_by_block.resize(native.blocks().len(), None);
         for (index, list) in native.lists().iter().enumerate() {
             let block = list.block().get() as usize - 1;
             let slot =
@@ -51,17 +67,20 @@ impl NativeLoweringIndex {
                 ));
             }
         }
-        let mut items_by_list = vec![Vec::new(); native.lists().len()];
+        let mut items_by_list = empty_index_buckets(native.lists().len())?;
         for (index, item) in native.items().iter().enumerate() {
-            items_by_list
-                .get_mut(item.list().get() as usize - 1)
-                .ok_or(NativeProjectionError::InvalidRelation(
-                    "item list is outside the lowering index",
-                ))?
-                .push(index);
+            push_index(
+                items_by_list
+                    .get_mut(item.list().get() as usize - 1)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "item list is outside the lowering index",
+                    ))?,
+                index,
+            )?;
         }
         Ok(Self {
             block_children,
+            blocks_by_owner,
             list_by_block,
             items_by_list,
         })
@@ -71,6 +90,29 @@ impl NativeLoweringIndex {
         let index = parent.map_or(0, |parent| parent.get() as usize);
         self.block_children.get(index).map_or(&[], Vec::as_slice)
     }
+
+    fn owner_blocks(&self, owner: libmandoc_rs::structured::OwnerKey) -> &[usize] {
+        self.blocks_by_owner
+            .get(owner.get() as usize)
+            .map_or(&[], Vec::as_slice)
+    }
+}
+
+fn empty_index_buckets(length: usize) -> Result<Vec<Vec<usize>>, NativeProjectionError> {
+    let mut buckets = Vec::new();
+    buckets
+        .try_reserve_exact(length)
+        .map_err(|_| NativeProjectionError::InvalidRelation("lowering index allocation"))?;
+    buckets.resize_with(length, Vec::new);
+    Ok(buckets)
+}
+
+fn push_index(bucket: &mut Vec<usize>, index: usize) -> Result<(), NativeProjectionError> {
+    bucket
+        .try_reserve(1)
+        .map_err(|_| NativeProjectionError::InvalidRelation("lowering index allocation"))?;
+    bucket.push(index);
+    Ok(())
 }
 
 /// Run the private C03 entry from native execution through stable semantic IR.
@@ -357,9 +399,9 @@ fn item_blocks(
     evidence: &mut NativeHeadEvidence,
 ) -> Result<Vec<Block>, NativeProjectionError> {
     let mut blocks = Vec::new();
-    for &child_index in index.block_children(Some(list_block.key())) {
+    for &child_index in index.owner_blocks(item.owner()) {
         let child = &projection.document().blocks()[child_index];
-        if child.owner() != item.owner() {
+        if child.parent() != Some(list_block.key()) {
             continue;
         }
         push_lowered_block(
@@ -388,6 +430,11 @@ fn item_term_roots(
                 "form references an unknown atom",
             ))?
             .root();
+        if roots.last().is_some_and(|previous| *previous > root) {
+            return Err(NativeProjectionError::InvalidRelation(
+                "item term roots are not ordered",
+            ));
+        }
         if roots.last() != Some(&root) {
             roots.push(root);
         }
@@ -478,12 +525,9 @@ fn content_range_for_refs(
             "declaration content references an unknown atom",
         ))?
         .root();
-    let term = roots
-        .iter()
-        .position(|candidate| *candidate == root)
-        .ok_or(NativeProjectionError::InvalidRelation(
-            "declaration content is outside the item term roots",
-        ))?;
+    let term = roots.binary_search(&root).map_err(|_| {
+        NativeProjectionError::InvalidRelation("declaration content is outside the item term roots")
+    })?;
     let atom_offsets = root_offsets
         .get(term)
         .ok_or(NativeProjectionError::InvalidRelation(

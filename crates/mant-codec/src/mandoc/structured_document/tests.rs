@@ -259,6 +259,90 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
 }
 
 #[test]
+fn tp_width_tq_boundary_and_rs_continuation_survive_lowering() {
+    // Each fragment was run through the pinned reference first. The native
+    // path follows `pre_TP` for width/tag separation, keeps TQ independent
+    // from marker lists, and treats the sibling RS produced by `blk_exp` as
+    // content of the preceding ordered item.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "boundaries.1",
+            b".TH X 1\n.SH D\n.TP 4\n\\(bu\nBULLET\n.TP\n\\(bu\n.TQ\nALIAS\nBODY\n.IP 1.\nONE\n.RS\ncontinuation\n.RE\n.IP 2.\nTWO\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("boundaries.1", &bundle, InputFormat::Man)
+        .expect("native marker boundaries lower to semantic IR");
+    let blocks = &document.sections[0].blocks;
+    assert!(matches!(
+        &blocks[0],
+        Block::List {
+            kind: ListKind::Bullet,
+            items,
+            ..
+        } if items.len() == 2
+    ));
+    assert!(matches!(
+        &blocks[1],
+        Block::DefinitionList { items, .. }
+            if mant_ir::inline_plain_text(&items[0].terms[0]) == "ALIAS"
+    ));
+    let Block::List {
+        kind: ListKind::Ordered { start: Some(1) },
+        items,
+        ..
+    } = &blocks[2]
+    else {
+        panic!("RS-separated ordinals remain one ordered list: {blocks:#?}")
+    };
+    assert_eq!(items.len(), 2);
+    let first_text = items[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(mant_ir::inline_plain_text(children)),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(first_text.contains("ONE"), "{first_text:?}");
+    assert!(first_text.contains("continuation"), "{first_text:?}");
+}
+
+#[test]
+fn nested_rs_list_keeps_outer_ordinal_state_and_item_ownership() {
+    // The exact source was run through the pinned reference first. The RS
+    // subtree owns its local bullet state, while the outer 1./2. sequence and
+    // the nested list's attachment to item 1 remain intact.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "nested-rs.1",
+            b".TH X 1\n.SH D\n.IP 1.\nONE\n.RS\n.IP \\(bu\nNESTED\n.RE\n.IP 2.\nTWO\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("nested-rs.1", &bundle, InputFormat::Man)
+        .expect("nested RS list lowers with scoped marker state");
+    let Block::List {
+        kind: ListKind::Ordered { start: Some(1) },
+        items,
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("outer ordered list retained: {:#?}", document.sections)
+    };
+    assert_eq!(items.len(), 2);
+    assert!(items[0].blocks.iter().any(|block| matches!(
+        block,
+        Block::List {
+            kind: ListKind::Bullet,
+            items,
+            ..
+        } if items.len() == 1
+    )));
+}
+
+#[test]
 fn independent_mdoc_lists_keep_their_container_boundaries() {
     // This exact source was run through the pinned reference first. The two
     // Bl/El containers remain independent even though their visible bullets
