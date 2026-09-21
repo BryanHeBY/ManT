@@ -230,6 +230,7 @@ fn selected_native_sources(
         owned.push(crate_dir.join("shim/mant_mandoc_structured.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_budget.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_source.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_structured_session.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_result.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_abi.c"));
     }
