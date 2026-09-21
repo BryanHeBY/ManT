@@ -19,6 +19,15 @@ enum man_marker_style {
 	MAN_MARKER_PAREN_PAIR
 };
 
+#define MAN_MARKER_CANDIDATE_MAX 64U
+
+struct man_marker_candidate {
+	char text[MAN_MARKER_CANDIDATE_MAX];
+	size_t length;
+	uint8_t valid;
+	uint8_t pending_space;
+};
+
 static uint32_t
 context_parent(const struct structured_session *session,
     const struct structured_node_context *context)
@@ -74,38 +83,146 @@ mdoc_list_kind(const struct roff_node *node, uint32_t *kind,
 	}
 }
 
-static const struct roff_node *
-first_text(const struct roff_node *node)
-{
-	const struct roff_node *found;
+static int scan_man_marker_node(struct man_marker_candidate *,
+    const struct roff_node *, int);
 
-	for (; node != NULL; node = node->next) {
-		if (node->type == ROFFT_TEXT && node->string != NULL)
-			return node;
-		if ((found = first_text(node->child)) != NULL)
-			return found;
+static int
+append_man_marker_text(struct man_marker_candidate *candidate,
+    const char *text, int separated)
+{
+	const char *end;
+	size_t before;
+
+	if (text == NULL || text[0] == '\0') {
+		candidate->valid = 0;
+		return 0;
 	}
-	return NULL;
+	if (separated && candidate->length != 0)
+		candidate->pending_space = 1;
+	before = candidate->length;
+	while (*text != '\0') {
+		if (*text == ' ' || *text == '\t' ||
+		    (text[0] == '\\' && text[1] == ' ')) {
+			if (candidate->length != 0)
+				candidate->pending_space = 1;
+			text += *text == '\\' ? 2 : 1;
+			continue;
+		}
+		if (text[0] == '\\' && text[1] == 'f' && text[2] != '\0') {
+			if (text[2] == '[') {
+				end = strchr(text + 3, ']');
+				if (end == NULL) {
+					candidate->valid = 0;
+					return 0;
+				}
+				text = end + 1;
+			} else
+				text += 3;
+			continue;
+		}
+		if (candidate->pending_space != 0 && candidate->length != 0) {
+			if (candidate->length == MAN_MARKER_CANDIDATE_MAX - 1) {
+				candidate->valid = 0;
+				return 0;
+			}
+			candidate->text[candidate->length++] = ' ';
+		}
+		candidate->pending_space = 0;
+		if (candidate->length == MAN_MARKER_CANDIDATE_MAX - 1) {
+			candidate->valid = 0;
+			return 0;
+		}
+		candidate->text[candidate->length++] = *text++;
+		candidate->text[candidate->length] = '\0';
+	}
+	return candidate->length != before;
+}
+
+static int
+scan_man_marker_sequence(struct man_marker_candidate *candidate,
+    const struct roff_node *node, int separated, int concatenate)
+{
+	int emitted, node_emitted;
+	size_t before;
+
+	emitted = 0;
+	for (; node != NULL && candidate->valid; node = node->next) {
+		before = candidate->length;
+		node_emitted = scan_man_marker_node(candidate, node,
+		    separated && (emitted || before != 0));
+		if (!node_emitted)
+			continue;
+		emitted = 1;
+		separated = !concatenate;
+	}
+	return emitted;
+}
+
+static int
+scan_man_marker_node(struct man_marker_candidate *candidate,
+    const struct roff_node *node, int separated)
+{
+	if (node == NULL || !candidate->valid)
+		return 0;
+	switch (node->type) {
+	case ROFFT_TEXT:
+		return append_man_marker_text(candidate, node->string, separated);
+	case ROFFT_COMMENT:
+		return 0;
+	case ROFFT_ELEM:
+		break;
+	default:
+		candidate->valid = 0;
+		return 0;
+	}
+	switch (node->tok) {
+	case MAN_BI:
+	case MAN_IB:
+	case MAN_BR:
+	case MAN_RB:
+	case MAN_IR:
+	case MAN_RI:
+		return scan_man_marker_sequence(candidate, node->child,
+		    separated, 1);
+	case MAN_SM:
+	case MAN_SB:
+	case MAN_R:
+	case MAN_B:
+	case MAN_I:
+		return scan_man_marker_sequence(candidate, node->child,
+		    separated, 0);
+	default:
+		candidate->valid = 0;
+		return 0;
+	}
 }
 
 /*
- * TP accepts an optional width on the macro line, but pre_TP() deliberately
- * starts rendering its tag at the first NODE_LINE child.  Classification has
- * to use the same boundary or a numeric width can masquerade as a marker.
+ * Mirror the effective head ranges in man_term.c::pre_IP/pre_TP.  Marker
+ * lowering is allowed only when every formatter-executed node in that range
+ * is a supported font wrapper and the complete visible text is a marker.
  */
-static const struct roff_node *
-man_marker_text(const struct roff_node *node)
+static int
+man_marker_candidate(const struct roff_node *node,
+    struct man_marker_candidate *candidate)
 {
 	const struct roff_node *head;
 
+	memset(candidate, 0, sizeof(*candidate));
+	candidate->valid = 1;
 	head = node == NULL ? NULL : node->head;
-	if (node != NULL && node->tok == MAN_TP && head != NULL) {
-		head = head->child;
+	if (head == NULL || head->child == NULL)
+		return 0;
+	head = head->child;
+	if (node->tok == MAN_IP)
+		scan_man_marker_node(candidate, head, 0);
+	else if (node->tok == MAN_TP) {
 		while (head != NULL && (head->flags & NODE_LINE) == 0)
 			head = head->next;
-		return first_text(head);
-	}
-	return first_text(head);
+		scan_man_marker_sequence(candidate, head, 0, 0);
+	} else
+		return 0;
+	return candidate->valid && candidate->length != 0;
 }
 
 /*
@@ -153,13 +270,12 @@ skip_marker_decoration(const char *text)
 static int
 man_named_bullet(const struct roff_node *node)
 {
-	const struct roff_node *text_node;
+	struct man_marker_candidate candidate;
 	const char *text;
 
-	text_node = man_marker_text(node);
-	if (text_node == NULL)
+	if (!man_marker_candidate(node, &candidate))
 		return 0;
-	text = skip_marker_decoration(text_node->string);
+	text = skip_marker_decoration(candidate.text);
 	if (strncmp(text, "\\(bu", 4) == 0)
 		text += 4;
 	else if (strncmp(text, "\\[bu]", 5) == 0)
@@ -172,15 +288,14 @@ man_named_bullet(const struct roff_node *node)
 static uint32_t
 man_ordinal_start(const struct roff_node *node, uint32_t *style)
 {
-	const struct roff_node *text_node;
+	struct man_marker_candidate candidate;
 	const char *text;
 	uint64_t value;
 	int parenthesized;
 
-	text_node = man_marker_text(node);
-	if (text_node == NULL)
+	if (!man_marker_candidate(node, &candidate))
 		return 0;
-	text = skip_marker_decoration(text_node->string);
+	text = skip_marker_decoration(candidate.text);
 	parenthesized = *text == '(';
 	if (parenthesized)
 		text++;
