@@ -280,6 +280,15 @@ impl ContentAtom {
     pub const fn provenance(&self) -> ProvenanceKey {
         self.provenance
     }
+
+    /// Consume this record and return its owned payload.
+    ///
+    /// This is used by the first normalized-content producer to move native
+    /// text into its authoritative store without retaining a second copy.
+    #[must_use]
+    pub fn into_kind(self) -> ContentAtomKind {
+        self.kind
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -401,6 +410,16 @@ impl LinkOccurrence {
     #[must_use]
     pub const fn provenance(&self) -> ProvenanceKey {
         self.provenance
+    }
+
+    /// Consume this occurrence and return its owned destination metadata.
+    ///
+    /// Structural relations remain available through the borrowed accessors
+    /// before consumption; the returned strings can then move into the final
+    /// authoritative content store without cloning.
+    #[must_use]
+    pub fn into_target_and_title(self) -> (NativeLinkTarget, Option<String>) {
+        (self.target, self.title)
     }
 }
 

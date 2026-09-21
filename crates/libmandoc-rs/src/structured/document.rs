@@ -158,7 +158,54 @@ pub struct StructuredDocument {
     pub(crate) diagnostics: Vec<NativeDiagnostic>,
 }
 
+/// Owned native tables transferred into one normalized content store.
+///
+/// The remaining [`StructuredDocument`] keeps block, list, evidence, source,
+/// and diagnostic tables so a consumer can finish structural lowering after
+/// this one-way transfer.  Its content-table accessors return empty slices.
+#[derive(Debug)]
+pub struct StructuredContentTables {
+    owners: Vec<ContentOwner>,
+    roots: Vec<ContentRoot>,
+    atoms: Vec<ContentAtom>,
+    points: Vec<ContentPoint>,
+    links: Vec<LinkOccurrence>,
+}
+
+/// Dense native content tables in owner/root/atom/point/link order.
+pub type StructuredContentTableParts = (
+    Vec<ContentOwner>,
+    Vec<ContentRoot>,
+    Vec<ContentAtom>,
+    Vec<ContentPoint>,
+    Vec<LinkOccurrence>,
+);
+
+impl StructuredContentTables {
+    /// Consume the transfer object into its dense native tables.
+    #[must_use]
+    pub fn into_parts(self) -> StructuredContentTableParts {
+        (self.owners, self.roots, self.atoms, self.points, self.links)
+    }
+}
+
 impl StructuredDocument {
+    /// Move the native content-store records out after relation planning.
+    ///
+    /// This deliberately leaves all structural and evidence tables in place.
+    /// Callers must finish every operation that needs native owners, roots,
+    /// points, or link-label tables before invoking this one-way transfer.
+    #[must_use]
+    pub fn take_content_tables(&mut self) -> StructuredContentTables {
+        StructuredContentTables {
+            owners: std::mem::take(&mut self.owners),
+            roots: std::mem::take(&mut self.content_roots),
+            atoms: std::mem::take(&mut self.content_atoms),
+            points: std::mem::take(&mut self.content_points),
+            links: std::mem::take(&mut self.links),
+        }
+    }
+
     #[must_use]
     pub const fn root_source(&self) -> SourceKey {
         self.root_source
