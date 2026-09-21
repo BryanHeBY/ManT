@@ -42,5 +42,7 @@ struct structured_column {
 
 void mant_structured_observe_terminal(struct termp *, void *,
     const struct term_collector_event *);
+void mant_structured_buffer_release(struct structured_session *,
+    const struct mant_structured_result *);
 
 #endif

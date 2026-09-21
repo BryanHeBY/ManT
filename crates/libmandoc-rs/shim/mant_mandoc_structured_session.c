@@ -370,35 +370,7 @@ native_cleanup:
 		    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 
 cleanup:
-	if (session.probe != NULL) {
-		uint64_t slots = 0, sidecar_bytes;
-		uint32_t column;
-
-		for (column = 0; column < session.column_count; column++) {
-			if (UINT64_MAX - slots < session.columns[column].capacity) {
-				slots = UINT64_MAX;
-				break;
-			}
-			slots += session.columns[column].capacity;
-		}
-		sidecar_bytes = (uint64_t)session.node_capacity *
-		    sizeof(*session.node_stack) +
-		    (uint64_t)session.token_capacity * sizeof(*session.tokens) +
-		    (uint64_t)session.column_capacity * sizeof(*session.columns) +
-		    session.projection_peak_bytes;
-		if (slots == UINT64_MAX || slots >
-		    (UINT64_MAX - sidecar_bytes) / sizeof(struct structured_slot))
-			sidecar_bytes = UINT64_MAX;
-		else
-			sidecar_bytes += slots * sizeof(struct structured_slot);
-		session.probe->builder_allocated_bytes = session.allocated_bytes;
-		session.probe->content_bytes = session.content_bytes;
-		session.probe->source_count = result == NULL ? 0 :
-		    result->source_count;
-		session.probe->token_count = session.token_total;
-		session.probe->slot_capacity = slots;
-		session.probe->sidecar_allocated_bytes = sidecar_bytes;
-	}
+	mant_structured_buffer_release(&session, result);
 	status = session.status;
 	if (status == MANT_STRUCTURED_OK) {
 		*out_result = result;
@@ -416,14 +388,6 @@ cleanup:
 			free(session.source_maps[source].lines);
 	free(session.source_maps);
 	free(session.node_stack);
-	for (uint32_t column = 0; column < session.column_count; column++)
-		free(session.columns[column].slots);
-	free(session.columns);
-	for (uint32_t token = 0; token < session.token_slot_count; token++) {
-		free(session.tokens[token].projection_bytes);
-		free(session.tokens[token].projection_survived);
-	}
-	free(session.tokens);
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;
 	structured_active = 0;
