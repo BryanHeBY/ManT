@@ -228,6 +228,8 @@ fn selected_native_sources(
     }
     if selection.has(NativeSelection::STRUCTURED) {
         owned.push(crate_dir.join("shim/mant_mandoc_structured.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_structured_result.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_structured_abi.c"));
     }
     if selection.has(NativeSelection::MEMORY_ONLY) {
         owned.push(crate_dir.join("shim/windows_compat.c"));
