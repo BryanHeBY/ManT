@@ -1,6 +1,7 @@
 # libmandoc structured-rendering internals
 
-Status: refactoring baseline frozen at `bcd6661d` on 2026-09-21.
+Status: refactor completed on `dev`; baseline frozen at `bcd6661d` on
+2026-09-21 and native split completed at `eb502316`.
 
 This document is the module and ownership map for the behavior-preserving
 `libmandoc-rs` structured-rendering split.  It supplements the frozen
@@ -34,9 +35,9 @@ parts of the existing private contract.
 
 ## Rust modules
 
-The final module names may vary slightly when a dependency boundary makes a
-different name clearer.  Visibility is limited to the nearest common parent;
-the split must not replace private items with crate-wide visibility.
+The final modules follow the boundaries below.  Visibility is limited to the
+nearest common parent; the split did not replace private items with crate-wide
+visibility.
 
 ```text
 src/structured/
@@ -72,20 +73,24 @@ Every cross-file C symbol uses the `mant_structured_` project prefix; no C
 source file includes another C source file.
 
 ```text
+shim/mant_mandoc_structured.c           collector dispatch and active buffer
 shim/mant_mandoc_structured_session.c   parse/render orchestration and cleanup
 shim/mant_mandoc_structured_source.c    bundle/include and source provenance
 shim/mant_mandoc_structured_budget.c    charging and controlled allocation
 shim/mant_mandoc_structured_builder.c   final result construction
 shim/mant_mandoc_structured_result.c    result check, view, transfer, and free
-shim/mant_mandoc_structured_buffer.c    tokens, slots, columns, and projection
-shim/mant_mandoc_structured_collector.c event dispatch and content boundaries
 shim/mant_mandoc_structured_abi.c       size, alignment, and offset probes
 ```
 
-The concrete split is extracted in dependency order: ABI/result leaves,
-budget, source, builder, session, buffer, then collector.  A module is added to
-`build.rs` in the same commit that connects it; intermediate commits continue
-to compile every supported feature combination.
+The concrete split was extracted in dependency order: ABI/result leaves,
+budget, source, session, then builder/buffer.  Collector dispatch and its
+reclaimable token/slot/column/projection storage deliberately remain in one C
+translation unit: partial consumption and retirement are one state machine,
+and separating them would widen the mutation boundary.  Their representation
+is declared in the project-private session/buffer headers, but no other C
+module directly accesses or modifies those fields.  A module was added to
+`build.rs` in the same commit that connected it; every intermediate commit
+continued to compile the supported feature combinations.
 
 | State or resource | Sole writer/owner | Transfer or release boundary |
 | --- | --- | --- |
@@ -104,6 +109,9 @@ Buffer state is one lifecycle unit.  Collector and session code request
 complete operations such as record, consume, discard, clear-pending, and
 release; they do not update token, slot, free-list, or projection fields
 independently.  Active storage remains separate from returned result arrays.
+The final collector release also freezes probe counters before reclaiming the
+active sidecar; cumulative builder/content/source counters remain distinct
+from active and peak collector storage.
 
 The session module is the only owner of structured-specific TLS.  The generic
 bundle/source TLS already present in `mant_mandoc_shim.c` is not migrated by
@@ -148,6 +156,48 @@ ASan, TSan, symbol isolation, packaged-source tests, offline vendor replay,
 relevant consumers, and the workspace suite.  Windows and macOS execution is
 reported only when actually run by CI or on those hosts.
 
+## Completed verification
+
+The final Linux x86_64 local gate ran on 2026-09-21.  The following were
+executed, not merely inspected:
+
+- parser-only, render-only, structured-only, render+structured, and
+  all-feature `libmandoc-rs` tests, including strict native warnings;
+- the complete `scripts/check.sh --build-profile release` gate, covering the
+  workspace, independent consumers, packaged source sets, symbol isolation,
+  docs with warnings denied, strict Clippy, fuzz compilation, audits, query
+  gold, and the release executable smoke test;
+- offline `sync_vendor.py --verify` replay of all 29 locked patches with zero
+  vendor differences;
+- the mixed Rust/C AddressSanitizer suite and the ThreadSanitizer suite at 64
+  rounds per worker;
+- release GCC and Git sidecar probes after warming the build cache.
+
+All deterministic probe counters matched the frozen table.  Warm observations
+were 2.17 seconds/68,848 KiB for GCC and 0.10 seconds/53,812 KiB for Git.  These
+single-host timings are evidence against an obvious local regression, not a
+portable performance guarantee.  Windows and macOS execution remains for CI.
+
+The full gate exposed two pre-existing SourceKey migration omissions outside
+the mechanical split.  They were repaired separately: profiler fixtures now
+pass their exact decoded byte length to lowering, and v1 single-source query
+gold coordinates bind explicitly to root `SourceKey` 1 while rejecting other
+keys.
+
+## Deliberately retained large modules
+
+- `src/ffi/structured/validation.rs` keeps ordered admission, budget, range,
+  key, and relationship checks together because their precedence is part of
+  the FFI contract.
+- `src/ffi/structured/raw.rs` and `shim/mant_mandoc_structured.h` remain the
+  contiguous Rust/C ABI declarations needed for layout review.
+- `shim/mant_mandoc_structured.c` keeps collector dispatch beside the active
+  buffer state machine, as described above; it no longer owns session, source,
+  result, ABI, budget, or final-builder responsibilities.
+- `shim/mant_mandoc_shim.c` remains unchanged.  It jointly supports legacy AST
+  export, source authorization, and reference rendering; splitting it is an
+  independent risk-bearing unit and does not block structured collector work.
+
 ## Commit and review boundaries
 
 Each commit keeps a connected implementation and records the moved owner and
@@ -156,7 +206,8 @@ behavior discrepancy stops the mechanical unit: the corresponding pinned CVS
 path and exact reference input are inspected before any separate behavior
 change is considered.
 
-Read-only cross-review occurs after the Rust FFI split, after source/budget/
-session extraction, and after buffer/collector encapsulation.  Reviews name
-their exact base and candidate, distinguish regressions from encapsulation
-gaps and optional suggestions, and do not claim unrun verification.
+Read-only cross-review occurred after the Rust FFI split, after source/budget/
+session extraction, and after buffer/collector encapsulation.  The reviewers
+found no blocking regression; their non-blocking notes about shared private
+buffer representation and retained cross-module probe aggregation are recorded
+above rather than hidden by another algorithm change.
