@@ -118,6 +118,8 @@ struct StructuredDocument {
     atoms: Vec<ContentAtom>,
     points: Vec<ContentPoint>,
     links: Vec<LinkOccurrence>,
+    anchors: Vec<AnchorEvidence>,
+    headings: Vec<HeadingEvidence>,
     declarations: Vec<DeclarationEvidence>,
     blocks: Vec<NativeBlock>,
     tables: Vec<NativeTable>,
@@ -158,6 +160,7 @@ struct ContentAtom {
     root: ContentRootKey,
     owner: OwnerKey,
     kind: ContentAtomKind,
+    link: Option<LinkOccurrenceKey>,
     provenance: Provenance,
 }
 
@@ -167,7 +170,6 @@ enum ContentAtomKind {
         display_override: Option<String>,
         style: NativeStyle,
         role: Option<NativeRole>,
-        link: Option<LinkOccurrenceKey>,
     },
     Whitespace {
         text: String,
@@ -175,11 +177,15 @@ enum ContentAtomKind {
         breakable: bool,
         style: NativeStyle,
         role: Option<NativeRole>,
-        link: Option<LinkOccurrenceKey>,
     },
     BreakOpportunity,             // zero text and zero logical scalars
     HardBreak,                    // zero text, one logical `\n` scalar
 }
+
+// `ContentAtomKey` is dense global retained native execution order. The atom
+// table is stored in that order; each root atom vector is its ordered
+// projection. The common link may be present on Text, Whitespace, or
+// HardBreak, and must be absent on BreakOpportunity.
 
 struct ContentRef {
     atom: ContentAtomKey,
@@ -205,7 +211,29 @@ struct LinkOccurrence {
     owner: OwnerKey,
     target: NativeLinkTarget,
     title: Option<String>,        // non-visible advisory metadata
-    label: Vec<ContentRef>,
+    label: Vec<LinkLabelPart>,
+    provenance: Provenance,
+}
+
+enum LinkLabelPart {
+    Content(ContentRef),
+    HardBreak(ContentAtomKey),
+}
+
+struct AnchorEvidence {
+    key: AnchorEvidenceKey,
+    owner: OwnerKey,
+    point: ContentPointKey,
+    target: String,               // exact native target spelling
+    origin: NativeTargetOrigin,   // authored or formatter-generated
+    provenance: Provenance,
+}
+
+struct HeadingEvidence {
+    key: HeadingEvidenceKey,
+    block: NativeBlockKey,
+    owner: OwnerKey,
+    authored_phrase: Option<String>,
     provenance: Provenance,
 }
 
@@ -227,8 +255,12 @@ than source ranges or reconstructed strings.
 
 Atoms split at style, role, link, owner, root, provenance, and logical
 connection boundaries. Consequently a link label contains whole linked atoms,
-and every atom with `link=l1` occurs exactly once in `l1.label`; form/name refs
-may select UTF-8 subranges without changing wrapper ownership.
+and every Text/Whitespace atom with `link=l1` occurs exactly once as a content
+part in `l1.label`. Every logical `HardBreak` structurally inside the
+occurrence carries `link=l1`, appears exactly once as a hard-break part, and
+contributes one logical `\n`; an automatic visual wrap never creates a
+`HardBreak` or label part. A `BreakOpportunity` never appears in the label.
+Form/name refs may select UTF-8 subranges without changing wrapper ownership.
 
 The public v0.12 IR keeps these roots and atoms as its only inline text store.
 Existing inline topology remains, but its leaves become references:
@@ -255,8 +287,11 @@ Wrapper paths remain structural `ContentLocation`s, while their leaves resolve
 to the same atom keys used by entry facts, fixed placements, links, search, and
 copy. IR validation requires Strong/Emphasis/Code/Link topology to agree with
 the referenced atom style/role/link facts; wrappers own structure only. Native
-result keys are validated and copied directly into this document store; codec
-does not create a second text tree or later remap refs by string.
+body atoms and refs are validated and moved into this document store without a
+second text tree or any string-based remapping. Codec may perform one bounded
+dense key remap while converting native navigation evidence into public
+occurrences, points, and IDs; all atom annotations, label parts, wrappers, and
+relations participate in that same atomic map.
 Logical matching and copy always use `text`. The profile-specific
 `display_override`, when present, is a bounded glyph projection mapped back to
 the same logical atom; it is never searched or treated as a second body.
@@ -282,13 +317,84 @@ empty owner exists without borrowing the following item's body. A zero-width
 anchor uses a checked `ContentPoint` either between atoms or at a UTF-8 boundary
 inside a text/whitespace atom in one of the owner's roots; no dummy character
 is inserted. Its `scalar_boundary` must equal the scalar count derived from all
-preceding atom content plus the selected in-atom prefix. A link occurrence owns
-its typed target and
-ordered label refs. All its labelled atoms carry the same link key. Placements
-derive occurrence identity through their target ref; they never store a second
-occurrence key. Two separately authored links always get different keys even
-when source position, target, and label are equal; repeated placement of one
-link reuses its one key.
+preceding atom content plus the selected in-atom prefix. `AnchorEvidence` binds
+native target identity and origin to that point. Several authored or generated
+targets may share one point, and codec alone allocates their normalized public
+`NodeId`s and exact authored `FragmentAlias` values. Neither the point nor its
+scalar offset is a target identity.
+
+Anchor evidence keys follow retained native execution order; producers never
+deduplicate them by target bytes. Codec groups evidence by `(owner, point)` and
+emits one public destination at that location. Repeated identical spellings at
+the same point do not create another public identity. Distinct valid authored
+spellings become aliases of the same destination in evidence order; generated
+spellings never become aliases. A leading point already owned by a `Section`
+or `EntryFacts` reuses that owner's destination: evidence may add valid
+authored aliases, but never replaces the heading-derived section ID or the
+entry ID and never emits a second `Inline::Anchor`. At any other point codec
+emits exactly one `Inline::Anchor`; its normalized `NodeId` base comes from the
+first valid authored spelling, otherwise the first generated spelling, and
+otherwise the reserved base `anchor` plus the shared document-order collision
+allocator. Invalid authored aliases are diagnosed and omitted without losing
+the destination. Multiple generated spellings at one point intentionally
+collapse into that one destination; only the first selects its base and none
+becomes a public alias. Sections, entries, and inline anchors share the same
+deterministic document-order allocator. Before allocating any `NodeId`, codec
+collects every valid authored alias claim. A structural or generated ID
+candidate must avoid aliases claimed by another destination; it may equal an
+alias of its own destination. Equal authored aliases explicitly claimed by two
+destinations remain equal, resolve as ambiguous, and produce the existing
+diagnostic rather than being rewritten. Remaining ID collisions receive stable
+document-order suffixes. Anchor provenance identifies the target request or
+generated trigger and may differ from the landing point and owner provenance.
+
+A link occurrence owns its typed target and ordered label parts. All its
+labelled atoms carry the same link key. One occurrence may span several
+structural roots or wrapper fragments owned by the same owner; every structural
+`Inline::Link` fragment carries the same occurrence key, and scanners count the
+table occurrence rather than wrapper nodes. A zero-width break opportunity is
+omitted, while an intervening `HardBreak` is an explicit label part; neither
+creates a new occurrence. Link-label copy and reference labels concatenate
+content parts and the hard-break `\n` in order. Protocol and UI search always
+matches each root's logical sequence; it never searches or concatenates the
+occurrence label across roots. A root-local hit may be associated with the
+occurrence whose annotated atoms it intersects. Placements derive occurrence
+identity through their target ref; they never store a second occurrence key.
+Two separately authored links always
+get different keys even when source position, target, and label are equal;
+repeated placement or structural fragmentation of one link reuses its one key.
+The occurrence provenance belongs to the authored destination operand or
+request that created the target; label atoms retain their own provenance and
+never replace destination provenance merely because they render first.
+
+Every native heading block has exactly one `HeadingEvidence`. When
+`authored_phrase` is present it is nonempty and contains the source-derived
+phrase used by the pinned section-link path after roff deformatting but before
+terminal spacing, zero-width, font, or wrapping effects. When source identity
+cannot be recovered the field is absent; that is a closed, non-navigable state,
+not permission to substitute display text. It is native-only navigation
+evidence and never enters render, copy, or search text.
+`NativeLinkTarget::Section` carries the same authored domain. Codec derives the
+section `NodeId` base and lookup map from authored phrases, while the heading
+root remains the outline/render authority. Duplicate phrases are ambiguous for
+lookup even though their public IDs receive deterministic suffixes. A heading
+with absent evidence receives the reserved base `section` through the shared
+document-order collision allocator, is omitted from the authored-phrase lookup
+map, and can be reached only through its structural ID or a valid explicit
+anchor alias at its leading point. Missing evidence never falls back to display
+text. Codec resolves successful
+section links through the shared navigation map; it never treats displayed
+heading text or a native key as the destination identity.
+
+Native and public link occurrences are distinct typed stages:
+`NativeLinkOccurrence<NativeLinkTarget>` may contain an authored section
+phrase, while public `LinkOccurrence<LinkTarget>` contains only a resolved
+`Section { id: NodeId }`. On a missing or ambiguous section target, codec emits
+the existing unresolved-section diagnostic and atomically removes that native
+occurrence from the public link table, clears its atom link annotations,
+unwraps every structural link fragment, and densely remaps later public link
+keys. Label content remains in place. A failed section target can therefore
+leave neither a navigable reference nor a dangling occurrence.
 
 Native C exports structure and evidence: real head/term/body boundaries,
 native roles, explicit relationships, and content refs. It does not construct
@@ -692,9 +798,11 @@ The final field/discriminator changes to implement in C09a are frozen here:
 | provenance | closed tagged union: `authored`, `generated`, `unknown`; generated may carry `trigger` only |
 | content owner | closed object: `key`, owner kind, ordered roots/blocks, and `provenance` |
 | content root | closed object: `key`, `owner`, root kind, ordered `atoms`/`points`, and `provenance` |
-| content atom | closed tagged union: `text`, `whitespace`, `break-opportunity`, `hard-break`; text/whitespace own logical text and optional bounded `displayOverride`; hard break counts one scalar and break opportunity counts none |
+| content atom | closed tagged union with common optional `link`: `text`, `whitespace`, `break-opportunity`, `hard-break`; text/whitespace own logical text and optional bounded `displayOverride`; hard break counts one scalar and may carry a link, while break opportunity counts none and must not carry one |
 | content point | closed object: `key`, `root`, tagged `boundary`, `scalarBoundary`, `owner`, `provenance`; the boundary is either between atoms or a UTF-8 position in a root atom, and its scalar value is checked against that root |
-| link occurrence | closed object: `key`, `owner`, typed `target`, ordered `label` refs, and `provenance` |
+| link occurrence | closed object: `key`, `owner`, typed `target`, ordered content/hard-break `label` parts, and destination `provenance` |
+| anchor evidence | native-only closed object: `key`, `owner`, `point`, exact `target`, authored/generated `origin`, and `provenance`; multiple records may share one point, while codec alone allocates public IDs and aliases |
+| heading evidence | native-only closed object: `key`, heading `block`, `owner`, optional nonempty `authoredPhrase`, and `provenance`; exactly one record exists per heading, absence is an explicit non-navigable authored state, and section links are resolved only in the present authored phrase domain |
 | inline leaves | `text`/`code` carry only `content`; `line-break` carries a HardBreak atom; `anchor` carries a point; `link` carries an occurrence key; wrappers retain children but no leaf owns visible text |
 | block discriminator | retain `type`; add `fixed-display`; every inline-bearing block/heading/term/cell carries a root; equation/unsupported visible output also uses a root rather than `value`/`text`; `preformatted` continues to mean code/literal source semantics, not native fixed geometry |
 | table | logical `rows` remain authoritative; optional `fixedView` references their content rather than copying it |
@@ -725,12 +833,83 @@ Decoders reject a missing/empty table, duplicate/non-dense keys, an invalid
 root, and the old singular `source` field. Persistent caches include a format
 fingerprint and invalidate the old shape.
 
+Protocol responses that retain any `Inline`, entry form, heading, block, link,
+point, or logical search range without embedding the complete `Document` carry
+one bounded response-local projection:
+
+```rust
+struct ContentProjection {
+    content_store: ContentStore,
+}
+```
+
+The response's ordinary fields still own the retained heading/block/list/item/
+table topology. `ContentProjection` is the one response-local `ContentStore`
+for that topology: owners, roots, atoms, points, public link occurrences, and
+any reachable fixed views, lines, placements, and decorations. Native-only
+anchor and heading evidence never crosses the codec boundary. A public
+`Inline::Anchor` makes its point reachable.
+
+Projection closure starts from every returned structure, form, logical range,
+and occurrence key. It retains each reached root atomically with its complete
+atom/point order; a reached link retains its complete ordered label and expands
+closure to every referenced root; an anchor retains its point/root/owner; and a
+fixed/table block retains every cell relation, view, line, placement, and
+decoration. Owner/root/link/fixed edges expand to a fixed point before one
+atomic dense remap updates both store and response fields. A partial link,
+partial root, dangling point, or copied fallback body is invalid.
+
+Projection keys are local to exactly one response envelope. Their numeric
+values are never compared with, cached as, or converted to keys from the source
+`Document`; a scope record is selected before any enclosed key is interpreted.
+Structural path components keep their response-local topology coordinates,
+while every leaf ref and occurrence key resolves only through that record's
+projection.
+
+Full-document responses use `Document.contentStore` directly and do not add a
+second projection. Standalone search always carries a projection covering all
+returned logical hits; scope search carries one projection per returned
+document record. Search never emits a root key that only an omitted document
+could resolve.
+
+Outline/reference records carry a response-local occurrence key instead of a
+copied authoritative target or label. The target and complete label resolve
+from the projection. A bounded label prefix may remain only as explicitly
+presentation-only text. Structural `fragments` are emitted in document order
+only when the response retains their topology; otherwise logical label parts and
+owner identity remain the address. An occurrence intersects a selected scope
+when at least one logical fragment is in scope, and is counted once by key;
+additional wrappers or fixed placements consume mapping work but never another
+occurrence.
+
+Projection construction has hard clamps of 1,000,000 objects, 8,000,000 edges,
+32 MiB of retained bytes, and 16,000,000 traversal/remap steps, further lowered
+by each operation's existing scan and content-byte options. All skipped offset
+work is charged while constructing the response. Wire decoders do not invent a
+missing operation budget: they enforce the fixed object/edge/byte clamps and
+the traversal/remap-step clamp plus complete closure, while the producer
+enforces request-specific work limits.
+Optional excerpt, support, or explanation bodies that cannot
+close within the remaining budget are omitted atomically and set their existing
+omission flag. A required search/reference record or explicit excerpt whose
+closure cannot fit fails with the operation's budget error; it never returns a
+partial projection or an unresolvable next page.
+
+Rendered previews, outline labels, entry-name strings, explanation snippets,
+search context, and matched-text echoes may remain bounded presentation fields,
+but they are never accepted as content, link, search, form, or explanation
+authority. Validation rejects dangling keys, duplicate old/new authorities,
+or incomplete closure.
+
 ## 4. FFI and lifetime contract
 
 The structured ABI is private to `libmandoc-rs`, but its minimum interface is
-frozen. All enum and status fields are `uint32_t`; keys and collection counts
-are `uint32_t`; source sizes/ranges, aggregate counters, and byte lengths are
-`uint64_t`; terminal columns and logical scalar offsets are `uint32_t`.
+frozen. All new enum and status fields are `uint32_t`; the only narrower legacy
+enum is the physically retained v3 item `target_origin` byte, which v4 requires
+to be zero together with the other legacy item-target fields. Keys and
+collection counts are `uint32_t`; source sizes/ranges, aggregate counters, and
+byte lengths are `uint64_t`; terminal columns and logical scalar offsets are
+`uint32_t`.
 Booleans are `uint8_t` and must be 0 or 1. Every view has explicit reserved
 bytes initialized to zero.
 
@@ -792,7 +971,7 @@ struct mant_structured_failure_view {
     uint32_t reserved;
 };
 
-uint32_t mant_structured_abi_version(void); /* exactly 2 for this contract */
+uint32_t mant_structured_abi_version(void); /* exactly 4 for this contract */
 uint64_t mant_structured_discriminant_fingerprint(void);
 uint32_t mant_structured_render(
     const struct mant_structured_input_view *,
@@ -816,11 +995,18 @@ View-kind IDs are frozen in this order: input source `1`, input `2`, failure
 `3`, limits `4`, result `5`, then source/span/provenance/owner/content root/
 content atom/content ref/content point/link/block/table/table row/table cell/
 fixed view/fixed line/placement/decoration/form/name hint/relation/diagnostic as
-`6..26`, document metadata as `27`, list as `28`, and item as `29`. Field IDs are one-based in declaration
-order; zero is invalid. Metadata was added when the first vertical session
+`6..26`, document metadata as `27`, list as `28`, item as `29`, anchor evidence
+as `30`, heading evidence as `31`, and link-label part as `32`. Existing
+semantic view-kind IDs remain stable across the v3 to v4 extension. Field IDs
+are one-based in declaration order; zero is invalid.
+Metadata was added when the first vertical session
 proved that the parser/tree must be released before result return, leaving no
 sound later source for title, section, date, OS, architecture, name, alias,
 macroset, or `hasBody`.
+ABI v4 is not binary-compatible with the checked-in v3 layout: limits, result,
+and link views grow, and their final reserved field moves. Existing semantic
+view IDs and non-reserved field order stay fixed only to make the migration and
+offset audit explicit; callers still reject every non-v4 fingerprint/version.
 `view_size`/`view_align` return zero for an invalid kind and `view_offset`
 returns `SIZE_MAX` for an invalid kind or field. Every ABI record except the
 generic byte/slice views ends with an explicit `uint32_t reserved` field (plus
@@ -849,6 +1035,8 @@ values:
 | placement target | `content=1`, `point=2` |
 | cell map | `affine=1`, `grapheme-cluster=2`, `overlay=3` |
 | link target | `external=1`, `email=2`, `document=3`, `manual=4`, `section=5` |
+| target origin | `generated=1`, `authored=2` |
+| link-label part | `content=1`, `hard-break=2` |
 | table cell | `text=1`, `horizontal-rule=2`, `double-horizontal-rule=3`, `isolated-horizontal-rule=4`, `isolated-double-horizontal-rule=5` |
 | table alignment | `left=1`, `center=2`, `right=3`; zero is absent |
 | decoration | `border=1`, `rule=2`, `padding=3` |
@@ -862,6 +1050,49 @@ one-based field ID in `mant_structured_limits`. Owner/root/block/role/relation,
 table, and diagnostic enums are closed semantic enums listed by the generated
 C02a header and v0.12 schema; zero remains invalid/absent, additions require the
 same contract/fingerprint review rather than silent passthrough.
+
+The v4 additions have these exact C layouts; all origin fields in new views are
+`uint32_t`. The legacy item `target_present`, `target_origin`, and target bytes
+remain physically present with their v3 widths and offsets but must all be zero
+in a v4 result. The v4 validator rejects a nonempty legacy item target.
+
+```c
+struct mant_structured_anchor_view {
+    uint32_t key, owner, point, origin;
+    struct mant_bytes_view target;
+    uint32_t provenance, reserved;
+};
+
+struct mant_structured_heading_evidence_view {
+    uint32_t key, block, owner;
+    uint8_t authored_phrase_present;
+    uint8_t authored_phrase_reserved_bytes[7];
+    struct mant_bytes_view authored_phrase;
+    uint32_t provenance, reserved;
+};
+
+struct mant_structured_link_label_part_view {
+    uint32_t kind, atom, byte_start, byte_end, reserved;
+};
+```
+
+`mant_structured_link_view` retains the v3
+`first_label_ref/label_ref_count` fields, which v4 producers zero and consumers
+reject when nonzero. It appends `first_label_part`, `label_part_count` after
+`provenance` and before the final `reserved`. Content parts require a full
+Text/Whitespace atom range; hard-break parts require a HardBreak atom and zero
+byte endpoints. Every part's atom carries the occurrence link key; parts are
+strictly increasing by retained native execution order, every linked
+Text/Whitespace/HardBreak atom occurs in exactly one part of that occurrence,
+and an atom cannot belong to two occurrences. These checks also prove that a
+hard break has the occurrence owner and lies within its actual execution span,
+rather than being injected from another root or owner. Part provenance is the
+referenced atom's provenance, never the destination provenance. Automatic
+visual wrapping creates neither a HardBreak atom nor a label part.
+`mant_structured_limits` appends `max_anchor_evidence`,
+`max_heading_evidence`, and `max_link_label_parts` before its final reserved
+word. `mant_structured_result_view` appends `anchors`, `heading_evidence`, and
+`link_label_parts` slices before its final reserved word.
 
 Input byte/path pointers are borrowed for the synchronous call only and are
 never retained by a result. A zero-length byte/slice view is exactly
@@ -922,11 +1153,13 @@ width, the document metadata view, then typed `mant_slice_view` fields for `sour
 `spans`, `provenances`, `owners`, `contentRoots`, `contentAtoms`,
 `contentRefs`, `contentPoints`, `links`, `blocks`, `lists`, `items`, `tables`, `tableRows`,
 `tableCells`, `fixedViews`, `fixedLines`, `placements`, `decorations`, `forms`,
-`nameHints`, `relations`, and `diagnostics`, followed by its reserved word. These
+`nameHints`, `relations`, and `diagnostics`, then the appended `anchors`,
+`headingEvidence`, and `linkLabelParts` slices, followed by its reserved word.
+These
 are result-owned immutable
 tables. Keys are always `index + 1`; every `first/count` pair is a zero-based
-sub-slice into the named unkeyed descriptor table, currently `contentRefs`.
-Other parent/child collections use parent keys plus an explicit ordinal so
+sub-slice into its named unkeyed descriptor table, currently `contentRefs` or
+`linkLabelParts`. Other parent/child collections use parent keys plus an explicit ordinal so
 they do not require incompatible contiguity orderings.
 
 `span` and `provenance` are immutable descriptor tables addressed internally by
@@ -946,10 +1179,13 @@ descriptor indexes do not escape as public document identity.
 | `content_atom` | `key`, `root`, root-local ordinal, `owner`, atom kind, `styleFlags`, `role`, `link`, logical-text bytes, display-override-present/bytes, whitespace-breakable, provenance |
 | `content_ref` | `atom`, `byteStart`, `byteEnd` |
 | `content_point` | `key`, `root`, root-local ordinal, `owner`, boundary kind, `atomBoundary` or `atom/byteOffset`, `scalarBoundary`, provenance |
-| `link` | `key`, `owner`, target kind, `targetA`, target-B-present/`targetB`, title-present/title, `firstLabelRef/labelRefCount`, provenance |
+| `link` | `key`, `owner`, target kind, `targetA`, target-B-present/`targetB`, title-present/title, zeroed legacy `firstLabelRef/labelRefCount`, provenance, `firstLabelPart/labelPartCount` |
+| `link_label_part` | unkeyed content/hard-break kind, atom, byte start/end; content spans the full Text/Whitespace atom and hard-break bytes are zero |
 | `block` | `key`, `owner`, block kind, parent key, ordinal, provenance, optional root/table/fixed key |
+| `anchor` | `key`, `owner`, `point`, target bytes, target origin, provenance |
+| `heading_evidence` | `key`, heading block, owner, authored-phrase-present byte and optional nonempty phrase bytes, provenance |
 | `list` | `key`, owning block, list kind, compact flag, optional ordered start, provenance |
-| `item` | `key`, list key, owner, list-local ordinal, contiguous form range, optional target, provenance |
+| `item` | `key`, list key, owner, list-local ordinal, contiguous form range, zeroed legacy target-present/origin/bytes, provenance; target identity lives only in `anchor` |
 | `table` | `key`, owning block, optional fixed-view key, provenance |
 | `table_row` | `key`, table key, table-local ordinal, provenance |
 | `table_cell` | `key`, row key, row-local column ordinal, owner, kind/alignment, row/column span, provenance |
@@ -963,8 +1199,9 @@ descriptor indexes do not escape as public document identity.
 | `diagnostic` | level/code, message bytes, optional source-qualified span, owner key when bound |
 
 In this table every key, enum, flag set, ordinal, count, scalar endpoint, and
-column is `uint32_t`; booleans/presence bits are `uint8_t`; source sizes and
-exact source byte endpoints are `uint64_t`; strings are `mant_bytes_view`.
+column is `uint32_t`, except the retained-and-zeroed legacy item target fields
+described above; booleans/presence bits are `uint8_t`; source sizes and exact
+source byte endpoints are `uint64_t`; strings are `mant_bytes_view`.
 `targetA/targetB` mean URI/absent, address/absent, document/fragment,
 manual-name/manual-section, or section-id/absent for the five link kinds in
 order. Optional B/title views are null/zero unless their preceding presence bit
@@ -979,12 +1216,24 @@ zero within each parent and define public vector order. For a block with
 `parent=0`, `ordinal` is dense among that owner's top-level blocks; otherwise
 the parent is a block with the same owner and the ordinal is dense among its
 children. `ContentOwner.blocks` contains those top-level keys. A block's
-optional root/table/fixed fields obey its kind and all inactive fields are zero.
-A fixed view belongs directly to exactly one block or table; a table-owned view
+optional root/table/fixed fields obey its kind and all inactive fields are
+zero. A fixed view belongs directly to exactly one block or table; a table-owned view
 reaches its block through the table. Every in-atom point
 names a Text/Whitespace atom in the same root and a UTF-8 byte boundary.
-`content_atom.link` must
-refer to a link whose owner matches and whose label contains that atom range.
+`content_atom.link` must refer to a link whose owner matches. Every heading
+block has exactly one heading evidence record naming that block and owner. A
+present authored phrase is nonempty; an absent phrase has a zero
+`authored_phrase_present` byte and a null/zero byte view. Label parts are
+strictly increasing by `ContentAtomKey`, whose dense atom-table order is the
+global retained native execution order across roots; every linked
+Text/Whitespace atom occurs exactly once as a full-range
+content part, and every linked logical HardBreak occurs exactly once as a
+zero-endpoint hard-break part. Each part atom carries that occurrence key and
+owner, no part atom appears in another occurrence, and automatic visual wraps
+produce no atom or part. Text, Whitespace, and HardBreak may carry a nonzero
+link; BreakOpportunity must carry zero. Every anchor names a point with the
+same owner, a nonempty target, a known origin, and valid provenance; several
+anchors may name the same point.
 Placements contain no occurrence key: link/reference identity is derived from
 the logical target. Blocks form an acyclic forest, table spans resolve within
 their grid, all sub-slices are in range, and each child has one logical parent.
@@ -992,10 +1241,10 @@ their grid, all sub-slices are in range, and each child has one logical parent.
 The C header and Rust `repr(C)` declarations contain these fields in the same
 order. Tests query size, alignment, and every consumed field offset for every
 view kind, not only the largest structs. Rust calls `result_view` once, validates
-all slice ptr/count/stride triples before dereference, then copies in this order:
-sources/spans, owners/roots/atoms/points, links/evidence, blocks/tables/fixed
-relations, diagnostics. All arithmetic and `try_reserve` calls precede slicing
-or allocation.
+all slice ptr/count/stride triples before dereference, then copies in this
+order: sources/spans, owners/roots/atoms/points, links/anchors/evidence,
+blocks/tables/fixed relations, and diagnostics. All arithmetic and
+`try_reserve` calls precede slicing or allocation.
 
 ### Limits
 
@@ -1022,6 +1271,13 @@ or allocation.
 | `maxTransferObjects` / `maxTransferEdges` | 16,777,216 / 16,777,216 |
 | `maxTransferBytes` | 512 MiB |
 | `maxNestingDepth` / `maxIncludeDepth` | 256 / 64 |
+| `maxAnchorEvidence` | 1,048,576 |
+| `maxHeadingEvidence` | 1,048,576 |
+| `maxLinkLabelParts` | 8,388,608 |
+
+The final three fields are appended in ABI v4, so all v3 non-reserved limit
+field IDs remain stable. The new view kinds and result slices are appended for
+the same auditability reason; v4 remains a versioned layout change.
 
 Counters use checked `uint64_t` addition/multiplication and reject before growth.
 `maxInputSources` bounds the authorization slice, `maxSources` bounds the dense
@@ -1033,13 +1289,23 @@ and terminal column must fit its fixed `uint32_t` field; reaching the sentinel
 space is a budget error. Separator bytes, zero-width connection atoms,
 source-line mapping entries/bytes, and graph edges are charged explicitly even
 when they add no final visible bytes. `maxContentBytes` includes logical atom
-text, display overrides, decoration glyphs, link components, and diagnostic
-messages. Builder operations charge every accepted/mutating sidecar action and
+text, display overrides, decoration glyphs, link components, anchor targets,
+authored heading phrases, and diagnostic messages. Builder operations charge
+every accepted/mutating sidecar action and
 every object/edge append. Transfer limits independently charge each validated
 record, traversed relation, and copied byte before Rust allocation. A later
 evidence-based default change
 requires updating this table and F review; callers may select lower positive
 limits.
+
+Each anchor charges one anchor-evidence object, its owner/point/provenance
+edges, target bytes, one builder operation, and the corresponding transfer
+object/edges/bytes. Anchors sharing a point do not charge another content point.
+Each heading evidence record charges one object, block/owner/provenance edges,
+present phrase bytes, and transfer work. Every link-label part charges its own
+object and atom edge plus builder operations and transfer objects/edges. It
+does not charge `maxContentBytes`: the referenced atom text is charged exactly
+once at the atom, and a hard-break part owns no bytes.
 
 ### Ownership and failure state
 
@@ -1193,7 +1459,7 @@ count at least:
 | --- | --- |
 | Input | source count, logical-path bytes, decoded bytes per source and total, include depth |
 | Native work | executed/reparsed line limits already supplied by native, tree depth, builder operations, annotation mutations, and diagnostic count |
-| Builder memory | allocated bytes, content atoms, owners, blocks/items/cells, connection atoms, annotation runs, source maps, refs, links, points, fixed lines, placements, decorations, and relation edges |
+| Builder memory | allocated bytes, content atoms, owners, blocks/items/cells, connection atoms, annotation runs, source maps, refs, links, label parts, points, anchor/heading evidence, fixed lines, placements, decorations, and relation edges |
 | Owned output | total UTF-8 bytes and each collection count before the C result or Rust copy grows |
 | Transfer work | validated objects, edges, path depth, and copied bytes, including source-table mappings |
 

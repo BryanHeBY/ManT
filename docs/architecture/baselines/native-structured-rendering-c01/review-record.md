@@ -3,7 +3,7 @@
 Base: `6a1469a4`
 
 Final contract SHA-256:
-`6125e6a59db955fcef86a50c73b2a92f77e6b00a3b060d87e8f615ebdebb56b9`
+`a791ae397f90f4044e4788e4bff3f430fb2de497c14be25858953594c49e5551`
 
 The first complete draft (`662b5365...a42f6995`) received independent N, F,
 and S read-only review. Findings required an executable minimum FFI shape,
@@ -39,3 +39,28 @@ yet. The C00b product test results are recorded in the contract; product tests
 were not rerun for this documentation-only C01 candidate. Sanitizers, native
 Windows/macOS execution, failure injection, and future sidecar performance
 remain unverified.
+
+## C04 address and wire amendment
+
+Date: 2026-09-22
+
+Base: `72fc0877`
+
+C04 exposed four relationships that the original C01 freeze did not make
+executable: generic native anchor identity at a `ContentPoint`, authored
+heading identity distinct from display text, hard breaks inside a link label,
+and self-contained content for partial protocol responses. The amendment adds
+native-only anchor/heading evidence, ordered content/hard-break link-label
+parts, ABI v4 views and limits, and a bounded response-local
+`ContentProjection`. It also freezes root-local logical search, cross-root
+occurrence identity, deterministic public-ID/alias allocation, and atomic
+section-link downgrade.
+
+Targeted read-only N and S reviews both passed after the final corrections. N
+checked enum widths, optional heading evidence, global atom/link ordering,
+HardBreak integrity, budgets, and byte accounting. S checked root-local search,
+Section/Entry landing-point ownership, alias collision priority, fallback IDs,
+projection closure and budgets, reference counting, and response-local key
+domains. This was a documentation-only amendment: no product build or test was
+run for it, and implementation remains the work of the corresponding C09a/C04
+subunits.
