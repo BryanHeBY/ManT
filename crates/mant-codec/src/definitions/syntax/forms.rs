@@ -1,6 +1,7 @@
 //! Keep declaration separators and parameter styling distinct until extraction.
 use super::declaration::DeclarationState;
 use mant_ir::Inline;
+use std::ops::Range;
 
 use mant_ir::inline_plain_text as plain_text;
 
@@ -193,12 +194,30 @@ pub(super) fn environment_prefix(inlines: &[Inline]) -> Option<String> {
 /// nesting and local argument phases survive strong/link wrapper boundaries;
 /// punctuation inside an argument is not a fresh declaration.
 pub(super) fn declaration_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
+    let mut ranges = SplitRanges::default();
     split_groups(
         term,
         &[',', '|'],
         &mut None,
         &mut DeclarationState::new(plain_text(term), term),
+        &mut ranges,
     )
+}
+
+/// Return the exact visible byte ranges selected by the same declaration
+/// state machine as [`declaration_groups`]. Callers can bind those decisions
+/// back to the original styled tree without searching flattened text.
+pub(in crate::definitions) fn declaration_group_ranges(term: &[Inline]) -> Vec<Range<usize>> {
+    let text = plain_text(term);
+    let mut ranges = SplitRanges::tracking();
+    let _ = split_groups(
+        term,
+        &[',', '|'],
+        &mut None,
+        &mut DeclarationState::new(text.clone(), term),
+        &mut ranges,
+    );
+    ranges.finish(&text)
 }
 
 /// Slashes only separate the invocation token after its option grammar has
@@ -223,6 +242,7 @@ fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
                 &['/'],
                 &mut Some(start + token.len()),
                 &mut DeclarationState::new(text, &group).within_validated_token(),
+                &mut SplitRanges::default(),
             )
         })
         .collect()
@@ -248,13 +268,17 @@ fn split_groups(
     separators: &[char],
     remaining: &mut Option<usize>,
     state: &mut DeclarationState,
+    ranges: &mut SplitRanges,
 ) -> Vec<Vec<Inline>> {
     let mut groups = vec![Vec::new()];
     for inline in term {
         let parts = match inline {
             Inline::Text { value } => value
                 .split(|character| {
-                    state.separator(character, take_separator(character, separators, remaining))
+                    let separator = state
+                        .separator(character, take_separator(character, separators, remaining));
+                    ranges.character(character, separator);
+                    separator
                 })
                 .map(|value| {
                     vec![Inline::Text {
@@ -264,7 +288,10 @@ fn split_groups(
                 .collect(),
             Inline::Code { value } => value
                 .split(|character| {
-                    state.separator(character, take_separator(character, separators, remaining))
+                    let separator = state
+                        .separator(character, take_separator(character, separators, remaining));
+                    ranges.character(character, separator);
+                    separator
                 })
                 .map(|value| {
                     vec![Inline::Code {
@@ -272,15 +299,17 @@ fn split_groups(
                     }]
                 })
                 .collect(),
-            Inline::Strong { children } => split_groups(children, separators, remaining, state)
-                .into_iter()
-                .map(|children| vec![Inline::Strong { children }])
-                .collect(),
+            Inline::Strong { children } => {
+                split_groups(children, separators, remaining, state, ranges)
+                    .into_iter()
+                    .map(|children| vec![Inline::Strong { children }])
+                    .collect()
+            }
             Inline::Link {
                 target,
                 title,
                 children,
-            } => split_groups(children, separators, remaining, state)
+            } => split_groups(children, separators, remaining, state, ranges)
                 .into_iter()
                 .map(|children| {
                     vec![Inline::Link {
@@ -291,9 +320,11 @@ fn split_groups(
                 })
                 .collect(),
             _ => {
-                state.opaque(&plain_text(std::slice::from_ref(inline)));
+                let text = plain_text(std::slice::from_ref(inline));
+                state.opaque(&text);
+                ranges.opaque(text.len());
                 if let Some(bytes) = remaining {
-                    *bytes = bytes.saturating_sub(plain_text(std::slice::from_ref(inline)).len());
+                    *bytes = bytes.saturating_sub(text.len());
                 }
                 vec![vec![inline.clone()]]
             }
@@ -306,6 +337,59 @@ fn split_groups(
         }
     }
     groups
+}
+
+#[derive(Default)]
+struct SplitRanges {
+    enabled: bool,
+    start: usize,
+    offset: usize,
+    groups: Vec<Range<usize>>,
+}
+
+impl SplitRanges {
+    fn tracking() -> Self {
+        Self {
+            enabled: true,
+            ..Self::default()
+        }
+    }
+
+    fn character(&mut self, character: char, separator: bool) {
+        if !self.enabled {
+            return;
+        }
+        if separator {
+            self.groups.push(self.start..self.offset);
+            self.offset += character.len_utf8();
+            self.start = self.offset;
+        } else {
+            self.offset += character.len_utf8();
+        }
+    }
+
+    fn opaque(&mut self, length: usize) {
+        if self.enabled {
+            self.offset += length;
+        }
+    }
+
+    fn finish(mut self, text: &str) -> Vec<Range<usize>> {
+        self.groups.push(self.start..self.offset);
+        self.groups
+            .into_iter()
+            .filter_map(|range| trim_range(text, range))
+            .collect()
+    }
+}
+
+fn trim_range(text: &str, range: Range<usize>) -> Option<Range<usize>> {
+    let value = text.get(range.clone())?;
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| {
+        let start = trimmed.as_ptr() as usize - value.as_ptr() as usize;
+        range.start + start..range.start + start + trimmed.len()
+    })
 }
 
 fn take_separator(character: char, separators: &[char], remaining: &mut Option<usize>) -> bool {
@@ -386,6 +470,72 @@ mod tests {
 
         let term = vec![text("--mode=[a|b], --other")];
         assert_eq!(declaration_groups(&term).len(), 2);
+    }
+
+    #[test]
+    fn declaration_ranges_track_utf8_wrappers_opaque_arguments_and_repeated_text() {
+        let text = |value: &str| Inline::Text {
+            value: value.into(),
+        };
+        let term = vec![
+            Inline::Strong {
+                children: vec![
+                    text("--界"),
+                    Inline::Emphasis {
+                        children: vec![text("値,同")],
+                    },
+                ],
+            },
+            text(", "),
+            Inline::Link {
+                target: mant_ir::LinkTarget::External {
+                    uri: "https://example.invalid/".into(),
+                },
+                title: None,
+                children: vec![Inline::Strong {
+                    children: vec![text("--界")],
+                }],
+            },
+        ];
+        let visible = plain_text(&term);
+        let ranges = declaration_group_ranges(&term);
+        assert_eq!(
+            ranges
+                .iter()
+                .map(|range| &visible[range.clone()])
+                .collect::<Vec<_>>(),
+            ["--界値,同", "--界"]
+        );
+        assert_eq!(ranges, [0..12, 14..19]);
+
+        for value in ["--set=KEY,VALUE", "--set=KEY,[a,b]"] {
+            let term = vec![Inline::Strong {
+                children: vec![text(value)],
+            }];
+            assert_eq!(declaration_group_ranges(&term), [0..value.len()]);
+        }
+
+        let adjacent = vec![
+            Inline::Strong {
+                children: vec![text("--set=KEY")],
+            },
+            text(","),
+            Inline::Strong {
+                children: vec![text("VALUE")],
+            },
+        ];
+        assert_eq!(declaration_groups(&adjacent), [adjacent.clone()]);
+
+        let spaced = vec![
+            Inline::Strong {
+                children: vec![text("--set=KEY")],
+            },
+            text(", "),
+            Inline::Strong {
+                children: vec![text("VALUE")],
+            },
+        ];
+        assert_eq!(declaration_groups(&spaced).len(), 2);
     }
 
     #[test]

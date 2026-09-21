@@ -507,6 +507,9 @@ pub(super) fn validate_structured_relations(
             form_root = Some(root_index);
         }
         let form_root = form_root.ok_or_else(relation_error)?;
+        if term_root_evidence[form_root] & 1 != 0 {
+            return Err(relation_error());
+        }
         term_root_evidence[form_root] |= 1;
     }
     for atom in slices.content_atoms {

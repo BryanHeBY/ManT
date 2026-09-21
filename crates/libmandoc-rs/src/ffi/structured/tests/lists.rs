@@ -54,8 +54,8 @@ Body B.
 
     assert_eq!(document.lists.len(), 4, "{document:#?}");
     assert_eq!(document.items.len(), 4, "{document:#?}");
-    assert_eq!(document.forms.len(), 6, "{document:#?}");
-    assert_eq!(document.items[0].form_count, 3);
+    assert_eq!(document.forms.len(), 5, "{document:#?}");
+    assert_eq!(document.items[0].form_count, 2);
     assert_eq!(document.items[1].form_count, 1);
     assert_eq!(document.items[1].owner + 1, document.items[2].owner);
     assert_eq!(document.items[2].owner + 1, document.items[3].owner);
@@ -68,11 +68,11 @@ Body B.
         .collect::<Vec<_>>();
     assert_eq!(first_terms, ["--output, -o=FILE", "-O"]);
     assert_eq!(
-        document.forms[..3]
+        document.forms[..2]
             .iter()
             .map(|form| ref_text(&document, form.first_ref, form.ref_count))
             .collect::<Vec<_>>(),
-        ["--output", "-o=FILE", "-O"]
+        ["--output, -o=FILE", "-O"]
     );
     let empty_bodies = document
         .content_roots
@@ -564,6 +564,32 @@ fn native_check_rejects_a_form_crossing_tq_term_roots() {
         unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
         STATUS_RELATION
     );
+
+    forms[0].ref_count = 1;
+    assert_eq!(forms[0].ref_count, 1);
+    assert_eq!(forms[1].ref_count, 1);
+    let refs = unsafe {
+        std::slice::from_raw_parts(
+            view.content_refs.ptr.cast::<ContentRefView>(),
+            view.content_refs.count as usize,
+        )
+    };
+    let first_atom = refs[forms[0].first_ref as usize - 1].atom as usize - 1;
+    let second_atom = refs[forms[1].first_ref as usize - 1].atom as usize - 1;
+    let atoms = unsafe {
+        std::slice::from_raw_parts_mut(
+            view.content_atoms.ptr.cast::<ContentAtomView>().cast_mut(),
+            view.content_atoms.count as usize,
+        )
+    };
+    assert_ne!(atoms[first_atom].root, atoms[second_atom].root);
+    atoms[second_atom].root = atoms[first_atom].root;
+    atoms[second_atom].ordinal = 1;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "two structural forms must not claim the same term root"
+    );
 }
 
 #[test]
@@ -591,7 +617,7 @@ fn empty_mdoc_item_receives_preceding_tg_target() {
 }
 
 #[test]
-fn mdoc_multiple_labels_produce_independent_forms_and_hints() {
+fn mdoc_multiple_labels_keep_one_structural_form_and_independent_hints() {
     // The exact source was checked against the pinned reference. Pinned
     // `mdoc_term.c::termp_it_pre` executes both Fl nodes around punctuation;
     // the collector retains two source-marked declaration occurrences.
@@ -611,7 +637,7 @@ fn mdoc_multiple_labels_produce_independent_forms_and_hints() {
         &Limits::default(),
     )
     .expect("mdoc labels retain forms and native hints");
-    assert_eq!(document.items[0].form_count, 2);
+    assert_eq!(document.items[0].form_count, 1);
     assert_eq!(document.name_hints.len(), 2);
     assert_eq!(
         document
@@ -619,7 +645,7 @@ fn mdoc_multiple_labels_produce_independent_forms_and_hints() {
             .iter()
             .map(|form| ref_text(&document, form.first_ref, form.ref_count))
             .collect::<Vec<_>>(),
-        ["-a", "-b"]
+        ["-a, -b"]
     );
 }
 

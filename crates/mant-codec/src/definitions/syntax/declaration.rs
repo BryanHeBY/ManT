@@ -78,6 +78,7 @@ impl DeclarationState {
             && remainder.trim_start().starts_with(['-', '+']);
         let following = remainder.trim_start();
         let fresh_literal = self.phase != Phase::Name
+            && remainder.starts_with(char::is_whitespace)
             && self
                 .literal_starts
                 .contains(&(self.text.len() - following.len()))

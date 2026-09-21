@@ -567,6 +567,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		}
 		if (form_root == 0)
 			return 0;
+		if ((result->validation_roots[form_root - 1] & 1) != 0)
+			return 0;
 		result->validation_roots[form_root - 1] = 1;
 	}
 	for (i = 0; i < result->content_atom_count; i++) {

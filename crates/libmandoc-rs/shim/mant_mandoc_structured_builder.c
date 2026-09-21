@@ -338,14 +338,6 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 }
 
 static int
-form_separator(const struct mant_structured_content_atom_view *atom)
-{
-	return atom->kind == MANT_ATOM_TEXT && atom->role == 0 &&
-	    atom->text.len == 1 &&
-	    (atom->text.ptr[0] == ',' || atom->text.ptr[0] == '|');
-}
-
-static int
 append_name_hint(struct structured_session *session, uint32_t form_key,
     uint32_t first_ref, uint32_t ref_count, uint32_t provenance)
 {
@@ -486,7 +478,7 @@ finalize_term_root(struct structured_session *session,
     uint32_t root_key, uint32_t item_key)
 {
 	const struct mant_structured_content_atom_view *atom;
-	uint32_t begin, end, i, remaining_content, segment_content;
+	uint32_t begin, end, i;
 
 	if (root_key == 0 || root_key > session->result->content_root_count ||
 	    item_key == 0 || item_key > session->result->item_count)
@@ -503,7 +495,6 @@ finalize_term_root(struct structured_session *session,
 		return 0;
 	}
 	end = begin + session->root_atoms[root_key - 1].count;
-	remaining_content = 0;
 	for (i = begin; i < end; i++) {
 		atom = session->result->content_atoms + i;
 		if (atom->root != root_key) {
@@ -511,24 +502,6 @@ finalize_term_root(struct structured_session *session,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, atom->root, root_key);
 			return 0;
 		}
-		if (atom->kind != MANT_ATOM_WHITESPACE)
-			remaining_content++;
-	}
-	segment_content = 0;
-	for (i = begin; i < end; i++) {
-		atom = session->result->content_atoms + i;
-		if (atom->kind != MANT_ATOM_WHITESPACE)
-			remaining_content--;
-		if (!form_separator(atom) || segment_content == 0 ||
-		    remaining_content == 0) {
-			if (atom->kind != MANT_ATOM_WHITESPACE)
-				segment_content++;
-			continue;
-		}
-		if (!append_term_form(session, root_key, item_key, begin, i))
-			return 0;
-		begin = i + 1;
-		segment_content = 0;
 	}
 	return append_term_form(session, root_key, item_key, begin, end);
 }

@@ -12,6 +12,7 @@ mod forms;
 mod head;
 mod named;
 mod options;
+pub(super) use forms::declaration_group_ranges;
 pub(super) use head::is_inferred_head;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};

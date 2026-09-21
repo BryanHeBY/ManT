@@ -85,15 +85,26 @@ pub(super) fn native_forms(
     native
         .forms
         .iter()
-        .filter_map(|form| {
-            let leaves = terms.get(form.term)?;
-            let parts = form
-                .parts
-                .iter()
-                .cloned()
-                .flat_map(|range| slices(leaves, form.term, range))
-                .collect::<Vec<_>>();
-            (!parts.is_empty()).then_some(EntryForm { parts })
+        .flat_map(|form| {
+            let Some(leaves) = terms.get(form.term) else {
+                return Vec::new();
+            };
+            super::syntax::declaration_group_ranges(&item.terms[form.term])
+                .into_iter()
+                .filter_map(|group| {
+                    let parts = form
+                        .parts
+                        .iter()
+                        .filter_map(|native| {
+                            let start = group.start.max(native.start);
+                            let end = group.end.min(native.end);
+                            (start < end).then_some(start..end)
+                        })
+                        .flat_map(|range| slices(leaves, form.term, range))
+                        .collect::<Vec<_>>();
+                    (!parts.is_empty()).then_some(EntryForm { parts })
+                })
+                .collect::<Vec<_>>()
         })
         .collect()
 }

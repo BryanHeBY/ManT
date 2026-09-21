@@ -411,6 +411,56 @@ fn literal_separator_definition_keeps_its_term() {
 }
 
 #[test]
+fn shared_declaration_grammar_distinguishes_arguments_from_aliases() {
+    // This exact source was run through the pinned UTF-8/78 reference first.
+    // `man_term.c::pre_alternate` can put a comma in its own styled atom, but
+    // that formatter boundary does not decide whether it separates aliases.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "form-grammar.1",
+            b".TH X 1\n.SH OPTIONS\n.TP\n.BR --set=KEY , VALUE\nBODY\n.TP\n.B --set=KEY,VALUE\nSECOND\n.TP\n.BR -a , --all\nTHIRD\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("form-grammar.1", &bundle, InputFormat::Man)
+        .expect("native structural forms use the shared declaration grammar");
+    let items = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::DefinitionList { items, .. } => items.first(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(items.len(), 3, "{document:#?}");
+    let forms = items
+        .iter()
+        .map(|item| {
+            let facts = item.entry.as_ref().expect("option facts");
+            facts
+                .forms
+                .iter()
+                .map(|form| {
+                    EntryOwner::Definition(item)
+                        .form(form)
+                        .map(|form| mant_ir::inline_plain_text(&form))
+                        .expect("form resolves")
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        forms,
+        [
+            vec!["--set=KEY,VALUE".to_owned()],
+            vec!["--set=KEY,VALUE".to_owned()],
+            vec!["-a".to_owned(), "--all".to_owned()],
+        ]
+    );
+}
+
+#[test]
 fn mdoc_native_kinds_nesting_and_targets_survive_ir_lowering() {
     // Reference output and the corresponding
     // `mdoc_term.c::termp_bl_pre/termp_it_pre` path were inspected before
