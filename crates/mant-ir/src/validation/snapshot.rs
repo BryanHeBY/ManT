@@ -29,7 +29,7 @@ impl<'a> DocumentValidation<'a> {
     #[must_use]
     pub fn new(document: &'a Document) -> Self {
         let index = DocumentIndex::build(document);
-        let relations = crate::entry::relation_issues(document, &index);
+        let relations = crate::entry::relation_issues(document, document.content(), &index);
         let diagnostics = super::document::validate_with_index(document, &index, &relations);
         Self {
             document,

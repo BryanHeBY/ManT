@@ -8,8 +8,8 @@
 use std::{error::Error, fmt};
 
 use crate::{
-    ContentLocationRef, Document, EntryContentSlice, EntryOwner, FragmentAlias, Inline, LinkTarget,
-    NodeId, RootTextRange, SourceSpan,
+    ContentLocationRef, Document, EntryContentSlice, EntryOwner, FragmentAlias, Heading, Inline,
+    LinkTarget, NodeId, RootTextRange, SourceSpan,
 };
 
 /// One store-resolved inline node.
@@ -273,6 +273,33 @@ impl<'store> ContentContext<'store> {
         Ok(output)
     }
 
+    /// Derive the visible text of one heading through this content store.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained heading content does not
+    /// resolve in this store.
+    pub fn heading_plain_text(self, heading: &'store Heading) -> Result<String, ContentReadError> {
+        self.plain_text(&heading.content)
+    }
+
+    /// Derive a whitespace-normalized, single-line heading label.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained heading content does not
+    /// resolve in this store.
+    pub fn heading_single_line_text(
+        self,
+        heading: &'store Heading,
+    ) -> Result<String, ContentReadError> {
+        Ok(self
+            .heading_plain_text(heading)?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "))
+    }
+
     /// Visit borrowed logical text leaves in source order without allocation.
     ///
     /// Emitted text remains borrowed from this context's store, not from an
@@ -397,6 +424,88 @@ impl<'store> ContentContext<'store> {
         Ok(false)
     }
 
+    /// Whether a literal inline stream contains an authored row.
+    ///
+    /// Empty wrappers and zero-width anchors alone do not create a row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when any inspected node does not resolve in
+    /// this store.
+    pub fn has_literal_rows(self, nodes: &'store [Inline]) -> Result<bool, ContentReadError> {
+        for node in nodes {
+            let present = match self.inline(node)? {
+                InlineView::Text(_) | InlineView::Code(_) | InlineView::LineBreak => true,
+                InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                    self.has_literal_rows(children)?
+                }
+                InlineView::Link(link) => self.has_literal_rows(link.children())?,
+                InlineView::Anchor(_) => false,
+            };
+            if present {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Measure the final open row of a definition's original labels.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when any inspected term does not resolve in
+    /// this store.
+    pub fn definition_run_in_width(
+        self,
+        terms: &'store [Vec<Inline>],
+    ) -> Result<Option<usize>, ContentReadError> {
+        let mut final_row = String::new();
+        let mut present = false;
+        for term in terms {
+            let mut row = String::new();
+            let mut term_present = false;
+            self.append_final_row(term, &mut row, &mut term_present)?;
+            if term_present {
+                final_row = row;
+                present = true;
+            }
+        }
+        Ok((present && !final_row.is_empty()).then(|| crate::geometry::text_width(&final_row)))
+    }
+
+    fn append_final_row(
+        self,
+        nodes: &'store [Inline],
+        row: &mut String,
+        present: &mut bool,
+    ) -> Result<(), ContentReadError> {
+        for node in nodes {
+            match self.inline(node)? {
+                InlineView::Text(value) | InlineView::Code(value) => {
+                    *present |= !value.is_empty();
+                    if let Some((_, tail)) = value.rsplit_once('\n') {
+                        row.clear();
+                        row.push_str(tail);
+                    } else {
+                        row.push_str(value);
+                    }
+                }
+                InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                    self.append_final_row(children, row, present)?;
+                }
+                InlineView::Link(link) => {
+                    self.append_final_row(link.children(), row, present)?;
+                }
+                InlineView::LineBreak => {
+                    row.clear();
+                    *present = true;
+                }
+                InlineView::Anchor(_) => {}
+            }
+        }
+        Ok(())
+    }
+
     /// Count logical Unicode scalars in an inline root.
     ///
     /// Wrappers and anchors add no positions; every hard break contributes one.
@@ -421,7 +530,12 @@ impl<'store> ContentContext<'store> {
     }
 
     /// Project a checked owner-local content slice into logical scalar offsets.
-    pub(crate) fn project_content_slice(
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained slice content does not
+    /// resolve in this store or its scalar coordinates overflow.
+    pub fn project_content_slice(
         self,
         owner: EntryOwner<'store>,
         slice: &EntryContentSlice,
@@ -443,7 +557,11 @@ impl<'store> ContentContext<'store> {
             nodes = if depth + 1 == slice.path.len() {
                 std::slice::from_ref(node)
             } else {
-                let Some(children) = inline_children(node) else {
+                let Some(children) = (match self.inline(node)? {
+                    InlineView::Strong(children) | InlineView::Emphasis(children) => Some(children),
+                    InlineView::Link(link) => Some(link.children()),
+                    _ => None,
+                }) else {
                     return Ok(None);
                 };
                 children
@@ -482,15 +600,6 @@ impl<'store> ContentContext<'store> {
     }
 }
 
-fn inline_children(inline: &Inline) -> Option<&[Inline]> {
-    match inline {
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => Some(children),
-        _ => None,
-    }
-}
-
 impl Document {
     /// Borrow the contextual reader for this document's authoritative content.
     #[must_use]
@@ -503,6 +612,8 @@ impl Document {
 mod tests {
     use crate::{ContentContext, ContentLocation, Document, Inline};
     use serde_json::json;
+
+    fn assert_send_sync<T: Send + Sync>() {}
 
     #[test]
     fn context_reads_text_and_resolves_links_from_one_document() {
@@ -554,7 +665,6 @@ mod tests {
         );
 
         let _: ContentContext<'_> = content;
-        fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<ContentContext<'static>>();
     }
 

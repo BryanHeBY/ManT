@@ -24,15 +24,16 @@ pub use blocks::{block_layout, block_layout_mut, block_source, rebase_roots};
 
 /// Whether a literal inline stream contains an authored row, even an empty
 /// text row. Empty wrappers and zero-width targets alone are not blank lines.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects directly owned inline
+/// content.
 #[must_use]
 pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
-    nodes.iter().any(|node| match node {
-        crate::Inline::Text { .. } | crate::Inline::Code { .. } | crate::Inline::LineBreak => true,
-        crate::Inline::Strong { children }
-        | crate::Inline::Emphasis { children }
-        | crate::Inline::Link { children, .. } => has_literal_rows(children),
-        crate::Inline::Anchor { .. } => false,
-    })
+    crate::ContentContext::detached()
+        .has_literal_rows(nodes)
+        .expect("legacy inline text is self-contained")
 }
 
 /// Maximum explicit gap in one logical block boundary. The producer can report

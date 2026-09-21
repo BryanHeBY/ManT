@@ -1,7 +1,7 @@
 //! Bounded original-link label projection shared by protocol and UI consumers.
 
 use super::{ReferenceScanStop, ReferenceWorkBudget};
-use crate::Inline;
+use crate::{ContentContext, Inline, InlineView};
 
 /// One plain visible label prefix. An empty original label remains empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,59 +24,94 @@ pub fn reference_label(
     budget: &mut ReferenceWorkBudget,
     max_bytes: usize,
 ) -> Result<ReferenceLabel, ReferenceScanStop> {
-    let mut label = ReferenceLabel {
-        text: String::new(),
-        truncated: false,
-    };
-    append(nodes, depth, budget, max_bytes.min(4096), &mut label)?;
-    Ok(label)
+    ContentContext::detached().reference_label(nodes, depth, budget, max_bytes)
 }
 
-fn append(
-    nodes: &[Inline],
-    depth: usize,
-    budget: &mut ReferenceWorkBudget,
-    limit: usize,
-    label: &mut ReferenceLabel,
-) -> Result<(), ReferenceScanStop> {
-    for node in nodes {
-        budget.consume(depth.saturating_add(1), 1, 0)?;
-        match node {
-            Inline::Text { value } | Inline::Code { value } => {
-                // Inspect only enough bytes to choose a UTF-8 prefix and prove
-                // truncation; never scan a huge omitted suffix merely to count it.
-                let inspect = value
-                    .len()
-                    .min(limit.saturating_sub(label.text.len()).saturating_add(4));
-                budget.consume(depth.saturating_add(1), 0, inspect)?;
-                for character in value.chars() {
-                    if character.len_utf8() > limit.saturating_sub(label.text.len()) {
+impl<'store> ContentContext<'store> {
+    /// Project a link label through this content store under the caller's
+    /// shared reference-work budget.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReferenceScanStop::InvalidRoot`] when retained label content
+    /// does not resolve in this store. Other variants report ordinary scan
+    /// limits before unbudgeted traversal or text inspection.
+    pub fn reference_label(
+        self,
+        nodes: &'store [Inline],
+        depth: usize,
+        budget: &mut ReferenceWorkBudget,
+        max_bytes: usize,
+    ) -> Result<ReferenceLabel, ReferenceScanStop> {
+        let mut label = ReferenceLabel {
+            text: String::new(),
+            truncated: false,
+        };
+        self.append_reference_label(nodes, depth, budget, max_bytes.min(4096), &mut label)?;
+        Ok(label)
+    }
+
+    fn append_reference_label(
+        self,
+        nodes: &'store [Inline],
+        depth: usize,
+        budget: &mut ReferenceWorkBudget,
+        limit: usize,
+        label: &mut ReferenceLabel,
+    ) -> Result<(), ReferenceScanStop> {
+        for node in nodes {
+            budget.consume(depth.saturating_add(1), 1, 0)?;
+            match self
+                .inline(node)
+                .map_err(|_| ReferenceScanStop::InvalidRoot)?
+            {
+                InlineView::Text(value) | InlineView::Code(value) => {
+                    let inspect = value
+                        .len()
+                        .min(limit.saturating_sub(label.text.len()).saturating_add(4));
+                    budget.consume(depth.saturating_add(1), 0, inspect)?;
+                    for character in value.chars() {
+                        if character.len_utf8() > limit.saturating_sub(label.text.len()) {
+                            label.truncated = true;
+                            return Ok(());
+                        }
+                        label.text.push(character);
+                    }
+                }
+                InlineView::LineBreak => {
+                    budget.consume(depth.saturating_add(1), 0, 1)?;
+                    if label.text.len() == limit {
                         label.truncated = true;
                         return Ok(());
                     }
-                    label.text.push(character);
+                    label.text.push('\n');
                 }
-            }
-            Inline::LineBreak => {
-                budget.consume(depth.saturating_add(1), 0, 1)?;
-                if label.text.len() == limit {
-                    label.truncated = true;
-                    return Ok(());
+                InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                    self.append_reference_label(
+                        children,
+                        depth.saturating_add(1),
+                        budget,
+                        limit,
+                        label,
+                    )?;
                 }
-                label.text.push('\n');
+                InlineView::Link(link) => {
+                    self.append_reference_label(
+                        link.children(),
+                        depth.saturating_add(1),
+                        budget,
+                        limit,
+                        label,
+                    )?;
+                }
+                InlineView::Anchor(_) => {}
             }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => {
-                append(children, depth.saturating_add(1), budget, limit, label)?;
+            if label.truncated {
+                break;
             }
-            Inline::Anchor { .. } => {}
         }
-        if label.truncated {
-            break;
-        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]

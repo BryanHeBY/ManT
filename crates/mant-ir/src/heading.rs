@@ -63,7 +63,7 @@ impl Document {
             .as_ref()
             .and_then(|heading| {
                 self.content()
-                    .plain_text(&heading.content)
+                    .heading_plain_text(heading)
                     .ok()
                     .map(Cow::Owned)
             })

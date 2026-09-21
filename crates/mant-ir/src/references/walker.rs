@@ -5,8 +5,9 @@ use super::{
     ReferenceScanReport, ReferenceScanStop, ReferenceScope, ReferenceWorkBudget,
 };
 use crate::{
-    Block, ContentBlockStep as Step, ContentInlineRoot, ContentLocationRef, Document, EntryOwner,
-    EntryOwnerLocationRef, Inline, LinkTarget, MAX_CONTENT_LOCATION_BYTES, Section, SourceSpan,
+    Block, ContentBlockStep as Step, ContentContext, ContentInlineRoot, ContentLocationRef,
+    Document, EntryOwner, EntryOwnerLocationRef, Inline, InlineView, LinkTarget,
+    MAX_CONTENT_LOCATION_BYTES, Section, SourceSpan,
 };
 use std::ops::ControlFlow;
 
@@ -32,7 +33,7 @@ pub(super) fn scan<'ir>(
             bytes: 0,
         }),
     );
-    let mut scan = Scan::new(pending, options, visit);
+    let mut scan = Scan::new(document.content(), pending, options, visit);
     let result = scan.scope(document, scope);
     let report = scan.finish(result);
     *budget = scan.budget;
@@ -62,6 +63,7 @@ enum TargetSite<'a> {
 }
 
 struct Scan<'ir, F> {
+    content: ContentContext<'ir>,
     budget: ReferenceWorkBudget,
     report: ReferenceScanReport,
     visit: F,
@@ -76,8 +78,14 @@ impl<'ir, F> Scan<'ir, F>
 where
     F: for<'path> FnMut(NavigationEvent<'ir, 'path>, &mut ReferenceWorkBudget) -> ControlFlow<()>,
 {
-    fn new(budget: ReferenceWorkBudget, options: NavigationScanOptions, visit: F) -> Self {
+    fn new(
+        content: ContentContext<'ir>,
+        budget: ReferenceWorkBudget,
+        options: NavigationScanOptions,
+        visit: F,
+    ) -> Self {
         Self {
+            content,
             budget,
             report: ReferenceScanReport::default(),
             visit,
@@ -339,26 +347,29 @@ where
         for (index, node) in nodes.iter().enumerate() {
             self.charge(self.depth() + 1, 1, 0)?;
             self.path.push(coordinate(index)?);
+            let view = self
+                .content
+                .inline(node)
+                .map_err(|_| ReferenceScanStop::InvalidRoot)?;
             if self.options.targets
-                && let Inline::Anchor {
-                    id,
-                    fragment_aliases,
-                    ..
-                } = node
+                && let InlineView::Anchor(anchor) = view
             {
                 let site = self
                     .owners
                     .semantic()
-                    .filter(|frame| frame.owner.facts().is_some_and(|facts| facts.id == *id))
+                    .filter(|frame| {
+                        frame
+                            .owner
+                            .facts()
+                            .is_some_and(|facts| facts.id == *anchor.id())
+                    })
                     .map_or(TargetSite::Inline(root), TargetSite::Owner);
-                self.target(id, fragment_aliases, site)?;
+                self.target(anchor.id(), anchor.fragment_aliases(), site)?;
             }
-            if let Inline::Link {
-                target, children, ..
-            } = node
-                && self.options.links.contains(target)
+            if let InlineView::Link(link) = view
+                && self.options.links.contains(link.target())
             {
-                self.charge(self.depth(), 0, target_bytes(target))?;
+                self.charge(self.depth(), 0, target_bytes(link.target()))?;
                 // Summary does not inspect labels. A materializing callback
                 // charges actual label work against this same budget.
                 // Encoded-size validation walks the whole current position;
@@ -394,8 +405,8 @@ where
                 if (self.visit)(
                     NavigationEvent::Link(LinkOccurrenceRef {
                         link: node,
-                        target,
-                        label: children,
+                        target: link.target(),
+                        label: link.children(),
                         location,
                         content_owner: self.owners.content().map(owner),
                         semantic_owner: self.owners.semantic().map(owner),
@@ -410,8 +421,15 @@ where
                     return Err(ReferenceScanStop::Visitor);
                 }
             }
-            if let Some(children) = crate::content_location::inline_children(node) {
-                self.inlines(children, root, source)?;
+            match view {
+                InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                    self.inlines(children, root, source)?;
+                }
+                InlineView::Link(link) => self.inlines(link.children(), root, source)?,
+                InlineView::Text(_)
+                | InlineView::Code(_)
+                | InlineView::Anchor(_)
+                | InlineView::LineBreak => {}
             }
             self.path.pop();
         }

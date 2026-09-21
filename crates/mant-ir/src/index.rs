@@ -3,7 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    DOCUMENT_ROOT_ID, DefinitionItem, Document, FragmentAlias, Inline, NodeId, Section,
+    ContentContext, DOCUMENT_ROOT_ID, DefinitionItem, Document, FragmentAlias, Inline, InlineView,
+    NodeId, Section,
     visit::{self, Visit},
 };
 
@@ -67,7 +68,11 @@ impl DocumentIndex {
     /// Derive a complete immutable index in one traversal of `document`.
     #[must_use]
     pub fn build(document: &Document) -> Self {
-        let mut builder = IndexBuilder::default();
+        let mut builder = IndexBuilder {
+            content: document.content(),
+            index: Self::default(),
+            section_stack: Vec::new(),
+        };
         builder.visit_document(document);
         if (document.heading.is_some()
             || !document.blocks.is_empty()
@@ -134,13 +139,13 @@ impl DocumentIndex {
     }
 }
 
-#[derive(Default)]
-struct IndexBuilder {
+struct IndexBuilder<'ir> {
+    content: ContentContext<'ir>,
     index: DocumentIndex,
     section_stack: Vec<NodeId>,
 }
 
-impl IndexBuilder {
+impl IndexBuilder<'_> {
     fn register(&mut self, id: &NodeId, role: IndexedRole) {
         self.register_fragment(FragmentAlias::from(id.as_str()), id, false);
         let containing_section = self.section_stack.last().cloned();
@@ -172,7 +177,7 @@ impl IndexBuilder {
     }
 }
 
-impl<'ir> Visit<'ir> for IndexBuilder {
+impl<'ir> Visit<'ir> for IndexBuilder<'ir> {
     fn visit_list_item(&mut self, item: &'ir crate::ListItem) {
         if let Some(facts) = &item.entry {
             self.register(&facts.id, IndexedRole::Entry);
@@ -197,18 +202,29 @@ impl<'ir> Visit<'ir> for IndexBuilder {
     }
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        if let Inline::Anchor {
-            id,
-            fragment_aliases,
-            ..
-        } = inline
+        match self
+            .content
+            .inline(inline)
+            .expect("document inline resolves in its own content store")
         {
-            self.register(id, IndexedRole::Anchor);
-            for alias in fragment_aliases {
-                self.register_fragment(alias.clone(), id, true);
+            InlineView::Anchor(anchor) => {
+                self.register(anchor.id(), IndexedRole::Anchor);
+                for alias in anchor.fragment_aliases() {
+                    self.register_fragment(alias.clone(), anchor.id(), true);
+                }
             }
+            InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                for child in children {
+                    self.visit_inline(child);
+                }
+            }
+            InlineView::Link(link) => {
+                for child in link.children() {
+                    self.visit_inline(child);
+                }
+            }
+            InlineView::Text(_) | InlineView::Code(_) | InlineView::LineBreak => {}
         }
-        visit::walk_inline(self, inline);
     }
 }
 

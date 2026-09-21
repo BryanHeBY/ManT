@@ -2,7 +2,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    Diagnostic, DiagnosticLevel, Document, EntryContentSlice, EntryFacts, EntryOwner, NameCase,
+    ContentContext, ContentReadError, Diagnostic, DiagnosticLevel, Document, EntryContentSlice,
+    EntryFacts, EntryOwner, NameCase,
     visit::{self, Visit},
 };
 
@@ -69,7 +70,11 @@ impl EntryRelationIssue {
 /// Forward references are resolved against this complete document snapshot.
 #[must_use]
 pub fn entry_relation_issues(document: &Document) -> Vec<EntryRelationIssue> {
-    relation_issues(document, &crate::DocumentIndex::build(document))
+    relation_issues(
+        document,
+        document.content(),
+        &crate::DocumentIndex::build(document),
+    )
 }
 impl<'a> Visit<'a> for Owners<'a> {
     fn visit_definition_item(&mut self, item: &'a crate::DefinitionItem) {
@@ -98,6 +103,7 @@ impl<'a> Visit<'a> for Owners<'a> {
 
 pub(crate) fn relation_issues(
     document: &Document,
+    content: ContentContext<'_>,
     index: &crate::DocumentIndex,
 ) -> Vec<EntryRelationIssue> {
     let mut owners = Owners::default();
@@ -113,7 +119,8 @@ pub(crate) fn relation_issues(
     for (&id, records) in &owners.0 {
         for &owner in records {
             let facts = owner.facts().expect("collected fact owner");
-            let bindings = valid_name_bindings(owner);
+            let bindings = valid_name_bindings(content, owner)
+                .expect("validated document content resolves in its own store");
             if bindings.is_none() {
                 diagnostics.push(EntryRelationIssue {
                     owner: id.into(),
@@ -204,29 +211,87 @@ fn has_relationship_facts(facts: &EntryFacts) -> bool {
 impl<'a> EntryOwner<'a> {
     /// Selectable names, validated atomically against every explicit form
     /// binding. Failure leaves the owner, forms and original content intact.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal legacy backend rejects directly owned inline
+    /// content.
     #[must_use]
     pub fn validated_names(self) -> Option<&'a [String]> {
-        valid_name_bindings(self)?;
-        Some(&self.facts()?.names)
+        ContentContext::detached()
+            .entry_validated_names(self)
+            .expect("legacy inline text is self-contained")
     }
 
     /// Same-owner groups only when all names and the complete group set bind.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal legacy backend rejects directly owned inline
+    /// content.
     #[must_use]
     pub fn validated_alias_groups(self) -> Option<&'a [Vec<String>]> {
-        let bound = valid_name_bindings(self)?;
-        let facts = self.facts()?;
-        groups_are_valid(facts, &bound).then_some(&facts.alias_groups)
+        ContentContext::detached()
+            .entry_validated_alias_groups(self)
+            .expect("legacy inline text is self-contained")
     }
 }
 
-fn valid_name_bindings(owner: EntryOwner<'_>) -> Option<BTreeSet<usize>> {
-    let facts = owner.facts()?;
-    owner.forms()?;
+impl<'store> ContentContext<'store> {
+    /// Return selectable names only when every explicit binding resolves and
+    /// matches the original authored form content.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained binding content does not
+    /// resolve in this store.
+    pub fn entry_validated_names(
+        self,
+        owner: EntryOwner<'store>,
+    ) -> Result<Option<&'store [String]>, ContentReadError> {
+        let Some(_) = valid_name_bindings(self, owner)? else {
+            return Ok(None);
+        };
+        Ok(owner.facts().map(|facts| facts.names.as_slice()))
+    }
+
+    /// Return same-owner alias groups only when names and groups are valid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained binding content does not
+    /// resolve in this store.
+    pub fn entry_validated_alias_groups(
+        self,
+        owner: EntryOwner<'store>,
+    ) -> Result<Option<&'store [Vec<String>]>, ContentReadError> {
+        let Some(bound) = valid_name_bindings(self, owner)? else {
+            return Ok(None);
+        };
+        let Some(facts) = owner.facts() else {
+            return Ok(None);
+        };
+        Ok(groups_are_valid(facts, &bound).then_some(facts.alias_groups.as_slice()))
+    }
+}
+
+fn valid_name_bindings(
+    content: ContentContext<'_>,
+    owner: EntryOwner<'_>,
+) -> Result<Option<BTreeSet<usize>>, ContentReadError> {
+    let Some(facts) = owner.facts() else {
+        return Ok(None);
+    };
+    if content.entry_forms(owner)?.is_none() {
+        return Ok(None);
+    }
     let mut names = BTreeSet::new();
     for binding in &facts.name_bindings {
-        let expected = facts.names.get(binding.name)?;
+        let Some(expected) = facts.names.get(binding.name) else {
+            return Ok(None);
+        };
         if !names.insert(binding.name) || binding.occurrences.is_empty() {
-            return None;
+            return Ok(None);
         }
         for occurrence in &binding.occurrences {
             if occurrence
@@ -234,14 +299,14 @@ fn valid_name_bindings(owner: EntryOwner<'_>) -> Option<BTreeSet<usize>> {
                 .iter()
                 .any(|part| !inside_head(facts, part))
             {
-                return None;
+                return Ok(None);
             }
-            if !owner.form_text_equals(occurrence, expected) {
-                return None;
+            if !content.entry_form_text_equals(owner, occurrence, expected)? {
+                return Ok(None);
             }
         }
     }
-    (names.len() == facts.names.len()).then_some(names)
+    Ok((names.len() == facts.names.len()).then_some(names))
 }
 
 fn inside_head(facts: &EntryFacts, piece: &EntryContentSlice) -> bool {

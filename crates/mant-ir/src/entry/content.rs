@@ -3,7 +3,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
-use crate::{Block, DefinitionItem, EntryFacts, Inline, ListItem};
+use crate::{
+    Block, ContentContext, ContentReadError, DefinitionItem, EntryFacts, Inline, InlineView,
+    ListItem,
+};
 
 /// The content owner of one semantic entry; no body is copied into the index.
 #[derive(Debug, Clone, Copy)]
@@ -149,52 +152,6 @@ pub struct EntryNameBinding {
 }
 
 impl<'a> EntryOwner<'a> {
-    /// Compare visible form text without constructing styled inline copies.
-    /// Used by exact binding validation, independently of lookup case policy.
-    pub(crate) fn form_text_equals(self, form: &EntryForm, mut expected: &str) -> bool {
-        if form.parts.is_empty() || !form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1])) {
-            return false;
-        }
-        for part in &form.parts {
-            let Some(mut nodes) = self.inline_root(&part.root) else {
-                return false;
-            };
-            for (depth, &index) in part.path.iter().enumerate() {
-                let Some(node) = nodes.get(index) else {
-                    return false;
-                };
-                if depth + 1 == part.path.len() {
-                    nodes = std::slice::from_ref(node);
-                } else {
-                    nodes = match node {
-                        Inline::Strong { children }
-                        | Inline::Emphasis { children }
-                        | Inline::Link { children, .. } => children,
-                        _ => return false,
-                    };
-                }
-            }
-            if let Some(range) = &part.bytes {
-                if part.path.is_empty() || range.start >= range.end {
-                    return false;
-                }
-                let [Inline::Text { value } | Inline::Code { value }] = nodes else {
-                    return false;
-                };
-                let Some(text) = value.get(range.clone()) else {
-                    return false;
-                };
-                let Some(rest) = expected.strip_prefix(text) else {
-                    return false;
-                };
-                expected = rest;
-            } else if !consume_text(nodes, &mut expected) {
-                return false;
-            }
-        }
-        expected.is_empty()
-    }
-
     /// Source span attached to the original owner, never guessed from content.
     #[must_use]
     pub const fn source(self) -> Option<crate::SourceSpan> {
@@ -248,34 +205,177 @@ impl<'a> EntryOwner<'a> {
     }
 
     /// Project one validated slice; invalid references never produce partial text.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal legacy backend rejects directly owned inline
+    /// content.
     #[must_use]
     pub fn content_slice(self, slice: &EntryContentSlice) -> Option<Vec<Inline>> {
-        let mut nodes = self.inline_root(&slice.root)?;
+        ContentContext::detached()
+            .entry_content_slice(self, slice)
+            .expect("legacy inline text is self-contained")
+    }
+
+    /// Project complete authored forms, failing atomically on invalid bindings.
+    /// Empty bindings are unknown even when displayed native terms exist.
+    /// An absent owner or any invalid form returns `None`, never a partial set.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal legacy backend rejects directly owned inline
+    /// content.
+    #[must_use]
+    pub fn forms(self) -> Option<EntryForms<'a>> {
+        ContentContext::detached()
+            .entry_forms(self)
+            .expect("legacy inline text is self-contained")
+    }
+
+    /// Count complete valid form bindings without copying inline content or names.
+    ///
+    /// This has the same atomic validity rule as [`Self::forms`]; invalid bindings
+    /// yield `None`, and an explicitly unrecorded form set yields zero.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal legacy backend rejects directly owned inline
+    /// content.
+    #[must_use]
+    pub fn validated_form_count(self) -> Option<usize> {
+        ContentContext::detached()
+            .entry_validated_form_count(self)
+            .expect("legacy inline text is self-contained")
+    }
+
+    /// Project one ordered form without accepting a partial binding.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal legacy backend rejects directly owned inline
+    /// content.
+    #[must_use]
+    pub fn form(self, form: &EntryForm) -> Option<Cow<'a, [Inline]>> {
+        ContentContext::detached()
+            .entry_form(self, form)
+            .expect("legacy inline text is self-contained")
+    }
+}
+
+impl<'store> ContentContext<'store> {
+    /// Compare one form's visible text against an expected value without
+    /// constructing a styled projection.
+    ///
+    /// Invalid form bindings compare unequal. Store-resolution failures remain
+    /// distinct from malformed bindings.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained form content does not resolve
+    /// in this store.
+    pub fn entry_form_text_equals(
+        self,
+        owner: EntryOwner<'store>,
+        form: &EntryForm,
+        expected: &str,
+    ) -> Result<bool, ContentReadError> {
+        let mut remaining = expected;
+        if form.parts.is_empty() || !form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1])) {
+            return Ok(false);
+        }
+        for part in &form.parts {
+            let Some(mut nodes) = owner.inline_root(&part.root) else {
+                return Ok(false);
+            };
+            for (depth, &index) in part.path.iter().enumerate() {
+                let Some(node) = nodes.get(index) else {
+                    return Ok(false);
+                };
+                if depth + 1 == part.path.len() {
+                    nodes = std::slice::from_ref(node);
+                } else {
+                    let Some(children) = self.inline_children(node)? else {
+                        return Ok(false);
+                    };
+                    nodes = children;
+                }
+            }
+            if let Some(range) = &part.bytes {
+                if part.path.is_empty() || range.start >= range.end {
+                    return Ok(false);
+                }
+                let [node] = nodes else {
+                    return Ok(false);
+                };
+                let (InlineView::Text(value) | InlineView::Code(value)) = self.inline(node)? else {
+                    return Ok(false);
+                };
+                let Some(text) = value.get(range.clone()) else {
+                    return Ok(false);
+                };
+                let Some(rest) = remaining.strip_prefix(text) else {
+                    return Ok(false);
+                };
+                remaining = rest;
+            } else if !self.consume_entry_text(nodes, &mut remaining)? {
+                return Ok(false);
+            }
+        }
+        Ok(remaining.is_empty())
+    }
+
+    /// Project one validated owner-local slice.
+    ///
+    /// Invalid references return `Ok(None)` and never produce partial content.
+    /// This compatibility projection remains available while wire DTOs retain
+    /// owned inline fragments.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained content does not resolve in
+    /// this store.
+    pub fn entry_content_slice(
+        self,
+        owner: EntryOwner<'store>,
+        slice: &EntryContentSlice,
+    ) -> Result<Option<Vec<Inline>>, ContentReadError> {
+        let Some(mut nodes) = owner.inline_root(&slice.root) else {
+            return Ok(None);
+        };
         let Some((&last, parents)) = slice.path.split_last() else {
-            return slice.bytes.is_none().then(|| nodes.to_vec());
+            if slice.bytes.is_some() {
+                return Ok(None);
+            }
+            self.scalar_len(nodes)?;
+            return Ok(Some(nodes.to_vec()));
         };
         let mut wrappers = Vec::new();
         for &index in parents {
-            let parent = nodes.get(index)?;
-            nodes = match parent {
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => children,
-                _ => return None,
+            let Some(parent) = nodes.get(index) else {
+                return Ok(None);
             };
+            let Some(children) = self.inline_children(parent)? else {
+                return Ok(None);
+            };
+            nodes = children;
             wrappers.push(parent);
         }
-        let node = nodes.get(last)?;
+        let Some(node) = nodes.get(last) else {
+            return Ok(None);
+        };
         let mut selected = if let Some(range) = &slice.bytes {
             if range.start >= range.end {
-                return None;
+                return Ok(None);
             }
-            let value = match node {
-                Inline::Text { value } | Inline::Code { value } => value.get(range.clone())?,
-                _ => return None,
+            let view = self.inline(node)?;
+            let (InlineView::Text(value) | InlineView::Code(value)) = view else {
+                return Ok(None);
             };
-            match node {
-                Inline::Code { .. } => Inline::Code {
+            let Some(value) = value.get(range.clone()) else {
+                return Ok(None);
+            };
+            match view {
+                InlineView::Code(_) => Inline::Code {
                     value: value.into(),
                 },
                 _ => Inline::Text {
@@ -283,106 +383,96 @@ impl<'a> EntryOwner<'a> {
                 },
             }
         } else {
+            self.scalar_len(std::slice::from_ref(node))?;
             node.clone()
         };
         for wrapper in wrappers.into_iter().rev() {
             let children = vec![selected];
-            selected = match wrapper {
-                Inline::Strong { .. } => Inline::Strong { children },
-                Inline::Emphasis { .. } => Inline::Emphasis { children },
-                Inline::Link { target, title, .. } => Inline::Link {
-                    target: target.clone(),
-                    title: title.clone(),
+            selected = match self.inline(wrapper)? {
+                InlineView::Strong(_) => Inline::Strong { children },
+                InlineView::Emphasis(_) => Inline::Emphasis { children },
+                InlineView::Link(link) => Inline::Link {
+                    target: link.target().clone(),
+                    title: link.title().map(str::to_owned),
                     children,
                 },
-                _ => return None,
+                _ => return Ok(None),
             };
         }
-        Some(vec![selected])
+        Ok(Some(vec![selected]))
     }
 
     /// Project complete authored forms, failing atomically on invalid bindings.
-    /// Empty bindings are unknown even when displayed native terms exist.
-    /// An absent owner or any invalid form returns `None`, never a partial set.
-    #[must_use]
-    pub fn forms(self) -> Option<EntryForms<'a>> {
-        let facts = self.facts()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained form content does not resolve
+    /// in this store.
+    pub fn entry_forms(
+        self,
+        owner: EntryOwner<'store>,
+    ) -> Result<Option<EntryForms<'store>>, ContentReadError> {
+        let Some(facts) = owner.facts() else {
+            return Ok(None);
+        };
         if facts.forms.is_empty() {
-            return Some(EntryForms::Unrecorded);
+            return Ok(Some(EntryForms::Unrecorded));
         }
-        if let Self::Definition(item) = self
+        if let EntryOwner::Definition(item) = owner
             && facts.forms.len() == item.terms.len()
             && facts.forms.iter().enumerate().all(|(index, form)| {
                 matches!(&form.parts[..], [EntryContentSlice {root: EntryInlineRoot::Term {index: term}, path, bytes: None}] if *term == index && path.is_empty())
             })
         {
-            return Some(EntryForms::Borrowed(&item.terms));
+            for term in &item.terms {
+                self.scalar_len(term)?;
+            }
+            return Ok(Some(EntryForms::Borrowed(&item.terms)));
         }
-        facts
-            .forms
-            .iter()
-            .map(|form| self.form(form))
-            .collect::<Option<Vec<_>>>()
-            .map(EntryForms::Projected)
-    }
-
-    /// Count complete valid form bindings without copying inline content or names.
-    ///
-    /// This has the same atomic validity rule as [`Self::forms`]; invalid bindings
-    /// yield `None`, and an explicitly unrecorded form set yields zero.
-    #[must_use]
-    pub fn validated_form_count(self) -> Option<usize> {
-        let forms = &self.facts()?.forms;
-        forms
-            .iter()
-            .all(|form| self.form_is_valid(form))
-            .then_some(forms.len())
-    }
-
-    fn form_is_valid(self, form: &EntryForm) -> bool {
-        !form.parts.is_empty()
-            && form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1]))
-            && form.parts.iter().all(|part| self.slice_is_valid(part))
-    }
-
-    fn slice_is_valid(self, slice: &EntryContentSlice) -> bool {
-        let Some(mut nodes) = self.inline_root(&slice.root) else {
-            return false;
-        };
-        let Some((&last, parents)) = slice.path.split_last() else {
-            return slice.bytes.is_none();
-        };
-        for &index in parents {
-            let Some(
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. },
-            ) = nodes.get(index)
-            else {
-                return false;
+        let mut forms = Vec::with_capacity(facts.forms.len());
+        for form in &facts.forms {
+            let Some(form) = self.entry_form(owner, form)? else {
+                return Ok(None);
             };
-            nodes = children;
+            forms.push(form);
         }
-        let Some(node) = nodes.get(last) else {
-            return false;
+        Ok(Some(EntryForms::Projected(forms)))
+    }
+
+    /// Count complete valid form bindings without copying inline content.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained form content does not resolve
+    /// in this store.
+    pub fn entry_validated_form_count(
+        self,
+        owner: EntryOwner<'store>,
+    ) -> Result<Option<usize>, ContentReadError> {
+        let Some(facts) = owner.facts() else {
+            return Ok(None);
         };
-        match &slice.bytes {
-            None => true,
-            Some(range) if range.start < range.end => match node {
-                Inline::Text { value } | Inline::Code { value } => {
-                    value.get(range.clone()).is_some()
-                }
-                _ => false,
-            },
-            Some(_) => false,
+        for form in &facts.forms {
+            if !self.entry_form_is_valid(owner, form)? {
+                return Ok(None);
+            }
         }
+        Ok(Some(facts.forms.len()))
     }
 
     /// Project one ordered form without accepting a partial binding.
-    #[must_use]
-    pub fn form(self, form: &EntryForm) -> Option<Cow<'a, [Inline]>> {
-        if !self.form_is_valid(form) {
-            return None;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContentReadError`] when retained form content does not resolve
+    /// in this store.
+    pub fn entry_form(
+        self,
+        owner: EntryOwner<'store>,
+        form: &EntryForm,
+    ) -> Result<Option<Cow<'store, [Inline]>>, ContentReadError> {
+        if !self.entry_form_is_valid(owner, form)? {
+            return Ok(None);
         }
         if let [
             EntryContentSlice {
@@ -392,44 +482,125 @@ impl<'a> EntryOwner<'a> {
             },
         ] = &form.parts[..]
         {
-            let nodes = self.inline_root(root)?;
+            let Some(nodes) = owner.inline_root(root) else {
+                return Ok(None);
+            };
             if path.is_empty() {
-                return Some(Cow::Borrowed(nodes));
+                return Ok(Some(Cow::Borrowed(nodes)));
             }
             if let [index] = path[..] {
-                return nodes.get(index..index.checked_add(1)?).map(Cow::Borrowed);
+                return Ok(nodes.get(index..index.saturating_add(1)).map(Cow::Borrowed));
             }
         }
-        let parts = form
-            .parts
-            .iter()
-            .map(|part| self.content_slice(part))
-            .collect::<Option<Vec<_>>>()?;
-        Some(Cow::Owned(parts.into_iter().flatten().collect()))
+        let mut projected = Vec::new();
+        for part in &form.parts {
+            let Some(nodes) = self.entry_content_slice(owner, part)? else {
+                return Ok(None);
+            };
+            projected.extend(nodes);
+        }
+        Ok(Some(Cow::Owned(projected)))
     }
-}
 
-fn consume_text(nodes: &[Inline], expected: &mut &str) -> bool {
-    for node in nodes {
-        let text = match node {
-            Inline::Text { value } | Inline::Code { value } => value.as_str(),
-            Inline::LineBreak => "\n",
-            Inline::Anchor { .. } => continue,
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => {
-                if !consume_text(children, expected) {
-                    return false;
-                }
-                continue;
+    fn entry_form_is_valid(
+        self,
+        owner: EntryOwner<'store>,
+        form: &EntryForm,
+    ) -> Result<bool, ContentReadError> {
+        if form.parts.is_empty() || !form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1])) {
+            return Ok(false);
+        }
+        for part in &form.parts {
+            if !self.entry_slice_is_valid(owner, part)? {
+                return Ok(false);
             }
-        };
-        let Some(rest) = expected.strip_prefix(text) else {
-            return false;
-        };
-        *expected = rest;
+        }
+        Ok(true)
     }
-    true
+
+    fn entry_slice_is_valid(
+        self,
+        owner: EntryOwner<'store>,
+        slice: &EntryContentSlice,
+    ) -> Result<bool, ContentReadError> {
+        let Some(mut nodes) = owner.inline_root(&slice.root) else {
+            return Ok(false);
+        };
+        let Some((&last, parents)) = slice.path.split_last() else {
+            if slice.bytes.is_some() {
+                return Ok(false);
+            }
+            self.scalar_len(nodes)?;
+            return Ok(true);
+        };
+        for &index in parents {
+            let Some(node) = nodes.get(index) else {
+                return Ok(false);
+            };
+            let Some(children) = self.inline_children(node)? else {
+                return Ok(false);
+            };
+            nodes = children;
+        }
+        let Some(node) = nodes.get(last) else {
+            return Ok(false);
+        };
+        match &slice.bytes {
+            None => {
+                self.scalar_len(std::slice::from_ref(node))?;
+                Ok(true)
+            }
+            Some(range) if range.start < range.end => match self.inline(node)? {
+                InlineView::Text(value) | InlineView::Code(value) => {
+                    Ok(value.get(range.clone()).is_some())
+                }
+                _ => Ok(false),
+            },
+            Some(_) => Ok(false),
+        }
+    }
+
+    fn consume_entry_text(
+        self,
+        nodes: &'store [Inline],
+        expected: &mut &str,
+    ) -> Result<bool, ContentReadError> {
+        for node in nodes {
+            let text = match self.inline(node)? {
+                InlineView::Text(value) | InlineView::Code(value) => value,
+                InlineView::LineBreak => "\n",
+                InlineView::Anchor(_) => continue,
+                InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                    if !self.consume_entry_text(children, expected)? {
+                        return Ok(false);
+                    }
+                    continue;
+                }
+                InlineView::Link(link) => {
+                    if !self.consume_entry_text(link.children(), expected)? {
+                        return Ok(false);
+                    }
+                    continue;
+                }
+            };
+            let Some(rest) = expected.strip_prefix(text) else {
+                return Ok(false);
+            };
+            *expected = rest;
+        }
+        Ok(true)
+    }
+
+    fn inline_children(
+        self,
+        inline: &'store Inline,
+    ) -> Result<Option<&'store [Inline]>, ContentReadError> {
+        Ok(match self.inline(inline)? {
+            InlineView::Strong(children) | InlineView::Emphasis(children) => Some(children),
+            InlineView::Link(link) => Some(link.children()),
+            _ => None,
+        })
+    }
 }
 
 impl EntryContentSlice {

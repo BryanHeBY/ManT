@@ -8,44 +8,16 @@ use crate::Inline;
 /// Anchors and empty wrappers do not create rows; a trailing explicit break
 /// closes a row and must not be erased by trimming. Width is measured after
 /// joining style/link fragments, preserving combining and wide characters.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects directly owned inline
+/// content.
 #[must_use]
 pub fn definition_run_in_width(terms: &[Vec<Inline>]) -> Option<usize> {
-    let mut final_row = String::new();
-    let mut present = false;
-    for term in terms {
-        let mut row = String::new();
-        let mut term_present = false;
-        append(term, &mut row, &mut term_present);
-        if term_present {
-            final_row = row;
-            present = true;
-        }
-    }
-    (present && !final_row.is_empty()).then(|| super::text_width(&final_row))
-}
-
-fn append(nodes: &[Inline], row: &mut String, present: &mut bool) {
-    for node in nodes {
-        match node {
-            Inline::Text { value } | Inline::Code { value } => {
-                *present |= !value.is_empty();
-                if let Some((_, tail)) = value.rsplit_once('\n') {
-                    row.clear();
-                    row.push_str(tail);
-                } else {
-                    row.push_str(value);
-                }
-            }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => append(children, row, present),
-            Inline::LineBreak => {
-                row.clear();
-                *present = true;
-            }
-            Inline::Anchor { .. } => {}
-        }
-    }
+    crate::ContentContext::detached()
+        .definition_run_in_width(terms)
+        .expect("legacy inline text is self-contained")
 }
 
 #[cfg(test)]
