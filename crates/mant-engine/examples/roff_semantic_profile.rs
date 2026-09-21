@@ -658,8 +658,11 @@ mod tests {
         let parsed = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source)
             .unwrap();
-        let mut document =
-            mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &parsed);
+        let mut document = mant_codec::lower_mandoc_document(
+            std::path::Path::new("probe.1"),
+            &parsed,
+            u64::try_from(source.len()).unwrap(),
+        );
         let clean = super::profile_document("probe", &parsed.document.root, &document, 0);
         assert_eq!(clean["semanticViolations"], serde_json::json!([]));
         assert_eq!(clean["semanticsComplete"], true);
@@ -721,7 +724,11 @@ mod tests {
         let parsed = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source)
             .unwrap();
-        let document = mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &parsed);
+        let document = mant_codec::lower_mandoc_document(
+            std::path::Path::new("probe.1"),
+            &parsed,
+            u64::try_from(source.len()).unwrap(),
+        );
         let profile = super::profile_document("probe", &parsed.document.root, &document, 0);
 
         assert_eq!(profile["ordinalEntries"], serde_json::json!([]));

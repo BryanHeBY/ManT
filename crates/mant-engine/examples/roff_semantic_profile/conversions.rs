@@ -293,7 +293,11 @@ mod tests {
         let report = Parser::default()
             .parse_bytes("ordinal-audit.7", source.as_bytes())
             .expect("parse ordinal audit source");
-        let document = lower_mandoc_document(Path::new("ordinal-audit.7"), &report);
+        let document = lower_mandoc_document(
+            Path::new("ordinal-audit.7"),
+            &report,
+            u64::try_from(source.len()).unwrap(),
+        );
         (report, document)
     }
 

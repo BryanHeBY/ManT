@@ -419,7 +419,11 @@ mod tests {
                 .parse_bytes(path, source.as_bytes())
                 .unwrap();
                 let native = native_target_profile(&report.document.root);
-                let document = super::lower_mandoc_document(path, &report);
+                let document = super::lower_mandoc_document(
+                    path,
+                    &report,
+                    u64::try_from(source.len()).unwrap(),
+                );
                 let observed = super::observed_targets(&document);
                 let (missing, matched, used) =
                     match_targets(&native.expected, &observed.occurrences);
@@ -511,7 +515,8 @@ Escape.
                 serde_json::to_string(&native.expected).unwrap()
             );
         }
-        let document = super::lower_mandoc_document(path, &report);
+        let document =
+            super::lower_mandoc_document(path, &report, u64::try_from(source.len()).unwrap());
         let observed = super::observed_targets(&document);
         let (missing, matched, used) = match_targets(&native.expected, &observed.occurrences);
         assert!(
