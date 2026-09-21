@@ -281,6 +281,146 @@ fn man_tp_markers_use_the_same_source_classification_as_ip() {
 }
 
 #[test]
+fn man_tp_width_is_not_mistaken_for_the_rendered_marker() {
+    // These exact bullet and ordinal inputs were run through the pinned
+    // reference first. `man_term.c::pre_TP` consumes the same-line argument
+    // as width and starts rendering the tag at the first NODE_LINE child.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "tp-width.1",
+            b".TH X 1\n.SH D\n.TP 4\n\\(bu\nBULLET\n.TP 4\n2.\nSECOND\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "tp-width.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("TP width stays outside marker classification");
+    assert_eq!(
+        document
+            .lists
+            .iter()
+            .map(|list| (list.kind, list.start))
+            .collect::<Vec<_>>(),
+        [(LIST_BULLET, None), (LIST_ORDERED, Some(2))]
+    );
+}
+
+#[test]
+fn tq_does_not_continue_a_marker_classified_tp() {
+    // The exact input was run through the pinned reference first. The TP
+    // bullet is one visible item; the following TQ renders an independent
+    // ALIAS tag, so attaching it to the marker item would discard content.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "marker-tq.1",
+            b".TH X 1\n.SH D\n.TP\n\\(bu\n.TQ\nALIAS\nBODY\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "marker-tq.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("TQ after a marker TP owns an independent definition");
+    assert_eq!(
+        document
+            .lists
+            .iter()
+            .map(|list| list.kind)
+            .collect::<Vec<_>>(),
+        [LIST_BULLET, LIST_DEFINITION]
+    );
+    assert_eq!(document.items.len(), 2);
+    let alias = &document.forms[document.items[1].first_form.unwrap() as usize - 1];
+    assert_eq!(
+        ref_text(&document, alias.first_ref, alias.ref_count),
+        "ALIAS"
+    );
+}
+
+#[test]
+fn relative_indent_is_owned_by_and_connects_ordered_items() {
+    // The exact input was run through the pinned reference first. Pinned
+    // `man_macro.c::blk_exp` closes IP before opening the sibling RS, while
+    // `man_term.c::pre_RS/post_RS` renders that scope inside the first item.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "ordered-rs.1",
+            b".TH X 1\n.SH D\n.IP 1.\nONE\n.RS\ncontinuation\n.RE\n.IP 2.\nTWO\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "ordered-rs.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("RS remains a transparent ordered-item continuation");
+    assert_eq!(document.lists.len(), 1, "{document:#?}");
+    assert_eq!(document.lists[0].kind, LIST_ORDERED);
+    assert_eq!(document.items.len(), 2);
+    let first_owner = document.items[0].owner;
+    let first_bodies = document
+        .content_roots
+        .iter()
+        .filter(|root| root.owner == first_owner && root.kind == ROOT_BODY)
+        .map(|root| root_text(&document, root.key))
+        .collect::<String>();
+    assert!(first_bodies.contains("ONE"), "{first_bodies:?}");
+    assert!(first_bodies.contains("continuation"), "{first_bodies:?}");
+}
+
+#[test]
+fn nested_rs_markers_do_not_replace_the_outer_ordered_run() {
+    // The exact input was run through the pinned reference first. `blk_exp`
+    // gives RS an independent subtree, so its nested bullet has local marker
+    // state while the following outer 2. still continues the outer 1. run.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "nested-rs.1",
+            b".TH X 1\n.SH D\n.IP 1.\nONE\n.RS\n.IP \\(bu\nNESTED\n.RE\n.IP 2.\nTWO\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "nested-rs.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("nested RS marker state restores the outer run");
+    assert_eq!(
+        document
+            .lists
+            .iter()
+            .map(|list| (list.kind, list.start))
+            .collect::<Vec<_>>(),
+        [(LIST_ORDERED, Some(1)), (LIST_BULLET, None)]
+    );
+    let outer_items = document
+        .items
+        .iter()
+        .filter(|item| item.list == document.lists[0].key)
+        .collect::<Vec<_>>();
+    assert_eq!(outer_items.len(), 2, "{document:#?}");
+    let nested = &document.lists[1];
+    let nested_block = &document.blocks[nested.block as usize - 1];
+    assert_eq!(nested_block.parent, Some(document.lists[0].block));
+    assert_eq!(nested_block.owner, outer_items[0].owner);
+}
+
+#[test]
 fn tq_continuation_expires_after_body_or_paragraph_boundary() {
     // Both exact inputs were run through the pinned reference first.
     // `man_macro.c::blk_imp` and the local continued-head patch retain only

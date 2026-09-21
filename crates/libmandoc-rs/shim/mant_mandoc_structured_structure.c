@@ -88,6 +88,44 @@ first_text(const struct roff_node *node)
 	return NULL;
 }
 
+/*
+ * TP accepts an optional width on the macro line, but pre_TP() deliberately
+ * starts rendering its tag at the first NODE_LINE child.  Classification has
+ * to use the same boundary or a numeric width can masquerade as a marker.
+ */
+static const struct roff_node *
+man_marker_text(const struct roff_node *node)
+{
+	const struct roff_node *head;
+
+	head = node == NULL ? NULL : node->head;
+	if (node != NULL && node->tok == MAN_TP && head != NULL) {
+		head = head->child;
+		while (head != NULL && (head->flags & NODE_LINE) == 0)
+			head = head->next;
+		return first_text(head);
+	}
+	return first_text(head);
+}
+
+/*
+ * man_macro.c::blk_exp closes an implicit IP/TP before opening RS, leaving
+ * the relative-indent block as an AST sibling.  The formatter nevertheless
+ * renders consecutive RS siblings as content of the preceding visible item.
+ */
+static int
+man_marker_reaches(const struct roff_node *marker,
+    const struct roff_node *node)
+{
+	if (marker == NULL || node == NULL)
+		return 0;
+	for (marker = marker->next; marker != NULL && marker != node;
+	    marker = marker->next)
+		if (marker->type != ROFFT_BLOCK || marker->tok != MAN_RS)
+			return 0;
+	return marker == node;
+}
+
 static const char *
 skip_marker_decoration(const char *text)
 {
@@ -118,7 +156,7 @@ man_named_bullet(const struct roff_node *node)
 	const struct roff_node *text_node;
 	const char *text;
 
-	text_node = first_text(node == NULL ? NULL : node->head);
+	text_node = man_marker_text(node);
 	if (text_node == NULL)
 		return 0;
 	text = skip_marker_decoration(text_node->string);
@@ -139,7 +177,7 @@ man_ordinal_start(const struct roff_node *node, uint32_t *style)
 	uint64_t value;
 	int parenthesized;
 
-	text_node = first_text(node == NULL ? NULL : node->head);
+	text_node = man_marker_text(node);
 	if (text_node == NULL)
 		return 0;
 	text = skip_marker_decoration(text_node->string);
@@ -337,8 +375,31 @@ mant_structured_enter_node(struct structured_session *session,
 	context = contexts + session->node_depth - 1;
 	*context = inherited;
 	context->term_root = 0;
+	context->restore_man_state = 0;
 	if (node == NULL)
 		return 1;
+	if (node->type == ROFFT_BLOCK && node->tok == MAN_RS) {
+		context->saved_man_marker_node = session->last_man_marker_node;
+		context->saved_man_item = session->last_man_item;
+		context->saved_man_list = session->last_man_list;
+		context->saved_man_parent_block = session->last_man_parent_block;
+		context->saved_man_marker_list = session->last_man_marker_list;
+		context->saved_man_marker_kind = session->last_man_marker_kind;
+		context->saved_man_marker_style = session->last_man_marker_style;
+		context->saved_man_marker_ordinal = session->next_man_marker_ordinal;
+		context->restore_man_state = 1;
+		if (session->last_man_item != 0 &&
+		    session->last_man_marker_list != 0 &&
+		    session->last_man_parent_block == context_parent(session, context) &&
+		    man_marker_reaches(session->last_man_marker_node, node)) {
+			context->item = session->last_man_item;
+			context->list = session->last_man_marker_list;
+			context->owner = session->result->items[
+			    context->item - 1].owner;
+			context->container_block = session->result->lists[
+			    context->list - 1].block;
+		}
+	}
 	if (node->type == ROFFT_BLOCK && node->tok == MDOC_Bl) {
 		if (!mdoc_list_kind(node, &kind, &block_kind))
 			return 0;
@@ -354,6 +415,9 @@ mant_structured_enter_node(struct structured_session *session,
 	    node->tok == MAN_TQ)) {
 		if (node->tok == MAN_TQ && session->man_continuation_pending != 0 &&
 		    session->last_man_item != 0 &&
+		    session->last_man_list != 0 &&
+		    session->result->lists[session->last_man_list - 1].kind ==
+		    MANT_LIST_DEFINITION &&
 		    session->last_man_parent_block == context_parent(session, context)) {
 			context->item = session->last_man_item;
 			context->list = session->last_man_list;
@@ -381,7 +445,8 @@ mant_structured_enter_node(struct structured_session *session,
 			block_kind = MANT_BLOCK_DEFINITION_LIST;
 		}
 		if (marker && session->last_man_marker_node != NULL &&
-		    session->last_man_marker_node->next == node &&
+		    man_marker_reaches(session->last_man_marker_node, node) &&
+		    session->last_man_parent_block == context_parent(session, context) &&
 		    session->last_man_marker_kind == kind &&
 		    session->last_man_marker_style == marker_style &&
 		    (kind != MANT_LIST_ORDERED ||
@@ -405,7 +470,9 @@ mant_structured_enter_node(struct structured_session *session,
 		session->last_man_parent_block = context_parent(session,
 		    session->node_depth > 1 ?
 		    session->node_contexts + session->node_depth - 2 : NULL);
-		session->man_continuation_pending = node->tok != MAN_IP;
+		session->man_continuation_pending = node->tok != MAN_IP &&
+		    session->result->lists[context->list - 1].kind ==
+		    MANT_LIST_DEFINITION;
 		return 1;
 	}
 	if (node->tok == MDOC_Tg && (node->flags & NODE_ID) != 0 &&
@@ -452,8 +519,25 @@ mant_structured_leave_node(struct structured_session *session,
 		    context->item);
 	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MDOC_Bl)
 		session->pending_item_target = NULL;
-	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MAN_RS)
+	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MAN_RS) {
 		session->man_continuation_pending = 0;
+		if (context != NULL && context->restore_man_state != 0) {
+			session->last_man_marker_node =
+			    context->saved_man_marker_node;
+			session->last_man_item = context->saved_man_item;
+			session->last_man_list = context->saved_man_list;
+			session->last_man_parent_block =
+			    context->saved_man_parent_block;
+			session->last_man_marker_list =
+			    context->saved_man_marker_list;
+			session->last_man_marker_kind =
+			    context->saved_man_marker_kind;
+			session->last_man_marker_style =
+			    context->saved_man_marker_style;
+			session->next_man_marker_ordinal =
+			    context->saved_man_marker_ordinal;
+		}
+	}
 	if (node != NULL && (((node->type == ROFFT_HEAD ||
 	    node->type == ROFFT_BODY) &&
 	    (node->tok == MDOC_It || node->tok == MAN_IP ||

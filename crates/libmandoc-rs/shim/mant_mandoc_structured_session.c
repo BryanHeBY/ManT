@@ -404,6 +404,7 @@ cleanup:
 	free(session.node_stack);
 	free(session.node_contexts);
 	free(session.owner_root_counts);
+	free(session.root_atoms);
 	free(session.block_child_counts);
 	free(session.list_item_counts);
 	mant_structured_result_free(result);

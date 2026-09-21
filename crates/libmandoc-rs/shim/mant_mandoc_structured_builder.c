@@ -248,6 +248,7 @@ mant_structured_open_content_root(struct structured_session *session, int headin
     uint32_t provenance)
 {
 	struct mant_structured_content_root_view *roots, *root;
+	struct structured_root_atoms *root_atoms;
 	struct structured_node_context *context;
 	uint32_t owner_key, root_kind, block_kind, parent, block;
 
@@ -284,6 +285,17 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 	if (roots == NULL)
 		return 0;
 	session->result->content_roots = roots;
+	root_atoms = mant_structured_grow_array(session, session->root_atoms,
+	    session->result->content_root_count, &session->root_atom_capacity,
+	    mant_structured_limit_u32(session->limits->max_blocks),
+	    sizeof(*root_atoms), session->limits->max_builder_allocated_bytes, 12,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (root_atoms == NULL)
+		return 0;
+	session->root_atoms = root_atoms;
+	root_atoms += session->result->content_root_count;
+	root_atoms->first = UINT32_MAX;
+	root_atoms->count = 0;
 	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER) ||
@@ -329,16 +341,6 @@ form_separator(const struct mant_structured_content_atom_view *atom)
 	return atom->kind == MANT_ATOM_TEXT && atom->role == 0 &&
 	    atom->text.len == 1 &&
 	    (atom->text.ptr[0] == ',' || atom->text.ptr[0] == '|');
-}
-
-static int
-form_range_has_content(const struct mant_structured_result *result,
-    uint32_t begin, uint32_t end)
-{
-	for (; begin < end; begin++)
-		if (result->content_atoms[begin].kind != MANT_ATOM_WHITESPACE)
-			return 1;
-	return 0;
 }
 
 static int
@@ -482,31 +484,49 @@ mant_structured_finalize_term_root(struct structured_session *session,
     uint32_t root_key, uint32_t item_key)
 {
 	const struct mant_structured_content_atom_view *atom;
-	uint32_t begin, end, i;
+	uint32_t begin, end, i, remaining_content, segment_content;
 
 	if (root_key == 0 || root_key > session->result->content_root_count ||
 	    item_key == 0 || item_key > session->result->item_count)
 		return 1;
-	begin = end = 0;
-	for (i = 0; i < session->result->content_atom_count; i++) {
-		atom = session->result->content_atoms + i;
-		if (atom->root == root_key) {
-			if (end == 0)
-				begin = i;
-			end = i + 1;
-		}
-	}
-	if (end == 0)
+	if (session->root_atoms[root_key - 1].count == 0)
 		return 1;
+	begin = session->root_atoms[root_key - 1].first;
+	if (begin > session->result->content_atom_count ||
+	    session->root_atoms[root_key - 1].count >
+	    session->result->content_atom_count - begin) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0,
+		    begin, session->result->content_atom_count);
+		return 0;
+	}
+	end = begin + session->root_atoms[root_key - 1].count;
+	remaining_content = 0;
 	for (i = begin; i < end; i++) {
 		atom = session->result->content_atoms + i;
-		if (!form_separator(atom) ||
-		    !form_range_has_content(session->result, begin, i) ||
-		    !form_range_has_content(session->result, i + 1, end))
+		if (atom->root != root_key) {
+			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, atom->root, root_key);
+			return 0;
+		}
+		if (atom->kind != MANT_ATOM_WHITESPACE)
+			remaining_content++;
+	}
+	segment_content = 0;
+	for (i = begin; i < end; i++) {
+		atom = session->result->content_atoms + i;
+		if (atom->kind != MANT_ATOM_WHITESPACE)
+			remaining_content--;
+		if (!form_separator(atom) || segment_content == 0 ||
+		    remaining_content == 0) {
+			if (atom->kind != MANT_ATOM_WHITESPACE)
+				segment_content++;
 			continue;
+		}
 		if (!append_term_form(session, root_key, item_key, begin, i))
 			return 0;
 		begin = i + 1;
+		segment_content = 0;
 	}
 	return append_term_form(session, root_key, item_key, begin, end);
 }
@@ -710,6 +730,10 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 		atom->display_override_present = 1;
 	} else
 		session->current_display_capacity = 0;
+	if (session->root_atoms[root - 1].count == 0)
+		session->root_atoms[root - 1].first = atom->key - 1;
+	session->root_atoms[root - 1].count++;
+	session->current_root_atom_count++;
 	return 1;
 }
 

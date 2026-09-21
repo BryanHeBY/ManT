@@ -20,7 +20,26 @@ struct structured_node_context {
 	uint32_t item;
 	uint32_t container_block;
 	uint32_t term_root;
+	const struct roff_node *saved_man_marker_node;
+	uint32_t saved_man_item;
+	uint32_t saved_man_list;
+	uint32_t saved_man_parent_block;
+	uint32_t saved_man_marker_list;
+	uint32_t saved_man_marker_kind;
+	uint32_t saved_man_marker_style;
+	uint32_t saved_man_marker_ordinal;
 	uint8_t part;
+	uint8_t restore_man_state;
+};
+
+struct structured_root_atoms {
+	/*
+	 * Formatter head execution emits each term root as one atom interval.
+	 * Finalization validates that interval before using it; body roots keep
+	 * the same bookkeeping but do not otherwise depend on contiguity.
+	 */
+	uint32_t first;
+	uint32_t count;
 };
 
 struct structured_session {
@@ -56,6 +75,8 @@ struct structured_session {
 	uint32_t node_context_capacity;
 	uint32_t *owner_root_counts;
 	uint32_t owner_root_capacity;
+	struct structured_root_atoms *root_atoms;
+	uint32_t root_atom_capacity;
 	uint32_t *block_child_counts;
 	uint32_t block_child_capacity;
 	uint32_t *list_item_counts;
