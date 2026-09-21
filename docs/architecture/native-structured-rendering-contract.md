@@ -5,6 +5,10 @@ document defines the minimum relationships that the native producer, FFI,
 ManT IR, and consumers must preserve. It does not claim that the structured
 renderer is implemented.
 
+The behavior-preserving internal module split is tracked separately in the
+[libmandoc structured-rendering internals](libmandoc-structured-internals.md)
+map so this contract remains focused on cross-layer behavior.
+
 ## Evidence checkpoint
 
 | Item | Frozen identity |
