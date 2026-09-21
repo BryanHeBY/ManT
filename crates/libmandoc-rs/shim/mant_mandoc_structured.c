@@ -21,6 +21,7 @@
 #include "mant_mandoc_output.h"
 
 #define MANT_STRUCTURED_MAGIC 0x4d535231U
+#define MANT_TOKEN_PROJECTION_INLINE 8U
 
 _Static_assert(MANT_DIAGNOSTIC_CODE_NATIVE_LAST == MANDOCERR_MAX,
     "structured diagnostic code range must match pinned mandocerr");
@@ -88,11 +89,17 @@ struct structured_token {
 	uint32_t link;
 	int value;
 	enum term_collector_reason reason;
-	uint32_t projection_start;
 	uint32_t projection_length;
+	uint32_t projection_capacity;
 	uint32_t live_slots;
+	uint32_t next_free;
+	uint8_t *projection_bytes;
+	uint8_t *projection_survived;
+	uint8_t projection_inline[MANT_TOKEN_PROJECTION_INLINE];
+	uint8_t projection_survived_inline[MANT_TOKEN_PROJECTION_INLINE];
 	uint8_t survived;
 	uint8_t committed;
+	uint8_t active;
 };
 
 struct structured_slot {
@@ -148,14 +155,13 @@ struct structured_session {
 	uint32_t pending_break_provenance;
 	uint32_t pending_break_root;
 	struct structured_token *tokens;
-	uint32_t token_count;
+	uint32_t token_slot_count;
 	uint32_t token_capacity;
+	uint32_t free_token;
 	uint32_t pending_token;
-	uint8_t *projection_bytes;
-	uint8_t *projection_survived;
-	uint32_t projection_byte_count;
-	uint32_t projection_byte_capacity;
-	uint32_t projection_survived_capacity;
+	uint64_t token_total;
+	uint64_t projection_live_bytes;
+	uint64_t projection_peak_bytes;
 	struct structured_column *columns;
 	uint32_t column_count;
 	uint32_t column_capacity;
@@ -1996,15 +2002,16 @@ static void
 commit_token(struct structured_session *session, uint32_t key)
 {
 	struct structured_token *token;
+	uint8_t *projection_bytes, *projection_survived;
 	uint32_t kind;
 	uint8_t bytes[4];
 	size_t display_length, index, length;
 	int breakable;
 
-	if (key == 0 || key > session->token_count)
+	if (key == 0 || key > session->token_slot_count)
 		return;
 	token = session->tokens + key - 1;
-	if (token->committed)
+	if (!token->active || token->committed)
 		return;
 	token->committed = 1;
 	if (token->value == ASCII_NBRZW)
@@ -2064,18 +2071,119 @@ commit_token(struct structured_session *session, uint32_t key)
 	    MANT_ATOM_WHITESPACE : MANT_ATOM_TEXT;
 	breakable = kind == MANT_ATOM_WHITESPACE &&
 	    token->reason != TERM_COLLECT_KEEP_SPACE;
+	projection_bytes = token->projection_capacity == 0 ?
+	    token->projection_inline : token->projection_bytes;
+	projection_survived = token->projection_capacity == 0 ?
+	    token->projection_survived_inline : token->projection_survived;
 	display_length = 0;
-	for (index = token->projection_start;
-	    index < token->projection_start + token->projection_length; index++)
-		if (session->projection_survived[index])
-			session->projection_bytes[token->projection_start +
-			    display_length++] = session->projection_bytes[index];
+	for (index = 0; index < token->projection_length; index++)
+		if (projection_survived[index])
+			projection_bytes[display_length++] = projection_bytes[index];
 	if (append_atom(session, token->root, token->provenance, kind,
 	    token->style, token->role, token->link, bytes, length,
-	    display_length == 0 ? NULL :
-	    session->projection_bytes + token->projection_start,
+	    display_length == 0 ? NULL : projection_bytes,
 	    display_length, breakable))
 		record_link_ref(session, token->link);
+}
+
+static void
+retire_token(struct structured_session *session, uint32_t key)
+{
+	struct structured_token *token;
+	uint64_t projection_bytes;
+
+	if (key == 0 || key > session->token_slot_count ||
+	    key == session->pending_token)
+		return;
+	token = session->tokens + key - 1;
+	if (!token->active || token->live_slots != 0)
+		return;
+	projection_bytes = (uint64_t)token->projection_capacity * 2;
+	if (projection_bytes <= session->projection_live_bytes)
+		session->projection_live_bytes -= projection_bytes;
+	else
+		session->projection_live_bytes = 0;
+	free(token->projection_bytes);
+	free(token->projection_survived);
+	token->projection_bytes = NULL;
+	token->projection_survived = NULL;
+	token->projection_capacity = 0;
+	token->projection_length = 0;
+	token->active = 0;
+	token->next_free = session->free_token;
+	session->free_token = key;
+}
+
+static void
+clear_pending_token(struct structured_session *session)
+{
+	uint32_t key;
+
+	key = session->pending_token;
+	session->pending_token = 0;
+	retire_token(session, key);
+}
+
+static int
+grow_token_projection(struct structured_session *session,
+    struct structured_token *token)
+{
+	uint8_t *bytes, *survived, *old_bytes, *old_survived;
+	uint32_t maximum, new_capacity, old_capacity;
+	uint64_t live_bytes;
+
+	maximum = limit_u32(session->limits->max_content_bytes);
+	old_capacity = token->projection_capacity;
+	if (maximum <= token->projection_length) {
+		set_failure(session, MANT_STRUCTURED_BUDGET,
+		    MANT_STRUCTURED_STAGE_RENDER, 10,
+		    (uint64_t)token->projection_length + 1, maximum);
+		return 0;
+	}
+	new_capacity = old_capacity == 0 ?
+	    MANT_TOKEN_PROJECTION_INLINE * 2 : old_capacity;
+	if (new_capacity > maximum)
+		new_capacity = maximum;
+	while (new_capacity <= token->projection_length) {
+		if (new_capacity > maximum / 2) {
+			new_capacity = maximum;
+			break;
+		}
+		new_capacity *= 2;
+	}
+	if (new_capacity <= token->projection_length) {
+		set_failure(session, MANT_STRUCTURED_BUDGET,
+		    MANT_STRUCTURED_STAGE_RENDER, 10,
+		    (uint64_t)token->projection_length + 1, maximum);
+		return 0;
+	}
+	bytes = allocate(session, new_capacity, 0,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (bytes == NULL)
+		return 0;
+	survived = allocate(session, new_capacity, 0,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (survived == NULL) {
+		free(bytes);
+		return 0;
+	}
+	old_bytes = old_capacity == 0 ? token->projection_inline :
+	    token->projection_bytes;
+	old_survived = old_capacity == 0 ?
+	    token->projection_survived_inline : token->projection_survived;
+	memcpy(bytes, old_bytes, token->projection_length);
+	memcpy(survived, old_survived, token->projection_length);
+	free(token->projection_bytes);
+	free(token->projection_survived);
+	token->projection_bytes = bytes;
+	token->projection_survived = survived;
+	token->projection_capacity = new_capacity;
+	live_bytes = session->projection_live_bytes - (uint64_t)old_capacity * 2 +
+	    (uint64_t)new_capacity * 2;
+	session->projection_live_bytes = live_bytes;
+	if (session->projection_peak_bytes < live_bytes)
+		session->projection_peak_bytes = live_bytes;
+	return 1;
 }
 
 static uint32_t
@@ -2084,86 +2192,87 @@ record_projection(struct structured_session *session, uint32_t key, int value)
 	struct structured_token *token;
 	uint8_t *bytes, *survived;
 
-	if (key == 0 || key > session->token_count || value < 0 || value > 0xff) {
+	if (key == 0 || key > session->token_slot_count || value < 0 ||
+	    value > 0xff || !session->tokens[key - 1].active) {
 		set_failure(session, MANT_STRUCTURED_RELATION,
-		    MANT_STRUCTURED_STAGE_RENDER, 0, key, session->token_count);
+		    MANT_STRUCTURED_STAGE_RENDER, 0, key,
+		    session->token_slot_count);
 		return 0;
 	}
 	token = session->tokens + key - 1;
-	if (token->projection_length == 0)
-		token->projection_start = session->projection_byte_count;
-	else if (token->projection_start + token->projection_length !=
-	    session->projection_byte_count) {
-		set_failure(session, MANT_STRUCTURED_RELATION,
-		    MANT_STRUCTURED_STAGE_RENDER, 0,
-		    token->projection_start + token->projection_length,
-		    session->projection_byte_count);
-		return 0;
+	if (token->projection_length == MANT_TOKEN_PROJECTION_INLINE ||
+	    (token->projection_capacity != 0 &&
+	    token->projection_length == token->projection_capacity)) {
+		if (!grow_token_projection(session, token))
+			return 0;
 	}
-	bytes = grow_array(session, session->projection_bytes,
-	    session->projection_byte_count, &session->projection_byte_capacity,
-	    limit_u32(session->limits->max_content_bytes), sizeof(*bytes),
-	    session->limits->max_builder_allocated_bytes, 10,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (bytes == NULL)
-		return 0;
-	session->projection_bytes = bytes;
-	survived = grow_array(session, session->projection_survived,
-	    session->projection_byte_count, &session->projection_survived_capacity,
-	    limit_u32(session->limits->max_content_bytes), sizeof(*survived),
-	    session->limits->max_builder_allocated_bytes, 10,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (survived == NULL)
-		return 0;
-	session->projection_survived = survived;
-	bytes[session->projection_byte_count] = (uint8_t)value;
-	survived[session->projection_byte_count] = 0;
-	session->projection_byte_count++;
+	bytes = token->projection_capacity == 0 ? token->projection_inline :
+	    token->projection_bytes;
+	survived = token->projection_capacity == 0 ?
+	    token->projection_survived_inline : token->projection_survived;
+	bytes[token->projection_length] = (uint8_t)value;
+	survived[token->projection_length] = 0;
 	token->projection_length++;
-	return session->projection_byte_count;
+	return token->projection_length;
 }
 
 static void
 discard_slot(struct structured_session *session, struct structured_slot *slot)
 {
 	struct structured_token *token;
+	uint8_t *survived;
+	uint32_t key;
 
-	if (slot->token != 0 && slot->token <= session->token_count) {
-		token = session->tokens + slot->token - 1;
+	key = slot->token;
+	if (key != 0 && key <= session->token_slot_count &&
+	    session->tokens[key - 1].active) {
+		token = session->tokens + key - 1;
+		survived = token->projection_capacity == 0 ?
+		    token->projection_survived_inline :
+		    token->projection_survived;
+		if (slot->projection != 0 &&
+		    slot->projection <= token->projection_length)
+			survived[slot->projection - 1] = 0;
 		if (token->live_slots != 0)
 			token->live_slots--;
 		if (token->live_slots == 0 && token->survived)
-			commit_token(session, slot->token);
+			commit_token(session, key);
 	}
-	if (slot->projection != 0 &&
-	    slot->projection <= session->projection_byte_count)
-		session->projection_survived[slot->projection - 1] = 0;
 	slot->token = 0;
 	slot->projection = 0;
+	retire_token(session, key);
 }
 
 static void
 consume_slot(struct structured_session *session, struct structured_slot *slot)
 {
 	struct structured_token *token;
+	uint8_t *survived;
 	uint32_t key;
 
 	key = slot->token;
-	if (key == 0 || key > session->token_count) {
+	if (key == 0 || key > session->token_slot_count ||
+	    !session->tokens[key - 1].active) {
 		discard_slot(session, slot);
 		return;
 	}
 	token = session->tokens + key - 1;
 	token->survived = 1;
 	if (slot->projection != 0 &&
-	    slot->projection <= session->projection_byte_count)
-		session->projection_survived[slot->projection - 1] = 1;
+	    slot->projection <= token->projection_length) {
+		survived = token->projection_capacity == 0 ?
+		    token->projection_survived_inline :
+		    token->projection_survived;
+
+		survived[slot->projection - 1] = 1;
+	}
 	if (token->live_slots != 0)
 		token->live_slots--;
 	slot->token = 0;
 	slot->projection = 0;
 	if (token->live_slots == 0)
 		commit_token(session, key);
+	retire_token(session, key);
 }
 
 static void
@@ -2173,10 +2282,11 @@ collect_logical(struct structured_session *session,
 	const struct roff_node *node;
 	struct structured_token *tokens, *token;
 	uint32_t provenance;
+	uint32_t key;
 	int heading, authored;
 
+	clear_pending_token(session);
 	if (session->output_depth != 0) {
-		session->pending_token = 0;
 		return;
 	}
 	node = collector_node(session, event);
@@ -2197,16 +2307,24 @@ collect_logical(struct structured_session *session,
 	    session->limits->max_annotation_mutations, 29,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return;
-	tokens = grow_array(session, session->tokens, session->token_count,
-	    &session->token_capacity,
-	    limit_u32(session->limits->max_annotation_mutations),
-	    sizeof(*tokens), session->limits->max_builder_allocated_bytes, 29,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (tokens == NULL)
-		return;
-	session->tokens = tokens;
-	token = tokens + session->token_count;
+	if (session->free_token != 0) {
+		key = session->free_token;
+		token = session->tokens + key - 1;
+		session->free_token = token->next_free;
+	} else {
+		tokens = grow_array(session, session->tokens,
+		    session->token_slot_count, &session->token_capacity,
+		    limit_u32(session->limits->max_annotation_mutations),
+		    sizeof(*tokens), session->limits->max_builder_allocated_bytes,
+		    29, MANT_STRUCTURED_STAGE_RENDER);
+		if (tokens == NULL)
+			return;
+		session->tokens = tokens;
+		key = ++session->token_slot_count;
+		token = tokens + key - 1;
+	}
 	memset(token, 0, sizeof(*token));
+	token->active = 1;
 	token->node = node;
 	token->provenance = provenance;
 	token->root = session->current_root;
@@ -2228,7 +2346,9 @@ collect_logical(struct structured_session *session,
 	}
 	token->value = event->value;
 	token->reason = event->reason;
-	session->pending_token = ++session->token_count;
+	session->pending_token = key;
+	if (session->token_total != UINT64_MAX)
+		session->token_total++;
 }
 
 static struct structured_column *
@@ -2432,6 +2552,7 @@ observe_terminal(struct termp *p, void *arg,
 	}
 	if (event->op == TERM_COLLECT_DIRECT) {
 		commit_token(session, session->pending_token);
+		clear_pending_token(session);
 		return;
 	}
 	if (event->op == TERM_COLLECT_BUFFER_TRUNCATE ||
@@ -2477,7 +2598,7 @@ observe_terminal(struct termp *p, void *arg,
 				discard_slot(session, column->slots + index);
 		}
 		if (event->op == TERM_COLLECT_BUFFER_RESET)
-			session->pending_token = 0;
+			clear_pending_token(session);
 		return;
 	}
 	if (event->op != TERM_COLLECT_ENDLINE)
@@ -2719,8 +2840,7 @@ cleanup:
 		    sizeof(*session.node_stack) +
 		    (uint64_t)session.token_capacity * sizeof(*session.tokens) +
 		    (uint64_t)session.column_capacity * sizeof(*session.columns) +
-		    session.projection_byte_capacity +
-		    session.projection_survived_capacity;
+		    session.projection_peak_bytes;
 		if (slots == UINT64_MAX || slots >
 		    (UINT64_MAX - sidecar_bytes) / sizeof(struct structured_slot))
 			sidecar_bytes = UINT64_MAX;
@@ -2730,7 +2850,7 @@ cleanup:
 		session.probe->content_bytes = session.content_bytes;
 		session.probe->source_count = result == NULL ? 0 :
 		    result->source_count;
-		session.probe->token_count = session.token_count;
+		session.probe->token_count = session.token_total;
 		session.probe->slot_capacity = slots;
 		session.probe->sidecar_allocated_bytes = sidecar_bytes;
 	}
@@ -2754,9 +2874,11 @@ cleanup:
 	for (uint32_t column = 0; column < session.column_count; column++)
 		free(session.columns[column].slots);
 	free(session.columns);
+	for (uint32_t token = 0; token < session.token_slot_count; token++) {
+		free(session.tokens[token].projection_bytes);
+		free(session.tokens[token].projection_survived);
+	}
 	free(session.tokens);
-	free(session.projection_bytes);
-	free(session.projection_survived);
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;
 	structured_active = 0;

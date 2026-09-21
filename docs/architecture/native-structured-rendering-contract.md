@@ -59,14 +59,16 @@ and Git fixtures, a warmed release build, UTF-8 profile, and native width 78.
 Each test performs one warm-up traversal followed by ten measured traversals;
 the metrics are deterministic across those ten traversals.  GCC reports
 6,416,335 collector events, 1,232,413 tokens, 16,384 sidecar slots,
-117,571,904 sidecar bytes, and 170,612,387 cumulative builder-allocation
-bytes; the complete test took 2.41 seconds wall time with 137,792 KiB peak
-RSS.  Git reports 287,477 events, 54,832 tokens, 1,024 sidecar slots,
-3,678,528 sidecar bytes, and 5,512,427 cumulative builder-allocation bytes;
-it took 0.17 seconds with 51,748 KiB peak RSS.  These are local workset
-evidence, not release thresholds or claims that unsupported structures loaded
-successfully.  The commands are the two ignored
-`ffi::structured::tests::probe_{gcc,git}_sidecar_workset` tests under
+917,824 sidecar bytes, and 53,958,307 cumulative builder-allocation bytes; a
+warmed complete test took 2.29 seconds wall time with 68,712 KiB peak RSS.
+Git reports 287,477 events, 54,832 tokens, 1,024 sidecar slots, 106,816
+sidecar bytes, and 1,940,715 cumulative builder-allocation bytes; it took 0.17
+seconds with 51,504 KiB peak RSS.  Token counts remain cumulative work
+accounting, while sidecar storage now tracks the reusable active-buffer high
+water rather than retaining the token history.  These are local workset
+evidence and a structural regression guard, not release thresholds or claims
+that unsupported structures loaded successfully.  The commands are the two
+ignored `ffi::structured::tests::probe_{gcc,git}_sidecar_workset` tests under
 `/usr/bin/time -v cargo test --release -p libmandoc-rs --all-features`.
 
 ## Authority and difference ledger
@@ -1092,6 +1094,13 @@ and logical token identity. `term_setcol()` grows the sidecar array with
 `tcols[]`, switching `p->tcol` selects the matching sidecar, and `adjbuf()`
 growth preserves slot alignment. Table columns can therefore retain independent
 suffixes across physical lines.
+
+Logical-token keys address stable reusable slots. A token remains live while
+it is the pending logical write or any column slot references it; once neither
+condition holds, its projection bytes are released and the slot enters a free
+list. Cumulative token/mutation/allocation counters remain monotonic, but the
+allocated annotation workset is bounded by active native buffers rather than
+the complete execution history.
 
 Every accepted buffer write reports one disposition to the sidecar:
 
