@@ -12,8 +12,9 @@ pub use body::{render_query_man, render_query_text, render_query_text_with};
 pub use excerpt::{render_excerpt_text, render_excerpt_text_with};
 
 #[cfg(test)]
-fn plain_renderer() -> blocks::BlockRenderer<'static> {
+fn plain_renderer<'a>() -> blocks::BlockRenderer<'a> {
     blocks::BlockRenderer {
+        content: None,
         locations: None,
         names: None,
         decorate: &|_, text| text.to_owned(),

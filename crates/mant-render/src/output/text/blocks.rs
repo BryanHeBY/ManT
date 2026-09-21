@@ -2,24 +2,31 @@
 //! Decorators must preserve visible content and boundary whitespace.
 use super::flow::Flow;
 use super::indent_lines;
-use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
+use crate::presentation::{
+    EntryStyleMap, TextPresentation, TextRole, visit_inline_text, visit_inline_text_with,
+};
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
-use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
+use mant_ir::{
+    Block, ContentContext, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell,
+};
 
 mod lists;
 
 pub(super) struct BlockRenderer<'a> {
+    // Response-local explanation/excerpt DTOs do not carry ContentProjection
+    // yet. Full documents always supply their authoritative context.
+    pub(super) content: Option<ContentContext<'a>>,
     pub(super) names: Option<EntryStyleMap<'a>>,
     pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
     pub(super) locations: Option<&'a super::super::styles::LocatedStyles<'a>>,
 }
 
-impl BlockRenderer<'_> {
+impl<'a> BlockRenderer<'a> {
     pub(super) fn paint(&self, role: TextRole, text: &str) -> String {
         (self.decorate)(role.into(), text)
     }
 
-    pub(super) fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
+    pub(super) fn inline_text(&self, children: &'a [Inline], role: TextRole) -> String {
         if let Some(locations) = self.locations {
             return locations.inline(children, role, self.decorate);
         }
@@ -28,7 +35,7 @@ impl BlockRenderer<'_> {
             .names
             .as_ref()
             .map_or(&[][..], |map| map.ranges(children));
-        visit_inline_text(children, names, |inline, _, value| {
+        let mut emit = |inline, _, value| {
             text.push_str(&(self.decorate)(
                 TextPresentation {
                     role,
@@ -37,11 +44,19 @@ impl BlockRenderer<'_> {
                 },
                 value,
             ));
-        });
+        };
+        if let Some(content) = self.content {
+            visit_inline_text_with(content, children, names, &mut emit)
+                .expect("validated document content must resolve while rendering");
+        } else {
+            // Transitional compatibility for DTO fragments until their
+            // response envelope carries the required ContentProjection.
+            visit_inline_text(children, names, &mut emit);
+        }
         text
     }
 
-    pub(super) fn sections_flow(&self, sections: &[Section], depth: usize) -> Flow {
+    pub(super) fn sections_flow(&self, sections: &'a [Section], depth: usize) -> Flow {
         let mut output = Flow::default();
         for section in sections {
             output.extend(self.section_flow(section, depth));
@@ -49,11 +64,11 @@ impl BlockRenderer<'_> {
         output
     }
 
-    pub(super) fn render_section(&self, section: &Section, depth: usize) -> String {
+    pub(super) fn render_section(&self, section: &'a Section, depth: usize) -> String {
         self.section_flow(section, depth).finish(false)
     }
 
-    fn section_flow(&self, section: &Section, depth: usize) -> Flow {
+    fn section_flow(&self, section: &'a Section, depth: usize) -> Flow {
         let heading_indent = "  ".repeat(depth);
         let mut output = Flow::default();
         output.gap(section.spacing_before_lines);
@@ -66,13 +81,13 @@ impl BlockRenderer<'_> {
         output
     }
 
-    pub(super) fn render_blocks(&self, blocks: &[Block], base_indent: i32) -> String {
+    pub(super) fn render_blocks(&self, blocks: &'a [Block], base_indent: i32) -> String {
         self.render_block_sequence(blocks, base_indent, None)
     }
 
     pub(super) fn render_block_sequence(
         &self,
-        blocks: &[Block],
+        blocks: &'a [Block],
         base_indent: i32,
         leading_gap: Option<usize>,
     ) -> String {
@@ -80,7 +95,7 @@ impl BlockRenderer<'_> {
             .finish(leading_gap.is_some())
     }
 
-    pub(super) fn block_flow(&self, blocks: &[Block], base_indent: i32) -> Flow {
+    pub(super) fn block_flow(&self, blocks: &'a [Block], base_indent: i32) -> Flow {
         let mut output = Flow::default();
         for block in blocks {
             output.gap(mant_ir::geometry::block_gap(block));
@@ -89,7 +104,7 @@ impl BlockRenderer<'_> {
         output
     }
 
-    fn render_block(&self, block: &Block, base_indent: i32) -> Flow {
+    fn render_block(&self, block: &'a Block, base_indent: i32) -> Flow {
         // Literal newlines and whitespace are content, not layout requests.
         // They must survive even when the entire block contains only blanks.
         if let Block::Preformatted {
@@ -202,11 +217,11 @@ impl BlockRenderer<'_> {
         }
     }
 
-    fn cell_text(&self, cell: &TableCell) -> String {
+    fn cell_text(&self, cell: &'a TableCell) -> String {
         self.render_blocks(&cell.blocks, 0)
     }
 
-    fn table_flow(&self, rows: &[mant_ir::TableRow], origin: i32) -> Flow {
+    fn table_flow(&self, rows: &'a [mant_ir::TableRow], origin: i32) -> Flow {
         if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
             return self.stacked_table_flow(rows, origin);
         }
@@ -226,7 +241,7 @@ impl BlockRenderer<'_> {
         }
     }
 
-    fn stacked_table_flow(&self, rows: &[mant_ir::TableRow], origin: i32) -> Flow {
+    fn stacked_table_flow(&self, rows: &'a [mant_ir::TableRow], origin: i32) -> Flow {
         let mut output = Flow::default();
         for row in rows {
             match &row.kind {

@@ -4,11 +4,11 @@ use super::{
     coordinate, indent_lines, marker_run_in_gap, padding, text_width,
 };
 
-impl BlockRenderer<'_> {
+impl<'a> BlockRenderer<'a> {
     pub(super) fn render_list(
         &self,
         kind: ListKind,
-        items: &[ListItem],
+        items: &'a [ListItem],
         compact: bool,
         base_indent: i32,
     ) -> Flow {
@@ -56,7 +56,7 @@ impl BlockRenderer<'_> {
 
     pub(super) fn render_definitions(
         &self,
-        items: &[DefinitionItem],
+        items: &'a [DefinitionItem],
         compact: bool,
         base_indent: i32,
     ) -> Flow {
@@ -72,7 +72,7 @@ impl BlockRenderer<'_> {
         output
     }
 
-    fn render_definition(&self, item: &DefinitionItem, origin: i32) -> Flow {
+    fn render_definition(&self, item: &'a DefinitionItem, origin: i32) -> Flow {
         let body_origin = compose_origin(origin, item.layout.body_indent_columns);
         let mut terms = item
             .terms

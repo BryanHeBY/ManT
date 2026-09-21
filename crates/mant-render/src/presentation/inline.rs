@@ -1,6 +1,6 @@
 //! Borrowed source markup and semantic decoration, independent of line layout.
 use super::InlineNameRange;
-use mant_ir::{EntryKind, Inline, LinkTarget};
+use mant_ir::{ContentContext, ContentReadError, EntryKind, Inline, InlineView, LinkTarget};
 
 /// Orthogonal source modifiers and an optional validated name role.
 /// No colors, terminal state, query matching or persistent IR are stored here.
@@ -60,6 +60,127 @@ pub fn visit_inline_text<'a>(
         &mut cursor,
         &mut emit,
     );
+}
+
+/// Visit original visible text through its authoritative content context.
+///
+/// This is the store-backed counterpart of [`visit_inline_text`]. New
+/// document and projection consumers should use this entry point so inline
+/// leaves and link metadata never need to be read from their storage shape.
+///
+/// # Errors
+///
+/// Returns [`ContentReadError`] when any retained inline node does not resolve
+/// in the supplied content store.
+pub fn visit_inline_text_with<'store>(
+    content: ContentContext<'store>,
+    nodes: &'store [Inline],
+    names: &[InlineNameRange],
+    mut emit: impl FnMut(InlinePresentation, Option<&'store LinkTarget>, &'store str),
+) -> Result<(), ContentReadError> {
+    let length = if names.is_empty() {
+        0
+    } else {
+        content.scalar_len(nodes)?
+    };
+    let names = if names
+        .iter()
+        .all(|name| name.chars.start < name.chars.end && name.chars.end <= length)
+        && names
+            .windows(2)
+            .all(|pair| pair[0].chars.end <= pair[1].chars.start)
+    {
+        names
+    } else {
+        &[]
+    };
+    let mut cursor = 0;
+    walk_with(
+        content,
+        nodes,
+        InlinePresentation::default(),
+        None,
+        names,
+        &mut cursor,
+        &mut emit,
+    )
+}
+
+fn walk_with<'store>(
+    content: ContentContext<'store>,
+    nodes: &'store [Inline],
+    style: InlinePresentation,
+    target: Option<&'store LinkTarget>,
+    names: &[InlineNameRange],
+    cursor: &mut usize,
+    emit: &mut impl FnMut(InlinePresentation, Option<&'store LinkTarget>, &'store str),
+) -> Result<(), ContentReadError> {
+    for node in nodes {
+        match content.inline(node)? {
+            InlineView::Text(value) => text(value, style, target, names, cursor, emit),
+            InlineView::Code(value) => text(
+                value,
+                InlinePresentation {
+                    code: true,
+                    ..style
+                },
+                target,
+                names,
+                cursor,
+                emit,
+            ),
+            InlineView::Strong(children) => walk_with(
+                content,
+                children,
+                InlinePresentation {
+                    strong: true,
+                    ..style
+                },
+                target,
+                names,
+                cursor,
+                emit,
+            )?,
+            InlineView::Emphasis(children) => walk_with(
+                content,
+                children,
+                InlinePresentation {
+                    emphasis: true,
+                    ..style
+                },
+                target,
+                names,
+                cursor,
+                emit,
+            )?,
+            InlineView::Link(link) => walk_with(
+                content,
+                link.children(),
+                InlinePresentation {
+                    link: true,
+                    ..style
+                },
+                Some(link.target()),
+                names,
+                cursor,
+                emit,
+            )?,
+            InlineView::LineBreak => text(
+                "\n",
+                InlinePresentation {
+                    structural_break: true,
+                    ..style
+                },
+                target,
+                names,
+                cursor,
+                emit,
+            ),
+            InlineView::Anchor(_) => {}
+            _ => return Err(ContentReadError),
+        }
+    }
+    Ok(())
 }
 
 fn walk<'a>(
@@ -189,6 +310,34 @@ fn text<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn document_with_nested_markup() -> mant_ir::Document {
+        serde_json::from_value(serde_json::json!({
+            "sources": [{
+                "key": 1,
+                "identity": {"kind": "anonymous", "name": "test"},
+                "format": "markdown",
+                "decodedByteLength": 0,
+                "coordinates": {"kind": "decoded-utf8-bytes"}
+            }],
+            "rootSource": 1,
+            "meta": {},
+            "heading": {"content": [{
+                "type": "emphasis",
+                "children": [{
+                    "type": "link",
+                    "target": {"kind": "external", "uri": "https://example.test"},
+                    "children": [{
+                        "type": "strong",
+                        "children": [{"type": "code", "value": "é名 rest"}]
+                    }]
+                }]
+            }]},
+            "sections": []
+        }))
+        .expect("valid test document")
+    }
+
     #[test]
     fn nested_markup_and_split_name_remain_orthogonal() {
         let nodes = [Inline::Emphasis {
@@ -215,6 +364,31 @@ mod tests {
                 spans.push((style, link.is_some(), text.to_owned()));
             },
         );
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].2, "é名");
+        assert_eq!(spans[0].0.entry_kind, Some(EntryKind::Command));
+        assert_eq!(spans[1].0.entry_kind, None);
+        for (style, link, _) in spans {
+            assert!(style.strong && style.emphasis && style.code && style.link && link);
+        }
+    }
+
+    #[test]
+    fn contextual_visit_preserves_nested_roles_and_borrowed_link_target() {
+        let document = document_with_nested_markup();
+        let nodes = &document.heading.as_ref().expect("heading").content;
+        let mut spans = Vec::new();
+        visit_inline_text_with(
+            document.content(),
+            nodes,
+            &[InlineNameRange {
+                chars: 0..2,
+                kind: EntryKind::Command,
+            }],
+            |style, link, text| spans.push((style, link.is_some(), text.to_owned())),
+        )
+        .expect("document content resolves");
+
         assert_eq!(spans.len(), 2);
         assert_eq!(spans[0].2, "é名");
         assert_eq!(spans[0].0.entry_kind, Some(EntryKind::Command));

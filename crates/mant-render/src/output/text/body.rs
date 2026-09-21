@@ -10,6 +10,7 @@ pub(in crate::output) fn render_located_blocks<'a>(
     decorate: &'a dyn Fn(TextPresentation, &str) -> String,
 ) -> String {
     blocks::BlockRenderer {
+        content: None,
         names: None,
         locations: Some(locations),
         decorate,
@@ -62,26 +63,33 @@ fn render_query_body_with(
         .document
         .as_ref()
         .and_then(|document| document.meta.manual_section.as_deref());
-    let title = query
-        .document
-        .as_ref()
-        .and_then(|document| document.heading.as_ref())
-        .map_or_else(
-            || {
-                decorate(
-                    TextRole::Document.into(),
-                    &document_label(&query.label, section),
-                )
-            },
-            |heading| {
-                blocks::BlockRenderer {
-                    names: None,
-                    decorate,
-                    locations: None,
-                }
-                .inline_text(&heading.content, TextRole::Document)
-            },
-        );
+    let title = query.document.as_ref().map_or_else(
+        || {
+            decorate(
+                TextRole::Document.into(),
+                &document_label(&query.label, section),
+            )
+        },
+        |document| {
+            document.heading.as_ref().map_or_else(
+                || {
+                    decorate(
+                        TextRole::Document.into(),
+                        &document_label(&query.label, section),
+                    )
+                },
+                |heading| {
+                    blocks::BlockRenderer {
+                        content: Some(document.content()),
+                        names: None,
+                        decorate,
+                        locations: None,
+                    }
+                    .inline_text(&heading.content, TextRole::Document)
+                },
+            )
+        },
+    );
     let mut output = flow::Flow::text(title);
     if include_tldr && let Some(tldr) = &query.tldr {
         output.gap(1);
@@ -89,6 +97,7 @@ fn render_query_body_with(
     }
     if let Some(document) = &query.document {
         let renderer = blocks::BlockRenderer {
+            content: Some(document.content()),
             names: styled.then(|| EntryStyleMap::for_document(document)),
             decorate,
             locations: None,
