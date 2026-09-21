@@ -18,8 +18,9 @@ uint32_t mant_structured_append_block(struct structured_session *, uint32_t,
     uint32_t, uint32_t, uint32_t, uint32_t);
 int mant_structured_open_content_root(struct structured_session *, int,
     uint32_t);
-int mant_structured_finalize_term_root(struct structured_session *, uint32_t,
+int mant_structured_close_term_root(struct structured_session *, uint32_t,
     uint32_t);
+int mant_structured_finish_term_roots(struct structured_session *);
 int mant_structured_append_atom(struct structured_session *, uint32_t,
     uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, const uint8_t *,
     size_t, const uint8_t *, size_t, int);

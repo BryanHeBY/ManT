@@ -757,6 +757,31 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 	}
 }
 
+int
+mant_structured_buffer_is_settled(const struct structured_session *session)
+{
+	const struct structured_column *column;
+	uint32_t column_index, slot, token;
+
+	if (session->node_depth != 0 || session->output_depth != 0 ||
+	    session->pending_token != 0 || session->pending_break_root != 0)
+		return 0;
+	for (token = 0; token < session->token_slot_count; token++)
+		if (session->tokens[token].active != 0)
+			return 0;
+	for (column_index = 0; column_index < session->column_count;
+	    column_index++) {
+		column = session->columns + column_index;
+		if (column->partial_pending != 0)
+			return 0;
+		for (slot = 0; slot < column->capacity; slot++)
+			if (column->slots[slot].token != 0 ||
+			    column->slots[slot].projection != 0)
+				return 0;
+	}
+	return 1;
+}
+
 void
 mant_structured_buffer_release(struct structured_session *session,
     const struct mant_structured_result *result)

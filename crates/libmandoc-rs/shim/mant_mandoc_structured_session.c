@@ -338,10 +338,14 @@ mant_structured_render(const struct mant_structured_input_view *input,
 			    mant_mandoc_output_length(output);
 		mant_mandoc_output_free(output);
 		output = NULL;
-		if (session.probe == NULL && session.pending_break_root != 0 &&
-		    session.status == MANT_STRUCTURED_OK)
-			mant_structured_set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
-			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+		if (session.status == MANT_STRUCTURED_OK) {
+			if (!mant_structured_buffer_is_settled(&session))
+				mant_structured_set_failure(&session,
+				    MANT_STRUCTURED_RELATION,
+				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+			else
+				mant_structured_finish_term_roots(&session);
+		}
 		if (session.status != MANT_STRUCTURED_OK)
 			goto native_cleanup;
 	}

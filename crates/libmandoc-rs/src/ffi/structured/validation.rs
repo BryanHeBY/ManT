@@ -476,11 +476,11 @@ pub(super) fn validate_structured_relations(
     {
         return Err(relation_error());
     }
-    let mut term_roots = Vec::new();
-    term_roots
+    let mut term_root_evidence = Vec::new();
+    term_root_evidence
         .try_reserve_exact(slices.content_roots.len())
         .map_err(alloc_error)?;
-    term_roots.resize(slices.content_roots.len(), false);
+    term_root_evidence.resize(slices.content_roots.len(), 0_u8);
     for (index, form) in slices.forms.iter().enumerate() {
         let start = form.first_ref.checked_sub(1).map(|first| first as usize);
         let end = start.and_then(|start| start.checked_add(form.ref_count as usize));
@@ -507,15 +507,25 @@ pub(super) fn validate_structured_relations(
             form_root = Some(root_index);
         }
         let form_root = form_root.ok_or_else(relation_error)?;
-        term_roots[form_root] = true;
+        term_root_evidence[form_root] |= 1;
     }
-    if slices
-        .content_roots
-        .iter()
-        .enumerate()
-        .any(|(index, root)| (root.kind == ROOT_TERM) != term_roots[index])
-    {
-        return Err(relation_error());
+    for atom in slices.content_atoms {
+        let root_index = atom.root as usize - 1;
+        if atom.kind == ATOM_TEXT && slices.content_roots[root_index].kind == ROOT_TERM {
+            term_root_evidence[root_index] |= 2;
+        }
+    }
+    for (index, root) in slices.content_roots.iter().enumerate() {
+        if root.kind == ROOT_TERM {
+            let owner_index = root.owner as usize - 1;
+            if term_root_evidence[index] & 1 == 0
+                && (term_root_evidence[index] & 2 != 0 || !item_owners[owner_index])
+            {
+                return Err(relation_error());
+            }
+        } else if term_root_evidence[index] != 0 {
+            return Err(relation_error());
+        }
     }
     let mut previous_hint_form = 0_u32;
     for (index, hint) in slices.name_hints.iter().enumerate() {

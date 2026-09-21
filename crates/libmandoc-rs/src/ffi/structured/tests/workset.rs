@@ -31,6 +31,35 @@ fn collector_reuses_retired_ascii_projection_state() {
 }
 
 #[test]
+fn probe_accounts_for_deferred_term_finalization() {
+    // This exact TP/TQ source was run through the pinned UTF-8/78 reference
+    // first. Both heads are formatter-executed declarations, so the probe
+    // must exercise the same two-form finalization budget as production.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "probe-forms.1",
+            b".TH X 1\n.SH OPTIONS\n.TP\n.B --one\n.TQ\n.B --two\nBODY\n".to_vec(),
+        )
+        .unwrap();
+    let mut limits = Limits {
+        max_forms: 1,
+        ..Limits::default()
+    };
+
+    let error = probe_structured("probe-forms.1", &bundle, InputFormat::Man, 78, &limits)
+        .expect_err("probe must not skip deferred form construction");
+    assert_eq!(error.status, STATUS_BUDGET);
+    assert_eq!(error.stage, 4);
+    assert_eq!(error.limit_kind, 24);
+    assert_eq!((error.observed, error.allowed), (2, 1));
+
+    limits.max_forms = 2;
+    probe_structured("probe-forms.1", &bundle, InputFormat::Man, 78, &limits)
+        .expect("probe accepts the exact completed form budget");
+}
+
+#[test]
 #[ignore = "measurement probe: run in release mode under /usr/bin/time -v"]
 fn probe_gcc_sidecar_workset() {
     run_real_fixture_probe("gcc.1.gz", "gcc.1");

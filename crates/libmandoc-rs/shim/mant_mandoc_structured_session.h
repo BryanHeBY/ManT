@@ -35,11 +35,15 @@ struct structured_node_context {
 struct structured_root_atoms {
 	/*
 	 * Formatter head execution emits each term root as one atom interval.
-	 * Finalization validates that interval before using it; body roots keep
-	 * the same bookkeeping but do not otherwise depend on contiguity.
+	 * Finalization validates that interval after the formatter has drained;
+	 * body roots keep the same bookkeeping but do not otherwise depend on
+	 * contiguity.  A closed term can legitimately contain no visible atoms.
 	 */
 	uint32_t first;
 	uint32_t count;
+	uint32_t item;
+	uint8_t closed;
+	uint8_t finalized;
 };
 
 struct structured_session {

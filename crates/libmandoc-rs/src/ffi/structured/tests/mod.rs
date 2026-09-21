@@ -6,6 +6,7 @@ use std::{ffi::c_void, ptr::NonNull};
 
 mod abi;
 mod content;
+mod list_lifecycle;
 mod lists;
 mod resources;
 mod source;

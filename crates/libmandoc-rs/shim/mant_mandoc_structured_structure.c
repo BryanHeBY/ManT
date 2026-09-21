@@ -515,7 +515,7 @@ mant_structured_leave_node(struct structured_session *session,
 	context = mant_structured_current_context(session);
 	if (context != NULL && node != NULL && node->type == ROFFT_HEAD &&
 	    context->part == STRUCTURED_PART_TERM && context->term_root != 0)
-		mant_structured_finalize_term_root(session, context->term_root,
+		mant_structured_close_term_root(session, context->term_root,
 		    context->item);
 	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MDOC_Bl)
 		session->pending_item_target = NULL;

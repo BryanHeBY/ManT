@@ -294,8 +294,8 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 		return 0;
 	session->root_atoms = root_atoms;
 	root_atoms += session->result->content_root_count;
+	memset(root_atoms, 0, sizeof(*root_atoms));
 	root_atoms->first = UINT32_MAX;
-	root_atoms->count = 0;
 	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER) ||
@@ -325,6 +325,8 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 		session->section_heading_block = block;
 	} else if (root_kind == MANT_ROOT_TERM && context != NULL) {
 		uint32_t index;
+
+		root_atoms->item = context->item;
 		for (index = session->node_depth; index > 0; index--)
 			if (session->node_contexts[index - 1].item == context->item &&
 			    session->node_contexts[index - 1].part ==
@@ -479,8 +481,8 @@ append_term_form(struct structured_session *session, uint32_t root_key,
 	    run_first, run_count, form->provenance);
 }
 
-int
-mant_structured_finalize_term_root(struct structured_session *session,
+static int
+finalize_term_root(struct structured_session *session,
     uint32_t root_key, uint32_t item_key)
 {
 	const struct mant_structured_content_atom_view *atom;
@@ -529,6 +531,69 @@ mant_structured_finalize_term_root(struct structured_session *session,
 		segment_content = 0;
 	}
 	return append_term_form(session, root_key, item_key, begin, end);
+}
+
+int
+mant_structured_close_term_root(struct structured_session *session,
+    uint32_t root_key, uint32_t item_key)
+{
+	struct structured_root_atoms *state;
+	const struct mant_structured_content_root_view *root;
+	const struct mant_structured_item_view *item;
+
+	if (root_key == 0 || root_key > session->result->content_root_count ||
+	    item_key == 0 || item_key > session->result->item_count) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, root_key, item_key);
+		return 0;
+	}
+	state = session->root_atoms + root_key - 1;
+	root = session->result->content_roots + root_key - 1;
+	item = session->result->items + item_key - 1;
+	if (root->kind != MANT_ROOT_TERM || state->item != item_key ||
+	    root->owner != item->owner || state->closed != 0) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, root_key, item_key);
+		return 0;
+	}
+	state->closed = 1;
+	return 1;
+}
+
+int
+mant_structured_finish_term_roots(struct structured_session *session)
+{
+	const struct mant_structured_content_root_view *root;
+	struct structured_root_atoms *state;
+	uint32_t index, key;
+
+	for (index = 0; index < session->result->content_root_count; index++) {
+		key = index + 1;
+		root = session->result->content_roots + index;
+		state = session->root_atoms + index;
+		if (root->kind != MANT_ROOT_TERM) {
+			if (state->item != 0 || state->closed != 0 ||
+			    state->finalized != 0) {
+				mant_structured_set_failure(session,
+				    MANT_STRUCTURED_RELATION,
+				    MANT_STRUCTURED_STAGE_RENDER, 0, key, 0);
+				return 0;
+			}
+			continue;
+		}
+		if (state->item == 0 || state->closed == 0 ||
+		    state->finalized != 0 ||
+		    !finalize_term_root(session, key, state->item)) {
+			if (session->status == MANT_STRUCTURED_OK)
+				mant_structured_set_failure(session,
+				    MANT_STRUCTURED_RELATION,
+				    MANT_STRUCTURED_STAGE_RENDER, 0, key,
+				    state->item);
+			return 0;
+		}
+		state->finalized = 1;
+	}
+	return 1;
 }
 
 int

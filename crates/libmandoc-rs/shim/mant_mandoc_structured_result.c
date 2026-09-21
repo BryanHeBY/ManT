@@ -37,6 +37,24 @@ allocation_fits(uint32_t count, size_t item_size)
 }
 
 static int
+owner_has_item(const struct mant_structured_result *result, uint32_t owner)
+{
+	uint32_t begin, end, middle;
+
+	begin = 0;
+	end = result->item_count;
+	while (begin < end) {
+		middle = begin + (end - begin) / 2;
+		if (result->items[middle].owner < owner)
+			begin = middle + 1;
+		else
+			end = middle;
+	}
+	return begin < result->item_count &&
+	    result->items[begin].owner == owner;
+}
+
+static int
 prepare_validation_scratch(const struct mant_structured_result *result,
     struct structured_session *session)
 {
@@ -551,10 +569,22 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 			return 0;
 		result->validation_roots[form_root - 1] = 1;
 	}
-	for (i = 0; i < result->content_root_count; i++)
-		if ((result->content_roots[i].kind == MANT_ROOT_TERM) !=
-		    (result->validation_roots[i] == 1))
+	for (i = 0; i < result->content_atom_count; i++) {
+		atom = result->content_atoms + i;
+		if (atom->kind == MANT_ATOM_TEXT &&
+		    result->content_roots[atom->root - 1].kind == MANT_ROOT_TERM)
+			result->validation_roots[atom->root - 1] |= 2;
+	}
+	for (i = 0; i < result->content_root_count; i++) {
+		root = result->content_roots + i;
+		if (root->kind == MANT_ROOT_TERM) {
+			if ((result->validation_roots[i] & 1) == 0 &&
+			    ((result->validation_roots[i] & 2) != 0 ||
+			    !owner_has_item(result, root->owner)))
+				return 0;
+		} else if (result->validation_roots[i] != 0)
 			return 0;
+	}
 	previous_hint_form = 0;
 	for (i = 0; i < result->name_hint_count; i++) {
 		uint32_t relative_ref;
