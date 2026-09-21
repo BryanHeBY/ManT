@@ -53,7 +53,9 @@ src/ffi/structured/
   raw.rs          private repr(C) views, discriminants, and extern functions
   input.rs        bundle descriptors and input-lifetime binding
   session.rs      re-entry guard, native call sequence, and handle RAII
-  validation.rs   ABI admission, budgets, ranges, keys, and relations
+  validation.rs   ABI admission, ranges, keys, and ordered relations
+  validation/
+    preflight.rs  owned-transfer object, edge, and byte budgets
   transfer.rs     handle-bound borrowed views and owned transfer model
   conversion.rs   owned-transfer to public typed-model conversion
   tests/          ABI, source, prose, resource-failure, and concurrency groups
@@ -64,6 +66,20 @@ submodules plus re-exports.  Raw ABI types stay below `ffi::structured`.
 Borrowed views are constructed only from `&ResultHandle` and are consumed
 before that handle can be dropped.  The current raw-owned intermediate model
 remains distinct from the public typed model in this refactor.
+
+The private codec consumer is split at the same semantic boundaries without
+adding a second model:
+
+```text
+mant-codec/src/mandoc/structured_document.rs
+  orchestration from the native projection into stable IR
+mant-codec/src/mandoc/structured_document/
+  index.rs       native relationship indexes
+  blocks.rs      section, block, list, and item lowering
+  evidence.rs    declaration ranges and native head evidence
+  content.rs     inline, link-target, provenance, and diagnostic lowering
+  tests.rs       end-to-end native structured lowering fixtures
+```
 
 ## Native modules and ownership
 
@@ -78,6 +94,7 @@ shim/mant_mandoc_structured_session.c   parse/render orchestration and cleanup
 shim/mant_mandoc_structured_source.c    bundle/include and source provenance
 shim/mant_mandoc_structured_budget.c    charging and controlled allocation
 shim/mant_mandoc_structured_builder.c   final result construction
+shim/mant_mandoc_structured_link.c      link identity, targets, and label refs
 shim/mant_mandoc_structured_result.c    result check, view, transfer, and free
 shim/mant_mandoc_structured_abi.c       size, alignment, and offset probes
 ```
@@ -101,6 +118,7 @@ continued to compile the supported feature combinations.
 | source keys, maps, include diagnostics | source | immutable source facts move to result |
 | counters, limits, failure record | budget | cumulative counters never become live counts |
 | final arrays and owned strings | builder/result | result handle or failed-session cleanup |
+| link data and label refs | link builder | result cleanup |
 | pending token, live slots, free list | buffer | retire only after pending and slot refs clear |
 | partial consumption and projections | buffer | projection storage retires with its token |
 | node/content boundary context | collector | active render only; no whole-page event history |
@@ -186,9 +204,11 @@ keys.
 
 ## Deliberately retained large modules
 
-- `src/ffi/structured/validation.rs` keeps ordered admission, budget, range,
-  key, and relationship checks together because their precedence is part of
-  the FFI contract.
+- `src/ffi/structured/validation.rs` keeps ordered range, key, and
+  relationship checks together because their precedence is part of the FFI
+  contract.
+  Transfer object, edge, and byte accounting is isolated in
+  `validation/preflight.rs` because it runs as one separate admission step.
 - `src/ffi/structured/raw.rs` and `shim/mant_mandoc_structured.h` remain the
   contiguous Rust/C ABI declarations needed for layout review.
 - `shim/mant_mandoc_structured.c` keeps collector dispatch beside the active
@@ -205,6 +225,13 @@ tests run.  Mechanical movement does not change expectations.  A newly found
 behavior discrepancy stops the mechanical unit: the corresponding pinned CVS
 path and exact reference input are inspected before any separate behavior
 change is considered.
+
+At the start and close of every structured-rendering milestone, review file
+size together with responsibility count and expected next-stage churn.  Split
+before the next capability when a module has accumulated independent owners or
+safety boundaries; do not split a cohesive state machine merely to meet a line
+target.  Keep mechanical moves separate from behavior changes and rerun the
+affected feature matrix after every connected move.
 
 Read-only cross-review occurred after the Rust FFI split, after source/budget/
 session extraction, and after buffer/collector encapsulation.  The reviewers
