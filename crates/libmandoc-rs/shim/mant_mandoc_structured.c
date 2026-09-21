@@ -17,14 +17,14 @@
 #include "manconf.h"
 #include "term.h"
 
-#include "mant_mandoc_structured_internal.h"
+#include "mant_mandoc_structured_session.h"
 #include "mant_mandoc_output.h"
 
-#define MANT_TOKEN_PROJECTION_INLINE 8U
 
 _Static_assert(MANT_DIAGNOSTIC_CODE_NATIVE_LAST == MANDOCERR_MAX,
     "structured diagnostic code range must match pinned mandocerr");
 
+#define MANT_TOKEN_PROJECTION_INLINE 8U
 
 struct structured_token {
 	const struct roff_node *node;
@@ -60,67 +60,6 @@ struct structured_column {
 	uint8_t partial_pending;
 };
 
-struct structured_session {
-	const struct mant_structured_input_view *input;
-	const struct mant_input_source_view *inputs;
-	const struct mant_structured_limits *limits;
-	struct mant_structured_probe_metrics *probe;
-	struct mant_structured_result *result;
-	uint32_t *source_keys;
-	struct structured_source_map *source_maps;
-	uint32_t current_input;
-	uint32_t status;
-	uint32_t stage;
-	uint32_t limit_kind;
-	uint64_t observed;
-	uint64_t allowed;
-	uint64_t source_path_bytes;
-	uint64_t decoded_bytes;
-	uint64_t source_map_entries;
-	uint64_t source_map_bytes;
-	uint64_t builder_operations;
-	uint64_t allocated_bytes;
-	uint64_t content_bytes;
-	uint64_t include_depth;
-	uint64_t connection_atoms;
-	uint64_t annotation_runs;
-	uint64_t annotation_mutations;
-	uint64_t relation_edges;
-	const struct roff_node **node_stack;
-	uint32_t node_depth;
-	uint32_t node_capacity;
-	uint32_t output_depth;
-	uint32_t current_root;
-	uint32_t current_owner;
-	uint32_t current_root_atom_count;
-	uint32_t section_owner;
-	uint32_t section_heading_block;
-	uint32_t section_root_count;
-	uint32_t section_child_block_count;
-	uint32_t top_level_block_count;
-	uint32_t pending_break_provenance;
-	uint32_t pending_break_root;
-	struct structured_token *tokens;
-	uint32_t token_slot_count;
-	uint32_t token_capacity;
-	uint32_t free_token;
-	uint32_t pending_token;
-	uint64_t token_total;
-	uint64_t projection_live_bytes;
-	uint64_t projection_peak_bytes;
-	struct structured_column *columns;
-	uint32_t column_count;
-	uint32_t column_capacity;
-	const struct roff_node *last_span_node;
-	uint32_t last_span;
-	const struct roff_node *last_provenance_node;
-	uint32_t last_provenance;
-	uint8_t last_provenance_authored;
-	uint64_t current_atom_capacity;
-	uint64_t current_display_capacity;
-	const struct roff_node *last_link_node;
-	uint32_t last_link;
-};
 
 MANT_THREAD_LOCAL struct structured_session *active_session;
 MANT_THREAD_LOCAL int structured_active;
@@ -128,17 +67,18 @@ MANT_THREAD_LOCAL uint64_t structured_fail_after = UINT64_MAX;
 MANT_THREAD_LOCAL uint64_t structured_allocation_count;
 MANT_THREAD_LOCAL struct mant_structured_probe_metrics *structured_probe;
 
-static void set_failure(struct structured_session *, uint32_t, uint32_t,
-    uint32_t, uint64_t, uint64_t);
-static int charge(struct structured_session *, uint64_t *, uint64_t,
-    uint64_t, uint32_t, uint32_t);
-static void *allocate(struct structured_session *, uint64_t, int, uint32_t);
-static void *grow_array(struct structured_session *, void *, uint32_t,
-    uint32_t *, uint32_t, size_t, uint64_t, uint32_t, uint32_t);
-static uint8_t *copy_bytes(struct structured_session *, const uint8_t *,
-    uint64_t, int, uint32_t);
-static struct mant_bytes_view copy_cstring(struct structured_session *,
-    const char *);
+void
+mant_structured_test_fail_after(uint64_t successful_allocations)
+{
+	structured_fail_after = successful_allocations;
+}
+
+int
+mant_structured_injected_allocation_failure(void)
+{
+	return structured_allocation_count++ >= structured_fail_after;
+}
+
 static int safe_logical_name(const uint8_t *, uint64_t);
 static int bytes_equal(struct mant_bytes_view, const uint8_t *, size_t);
 static uint32_t find_input_exact(struct structured_session *, const uint8_t *,
@@ -164,11 +104,6 @@ static void observe_terminal(struct termp *, void *,
     const struct term_collector_event *);
 
 
-void
-mant_structured_test_fail_after(uint64_t successful_allocations)
-{
-	structured_fail_after = successful_allocations;
-}
 
 int
 mant_structured_source_position_in_maps(const struct structured_source_map *maps,
@@ -193,7 +128,7 @@ valid_source_position(struct structured_session *session, uint32_t source_key,
 	if (source_key == 0 || source_key > session->input->sources.count ||
 	    line == 0)
 		return 0;
-	if (!charge(session, &session->builder_operations, 1,
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_CHECK))
 		return 0;
@@ -242,12 +177,6 @@ diagnostic_level(enum mandoclevel level)
 	}
 }
 
-static int
-injected_allocation_failure(void)
-{
-	return structured_allocation_count++ >= structured_fail_after;
-}
-
 
 void
 mant_structured_clear_failure(struct mant_structured_failure_view *failure)
@@ -256,160 +185,6 @@ mant_structured_clear_failure(struct mant_structured_failure_view *failure)
 		memset(failure, 0, sizeof(*failure));
 }
 
-static void
-set_failure(struct structured_session *session, uint32_t status,
-    uint32_t stage, uint32_t kind, uint64_t observed, uint64_t allowed)
-{
-	if (session->status != MANT_STRUCTURED_OK)
-		return;
-	session->status = status;
-	session->stage = stage;
-	session->limit_kind = kind;
-	session->observed = observed;
-	session->allowed = allowed;
-}
-
-static int
-charge(struct structured_session *session, uint64_t *counter,
-    uint64_t amount, uint64_t maximum, uint32_t kind, uint32_t stage)
-{
-	uint64_t observed;
-
-	if (amount <= maximum && *counter <= maximum - amount) {
-		*counter += amount;
-		return 1;
-	}
-	observed = amount > UINT64_MAX - *counter ? UINT64_MAX :
-	    *counter + amount;
-	set_failure(session, MANT_STRUCTURED_BUDGET, stage, kind,
-	    observed, maximum);
-	return 0;
-}
-
-static void *
-allocate(struct structured_session *session, uint64_t bytes, int zeroed,
-    uint32_t stage)
-{
-	void *pointer;
-
-	if (bytes == 0)
-		return NULL;
-	if (bytes > SIZE_MAX) {
-		set_failure(session, MANT_STRUCTURED_BUDGET, stage, 9,
-		    bytes, SIZE_MAX);
-		return NULL;
-	}
-	if (!charge(session, &session->allocated_bytes, bytes,
-	    session->limits->max_builder_allocated_bytes, 9, stage))
-		return NULL;
-	pointer = injected_allocation_failure() ? NULL :
-	    (zeroed ? calloc(1, (size_t)bytes) : malloc((size_t)bytes));
-	if (pointer == NULL)
-		set_failure(session, MANT_STRUCTURED_BUILDER_ALLOC, stage, 0,
-		    bytes, session->limits->max_builder_allocated_bytes);
-	return pointer;
-}
-
-static void *
-grow_array(struct structured_session *session, void *old, uint32_t count,
-    uint32_t *capacity, uint32_t maximum, size_t element_size, uint64_t byte_limit,
-    uint32_t limit_kind, uint32_t stage)
-{
-	void *grown;
-	uint32_t new_capacity;
-	uint64_t bytes, added_bytes;
-
-	if (session->status != MANT_STRUCTURED_OK)
-		return NULL;
-	if (count >= maximum) {
-		set_failure(session, MANT_STRUCTURED_BUDGET, stage, limit_kind,
-		    (uint64_t)count + 1, maximum);
-		return NULL;
-	}
-	if (count < *capacity)
-		return old;
-	new_capacity = *capacity == 0 ? 8 : *capacity;
-	if (new_capacity > maximum)
-		new_capacity = maximum;
-	while (new_capacity <= count) {
-		if (new_capacity > maximum / 2) {
-			new_capacity = maximum;
-			break;
-		}
-		new_capacity *= 2;
-	}
-	if (new_capacity <= count || (element_size != 0 &&
-	    (uint64_t)new_capacity > UINT64_MAX / element_size)) {
-		set_failure(session, MANT_STRUCTURED_BUDGET, stage,
-		    limit_kind, UINT64_MAX,
-		    byte_limit);
-		return NULL;
-	}
-	bytes = (uint64_t)new_capacity * element_size;
-	if (bytes > byte_limit || bytes > SIZE_MAX) {
-		set_failure(session, MANT_STRUCTURED_BUDGET, stage, 9,
-		    bytes, byte_limit < SIZE_MAX ? byte_limit : SIZE_MAX);
-		return NULL;
-	}
-	added_bytes = (uint64_t)(new_capacity - *capacity) * element_size;
-	if (!charge(session, &session->allocated_bytes, added_bytes,
-	    session->limits->max_builder_allocated_bytes, 9,
-	    stage))
-		return NULL;
-	grown = injected_allocation_failure() ? NULL : realloc(old, (size_t)bytes);
-	if (grown == NULL) {
-		set_failure(session, MANT_STRUCTURED_BUILDER_ALLOC, stage,
-		    0, bytes, byte_limit);
-		return NULL;
-	}
-	*capacity = new_capacity;
-	return grown;
-}
-
-static uint8_t *
-copy_bytes(struct structured_session *session, const uint8_t *bytes,
-    uint64_t length, int content, uint32_t stage)
-{
-	uint8_t *copy;
-
-	if (session->status != MANT_STRUCTURED_OK)
-		return NULL;
-	if (length == 0)
-		return NULL;
-	if (length > SIZE_MAX || (content != 0 &&
-	    !charge(session, &session->content_bytes, length,
-	    session->limits->max_content_bytes, 10,
-	    stage)) ||
-	    !charge(session, &session->allocated_bytes, length,
-	    session->limits->max_builder_allocated_bytes, 9,
-	    stage))
-		return NULL;
-	copy = injected_allocation_failure() ? NULL : malloc((size_t)length);
-	if (copy == NULL) {
-		set_failure(session, MANT_STRUCTURED_BUILDER_ALLOC, stage, 0,
-		    length,
-		    session->limits->max_builder_allocated_bytes);
-		return NULL;
-	}
-	memcpy(copy, bytes, (size_t)length);
-	return copy;
-}
-
-static struct mant_bytes_view
-copy_cstring(struct structured_session *session, const char *string)
-{
-	struct mant_bytes_view view;
-
-	memset(&view, 0, sizeof(view));
-	if (string == NULL || *string == '\0')
-		return view;
-	view.len = strlen(string);
-	view.ptr = copy_bytes(session, (const uint8_t *)string, view.len, 1,
-	    MANT_STRUCTURED_STAGE_FINALIZE);
-	if (view.ptr == NULL)
-		view.len = 0;
-	return view;
-}
 
 int
 mant_structured_valid_bytes(struct mant_bytes_view view)
@@ -502,7 +277,7 @@ find_input_exact(struct structured_session *session, const uint8_t *path,
 	uint32_t i;
 
 	for (i = 0; i < session->input->sources.count; i++) {
-		if (!charge(session, &session->builder_operations, 1,
+		if (!mant_structured_charge(session, &session->builder_operations, 1,
 		    session->limits->max_builder_operations, 8,
 		    MANT_STRUCTURED_STAGE_RESOLVE))
 			return 0;
@@ -531,7 +306,7 @@ find_input_beside(struct structured_session *session, const uint8_t *path,
 	total = prefix + length;
 	if (total > SIZE_MAX)
 		return 0;
-	joined = allocate(session, total, 0, MANT_STRUCTURED_STAGE_RESOLVE);
+	joined = mant_structured_allocate(session, total, 0, MANT_STRUCTURED_STAGE_RESOLVE);
 	if (joined == NULL)
 		return 0;
 	memcpy(joined, current.ptr, (size_t)prefix);
@@ -554,19 +329,19 @@ register_source(struct structured_session *session, uint32_t input_slot)
 
 	if (session->source_keys[input_slot - 1] != 0)
 		return session->source_keys[input_slot - 1];
-	if (!charge(session, &session->builder_operations, 2,
+	if (!mant_structured_charge(session, &session->builder_operations, 2,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RESOLVE))
 		return 0;
 	if (session->result->source_count >= session->limits->max_sources ||
 	    session->result->source_count == UINT32_MAX) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_RESOLVE, 2,
 		    (uint64_t)session->result->source_count + 1,
 		    session->limits->max_sources);
 		return 0;
 	}
-	grown = grow_array(session, session->result->sources,
+	grown = mant_structured_grow_array(session, session->result->sources,
 	    session->result->source_count, &session->result->source_capacity,
 	    (uint32_t)session->limits->max_sources, sizeof(*grown),
 	    session->limits->max_builder_allocated_bytes, 2,
@@ -584,7 +359,7 @@ register_source(struct structured_session *session, uint32_t input_slot)
 	source->coordinate_kind = MANT_COORD_NATIVE_NORMALIZED_BYTES;
 	source->decoded_length = input->source_bytes.len;
 	source->logical_name.len = input->logical_name.len;
-	source->logical_name.ptr = copy_bytes(session, input->logical_name.ptr,
+	source->logical_name.ptr = mant_structured_copy_bytes(session, input->logical_name.ptr,
 	    input->logical_name.len, 0, MANT_STRUCTURED_STAGE_RESOLVE);
 	if (input->logical_name.len != 0 && source->logical_name.ptr == NULL)
 		return 0;
@@ -607,7 +382,7 @@ read_input(struct structured_session *session, struct mparse *parser,
 	is_include = session->current_input != 0;
 	if (is_include &&
 	    session->include_depth >= session->limits->max_include_depth) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_RESOLVE, 36,
 		    session->include_depth + 1,
 		    session->limits->max_include_depth);
@@ -619,7 +394,7 @@ read_input(struct structured_session *session, struct mparse *parser,
 	input = session->inputs + input_slot - 1;
 	if (input->logical_name.len >= SIZE_MAX)
 		return 0;
-	name = allocate(session, input->logical_name.len + 1, 0,
+	name = mant_structured_allocate(session, input->logical_name.len + 1, 0,
 	    MANT_STRUCTURED_STAGE_RESOLVE);
 	if (name == NULL)
 		return 0;
@@ -665,17 +440,17 @@ observe_source_line(void *arg, uint32_t source_key, int line, size_t length)
 	}
 	old_count = map->line_count;
 	added_bytes = (uint64_t)(needed - old_count) * sizeof(*entry);
-	if (!charge(session, &session->builder_operations, 1,
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_PARSE) ||
-	    !charge(session, &session->source_map_entries, needed - old_count,
+	    !mant_structured_charge(session, &session->source_map_entries, needed - old_count,
 	    session->limits->max_source_map_entries, 6,
 	    MANT_STRUCTURED_STAGE_PARSE) ||
-	    !charge(session, &session->source_map_bytes, added_bytes,
+	    !mant_structured_charge(session, &session->source_map_bytes, added_bytes,
 	    session->limits->max_source_map_bytes, 7,
 	    MANT_STRUCTURED_STAGE_PARSE))
 		return;
-	grown = grow_array(session, map->lines, needed - 1,
+	grown = mant_structured_grow_array(session, map->lines, needed - 1,
 	    &map->line_capacity,
 	    UINT32_MAX, sizeof(*grown),
 	    session->limits->max_builder_allocated_bytes, 6,
@@ -730,11 +505,11 @@ mant_structured_read_bundle(struct mparse *parser, const char *requested)
 		if (callback_status != MANT_RESOLVE_FOUND) {
 			if (slot != 0 || callback_status > MANT_RESOLVE_INVALID ||
 			    callback_status == MANT_RESOLVE_INVALID)
-				set_failure(session, MANT_STRUCTURED_INVALID_INPUT,
+				mant_structured_set_failure(session, MANT_STRUCTURED_INVALID_INPUT,
 				    MANT_STRUCTURED_STAGE_RESOLVE, 0,
 				    callback_status, MANT_RESOLVE_INVALID);
 			else if (callback_status != MANT_RESOLVE_NOT_FOUND)
-				set_failure(session, MANT_STRUCTURED_NATIVE,
+				mant_structured_set_failure(session, MANT_STRUCTURED_NATIVE,
 				    MANT_STRUCTURED_STAGE_RESOLVE, 0,
 				    callback_status, 0);
 			slot = 0;
@@ -748,7 +523,7 @@ mant_structured_read_bundle(struct mparse *parser, const char *requested)
 			return -1;
 		}
 		if (slot == 0 || slot > session->input->sources.count) {
-			set_failure(session, MANT_STRUCTURED_INVALID_INPUT,
+			mant_structured_set_failure(session, MANT_STRUCTURED_INVALID_INPUT,
 			    MANT_STRUCTURED_STAGE_RESOLVE, 0, slot,
 			    session->input->sources.count);
 			errno = EINVAL;
@@ -765,7 +540,7 @@ mant_structured_read_bundle(struct mparse *parser, const char *requested)
 			return -1;
 		}
 		if (callback_used)
-			set_failure(session, MANT_STRUCTURED_INVALID_INPUT,
+			mant_structured_set_failure(session, MANT_STRUCTURED_INVALID_INPUT,
 			    MANT_STRUCTURED_STAGE_RESOLVE, 0, slot, 0);
 		errno = ENOENT;
 		return -1;
@@ -793,14 +568,14 @@ observe_diagnostic(void *arg, enum mandocerr code, enum mandoclevel level,
 
 	if (session == NULL || session->status != MANT_STRUCTURED_OK)
 		return;
-	if (!charge(session, &session->builder_operations, 1,
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_PARSE))
 		return;
 	if (session->result->diagnostic_count >=
 	    session->limits->max_diagnostics ||
 	    session->result->diagnostic_count == UINT32_MAX) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_PARSE, 31,
 		    (uint64_t)session->result->diagnostic_count + 1,
 		    session->limits->max_diagnostics);
@@ -813,7 +588,7 @@ observe_diagnostic(void *arg, enum mandocerr code, enum mandoclevel level,
 		needed = vsnprintf(NULL, 0, format, measured);
 		va_end(measured);
 		if (needed < 0) {
-			set_failure(session, MANT_STRUCTURED_NATIVE,
+			mant_structured_set_failure(session, MANT_STRUCTURED_NATIVE,
 			    MANT_STRUCTURED_STAGE_PARSE, 0, 0, 0);
 			return;
 		}
@@ -822,20 +597,20 @@ observe_diagnostic(void *arg, enum mandocerr code, enum mandoclevel level,
 	if (base_length > UINT64_MAX - detail_length ||
 	    (base_length != 0 && detail_length != 0 &&
 	    base_length + detail_length > UINT64_MAX - 2)) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_PARSE, 10, UINT64_MAX,
 		    session->limits->max_content_bytes);
 		return;
 	}
 	message_length = base_length + detail_length +
 	    (base_length != 0 && detail_length != 0 ? 2 : 0);
-	if (!charge(session, &session->content_bytes, message_length,
+	if (!mant_structured_charge(session, &session->content_bytes, message_length,
 	    session->limits->max_content_bytes, 10,
 	    MANT_STRUCTURED_STAGE_PARSE) || message_length == UINT64_MAX)
 		return;
 	message = NULL;
 	if (message_length != 0) {
-		message = allocate(session, message_length + 1, 0,
+		message = mant_structured_allocate(session, message_length + 1, 0,
 		    MANT_STRUCTURED_STAGE_PARSE);
 		if (message == NULL)
 			return;
@@ -852,7 +627,7 @@ observe_diagnostic(void *arg, enum mandocerr code, enum mandoclevel level,
 		va_end(written);
 		if (written_count < 0 || (uint64_t)written_count != detail_length) {
 			free(message);
-			set_failure(session, MANT_STRUCTURED_NATIVE,
+			mant_structured_set_failure(session, MANT_STRUCTURED_NATIVE,
 			    MANT_STRUCTURED_STAGE_PARSE, 0, 0, 0);
 			return;
 		}
@@ -861,13 +636,13 @@ observe_diagnostic(void *arg, enum mandocerr code, enum mandoclevel level,
 	has_span = source_key != 0 && source_key <= session->result->source_count &&
 	    line > 0 && column >= 0;
 	if (has_span) {
-		if (!charge(session, &session->builder_operations, 1,
+		if (!mant_structured_charge(session, &session->builder_operations, 1,
 		    session->limits->max_builder_operations, 8,
 		    MANT_STRUCTURED_STAGE_PARSE)) {
 			free(message);
 			return;
 		}
-		grown_spans = grow_array(session, session->result->spans,
+		grown_spans = mant_structured_grow_array(session, session->result->spans,
 		    session->result->span_count, &session->result->span_capacity,
 		    UINT32_MAX,
 		    sizeof(*grown_spans),
@@ -879,7 +654,7 @@ observe_diagnostic(void *arg, enum mandocerr code, enum mandoclevel level,
 		}
 		session->result->spans = grown_spans;
 	}
-	grown_diagnostics = grow_array(session, session->result->diagnostics,
+	grown_diagnostics = mant_structured_grow_array(session, session->result->diagnostics,
 	    session->result->diagnostic_count,
 	    &session->result->diagnostic_capacity,
 	    (uint32_t)session->limits->max_diagnostics,
@@ -912,7 +687,7 @@ observe_diagnostic(void *arg, enum mandocerr code, enum mandoclevel level,
 	if (diagnostic->level == 0 ||
 	    diagnostic->code < MANT_DIAGNOSTIC_CODE_NATIVE_FIRST ||
 	    diagnostic->code > MANT_DIAGNOSTIC_CODE_NATIVE_LAST)
-		set_failure(session, MANT_STRUCTURED_NATIVE,
+		mant_structured_set_failure(session, MANT_STRUCTURED_NATIVE,
 		    MANT_STRUCTURED_STAGE_PARSE, 0, 0, 0);
 }
 
@@ -921,7 +696,7 @@ copy_metadata(struct structured_session *session, const struct roff_meta *meta)
 {
 	struct mant_structured_metadata_view *out = &session->result->metadata;
 
-	if (!charge(session, &session->builder_operations, 9,
+	if (!mant_structured_charge(session, &session->builder_operations, 9,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_FINALIZE))
 		return 0;
@@ -946,14 +721,14 @@ copy_metadata(struct structured_session *session, const struct roff_meta *meta)
 		out->presence_flags |= MANT_METADATA_DATE_PRESENT;
 	if (meta->sodest != NULL)
 		out->presence_flags |= MANT_METADATA_ALIAS_PRESENT;
-	out->title = copy_cstring(session, meta->title);
-	out->section = copy_cstring(session, meta->msec);
-	out->volume = copy_cstring(session, meta->vol);
-	out->operating_system = copy_cstring(session, meta->os);
-	out->architecture = copy_cstring(session, meta->arch);
-	out->name = copy_cstring(session, meta->name);
-	out->date = copy_cstring(session, meta->date);
-	out->alias_target = copy_cstring(session, meta->sodest);
+	out->title = mant_structured_copy_cstring(session, meta->title);
+	out->section = mant_structured_copy_cstring(session, meta->msec);
+	out->volume = mant_structured_copy_cstring(session, meta->vol);
+	out->operating_system = mant_structured_copy_cstring(session, meta->os);
+	out->architecture = mant_structured_copy_cstring(session, meta->arch);
+	out->name = mant_structured_copy_cstring(session, meta->name);
+	out->date = mant_structured_copy_cstring(session, meta->date);
+	out->alias_target = mant_structured_copy_cstring(session, meta->sodest);
 	out->has_body = meta->hasbody != 0 ||
 	    (meta->macroset == MACROSET_MDOC && meta->first != NULL &&
 	    meta->first->child != NULL);
@@ -971,7 +746,7 @@ check_nesting_depth(struct structured_session *session,
 	depth = 1;
 	for (;;) {
 		if (depth > session->limits->max_nesting_depth) {
-			set_failure(session, MANT_STRUCTURED_BUDGET,
+			mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 			    MANT_STRUCTURED_STAGE_PARSE, 35, depth,
 			    session->limits->max_nesting_depth);
 			return 0;
@@ -1034,13 +809,13 @@ validate_input(struct structured_session *session)
 		return 0;
 #endif
 	if (input->sources.count > session->limits->max_input_sources) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_MARSHAL, 1, input->sources.count,
 		    session->limits->max_input_sources);
 		return 0;
 	}
 	if (input->sources.count > session->limits->max_source_map_entries) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_MARSHAL, 6, input->sources.count,
 		    session->limits->max_source_map_entries);
 		return 0;
@@ -1071,7 +846,7 @@ validate_input(struct structured_session *session)
 			return 0;
 		if (source->source_bytes.len >
 		    session->limits->max_decoded_source_bytes_per_source) {
-			set_failure(session, MANT_STRUCTURED_BUDGET,
+			mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 			    MANT_STRUCTURED_STAGE_MARSHAL, 4,
 			    source->source_bytes.len,
 			    session->limits->max_decoded_source_bytes_per_source);
@@ -1084,11 +859,11 @@ validate_input(struct structured_session *session)
 		if (source->identity_kind != MANT_IDENTITY_BUNDLE_MEMBER)
 			name_bytes += source->resolver_name.len;
 		if (
-		    !charge(session, &session->source_path_bytes,
+		    !mant_structured_charge(session, &session->source_path_bytes,
 		    name_bytes,
 		    session->limits->max_source_path_bytes, 3,
 		    MANT_STRUCTURED_STAGE_MARSHAL) ||
-		    !charge(session, &session->decoded_bytes,
+		    !mant_structured_charge(session, &session->decoded_bytes,
 		    source->source_bytes.len,
 		    session->limits->max_decoded_source_bytes_total, 5,
 		    MANT_STRUCTURED_STAGE_MARSHAL))
@@ -1190,11 +965,11 @@ append_span_for_node(struct structured_session *session,
 		return 0;
 	if (node == session->last_span_node && session->last_span != 0)
 		return session->last_span;
-	if (!charge(session, &session->builder_operations, 1,
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
-	grown = grow_array(session, session->result->spans,
+	grown = mant_structured_grow_array(session, session->result->spans,
 	    session->result->span_count, &session->result->span_capacity,
 	    UINT32_MAX, sizeof(*grown),
 	    session->limits->max_builder_allocated_bytes, 6,
@@ -1228,7 +1003,7 @@ append_provenance(struct structured_session *session,
 	span = append_span_for_node(session, node);
 	if (session->status != MANT_STRUCTURED_OK)
 		return 0;
-	grown = grow_array(session, session->result->provenances,
+	grown = mant_structured_grow_array(session, session->result->provenances,
 	    session->result->provenance_count,
 	    &session->result->provenance_capacity, UINT32_MAX, sizeof(*grown),
 	    session->limits->max_builder_allocated_bytes, 9,
@@ -1320,7 +1095,7 @@ open_content_root(struct structured_session *session, int heading,
 
 	new_owner = heading || session->section_owner == 0;
 	if (new_owner) {
-		owners = grow_array(session, session->result->owners,
+		owners = mant_structured_grow_array(session, session->result->owners,
 		    session->result->owner_count,
 		    &session->result->owner_capacity,
 		    limit_u32(session->limits->max_owners), sizeof(*owners),
@@ -1337,7 +1112,7 @@ open_content_root(struct structured_session *session, int heading,
 		owner_key = owner->key;
 	} else
 		owner_key = session->section_owner;
-	roots = grow_array(session, session->result->content_roots,
+	roots = mant_structured_grow_array(session, session->result->content_roots,
 	    session->result->content_root_count,
 	    &session->result->content_root_capacity,
 	    limit_u32(session->limits->max_blocks), sizeof(*roots),
@@ -1346,7 +1121,7 @@ open_content_root(struct structured_session *session, int heading,
 	if (roots == NULL)
 		return 0;
 	session->result->content_roots = roots;
-	blocks = grow_array(session, session->result->blocks,
+	blocks = mant_structured_grow_array(session, session->result->blocks,
 	    session->result->block_count, &session->result->block_capacity,
 	    limit_u32(session->limits->max_blocks), sizeof(*blocks),
 	    session->limits->max_builder_allocated_bytes, 12,
@@ -1355,10 +1130,10 @@ open_content_root(struct structured_session *session, int heading,
 		return 0;
 	session->result->blocks = blocks;
 	operations = new_owner ? 3 : 2;
-	if (!charge(session, &session->builder_operations, operations,
+	if (!mant_structured_charge(session, &session->builder_operations, operations,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER) ||
-	    !charge(session, &session->relation_edges, 6,
+	    !mant_structured_charge(session, &session->relation_edges, 6,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
@@ -1411,14 +1186,14 @@ append_atom(struct structured_session *session, uint32_t root,
 
 	if (root == 0 || root > session->result->content_root_count)
 		return 0;
-	if (!charge(session, &session->builder_operations, 1,
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
-	if ((length != 0 && !charge(session, &session->content_bytes, length,
+	if ((length != 0 && !mant_structured_charge(session, &session->content_bytes, length,
 	    session->limits->max_content_bytes, 10,
 	    MANT_STRUCTURED_STAGE_RENDER)) ||
-	    (display_length != 0 && !charge(session, &session->content_bytes,
+	    (display_length != 0 && !mant_structured_charge(session, &session->content_bytes,
 	    display_length, session->limits->max_content_bytes, 10,
 	    MANT_STRUCTURED_STAGE_RENDER)))
 		return 0;
@@ -1432,7 +1207,7 @@ append_atom(struct structured_session *session, uint32_t root,
 		    atom->whitespace_breakable == (breakable != 0) &&
 		    (kind == MANT_ATOM_TEXT || kind == MANT_ATOM_WHITESPACE)) {
 			if (atom->text.len > UINT64_MAX - length) {
-				set_failure(session, MANT_STRUCTURED_BUDGET,
+				mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 				    MANT_STRUCTURED_STAGE_RENDER, 10,
 				    UINT64_MAX, session->limits->max_content_bytes);
 				return 0;
@@ -1449,20 +1224,20 @@ append_atom(struct structured_session *session, uint32_t root,
 					new_capacity *= 2;
 				}
 				if (new_capacity > SIZE_MAX) {
-					set_failure(session, MANT_STRUCTURED_BUDGET,
+					mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 					    MANT_STRUCTURED_STAGE_RENDER, 9,
 					    new_capacity, SIZE_MAX);
 					return 0;
 				}
 				added = new_capacity - session->current_atom_capacity;
-				if (!charge(session, &session->allocated_bytes, added,
+				if (!mant_structured_charge(session, &session->allocated_bytes, added,
 				    session->limits->max_builder_allocated_bytes, 9,
 				    MANT_STRUCTURED_STAGE_RENDER))
 					return 0;
-				grown_text = injected_allocation_failure() ? NULL :
+				grown_text = mant_structured_injected_allocation_failure() ? NULL :
 				    realloc((void *)atom->text.ptr, (size_t)new_capacity);
 				if (grown_text == NULL) {
-					set_failure(session,
+					mant_structured_set_failure(session,
 					    MANT_STRUCTURED_BUILDER_ALLOC,
 					    MANT_STRUCTURED_STAGE_RENDER, 0,
 					    new_capacity,
@@ -1478,7 +1253,7 @@ append_atom(struct structured_session *session, uint32_t root,
 			if (display_length != 0) {
 				if (atom->display_override.len >
 				    UINT64_MAX - display_length) {
-					set_failure(session, MANT_STRUCTURED_BUDGET,
+					mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 					    MANT_STRUCTURED_STAGE_RENDER, 10,
 					    UINT64_MAX,
 					    session->limits->max_content_bytes);
@@ -1498,20 +1273,20 @@ append_atom(struct structured_session *session, uint32_t root,
 					added = new_capacity -
 					    session->current_display_capacity;
 					if (new_capacity > SIZE_MAX) {
-						set_failure(session, MANT_STRUCTURED_BUDGET,
+						mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 						    MANT_STRUCTURED_STAGE_RENDER, 9,
 						    new_capacity, SIZE_MAX);
 						return 0;
 					}
-					if (!charge(session, &session->allocated_bytes, added,
+					if (!mant_structured_charge(session, &session->allocated_bytes, added,
 					    session->limits->max_builder_allocated_bytes, 9,
 					    MANT_STRUCTURED_STAGE_RENDER))
 						return 0;
-					grown_text = injected_allocation_failure() ? NULL :
+					grown_text = mant_structured_injected_allocation_failure() ? NULL :
 					    realloc((void *)atom->display_override.ptr,
 					    (size_t)new_capacity);
 					if (grown_text == NULL) {
-						set_failure(session,
+						mant_structured_set_failure(session,
 						    MANT_STRUCTURED_BUILDER_ALLOC,
 						    MANT_STRUCTURED_STAGE_RENDER, 0,
 						    new_capacity,
@@ -1528,21 +1303,21 @@ append_atom(struct structured_session *session, uint32_t root,
 			return 1;
 		}
 	}
-	if (!charge(session, &session->annotation_runs, 1,
+	if (!mant_structured_charge(session, &session->annotation_runs, 1,
 	    session->limits->max_annotation_runs, 28,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
 	if ((kind == MANT_ATOM_BREAK_OPPORTUNITY ||
 	    kind == MANT_ATOM_HARD_BREAK) &&
-	    !charge(session, &session->connection_atoms, 1,
+	    !mant_structured_charge(session, &session->connection_atoms, 1,
 	    session->limits->max_connection_atoms, 27,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
-	if (!charge(session, &session->relation_edges, link == 0 ? 3 : 4,
+	if (!mant_structured_charge(session, &session->relation_edges, link == 0 ? 3 : 4,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
-	atoms = grow_array(session, session->result->content_atoms,
+	atoms = mant_structured_grow_array(session, session->result->content_atoms,
 	    session->result->content_atom_count,
 	    &session->result->content_atom_capacity,
 	    limit_u32(session->limits->max_content_atoms), sizeof(*atoms),
@@ -1568,7 +1343,7 @@ append_atom(struct structured_session *session, uint32_t root,
 	atom->provenance = provenance;
 	if (length != 0) {
 		session->current_atom_capacity = length < 8 ? 8 : length;
-		atom->text.ptr = allocate(session, session->current_atom_capacity,
+		atom->text.ptr = mant_structured_allocate(session, session->current_atom_capacity,
 		    0, MANT_STRUCTURED_STAGE_RENDER);
 		if (atom->text.ptr == NULL)
 			return 0;
@@ -1579,7 +1354,7 @@ append_atom(struct structured_session *session, uint32_t root,
 	if (display_length != 0) {
 		session->current_display_capacity = display_length < 8 ? 8 :
 		    display_length;
-		atom->display_override.ptr = allocate(session,
+		atom->display_override.ptr = mant_structured_allocate(session,
 		    session->current_display_capacity, 0,
 		    MANT_STRUCTURED_STAGE_RENDER);
 		if (atom->display_override.ptr == NULL)
@@ -1668,7 +1443,7 @@ copy_link_target(struct structured_session *session,
 	length = strlen(node->string);
 	if (!mant_structured_valid_utf8((const uint8_t *)node->string, length))
 		return 0;
-	out->ptr = copy_bytes(session, (const uint8_t *)node->string,
+	out->ptr = mant_structured_copy_bytes(session, (const uint8_t *)node->string,
 	    length, 1, MANT_STRUCTURED_STAGE_RENDER);
 	if (out->ptr == NULL)
 		return 0;
@@ -1725,11 +1500,11 @@ ensure_link(struct structured_session *session, const struct roff_node *node,
 	}
 	if (first == NULL || (kind == MANT_LINK_MANUAL && second == NULL))
 		goto unsupported;
-	if (!charge(session, &session->relation_edges, 2,
+	if (!mant_structured_charge(session, &session->relation_edges, 2,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return 0;
-	links = grow_array(session, session->result->links,
+	links = mant_structured_grow_array(session, session->result->links,
 	    session->result->link_count, &session->result->link_capacity,
 	    limit_u32(session->limits->max_links), sizeof(*links),
 	    session->limits->max_builder_allocated_bytes, 16,
@@ -1762,7 +1537,7 @@ unsupported:
 		memset(link, 0, sizeof(*link));
 	}
 	if (session->probe == NULL)
-		set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
+		mant_structured_set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
 		    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 	return 0;
 }
@@ -1788,16 +1563,16 @@ record_link_ref(struct structured_session *session, uint32_t link_key)
 		}
 	}
 	if (atom->text.len > UINT32_MAX) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_RENDER, 14,
 		    atom->text.len, UINT32_MAX);
 		return;
 	}
-	if (!charge(session, &session->relation_edges, 2,
+	if (!mant_structured_charge(session, &session->relation_edges, 2,
 	    session->limits->max_relation_edges, 30,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return;
-	refs = grow_array(session, session->result->content_refs,
+	refs = mant_structured_grow_array(session, session->result->content_refs,
 	    session->result->content_ref_count,
 	    &session->result->content_ref_capacity,
 	    limit_u32(session->limits->max_content_refs), sizeof(*refs),
@@ -1837,7 +1612,7 @@ commit_token(struct structured_session *session, uint32_t key)
 	if (token->value == '\n') {
 		if (session->pending_break_root != 0) {
 			if (session->probe == NULL)
-				set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
+				mant_structured_set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
 				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 			return;
 		}
@@ -1880,7 +1655,7 @@ commit_token(struct structured_session *session, uint32_t key)
 	length = encode_scalar(token->value, bytes);
 	if (length == 0 || (token->value < 0x20 && token->value != '\t')) {
 		if (session->probe == NULL)
-			set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
+			mant_structured_set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
 			    MANT_STRUCTURED_STAGE_RENDER, 0,
 			    (uint32_t)token->value, 0);
 		return;
@@ -1953,7 +1728,7 @@ grow_token_projection(struct structured_session *session,
 	maximum = limit_u32(session->limits->max_content_bytes);
 	old_capacity = token->projection_capacity;
 	if (maximum <= token->projection_length) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_RENDER, 10,
 		    (uint64_t)token->projection_length + 1, maximum);
 		return 0;
@@ -1970,16 +1745,16 @@ grow_token_projection(struct structured_session *session,
 		new_capacity *= 2;
 	}
 	if (new_capacity <= token->projection_length) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_RENDER, 10,
 		    (uint64_t)token->projection_length + 1, maximum);
 		return 0;
 	}
-	bytes = allocate(session, new_capacity, 0,
+	bytes = mant_structured_allocate(session, new_capacity, 0,
 	    MANT_STRUCTURED_STAGE_RENDER);
 	if (bytes == NULL)
 		return 0;
-	survived = allocate(session, new_capacity, 0,
+	survived = mant_structured_allocate(session, new_capacity, 0,
 	    MANT_STRUCTURED_STAGE_RENDER);
 	if (survived == NULL) {
 		free(bytes);
@@ -2012,7 +1787,7 @@ record_projection(struct structured_session *session, uint32_t key, int value)
 
 	if (key == 0 || key > session->token_slot_count || value < 0 ||
 	    value > 0xff || !session->tokens[key - 1].active) {
-		set_failure(session, MANT_STRUCTURED_RELATION,
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 		    MANT_STRUCTURED_STAGE_RENDER, 0, key,
 		    session->token_slot_count);
 		return 0;
@@ -2121,7 +1896,7 @@ collect_logical(struct structured_session *session,
 		if (!open_content_root(session, heading, provenance))
 			return;
 	}
-	if (!charge(session, &session->annotation_mutations, 1,
+	if (!mant_structured_charge(session, &session->annotation_mutations, 1,
 	    session->limits->max_annotation_mutations, 29,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return;
@@ -2130,7 +1905,7 @@ collect_logical(struct structured_session *session,
 		token = session->tokens + key - 1;
 		session->free_token = token->next_free;
 	} else {
-		tokens = grow_array(session, session->tokens,
+		tokens = mant_structured_grow_array(session, session->tokens,
 		    session->token_slot_count, &session->token_capacity,
 		    limit_u32(session->limits->max_annotation_mutations),
 		    sizeof(*tokens), session->limits->max_builder_allocated_bytes,
@@ -2176,7 +1951,7 @@ collector_column(struct structured_session *session, size_t index)
 	uint32_t needed;
 
 	if (index >= UINT32_MAX) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_RENDER, 29,
 		    index, UINT32_MAX - 1);
 		return NULL;
@@ -2184,7 +1959,7 @@ collector_column(struct structured_session *session, size_t index)
 	needed = (uint32_t)index + 1;
 	if (needed <= session->column_count)
 		return session->columns + index;
-	columns = grow_array(session, session->columns, needed - 1,
+	columns = mant_structured_grow_array(session, session->columns, needed - 1,
 	    &session->column_capacity, UINT32_MAX, sizeof(*columns),
 	    session->limits->max_builder_allocated_bytes, 9,
 	    MANT_STRUCTURED_STAGE_RENDER);
@@ -2205,7 +1980,7 @@ ensure_slots(struct structured_session *session,
 	uint32_t needed, old_capacity;
 
 	if (end > UINT32_MAX) {
-		set_failure(session, MANT_STRUCTURED_BUDGET,
+		mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
 		    MANT_STRUCTURED_STAGE_RENDER, 29, end, UINT32_MAX);
 		return 0;
 	}
@@ -2213,7 +1988,7 @@ ensure_slots(struct structured_session *session,
 	if (needed <= column->capacity)
 		return 1;
 	old_capacity = column->capacity;
-	slots = grow_array(session, column->slots, needed - 1,
+	slots = mant_structured_grow_array(session, column->slots, needed - 1,
 	    &column->capacity, UINT32_MAX, sizeof(*slots),
 	    session->limits->max_builder_allocated_bytes, 9,
 	    MANT_STRUCTURED_STAGE_RENDER);
@@ -2280,7 +2055,7 @@ observe_terminal(struct termp *p, void *arg,
 			break;
 		}
 	}
-	if (!charge(session, &session->builder_operations, 1,
+	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return;
@@ -2297,7 +2072,7 @@ observe_terminal(struct termp *p, void *arg,
 			maximum = session->limits->max_nesting_depth > UINT32_MAX ?
 			    UINT32_MAX :
 			    (uint32_t)session->limits->max_nesting_depth;
-			stack = grow_array(session, session->node_stack,
+			stack = mant_structured_grow_array(session, session->node_stack,
 			    session->node_depth, &session->node_capacity, maximum,
 			    sizeof(*stack),
 			    session->limits->max_builder_allocated_bytes, 35,
@@ -2319,7 +2094,7 @@ observe_terminal(struct termp *p, void *arg,
 		} else if (event->phase == TERM_COLLECT_LEAVE) {
 			if (session->node_depth == 0 ||
 			    session->node_stack[session->node_depth - 1] != event->node) {
-				set_failure(session, MANT_STRUCTURED_RELATION,
+				mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 				return;
 			}
@@ -2339,7 +2114,7 @@ observe_terminal(struct termp *p, void *arg,
 		if (column == NULL)
 			return;
 		if (event->pos >= event->end || event->end - event->pos != 1) {
-			set_failure(session, MANT_STRUCTURED_RELATION,
+			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, event->pos,
 			    event->end);
 			return;
@@ -2353,7 +2128,7 @@ observe_terminal(struct termp *p, void *arg,
 		    event->value) : 0;
 		if (session->status != MANT_STRUCTURED_OK)
 			return;
-		if (!charge(session, &session->annotation_mutations, 1,
+		if (!mant_structured_charge(session, &session->annotation_mutations, 1,
 		    session->limits->max_annotation_mutations, 29,
 		    MANT_STRUCTURED_STAGE_RENDER))
 			return;
@@ -2399,12 +2174,12 @@ observe_terminal(struct termp *p, void *arg,
 			}
 		}
 		if (event->end > column->capacity || event->pos > event->end) {
-			set_failure(session, MANT_STRUCTURED_RELATION,
+			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, event->end,
 			    column->capacity);
 			return;
 		}
-		if (!charge(session, &session->annotation_mutations,
+		if (!mant_structured_charge(session, &session->annotation_mutations,
 		    event->end - event->pos,
 		    session->limits->max_annotation_mutations, 29,
 		    MANT_STRUCTURED_STAGE_RENDER))
@@ -2426,7 +2201,7 @@ observe_terminal(struct termp *p, void *arg,
 		    session->pending_break_provenance, MANT_ATOM_HARD_BREAK,
 		    0, 0, 0, NULL, 0, NULL, 0, 0) &&
 		    session->status == MANT_STRUCTURED_OK)
-			set_failure(session, MANT_STRUCTURED_RELATION,
+			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 		session->pending_break_root = 0;
 		session->pending_break_provenance = 0;
@@ -2484,35 +2259,35 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	mchars_ready = 0;
 	output_active = 0;
 	if (!validate_limits(limits)) {
-		set_failure(&session, MANT_STRUCTURED_INVALID_INPUT,
+		mant_structured_set_failure(&session, MANT_STRUCTURED_INVALID_INPUT,
 		    MANT_STRUCTURED_STAGE_MARSHAL, 0, 0, 0);
 		goto cleanup;
 	}
 	if (!validate_input(&session)) {
 		if (session.status == MANT_STRUCTURED_OK)
-			set_failure(&session, MANT_STRUCTURED_INVALID_INPUT,
+			mant_structured_set_failure(&session, MANT_STRUCTURED_INVALID_INPUT,
 			    MANT_STRUCTURED_STAGE_MARSHAL, 0, 0, 0);
 		goto cleanup;
 	}
-	result = allocate(&session, sizeof(*result), 1,
+	result = mant_structured_allocate(&session, sizeof(*result), 1,
 	    MANT_STRUCTURED_STAGE_MARSHAL);
 	if (result == NULL)
 		goto cleanup;
 	session.result = result;
 	source_map_bytes = (uint64_t)input->sources.count *
 	    (sizeof(*session.source_keys) + sizeof(*session.source_maps));
-	if (!charge(&session, &session.source_map_entries,
+	if (!mant_structured_charge(&session, &session.source_map_entries,
 	    input->sources.count, limits->max_source_map_entries, 6,
 	    MANT_STRUCTURED_STAGE_MARSHAL) ||
-	    !charge(&session, &session.source_map_bytes, source_map_bytes,
+	    !mant_structured_charge(&session, &session.source_map_bytes, source_map_bytes,
 	    limits->max_source_map_bytes, 7, MANT_STRUCTURED_STAGE_MARSHAL))
 		goto cleanup;
-	session.source_keys = allocate(&session,
+	session.source_keys = mant_structured_allocate(&session,
 	    (uint64_t)input->sources.count * sizeof(*session.source_keys), 1,
 	    MANT_STRUCTURED_STAGE_MARSHAL);
 	if (session.source_keys == NULL)
 		goto cleanup;
-	session.source_maps = allocate(&session,
+	session.source_maps = mant_structured_allocate(&session,
 	    (uint64_t)input->sources.count * sizeof(*session.source_maps), 1,
 	    MANT_STRUCTURED_STAGE_MARSHAL);
 	if (session.source_maps == NULL)
@@ -2540,14 +2315,14 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	mandoc_msg_setsourcekey(session.source_keys[input->root_input - 1]);
 	meta = mparse_result(parser);
 	if (meta == NULL) {
-		set_failure(&session, MANT_STRUCTURED_NATIVE,
+		mant_structured_set_failure(&session, MANT_STRUCTURED_NATIVE,
 		    MANT_STRUCTURED_STAGE_PARSE, 0, 0, 0);
 		goto native_cleanup;
 	}
 	if (!check_nesting_depth(&session, meta->first))
 		goto native_cleanup;
 	if (session.probe == NULL && !supported_tree(meta->first)) {
-		set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
+		mant_structured_set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
 		    MANT_STRUCTURED_STAGE_RENDER, 0, 1, 0);
 		goto native_cleanup;
 	}
@@ -2561,7 +2336,7 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		    limits->max_content_bytes > SIZE_MAX ? SIZE_MAX :
 		    (size_t)limits->max_content_bytes);
 		if (output == NULL || !mant_mandoc_output_begin(output)) {
-			set_failure(&session, MANT_STRUCTURED_BUILDER_ALLOC,
+			mant_structured_set_failure(&session, MANT_STRUCTURED_BUILDER_ALLOC,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, 0,
 			    limits->max_builder_allocated_bytes);
 			goto native_cleanup;
@@ -2572,7 +2347,7 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		renderer = input->profile == MANT_PROFILE_ASCII ?
 		    ascii_alloc(&output_options) : utf8_alloc(&output_options);
 		if (renderer == NULL) {
-			set_failure(&session, MANT_STRUCTURED_NATIVE,
+			mant_structured_set_failure(&session, MANT_STRUCTURED_NATIVE,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 			goto native_cleanup;
 		}
@@ -2588,7 +2363,7 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		output_active = 0;
 		if (mant_mandoc_output_status(output) != 0 &&
 		    session.status == MANT_STRUCTURED_OK)
-			set_failure(&session, MANT_STRUCTURED_BUDGET,
+			mant_structured_set_failure(&session, MANT_STRUCTURED_BUDGET,
 			    MANT_STRUCTURED_STAGE_RENDER, 10,
 			    mant_mandoc_output_length(output),
 			    limits->max_content_bytes);
@@ -2599,7 +2374,7 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		output = NULL;
 		if (session.probe == NULL && session.pending_break_root != 0 &&
 		    session.status == MANT_STRUCTURED_OK)
-			set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
+			mant_structured_set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 		if (session.status != MANT_STRUCTURED_OK)
 			goto native_cleanup;
@@ -2625,21 +2400,21 @@ native_cleanup:
 	if (session.status == MANT_STRUCTURED_OK) {
 		if (!check_source_positions(&session) &&
 		    session.status == MANT_STRUCTURED_OK)
-			set_failure(&session, MANT_STRUCTURED_RELATION,
+			mant_structured_set_failure(&session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
 		else if (session.status == MANT_STRUCTURED_OK) {
 			result->source_maps = session.source_maps;
 			result->source_map_count = input->sources.count;
 			session.source_maps = NULL;
 			if (!mant_structured_result_is_valid(result))
-				set_failure(&session, MANT_STRUCTURED_RELATION,
+				mant_structured_set_failure(&session, MANT_STRUCTURED_RELATION,
 				    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
 			else
 				result->checked = 1;
 		}
 	}
 	if (session.probe != NULL && session.status == MANT_STRUCTURED_OK)
-		set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
+		mant_structured_set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
 		    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 
 cleanup:

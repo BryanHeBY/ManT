@@ -1,0 +1,87 @@
+/* Private session state shared by structured-rendering implementation units. */
+#ifndef MANT_MANDOC_STRUCTURED_SESSION_H
+#define MANT_MANDOC_STRUCTURED_SESSION_H
+
+#include "mant_mandoc_structured_internal.h"
+
+struct roff_node;
+struct structured_token;
+struct structured_column;
+
+struct structured_session {
+	const struct mant_structured_input_view *input;
+	const struct mant_input_source_view *inputs;
+	const struct mant_structured_limits *limits;
+	struct mant_structured_probe_metrics *probe;
+	struct mant_structured_result *result;
+	uint32_t *source_keys;
+	struct structured_source_map *source_maps;
+	uint32_t current_input;
+	uint32_t status;
+	uint32_t stage;
+	uint32_t limit_kind;
+	uint64_t observed;
+	uint64_t allowed;
+	uint64_t source_path_bytes;
+	uint64_t decoded_bytes;
+	uint64_t source_map_entries;
+	uint64_t source_map_bytes;
+	uint64_t builder_operations;
+	uint64_t allocated_bytes;
+	uint64_t content_bytes;
+	uint64_t include_depth;
+	uint64_t connection_atoms;
+	uint64_t annotation_runs;
+	uint64_t annotation_mutations;
+	uint64_t relation_edges;
+	const struct roff_node **node_stack;
+	uint32_t node_depth;
+	uint32_t node_capacity;
+	uint32_t output_depth;
+	uint32_t current_root;
+	uint32_t current_owner;
+	uint32_t current_root_atom_count;
+	uint32_t section_owner;
+	uint32_t section_heading_block;
+	uint32_t section_root_count;
+	uint32_t section_child_block_count;
+	uint32_t top_level_block_count;
+	uint32_t pending_break_provenance;
+	uint32_t pending_break_root;
+	struct structured_token *tokens;
+	uint32_t token_slot_count;
+	uint32_t token_capacity;
+	uint32_t free_token;
+	uint32_t pending_token;
+	uint64_t token_total;
+	uint64_t projection_live_bytes;
+	uint64_t projection_peak_bytes;
+	struct structured_column *columns;
+	uint32_t column_count;
+	uint32_t column_capacity;
+	const struct roff_node *last_span_node;
+	uint32_t last_span;
+	const struct roff_node *last_provenance_node;
+	uint32_t last_provenance;
+	uint8_t last_provenance_authored;
+	uint64_t current_atom_capacity;
+	uint64_t current_display_capacity;
+	const struct roff_node *last_link_node;
+	uint32_t last_link;
+};
+
+int mant_structured_injected_allocation_failure(void);
+void mant_structured_set_failure(struct structured_session *, uint32_t,
+    uint32_t, uint32_t, uint64_t, uint64_t);
+int mant_structured_charge(struct structured_session *, uint64_t *, uint64_t,
+    uint64_t, uint32_t, uint32_t);
+void *mant_structured_allocate(struct structured_session *, uint64_t, int,
+    uint32_t);
+void *mant_structured_grow_array(struct structured_session *, void *,
+    uint32_t, uint32_t *, uint32_t, size_t, uint64_t, uint32_t, uint32_t);
+uint8_t *mant_structured_copy_bytes(struct structured_session *,
+    const uint8_t *, uint64_t, int, uint32_t);
+struct mant_bytes_view mant_structured_copy_cstring(
+    struct structured_session *, const char *);
+
+#endif
