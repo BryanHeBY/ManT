@@ -20,6 +20,7 @@
 #include "mant_mandoc_structured_source.h"
 #include "mant_mandoc_structured_buffer.h"
 #include "mant_mandoc_structured_builder.h"
+#include "mant_mandoc_structured_link.h"
 #include "mant_mandoc_structured_structure.h"
 #include "mant_mandoc_output.h"
 
