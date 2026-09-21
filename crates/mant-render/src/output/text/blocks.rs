@@ -56,6 +56,28 @@ impl<'a> BlockRenderer<'a> {
         text
     }
 
+    fn has_literal_rows(&self, children: &'a [Inline]) -> bool {
+        self.content.map_or_else(
+            || mant_ir::geometry::has_literal_rows(children),
+            |content| {
+                content
+                    .has_literal_rows(children)
+                    .expect("validated document content must resolve while measuring rows")
+            },
+        )
+    }
+
+    fn definition_run_in_width(&self, terms: &'a [Vec<Inline>]) -> Option<usize> {
+        self.content.map_or_else(
+            || mant_ir::geometry::definition_run_in_width(terms),
+            |content| {
+                content
+                    .definition_run_in_width(terms)
+                    .expect("validated document content must resolve while measuring terms")
+            },
+        )
+    }
+
     pub(super) fn sections_flow(&self, sections: &'a [Section], depth: usize) -> Flow {
         let mut output = Flow::default();
         for section in sections {
@@ -111,7 +133,7 @@ impl<'a> BlockRenderer<'a> {
             children, layout, ..
         } = block
         {
-            if !mant_ir::geometry::has_literal_rows(children) {
+            if !self.has_literal_rows(children) {
                 return Flow::default();
             }
             return Flow::literal(indent_lines(

@@ -2,7 +2,7 @@
 use std::{collections::HashMap, marker::PhantomData, ops::Range};
 
 use mant_ir::{
-    Block, Document, EntryKind, EntryOwner, Inline, project_content_slice,
+    Block, ContentContext, Document, EntryKind, EntryOwner, Inline, project_content_slice,
     visit::{self, Visit},
 };
 
@@ -25,6 +25,10 @@ pub struct InlineNameRange {
 #[derive(Debug, Default)]
 pub struct EntryStyleMap<'a> {
     roots: HashMap<usize, Vec<InlineNameRange>>,
+    // Complete documents bind semantic ranges through their authoritative
+    // store. Materialized excerpt/DTO constructors below intentionally retain
+    // the legacy self-contained-inline boundary until ContentProjection ships.
+    content: Option<ContentContext<'a>>,
     source: PhantomData<&'a Inline>,
 }
 
@@ -32,13 +36,19 @@ impl<'a> EntryStyleMap<'a> {
     /// Collect all validated ordinary name bindings from a document.
     #[must_use]
     pub fn for_document(document: &'a Document) -> Self {
-        let mut map = Self::default();
+        let mut map = Self {
+            content: Some(document.content()),
+            ..Self::default()
+        };
         map.visit_document(document);
         map.normalize();
         map
     }
 
-    /// Collect bindings for already materialized content, including nested owners.
+    /// Collect bindings for a self-contained materialized excerpt or DTO.
+    ///
+    /// This compatibility boundary remains detached until response envelopes
+    /// carry a `ContentProjection`; complete documents use [`Self::for_document`].
     #[must_use]
     pub fn for_blocks(blocks: &'a [Block]) -> Self {
         let mut map = Self::default();
@@ -49,7 +59,10 @@ impl<'a> EntryStyleMap<'a> {
         map
     }
 
-    /// Collect bindings within a materialized section and its descendants.
+    /// Collect bindings within a self-contained materialized section DTO.
+    ///
+    /// This is the section counterpart of the detached [`Self::for_blocks`]
+    /// compatibility boundary.
     #[must_use]
     pub fn for_section(section: &'a mant_ir::Section) -> Self {
         let mut map = Self::default();
@@ -70,7 +83,14 @@ impl<'a> EntryStyleMap<'a> {
     }
 
     fn owner(&mut self, owner: EntryOwner<'a>) {
-        let Some(names) = owner.validated_names() else {
+        let content = self.content;
+        let names = match content {
+            Some(content) => content
+                .entry_validated_names(owner)
+                .expect("document entry content must resolve while styling"),
+            None => owner.validated_names(),
+        };
+        let Some(names) = names else {
             return;
         };
         if names.is_empty() {
@@ -84,7 +104,12 @@ impl<'a> EntryStyleMap<'a> {
                 let ranges = occurrence
                     .parts
                     .iter()
-                    .map(|part| project_content_slice(owner, part))
+                    .map(|part| match content {
+                        Some(content) => content
+                            .project_content_slice(owner, part)
+                            .expect("document entry range must resolve while styling"),
+                        None => project_content_slice(owner, part),
+                    })
                     .collect::<Option<Vec<_>>>();
                 let Some(ranges) = ranges else {
                     continue;

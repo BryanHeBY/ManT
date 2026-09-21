@@ -83,7 +83,7 @@ impl<'a> BlockRenderer<'a> {
         if let Some((children, layout)) = item.inline_description()
             && let Some(last) = terms.pop()
         {
-            let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
+            let last_width = self.definition_run_in_width(&item.terms).unwrap_or(0);
             let first_origin =
                 compose_origin(body_origin, layout.indent_columns).max(compose_origin(
                     origin,
