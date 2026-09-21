@@ -410,7 +410,7 @@ cleanup:
 	free(session.owner_root_counts);
 	free(session.root_atoms);
 	free(session.block_child_counts);
-	free(session.list_item_counts);
+	free(session.list_states);
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;
 	structured_active = 0;

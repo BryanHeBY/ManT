@@ -617,6 +617,148 @@ fn empty_mdoc_item_receives_preceding_tg_target() {
 }
 
 #[test]
+fn nested_empty_mdoc_item_uses_its_own_list_target_scope() {
+    // This exact source was run through the pinned reference first.
+    // `mdoc_validate.c::post_tg` leaves the target on Tg when the following
+    // bullet item has no body child; the inherited outer item is not active in
+    // the nested Bl scope.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "nested-target.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl outer\n.Bl -bullet\n.Tg nested-target\n.It\n.El\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "nested-target.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("nested empty item retains its list-scoped target");
+    assert_eq!(document.lists.len(), 2, "{document:#?}");
+    assert_eq!(document.items.len(), 2, "{document:#?}");
+    assert_eq!(document.items[0].list, document.lists[0].key);
+    assert_eq!(document.items[0].target.as_deref(), Some("outer"));
+    assert_eq!(document.items[1].list, document.lists[1].key);
+    assert_eq!(document.items[1].target.as_deref(), Some("nested-target"));
+    let nested_block = &document.blocks[document.lists[1].block as usize - 1];
+    assert_eq!(nested_block.owner, document.items[0].owner);
+}
+
+#[test]
+fn sibling_nested_lists_keep_independent_pending_targets() {
+    // This exact source was run through the pinned reference first. Both Tg
+    // nodes retain NODE_ID because their following bullet items are empty;
+    // each target belongs to the immediately enclosing Bl scope.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "sibling-targets.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl outer\n.Bl -bullet\n.Tg first-target\n.It\n.El\n.Bl -bullet\n.Tg second-target\n.It\n.El\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "sibling-targets.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("sibling nested lists retain independent pending targets");
+    assert_eq!(document.lists.len(), 3, "{document:#?}");
+    assert_eq!(document.items.len(), 3, "{document:#?}");
+    assert_eq!(document.items[1].list, document.lists[1].key);
+    assert_eq!(document.items[1].target.as_deref(), Some("first-target"));
+    assert_eq!(document.items[2].list, document.lists[2].key);
+    assert_eq!(document.items[2].target.as_deref(), Some("second-target"));
+}
+
+#[test]
+fn distinct_pending_targets_fail_closed_until_items_can_retain_all_anchors() {
+    // These exact sources were run through the pinned reference first. The Tg
+    // nodes retain NODE_ID values. The current item ABI has one target slot,
+    // so silently overwriting either distinct authored target is invalid.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "multiple-targets.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh OPTIONS\n.Bl -bullet\n.Tg first-target\n.Tg second-target\n.It\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let error = render_prelude(
+        "multiple-targets.1",
+        &bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect_err("one target slot cannot represent two distinct authored anchors");
+    assert_eq!(error.status, STATUS_UNSUPPORTED);
+
+    let mut duplicate_bundle = SourceBundle::new();
+    duplicate_bundle
+        .insert(
+            "duplicate-targets.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh OPTIONS\n.Bl -bullet\n.Tg same-target\n.Tg same-target\n.It\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let duplicate = render_prelude(
+        "duplicate-targets.1",
+        &duplicate_bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("identical pending targets fit the one-target contract");
+    assert_eq!(duplicate.items[0].target.as_deref(), Some("same-target"));
+
+    let mut moved_bundle = SourceBundle::new();
+    moved_bundle
+        .insert(
+            "pending-and-moved.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh OPTIONS\n.Bl -bullet\n.Tg first-target\n.Tg second-target\n.It\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let moved_error = render_prelude(
+        "pending-and-moved.1",
+        &moved_bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect_err("a moved target cannot overwrite a pending authored target");
+    assert_eq!(moved_error.status, STATUS_UNSUPPORTED);
+
+    let mut precedence_bundle = SourceBundle::new();
+    precedence_bundle
+        .insert(
+            "target-precedence.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.Tg explicit-target\n.It Fl automatic\nBODY\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let precedence = render_prelude(
+        "target-precedence.1",
+        &precedence_bundle,
+        InputFormat::Mdoc,
+        78,
+        &Limits::default(),
+    )
+    .expect("an automatic inline tag cannot displace the authored target");
+    assert_eq!(
+        precedence.items[0].target.as_deref(),
+        Some("explicit-target")
+    );
+}
+
+#[test]
 fn mdoc_multiple_labels_keep_one_structural_form_and_independent_hints() {
     // The exact source was checked against the pinned reference. Pinned
     // `mdoc_term.c::termp_it_pre` executes both Fl nodes around punctuation;

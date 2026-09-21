@@ -514,3 +514,33 @@ Nested two.
         )
     );
 }
+
+#[test]
+fn nested_empty_mdoc_item_retains_its_explicit_target() {
+    // This exact source was run through the pinned reference first.
+    // `mdoc_validate.c::post_tg` keeps Tg as the target owner because the
+    // following bullet item has no body child.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "nested-target.1",
+            b".Dd September 21, 2026\n.Dt X 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl outer\n.Bl -bullet\n.Tg nested-target\n.It\n.El\n.El\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("nested-target.1", &bundle, InputFormat::Mdoc)
+        .expect("nested empty target lowers through the native path");
+    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        panic!("outer definition list retained")
+    };
+    let Block::List { items: nested, .. } = &items[0].description[0] else {
+        panic!("nested bullet list retained")
+    };
+    let Block::Paragraph { children, .. } = &nested[0].blocks[0] else {
+        panic!("target-only empty item receives an anchor paragraph")
+    };
+    assert!(matches!(
+        children.as_slice(),
+        [Inline::Anchor { id, .. }] if id.as_str() == "nested-target"
+    ));
+}

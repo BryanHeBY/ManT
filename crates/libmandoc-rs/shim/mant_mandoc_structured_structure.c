@@ -41,7 +41,7 @@ static uint32_t
 context_owner(struct structured_session *session,
     const struct structured_node_context *context, uint32_t provenance)
 {
-	if (context != NULL && context->item != 0)
+	if (context != NULL && context->owner != 0)
 		return context->owner;
 	if (session->section_owner == 0)
 		session->section_owner = mant_structured_append_owner(session,
@@ -329,7 +329,8 @@ append_list(struct structured_session *session,
     uint32_t kind, uint32_t block_kind, uint32_t start, int compact)
 {
 	struct mant_structured_list_view *lists, *list;
-	uint32_t *counts, owner, parent, provenance, block;
+	struct structured_list_state *states, *state;
+	uint32_t owner, parent, provenance, block;
 
 	provenance = mant_structured_append_provenance(session, node, 1);
 	owner = context_owner(session, context, provenance);
@@ -348,15 +349,16 @@ append_list(struct structured_session *session,
 	if (lists == NULL)
 		return 0;
 	session->result->lists = lists;
-	counts = mant_structured_grow_array(session, session->list_item_counts,
-	    session->result->list_count, &session->list_item_capacity,
-	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*counts),
+	states = mant_structured_grow_array(session, session->list_states,
+	    session->result->list_count, &session->list_state_capacity,
+	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*states),
 	    session->limits->max_builder_allocated_bytes, 12,
 	    MANT_STRUCTURED_STAGE_RENDER);
-	if (counts == NULL)
+	if (states == NULL)
 		return 0;
-	session->list_item_counts = counts;
-	counts[session->result->list_count] = 0;
+	session->list_states = states;
+	state = states + session->result->list_count;
+	memset(state, 0, sizeof(*state));
 	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER) ||
@@ -372,7 +374,10 @@ append_list(struct structured_session *session,
 	list->compact = compact != 0;
 	list->start = kind == MANT_LIST_ORDERED ? start : 0;
 	list->provenance = provenance;
+	context->owner = owner;
 	context->list = list->key;
+	/* The new list owns its active item and pending target scope. */
+	context->item = 0;
 	context->container_block = block;
 	return list->key;
 }
@@ -389,12 +394,28 @@ set_item_target(struct structured_session *session, uint32_t item_key,
 	    node->tag[0] == '\0')
 		return 1;
 	item = session->result->items + item_key - 1;
-	if (item->target_present != 0)
-		return 1;
 	target_length = strlen(node->tag);
 	if (!mant_structured_valid_utf8((const uint8_t *)node->tag,
 	    target_length))
 		return 1;
+	if (item->target_present != 0) {
+		if (item->target.len == target_length &&
+		    memcmp(item->target.ptr, node->tag, target_length) == 0)
+			return 1;
+		/*
+		 * Inline automatic tags are recoverable from native markup, but a
+		 * Tg retained on itself or moved onto an It owner is not.  Until the
+		 * item ABI carries multiple authored targets, fail rather than drop it.
+		 */
+		if (node->tok == MDOC_Tg || (node->tok == MDOC_It &&
+		    (node->type == ROFFT_HEAD || node->type == ROFFT_BODY))) {
+			mant_structured_set_failure(session,
+			    MANT_STRUCTURED_UNSUPPORTED,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, 2, 1);
+			return 0;
+		}
+		return 1;
+	}
 	item->target.ptr = mant_structured_copy_bytes(session,
 	    (const uint8_t *)node->tag, target_length, 1,
 	    MANT_STRUCTURED_STAGE_RENDER);
@@ -405,6 +426,32 @@ set_item_target(struct structured_session *session, uint32_t item_key,
 	return 1;
 }
 
+static int
+remember_item_target(struct structured_session *session, uint32_t list_key,
+    const struct roff_node *node)
+{
+	struct structured_list_state *state;
+
+	if (list_key == 0 || list_key > session->result->list_count ||
+	    node == NULL || node->tag == NULL || node->tag[0] == '\0') {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, list_key,
+		    session->result->list_count);
+		return 0;
+	}
+	state = session->list_states + list_key - 1;
+	if (state->pending_item_target == NULL) {
+		state->pending_item_target = node;
+		return 1;
+	}
+	if (strcmp(state->pending_item_target->tag, node->tag) == 0)
+		return 1;
+	/* One item target cannot silently discard a second authored Tg. */
+	mant_structured_set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
+	    MANT_STRUCTURED_STAGE_RENDER, 0, 2, 1);
+	return 0;
+}
+
 static uint32_t
 append_item(struct structured_session *session,
     struct structured_node_context *context, const struct roff_node *node,
@@ -412,11 +459,13 @@ append_item(struct structured_session *session,
 {
 	struct mant_structured_item_view *items, *item;
 	const struct mant_structured_list_view *list;
+	struct structured_list_state *state;
 	uint32_t kind, owner, provenance;
 
 	if (list_key == 0 || list_key > session->result->list_count)
 		return 0;
 	list = session->result->lists + list_key - 1;
+	state = session->list_states + list_key - 1;
 	provenance = mant_structured_append_provenance(session, node, 1);
 	kind = list->kind == MANT_LIST_DEFINITION ||
 	    list->kind == MANT_LIST_NATIVE_MARKER ?
@@ -444,16 +493,16 @@ append_item(struct structured_session *session,
 	item->key = ++session->result->item_count;
 	item->list = list_key;
 	item->owner = owner;
-	item->ordinal = session->list_item_counts[list_key - 1]++;
+	item->ordinal = state->item_count++;
 	item->provenance = provenance;
+	if (state->pending_item_target != NULL) {
+		if (!set_item_target(session, item->key,
+		    state->pending_item_target))
+			return 0;
+		state->pending_item_target = NULL;
+	}
 	if (!set_item_target(session, item->key, node))
 		return 0;
-	if (session->pending_item_target != NULL) {
-		if (!set_item_target(session, item->key,
-		    session->pending_item_target))
-			return 0;
-		session->pending_item_target = NULL;
-	}
 	context->owner = owner;
 	context->item = item->key;
 	context->list = list_key;
@@ -591,8 +640,9 @@ mant_structured_enter_node(struct structured_session *session,
 		return 1;
 	}
 	if (node->tok == MDOC_Tg && (node->flags & NODE_ID) != 0 &&
-	    context->list != 0 && context->item == 0)
-		session->pending_item_target = node;
+	    context->list != 0 && context->item == 0 &&
+	    !remember_item_target(session, context->list, node))
+		return 0;
 	if ((node->tok == MAN_PP || node->tok == MAN_LP || node->tok == MAN_P ||
 	    node->tok == MAN_IP || node->tok == MAN_TP) &&
 	    node->type != ROFFT_HEAD && node->type != ROFFT_BODY)
@@ -632,8 +682,9 @@ mant_structured_leave_node(struct structured_session *session,
 	    context->part == STRUCTURED_PART_TERM && context->term_root != 0)
 		mant_structured_close_term_root(session, context->term_root,
 		    context->item);
-	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MDOC_Bl)
-		session->pending_item_target = NULL;
+	if (context != NULL && node != NULL && node->type == ROFFT_BLOCK &&
+	    node->tok == MDOC_Bl && context->list != 0)
+		session->list_states[context->list - 1].pending_item_target = NULL;
 	if (node != NULL && node->type == ROFFT_BLOCK && node->tok == MAN_RS) {
 		session->man_continuation_pending = 0;
 		if (context != NULL && context->restore_man_state != 0) {

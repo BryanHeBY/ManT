@@ -46,6 +46,12 @@ struct structured_root_atoms {
 	uint8_t finalized;
 };
 
+struct structured_list_state {
+	/* Active item ordinals and pre-item Tg ownership share one list scope. */
+	uint32_t item_count;
+	const struct roff_node *pending_item_target;
+};
+
 struct structured_session {
 	const struct mant_structured_input_view *input;
 	const struct mant_input_source_view *inputs;
@@ -83,8 +89,8 @@ struct structured_session {
 	uint32_t root_atom_capacity;
 	uint32_t *block_child_counts;
 	uint32_t block_child_capacity;
-	uint32_t *list_item_counts;
-	uint32_t list_item_capacity;
+	struct structured_list_state *list_states;
+	uint32_t list_state_capacity;
 	uint32_t last_man_item;
 	uint32_t last_man_list;
 	uint32_t last_man_parent_block;
@@ -94,7 +100,6 @@ struct structured_session {
 	uint32_t last_man_marker_kind;
 	uint32_t last_man_marker_style;
 	uint32_t next_man_marker_ordinal;
-	const struct roff_node *pending_item_target;
 	uint32_t output_depth;
 	uint32_t current_root;
 	uint32_t current_owner;
