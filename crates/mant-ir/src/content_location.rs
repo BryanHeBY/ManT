@@ -7,7 +7,7 @@ mod resolve;
 mod types;
 
 pub use entry::EntryOwnerLocationRef;
-pub(crate) use resolve::{block_children, content_blocks, inline_children};
+pub(crate) use resolve::{block_children, content_blocks, inline_children, resolve_location};
 pub use resolve::{
     resolve_block_descendant, resolve_content_block, resolve_content_section, resolve_inline_path,
 };

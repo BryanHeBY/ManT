@@ -8,13 +8,13 @@ impl ContentLocation {
     /// Resolve the checked inline container or singleton node in this snapshot.
     #[must_use]
     pub fn resolve<'a>(&self, document: &'a Document) -> Option<&'a [Inline]> {
-        self.as_ref().resolve(document)
+        document.content().resolve(self.as_ref())
     }
 
     /// Resolve precisely one real link, including an empty-label link.
     #[must_use]
     pub fn resolve_link<'a>(&self, document: &'a Document) -> Option<&'a Inline> {
-        self.as_ref().resolve_link(document)
+        document.content().resolve_link(self.as_ref())
     }
 }
 
@@ -22,48 +22,46 @@ impl ContentLocationRef<'_> {
     /// Check container kinds and bounds against the exact supplied document.
     #[must_use]
     pub fn resolve(self, document: &Document) -> Option<&[Inline]> {
-        if !self.within_limits() {
-            return None;
-        }
-        let (nodes, path) = match self {
-            Self::DocumentHeading { path } => (document.heading.as_ref()?.content.as_slice(), path),
-            Self::SectionHeading { sections, path } => (
-                resolve_content_section(document, sections)?
-                    .heading
-                    .content
-                    .as_slice(),
-                path,
-            ),
-            Self::Content {
-                sections,
-                blocks,
-                root,
-                path,
-            } => {
-                let blocks_root = content_blocks(document, sections)?;
-                let block = resolve_content_block(blocks_root, blocks)?;
-                (resolve_inline_root(block, root)?, path)
-            }
-        };
-        resolve_inline_path(nodes, path)
+        document.content().resolve(self)
     }
 
     /// A link occurrence must identify a node, not a whole one-link container.
     #[must_use]
     pub fn resolve_link(self, document: &Document) -> Option<&Inline> {
-        let path = match self {
-            Self::DocumentHeading { path }
-            | Self::SectionHeading { path, .. }
-            | Self::Content { path, .. } => path,
-        };
-        if path.is_empty() {
-            return None;
-        }
-        match self.resolve(document)? {
-            [link @ Inline::Link { .. }] => Some(link),
-            _ => None,
-        }
+        document.content().resolve_link(self)
     }
+}
+
+pub(crate) fn resolve_location<'a>(
+    document: &'a Document,
+    location: ContentLocationRef<'_>,
+) -> Option<&'a [Inline]> {
+    if !location.within_limits() {
+        return None;
+    }
+    let (nodes, path) = match location {
+        ContentLocationRef::DocumentHeading { path } => {
+            (document.heading.as_ref()?.content.as_slice(), path)
+        }
+        ContentLocationRef::SectionHeading { sections, path } => (
+            resolve_content_section(document, sections)?
+                .heading
+                .content
+                .as_slice(),
+            path,
+        ),
+        ContentLocationRef::Content {
+            sections,
+            blocks,
+            root,
+            path,
+        } => {
+            let blocks_root = content_blocks(document, sections)?;
+            let block = resolve_content_block(blocks_root, blocks)?;
+            (resolve_inline_root(block, root)?, path)
+        }
+    };
+    resolve_inline_path(nodes, path)
 }
 
 /// Resolve a nonempty path of section child indices.

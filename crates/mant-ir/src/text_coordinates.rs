@@ -18,61 +18,33 @@ pub struct RootTextRange {
 /// Invalid paths, split UTF-8 scalars and out-of-range references return None.
 /// This performs coordinate validation, not semantic name validation; callers
 /// must first obtain validated names before treating a slice as a name binding.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects a directly owned inline
+/// leaf.
 #[must_use]
 pub fn project_content_slice(
     owner: EntryOwner<'_>,
     slice: &EntryContentSlice,
 ) -> Option<RootTextRange> {
-    let mut nodes = owner.inline_root(&slice.root)?;
-    let mut start = 0;
-    for (depth, &index) in slice.path.iter().enumerate() {
-        start += inline_scalar_len(nodes.get(..index)?);
-        let node = nodes.get(index)?;
-        nodes = if depth + 1 == slice.path.len() {
-            std::slice::from_ref(node)
-        } else {
-            match node {
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => children,
-                _ => return None,
-            }
-        };
-    }
-    let length = if let Some(bytes) = &slice.bytes {
-        if slice.path.is_empty() || bytes.start >= bytes.end {
-            return None;
-        }
-        let [Inline::Text { value } | Inline::Code { value }] = nodes else {
-            return None;
-        };
-        let selected = value.get(bytes.clone())?;
-        start += value.get(..bytes.start)?.chars().count();
-        selected.chars().count()
-    } else {
-        inline_scalar_len(nodes)
-    };
-    Some(RootTextRange {
-        root: slice.root.clone(),
-        chars: start..start + length,
-    })
+    crate::ContentContext::detached()
+        .project_content_slice(owner, slice)
+        .expect("legacy inline text is self-contained")
 }
 
 /// Count original Unicode scalars: wrappers and anchors add no positions,
 /// while each authored hard line break occupies one scalar position.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects a directly owned inline
+/// leaf or the scalar count overflows `usize`.
 #[must_use]
 pub fn inline_scalar_len(nodes: &[Inline]) -> usize {
-    nodes
-        .iter()
-        .map(|node| match node {
-            Inline::Text { value } | Inline::Code { value } => value.chars().count(),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => inline_scalar_len(children),
-            Inline::LineBreak => 1,
-            Inline::Anchor { .. } => 0,
-        })
-        .sum()
+    crate::ContentContext::detached()
+        .scalar_len(nodes)
+        .expect("legacy inline text is self-contained")
 }
 
 #[cfg(test)]

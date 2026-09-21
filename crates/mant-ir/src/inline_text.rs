@@ -6,11 +6,16 @@ use crate::Inline;
 /// Styles and links contribute their original children, anchors contribute no
 /// text, and hard breaks contribute `\n`. This is not a terminal sanitizer,
 /// whitespace normalizer, or bounded reference-label projection.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects a directly owned inline
+/// leaf, which violates this compatibility API's representation invariant.
 #[must_use]
 pub fn inline_plain_text(nodes: &[Inline]) -> String {
-    let mut output = String::new();
-    visit_inline_plain_text(nodes, |text| output.push_str(text));
-    output
+    crate::ContentContext::detached()
+        .plain_text(nodes)
+        .expect("legacy inline text is self-contained")
 }
 
 /// Visit borrowed visible text leaves in source order, without decoration.
@@ -19,72 +24,58 @@ pub fn inline_plain_text(nodes: &[Inline]) -> String {
 /// breaks contribute a newline. This shares the exact content domain of
 /// [`inline_plain_text`] without allocating an intermediate flattened string.
 /// No sanitization, name matching or presentation roles are applied.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects a directly owned inline
+/// leaf.
 pub fn visit_inline_plain_text<'a>(nodes: &'a [Inline], mut emit: impl FnMut(&'a str)) {
-    fn append<'a>(nodes: &'a [Inline], emit: &mut impl FnMut(&'a str)) {
-        for node in nodes {
-            match node {
-                Inline::Text { value } | Inline::Code { value } => emit(value),
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => append(children, emit),
-                Inline::Anchor { .. } => {}
-                Inline::LineBreak => emit("\n"),
-            }
-        }
-    }
-    append(nodes, &mut emit);
+    crate::ContentContext::detached()
+        .visit_plain_text(nodes, &mut emit)
+        .expect("legacy inline text is self-contained");
 }
 
 /// First character visible to a renderer without allocating flattened text.
 /// Hard breaks and whitespace are characters; empty nodes and anchors are skipped.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects a directly owned inline
+/// leaf.
 #[must_use]
 pub fn first_visible_character(nodes: &[Inline]) -> Option<char> {
-    nodes.iter().find_map(first_character)
+    crate::ContentContext::detached()
+        .first_visible_character(nodes)
+        .expect("legacy inline text is self-contained")
 }
 
 /// Last character visible to a renderer without allocating flattened text.
 /// Hard breaks and whitespace are characters; empty nodes and anchors are skipped.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects a directly owned inline
+/// leaf.
 #[must_use]
 pub fn last_visible_character(nodes: &[Inline]) -> Option<char> {
-    nodes.iter().rev().find_map(last_character)
+    crate::ContentContext::detached()
+        .last_visible_character(nodes)
+        .expect("legacy inline text is self-contained")
 }
 
 /// Whether an inline fragment contains content other than layout-only breaks.
 /// Spaces, tabs and carriage returns count as content; only `\n` is excluded.
 /// This is intentionally different from checking trimmed text for nonemptiness.
+///
+/// # Panics
+///
+/// Panics only if the internal legacy backend rejects a directly owned inline
+/// leaf.
 #[must_use]
 pub fn has_printable_character(nodes: &[Inline]) -> bool {
-    nodes.iter().any(|node| match node {
-        Inline::Text { value } | Inline::Code { value } => {
-            value.chars().any(|character| character != '\n')
-        }
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => has_printable_character(children),
-        Inline::Anchor { .. } | Inline::LineBreak => false,
-    })
-}
-
-fn first_character(node: &Inline) -> Option<char> {
-    match node {
-        Inline::Text { value } | Inline::Code { value } => value.chars().next(),
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => first_visible_character(children),
-        Inline::Anchor { .. } => None,
-        Inline::LineBreak => Some('\n'),
-    }
-}
-
-fn last_character(node: &Inline) -> Option<char> {
-    match node {
-        Inline::Text { value } | Inline::Code { value } => value.chars().next_back(),
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => last_visible_character(children),
-        Inline::Anchor { .. } => None,
-        Inline::LineBreak => Some('\n'),
-    }
+    crate::ContentContext::detached()
+        .has_printable_character(nodes)
+        .expect("legacy inline text is self-contained")
 }
 
 /// Decide whether definition terms fit beside their first description line.

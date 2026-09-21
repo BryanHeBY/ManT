@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 mod address;
+mod content;
 mod content_location;
 mod declaration;
 mod document;
@@ -22,6 +23,7 @@ mod validation;
 pub mod visit;
 
 pub use address::*;
+pub use content::*;
 pub use content_location::*;
 pub use declaration::*;
 pub use document::*;

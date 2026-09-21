@@ -61,7 +61,12 @@ impl Document {
     pub fn display_title(&self) -> Option<Cow<'_, str>> {
         self.heading
             .as_ref()
-            .map(|heading| Cow::Owned(heading.plain_text()))
+            .and_then(|heading| {
+                self.content()
+                    .plain_text(&heading.content)
+                    .ok()
+                    .map(Cow::Owned)
+            })
             .or_else(|| self.meta.title.as_deref().map(Cow::Borrowed))
     }
 }
