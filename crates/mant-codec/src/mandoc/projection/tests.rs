@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 
 use libmandoc_rs::structured::{
-    ContentAtomKind, NativeLinkTarget, StructuredErrorKind, StructuredProfile, StructuredRenderer,
+    ContentAtomKind, NativeLinkTarget, StructuredProfile, StructuredRenderer,
 };
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{Provenance, SourceIdentity, SourceKey};
 
-use super::{NativeInlineLeaf, NativeProjectionError, NativeProseProjection, project_native_prose};
+use super::{NativeInlineLeaf, NativeProseProjection, project_native_prose};
 
 fn bundle(entries: &[(&str, &[u8])]) -> SourceBundle {
     let mut bundle = SourceBundle::new();
@@ -222,20 +222,18 @@ fn logical_connection_atoms_survive_the_final_private_projection() {
 }
 
 #[test]
-fn unsupported_native_structure_is_not_a_partial_prose_success() {
+fn c03_native_definition_structure_is_no_longer_a_partial_prose_failure() {
     // Registered-oracle preflight (binary d7c587...e7311d) and the exact
     // UTF-8/78 `.TP` probe preceded this assertion. Pinned
     // `man_term.c::pre_TP` treats it as a definition, not plain prose.
     let input = b".TH UNSUPPORTED 1\n.SH OPTIONS\n.TP\n.B -x\nbody\n";
-    let error = project_native_prose(
+    let projection = project_native_prose(
         "unsupported.1",
         &bundle(&[("unsupported.1", input)]),
         InputFormat::Man,
     )
-    .expect_err("C02b must reject structure it cannot project completely");
-    assert!(matches!(
-        error,
-        NativeProjectionError::Native(ref native)
-            if native.kind() == StructuredErrorKind::Unsupported
-    ));
+    .expect("C03 projects complete native definition structure");
+    assert_eq!(projection.document().lists().len(), 1);
+    assert_eq!(projection.document().items().len(), 1);
+    assert_eq!(projection.document().forms().len(), 1);
 }

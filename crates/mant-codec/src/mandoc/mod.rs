@@ -16,6 +16,9 @@ mod projection;
 mod redirect;
 mod reference;
 mod roff_escape;
+#[cfg(feature = "native-structured")]
+#[allow(dead_code)] // Private vertical slice until the production cutover phase.
+mod structured_document;
 pub use redirect::{RedirectSyntaxError, redirect_target};
 mod source_context;
 mod source_lines;

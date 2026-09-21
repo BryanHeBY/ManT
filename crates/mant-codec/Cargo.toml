@@ -29,5 +29,9 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 
+[dev-dependencies]
+mant-protocol = { path = "../mant-protocol", version = "^0.12.0" }
+mant-query = { path = "../mant-query", version = "^0.12.0" }
+
 [lints]
 workspace = true

@@ -101,7 +101,7 @@ pub(crate) struct NativeProseBlock {
     pub(crate) owner: OwnerKey,
     pub(crate) kind: NativeBlockKind,
     pub(crate) parent: Option<NativeBlockKey>,
-    pub(crate) root: ContentRootKey,
+    pub(crate) root: Option<ContentRootKey>,
     pub(crate) provenance: ProvenanceKey,
 }
 
@@ -208,7 +208,11 @@ fn validate_owners(
     for owner in document.owners() {
         if !matches!(
             owner.kind(),
-            ContentOwnerKind::Document | ContentOwnerKind::Section | ContentOwnerKind::Paragraph
+            ContentOwnerKind::Document
+                | ContentOwnerKind::Section
+                | ContentOwnerKind::Paragraph
+                | ContentOwnerKind::ListItem
+                | ContentOwnerKind::DefinitionItem
         ) {
             return Err(NativeProjectionError::UnsupportedOwner(owner.kind()));
         }
@@ -228,7 +232,7 @@ fn project_roots(
     for root in document.content_roots() {
         if !matches!(
             root.kind(),
-            ContentRootKind::Heading | ContentRootKind::Body
+            ContentRootKind::Heading | ContentRootKind::Term | ContentRootKind::Body
         ) {
             return Err(NativeProjectionError::UnsupportedRoot(root.kind()));
         }
@@ -349,31 +353,43 @@ fn project_blocks(
     for block in document.blocks() {
         if !matches!(
             block.kind(),
-            NativeBlockKind::Heading | NativeBlockKind::Paragraph
+            NativeBlockKind::Heading
+                | NativeBlockKind::Paragraph
+                | NativeBlockKind::List
+                | NativeBlockKind::DefinitionList
         ) {
             return Err(NativeProjectionError::UnsupportedBlock(block.kind()));
         }
-        let root = block.root().ok_or(NativeProjectionError::InvalidRelation(
-            "prose block has no content root",
-        ))?;
-        let root_index = one_based_index(root.get(), "block root key does not fit this platform")?;
-        let projected_root =
-            roots
-                .get(root_index)
-                .ok_or(NativeProjectionError::InvalidRelation(
-                    "prose block references an unknown root",
-                ))?;
-        let used = used_roots
-            .get_mut(root_index)
-            .ok_or(NativeProjectionError::InvalidRelation(
-                "block root state is missing",
-            ))?;
-        if projected_root.key != root || projected_root.owner != block.owner() || *used {
+        let root = block.root();
+        if let Some(root) = root {
+            let root_index =
+                one_based_index(root.get(), "block root key does not fit this platform")?;
+            let projected_root =
+                roots
+                    .get(root_index)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "prose block references an unknown root",
+                    ))?;
+            let used =
+                used_roots
+                    .get_mut(root_index)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "block root state is missing",
+                    ))?;
+            if projected_root.key != root || projected_root.owner != block.owner() || *used {
+                return Err(NativeProjectionError::InvalidRelation(
+                    "prose block root ownership is not unique",
+                ));
+            }
+            *used = true;
+        } else if !matches!(
+            block.kind(),
+            NativeBlockKind::List | NativeBlockKind::DefinitionList
+        ) {
             return Err(NativeProjectionError::InvalidRelation(
-                "prose block root ownership is not unique",
+                "prose block has no content root",
             ));
         }
-        *used = true;
         provenance(provenances, block.provenance())?;
         blocks.push(NativeProseBlock {
             key: block.key(),
@@ -384,12 +400,22 @@ fn project_blocks(
             provenance: block.provenance(),
         });
     }
-    if used_roots.iter().any(|used| !used) {
+    if roots
+        .iter()
+        .zip(&used_roots)
+        .any(|(root, used)| root_kind(document, root.key) != Some(ContentRootKind::Term) && !used)
+    {
         return Err(NativeProjectionError::InvalidRelation(
             "native prose root is not owned by exactly one block",
         ));
     }
     Ok(blocks)
+}
+
+fn root_kind(document: &StructuredDocument, key: ContentRootKey) -> Option<ContentRootKind> {
+    document
+        .content_root(key)
+        .map(libmandoc_rs::structured::ContentRoot::kind)
 }
 
 fn one_based_index(one_based: u32, relation: &'static str) -> Result<usize, NativeProjectionError> {
