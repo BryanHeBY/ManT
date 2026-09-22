@@ -52,6 +52,7 @@ fn thematic_rule_source_gaps_survive_root_section_and_nested_list_lowering() {
             let mut repeated = document.clone();
             super::super::layout::normalize_markdown_layout(
                 &super::super::source::MarkdownSource::new(&source),
+                &mut super::super::content::MarkdownContent::new(),
                 &mut repeated.blocks,
                 &mut repeated.sections,
             );
@@ -88,10 +89,13 @@ fn annotations_preserve_the_original_event_tree_and_every_visible_delimiter() {
             let prepared =
                 super::super::directives::PreparedMarkdown::new(&source, &mut diagnostics);
             let source_map = super::super::source::MarkdownSource::new(&source);
-            let raw = super::super::lower_document_structure(prepared.events, &source_map);
+            let mut content = super::super::content::MarkdownContent::new();
+            let raw =
+                super::super::lower_document_structure(prepared.events, &source_map, &mut content);
             let mut annotated = raw.root_blocks.clone();
             let mut declarations = prepared.declarations;
             super::super::entries::normalize_entry_lists(
+                &content,
                 &mut annotated,
                 &mut declarations,
                 &mut diagnostics,
@@ -186,13 +190,11 @@ fn list_tightness_comes_from_direct_parser_items_not_source_substrings() {
 #[test]
 fn decoded_fragments_are_exact_and_not_normalized_a_second_time() {
     use mant_ir::visit::{Visit, walk_inline};
-    struct Targets(Vec<String>);
-    impl<'a> Visit<'a> for Targets {
+    struct Targets<'a>(Vec<String>, mant_ir::ContentContext<'a>);
+    impl<'a> Visit<'a> for Targets<'a> {
         fn visit_inline(&mut self, inline: &'a Inline) {
-            if let Inline::Link {
-                target: mant_ir::LinkTarget::Section { id },
-                ..
-            } = inline
+            if let Ok(Some(link)) = self.1.link(inline)
+                && let mant_ir::LinkTarget::Section { id } = link.target()
             {
                 self.0.push(id.to_string());
             }
@@ -206,7 +208,7 @@ fn decoded_fragments_are_exact_and_not_normalized_a_second_time() {
         "{:?}",
         parsed.document.diagnostics
     );
-    let mut targets = Targets(Vec::new());
+    let mut targets = Targets(Vec::new(), parsed.document.content());
     targets.visit_document(&parsed.document);
     assert_eq!(targets.0, ["foo", "second", "second", "third", "percent"]);
     for fragment in ["%20foo", "foo%20", "FOO", "missing"] {

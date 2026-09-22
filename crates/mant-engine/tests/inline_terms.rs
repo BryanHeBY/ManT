@@ -39,6 +39,7 @@ fn document() -> &'static Document {
 #[test]
 fn short_terms_are_flagged_inline_and_long_terms_are_not() {
     let doc = document();
+    let content = doc.content();
     let operators = common::section(doc, "OPERATORS");
     let items = common::definition_items(operators);
 
@@ -50,7 +51,7 @@ fn short_terms_are_flagged_inline_and_long_terms_are_not() {
             .find(|item| {
                 item.terms
                     .iter()
-                    .any(|term| common::inline_text(term) == needle)
+                    .any(|term| common::inline_text(content, term) == needle)
             })
             .unwrap_or_else(|| panic!("missing operator term {needle:?}"));
         assert!(
@@ -65,7 +66,7 @@ fn short_terms_are_flagged_inline_and_long_terms_are_not() {
         .find(|item| {
             item.terms
                 .iter()
-                .any(|term| common::inline_text(term).contains("< >"))
+                .any(|term| common::inline_text(content, term).contains("< >"))
         })
         .expect("relational operators term");
     assert!(
@@ -77,6 +78,7 @@ fn short_terms_are_flagged_inline_and_long_terms_are_not() {
 #[test]
 fn long_option_names_are_not_inline() {
     let doc = document();
+    let content = doc.content();
     let options = common::section(doc, "OPTIONS");
     let items = common::definition_items(options);
 
@@ -85,7 +87,7 @@ fn long_option_names_are_not_inline() {
         .find(|item| {
             item.terms
                 .iter()
-                .any(|term| common::inline_text(term).contains("--verbose"))
+                .any(|term| common::inline_text(content, term).contains("--verbose"))
         })
         .expect("--verbose option");
     assert!(
@@ -97,6 +99,7 @@ fn long_option_names_are_not_inline() {
 #[test]
 fn uniform_ascii_markers_remain_authored_definition_tags() {
     let doc = document();
+    let content = doc.content();
     let exit = common::section(doc, "EXIT STATUS");
 
     // Repetition does not prove that the character is semantically disposable.
@@ -130,19 +133,21 @@ fn uniform_ascii_markers_remain_authored_definition_tags() {
     assert!(items.iter().all(|item| {
         item.terms
             .iter()
-            .all(|term| common::inline_text(term) == "o")
+            .all(|term| common::inline_text(content, term) == "o")
     }));
 }
 
 #[test]
 fn a_literal_tp_bullet_glyph_remains_a_definition_term() {
-    let operators = common::section(document(), "OPERATORS");
+    let doc = document();
+    let content = doc.content();
+    let operators = common::section(doc, "OPERATORS");
     let literal = common::definition_items(operators)
         .into_iter()
         .find(|item| {
             item.terms
                 .iter()
-                .any(|term| common::inline_text(term) == "*")
+                .any(|term| common::inline_text(content, term) == "*")
         })
         .expect("literal .TP * definition");
 
@@ -150,14 +155,16 @@ fn a_literal_tp_bullet_glyph_remains_a_definition_term() {
         panic!("literal term description should be a paragraph");
     };
     assert_eq!(
-        common::inline_text(children),
+        common::inline_text(content, children),
         "A literal punctuation term from a tagged paragraph."
     );
 }
 
 #[test]
 fn tq_aliases_share_one_definition_and_recompute_its_layout() {
-    let aliases = common::definition_items(common::section(document(), "ALIASES"));
+    let doc = document();
+    let content = doc.content();
+    let aliases = common::definition_items(common::section(doc, "ALIASES"));
     let [item] = aliases.as_slice() else {
         panic!(
             "expected one merged alias definition, got {}",
@@ -167,7 +174,7 @@ fn tq_aliases_share_one_definition_and_recompute_its_layout() {
     assert_eq!(
         item.terms
             .iter()
-            .map(|term| common::inline_text(term))
+            .map(|term| common::inline_text(content, term))
             .collect::<Vec<_>>(),
         ["-a", "--all"]
     );
@@ -179,14 +186,16 @@ fn tq_aliases_share_one_definition_and_recompute_its_layout() {
 
 #[test]
 fn explicit_tp_widths_control_layout_and_persist() {
-    let widths = common::definition_items(common::section(document(), "WIDTHS"));
+    let doc = document();
+    let content = doc.content();
+    let widths = common::definition_items(common::section(doc, "WIDTHS"));
     let find = |needle: &str| {
         widths
             .iter()
             .find(|item| {
                 item.terms
                     .iter()
-                    .any(|term| common::inline_text(term) == needle)
+                    .any(|term| common::inline_text(content, term) == needle)
             })
             .copied()
             .unwrap_or_else(|| panic!("missing width term {needle:?}"))

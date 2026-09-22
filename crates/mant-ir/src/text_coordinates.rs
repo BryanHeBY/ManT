@@ -1,5 +1,5 @@
 //! Original content coordinates shared by producers, queries and renderers.
-use crate::{EntryContentSlice, EntryInlineRoot, EntryOwner, Inline};
+use crate::{ContentContext, EntryContentSlice, EntryInlineRoot, EntryOwner, Inline};
 use std::ops::Range;
 
 /// A half-open Unicode scalar range within one original owner-local inline root.
@@ -21,16 +21,16 @@ pub struct RootTextRange {
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects a directly owned inline
-/// leaf.
+/// Panics if a retained key or range does not resolve in `content`.
 #[must_use]
 pub fn project_content_slice(
+    content: ContentContext<'_>,
     owner: EntryOwner<'_>,
     slice: &EntryContentSlice,
 ) -> Option<RootTextRange> {
-    crate::ContentContext::detached()
+    content
         .project_content_slice(owner, slice)
-        .expect("legacy inline text is self-contained")
+        .expect("entry content resolves in its authoritative content store")
 }
 
 /// Count original Unicode scalars: wrappers and anchors add no positions,
@@ -38,43 +38,49 @@ pub fn project_content_slice(
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects a directly owned inline
-/// leaf or the scalar count overflows `usize`.
+/// Panics if a retained key or range does not resolve in `content`, or the
+/// scalar count overflows `usize`.
 #[must_use]
-pub fn inline_scalar_len(nodes: &[Inline]) -> usize {
-    crate::ContentContext::detached()
+pub fn inline_scalar_len(content: ContentContext<'_>, nodes: &[Inline]) -> usize {
+    content
         .scalar_len(nodes)
-        .expect("legacy inline text is self-contained")
+        .expect("inline content resolves in its authoritative content store")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::ContentFixture;
     use crate::{
         Block, DefinitionItem, DefinitionLayout, LayoutHint, LinkTarget, ListItem, ListItemLayout,
     };
 
-    fn nodes() -> Vec<Inline> {
+    fn nodes(fixture: &mut ContentFixture) -> Vec<Inline> {
+        let text = fixture.text("前");
+        let anchor = fixture.anchor("zero");
+        let line_break = fixture.hard_break();
+        let link = fixture.link_text(
+            LinkTarget::External {
+                uri: "https://example.com".into(),
+            },
+            None,
+            "é名-param",
+            true,
+        );
+        let Inline::Link {
+            occurrence,
+            children,
+        } = link
+        else {
+            unreachable!();
+        };
         vec![
-            Inline::Text {
-                value: "前".into()
-            },
-            Inline::Anchor {
-                id: "zero".into(),
-                fragment_aliases: vec![],
-                owner_source: None,
-            },
-            Inline::LineBreak,
+            text,
+            anchor,
+            line_break,
             Inline::Link {
-                target: LinkTarget::External {
-                    uri: "https://example.com".into(),
-                },
-                title: None,
-                children: vec![Inline::Strong {
-                    children: vec![Inline::Code {
-                        value: "é名-param".into(),
-                    }],
-                }],
+                occurrence,
+                children: vec![Inline::Strong { children }],
             },
             Inline::Emphasis { children: vec![] },
         ]
@@ -82,9 +88,13 @@ mod tests {
 
     #[test]
     fn nested_source_bytes_project_into_original_scalars_for_both_owners() {
+        let mut fixture = ContentFixture::body();
+        let nodes = nodes(&mut fixture);
+        let store = fixture.finish();
+        let content = store.content();
         let item = ListItem {
             blocks: vec![Block::Paragraph {
-                children: nodes(),
+                children: nodes.clone(),
                 layout: LayoutHint::default(),
                 source: None,
             }],
@@ -93,7 +103,7 @@ mod tests {
             entry: None,
         };
         let definition = DefinitionItem {
-            terms: vec![nodes()],
+            terms: vec![nodes],
             description: vec![],
             layout: DefinitionLayout::default(),
             source: None,
@@ -112,26 +122,36 @@ mod tests {
                 bytes: Some(0..5),
             };
             assert_eq!(
-                project_content_slice(owner, &slice),
+                project_content_slice(content, owner, &slice),
                 Some(RootTextRange {
                     root: root.clone(),
                     chars: 2..4,
                 })
             );
-            assert_eq!(inline_scalar_len(owner.inline_root(&root).unwrap()), 10);
+            assert_eq!(
+                inline_scalar_len(content, owner.inline_root(&root).unwrap()),
+                10
+            );
             let whole = EntryContentSlice {
                 root,
                 path: vec![],
                 bytes: None,
             };
-            assert_eq!(project_content_slice(owner, &whole).unwrap().chars, 0..10);
+            assert_eq!(
+                project_content_slice(content, owner, &whole).unwrap().chars,
+                0..10
+            );
         }
     }
 
     #[test]
     fn invalid_byte_ranges_and_structural_paths_never_become_coordinates() {
+        let mut fixture = ContentFixture::body();
+        let nodes = nodes(&mut fixture);
+        let store = fixture.finish();
+        let content = store.content();
         let definition = DefinitionItem {
-            terms: vec![nodes()],
+            terms: vec![nodes],
             description: vec![],
             layout: DefinitionLayout::default(),
             source: None,
@@ -153,28 +173,35 @@ mod tests {
                 path,
                 bytes,
             };
-            assert_eq!(project_content_slice(owner, &slice), None, "{slice:?}");
+            assert_eq!(
+                project_content_slice(content, owner, &slice),
+                None,
+                "{slice:?}"
+            );
         }
     }
 
     #[test]
     fn empty_wrappers_anchors_and_hard_breaks_have_distinct_lengths() {
-        assert_eq!(inline_scalar_len(&[]), 0);
+        let mut fixture = ContentFixture::body();
+        let anchor = fixture.anchor("target");
+        let line_break = fixture.hard_break();
+        let text = fixture.text("e\u{301}👩‍💻");
+        let store = fixture.finish();
+        let content = store.content();
+        assert_eq!(inline_scalar_len(content, &[]), 0);
         assert_eq!(
-            inline_scalar_len(&[
-                Inline::Anchor {
-                    id: "target".into(),
-                    fragment_aliases: vec![],
-                    owner_source: None
-                },
-                Inline::Strong { children: vec![] },
-                Inline::Emphasis {
-                    children: vec![Inline::LineBreak]
-                },
-                Inline::Text {
-                    value: "e\u{301}👩‍💻".into()
-                },
-            ]),
+            inline_scalar_len(
+                content,
+                &[
+                    anchor,
+                    Inline::Strong { children: vec![] },
+                    Inline::Emphasis {
+                        children: vec![line_break]
+                    },
+                    text,
+                ]
+            ),
             6
         ); // One break + two combining scalars + three emoji scalars.
     }

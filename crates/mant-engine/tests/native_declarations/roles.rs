@@ -1,4 +1,4 @@
-use super::{EvidenceClass, ExplanationOptions, ExplanationQuery, definitions};
+use super::{EvidenceClass, ExplanationOptions, ExplanationQuery, common, definitions};
 use mant_ir::{EntryKind, ParameterKind};
 
 #[test]
@@ -76,11 +76,7 @@ fn local_definitions_override_inherited_values_without_inventing_domains() {
         assert_eq!(entry.kind, kind, "{name}");
         assert!(entry.value_domain.is_none());
         assert!(entry.alias_groups.is_empty());
-        assert!(
-            serde_json::to_string(&item.description)
-                .unwrap()
-                .contains(body)
-        );
+        assert!(common::block_slice_text(document.content(), &item.description).contains(body));
         let result = mant_query::explain_query(
             &query,
             &ExplanationQuery {

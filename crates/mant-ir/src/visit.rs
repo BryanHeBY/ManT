@@ -133,7 +133,10 @@ where
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => walk_inlines(visitor, children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {}
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak { .. } => {}
     }
 }
 
@@ -284,7 +287,10 @@ where
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => walk_inlines_mut(visitor, children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {}
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak { .. } => {}
     }
 }
 

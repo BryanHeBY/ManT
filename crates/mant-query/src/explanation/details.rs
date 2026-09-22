@@ -97,6 +97,7 @@ pub(super) fn entry(
     owner: EntryOwner<'_>,
     rejected: &std::collections::BTreeSet<mant_ir::NodeId>,
     budget: &mut Budget,
+    projection: &mut super::projection::ProjectionAdmission<'_>,
 ) -> Option<ExplanationEntry> {
     let facts = owner.facts()?;
     let names = content
@@ -128,14 +129,21 @@ pub(super) fn entry(
     // The protocol response still owns detached forms. ContentProjection will
     // replace this copy at the response-boundary cutover, not in this read-only
     // consumer migration.
-    budget.take(&details).then(|| ExplanationEntry {
-        kind: facts.kind,
-        case: facts.case,
-        names: names.to_vec(),
-        forms: forms.into_owned(),
-        name_bindings: Vec::new(),
-        alias_groups: alias_groups.to_vec(),
-        alias_of: alias_of.cloned(),
-        value_domain: facts.value_domain.clone(),
-    })
+    projection
+        .reserve(budget, &details, |builder| {
+            for form in forms.iter() {
+                builder.include_inlines(form)?;
+            }
+            Ok(())
+        })
+        .then(|| ExplanationEntry {
+            kind: facts.kind,
+            case: facts.case,
+            names: names.to_vec(),
+            forms: forms.into_owned(),
+            name_bindings: Vec::new(),
+            alias_groups: alias_groups.to_vec(),
+            alias_of: alias_of.cloned(),
+            value_domain: facts.value_domain.clone(),
+        })
 }

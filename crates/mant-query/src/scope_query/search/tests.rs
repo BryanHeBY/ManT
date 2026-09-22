@@ -1,7 +1,7 @@
 use mant_ir::{DocumentAddress, MarkdownOrigin, ResolvedContent};
 use mant_protocol::{
     DocumentScope, DocumentTraversal, ResolvedDocumentScope, ScopedDocument, SearchCase,
-    SearchQuery, SearchScope, SearchSyntax,
+    SearchQuery, SearchSyntax,
 };
 
 fn address(path: &str) -> DocumentAddress {
@@ -59,7 +59,7 @@ fn query(pattern: &str) -> SearchQuery {
         pattern: pattern.into(),
         syntax: SearchSyntax::Literal,
         case: SearchCase::Insensitive,
-        scope: SearchScope::Visible,
+        scope: mant_protocol::SearchScope::Visible,
         word: false,
         context_lines: 0,
         limit: 100,
@@ -68,7 +68,7 @@ fn query(pattern: &str) -> SearchQuery {
 }
 
 #[test]
-fn tldr_only_hits_omit_authored_source_context() {
+fn tldr_only_scope_search_retains_rendered_hit_without_authored_source() {
     let contents = vec![tldr_only("quick")];
     let graph = scope(&contents);
     let result = super::search_scope(
@@ -80,10 +80,10 @@ fn tldr_only_hits_omit_authored_source_context() {
     assert_eq!(result.total, 1);
     assert_eq!(result.documents.len(), 1);
     assert!(result.documents[0].source_context.is_none());
+    assert!(result.documents[0].content_projection.is_none());
     assert!(result.documents[0].matches[0].node_source.is_none());
-    let decoded: mant_protocol::ScopeSearch =
-        serde_json::from_value(serde_json::to_value(result).unwrap()).unwrap();
-    assert!(decoded.documents[0].source_context.is_none());
+    serde_json::from_value::<mant_protocol::ScopeSearch>(serde_json::to_value(result).unwrap())
+        .unwrap();
 }
 
 #[test]
@@ -95,7 +95,6 @@ fn zero_hit_tldr_only_search_stays_empty() {
         &query("absent"),
     )
     .unwrap();
-
     assert_eq!(result.total, 0);
     assert!(result.documents.is_empty());
 }
@@ -103,6 +102,54 @@ fn zero_hit_tldr_only_search_stays_empty() {
 #[test]
 fn mixed_manual_and_tldr_pages_keep_stable_global_pagination() {
     let contents = vec![manual("manual"), tldr_only("quick")];
+    let graph = scope(&contents);
+    let mut request = query("needle");
+    request.limit = 1;
+    let first = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &request,
+    )
+    .unwrap();
+    assert_eq!(first.total, 2);
+    assert_eq!(first.next_offset, Some(1));
+    assert_eq!(first.documents[0].matches[0].ordinal, 1);
+
+    request.offset = 1;
+    let second = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &request,
+    )
+    .unwrap();
+    assert_eq!(second.total, 2);
+    assert_eq!(second.next_offset, None);
+    assert_eq!(second.documents[0].matches[0].ordinal, 2);
+    assert!(second.documents[0].content_projection.is_none());
+}
+
+#[test]
+fn scoped_document_hits_keep_rendered_coordinates() {
+    let contents = vec![manual("manual")];
+    let graph = scope(&contents);
+    let result = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &query("needle"),
+    )
+    .unwrap();
+
+    assert_eq!(result.total, 1);
+    assert!(result.documents[0].content_projection.is_none());
+    assert!(
+        result.documents[0].matches[0].occurrences[0]
+            .markdown
+            .is_some()
+    );
+    serde_json::from_value::<mant_protocol::ScopeSearch>(serde_json::to_value(result).unwrap())
+        .unwrap();
+}
+
+#[test]
+fn global_pagination_counts_matching_line_groups() {
+    let contents = vec![manual("first"), manual("second")];
     let graph = scope(&contents);
     let mut request = query("needle");
     request.limit = 1;
@@ -114,7 +161,6 @@ fn mixed_manual_and_tldr_pages_keep_stable_global_pagination() {
     .unwrap();
     assert_eq!(first.total, 2);
     assert_eq!(first.next_offset, Some(1));
-    assert!(first.documents[0].source_context.is_some());
     assert_eq!(first.documents[0].matches[0].ordinal, 1);
 
     request.offset = 1;
@@ -125,6 +171,5 @@ fn mixed_manual_and_tldr_pages_keep_stable_global_pagination() {
     .unwrap();
     assert_eq!(second.total, 2);
     assert_eq!(second.next_offset, None);
-    assert!(second.documents[0].source_context.is_none());
     assert_eq!(second.documents[0].matches[0].ordinal, 2);
 }

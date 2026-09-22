@@ -159,10 +159,15 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
         } else {
             facts.forms.clear();
         }
-        let owner = EntryOwner::List(parent);
-        assert_eq!(owner.forms().is_none(), invalid);
+        let document = content.document.as_ref().unwrap();
+        let Block::List { items, .. } = &document.blocks[0] else {
+            unreachable!()
+        };
+        let owner = EntryOwner::List(&items[0]);
+        let forms = document.content().entry_forms(owner).unwrap();
+        assert_eq!(forms.is_none(), invalid);
         if !invalid {
-            assert!(matches!(owner.forms(), Some(EntryForms::Unrecorded)));
+            assert!(matches!(forms, Some(EntryForms::Unrecorded)));
         }
         let evidence = mant_query::select_explanation(&content, "TOKEN").unwrap();
         assert_eq!(evidence.total, 1);

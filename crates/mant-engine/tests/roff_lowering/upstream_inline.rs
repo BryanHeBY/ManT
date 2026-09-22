@@ -30,19 +30,17 @@ fn typewriter_and_typographic_quotes_keep_distinct_delimiters() {
 }
 
 fn links(document: &mant_ir::Document) -> Vec<(mant_ir::LinkTarget, String)> {
-    struct Collector(Vec<(mant_ir::LinkTarget, String)>);
-    impl<'ir> Visit<'ir> for Collector {
+    struct Collector<'a>(Vec<(mant_ir::LinkTarget, String)>, ContentContext<'a>);
+    impl<'ir> Visit<'ir> for Collector<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Link {
-                target, children, ..
-            } = inline
-            {
-                self.0.push((target.clone(), inline_text(children)));
+            if let Ok(InlineView::Link(link)) = self.1.inline(inline) {
+                self.0
+                    .push((link.target().clone(), inline_text(self.1, link.children())));
             }
             visit::walk_inline(self, inline);
         }
     }
-    let mut collector = Collector(Vec::new());
+    let mut collector = Collector(Vec::new(), document.content());
     collector.visit_document(document);
     collector.0
 }
@@ -79,20 +77,24 @@ fn mdoc(body: &str) -> mant_ir::Document {
 }
 
 fn styled_text(document: &mant_ir::Document) -> Vec<(String, bool, bool)> {
-    #[derive(Default)]
-    struct Collector {
+    struct Collector<'a> {
         runs: Vec<(String, bool, bool)>,
         strong: bool,
         emphasis: bool,
+        content: ContentContext<'a>,
     }
-    impl<'ir> Visit<'ir> for Collector {
+    impl<'ir> Visit<'ir> for Collector<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
             let previous = (self.strong, self.emphasis);
             match inline {
                 Inline::Strong { .. } => self.strong = true,
                 Inline::Emphasis { .. } => self.emphasis = true,
-                Inline::Text { value } => {
-                    self.runs.push((value.clone(), self.strong, self.emphasis));
+                Inline::Text { .. } => {
+                    let InlineView::Text(value) = self.content.inline(inline).unwrap() else {
+                        unreachable!()
+                    };
+                    self.runs
+                        .push((value.to_owned(), self.strong, self.emphasis));
                 }
                 _ => {}
             }
@@ -100,7 +102,12 @@ fn styled_text(document: &mant_ir::Document) -> Vec<(String, bool, bool)> {
             (self.strong, self.emphasis) = previous;
         }
     }
-    let mut collector = Collector::default();
+    let mut collector = Collector {
+        runs: Vec::new(),
+        strong: false,
+        emphasis: false,
+        content: document.content(),
+    };
     collector.visit_document(document);
     collector.runs
 }
@@ -214,7 +221,11 @@ fn enclosure_parts_have_one_owner_even_when_empty_or_reparented() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{document:?}")
         };
-        assert_eq!(inline_text(children), expected, "{body}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{body}"
+        );
         if body.contains(".Mt") {
             assert_eq!(links(&document).len(), 1);
         }
@@ -227,7 +238,7 @@ fn enclosure_parts_have_one_owner_even_when_empty_or_reparented() {
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("{rows:?}")
         };
-        assert_eq!(inline_text(children), expected);
+        assert_eq!(inline_text(document.content(), children), expected);
     }
 }
 
@@ -247,7 +258,11 @@ fn fo_counts_operands_without_counting_controls_or_targets() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{document:?}")
         };
-        assert_eq!(inline_text(children), expected, "{body}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{body}"
+        );
         assert!(
             children
                 .iter()
@@ -262,5 +277,5 @@ fn fo_counts_operands_without_counting_controls_or_targets() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("{document:?}")
     };
-    assert_eq!(inline_text(children), "int size_t");
+    assert_eq!(inline_text(document.content(), children), "int size_t");
 }

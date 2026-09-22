@@ -12,7 +12,7 @@ use ratatui::{
 use mant_ir::TableAlignment;
 
 use super::{
-    LineSurface, LinkTarget, LogicalLine, WrapMode,
+    LineSurface, LinkIdentity, LogicalLine, WrapMode,
     model::{LogicalTableCell, LogicalTableLayout, LogicalTableRow},
 };
 use crate::theme;
@@ -62,7 +62,7 @@ pub(super) struct WrappedSearchCell {
 }
 
 pub(super) struct WrappedLink {
-    pub(super) target: LinkTarget,
+    pub(super) identity: LinkIdentity,
     pub(super) start_column: usize,
     pub(super) end_column: usize,
 }
@@ -193,6 +193,7 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             // Preserve its semantic search cell while rendering one bounded
             // replacement cell, just as control characters are sanitized.
             first.display_character = Some('\u{fffd}');
+            first.display_override = None;
             first.width = 1;
             for cell in cells
                 .iter_mut()
@@ -200,6 +201,7 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 .take_while(|cell| !cell.grapheme_start)
             {
                 cell.display_character = None;
+                cell.display_override = None;
             }
         }
         let fit = fitting_prefix(&cells, available);

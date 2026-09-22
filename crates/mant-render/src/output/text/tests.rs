@@ -29,9 +29,7 @@ fn explicit_spacing_overrides_the_definition_join_default_even_at_zero() {
                     source: None,
                 },
                 Block::Paragraph {
-                    children: vec![Inline::Text {
-                        value: "CONTENT".into(),
-                    }],
+                    children: vec![crate::test_content::text("CONTENT")],
                     layout: LayoutHint::default(),
                     source: None,
                 },
@@ -63,13 +61,13 @@ fn query() -> ResolvedContent {
             sections: vec![Section {
                 id: "options-1".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                heading: "OPTIONS".into(),
+                heading: crate::test_content::heading("OPTIONS"),
                 spacing_before_lines: 0,
                 blocks: vec![paragraph("parent details", true)],
                 children: vec![Section {
                     id: "common-2".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    heading: "Common options".into(),
+                    heading: crate::test_content::heading("Common options"),
                     spacing_before_lines: 1,
                     blocks: vec![paragraph("child details", false)],
                     children: Vec::new(),
@@ -77,15 +75,14 @@ fn query() -> ResolvedContent {
                 }],
                 source: None,
             }],
+            content_store: crate::test_content::store(),
         }),
         tldr: None,
     }
 }
 
 fn paragraph(value: &str, strong: bool) -> Block {
-    let text = vec![Inline::Text {
-        value: value.to_owned(),
-    }];
+    let text = vec![crate::test_content::text(value.to_owned())];
     Block::Paragraph {
         children: if strong {
             vec![Inline::Strong { children: text }]
@@ -105,6 +102,86 @@ fn renders_plain_queries_without_markup_and_uses_resolved_manual_sections() {
     assert!(output.contains("parent details"));
     assert!(output.contains("Common options"));
     assert!(!output.contains("**"));
+}
+
+#[test]
+fn text_output_uses_profile_glyphs_without_rewriting_logical_atoms() {
+    // Fixed CVS term.c::term_word/encode1 on `.TH DISPLAY 1`, `.SH TEST`,
+    // `left\[em]right` prints `left--right` in ASCII and `left—right` in UTF-8.
+    let mut query = query();
+    let left = crate::test_content::text("left");
+    let dash = crate::test_content::text("—");
+    let right = crate::test_content::text("right");
+    let atom = match &dash {
+        Inline::Text { content } => content.atom,
+        _ => unreachable!(),
+    };
+    let document = query.document.as_mut().expect("manual document");
+    document.sections[0].blocks = vec![Block::Paragraph {
+        children: vec![left, dash, right],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    document.content_store = crate::test_content::store();
+    let root = {
+        let record = &mut document.content_store.atoms[(atom.get() - 1) as usize];
+        let mant_ir::ContentAtomKind::Text {
+            text,
+            display_override,
+        } = &mut record.kind
+        else {
+            unreachable!();
+        };
+        assert_eq!(text, "—");
+        *display_override = Some("--".to_owned());
+        record.root
+    };
+    assert!(
+        document
+            .content()
+            .root_logical_text(root)
+            .expect("logical root")
+            .contains("left—right")
+    );
+    assert!(render_query_text(&query).contains("left--right"));
+}
+
+#[test]
+fn text_output_keeps_each_projection_in_a_combining_grapheme() {
+    // Fixed CVS `term.c::term_word` on `.TH X 1`, `.SH NAME`,
+    // `X \[em]́ Y` prints `X --<?> Y` in ASCII and `X —́ Y` in UTF-8.
+    let mut query = query();
+    let left = crate::test_content::text("X");
+    let dash = crate::test_content::text("—");
+    let mark = crate::test_content::text("\u{0301}");
+    let right = crate::test_content::text("Y");
+    let atom = |inline: &Inline| match inline {
+        Inline::Text { content } => content.atom,
+        _ => unreachable!(),
+    };
+    let dash_atom = atom(&dash);
+    let mark_atom = atom(&mark);
+    let document = query.document.as_mut().expect("manual document");
+    document.sections[0].blocks = vec![Block::Paragraph {
+        children: vec![left, dash, mark, right],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    document.content_store = crate::test_content::store();
+    for (key, expected, glyphs) in [(dash_atom, "—", "--"), (mark_atom, "\u{0301}", "<?>")] {
+        let record = &mut document.content_store.atoms[(key.get() - 1) as usize];
+        let mant_ir::ContentAtomKind::Text {
+            text,
+            display_override,
+        } = &mut record.kind
+        else {
+            unreachable!();
+        };
+        assert_eq!(text, expected);
+        *display_override = Some(glyphs.into());
+    }
+    mant_ir::validate_content_store(&document.content_store).unwrap();
+    assert!(render_query_text(&query).contains("X--<?>Y"));
 }
 
 #[test]
@@ -196,21 +273,20 @@ fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
                 sections: vec![Section {
                     id: "s-1".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    heading: "S".into(),
+                    heading: crate::test_content::heading("S"),
                     spacing_before_lines: 0,
                     blocks,
                     children: Vec::new(),
                     source: None,
                 }],
+                content_store: crate::test_content::store(),
             }),
             tldr: None,
         }
     }
     fn para(value: &str) -> Block {
         Block::Paragraph {
-            children: vec![Inline::Text {
-                value: value.to_owned(),
-            }],
+            children: vec![crate::test_content::text(value.to_owned())],
             layout: LayoutHint::default(),
             source: None,
         }
@@ -264,7 +340,7 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
             sections: vec![Section {
                 id: "ops".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                heading: "OPERATORS".into(),
+                heading: crate::test_content::heading("OPERATORS"),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
                     declaration_groups: Vec::new(),
@@ -280,13 +356,11 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "* / %".to_owned(),
-                            }]],
+                            terms: vec![vec![crate::test_content::text("* / %".to_owned())]],
                             description: vec![Block::Paragraph {
-                                children: vec![Inline::Text {
-                                    value: "Multiplication, division, and modulus.".to_owned(),
-                                }],
+                                children: vec![crate::test_content::text(
+                                    "Multiplication, division, and modulus.".to_owned(),
+                                )],
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
@@ -299,13 +373,11 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "space".to_owned(),
-                            }]],
+                            terms: vec![vec![crate::test_content::text("space".to_owned())]],
                             description: vec![Block::Paragraph {
-                                children: vec![Inline::Text {
-                                    value: "String concatenation.".to_owned(),
-                                }],
+                                children: vec![crate::test_content::text(
+                                    "String concatenation.".to_owned(),
+                                )],
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
@@ -315,6 +387,7 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                 children: Vec::new(),
                 source: None,
             }],
+            content_store: crate::test_content::store(),
         }),
         tldr: None,
     };
@@ -354,7 +427,7 @@ fn man_format_keeps_inline_definitions_tight() {
             sections: vec![Section {
                 id: "ops".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                heading: "OPERATORS".into(),
+                heading: crate::test_content::heading("OPERATORS"),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
                     declaration_groups: Vec::new(),
@@ -370,13 +443,11 @@ fn man_format_keeps_inline_definitions_tight() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "&&".to_owned(),
-                            }]],
+                            terms: vec![vec![crate::test_content::text("&&".to_owned())]],
                             description: vec![Block::Paragraph {
-                                children: vec![Inline::Text {
-                                    value: "Logical AND.".to_owned(),
-                                }],
+                                children: vec![crate::test_content::text(
+                                    "Logical AND.".to_owned(),
+                                )],
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
@@ -389,13 +460,13 @@ fn man_format_keeps_inline_definitions_tight() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "--long-option-name".to_owned(),
-                            }]],
+                            terms: vec![vec![crate::test_content::text(
+                                "--long-option-name".to_owned(),
+                            )]],
                             description: vec![Block::Paragraph {
-                                children: vec![Inline::Text {
-                                    value: "A lengthy flag.".to_owned(),
-                                }],
+                                children: vec![crate::test_content::text(
+                                    "A lengthy flag.".to_owned(),
+                                )],
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
@@ -405,6 +476,7 @@ fn man_format_keeps_inline_definitions_tight() {
                 children: Vec::new(),
                 source: None,
             }],
+            content_store: crate::test_content::store(),
         }),
         tldr: None,
     };

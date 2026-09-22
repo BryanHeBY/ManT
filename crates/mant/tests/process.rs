@@ -11,8 +11,15 @@ use std::{
 
 use support::{configure_registered_documents, registered_documents_dir};
 
-fn plain_document_heading(value: &serde_json::Value) -> &serde_json::Value {
-    &value["document"]["heading"]["content"][0]["value"]
+fn plain_document_heading(value: &serde_json::Value) -> String {
+    let response: mant_protocol::DocumentResponse =
+        serde_json::from_value(value["document"].clone()).expect("valid document");
+    let document: mant_ir::Document = response.into();
+    document
+        .heading
+        .as_ref()
+        .expect("document heading")
+        .plain_text(document.content())
 }
 
 fn executable() -> &'static str {
@@ -669,7 +676,12 @@ fn one_owner_explanation_page_keeps_its_context_in_every_cli_format() {
             let response: mant_protocol::QueryExplanation = serde_json::from_str(&text).unwrap();
             assert_eq!(response.counts.direct_entry.returned, 1);
             assert_eq!(response.supports.len(), 1);
-            assert!(response.evidence[0].covered_by_support(&response.supports));
+            let content = response
+                .content_projection
+                .as_ref()
+                .expect("explanation content projection")
+                .content();
+            assert!(response.evidence[0].covered_by_support(content, &response.supports));
         } else {
             let heading = if format == "markdown" {
                 "Declaration\\-group context"
@@ -1504,7 +1516,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     assert!(direct.status.success());
     assert!(direct.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&direct.stdout).expect("query JSON");
-    assert_eq!(value["document"]["heading"]["content"][0]["value"], "Local");
+    assert_eq!(plain_document_heading(&value), "Local");
     assert_eq!(
         value["document"]["sources"][0]["identity"]["name"],
         path.to_str().expect("UTF-8 path")
@@ -1757,10 +1769,7 @@ fn unqualified_names_prefer_registered_markdown() {
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
     assert_eq!(value["label"], "process-registered");
-    assert_eq!(
-        value["document"]["heading"]["content"][0]["value"],
-        "Registered"
-    );
+    assert_eq!(plain_document_heading(&value), "Registered");
     assert_eq!(value["document"]["sources"][0]["format"], "markdown");
     let source_path = value["document"]["sources"][0]["identity"]["name"]
         .as_str()
@@ -2110,11 +2119,9 @@ fn query_windows_suffix(
 #[cfg(windows)]
 fn document_title(output: &std::process::Output) -> String {
     assert!(output.status.success(), "{output:?}");
-    serde_json::from_slice::<serde_json::Value>(&output.stdout)
-        .expect("suffix query JSON")["document"]["heading"]["content"][0]["value"]
-        .as_str()
-        .expect("document title")
-        .to_owned()
+    let value =
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).expect("suffix query JSON");
+    plain_document_heading(&value)
 }
 
 #[cfg(windows)]
@@ -2583,8 +2590,20 @@ fn markdown_root_content_is_discoverable_selectable_and_searchable() {
 
     let excerpt = run_json(&["--input", path, "--node", "root"]);
     assert_eq!(excerpt["selections"][0]["kind"], "document-root");
+    let projection: mant_ir::ContentProjection =
+        serde_json::from_value(excerpt["contentProjection"].clone())
+            .expect("valid excerpt content projection");
+    let block: mant_ir::Block =
+        serde_json::from_value(excerpt["selections"][0]["blocks"][0].clone())
+            .expect("valid root block");
+    let mant_ir::Block::Paragraph { children, .. } = block else {
+        panic!("root preface must be a paragraph");
+    };
     assert_eq!(
-        excerpt["selections"][0]["blocks"][0]["children"][0]["value"],
+        projection
+            .content()
+            .plain_text(&children)
+            .expect("root preface content"),
         "Read the preface needle first."
     );
 

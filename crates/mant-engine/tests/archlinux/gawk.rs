@@ -18,6 +18,7 @@ fn keeps_section_topology() {
 #[test]
 fn operator_table_has_correct_inline_term_decisions() {
     let doc = archlinux_manual("gawk");
+    let content = doc.content();
     let section = common::section(doc, "PATTERNS AND ACTIONS");
     let items = common::nested_definition_items(section);
 
@@ -28,7 +29,7 @@ fn operator_table_has_correct_inline_term_decisions() {
             .find(|item| {
                 item.terms
                     .iter()
-                    .any(|term| common::inline_text(term) == needle)
+                    .any(|term| common::inline_text(content, term) == needle)
             })
             .unwrap_or_else(|| panic!("missing gawk operator term {needle:?}"));
         assert!(
@@ -43,7 +44,7 @@ fn operator_table_has_correct_inline_term_decisions() {
         .find(|item| {
             item.terms
                 .iter()
-                .any(|term| common::inline_text(term).contains("< >"))
+                .any(|term| common::inline_text(content, term).contains("< >"))
         })
         .expect("gawk relational operator term");
     assert!(
@@ -62,6 +63,7 @@ fn operator_table_has_correct_inline_term_decisions() {
 fn man_format_preserves_resolved_operator_body_columns() {
     let output = render_query_man(&archlinux_manual_query("gawk"));
     let document = archlinux_manual("gawk");
+    let content = document.content();
     let items = common::nested_definition_items(common::section(document, "PATTERNS AND ACTIONS"));
     for (term, body) in [
         ("* / %", "Multiplication, division, and modulus."),
@@ -72,7 +74,7 @@ fn man_format_preserves_resolved_operator_body_columns() {
             .find(|item| {
                 item.terms
                     .iter()
-                    .any(|head| common::inline_text(head) == term)
+                    .any(|head| common::inline_text(content, head) == term)
             })
             .unwrap();
         assert!(item.layout.inline_term);
@@ -93,5 +95,5 @@ fn man_format_preserves_resolved_operator_body_columns() {
 /// No duplicate vertical spacing.
 #[test]
 fn does_not_have_duplicate_vertical_spacing() {
-    common::assert_bounded_vertical_spacing(&archlinux_manual("gawk").sections, "archlinux/gawk");
+    common::assert_bounded_vertical_spacing(archlinux_manual("gawk"), "archlinux/gawk");
 }

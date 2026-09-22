@@ -24,10 +24,21 @@ fn targets(source: &str) -> (mant_ir::ResolvedContent, Vec<LinkTarget>) {
             ..Default::default()
         },
     );
+    let projection = inventory
+        .content_projection
+        .as_ref()
+        .expect("reference projection");
     let targets = inventory
         .records
-        .into_iter()
-        .map(|record| record.target)
+        .iter()
+        .map(|record| {
+            projection
+                .content()
+                .occurrence(record.occurrence)
+                .expect("projected reference occurrence")
+                .target
+                .clone()
+        })
         .collect();
     (query, targets)
 }

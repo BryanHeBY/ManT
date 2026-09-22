@@ -7,6 +7,10 @@ use mant_ir::{
 use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
+#[path = "common/mod.rs"]
+#[allow(dead_code)]
+mod common;
+
 fn row<'a>(text: &'a str, token: &str) -> &'a str {
     text.lines()
         .find(|line| line.trim() == token)
@@ -39,7 +43,7 @@ fn definition<'a>(document: &'a Document, term: &str) -> &'a DefinitionItem {
         .find(|item| {
             item.terms
                 .iter()
-                .any(|nodes| inline_plain_text(nodes) == term)
+                .any(|nodes| inline_plain_text(document.content(), nodes) == term)
         })
         .unwrap_or_else(|| panic!("missing definition {term:?}: {document:?}"))
 }
@@ -64,16 +68,18 @@ fn spaced_relative_continuations_preserve_rows_columns_and_next_owner() {
             assert_eq!(blank_rows_before(&text, "LAST_CONTINUATION"), 1, "{text}");
             let document = content.document.as_ref().unwrap();
             let owner = definition(document, label);
-            let body = serde_json::to_string(&owner.description).unwrap();
+            let body = common::block_slice_text(document.content(), &owner.description);
             for token in ["FIRST_CONTINUATION", "NESTED_BODY", "LAST_CONTINUATION"] {
                 assert!(body.contains(token), "{body}");
             }
             assert!(!body.contains("OUTSIDE_BODY"), "{body}");
             assert_eq!(owner.layout.inline_term, !label.starts_with("--"));
             assert!(
-                serde_json::to_string(&definition(document, "--next").description)
-                    .unwrap()
-                    .contains("OUTSIDE_BODY")
+                common::block_slice_text(
+                    document.content(),
+                    &definition(document, "--next").description
+                )
+                .contains("OUTSIDE_BODY")
             );
         }
     }

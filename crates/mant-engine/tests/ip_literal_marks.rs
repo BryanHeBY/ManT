@@ -33,9 +33,13 @@ fn styled_punctuation_keys_keep_labels_body_and_explanation() {
     ] {
         let source = format!(".TH KEYS 1\n.SH COMMANDS\n.IP \"\\fB{mark}\\fP\" 10\nKEY_BODY\n");
         let bundle = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-        let items = definitions(bundle.document.as_ref().unwrap());
+        let document = bundle.document.as_ref().unwrap();
+        let items = definitions(document);
         assert_eq!(items.len(), 1);
-        assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), expected);
+        assert_eq!(
+            mant_ir::inline_plain_text(document.content(), &items[0].terms[0]),
+            expected
+        );
         let entry = items[0].entry.as_ref().expect("explicit styled key");
         assert_eq!(entry.kind, mant_ir::EntryKind::Term);
         assert_eq!(entry.names, [expected]);
@@ -78,13 +82,14 @@ fn unstyled_marks_are_presentation_and_styled_keys_are_not_option_values() {
                 ".TH KEYS 1\n.SH OPTIONS\n.TP\n.B --mode\nMode description.\n.RS\n.IP \"{tag}\" 4\nMARK_BODY\n.RE\n"
             );
             let bundle = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-            let items = definitions(bundle.document.as_ref().unwrap());
+            let document = bundle.document.as_ref().unwrap();
+            let items = definitions(document);
             let item = items
                 .iter()
                 .find(|item| {
-                    item.terms
-                        .iter()
-                        .any(|term| mant_ir::inline_plain_text(term).trim() == mark)
+                    item.terms.iter().any(|term| {
+                        mant_ir::inline_plain_text(document.content(), term).trim() == mark
+                    })
                 })
                 .expect("authored tag retained");
             if styled {
@@ -120,7 +125,8 @@ fn licensed_gcc_and_rsync_marks_do_not_add_semantic_nodes() {
         let marked = items
             .iter()
             .filter(|item| {
-                item.terms.len() == 1 && mant_ir::inline_plain_text(&item.terms[0]).trim() == mark
+                item.terms.len() == 1
+                    && mant_ir::inline_plain_text(document.content(), &item.terms[0]).trim() == mark
             })
             .collect::<Vec<_>>();
         assert_eq!(marked.len(), expected, "{fixture}");
@@ -155,7 +161,10 @@ fn licensed_posix_sh_editor_keys_retain_their_exact_source_owners() {
             .iter()
             .find(|item| item.source.is_some_and(|source| source.line == line))
             .unwrap_or_else(|| panic!("missing sh source owner at line {line}"));
-        assert_eq!(mant_ir::inline_plain_text(&item.terms[0]), key);
+        assert_eq!(
+            mant_ir::inline_plain_text(bundle.document.as_ref().unwrap().content(), &item.terms[0]),
+            key
+        );
         let explanation = mant_query::explain_query(
             &bundle,
             &ExplanationQuery {

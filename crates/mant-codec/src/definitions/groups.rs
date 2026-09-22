@@ -11,11 +11,18 @@ use std::collections::{HashMap, HashSet};
 const OWNER_MARKER_PREFIX: &str = "\0mant-native-definition-owner:";
 
 #[cfg(feature = "roff")]
-pub(crate) fn mark_native_definition_owner(item: &mut DefinitionItem, key: usize) {
+pub(crate) fn mark_native_definition_owner(
+    item: &mut DefinitionItem,
+    key: usize,
+    point: mant_ir::ContentPointKey,
+) {
     let Some(term) = item.terms.first_mut() else {
         return;
     };
-    term.insert(0, Inline::anchor(format!("{OWNER_MARKER_PREFIX}{key:x}")));
+    term.insert(
+        0,
+        Inline::anchor(point, format!("{OWNER_MARKER_PREFIX}{key:x}")),
+    );
 }
 
 pub(crate) fn is_internal_definition_owner_marker(id: &str) -> bool {
@@ -54,7 +61,7 @@ fn remove_inlines(inlines: &mut Vec<Inline>) {
             Inline::Text { .. }
             | Inline::Code { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
         retained.push(inline);
     }
@@ -265,6 +272,7 @@ impl GroupEvidence {
     /// preparation plan that will allocate their names, never another parser.
     pub(super) fn resolve(
         &self,
+        content: mant_ir::ContentContext<'_>,
         items: &[DefinitionItem],
         heads: &[bool],
         plan: &mut GroupMatchingPlan,
@@ -290,7 +298,7 @@ impl GroupEvidence {
                 // it closes the physical declaration run just like a
                 // recognized item.  Empty unknown heads still block a later
                 // suffix from borrowing an unrelated description.
-                if mant_ir::blocks_have_readable_content(&item.description) {
+                if mant_ir::blocks_have_readable_content(content, &item.description) {
                     blocked_by_unclassified_head = false;
                 } else if !self.presentation_heads.contains(&key.0) {
                     blocked_by_unclassified_head = true;
@@ -307,7 +315,7 @@ impl GroupEvidence {
                     && !self.presentation_predecessors.contains(&key.0)
                     && !self.body_closed_predecessors.contains(&key.0);
             }
-            if mant_ir::blocks_have_readable_content(&item.description) {
+            if mant_ir::blocks_have_readable_content(content, &item.description) {
                 let start_item = pending.take();
                 if !blocked_by_unclassified_head && let Some(start_item) = start_item {
                     result.push(DeclarationGroup {
@@ -382,6 +390,7 @@ impl GroupMatchingPlan {
 #[cfg(all(test, feature = "roff"))]
 mod tests {
     use super::{GroupEvidence, mark_native_definition_owner};
+    use crate::test_content as fixture;
     use mant_ir::{Block, DefinitionItem, DefinitionLayout, Inline, LayoutHint, SourceSpan};
 
     fn item(line: u32, column: u32, name: &str, description: bool) -> DefinitionItem {
@@ -395,14 +404,10 @@ mod tests {
                 end_column: None,
             }),
             entry: None,
-            terms: vec![vec![Inline::Text {
-                value: name.to_owned(),
-            }]],
+            terms: vec![vec![fixture::text(name)]],
             description: if description {
                 vec![Block::Paragraph {
-                    children: vec![Inline::Text {
-                        value: "description".to_owned(),
-                    }],
+                    children: vec![fixture::text("description")],
                     source: None,
                     layout: LayoutHint::default(),
                 }]
@@ -426,7 +431,10 @@ mod tests {
 
     fn record(evidence: &mut GroupEvidence, items: &mut [DefinitionItem], keys: &[usize]) {
         for (item, key) in items.iter_mut().zip(keys) {
-            mark_native_definition_owner(item, *key);
+            let Inline::Anchor { point, .. } = fixture::anchor("fixture-owner-point") else {
+                unreachable!();
+            };
+            mark_native_definition_owner(item, *key, point);
             evidence.record(item, *key);
         }
     }
@@ -446,7 +454,7 @@ mod tests {
 
         let mut plan = plan(&evidence, &items);
         assert_eq!(
-            evidence.resolve(&items, &[false, true, true], &mut plan),
+            evidence.resolve(fixture::content(), &items, &[false, true, true], &mut plan),
             vec![mant_ir::DeclarationGroup {
                 start_item: 1,
                 end_item: 3,
@@ -469,7 +477,7 @@ mod tests {
 
         let mut plan = plan(&evidence, &items);
         assert_eq!(
-            evidence.resolve(&items, &[true; 4], &mut plan),
+            evidence.resolve(fixture::content(), &items, &[true; 4], &mut plan),
             vec![
                 mant_ir::DeclarationGroup {
                     start_item: 0,
@@ -502,12 +510,10 @@ mod tests {
         // the first one.
         // Keep only the latter invocation's own markers. Same source
         // coordinates and heads must never make it borrow the first run.
-        let mut final_items = vec![item(12, 2, "-a", false), item(12, 2, "-b", true)];
-        mark_native_definition_owner(&mut final_items[0], 30);
-        mark_native_definition_owner(&mut final_items[1], 40);
+        let final_items = native_items[2..].to_vec();
         let mut plan = plan(&evidence, &final_items);
         assert_eq!(
-            evidence.resolve(&final_items, &[true; 2], &mut plan),
+            evidence.resolve(fixture::content(), &final_items, &[true; 2], &mut plan),
             vec![mant_ir::DeclarationGroup {
                 start_item: 0,
                 end_item: 2,
@@ -543,7 +549,11 @@ mod tests {
         let Block::DefinitionList { items, .. } = &blocks[0] else {
             unreachable!();
         };
-        assert!(evidence.resolve(items, &[true; 2], &mut plan).is_empty());
+        assert!(
+            evidence
+                .resolve(fixture::content(), items, &[true; 2], &mut plan)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -564,7 +574,7 @@ mod tests {
 
         let mut plan = plan(&evidence, &items);
         assert_eq!(
-            evidence.resolve(&items, &[true; 4], &mut plan),
+            evidence.resolve(fixture::content(), &items, &[true; 4], &mut plan),
             vec![
                 mant_ir::DeclarationGroup {
                     start_item: 0,
@@ -592,7 +602,7 @@ mod tests {
 
         let mut plan = plan(&evidence, &items);
         assert_eq!(
-            evidence.resolve(&items, &[false, true, true], &mut plan),
+            evidence.resolve(fixture::content(), &items, &[false, true, true], &mut plan),
             vec![mant_ir::DeclarationGroup {
                 start_item: 1,
                 end_item: 3,
@@ -615,7 +625,7 @@ mod tests {
         let mut plan = plan(&evidence, &items);
         assert!(
             evidence
-                .resolve(&items, &[false, true, true], &mut plan)
+                .resolve(fixture::content(), &items, &[false, true, true], &mut plan)
                 .is_empty()
         );
     }
@@ -638,9 +648,7 @@ mod tests {
                 layout: LayoutHint::default(),
             },
             Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "ordinary separator".to_owned(),
-                }],
+                children: vec![fixture::text("ordinary separator")],
                 source: None,
                 layout: LayoutHint::default(),
             },
@@ -657,9 +665,12 @@ mod tests {
             start_item: 0,
             end_item: 2,
         }];
-        assert_eq!(evidence.resolve(&first, &[true, true], &mut plan), expected);
         assert_eq!(
-            evidence.resolve(&second, &[true, true], &mut plan),
+            evidence.resolve(fixture::content(), &first, &[true, true], &mut plan),
+            expected
+        );
+        assert_eq!(
+            evidence.resolve(fixture::content(), &second, &[true, true], &mut plan),
             vec![mant_ir::DeclarationGroup {
                 start_item: 0,
                 end_item: 2,
@@ -699,7 +710,7 @@ mod tests {
         // outer witnesses because both expansions have identical coordinates
         // and heads. Parse-local markers make traversal order irrelevant.
         assert_eq!(
-            evidence.resolve(&inner, &[true, true], &mut plan),
+            evidence.resolve(fixture::content(), &inner, &[true, true], &mut plan),
             vec![mant_ir::DeclarationGroup {
                 start_item: 0,
                 end_item: 2,
@@ -707,7 +718,7 @@ mod tests {
         );
         assert!(
             evidence
-                .resolve(&outer, &[true, true], &mut plan)
+                .resolve(fixture::content(), &outer, &[true, true], &mut plan)
                 .is_empty()
         );
     }

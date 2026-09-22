@@ -1,6 +1,6 @@
 //! Keep declaration separators and parameter styling distinct until extraction.
 use super::declaration::DeclarationState;
-use mant_ir::Inline;
+use mant_ir::{ContentContext, ContentRef, Inline, InlineView};
 use std::ops::Range;
 
 use mant_ir::inline_plain_text as plain_text;
@@ -8,23 +8,25 @@ use mant_ir::inline_plain_text as plain_text;
 /// Borrowed authored syntax. Candidate generation never rewrites its complete
 /// form; only the temporary selector candidates are split.
 pub(super) struct AuthoredForm<'a> {
+    content: ContentContext<'a>,
     inlines: &'a [Inline],
 }
 
 impl<'a> AuthoredForm<'a> {
-    pub(super) const fn new(inlines: &'a [Inline]) -> Self {
-        Self { inlines }
+    pub(super) const fn new(content: ContentContext<'a>, inlines: &'a [Inline]) -> Self {
+        Self { content, inlines }
     }
 
-    pub(super) fn option_candidates(&self) -> impl Iterator<Item = FormCandidate> {
-        option_alias_groups(self.inlines)
+    pub(super) fn option_candidates(&self) -> impl Iterator<Item = FormCandidate<'a>> {
+        option_alias_groups(self.content, self.inlines)
             .into_iter()
             .scan(0, |offset, inlines| {
                 let start = *offset;
                 // All removed separators are one ASCII byte. Opaque argument
                 // runs were not split, and remain part of this visible length.
-                *offset += plain_text(&inlines).len() + 1;
+                *offset += plain_text(self.content, &inlines).len() + 1;
                 Some(FormCandidate {
+                    content: self.content,
                     inlines,
                     start,
                     token: None,
@@ -36,22 +38,23 @@ impl<'a> AuthoredForm<'a> {
 
 /// Own the styled candidate until the parameter decision is complete. Callers
 /// receive a lexical token only through that decision, not a flattenable tree.
-pub(super) struct FormCandidate {
+pub(super) struct FormCandidate<'a> {
+    content: ContentContext<'a>,
     inlines: Vec<Inline>,
     start: usize,
     token: Option<(String, usize)>,
 }
 
-impl FormCandidate {
+impl FormCandidate<'_> {
     pub(super) fn invocation_token(&self) -> Option<(String, usize)> {
         if let Some(token) = &self.token {
             return Some(token.clone());
         }
-        if starts_with_parameter(&self.inlines) {
+        if starts_with_parameter(self.content, &self.inlines) {
             return None;
         }
         let mut prefix = String::new();
-        append_name_prefix(&self.inlines, &mut prefix);
+        append_name_prefix(self.content, &self.inlines, &mut prefix);
         let token = invocation_token(&prefix);
         if token.is_empty() {
             return None;
@@ -63,26 +66,29 @@ impl FormCandidate {
     }
 
     fn paired_invocations(self) -> Vec<Self> {
-        if let Some(tokens) = pattern_declarations(&self.inlines) {
+        if let Some(tokens) = pattern_declarations(self.content, &self.inlines) {
             return tokens
                 .into_iter()
                 .map(|(token, offset)| Self {
+                    content: self.content,
                     inlines: Vec::new(),
                     start: self.start,
                     token: Some((token, self.start + offset)),
                 })
                 .collect();
         }
-        let Some([first, second]) = paired_option_tokens(&self.inlines) else {
+        let Some([first, second]) = paired_option_tokens(self.content, &self.inlines) else {
             return vec![self];
         };
         vec![
             Self {
+                content: self.content,
                 inlines: self.inlines.clone(),
                 start: self.start,
                 token: Some((first.0, self.start + first.1)),
             },
             Self {
+                content: self.content,
                 inlines: self.inlines,
                 start: self.start,
                 token: Some((second.0, self.start + second.1)),
@@ -94,11 +100,18 @@ impl FormCandidate {
 /// A complete whitespace-separated literal head may contain a pattern plus
 /// independently spelled long options. Accept no operands, argument styling,
 /// assignment suffixes or prose; a pattern itself never expands into names.
-fn pattern_declarations(inlines: &[Inline]) -> Option<Vec<(String, usize)>> {
+fn pattern_declarations(
+    content: ContentContext<'_>,
+    inlines: &[Inline],
+) -> Option<Vec<(String, usize)>> {
     let mut literal = String::new();
-    if !append_name_prefix(inlines, &mut literal) {
+    if !append_name_prefix(content, inlines, &mut literal) {
         return None;
     }
+    pattern_declarations_text(&literal)
+}
+
+fn pattern_declarations_text(literal: &str) -> Option<Vec<(String, usize)>> {
     let tokens = literal.split_whitespace().collect::<Vec<_>>();
     if tokens.len() < 2
         || !tokens[0].starts_with('-')
@@ -127,8 +140,15 @@ fn pattern_declarations(inlines: &[Inline]) -> Option<Vec<(String, usize)>> {
 /// parsing. Separately validated pattern heads are handled above. An arbitrary
 /// later dash token, third literal argument, or an
 /// emphasized operand cannot restart name recognition.
-pub(super) fn paired_option_tokens(inlines: &[Inline]) -> Option<[(String, usize); 2]> {
-    let prefix = literal_prefix(inlines);
+pub(super) fn paired_option_tokens(
+    content: ContentContext<'_>,
+    inlines: &[Inline],
+) -> Option<[(String, usize); 2]> {
+    let prefix = literal_prefix(content, inlines);
+    paired_option_tokens_text(&prefix)
+}
+
+fn paired_option_tokens_text(prefix: &str) -> Option<[(String, usize); 2]> {
     let tokens: Vec<_> = prefix.split_whitespace().take(4).collect();
     let (first, second) = match tokens.as_slice() {
         [first, second] | [first, "or", second] => (*first, *second),
@@ -152,54 +172,64 @@ pub(super) fn paired_option_tokens(inlines: &[Inline]) -> Option<[(String, usize
 
 /// Read visible literal content only until an explicitly styled parameter.
 /// Transparent wrappers do not erase that boundary, even without whitespace.
-fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
+fn append_name_prefix(content: ContentContext<'_>, nodes: &[Inline], output: &mut String) -> bool {
     for node in nodes {
-        match node {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children } | Inline::Link { children, .. } => {
-                if !append_name_prefix(children, output) {
+        match content.inline(node).expect("definition content resolves") {
+            InlineView::Text(value) | InlineView::Code(value) => output.push_str(value),
+            InlineView::Strong(children) => {
+                if !append_name_prefix(content, children, output) {
                     return false;
                 }
             }
-            Inline::Emphasis { children } => {
-                if first_content_is_parameter(children).is_some() {
+            InlineView::Link(link) => {
+                if !append_name_prefix(content, link.children(), output) {
+                    return false;
+                }
+            }
+            InlineView::Emphasis(children) => {
+                if first_content_is_parameter(content, children).is_some() {
                     return false;
                 }
                 // Whitespace-only styling is not a parameter, but still
                 // occupies bytes before a later recognized name.
-                output.push_str(&plain_text(children));
+                output.push_str(&plain_text(content, children));
             }
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
+            InlineView::Anchor(_) => {}
+            InlineView::LineBreak => output.push('\n'),
+            _ => unreachable!("all inline views are handled"),
         }
     }
     true
 }
 
-pub(super) fn literal_prefix(inlines: &[Inline]) -> String {
+pub(super) fn literal_prefix(content: ContentContext<'_>, inlines: &[Inline]) -> String {
     let mut prefix = String::new();
-    append_name_prefix(inlines, &mut prefix);
+    append_name_prefix(content, inlines, &mut prefix);
     prefix
 }
 
 /// An adjacent placeholder is part of the variable name, not the boundary of
 /// a shorter exact name. Separated operands and assignment values are different.
-pub(super) fn environment_prefix(inlines: &[Inline]) -> Option<String> {
+pub(super) fn environment_prefix(
+    content: ContentContext<'_>,
+    inlines: &[Inline],
+) -> Option<String> {
     let mut prefix = String::new();
-    let complete = append_name_prefix(inlines, &mut prefix);
+    let complete = append_name_prefix(content, inlines, &mut prefix);
     (complete || prefix.ends_with(char::is_whitespace) || prefix.contains('=')).then_some(prefix)
 }
 
 /// Split complete declarations without flattening parameter spans. Bracket
 /// nesting and local argument phases survive strong/link wrapper boundaries;
 /// punctuation inside an argument is not a fresh declaration.
-pub(super) fn declaration_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
+pub(super) fn declaration_groups(content: ContentContext<'_>, term: &[Inline]) -> Vec<Vec<Inline>> {
     let mut ranges = SplitRanges::default();
     split_groups(
+        content,
         term,
         &[',', '|'],
         &mut None,
-        &mut DeclarationState::new(plain_text(term), term),
+        &mut DeclarationState::new(content, plain_text(content, term), term),
         &mut ranges,
     )
 }
@@ -207,14 +237,18 @@ pub(super) fn declaration_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
 /// Return the exact visible byte ranges selected by the same declaration
 /// state machine as [`declaration_groups`]. Callers can bind those decisions
 /// back to the original styled tree without searching flattened text.
-pub(in crate::definitions) fn declaration_group_ranges(term: &[Inline]) -> Vec<Range<usize>> {
-    let text = plain_text(term);
+pub(in crate::definitions) fn declaration_group_ranges(
+    content: ContentContext<'_>,
+    term: &[Inline],
+) -> Vec<Range<usize>> {
+    let text = plain_text(content, term);
     let mut ranges = SplitRanges::tracking();
     let _ = split_groups(
+        content,
         term,
         &[',', '|'],
         &mut None,
-        &mut DeclarationState::new(text.clone(), term),
+        &mut DeclarationState::new(content, text.clone(), term),
         &mut ranges,
     );
     ranges.finish(&text)
@@ -223,11 +257,11 @@ pub(in crate::definitions) fn declaration_group_ranges(term: &[Inline]) -> Vec<R
 /// Slashes only separate the invocation token after its option grammar has
 /// been validated. Keep candidate trees intact so each candidate still passes
 /// the parameter check; never split argument paths later in the form.
-fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
-    declaration_groups(term)
+fn option_alias_groups(content: ContentContext<'_>, term: &[Inline]) -> Vec<Vec<Inline>> {
+    declaration_groups(content, term)
         .into_iter()
         .flat_map(|group| {
-            let text = plain_text(&group);
+            let text = plain_text(content, &group);
             let token = invocation_token(&text);
             if super::slash_option_forms(token).is_none() {
                 return vec![group];
@@ -238,10 +272,11 @@ fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
                 return vec![group];
             };
             split_groups(
+                content,
                 &group,
                 &['/'],
                 &mut Some(start + token.len()),
-                &mut DeclarationState::new(text, &group).within_validated_token(),
+                &mut DeclarationState::new(content, text, &group).within_validated_token(),
                 &mut SplitRanges::default(),
             )
         })
@@ -260,10 +295,63 @@ fn invocation_token(text: &str) -> &str {
         })
 }
 
+/// Select option candidates from one complete literal leaf without building a
+/// temporary string-owning inline tree.
+pub(super) fn literal_option_tokens(value: &str) -> Vec<(String, usize)> {
+    let mut state = DeclarationState::literal(value);
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    for (offset, character) in value.char_indices() {
+        if state.separator(character, matches!(character, ',' | '|')) {
+            ranges.push(start..offset);
+            start = offset + character.len_utf8();
+        }
+    }
+    ranges.push(start..value.len());
+
+    ranges
+        .into_iter()
+        .filter_map(|range| trim_range(value, range))
+        .flat_map(|range| {
+            let group = &value[range.clone()];
+            let token = invocation_token(group);
+            let token_start = range.start + token.as_ptr() as usize - group.as_ptr() as usize;
+            if let Some(parts) = super::slash_option_forms(token) {
+                return parts
+                    .into_iter()
+                    .scan(token_start, |offset, part| {
+                        let start = *offset;
+                        *offset += part.len() + 1;
+                        Some((part.to_owned(), start))
+                    })
+                    .collect::<Vec<_>>();
+            }
+            if let Some(tokens) = pattern_declarations_text(group) {
+                return tokens
+                    .into_iter()
+                    .map(|(token, offset)| (token, range.start + offset))
+                    .collect();
+            }
+            if let Some(tokens) = paired_option_tokens_text(group) {
+                return tokens
+                    .into_iter()
+                    .map(|(token, offset)| (token, range.start + offset))
+                    .collect();
+            }
+            if token.is_empty() {
+                Vec::new()
+            } else {
+                vec![(token.to_owned(), token_start)]
+            }
+        })
+        .collect()
+}
+
 /// One style-preserving splitter for alias punctuation. A bounded pass counts
 /// visible bytes even in opaque arguments. Links preserve their wrapper while
 /// exposing their visible children; their destination is never name evidence.
 fn split_groups(
+    content: ContentContext<'_>,
     term: &[Inline],
     separators: &[char],
     remaining: &mut Option<usize>,
@@ -273,54 +361,32 @@ fn split_groups(
     let mut groups = vec![Vec::new()];
     for inline in term {
         let parts = match inline {
-            Inline::Text { value } => value
-                .split(|character| {
-                    let separator = state
-                        .separator(character, take_separator(character, separators, remaining));
-                    ranges.character(character, separator);
-                    separator
-                })
-                .map(|value| {
-                    vec![Inline::Text {
-                        value: value.into(),
-                    }]
-                })
-                .collect(),
-            Inline::Code { value } => value
-                .split(|character| {
-                    let separator = state
-                        .separator(character, take_separator(character, separators, remaining));
-                    ranges.character(character, separator);
-                    separator
-                })
-                .map(|value| {
-                    vec![Inline::Code {
-                        value: value.into(),
-                    }]
-                })
-                .collect(),
+            Inline::Text { content: reference } => split_leaf(
+                content, *reference, false, separators, remaining, state, ranges,
+            ),
+            Inline::Code { content: reference } => split_leaf(
+                content, *reference, true, separators, remaining, state, ranges,
+            ),
             Inline::Strong { children } => {
-                split_groups(children, separators, remaining, state, ranges)
+                split_groups(content, children, separators, remaining, state, ranges)
                     .into_iter()
                     .map(|children| vec![Inline::Strong { children }])
                     .collect()
             }
             Inline::Link {
-                target,
-                title,
+                occurrence,
                 children,
-            } => split_groups(children, separators, remaining, state, ranges)
+            } => split_groups(content, children, separators, remaining, state, ranges)
                 .into_iter()
                 .map(|children| {
                     vec![Inline::Link {
-                        target: target.clone(),
-                        title: title.clone(),
+                        occurrence: *occurrence,
                         children,
                     }]
                 })
                 .collect(),
             _ => {
-                let text = plain_text(std::slice::from_ref(inline));
+                let text = plain_text(content, std::slice::from_ref(inline));
                 state.opaque(&text);
                 ranges.opaque(text.len());
                 if let Some(bytes) = remaining {
@@ -337,6 +403,56 @@ fn split_groups(
         }
     }
     groups
+}
+
+#[allow(clippy::too_many_arguments)]
+fn split_leaf(
+    content: ContentContext<'_>,
+    reference: ContentRef,
+    code: bool,
+    separators: &[char],
+    remaining: &mut Option<usize>,
+    state: &mut DeclarationState,
+    ranges: &mut SplitRanges,
+) -> Vec<Vec<Inline>> {
+    let value = content
+        .resolve_text(reference)
+        .expect("definition leaf resolves through its content store");
+    let mut output = Vec::new();
+    let mut start = 0usize;
+    for (offset, character) in value.char_indices() {
+        let separator =
+            state.separator(character, take_separator(character, separators, remaining));
+        ranges.character(character, separator);
+        if separator {
+            output.push(vec![slice_leaf(reference, start, offset, code)]);
+            start = offset + character.len_utf8();
+        }
+    }
+    output.push(vec![slice_leaf(reference, start, value.len(), code)]);
+    output
+}
+
+fn slice_leaf(reference: ContentRef, start: usize, end: usize, code: bool) -> Inline {
+    let start = reference
+        .bytes
+        .start
+        .checked_add(u32::try_from(start).expect("leaf slice start fits u32"))
+        .expect("leaf slice start stays within its atom");
+    let end = reference
+        .bytes
+        .start
+        .checked_add(u32::try_from(end).expect("leaf slice end fits u32"))
+        .expect("leaf slice end stays within its atom");
+    let content = ContentRef {
+        atom: reference.atom,
+        bytes: mant_ir::ContentByteRange { start, end },
+    };
+    if code {
+        Inline::Code { content }
+    } else {
+        Inline::Text { content }
+    }
 }
 
 #[derive(Default)]
@@ -400,41 +516,62 @@ fn take_separator(character: char, separators: &[char], remaining: &mut Option<u
     eligible && separators.contains(&character)
 }
 
-fn starts_with_parameter(term: &[Inline]) -> bool {
-    first_content_is_parameter(term).unwrap_or(false)
+fn starts_with_parameter(content: ContentContext<'_>, term: &[Inline]) -> bool {
+    first_content_is_parameter(content, term).unwrap_or(false)
 }
 
 /// Locate content, not merely a wrapper: separators may leave empty strong
 /// runs and anchors before the argument. Preserve emphasis ancestry instead
 /// of flattening text and losing the distinction between a name and a value.
-fn first_content_is_parameter(term: &[Inline]) -> Option<bool> {
-    term.iter().find_map(|inline| match inline {
-        Inline::Anchor { .. } | Inline::LineBreak => None,
-        Inline::Text { value } | Inline::Code { value } => {
-            (!value.trim().is_empty()).then_some(false)
+fn first_content_is_parameter(content: ContentContext<'_>, term: &[Inline]) -> Option<bool> {
+    term.iter().find_map(|inline| {
+        match content.inline(inline).expect("definition content resolves") {
+            InlineView::Anchor(_) | InlineView::LineBreak => None,
+            InlineView::Text(value) | InlineView::Code(value) => {
+                (!value.trim().is_empty()).then_some(false)
+            }
+            InlineView::Strong(children) => first_content_is_parameter(content, children),
+            InlineView::Link(link) => first_content_is_parameter(content, link.children()),
+            InlineView::Emphasis(children) => {
+                first_content_is_parameter(content, children).map(|_| true)
+            }
+            _ => unreachable!("all inline views are handled"),
         }
-        Inline::Strong { children } | Inline::Link { children, .. } => {
-            first_content_is_parameter(children)
-        }
-        Inline::Emphasis { children } => first_content_is_parameter(children).map(|_| true),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_content as fixture;
+
+    fn declaration_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
+        super::declaration_groups(fixture::content(), term)
+    }
+
+    fn declaration_group_ranges(term: &[Inline]) -> Vec<Range<usize>> {
+        super::declaration_group_ranges(fixture::content(), term)
+    }
+
+    fn plain_text(term: &[Inline]) -> String {
+        super::plain_text(fixture::content(), term)
+    }
+
+    fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
+        super::super::option_names_from_terms(fixture::content(), terms)
+    }
 
     #[test]
     fn declaration_state_crosses_wrappers_and_bounds_uncertain_nesting() {
-        let text = |value: &str| Inline::Text {
-            value: value.into(),
-        };
-        let link = |children| Inline::Link {
-            target: mant_ir::LinkTarget::External {
-                uri: "https://example.invalid/".into(),
-            },
-            title: None,
-            children,
+        let text = fixture::text;
+        let link = |children| {
+            fixture::link(
+                mant_ir::LinkTarget::External {
+                    uri: "https://example.invalid/".into(),
+                },
+                None,
+                children,
+            )
         };
         for parameter in ["[a|b]", "{+|-}", "<日本,名前>", "[a|b", "a] | b"] {
             let term = vec![
@@ -456,7 +593,7 @@ mod tests {
             },
             text(", --other"),
         ];
-        let names: Vec<_> = AuthoredForm::new(&term)
+        let names: Vec<_> = AuthoredForm::new(fixture::content(), &term)
             .option_candidates()
             .filter_map(|candidate| candidate.invocation_token())
             .collect();
@@ -474,9 +611,7 @@ mod tests {
 
     #[test]
     fn declaration_ranges_track_utf8_wrappers_opaque_arguments_and_repeated_text() {
-        let text = |value: &str| Inline::Text {
-            value: value.into(),
-        };
+        let text = fixture::text;
         let term = vec![
             Inline::Strong {
                 children: vec![
@@ -487,15 +622,15 @@ mod tests {
                 ],
             },
             text(", "),
-            Inline::Link {
-                target: mant_ir::LinkTarget::External {
+            fixture::link(
+                mant_ir::LinkTarget::External {
                     uri: "https://example.invalid/".into(),
                 },
-                title: None,
-                children: vec![Inline::Strong {
+                None,
+                vec![Inline::Strong {
                     children: vec![text("--界")],
                 }],
-            },
+            ),
         ];
         let visible = plain_text(&term);
         let ranges = declaration_group_ranges(&term);
@@ -512,7 +647,10 @@ mod tests {
             let term = vec![Inline::Strong {
                 children: vec![text(value)],
             }];
-            assert_eq!(declaration_group_ranges(&term), [0..value.len()]);
+            assert_eq!(
+                declaration_group_ranges(&term).as_slice(),
+                std::slice::from_ref(&(0..value.len()))
+            );
         }
 
         let adjacent = vec![
@@ -524,7 +662,10 @@ mod tests {
                 children: vec![text("VALUE")],
             },
         ];
-        assert_eq!(declaration_groups(&adjacent), [adjacent.clone()]);
+        assert_eq!(
+            declaration_groups(&adjacent).as_slice(),
+            std::slice::from_ref(&adjacent)
+        );
 
         let spaced = vec![
             Inline::Strong {
@@ -540,15 +681,15 @@ mod tests {
 
     #[test]
     fn transparent_links_preserve_separators_and_parameter_ancestry() {
-        let text = |value: &str| Inline::Text {
-            value: value.into(),
-        };
-        let link = |children| Inline::Link {
-            target: mant_ir::LinkTarget::External {
-                uri: "https://example.invalid/--not-a-name".into(),
-            },
-            title: None,
-            children,
+        let text = fixture::text;
+        let link = |children| {
+            fixture::link(
+                mant_ir::LinkTarget::External {
+                    uri: "https://example.invalid/--not-a-name".into(),
+                },
+                None,
+                children,
+            )
         };
         let source = vec![link(vec![Inline::Strong {
             children: vec![
@@ -561,32 +702,27 @@ mod tests {
         }])];
         let original = source.clone();
         assert_eq!(
-            super::super::option_names_from_terms(std::slice::from_ref(&source)),
+            option_names_from_terms(std::slice::from_ref(&source)),
             ["-L", "--library"]
         );
         assert_eq!(source, original);
         let argument = vec![Inline::Emphasis {
             children: vec![link(vec![text("-n,--FAKE")])],
         }];
-        assert!(super::super::option_names_from_terms(&[argument]).is_empty());
+        assert!(option_names_from_terms(&[argument]).is_empty());
         let slash = vec![link(vec![text("-n/-NUM")])];
-        assert_eq!(
-            super::super::option_names_from_terms(&[slash]),
-            ["-n", "-NUM"]
-        );
+        assert_eq!(option_names_from_terms(&[slash]), ["-n", "-NUM"]);
     }
 
     #[test]
     fn slash_grouping_keeps_styles_and_excludes_later_argument_paths() {
-        let code = |value: &str| Inline::Code {
-            value: value.into(),
-        };
+        let code = |value: &str| fixture::code(value.to_owned());
         let argument = |value: &str| Inline::Emphasis {
             children: vec![code(value)],
         };
         for spacer in [
             code(""),
-            Inline::anchor("invisible"),
+            fixture::anchor("invisible"),
             Inline::Strong { children: vec![] },
         ] {
             for name in [
@@ -596,7 +732,7 @@ mod tests {
                 },
             ] {
                 let term = vec![code("-n/"), spacer.clone(), name];
-                assert_eq!(super::super::option_names_from_terms(&[term]), ["-n"]);
+                assert_eq!(option_names_from_terms(&[term]), ["-n"]);
             }
         }
         for (term, names) in [
@@ -614,7 +750,7 @@ mod tests {
             (vec![code("-n/-NUM")], vec!["-n", "-NUM"]),
         ] {
             assert_eq!(
-                super::super::option_names_from_terms(std::slice::from_ref(&term)),
+                option_names_from_terms(std::slice::from_ref(&term)),
                 names,
                 "{term:?}"
             );
@@ -626,36 +762,25 @@ mod tests {
     #[test]
     fn empty_styling_cannot_hide_the_first_parameter_or_alias() {
         for spacer in [
-            Inline::Text {
-                value: " \t".into(),
-            },
-            Inline::Code {
-                value: String::new(),
-            },
-            Inline::Code {
-                value: " \t".into(),
-            },
+            fixture::text(" \t"),
+            fixture::code(""),
+            fixture::code(" \t"),
             Inline::Strong { children: vec![] },
             Inline::Strong {
-                children: vec![Inline::Text { value: " ".into() }],
+                children: vec![fixture::text(" ")],
             },
             Inline::Strong {
-                children: vec![
-                    Inline::Code { value: " ".into() },
-                    Inline::anchor("invisible"),
-                ],
+                children: vec![fixture::code(" "), fixture::anchor("invisible")],
             },
             Inline::Emphasis {
-                children: vec![Inline::Text { value: " ".into() }],
+                children: vec![fixture::text(" ")],
             },
-            Inline::anchor("invisible"),
-            Inline::LineBreak,
+            fixture::anchor("invisible"),
+            fixture::line_break(),
         ] {
             for separator in [",", "|"] {
                 for parameter in [false, true] {
-                    let text = Inline::Text {
-                        value: "-NUM".into(),
-                    };
+                    let text = fixture::text("-NUM");
                     let name = if parameter {
                         Inline::Emphasis {
                             children: vec![text],
@@ -667,15 +792,13 @@ mod tests {
                     };
                     let term = vec![Inline::Strong {
                         children: vec![
-                            Inline::Text {
-                                value: format!("-n{separator}"),
-                            },
+                            fixture::text(format!("-n{separator}")),
                             spacer.clone(),
                             name,
                         ],
                     }];
                     assert_eq!(
-                        super::super::option_names_from_terms(&[term]),
+                        option_names_from_terms(&[term]),
                         if parameter {
                             vec!["-n"]
                         } else {

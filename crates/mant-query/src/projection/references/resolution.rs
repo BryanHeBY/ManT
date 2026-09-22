@@ -101,7 +101,10 @@ enum Match {
     Limited,
 }
 
-fn requested(record: &ReferenceRecord) -> Option<&str> {
+fn requested<'a>(
+    content: mant_ir::ContentContext<'a>,
+    record: &ReferenceRecord,
+) -> Option<&'a str> {
     if !matches!(
         record.resolution,
         ReferenceResolution::Loaded {
@@ -111,7 +114,7 @@ fn requested(record: &ReferenceRecord) -> Option<&str> {
     ) {
         return None;
     }
-    match &record.target {
+    match &content.occurrence(record.occurrence)?.target {
         LinkTarget::Section { id } => Some(id.as_str()),
         LinkTarget::Document { fragment, .. } => fragment.as_deref(),
         _ => None,
@@ -126,9 +129,10 @@ pub(super) fn validate_local(
     retained: &mut usize,
     limit: usize,
 ) -> Option<ReferenceCoverage> {
+    let content = document.content();
     let mut wanted: BTreeMap<&str, Match> = BTreeMap::new();
     for record in records.iter() {
-        if let Some(fragment) = requested(record) {
+        if let Some(fragment) = requested(content, record) {
             wanted.entry(fragment).or_default();
         }
     }
@@ -157,7 +161,7 @@ pub(super) fn validate_local(
     let results: Vec<_> = records
         .iter()
         .map(|record| {
-            let name = requested(record)?;
+            let name = requested(content, record)?;
             Some(materialize_match(
                 wanted.get(name),
                 report.complete(),

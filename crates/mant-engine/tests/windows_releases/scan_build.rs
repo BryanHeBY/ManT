@@ -29,7 +29,7 @@ fn keeps_the_analyzer_options_checkers_and_archive_metadata() {
         document
             .sections
             .iter()
-            .map(|section| section.heading.plain_text())
+            .map(|section| section.heading.plain_text(document.content()))
             .collect::<Vec<_>>(),
         SCAN_BUILD_SECTIONS,
     );
@@ -48,5 +48,5 @@ fn keeps_the_analyzer_options_checkers_and_archive_metadata() {
 fn does_not_leak_roff_markup_or_duplicate_spacing() {
     let document = windows_release_manual("scan-build");
     common::assert_document_has_no_source_markup("windows-releases/scan-build", document);
-    common::assert_bounded_vertical_spacing(&document.sections, "windows-releases/scan-build");
+    common::assert_bounded_vertical_spacing(document, "windows-releases/scan-build");
 }

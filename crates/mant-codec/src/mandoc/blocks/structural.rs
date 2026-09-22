@@ -106,7 +106,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.formatter,
                 );
                 if !children.is_empty() {
-                    append_bibliography_period(&mut children);
+                    append_bibliography_period(&mut children, self.context, source_span(node));
                     self.output.push(Block::Paragraph {
                         children,
                         layout: layout_with_spacing(
@@ -261,10 +261,20 @@ impl StructuralLowerer<'_, '_, '_> {
 /// mandoc adds it while presenting the complete reference. Retaining that
 /// formatter-owned character keeps phrases and citations faithful without
 /// attaching punctuation to the individual `%A`/`%T` semantic nodes.
-fn append_bibliography_period(children: &mut Vec<Inline>) {
-    let text = plain_text(children);
+fn append_bibliography_period(
+    children: &mut Vec<Inline>,
+    context: &LoweringContext<'_>,
+    source: Option<mant_ir::SourceSpan>,
+) {
+    let text = context
+        .content
+        .with_context(|content| mant_ir::inline_plain_text(content, children));
     if !text.trim_end().ends_with(['.', '!', '?']) {
-        children.push(Inline::Text { value: ".".into() });
+        children.extend(context.content.lower(
+            mant_ir::ContentRootKind::Body,
+            source,
+            vec![crate::mandoc::inline::DraftInline::Text { value: ".".into() }],
+        ));
     }
 }
 

@@ -121,7 +121,7 @@ pub(crate) struct NativeProseProjection {
 }
 
 impl NativeProseProjection {
-    fn new(document: StructuredDocument) -> Result<Self, NativeProjectionError> {
+    pub(super) fn new(document: StructuredDocument) -> Result<Self, NativeProjectionError> {
         let sources = project_sources(&document)?;
         let root_source = source_key(document.root_source())?;
         validate_source_table(&sources, root_source)?;
@@ -156,6 +156,12 @@ impl NativeProseProjection {
 
     pub(crate) fn document(&self) -> &StructuredDocument {
         &self.document
+    }
+
+    pub(crate) fn take_content_tables(
+        &mut self,
+    ) -> libmandoc_rs::structured::StructuredContentTables {
+        self.document.take_content_tables()
     }
 
     pub(crate) fn sources(&self) -> &[SourceRecord] {

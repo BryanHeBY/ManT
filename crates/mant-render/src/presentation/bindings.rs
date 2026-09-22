@@ -2,7 +2,7 @@
 use std::{collections::HashMap, marker::PhantomData, ops::Range};
 
 use mant_ir::{
-    Block, ContentContext, Document, EntryKind, EntryOwner, Inline, project_content_slice,
+    Block, ContentContext, Document, EntryKind, EntryOwner, Inline,
     visit::{self, Visit},
 };
 
@@ -22,13 +22,10 @@ pub struct InlineNameRange {
 /// in other owners never acquire a type color. Addresses are never dereferenced
 /// or serialized. The borrow prevents caching the map beyond the source tree.
 /// This does not rebuild the semantic index and has no explain response limits.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct EntryStyleMap<'a> {
     roots: HashMap<usize, Vec<InlineNameRange>>,
-    // Complete documents bind semantic ranges through their authoritative
-    // store. Materialized excerpt/DTO constructors below intentionally retain
-    // the legacy self-contained-inline boundary until ContentProjection ships.
-    content: Option<ContentContext<'a>>,
+    content: ContentContext<'a>,
     source: PhantomData<&'a Inline>,
 }
 
@@ -37,21 +34,23 @@ impl<'a> EntryStyleMap<'a> {
     #[must_use]
     pub fn for_document(document: &'a Document) -> Self {
         let mut map = Self {
-            content: Some(document.content()),
-            ..Self::default()
+            roots: HashMap::new(),
+            content: document.content(),
+            source: PhantomData,
         };
         map.visit_document(document);
         map.normalize();
         map
     }
 
-    /// Collect bindings for a self-contained materialized excerpt or DTO.
-    ///
-    /// This compatibility boundary remains detached until response envelopes
-    /// carry a `ContentProjection`; complete documents use [`Self::for_document`].
+    /// Collect bindings for blocks retained by one response-local projection.
     #[must_use]
-    pub fn for_blocks(blocks: &'a [Block]) -> Self {
-        let mut map = Self::default();
+    pub fn for_blocks(content: ContentContext<'a>, blocks: &'a [Block]) -> Self {
+        let mut map = Self {
+            roots: HashMap::new(),
+            content,
+            source: PhantomData,
+        };
         for block in blocks {
             map.visit_block(block);
         }
@@ -59,13 +58,14 @@ impl<'a> EntryStyleMap<'a> {
         map
     }
 
-    /// Collect bindings within a self-contained materialized section DTO.
-    ///
-    /// This is the section counterpart of the detached [`Self::for_blocks`]
-    /// compatibility boundary.
+    /// Collect bindings within a section retained by one projection.
     #[must_use]
-    pub fn for_section(section: &'a mant_ir::Section) -> Self {
-        let mut map = Self::default();
+    pub fn for_section(content: ContentContext<'a>, section: &'a mant_ir::Section) -> Self {
+        let mut map = Self {
+            roots: HashMap::new(),
+            content,
+            source: PhantomData,
+        };
         map.visit_section(section);
         map.normalize();
         map
@@ -84,12 +84,9 @@ impl<'a> EntryStyleMap<'a> {
 
     fn owner(&mut self, owner: EntryOwner<'a>) {
         let content = self.content;
-        let names = match content {
-            Some(content) => content
-                .entry_validated_names(owner)
-                .expect("document entry content must resolve while styling"),
-            None => owner.validated_names(),
-        };
+        let names = content
+            .entry_validated_names(owner)
+            .expect("retained entry content must resolve while styling");
         let Some(names) = names else {
             return;
         };
@@ -104,11 +101,10 @@ impl<'a> EntryStyleMap<'a> {
                 let ranges = occurrence
                     .parts
                     .iter()
-                    .map(|part| match content {
-                        Some(content) => content
+                    .map(|part| {
+                        content
                             .project_content_slice(owner, part)
-                            .expect("document entry range must resolve while styling"),
-                        None => project_content_slice(owner, part),
+                            .expect("retained entry range must resolve while styling")
                     })
                     .collect::<Option<Vec<_>>>();
                 let Some(ranges) = ranges else {
@@ -177,17 +173,11 @@ mod tests {
             source: None,
             blocks: vec![Block::Paragraph {
                 children: vec![
-                    Inline::Text {
-                        value: "前\n".into(),
-                    },
+                    crate::test_content::text("前\n"),
                     Inline::Strong {
-                        children: vec![Inline::Code {
-                            value: "é名-param".into(),
-                        }],
+                        children: vec![crate::test_content::code("é名-param")],
                     },
-                    Inline::Text {
-                        value: " é名-param ordinary".into(),
-                    },
+                    crate::test_content::text(" é名-param ordinary"),
                 ],
                 layout: LayoutHint::default(),
                 source: None,
@@ -226,13 +216,20 @@ mod tests {
     fn maps_nested_utf8_slices_without_styling_equal_body_text() {
         let item = item();
         let owner = EntryOwner::List(&item);
+        let content = crate::test_content::content();
         assert_eq!(
-            project_content_slice(owner, &slice(Some(0..5)))
+            content
+                .project_content_slice(owner, &slice(Some(0..5)))
+                .unwrap()
                 .unwrap()
                 .chars,
             2..4
         );
-        let mut map = EntryStyleMap::default();
+        let mut map = EntryStyleMap {
+            roots: HashMap::new(),
+            content,
+            source: PhantomData,
+        };
         map.owner(owner);
         assert_eq!(
             map.ranges(
@@ -259,10 +256,18 @@ mod tests {
     #[test]
     fn rejects_invalid_unicode_and_whole_name_binding_atomically() {
         let mut item = item();
-        assert!(project_content_slice(EntryOwner::List(&item), &slice(Some(1..5))).is_none());
+        let content = crate::test_content::content();
+        assert!(!matches!(
+            content.project_content_slice(EntryOwner::List(&item), &slice(Some(1..5))),
+            Ok(Some(_))
+        ));
         item.entry.as_mut().unwrap().name_bindings[0].occurrences[0].parts[0].bytes = Some(0..2);
         let owner = EntryOwner::List(&item);
-        let mut map = EntryStyleMap::default();
+        let mut map = EntryStyleMap {
+            roots: HashMap::new(),
+            content,
+            source: PhantomData,
+        };
         map.owner(owner);
         assert!(map.roots.is_empty());
     }

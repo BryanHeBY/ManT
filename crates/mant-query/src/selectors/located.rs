@@ -142,7 +142,10 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
             });
         }
         for located in if DETAILS {
-            content_entries(&section.blocks)
+            content_entries(
+                content.expect("detailed collection has document content"),
+                &section.blocks,
+            )
         } else {
             content_entry_locations(&section.blocks)
         } {
@@ -216,7 +219,10 @@ fn collect_root_entries_impl<'a, const DETAILS: bool>(
         Vec::new()
     };
     for located in if DETAILS {
-        content_entries(blocks)
+        content_entries(
+            content.expect("detailed collection has document content"),
+            blocks,
+        )
     } else {
         content_entry_locations(blocks)
     } {

@@ -1,11 +1,10 @@
 //! CommonMark-only emphasis of exact inline matches before escaping/layout.
 //! Fenced displays remain verbatim; inserting Markdown inside them would lie.
-use super::{LocatedStyles, Span, key, pieces};
-use crate::presentation::TextPresentation;
+use super::{LocatedStyles, key};
 use mant_codec::encode::MarkdownInlineProjection;
 use mant_ir::Inline;
 use mant_protocol::ExplanationTextRoot;
-use std::borrow::Cow;
+use std::ops::Range;
 
 impl LocatedStyles<'_> {
     pub(in crate::output) fn markdown_inline(
@@ -13,146 +12,131 @@ impl LocatedStyles<'_> {
         nodes: &[Inline],
         options: mant_codec::encode::MarkdownFragmentOptions,
     ) -> String {
-        mant_codec::encode::render_inline_fragment(&self.project(nodes), options)
+        mant_codec::encode::render_projected_inline_fragment(
+            self.content()
+                .expect("retained explanation form has a content projection"),
+            nodes,
+            options,
+            self,
+        )
     }
 }
 
 impl MarkdownInlineProjection for LocatedStyles<'_> {
-    fn project<'a>(&self, nodes: &'a [Inline]) -> Cow<'a, [Inline]> {
-        let spans = self
-            .roots
+    fn scalar_ranges(&self, nodes: &[Inline]) -> &[Range<usize>] {
+        self.markdown_matches
             .get(&key(ExplanationTextRoot::Inline(nodes)))
-            .map_or(&[][..], Vec::as_slice);
-        // Borrow the overwhelmingly common unmarked root unchanged. Only one
-        // marked root is projected at a time, never the complete response/AST.
-        if !spans.iter().any(|s| s.matched) {
-            return Cow::Borrowed(nodes);
-        }
-        Cow::Owned(mark(nodes, &mut 0, spans, false))
+            .map_or(&[], Vec::as_slice)
     }
-}
-
-fn mark(nodes: &[Inline], cursor: &mut usize, spans: &[Span], strong: bool) -> Vec<Inline> {
-    let mut output = Vec::new();
-    for node in nodes {
-        match node {
-            Inline::Text { value } | Inline::Code { value } => {
-                pieces(
-                    value,
-                    cursor,
-                    spans,
-                    TextPresentation::default(),
-                    &mut |style, text| {
-                        let leaf = if matches!(node, Inline::Code { .. }) {
-                            Inline::Code { value: text.into() }
-                        } else {
-                            Inline::Text { value: text.into() }
-                        };
-                        output.push(if style.matched && !strong {
-                            Inline::Strong {
-                                children: vec![leaf],
-                            }
-                        } else {
-                            leaf
-                        });
-                    },
-                );
-            }
-            Inline::Strong { children } => output.push(Inline::Strong {
-                children: mark(children, cursor, spans, true),
-            }),
-            Inline::Emphasis { children } => output.push(Inline::Emphasis {
-                children: mark(children, cursor, spans, strong),
-            }),
-            Inline::Link {
-                children,
-                target,
-                title,
-            } => output.push(Inline::Link {
-                children: mark(children, cursor, spans, strong),
-                target: target.clone(),
-                title: title.clone(),
-            }),
-            Inline::LineBreak => {
-                *cursor += 1;
-                output.push(Inline::LineBreak);
-            }
-            Inline::Anchor { .. } => output.push(node.clone()),
-        }
-    }
-    output
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{collections::BTreeMap, marker::PhantomData};
+
+    fn projected_text(value: &str) -> (mant_ir::ContentProjection, Vec<Inline>) {
+        let mut builder = mant_ir::ContentStoreBuilder::new();
+        let owner = builder.push_owner(
+            mant_ir::ContentOwnerKind::Document,
+            mant_ir::Provenance::Unknown,
+        );
+        let root = builder.push_root(
+            owner,
+            mant_ir::ContentRootKind::Body,
+            mant_ir::Provenance::Unknown,
+        );
+        let content = builder.push_text(
+            root,
+            value.to_owned(),
+            None,
+            mant_ir::ContentStyle::default(),
+            None,
+            None,
+            mant_ir::Provenance::Unknown,
+        );
+        (
+            mant_ir::ContentProjection {
+                content_store: builder.finish(),
+            },
+            vec![Inline::Text { content }],
+        )
+    }
+
+    fn styles<'a>(
+        projection: &'a mant_ir::ContentProjection,
+        nodes: &'a [Inline],
+        matched: bool,
+    ) -> LocatedStyles<'a> {
+        let root = key(ExplanationTextRoot::Inline(nodes));
+        let mut roots = BTreeMap::new();
+        roots.insert(
+            root,
+            vec![super::super::Span {
+                chars: 1..4,
+                kind: None,
+                matched,
+            }],
+        );
+        let mut markdown_matches = BTreeMap::new();
+        if matched {
+            markdown_matches.insert(root, std::iter::once(1..4).collect());
+        }
+        LocatedStyles {
+            roots,
+            markdown_matches,
+            names: None,
+            content: Some(projection.content()),
+            lifetime: PhantomData,
+        }
+    }
 
     #[test]
-    fn projection_borrows_unmarked_roots_without_copying_inline_content() {
-        let nodes = [Inline::Text {
-            value: "ALPHA".into(),
-        }];
-        let styles = LocatedStyles::default();
-        let Cow::Borrowed(projected) = styles.project(&nodes) else {
-            panic!("unmarked inline roots must stay borrowed");
-        };
-        assert!(std::ptr::eq(projected.as_ptr(), nodes.as_ptr()));
+    fn unmarked_roots_have_no_projection_ranges() {
+        let (projection, nodes) = projected_text("ALPHA");
+        let styles = styles(&projection, &nodes, false);
+        assert!(styles.scalar_ranges(&nodes).is_empty());
     }
 
     #[test]
     fn projection_marks_only_the_borrowed_root_and_preserves_source() {
-        let nodes = [Inline::Text {
-            value: "ALPHA".into(),
-        }];
+        let (projection, nodes) = projected_text("ALPHA");
         let other = nodes.clone();
-        let mut styles = LocatedStyles::default();
-        styles.roots.insert(
-            key(ExplanationTextRoot::Inline(&nodes)),
-            vec![Span {
-                chars: 1..4,
-                kind: None,
-                matched: true,
-            }],
-        );
-        assert!(matches!(styles.project(&nodes), Cow::Owned(_)));
-        assert!(matches!(styles.project(&other), Cow::Borrowed(_)));
+        let styles = styles(&projection, &nodes, true);
+        assert_eq!(styles.scalar_ranges(&nodes), std::slice::from_ref(&(1..4)));
+        assert!(styles.scalar_ranges(&other).is_empty());
         let options = mant_codec::encode::MarkdownFragmentOptions::default();
         assert_eq!(styles.markdown_inline(&nodes, options), "A**LPH**A");
-        assert_eq!(styles.markdown_inline(&other, options), "ALPHA");
         assert_eq!(
-            mant_codec::encode::render_inline_fragment(&nodes, options),
+            mant_codec::encode::render_inline_fragment(projection.content(), &nodes, options),
             "ALPHA"
         );
     }
 
     #[test]
     fn block_report_decoration_does_not_change_canonical_document_encoding() {
+        let (projection, nodes) = projected_text("ALPHA");
         let blocks = [mant_ir::Block::Paragraph {
-            children: vec![Inline::Text {
-                value: "ALPHA".into(),
-            }],
+            children: nodes,
             layout: mant_ir::LayoutHint::default(),
             source: None,
         }];
         let mant_ir::Block::Paragraph { children, .. } = &blocks[0] else {
             unreachable!();
         };
-        let mut styles = LocatedStyles::default();
-        styles.roots.insert(
-            key(ExplanationTextRoot::Inline(children)),
-            vec![Span {
-                chars: 1..4,
-                kind: None,
-                matched: true,
-            }],
-        );
+        let styles = styles(&projection, children, true);
         let options = mant_codec::encode::MarkdownFragmentOptions::default();
         assert_eq!(
-            mant_codec::encode::render_located_blocks_fragment(&blocks, options, Some(&styles)),
+            mant_codec::encode::render_located_blocks_fragment(
+                projection.content(),
+                &blocks,
+                options,
+                Some(&styles),
+            ),
             ["A**LPH**A"]
         );
         assert_eq!(
-            mant_codec::encode::render_blocks_fragment(&blocks, options),
+            mant_codec::encode::render_blocks_fragment(projection.content(), &blocks, options),
             ["ALPHA"]
         );
     }

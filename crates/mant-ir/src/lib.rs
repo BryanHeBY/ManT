@@ -4,6 +4,8 @@
 mod address;
 mod content;
 mod content_location;
+mod content_projection;
+mod content_store;
 mod declaration;
 mod document;
 mod entry;
@@ -17,6 +19,8 @@ mod outline;
 mod references;
 mod resolved;
 mod table;
+#[cfg(test)]
+pub(crate) mod test_support;
 mod text_coordinates;
 mod tldr;
 mod validation;
@@ -25,6 +29,8 @@ pub mod visit;
 pub use address::*;
 pub use content::*;
 pub use content_location::*;
+pub use content_projection::*;
+pub use content_store::*;
 pub use declaration::*;
 pub use document::*;
 pub use entry::*;

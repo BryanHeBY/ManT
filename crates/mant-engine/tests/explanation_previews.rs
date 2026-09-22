@@ -44,10 +44,20 @@ fn previews_keep_two_original_blocks_complete_matches_and_atomic_body() {
     }
     let rendered = mant_render::render_explanation_text(&result);
     assert!(!rendered.contains("No match, unrelated full body"));
+    assert!(e.content.is_some());
     assert!(
-        serde_json::to_string(e.content.as_ref().unwrap())
+        result
+            .content_projection
+            .as_ref()
             .unwrap()
-            .contains("unrelated full body")
+            .content_store
+            .atoms
+            .iter()
+            .any(|atom| {
+                atom.kind
+                    .text()
+                    .is_some_and(|text| text.contains("unrelated full body"))
+            })
     );
     // Details + windows fit; complete large body does not. Windows are not
     // placed into content and window clipping is not a budget truncation.

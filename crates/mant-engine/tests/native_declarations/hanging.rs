@@ -1,4 +1,4 @@
-use super::{EvidenceClass, ExplanationOptions, ExplanationQuery, definitions};
+use super::{EvidenceClass, ExplanationOptions, ExplanationQuery, common, definitions};
 use mant_ir::EntryKind;
 
 #[test]
@@ -55,7 +55,7 @@ fn complete_hanging_heads_share_spacing_and_owner_rules_across_roles() {
             let entry = items[0].entry.as_ref().unwrap();
             assert_eq!(entry.kind, kind, "{source}");
             assert_eq!(entry.names, [name], "{source}");
-            let body = serde_json::to_string(&items[0].description).unwrap();
+            let body = common::block_slice_text(document.content(), &items[0].description);
             assert!(body.contains("OWNER_BODY") && !body.contains("OUTSIDE_BODY"));
             let result = mant_query::explain_query(
                 &query,

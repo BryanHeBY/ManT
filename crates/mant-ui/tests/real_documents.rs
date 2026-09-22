@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mant_ir::{Block, Document, Inline, ResolvedContent, Section};
+use mant_ir::{Block, ContentContext, Document, Inline, ResolvedContent, Section};
 use mant_protocol::{QueryInput, QueryRequest, QueryView, RequestSchema};
 use mant_ui::DocumentView;
 use ratatui::style::Modifier;
@@ -413,45 +413,55 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
 }
 
 fn collect_document_fragments(document: &Document, output: &mut Vec<ExpectedFragment>) {
+    let content = document.content();
     if let Some(heading) = &document.heading {
-        collect_inlines(&heading.content, output, false);
+        collect_inlines(content, &heading.content, output, false);
     }
-    collect_blocks(&document.blocks, output, false);
+    collect_blocks(content, &document.blocks, output, false);
     for section in &document.sections {
-        collect_section_fragments(section, output);
+        collect_section_fragments(content, section, output);
     }
 }
 
-fn collect_section_fragments(section: &Section, output: &mut Vec<ExpectedFragment>) {
-    collect_inlines(&section.heading.content, output, false);
-    collect_blocks(&section.blocks, output, false);
+fn collect_section_fragments(
+    content: ContentContext<'_>,
+    section: &Section,
+    output: &mut Vec<ExpectedFragment>,
+) {
+    collect_inlines(content, &section.heading.content, output, false);
+    collect_blocks(content, &section.blocks, output, false);
     for child in &section.children {
-        collect_section_fragments(child, output);
+        collect_section_fragments(content, child, output);
     }
 }
 
-fn collect_blocks(blocks: &[Block], output: &mut Vec<ExpectedFragment>, independent: bool) {
+fn collect_blocks(
+    content: ContentContext<'_>,
+    blocks: &[Block],
+    output: &mut Vec<ExpectedFragment>,
+    independent: bool,
+) {
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                collect_inlines(children, output, independent);
+                collect_inlines(content, children, output, independent);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    collect_blocks(&item.blocks, output, independent);
+                    collect_blocks(content, &item.blocks, output, independent);
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &item.terms {
-                        collect_inlines(term, output, independent);
+                        collect_inlines(content, term, output, independent);
                     }
-                    collect_blocks(&item.description, output, independent);
+                    collect_blocks(content, &item.description, output, independent);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_blocks(&cell.blocks, output, true);
+                    collect_blocks(content, &cell.blocks, output, true);
                 }
             }
             Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
@@ -465,19 +475,28 @@ fn collect_blocks(blocks: &[Block], output: &mut Vec<ExpectedFragment>, independ
     }
 }
 
-fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, independent: bool) {
+fn collect_inlines(
+    content: ContentContext<'_>,
+    inlines: &[Inline],
+    output: &mut Vec<ExpectedFragment>,
+    independent: bool,
+) {
     for inline in inlines {
         match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push(ExpectedFragment {
-                value: value.clone(),
-                independent,
-            }),
+            Inline::Text { content: reference } | Inline::Code { content: reference } => output
+                .push(ExpectedFragment {
+                    value: content
+                        .resolve_text(*reference)
+                        .expect("real document content resolves")
+                        .to_owned(),
+                    independent,
+                }),
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {
-                collect_inlines(children, output, independent);
+                collect_inlines(content, children, output, independent);
             }
-            Inline::Anchor { .. } | Inline::LineBreak => {}
+            Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
         }
     }
 }

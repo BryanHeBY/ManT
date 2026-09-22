@@ -6,18 +6,8 @@ use std::path::Path;
 use mant_ir::SemanticIndex;
 use mant_loader::parse_manual_bytes;
 
-fn inline_text(inlines: &[mant_ir::Inline]) -> String {
-    inlines
-        .iter()
-        .map(|inline| match inline {
-            mant_ir::Inline::Text { value } | mant_ir::Inline::Code { value } => value.clone(),
-            mant_ir::Inline::Strong { children }
-            | mant_ir::Inline::Emphasis { children }
-            | mant_ir::Inline::Link { children, .. } => inline_text(children),
-            mant_ir::Inline::Anchor { .. } => String::new(),
-            mant_ir::Inline::LineBreak => "\n".into(),
-        })
-        .collect()
+fn inline_text(content: mant_ir::ContentContext<'_>, inlines: &[mant_ir::Inline]) -> String {
+    content.plain_text(inlines).unwrap()
 }
 
 fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &str) {
@@ -62,7 +52,7 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
             entry
                 .forms
                 .iter()
-                .map(|f| inline_text(f))
+                .map(|f| inline_text(explained.content_projection.as_ref().unwrap().content(), f))
                 .collect::<Vec<_>>(),
             [form]
         );
@@ -73,17 +63,17 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
         .unwrap();
         assert!(mant_render::render_excerpt_text(&excerpt).contains("PAYLOAD"));
     }
-    mant_ir::visit::Visit::visit_document(&mut Bindings, document);
+    mant_ir::visit::Visit::visit_document(&mut Bindings(document.content()), document);
 }
 
-struct Bindings;
-impl<'a> mant_ir::visit::Visit<'a> for Bindings {
+struct Bindings<'a>(mant_ir::ContentContext<'a>);
+impl<'a> mant_ir::visit::Visit<'a> for Bindings<'a> {
     fn visit_list_item(&mut self, item: &'a mant_ir::ListItem) {
-        check_bindings(mant_ir::EntryOwner::List(item));
+        check_bindings(self.0, mant_ir::EntryOwner::List(item));
         mant_ir::visit::walk_list_item(self, item);
     }
     fn visit_definition_item(&mut self, item: &'a mant_ir::DefinitionItem) {
-        check_bindings(mant_ir::EntryOwner::Definition(item));
+        check_bindings(self.0, mant_ir::EntryOwner::Definition(item));
         mant_ir::visit::walk_definition_item(self, item);
     }
 }
@@ -114,17 +104,20 @@ fn enclosure_spacing_preserves_option_forms_names_and_explanation_sources() {
         assert_eq!(items[0].source.unwrap().line, 7);
         assert!(mant_render::render_query_text(&query).contains("-x [arg] tail"));
         assert!(items[0].terms[0].iter().any(|inline| matches!(
-            inline, mant_ir::Inline::Strong { children } if inline_text(children) == "-x"
+            inline, mant_ir::Inline::Strong { children } if inline_text(document.content(), children) == "-x"
         )));
     }
 }
-fn check_bindings(owner: mant_ir::EntryOwner<'_>) {
+fn check_bindings(content: mant_ir::ContentContext<'_>, owner: mant_ir::EntryOwner<'_>) {
     if let Some(facts) = owner.facts() {
         for binding in &facts.name_bindings {
             assert!(!binding.occurrences.is_empty());
             for occurrence in &binding.occurrences {
                 assert_eq!(
-                    inline_text(&owner.form(occurrence).unwrap()),
+                    inline_text(
+                        content,
+                        &content.entry_form(owner, occurrence).unwrap().unwrap()
+                    ),
                     facts.names[binding.name]
                 );
             }

@@ -39,7 +39,7 @@ fn one_native_link_remains_one_final_ir_occurrence_across_style_and_wrap() {
             ));
             links.push((
                 occurrence.target.clone(),
-                mant_ir::inline_plain_text(occurrence.label),
+                mant_ir::inline_plain_text(document.content(), occurrence.label),
             ));
             ControlFlow::Continue(())
         },
@@ -86,7 +86,10 @@ fn repeated_native_target_remains_two_authored_occurrences() {
         &document,
         mant_ir::ReferenceScanLimits::default(),
         |occurrence| {
-            labels.push(mant_ir::inline_plain_text(occurrence.label));
+            labels.push(mant_ir::inline_plain_text(
+                document.content(),
+                occurrence.label,
+            ));
             ControlFlow::Continue(())
         },
     );
@@ -116,7 +119,10 @@ fn hard_break_inside_native_link_keeps_one_occurrence() {
         &document,
         mant_ir::ReferenceScanLimits::default(),
         |occurrence| {
-            labels.push(mant_ir::inline_plain_text(occurrence.label));
+            labels.push(mant_ir::inline_plain_text(
+                document.content(),
+                occurrence.label,
+            ));
             ControlFlow::Continue(())
         },
     );
@@ -143,7 +149,10 @@ fn authored_heading_phrase_drives_section_identity_and_sx_resolution() {
         .expect("authored heading evidence lowers");
 
     assert_eq!(document.sections[0].id.as_str(), "white-space");
-    assert_eq!(document.sections[0].heading.plain_text(), "WhiteSpace");
+    assert_eq!(
+        document.sections[0].heading.plain_text(document.content()),
+        "WhiteSpace"
+    );
     let mut links = Vec::new();
     let report = mant_ir::scan_references(
         &document,
@@ -151,7 +160,7 @@ fn authored_heading_phrase_drives_section_identity_and_sx_resolution() {
         |occurrence| {
             links.push((
                 occurrence.target.clone(),
-                mant_ir::inline_plain_text(occurrence.label),
+                mant_ir::inline_plain_text(document.content(), occurrence.label),
             ));
             ControlFlow::Continue(())
         },
@@ -207,7 +216,9 @@ fn ambiguous_and_missing_sx_occurrences_downgrade_without_dangling_links() {
         .blocks
         .iter()
         .map(|block| match block {
-            Block::Paragraph { children, .. } => mant_ir::inline_plain_text(children),
+            Block::Paragraph { children, .. } => {
+                mant_ir::inline_plain_text(document.content(), children)
+            }
             _ => String::new(),
         })
         .collect::<String>();
@@ -239,13 +250,16 @@ fn break_opportunity_does_not_split_native_link_occurrence() {
             libmandoc_rs::structured::ContentAtomKind::BreakOpportunity
         )
     }));
-    let document = lower_projection(&projection).expect("break opportunity link lowers");
+    let document = lower_projection(projection).expect("break opportunity link lowers");
     let mut labels = Vec::new();
     let report = mant_ir::scan_references(
         &document,
         mant_ir::ReferenceScanLimits::default(),
         |occurrence| {
-            labels.push(mant_ir::inline_plain_text(occurrence.label));
+            labels.push(mant_ir::inline_plain_text(
+                document.content(),
+                occurrence.label,
+            ));
             ControlFlow::Continue(())
         },
     );

@@ -5,7 +5,7 @@
 
 use mant_ir::ResolvedContent;
 use mant_ir::{
-    Block, Inline,
+    Block, ContentContext, Inline, InlineView,
     visit::{self, Visit},
 };
 use mant_loader::load_roff_bytes;
@@ -148,16 +148,22 @@ fn literal_display_executes_explicit_fill_switches_and_restores_literal_rows() {
 
 #[test]
 fn synopsis_font_changes_survive_spacing_until_the_synopsis_scope_ends() {
-    struct Styles {
+    struct Styles<'a> {
         strong: bool,
         words: Vec<(String, bool)>,
+        content: ContentContext<'a>,
     }
-    impl<'ir> Visit<'ir> for Styles {
+    impl<'ir> Visit<'ir> for Styles<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
             let saved = self.strong;
             match inline {
                 Inline::Strong { .. } => self.strong = true,
-                Inline::Text { value } => self.words.push((value.clone(), self.strong)),
+                Inline::Text { .. } => {
+                    let InlineView::Text(value) = self.content.inline(inline).unwrap() else {
+                        unreachable!()
+                    };
+                    self.words.push((value.to_owned(), self.strong));
+                }
                 _ => {}
             }
             visit::walk_inline(self, inline);
@@ -168,6 +174,7 @@ fn synopsis_font_changes_survive_spacing_until_the_synopsis_scope_ends() {
     let mut styles = Styles {
         strong: false,
         words: Vec::new(),
+        content: content.document.as_ref().unwrap().content(),
     };
     styles.visit_document(content.document.as_ref().unwrap());
     for token in ["BETA", "GAMMA"] {

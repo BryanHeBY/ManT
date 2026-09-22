@@ -64,16 +64,12 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![
         AstBlock::Paragraph {
-            children: vec![Inline::Text {
-                value: "A long paragraph before the example repeats enough words to wrap very differently when the content pane changes width. ".repeat(8),
-            }],
+            children: vec![crate::test_content::text("A long paragraph before the example repeats enough words to wrap very differently when the content pane changes width. ".repeat(8))],
             layout: LayoutHint::default(),
             source: None,
         },
         AstBlock::Preformatted {
-            children: vec![Inline::Text {
-                value: "sentinel_code_block();".to_owned(),
-            }],
+            children: vec![crate::test_content::text("sentinel_code_block();".to_owned())],
             language: None,
             layout: LayoutHint::default(),
             source: None,
@@ -295,7 +291,7 @@ fn clicking_the_sidebar_selects_and_reclicking_a_branch_collapses_it() {
 fn full_outline_labels_mode_wraps_every_visible_title() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("manual").sections[0].children[0].heading =
-        "A deliberately long nested section title".into();
+        crate::test_content::heading("A deliberately long nested section title");
     let backend = TestBackend::new(64, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);

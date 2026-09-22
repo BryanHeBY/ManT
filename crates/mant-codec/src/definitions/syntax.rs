@@ -1,9 +1,10 @@
 //! Source-neutral grammars for semantic definition names and lexical evidence.
 //! Context selects a grammar; one recognition result carries both selectable
 //! spellings and their original ranges to the binding mapper.
+#![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use super::{RecognizedName, context::DefinitionContext};
 use mant_ir::inline_plain_text as plain_text;
-use mant_ir::{DefinitionItem, EntryKind, NameCase, ParameterKind};
+use mant_ir::{ContentContext, DefinitionItem, EntryKind, NameCase, ParameterKind};
 
 mod commands;
 mod decision;
@@ -19,8 +20,10 @@ use named::{is_configuration_key, is_variable_term};
 pub(super) use named::{is_ordinal_marker, is_value_name};
 #[cfg(test)]
 pub(super) use options::option_names;
+#[cfg(test)]
+pub(crate) use options::option_names_from_terms;
 pub(crate) use options::{
-    option_names_from_terms, option_occurrences_from_terms, option_prefix, slash_option_forms,
+    option_names_from_literal, option_occurrences_from_literal, option_prefix, slash_option_forms,
 };
 
 pub(super) struct InferredIdentity {
@@ -31,6 +34,7 @@ pub(super) struct InferredIdentity {
 }
 
 pub(super) fn infer_identity(
+    content: ContentContext<'_>,
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
@@ -38,14 +42,14 @@ pub(super) fn infer_identity(
     let first = item
         .terms
         .first()
-        .map_or_else(String::new, |term| plain_text(term));
+        .map_or_else(String::new, |term| plain_text(content, term));
     let trimmed = first.trim();
     let (mut kind, mut case) = decision::select_kind(trimmed, context, hint);
     let mut occurrences = if hint == Some(super::NativeHeadRole::LiteralTerm) {
         item.terms
             .iter()
             .map(|term| {
-                let text = plain_text(term);
+                let text = plain_text(content, term);
                 vec![super::RecognizedName::contiguous(
                     text.trim(),
                     text.len() - text.trim_start().len(),
@@ -53,27 +57,27 @@ pub(super) fn infer_identity(
             })
             .collect()
     } else if hint == Some(super::NativeHeadRole::Option) {
-        options::native_option_occurrences(&item.terms)
+        options::native_option_occurrences(content, &item.terms)
     } else if hint == Some(super::NativeHeadRole::Environment) {
         item.terms
             .iter()
             .map(|term| {
-                forms::environment_prefix(term)
+                forms::environment_prefix(content, term)
                     .and_then(|prefix| named::environment_occurrences(&prefix))
                     .unwrap_or_default()
             })
             .collect()
     } else {
-        name_occurrences(item, kind)
+        name_occurrences(content, item, kind)
     };
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
-        occurrences = name_occurrences(item, EntryKind::Command);
+        occurrences = name_occurrences(content, item, EntryKind::Command);
         if occurrences.iter().all(Vec::is_empty) {
             occurrences = item
                 .terms
                 .iter()
                 .map(|term| {
-                    let prefix = forms::literal_prefix(term);
+                    let prefix = forms::literal_prefix(content, term);
                     let name = prefix.trim();
                     if matches!(name, "-" | "--") {
                         vec![RecognizedName::contiguous(
@@ -95,7 +99,7 @@ pub(super) fn infer_identity(
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
         )
     {
-        occurrences = name_occurrences(item, EntryKind::Term);
+        occurrences = name_occurrences(content, item, EntryKind::Term);
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
@@ -136,12 +140,13 @@ pub(super) fn infer_identity(
 /// evidence. Binding only maps these ranges to styled IR leaves; it does not
 /// have another definition of punctuation or argument boundaries.
 pub(super) fn name_occurrences(
+    content: ContentContext<'_>,
     item: &DefinitionItem,
     kind: EntryKind,
 ) -> Vec<Vec<super::RecognizedName>> {
     if let EntryKind::Parameter { parameter_kind } = kind {
         if parameter_kind == ParameterKind::Option {
-            return options::parameter_occurrences(&item.terms);
+            return options::parameter_occurrences(content, &item.terms);
         }
         // Marker/operand inference requires an exact complete first term,
         // not a prefix of a longer invocation. Repeated matching terms may
@@ -149,12 +154,12 @@ pub(super) fn name_occurrences(
         let first = item
             .terms
             .first()
-            .map_or_else(String::new, |term| plain_text(term));
+            .map_or_else(String::new, |term| plain_text(content, term));
         return item
             .terms
             .iter()
             .map(|term| {
-                let text = plain_text(term);
+                let text = plain_text(content, term);
                 let trimmed = text.trim();
                 if trimmed == first.trim() && !trimmed.is_empty() {
                     vec![RecognizedName::contiguous(
@@ -170,7 +175,7 @@ pub(super) fn name_occurrences(
     item.terms
         .iter()
         .map(|term| {
-            let text = plain_text(term);
+            let text = plain_text(content, term);
             let locate = |part: &str, name: &str| {
                 super::RecognizedName::contiguous(
                     name,
@@ -195,14 +200,14 @@ pub(super) fn name_occurrences(
                         return vec![locate(&text, name)];
                     }
                     let mut offset = 0;
-                    forms::declaration_groups(term)
+                    forms::declaration_groups(content, term)
                         .into_iter()
                         .filter_map(|group| {
-                            let text = plain_text(&group);
+                            let text = plain_text(content, &group);
                             let start = offset;
                             offset += text.len() + 1;
-                            let name =
-                                commands::leading_styled_command_name(&group).or_else(|| {
+                            let name = commands::leading_styled_command_name(content, &group)
+                                .or_else(|| {
                                     commands::command_name_from_authored_form(&text)
                                         .map(str::to_owned)
                                 })?;

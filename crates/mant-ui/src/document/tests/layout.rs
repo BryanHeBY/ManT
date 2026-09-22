@@ -4,7 +4,7 @@ use super::*;
 #[test]
 fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
     for rows in [0, 1, 2, 3000] {
-        let mut builder = DocumentBuilder::new("gaps".into(), None);
+        let mut builder = DocumentBuilder::new("gaps".into(), None, None);
         builder.blocks(
             &[Block::List {
                 kind: ListKind::Bullet,
@@ -14,9 +14,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
                     source: None,
                     entry: None,
                     blocks: vec![Block::Paragraph {
-                        children: vec![Inline::Text {
-                            value: "BODY\nNEXT".into(),
-                        }],
+                        children: vec![crate::test_content::text("BODY\nNEXT")],
                         layout: LayoutHint {
                             spacing_before_lines: rows,
                             ..Default::default()
@@ -37,7 +35,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
             .collect::<String>();
         assert_eq!(text, "• BODY");
     }
-    let mut builder = DocumentBuilder::new("bounded".into(), None);
+    let mut builder = DocumentBuilder::new("bounded".into(), None, None);
     builder.blocks(
         &[Block::List {
             kind: ListKind::Plain,
@@ -57,9 +55,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
                         source: None,
                     },
                     Block::Paragraph {
-                        children: vec![Inline::Text {
-                            value: "BODY".into(),
-                        }],
+                        children: vec![crate::test_content::text("BODY")],
                         layout: LayoutHint::default(),
                         source: None,
                     },
@@ -74,7 +70,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
 #[test]
 fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
     for inline_term in [false, true] {
-        let mut builder = DocumentBuilder::new("target-rows".into(), None);
+        let mut builder = DocumentBuilder::new("target-rows".into(), None, None);
         builder.blocks(
             &[Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -87,29 +83,21 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                         ..Default::default()
                     },
                     terms: vec![vec![
-                        Inline::Text {
-                            value: "FIRST".into(),
-                        },
-                        Inline::LineBreak,
+                        crate::test_content::text("FIRST"),
+                        crate::test_content::line_break(),
                         Inline::Strong {
                             children: vec![
-                                Inline::anchor_at("second-head", None),
-                                Inline::Text {
-                                    value: "SECOND".into(),
-                                },
+                                crate::test_content::anchor("second-head"),
+                                crate::test_content::text("SECOND"),
                             ],
                         },
                     ]],
                     description: vec![Block::Paragraph {
                         children: vec![
-                            Inline::anchor_at("body", None),
-                            Inline::Text {
-                                value: "BODY\n".into(),
-                            },
-                            Inline::anchor_at("next-body", None),
-                            Inline::Text {
-                                value: "NEXT".into(),
-                            },
+                            crate::test_content::anchor("body"),
+                            crate::test_content::text("BODY\n"),
+                            crate::test_content::anchor("next-body"),
+                            crate::test_content::text("NEXT"),
                         ],
                         layout: LayoutHint::default(),
                         source: None,
@@ -125,7 +113,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
         assert_eq!(builder.anchors["body"], first_body);
         assert_eq!(builder.anchors["next-body"], first_body + 1);
     }
-    let mut builder = DocumentBuilder::new("list-target".into(), None);
+    let mut builder = DocumentBuilder::new("list-target".into(), None, None);
     builder.blocks(
         &[Block::List {
             kind: ListKind::Bullet,
@@ -136,15 +124,11 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                 entry: None,
                 blocks: vec![Block::Paragraph {
                     children: vec![
-                        Inline::anchor_at("first", None),
-                        Inline::Text {
-                            value: "FIRST".into(),
-                        },
-                        Inline::LineBreak,
-                        Inline::anchor_at("second", None),
-                        Inline::Text {
-                            value: "SECOND".into(),
-                        },
+                        crate::test_content::anchor("first"),
+                        crate::test_content::text("FIRST"),
+                        crate::test_content::line_break(),
+                        crate::test_content::anchor("second"),
+                        crate::test_content::text("SECOND"),
                     ],
                     layout: LayoutHint {
                         continuation_indent_columns: 3,
@@ -165,17 +149,13 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
 
 #[test]
 fn hanging_paragraph_preserves_hard_and_soft_continuation_origins() {
-    let mut builder = DocumentBuilder::new("hanging".into(), None);
+    let mut builder = DocumentBuilder::new("hanging".into(), None, None);
     builder.blocks(
         &[Block::Paragraph {
             children: vec![
-                Inline::Text {
-                    value: "FIRST words words words".into(),
-                },
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "SECOND".into(),
-                },
+                crate::test_content::text("FIRST words words words"),
+                crate::test_content::line_break(),
+                crate::test_content::text("SECOND"),
             ],
             layout: LayoutHint {
                 indent_columns: 2,
@@ -224,9 +204,7 @@ fn container_translation_and_nonparagraph_marker_width_are_preserved() {
                 source: None,
                 entry: None,
                 blocks: vec![Block::Preformatted {
-                    children: vec![Inline::Text {
-                        value: "CODE".into(),
-                    }],
+                    children: vec![crate::test_content::text("CODE")],
                     language: None,
                     layout: LayoutHint::default(),
                     source: None,
@@ -240,7 +218,7 @@ fn container_translation_and_nonparagraph_marker_width_are_preserved() {
         }];
         let before = blocks.clone();
         for shift in [0, 2, 5] {
-            let mut builder = DocumentBuilder::new("translation".into(), None);
+            let mut builder = DocumentBuilder::new("translation".into(), None, None);
             builder.blocks(&blocks, shift);
             assert_eq!(builder.lines[0].indent, usize::try_from(shift + 3).unwrap());
             let marker_width = format!("{start}. ").len();
@@ -260,7 +238,7 @@ fn container_translation_and_nonparagraph_marker_width_are_preserved() {
         unreachable!()
     };
     layout.indent_columns = 3;
-    let mut builder = DocumentBuilder::new("signed".into(), None);
+    let mut builder = DocumentBuilder::new("signed".into(), None, None);
     builder.blocks(
         &[Block::List {
             kind: ListKind::Plain,
@@ -287,7 +265,7 @@ fn container_translation_and_nonparagraph_marker_width_are_preserved() {
 
 #[test]
 fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
-    let mut builder = DocumentBuilder::new("outdent".into(), None);
+    let mut builder = DocumentBuilder::new("outdent".into(), None, None);
     builder.blocks(
         &[Block::List {
             kind: ListKind::Bullet,
@@ -298,19 +276,15 @@ fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
                 entry: None,
                 blocks: vec![Block::Paragraph {
                     children: vec![
-                        Inline::Link {
-                            title: None,
-                            target: mant_ir::LinkTarget::Section {
+                        crate::test_content::link(
+                            mant_ir::LinkTarget::Section {
                                 id: "target".into(),
                             },
-                            children: vec![Inline::Text {
-                                value: "LINK".into(),
-                            }],
-                        },
-                        Inline::LineBreak,
-                        Inline::Text {
-                            value: "CONTINUED".into(),
-                        },
+                            None,
+                            vec![crate::test_content::text("LINK")],
+                        ),
+                        crate::test_content::line_break(),
+                        crate::test_content::text("CONTINUED"),
                     ],
                     layout: LayoutHint {
                         indent_columns: -1,
@@ -343,7 +317,7 @@ fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
 fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
     for inline_term in [false, true] {
         for origin in [0, i32::MAX, i32::MIN] {
-            let mut builder = DocumentBuilder::new("targets".into(), None);
+            let mut builder = DocumentBuilder::new("targets".into(), None, None);
             builder.blocks(
                 &[Block::DefinitionList {
                     declaration_groups: vec![],
@@ -352,10 +326,8 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                         source: None,
                         entry: None,
                         terms: vec![
-                            vec![Inline::anchor_at("target", None)],
-                            vec![Inline::Text {
-                                value: "TERM".into(),
-                            }],
+                            vec![crate::test_content::anchor("target")],
+                            vec![crate::test_content::text("TERM")],
                         ],
                         description: vec![paragraph("BODY")],
                         layout: mant_ir::DefinitionLayout {
@@ -386,13 +358,11 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
 #[test]
 fn trailing_zero_width_heads_share_the_final_run_in_row() {
     for trailing_count in [1, 2, 3] {
-        let mut terms = vec![vec![Inline::Text {
-            value: "TERM".into(),
-        }]];
+        let mut terms = vec![vec![crate::test_content::text("TERM")]];
         terms.extend(
-            (0..trailing_count).map(|i| vec![Inline::anchor_at(format!("target-{i}"), None)]),
+            (0..trailing_count).map(|i| vec![crate::test_content::anchor(format!("target-{i}"))]),
         );
-        let mut builder = DocumentBuilder::new("trailing-targets".into(), None);
+        let mut builder = DocumentBuilder::new("trailing-targets".into(), None, None);
         builder.blocks(
             &[Block::DefinitionList {
                 declaration_groups: vec![],
@@ -439,9 +409,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                     items: vec![DefinitionItem {
                         source: None,
                         entry: None,
-                        terms: vec![vec![Inline::Text {
-                            value: label.into(),
-                        }]],
+                        terms: vec![vec![crate::test_content::text(label)]],
                         description: vec![paragraph("Initial description.")],
                         layout: mant_ir::DefinitionLayout {
                             inline_term,
@@ -479,16 +447,12 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
 
 #[test]
 fn preformatted_rows_share_one_full_width_surface() {
-    let mut builder = DocumentBuilder::new("demo".to_owned(), None);
+    let mut builder = DocumentBuilder::new("demo".to_owned(), None, None);
     builder.inline_lines_with_surface(
         &[
-            Inline::Text {
-                value: "short".to_owned(),
-            },
-            Inline::LineBreak,
-            Inline::Text {
-                value: "longer code".to_owned(),
-            },
+            crate::test_content::text("short".to_owned()),
+            crate::test_content::line_break(),
+            crate::test_content::text("longer code".to_owned()),
         ],
         3,
         Style::default().fg(theme::TEXT),
@@ -530,9 +494,9 @@ fn indented_continuation_without_spacing_follows_its_lead_row() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![
         paragraph("alternate object database"),
         Block::Paragraph {
-            children: vec![Inline::Text {
-                value: "Via the alternates mechanism, a repository can inherit objects.".to_owned(),
-            }],
+            children: vec![crate::test_content::text(
+                "Via the alternates mechanism, a repository can inherit objects.".to_owned(),
+            )],
             layout: LayoutHint {
                 indent_columns: 4,
                 spacing_before_lines: 0,
@@ -603,9 +567,7 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
             source: None,
             entry: None,
             blocks: vec![Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "alpha beta gamma".to_owned(),
-                }],
+                children: vec![crate::test_content::text("alpha beta gamma".to_owned())],
                 layout: LayoutHint::default(),
                 source: None,
             }],
@@ -629,9 +591,7 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
 #[test]
 fn adjacent_blocks_add_only_explicit_vertical_space() {
     let paragraph = |value: &str| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     };
@@ -639,9 +599,7 @@ fn adjacent_blocks_add_only_explicit_vertical_space() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![
         paragraph("before"),
         Block::Preformatted {
-            children: vec![Inline::Text {
-                value: "display".to_owned(),
-            }],
+            children: vec![crate::test_content::text("display".to_owned())],
             language: None,
             layout: LayoutHint::default(),
             source: None,
@@ -675,9 +633,7 @@ fn adjacent_blocks_add_only_explicit_vertical_space() {
 fn ordered_list_markers_saturate_instead_of_overflowing() {
     let mut bundle = bundle();
     let paragraph = |value: &str| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     };

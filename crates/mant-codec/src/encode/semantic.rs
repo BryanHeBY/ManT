@@ -6,17 +6,21 @@ use mant_ir::{
 };
 
 pub(super) fn supported(document: &Document) -> bool {
-    struct Check(bool);
-    impl<'a> Visit<'a> for Check {
+    struct Check<'a> {
+        supported: bool,
+        content: mant_ir::ContentContext<'a>,
+    }
+    impl<'a> Visit<'a> for Check<'a> {
         fn visit_definition_item(&mut self, item: &'a DefinitionItem) {
-            self.0 &= item.entry.is_none();
+            self.supported &= item.entry.is_none();
             visit::walk_definition_item(self, item);
         }
         fn visit_block(&mut self, block: &'a Block) {
             if let Block::List { items, .. } = block
                 && let Some(first) = items.iter().find_map(|item| item.entry.as_ref())
             {
-                self.0 &= crate::markdown::export_attached_policy(items).is_some()
+                self.supported &= crate::markdown::export_attached_policy(self.content, items)
+                    .is_some()
                     && items.iter().all(|item| {
                         item.entry.as_ref().is_some_and(|facts| {
                             facts.kind == first.kind
@@ -38,15 +42,20 @@ pub(super) fn supported(document: &Document) -> bool {
             visit::walk_block(self, block);
         }
     }
-    let mut check = Check(
-        mant_ir::validate_document(document).is_empty()
+    let mut check = Check {
+        supported: mant_ir::validate_document(document).is_empty()
             && mant_ir::semantics_complete(&document.diagnostics),
-    );
+        content: document.content(),
+    };
     check.visit_document(document);
-    check.0
+    check.supported
 }
 
-pub(super) fn declaration(facts: &EntryFacts, items: &[mant_ir::ListItem]) -> String {
+pub(super) fn declaration(
+    content: mant_ir::ContentContext<'_>,
+    facts: &EntryFacts,
+    items: &[mant_ir::ListItem],
+) -> String {
     format!(
         "<!-- mant:entries role={} case={}{} -->",
         role(facts.kind),
@@ -54,7 +63,8 @@ pub(super) fn declaration(facts: &EntryFacts, items: &[mant_ir::ListItem]) -> St
             NameCase::Sensitive => "sensitive",
             NameCase::Insensitive => "insensitive",
         },
-        crate::markdown::export_attached_policy(items).expect("supported semantic export list")
+        crate::markdown::export_attached_policy(content, items)
+            .expect("supported semantic export list")
     )
 }
 

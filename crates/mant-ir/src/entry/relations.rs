@@ -208,35 +208,6 @@ fn has_relationship_facts(facts: &EntryFacts) -> bool {
         || facts.alias_of.is_some()
 }
 
-impl<'a> EntryOwner<'a> {
-    /// Selectable names, validated atomically against every explicit form
-    /// binding. Failure leaves the owner, forms and original content intact.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal legacy backend rejects directly owned inline
-    /// content.
-    #[must_use]
-    pub fn validated_names(self) -> Option<&'a [String]> {
-        ContentContext::detached()
-            .entry_validated_names(self)
-            .expect("legacy inline text is self-contained")
-    }
-
-    /// Same-owner groups only when all names and the complete group set bind.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal legacy backend rejects directly owned inline
-    /// content.
-    #[must_use]
-    pub fn validated_alias_groups(self) -> Option<&'a [Vec<String>]> {
-        ContentContext::detached()
-            .entry_validated_alias_groups(self)
-            .expect("legacy inline text is self-contained")
-    }
-}
-
 impl<'store> ContentContext<'store> {
     /// Return selectable names only when every explicit binding resolves and
     /// matches the original authored form content.
@@ -363,11 +334,15 @@ mod tests {
     use super::*;
     use crate::{
         Block, DefinitionItem, DocumentMeta, EntryForm, EntryInlineRoot, EntryKind,
-        EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceCoordinates, SourceFormat,
+        EntryNameBinding, EntryNameEvidence, LayoutHint, SourceCoordinates, SourceFormat,
         SourceIdentity, SourceKey, SourceRecord,
     };
 
-    fn entry(id: &str, names: &[&str]) -> DefinitionItem {
+    fn entry(
+        fixture: &mut crate::test_support::ContentFixture,
+        id: &str,
+        names: &[&str],
+    ) -> DefinitionItem {
         DefinitionItem {
             source: None,
             entry: Some(EntryFacts {
@@ -397,18 +372,9 @@ mod tests {
                     })
                     .collect(),
             }),
-            terms: names
-                .iter()
-                .map(|name| {
-                    vec![Inline::Code {
-                        value: (*name).into(),
-                    }]
-                })
-                .collect(),
+            terms: names.iter().map(|name| vec![fixture.code(*name)]).collect(),
             description: vec![Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "Body --hidden".into(),
-                }],
+                children: vec![fixture.text("Body --hidden")],
                 layout: LayoutHint::default(),
                 source: None,
             }],
@@ -420,7 +386,7 @@ mod tests {
         }
     }
 
-    fn document(items: Vec<DefinitionItem>) -> Document {
+    fn document(content_store: crate::ContentStore, items: Vec<DefinitionItem>) -> Document {
         Document {
             heading: None,
             parser: None,
@@ -435,6 +401,7 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
@@ -449,8 +416,11 @@ mod tests {
         }
     }
 
-    fn codes(items: Vec<DefinitionItem>) -> Vec<String> {
-        crate::validate_document(&document(items))
+    fn codes(
+        fixture: &crate::test_support::ContentFixture,
+        items: Vec<DefinitionItem>,
+    ) -> Vec<String> {
+        crate::validate_document(&document(fixture.store().clone(), items))
             .into_iter()
             .filter_map(|d| d.code)
             .collect()
@@ -458,9 +428,11 @@ mod tests {
 
     #[test]
     fn validation_snapshot_keeps_duplicate_and_relation_findings_together() {
-        let mut invalid = entry("duplicate", &["-a"]);
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let mut invalid = entry(&mut fixture, "duplicate", &["-a"]);
         invalid.entry.as_mut().unwrap().alias_of = Some("missing".into());
-        let doc = document(vec![invalid, entry("duplicate", &["-b"])]);
+        let duplicate = entry(&mut fixture, "duplicate", &["-b"]);
+        let doc = document(fixture.store().clone(), vec![invalid, duplicate]);
         let snapshot = crate::DocumentValidation::new(&doc);
         assert!(std::ptr::eq(snapshot.document(), std::ptr::from_ref(&doc)));
         assert_eq!(snapshot.index(), &crate::DocumentIndex::build(&doc));
@@ -477,9 +449,10 @@ mod tests {
 
     #[test]
     fn typed_issues_and_document_diagnostics_share_one_relation_policy() {
-        let mut item = entry("probe", &["-a", "--all"]);
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let mut item = entry(&mut fixture, "probe", &["-a", "--all"]);
         item.entry.as_mut().unwrap().alias_groups = vec![vec!["-a".into(), "hidden".into()]];
-        let doc = document(vec![item]);
+        let doc = document(fixture.store().clone(), vec![item]);
         let issues = entry_relation_issues(&doc);
         assert_eq!(
             issues,
@@ -499,13 +472,18 @@ mod tests {
 
     #[test]
     fn explicit_groups_preserve_shared_body_without_merging_subjects() {
-        let mut item = entry("time-bounds", &["-S", "--since", "-U", "--until"]);
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let mut item = entry(
+            &mut fixture,
+            "time-bounds",
+            &["-S", "--since", "-U", "--until"],
+        );
         let body = item.description.clone();
         item.entry.as_mut().unwrap().alias_groups = vec![
             vec!["-S".into(), "--since".into()],
             vec!["-U".into(), "--until".into()],
         ];
-        let doc = document(vec![item]);
+        let doc = document(fixture.store().clone(), vec![item]);
         assert!(crate::validate_document(&doc).is_empty());
         let decoded: Document =
             serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
@@ -515,73 +493,81 @@ mod tests {
         };
         assert_eq!(items[0].description, body);
         assert_eq!(items[0].entry.as_ref().unwrap().alias_groups.len(), 2);
-        let mut related = entry("related", &["--time"]);
+        let mut related = entry(&mut fixture, "related", &["--time"]);
         related.entry.as_mut().unwrap().alias_of = Some("time-bounds".into());
         assert!(
-            codes(vec![items[0].clone(), related]).contains(&"ir.invalid-entry-alias-of".into())
+            codes(&fixture, vec![items[0].clone(), related])
+                .contains(&"ir.invalid-entry-alias-of".into())
         );
     }
 
     #[test]
     fn invalid_groups_never_establish_equivalence_or_hidden_names() {
+        let mut fixture = crate::test_support::ContentFixture::body();
         for groups in [
             vec![vec!["-S"]],
             vec![vec!["-S", "-S"]],
             vec![vec!["-S", "--hidden"]],
             vec![vec!["-S", "--since"], vec!["--since", "-S"]],
         ] {
-            let mut item = entry("since", &["-S", "--since"]);
+            let mut item = entry(&mut fixture, "since", &["-S", "--since"]);
             item.entry.as_mut().unwrap().alias_groups = groups
                 .into_iter()
                 .map(|g| g.into_iter().map(str::to_owned).collect())
                 .collect();
-            assert!(codes(vec![item]).contains(&"ir.invalid-entry-alias-groups".into()));
+            assert!(codes(&fixture, vec![item]).contains(&"ir.invalid-entry-alias-groups".into()));
         }
-        let mut item = entry("case", &["-s", "-S"]);
+        let mut item = entry(&mut fixture, "case", &["-s", "-S"]);
         let facts = item.entry.as_mut().unwrap();
         facts.case = NameCase::Insensitive;
         facts.alias_groups = vec![vec!["-s".into(), "-S".into()]];
-        assert!(codes(vec![item]).contains(&"ir.invalid-entry-alias-groups".into()));
+        assert!(codes(&fixture, vec![item]).contains(&"ir.invalid-entry-alias-groups".into()));
     }
 
     #[test]
     fn name_bindings_cannot_address_body_or_claim_different_text() {
-        let mut item = entry("since", &["--since"]);
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let mut item = entry(&mut fixture, "since", &["--since"]);
         item.entry.as_mut().unwrap().name_bindings[0].occurrences[0].parts[0].root =
             EntryInlineRoot::Block { index: 0 };
-        assert!(codes(vec![item]).contains(&"ir.invalid-entry-name-binding".into()));
-        let mut item = entry("since", &["--since"]);
+        assert!(codes(&fixture, vec![item]).contains(&"ir.invalid-entry-name-binding".into()));
+        let mut item = entry(&mut fixture, "since", &["--since"]);
         item.entry.as_mut().unwrap().names[0] = "--hidden".into();
-        assert!(codes(vec![item]).contains(&"ir.invalid-entry-name-binding".into()));
+        assert!(codes(&fixture, vec![item]).contains(&"ir.invalid-entry-name-binding".into()));
     }
 
     #[test]
     fn forward_relationships_require_unique_compatible_targets_and_no_cycles() {
-        let mut first = entry("first", &["--first"]);
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let mut first = entry(&mut fixture, "first", &["--first"]);
         first.entry.as_mut().unwrap().alias_of = Some("second".into());
-        let second = entry("second", &["--second"]);
-        assert!(codes(vec![first.clone(), second.clone()]).is_empty());
-        assert!(codes(vec![first.clone()]).contains(&"ir.invalid-entry-alias-of".into()));
+        let second = entry(&mut fixture, "second", &["--second"]);
+        assert!(codes(&fixture, vec![first.clone(), second.clone()]).is_empty());
+        assert!(codes(&fixture, vec![first.clone()]).contains(&"ir.invalid-entry-alias-of".into()));
         assert!(
-            codes(vec![first.clone(), second.clone(), second.clone()])
-                .contains(&"ir.invalid-entry-alias-of".into())
+            codes(
+                &fixture,
+                vec![first.clone(), second.clone(), second.clone()]
+            )
+            .contains(&"ir.invalid-entry-alias-of".into())
         );
         let mut incompatible = second.clone();
         incompatible.entry.as_mut().unwrap().kind = EntryKind::Command;
         assert!(
-            codes(vec![first.clone(), incompatible]).contains(&"ir.invalid-entry-alias-of".into())
+            codes(&fixture, vec![first.clone(), incompatible])
+                .contains(&"ir.invalid-entry-alias-of".into())
         );
         let mut cyclic = second;
         cyclic.entry.as_mut().unwrap().alias_of = Some("first".into());
         assert_eq!(
-            codes(vec![first, cyclic])
+            codes(&fixture, vec![first, cyclic])
                 .iter()
                 .filter(|code| code.as_str() == "ir.cyclic-entry-alias")
                 .count(),
             2
         );
-        let mut item = entry("self", &["--self"]);
+        let mut item = entry(&mut fixture, "self", &["--self"]);
         item.entry.as_mut().unwrap().alias_of = Some("self".into());
-        assert!(codes(vec![item]).contains(&"ir.invalid-entry-alias-of".into()));
+        assert!(codes(&fixture, vec![item]).contains(&"ir.invalid-entry-alias-of".into()));
     }
 }

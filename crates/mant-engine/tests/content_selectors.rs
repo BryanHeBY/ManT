@@ -260,13 +260,21 @@ fn rooted_references_use_original_owner_coordinates_independent_of_entry_visibil
             &policy,
         )
         .unwrap();
+        let projection = outline.references.content_projection.as_ref().unwrap();
         let names = outline
             .references
             .records
             .iter()
-            .map(|record| match &record.target {
-                mant_ir::LinkTarget::Document { name, .. } => name.as_str(),
-                other => panic!("{other:?}"),
+            .map(|record| {
+                match &projection
+                    .content()
+                    .occurrence(record.occurrence)
+                    .unwrap()
+                    .target
+                {
+                    mant_ir::LinkTarget::Document { name, .. } => name.as_str(),
+                    other => panic!("{other:?}"),
+                }
             })
             .collect::<Vec<_>>();
         assert_eq!(names, ["run", "body", "help"]);

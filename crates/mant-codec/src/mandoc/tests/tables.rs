@@ -63,10 +63,13 @@ fn tbl_text_block_prefers_native_parse_time_string_expansion() {
         panic!("expected one lowered table");
     };
     assert_eq!(
-        inline_text(match &rows[0].cells[0].blocks[0] {
-            Block::Paragraph { children, .. } => children,
-            other => panic!("expected table paragraph, got {other:?}"),
-        }),
+        inline_text(
+            document.content(),
+            match &rows[0].cells[0].blocks[0] {
+                Block::Paragraph { children, .. } => children,
+                other => panic!("expected table paragraph, got {other:?}"),
+            }
+        ),
         "There's"
     );
 }
@@ -88,7 +91,11 @@ fn tbl_source_recovery_never_replays_a_redefined_macro_outside_native_context() 
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("expected native table paragraph");
         };
-        assert_eq!(inline_text(children), "REPLACED_MACRO", "{definition}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            "REPLACED_MACRO",
+            "{definition}"
+        );
     }
 }
 
@@ -105,9 +112,9 @@ fn tbl_source_recovery_requires_native_direct_call_provenance() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected native table paragraph");
     };
-    assert_eq!(inline_text(children), "printf 3");
+    assert_eq!(inline_text(document.content(), children), "printf 3");
     assert!(
-        !contains_manual_link(children),
+        !contains_manual_link(&document, children),
         "a redefined .MR must not fabricate a manual link: {children:?}"
     );
 }
@@ -125,8 +132,8 @@ fn tbl_source_recovery_does_not_reinterpret_text_after_custom_control_change() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected native table paragraph");
     };
-    assert_eq!(inline_text(children), "printf 3");
-    assert!(!contains_manual_link(children), "{children:?}");
+    assert_eq!(inline_text(document.content(), children), "printf 3");
+    assert!(!contains_manual_link(&document, children), "{children:?}");
 }
 
 #[test]
@@ -150,7 +157,7 @@ fn tbl_recovery_marks_empty_user_macros_per_cell_without_degrading_siblings() {
             .cells
             .iter()
             .map(|cell| match cell.blocks.as_slice() {
-                [Block::Paragraph { children, .. }] => inline_text(children),
+                [Block::Paragraph { children, .. }] => inline_text(document.content(), children),
                 blocks => panic!("expected table cell paragraph: {blocks:?}"),
             })
             .collect::<Vec<_>>();
@@ -176,7 +183,10 @@ fn tbl_escape_disabled_cells_keep_escape_spellings_literal() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected native table paragraph");
     };
-    assert_eq!(inline_text(children), r"TOKEN \fIITALIC\fP");
+    assert_eq!(
+        inline_text(document.content(), children),
+        r"TOKEN \fIITALIC\fP"
+    );
     assert!(
         !contains_emphasis(children),
         "disabled escape processing must not synthesize italics: {children:?}"
@@ -196,7 +206,10 @@ fn tbl_native_payload_preserves_escape_transitions_inside_one_cell() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected native table paragraph");
     };
-    assert_eq!(inline_text(children), r"LITERAL \fIBARE\fP ACTIVE STYLED");
+    assert_eq!(
+        inline_text(document.content(), children),
+        r"LITERAL \fIBARE\fP ACTIVE STYLED"
+    );
     assert_eq!(
         children
             .iter()
@@ -220,7 +233,7 @@ fn tbl_source_recovery_preserves_native_whitespace_from_redefined_macro() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected native table paragraph");
     };
-    assert_eq!(inline_text(children), "A B");
+    assert_eq!(inline_text(document.content(), children), "A B");
 }
 
 #[test]
@@ -235,18 +248,23 @@ fn declined_tbl_recovery_never_consumes_native_macro_expansion_siblings() {
     assert!(text.contains("ORIGINAL_OPERAND"), "{text}");
 }
 
-fn contains_manual_link(children: &[Inline]) -> bool {
+fn contains_manual_link(document: &mant_ir::Document, children: &[Inline]) -> bool {
     children.iter().any(|inline| match inline {
-        Inline::Link {
-            target: mant_ir::LinkTarget::Manual { .. },
-            ..
-        } => true,
+        Inline::Link { .. }
+            if matches!(
+                link_target(document, inline),
+                Some(mant_ir::LinkTarget::Manual { .. })
+            ) =>
+        {
+            true
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => contains_manual_link(children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        | Inline::Link { children, .. } => contains_manual_link(document, children),
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -254,9 +272,10 @@ fn contains_emphasis(children: &[Inline]) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Emphasis { .. } => true,
         Inline::Strong { children } | Inline::Link { children, .. } => contains_emphasis(children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -275,7 +294,7 @@ fn tbl_native_field_count_wins_over_raw_tab_characters() {
         .cells
         .iter()
         .map(|cell| match cell.blocks.as_slice() {
-            [Block::Paragraph { children, .. }] => inline_text(children),
+            [Block::Paragraph { children, .. }] => inline_text(document.content(), children),
             blocks => panic!("expected table cell paragraph: {blocks:?}"),
         })
         .collect::<Vec<_>>();
@@ -295,7 +314,7 @@ fn tbl_comments_use_native_not_lexically_guessed_escape_state() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected table paragraph");
     };
-    assert_eq!(inline_text(children), "VISIBLE");
+    assert_eq!(inline_text(document.content(), children), "VISIBLE");
 }
 
 #[test]
@@ -314,7 +333,7 @@ fn tbl_comment_truncation_precedes_tab_cell_recovery() {
         .iter()
         .flat_map(|cell| &cell.blocks)
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(document.content(), children)),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -335,7 +354,7 @@ fn tbl_text_blocks_recover_complete_inline_macro_semantics() {
     let cells = rows
         .iter()
         .map(|row| match row.cells[0].blocks.as_slice() {
-            [Block::Paragraph { children, .. }] => inline_text(children),
+            [Block::Paragraph { children, .. }] => inline_text(document.content(), children),
             blocks => panic!("expected one table cell paragraph: {blocks:?}"),
         })
         .collect::<Vec<_>>();
@@ -357,7 +376,7 @@ fn tbl_source_recovery_never_promotes_roff_comments_to_cells_or_text_blocks() {
         .flat_map(|row| &row.cells)
         .flat_map(|cell| &cell.blocks)
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(document.content(), children)),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -385,7 +404,7 @@ fn tbl_source_recovery_uses_a_document_level_ec_escape_change() {
         .flat_map(|row| &row.cells)
         .flat_map(|cell| &cell.blocks)
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(document.content(), children)),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -407,5 +426,5 @@ fn tbl_inline_recovery_recreates_the_active_document_escape_state() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected one table paragraph");
     };
-    assert_eq!(inline_text(children), "leftright");
+    assert_eq!(inline_text(document.content(), children), "leftright");
 }

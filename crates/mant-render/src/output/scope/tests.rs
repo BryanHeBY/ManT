@@ -7,7 +7,7 @@ use mant_protocol::{
     DocumentScope, DocumentTraversal, EvidenceCounts, EvidenceOrder, ExplanationOptions,
     ExplanationOutcome, ExplanationQuery, ExplanationTruncation, MarkdownSchema,
     ResolvedDocumentScope, ScopeExplanation, ScopeQuerySchema, ScopeSearch, ScopedQueryFailure,
-    SearchCase, SearchRender, SearchRenderFormat, SearchRenderScope, SearchScope, SearchSyntax,
+    SearchCase, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSyntax,
 };
 
 fn address(path: &str) -> DocumentAddress {
@@ -72,7 +72,7 @@ fn search() -> ScopeSearch {
             pattern: "needle".into(),
             syntax: SearchSyntax::Literal,
             case: SearchCase::Sensitive,
-            scope: SearchScope::Visible,
+            scope: mant_protocol::SearchScope::Visible,
             word: false,
             context_lines: 0,
             limit: 1,
@@ -89,6 +89,7 @@ fn search() -> ScopeSearch {
                 address: address(path),
                 depth: 0,
                 source_context: Some(source_context()),
+                content_projection: None,
                 matches: vec![],
                 render: SearchRender {
                     schema: MarkdownSchema::V1,

@@ -8,6 +8,7 @@ use crate::fixtures::archlinux_manual;
 #[test]
 fn keeps_definition_lists_subsections_and_inline_styles() {
     let document = archlinux_manual("tar");
+    let content = document.content();
     common::assert_section_topology("archlinux/tar", document, TAR_SECTIONS);
 
     let synopsis = common::section(document, "SYNOPSIS");
@@ -15,7 +16,7 @@ fn keeps_definition_lists_subsections_and_inline_styles() {
         synopsis
             .children
             .iter()
-            .map(|child| child.heading.plain_text())
+            .map(|child| child.heading.plain_text(content))
             .collect::<Vec<_>>(),
         ["Traditional usage", "UNIX-style usage", "GNU-style usage"]
     );
@@ -25,7 +26,7 @@ fn keeps_definition_lists_subsections_and_inline_styles() {
         common::definition_items(common::section(document, "Operation mode"))
             .iter()
             .flat_map(|item| &item.terms)
-            .any(|term| common::inline_text(term).contains("--create"))
+            .any(|term| common::inline_text(content, term).contains("--create"))
     );
 }
 

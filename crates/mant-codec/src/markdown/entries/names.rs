@@ -1,13 +1,10 @@
 //! Explicit Markdown name grammar, distinct from native inference policy.
 use super::{AttachedValuePolicy, diagnostics::EntryRejectionReason};
 use crate::definitions::RecognizedName;
-use crate::definitions::{environment_variable_alias, option_names_from_terms, option_prefix};
-use mant_ir::{EntryKind, Inline};
+use crate::definitions::{environment_variable_alias, option_names_from_literal, option_prefix};
+use mant_ir::EntryKind;
 pub(super) fn is_option_code(value: &str) -> bool {
-    let terms = vec![vec![Inline::Code {
-        value: value.to_owned(),
-    }]];
-    !option_names_from_terms(&terms).is_empty() && value.trim_start().starts_with('-')
+    !option_names_from_literal(value).is_empty() && value.trim_start().starts_with('-')
 }
 
 pub(super) fn entry_names(
@@ -26,14 +23,7 @@ pub(super) fn entry_names(
             return value
                 .trim_start()
                 .starts_with('-')
-                .then(|| {
-                    let terms = vec![vec![Inline::Code {
-                        value: value.to_owned(),
-                    }]];
-                    crate::definitions::option_occurrences_from_terms(&terms)
-                        .pop()
-                        .unwrap_or_default()
-                })
+                .then(|| crate::definitions::option_occurrences_from_literal(value))
                 .filter(|names| !names.is_empty())
                 .ok_or(EntryRejectionReason::InvalidOptionName);
         }

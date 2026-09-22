@@ -30,8 +30,8 @@ pub use blocks::{block_layout, block_layout_mut, block_source, rebase_roots};
 /// Panics only if the internal legacy backend rejects directly owned inline
 /// content.
 #[must_use]
-pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
-    crate::ContentContext::detached()
+pub fn has_literal_rows(content: crate::ContentContext<'_>, nodes: &[crate::Inline]) -> bool {
+    content
         .has_literal_rows(nodes)
         .expect("legacy inline text is self-contained")
 }

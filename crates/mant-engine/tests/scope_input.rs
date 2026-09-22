@@ -1,12 +1,9 @@
 //! Collection query input is caller-owned IR, not a resolver or loading service.
-use mant_ir::{
-    Block, Document, DocumentAddress, DocumentMeta, Inline, LayoutHint, MarkdownOrigin,
-    ResolvedContent, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
-};
+use mant_ir::{DocumentAddress, MarkdownOrigin, ResolvedContent};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentScope, DocumentSelector, DocumentTraversal,
     ExplanationOptions, ExplanationQuery, ResolvedDocumentScope, ScopedDocument, SearchCase,
-    SearchQuery, SearchScope, SearchSyntax,
+    SearchQuery, SearchSyntax,
 };
 use mant_query::{QueryScopeView, ScopeInputError, explain_scope, search_scope};
 
@@ -19,36 +16,12 @@ fn address(path: &str) -> DocumentAddress {
 
 fn snapshot() -> (ResolvedDocumentScope, Vec<ResolvedContent>) {
     let documents = ["a", "b"]
-        .map(|name| ResolvedContent {
-            address: Some(address(name)),
-            label: name.into(),
-            tldr: None,
-            document: Some(Document {
-                parser: None,
-                sources: vec![SourceRecord {
-                    key: SourceKey::FIRST,
-                    identity: SourceIdentity::Anonymous {
-                        name: name.to_owned(),
-                    },
-                    format: SourceFormat::Markdown,
-                    decoded_byte_length: 0,
-                    content_sha256: None,
-                    coordinates: SourceCoordinates::DecodedUtf8Bytes,
-                }],
-                root_source: SourceKey::FIRST,
-                meta: DocumentMeta::default(),
-                heading: None,
-                fragment_aliases: vec![],
-                diagnostics: vec![],
-                sections: vec![],
-                blocks: vec![Block::Paragraph {
-                    children: vec![Inline::Text {
-                        value: format!("needle in {name}"),
-                    }],
-                    layout: LayoutHint::default(),
-                    source: None,
-                }],
-            }),
+        .map(|name| {
+            let mut content =
+                mant_loader::load_markdown_text(&format!("needle in {name}\n"), None).unwrap();
+            content.address = Some(address(name));
+            content.label = name.into();
+            content
         })
         .to_vec();
     let graph = ResolvedDocumentScope {
@@ -96,7 +69,7 @@ fn pure_collection_queries_reuse_exact_borrowed_ir_and_global_order() {
             pattern: "needle".into(),
             syntax: SearchSyntax::Literal,
             case: SearchCase::Sensitive,
-            scope: SearchScope::Visible,
+            scope: mant_protocol::SearchScope::Visible,
             word: false,
             context_lines: 0,
             limit: 1,

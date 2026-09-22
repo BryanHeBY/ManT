@@ -1,13 +1,15 @@
 //! Definition context policy; coordinated by the parent discovery passes.
+#![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use mant_ir::inline_plain_text as plain_text;
-use mant_ir::{DefinitionItem, EntryKind};
+use mant_ir::{ContentContext, DefinitionItem, EntryKind};
 
 /// Only semantic topology changes inherited context; visual indentation does not.
 pub(super) fn definition_group_context(
+    content: ContentContext<'_>,
     items: &[DefinitionItem],
     context: DefinitionContext,
 ) -> DefinitionContext {
-    if context == DefinitionContext::Generic && is_key_binding_command_group(items) {
+    if context == DefinitionContext::Generic && is_key_binding_command_group(content, items) {
         DefinitionContext::Commands
     } else {
         context
@@ -43,16 +45,16 @@ pub(super) fn child_definition_context(
 /// of command-name tokens plus at least one recognizable binding keeps this
 /// inference narrower than treating arbitrary hyphenated glossary terms as
 /// commands.
-fn is_key_binding_command_group(items: &[DefinitionItem]) -> bool {
+fn is_key_binding_command_group(content: ContentContext<'_>, items: &[DefinitionItem]) -> bool {
     items.len() > 1
         && items.iter().all(|item| {
             item.terms
                 .first()
-                .is_some_and(|term| key_binding_command_form(&plain_text(term)).is_some())
+                .is_some_and(|term| key_binding_command_form(&plain_text(content, term)).is_some())
         })
         && items.iter().any(|item| {
             item.terms.first().is_some_and(|term| {
-                key_binding_command_form(&plain_text(term))
+                key_binding_command_form(&plain_text(content, term))
                     .is_some_and(|(_, binding)| binding.is_some())
             })
         })

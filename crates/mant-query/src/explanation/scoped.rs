@@ -55,8 +55,20 @@ pub(crate) fn explain(
         }
     }
     let page = super::page::materialize(&plans, &selection, &mut budget);
-    let evidence = page.evidence;
+    let mut evidence = page.evidence;
     let mut supports = page.pools;
+    let projections = page.projections;
+    let mut content_projections = Vec::with_capacity(plans.len());
+    for (index, plan) in plans.iter().enumerate() {
+        content_projections.push(super::projection::attach_scoped(
+            plan.content.document.as_ref(),
+            &mut supports[index].values,
+            &mut evidence,
+            index,
+            &mut budget,
+            projections[index].reserved(),
+        ));
+    }
     let mut copy_omitted = vec![false; plans.len()];
     for result in &evidence {
         copy_omitted[result.document_index] |= omitted(&result.evidence);
@@ -72,6 +84,7 @@ pub(crate) fn explain(
                 local_counts[index],
                 copy_omitted[index],
                 std::mem::take(&mut supports[index].values),
+                content_projections[index].take(),
             );
             truncation.candidates |= report.truncation.candidates;
             truncation.relations |= report.truncation.relations;
@@ -119,6 +132,7 @@ fn source_report(
     counts: EvidenceCounts,
     copy_omitted: bool,
     supports: Vec<mant_protocol::ExplanationSupport>,
+    content_projection: Option<mant_ir::ContentProjection>,
 ) -> ScopedExplanation {
     let total = u32::try_from(plan.candidates.len()).expect("bounded candidates");
     let returned = mant_protocol::EvidenceClass::ALL
@@ -129,6 +143,7 @@ fn source_report(
     truncation.content = copy_omitted;
     ScopedExplanation {
         supports,
+        content_projection,
         address: source.address.clone(),
         depth: source.depth,
         label: plan.content.label.clone(),

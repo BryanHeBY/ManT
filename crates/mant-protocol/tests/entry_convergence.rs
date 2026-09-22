@@ -9,10 +9,177 @@ fn definition() -> Value {
         "case":"sensitive","names":[],"forms":[]},"terms":[],"description":[]})
 }
 
+fn empty_content_store() -> Value {
+    json!({"owners":[],"roots":[],"atoms":[],"points":[],"links":[]})
+}
+
+#[test]
+fn wire_document_rejects_partial_or_uncovered_atoms() {
+    use mant_ir::{
+        Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Inline,
+        LayoutHint, Provenance,
+    };
+
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let first = builder.push_text(
+        root,
+        "hello".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let mut payload = document(&definition());
+    payload["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
+    payload["blocks"] = serde_json::to_value([Block::Paragraph {
+        children: vec![Inline::Text { content: first }],
+        layout: LayoutHint::default(),
+        source: None,
+    }])
+    .unwrap();
+    let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
+    let mut hidden = payload.clone();
+    hidden["blocks"] = json!([]);
+    assert!(serde_json::from_value::<DocumentResponse>(hidden).is_err());
+    let mut duplicated = payload.clone();
+    let leaf = duplicated["blocks"][0]["children"][0].clone();
+    duplicated["blocks"][0]["children"]
+        .as_array_mut()
+        .unwrap()
+        .push(leaf);
+    assert!(serde_json::from_value::<DocumentResponse>(duplicated).is_err());
+    payload["blocks"][0]["children"][0]["content"]["bytes"]["end"] = json!(2);
+    assert!(serde_json::from_value::<DocumentResponse>(payload).is_err());
+}
+
+#[test]
+fn wire_document_rejects_nested_link_wrappers() {
+    use mant_ir::{
+        Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Inline,
+        LayoutHint, LinkTarget, Provenance,
+    };
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let outer_text = builder.push_text(
+        root,
+        "a".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let inner_text = builder.push_text(
+        root,
+        "b".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let outer = builder
+        .push_link_for_atoms(
+            &[outer_text.atom],
+            LinkTarget::External {
+                uri: "https://example.invalid/a".into(),
+            },
+            None,
+            Provenance::Unknown,
+        )
+        .unwrap();
+    let inner = builder
+        .push_link_for_atoms(
+            &[inner_text.atom],
+            LinkTarget::External {
+                uri: "https://example.invalid/b".into(),
+            },
+            None,
+            Provenance::Unknown,
+        )
+        .unwrap();
+    let mut payload = document(&definition());
+    payload["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
+    payload["blocks"] = serde_json::to_value([Block::Paragraph {
+        children: vec![
+            Inline::Link {
+                occurrence: outer,
+                children: vec![Inline::Text {
+                    content: outer_text,
+                }],
+            },
+            Inline::Link {
+                occurrence: inner,
+                children: vec![Inline::Text {
+                    content: inner_text,
+                }],
+            },
+        ],
+        layout: LayoutHint::default(),
+        source: None,
+    }])
+    .unwrap();
+    let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
+    let inner_wrapper = payload["blocks"][0]["children"]
+        .as_array_mut()
+        .unwrap()
+        .remove(1);
+    payload["blocks"][0]["children"][0]["children"]
+        .as_array_mut()
+        .unwrap()
+        .push(inner_wrapper);
+    assert!(serde_json::from_value::<DocumentResponse>(payload).is_err());
+}
+
+#[test]
+fn complete_wire_document_rejects_root_atoms_reordered_across_paragraphs() {
+    use mant_ir::{
+        Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Inline,
+        LayoutHint, Provenance,
+    };
+
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let first = builder.push_text(
+        root,
+        "first".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let second = builder.push_text(
+        root,
+        "second".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let mut payload = document(&definition());
+    payload["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
+    payload["blocks"] = serde_json::to_value([first, second].map(|content| Block::Paragraph {
+        children: vec![Inline::Text { content }],
+        layout: LayoutHint::default(),
+        source: None,
+    }))
+    .unwrap();
+    let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
+    payload["blocks"].as_array_mut().unwrap().swap(0, 1);
+    assert!(serde_json::from_value::<DocumentResponse>(payload).is_err());
+}
+
 fn document(item: &Value) -> Value {
     json!({"schema":"mant.document/v0.12","producer":{"name":"test","version":"0"},
         "sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],
-        "rootSource":1,"meta":{},"sections":[],
+        "rootSource":1,"contentStore":empty_content_store(),"meta":{},"sections":[],
         "blocks":[{"type":"definition-list","items":[item]}]})
 }
 
@@ -133,6 +300,7 @@ fn outline_names_and_entry_kind_are_closed_at_both_projection_levels() {
     assert!(serde_json::from_str::<OutlineNode>(&duplicate_full).is_err());
     assert!(serde_json::from_str::<OutlineNodeReference>(&duplicate).is_err());
     let mut excerpt = json!({"schema":"mant.excerpt/v0.12","label":"test",
+        "contentProjection":{"contentStore":empty_content_store()},
         "selections":[{"kind":"document-entry","outline":{"node":node},
             "entry":{"type":"definition-list","items":[definition()]}}]});
     assert!(serde_json::from_value::<QueryExcerpt>(excerpt.clone()).is_ok());

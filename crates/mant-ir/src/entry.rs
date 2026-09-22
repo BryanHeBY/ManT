@@ -9,7 +9,7 @@ mod walk;
 #[cfg(test)]
 mod wire;
 #[cfg(test)]
-use crate::{Block, DefinitionItem, Document, Inline, LinkTarget};
+use crate::{Block, DefinitionItem, Document, LinkTarget};
 pub use content::*;
 pub use facts::*;
 pub use index::SemanticIndex;
@@ -31,6 +31,7 @@ mod tests {
     use super::*;
 
     fn definition(
+        fixture: &mut crate::test_support::ContentFixture,
         id: &str,
         kind: EntryKind,
         names: &[&str],
@@ -70,14 +71,7 @@ mod tests {
                 names: names.iter().map(|alias| (*alias).to_owned()).collect(),
                 value_domain: None,
             }),
-            terms: forms
-                .iter()
-                .map(|form| {
-                    vec![Inline::Code {
-                        value: (*form).to_owned(),
-                    }]
-                })
-                .collect(),
+            terms: forms.iter().map(|form| vec![fixture.code(*form)]).collect(),
             description,
             layout: crate::DefinitionLayout {
                 inline_term: false,
@@ -89,6 +83,7 @@ mod tests {
 
     #[test]
     fn choice_validation_uses_direct_entry_ownership_through_containers() {
+        let mut fixture = crate::test_support::ContentFixture::body();
         let list = |item| Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![item],
@@ -97,6 +92,7 @@ mod tests {
             source: None,
         };
         let grandchild = definition(
+            &mut fixture,
             "command-child",
             EntryKind::Command,
             &["child"],
@@ -104,6 +100,7 @@ mod tests {
             Vec::new(),
         );
         let value = definition(
+            &mut fixture,
             "value-auto",
             EntryKind::Value,
             &["auto"],
@@ -111,9 +108,17 @@ mod tests {
             vec![list(grandchild)],
         );
         assert!(!value.has_value_choices());
-        let mut transparent = definition("unused", EntryKind::Term, &[], &[], vec![list(value)]);
+        let mut transparent = definition(
+            &mut fixture,
+            "unused",
+            EntryKind::Term,
+            &[],
+            &[],
+            vec![list(value)],
+        );
         transparent.entry = None;
         let parent = definition(
+            &mut fixture,
             "option-color",
             EntryKind::Parameter {
                 parameter_kind: crate::ParameterKind::Option,
@@ -134,7 +139,8 @@ mod tests {
             }],
         );
         assert!(parent.has_value_choices());
-        let entry = entry_from_definition(&parent).unwrap();
+        let store = fixture.finish();
+        let entry = entry_from_definition(store.content(), &parent).unwrap();
         assert_eq!(
             entry.value_domain,
             Some(ValueDomain::Choices { exhaustive: false })
@@ -144,7 +150,9 @@ mod tests {
 
     #[test]
     fn preserves_definition_nesting_and_counts_forms_separately() {
+        let mut fixture = crate::test_support::ContentFixture::body();
         let option = definition(
+            &mut fixture,
             "option-local-forward",
             EntryKind::Parameter {
                 parameter_kind: crate::ParameterKind::Option,
@@ -154,6 +162,7 @@ mod tests {
             Vec::new(),
         );
         let command = definition(
+            &mut fixture,
             "command-ssh",
             EntryKind::Command,
             &["ssh"],
@@ -180,6 +189,7 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store: fixture.finish(),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
@@ -187,7 +197,10 @@ mod tests {
             sections: vec![Section {
                 id: "synopsis".into(),
                 fragment_aliases: Vec::new(),
-                heading: "SYNOPSIS".into(),
+                heading: crate::Heading {
+                    content: Vec::new(),
+                    source: None,
+                },
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
                     declaration_groups: Vec::new(),
@@ -234,46 +247,50 @@ mod tests {
 
     #[test]
     fn derives_document_targets_only_from_linked_terms() {
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let description_link = fixture.link_text(
+            LinkTarget::Document {
+                name: "description-only".to_owned(),
+                fragment: None,
+            },
+            None,
+            "details",
+            false,
+        );
         let mut item = definition(
+            &mut fixture,
             "command-winget",
             EntryKind::Command,
             &["winget.exe"],
             &[],
             vec![Block::Paragraph {
-                children: vec![Inline::Link {
-                    target: LinkTarget::Document {
-                        name: "description-only".to_owned(),
-                        fragment: None,
-                    },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "details".to_owned(),
-                    }],
-                }],
+                children: vec![description_link],
                 layout: LayoutHint::default(),
                 source: None,
             }],
         );
-        item.terms = vec![vec![Inline::Link {
-            target: LinkTarget::Document {
+        let term_link = fixture.link_text(
+            LinkTarget::Document {
                 name: "winget.exe".to_owned(),
                 fragment: None,
             },
-            title: None,
-            children: vec![Inline::Code {
-                value: "winget.exe".to_owned(),
-            }],
-        }]];
+            None,
+            "winget.exe",
+            true,
+        );
+        item.terms = vec![vec![term_link]];
+        let store = fixture.finish();
+        let content = store.content();
 
         assert!(
-            entry_from_definition(&item)
+            entry_from_definition(content, &item)
                 .unwrap()
                 .document_targets
                 .is_empty()
         );
         item.entry.as_mut().unwrap().forms = vec![crate::EntryForm::term(0)];
 
-        let entry = entry_from_definition(&item).expect("entry");
+        let entry = entry_from_definition(content, &item).expect("entry");
         assert_eq!(
             entry.document_targets,
             [SemanticDocumentTarget {
@@ -288,7 +305,9 @@ mod tests {
 
     #[test]
     fn explicit_cross_document_domain_survives_index_derivation() {
+        let mut fixture = crate::test_support::ContentFixture::body();
         let mut item = definition(
+            &mut fixture,
             "option-config",
             EntryKind::Parameter {
                 parameter_kind: crate::ParameterKind::Option,
@@ -306,7 +325,8 @@ mod tests {
             source: None,
         });
 
-        let entry = entry_from_definition(&item).expect("entry");
+        let store = fixture.finish();
+        let entry = entry_from_definition(store.content(), &item).expect("entry");
         assert!(matches!(
             entry.value_domain,
             Some(ValueDomain::EntrySet {

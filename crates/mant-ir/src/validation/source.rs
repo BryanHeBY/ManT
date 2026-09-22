@@ -25,6 +25,44 @@ pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelati
             validate_relation_span(document, span)?;
         }
     }
+    for provenance in document
+        .content_store
+        .owners
+        .iter()
+        .map(|record| record.provenance)
+        .chain(
+            document
+                .content_store
+                .roots
+                .iter()
+                .map(|record| record.provenance),
+        )
+        .chain(
+            document
+                .content_store
+                .atoms
+                .iter()
+                .map(|record| record.provenance),
+        )
+        .chain(
+            document
+                .content_store
+                .points
+                .iter()
+                .map(|record| record.provenance),
+        )
+        .chain(
+            document
+                .content_store
+                .links
+                .iter()
+                .map(|record| record.provenance),
+        )
+    {
+        if let Some(span) = provenance_span(provenance) {
+            validate_relation_span(document, span)?;
+        }
+    }
 
     let mut collector = SourceRelationCollector {
         document,
@@ -48,6 +86,43 @@ pub fn document_has_source_spans(document: &Document) -> bool {
     {
         return true;
     }
+    if document
+        .content_store
+        .owners
+        .iter()
+        .map(|record| record.provenance)
+        .chain(
+            document
+                .content_store
+                .roots
+                .iter()
+                .map(|record| record.provenance),
+        )
+        .chain(
+            document
+                .content_store
+                .atoms
+                .iter()
+                .map(|record| record.provenance),
+        )
+        .chain(
+            document
+                .content_store
+                .points
+                .iter()
+                .map(|record| record.provenance),
+        )
+        .chain(
+            document
+                .content_store
+                .links
+                .iter()
+                .map(|record| record.provenance),
+        )
+        .any(|provenance| provenance_span(provenance).is_some())
+    {
+        return true;
+    }
     let mut collector = SourceRelationCollector {
         document,
         error: None,
@@ -55,6 +130,14 @@ pub fn document_has_source_spans(document: &Document) -> bool {
     };
     collector.visit_document(document);
     collector.saw_span
+}
+
+const fn provenance_span(provenance: crate::Provenance) -> Option<SourceSpan> {
+    match provenance {
+        crate::Provenance::Authored { span } => Some(span),
+        crate::Provenance::Generated { trigger } => trigger,
+        crate::Provenance::Unknown => None,
+    }
 }
 
 /// Validate a standalone source table and its root key.
@@ -268,8 +351,14 @@ impl<'ir> Visit<'ir> for SourceRelationCollector<'_> {
     }
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        if let Inline::Anchor { owner_source, .. } = inline {
-            self.span(*owner_source);
+        if let Inline::Anchor { point, .. } = inline {
+            let source = self.document.content_store.point(*point).and_then(|point| {
+                match point.provenance {
+                    crate::Provenance::Authored { span } => Some(span),
+                    crate::Provenance::Generated { .. } | crate::Provenance::Unknown => None,
+                }
+            });
+            self.span(source);
         }
         visit::walk_inline(self, inline);
     }

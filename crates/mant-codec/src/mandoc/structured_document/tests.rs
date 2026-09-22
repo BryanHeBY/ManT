@@ -5,6 +5,39 @@ use mant_protocol::{EntryProjection, EvidenceBasis, ExplanationOptions, Explanat
 mod addresses;
 
 #[test]
+fn ascii_overstrike_drops_only_the_unsafe_display_override() {
+    // The exact `.TH X 1`, `.SH NAME`, `X \[ct] Y` input was first run
+    // through the fixed ASCII/78 reference; term_ascii.c::ascii_uc2str
+    // projects the cent sign as `/\bc`. The native terminal renderer retains
+    // that historical output, while the structured IR keeps the logical `¢`
+    // without exposing backspace as an inline display glyph.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert("cent.1", b".TH X 1\n.SH NAME\nX \\[ct] Y\n".to_vec())
+        .unwrap();
+    let native = libmandoc_rs::structured::StructuredRenderer::new()
+        .with_profile(libmandoc_rs::structured::StructuredProfile::Ascii)
+        .render_bundle("cent.1", &bundle, InputFormat::Man)
+        .expect("legal ASCII manual retains its native structured result");
+    let projection = NativeProseProjection::new(native).expect("native prose projects");
+    let document = lower_projection(projection).expect("native prose lowers to document IR");
+    mant_ir::validate_content_store(&document.content_store).unwrap();
+    let cent = document
+        .content_store
+        .atoms
+        .iter()
+        .find(|atom| atom.kind.text() == Some("¢"))
+        .expect("cent sign is retained as a logical atom");
+    assert!(matches!(
+        &cent.kind,
+        mant_ir::ContentAtomKind::Text {
+            display_override: None,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn cross_wrapper_terms_reach_real_entry_facts_without_body_borrowing() {
     // The same source was run through the pinned reference before this
     // assertion. `man_macro.c::blk_imp` binds TQ to the preceding TP body;
@@ -53,9 +86,11 @@ Body B.
             .forms
             .iter()
             .map(|form| {
-                EntryOwner::Definition(&items[0])
-                    .form(form)
-                    .map(|form| mant_ir::inline_plain_text(&form))
+                document
+                    .content()
+                    .entry_form(EntryOwner::Definition(&items[0]), form)
+                    .unwrap()
+                    .map(|form| mant_ir::inline_plain_text(document.content(), &form))
                     .unwrap()
             })
             .collect::<Vec<_>>(),
@@ -117,7 +152,10 @@ fn assert_real_query_consumers(document: Document) {
         entry
             .forms
             .iter()
-            .map(|form| mant_ir::inline_plain_text(form))
+            .map(|form| mant_ir::inline_plain_text(
+                explanation.content_projection.as_ref().unwrap().content(),
+                form
+            ))
             .collect::<Vec<_>>(),
         ["--output", "-o=FILE", "-O"]
     );
@@ -174,9 +212,11 @@ fn mdoc_multiple_labels_bind_native_markup_to_exact_forms() {
             .forms
             .iter()
             .map(|form| {
-                EntryOwner::Definition(&items[0])
-                    .form(form)
-                    .map(|form| mant_ir::inline_plain_text(&form))
+                document
+                    .content()
+                    .entry_form(EntryOwner::Definition(&items[0]), form)
+                    .unwrap()
+                    .map(|form| mant_ir::inline_plain_text(document.content(), &form))
                     .unwrap()
             })
             .collect::<Vec<_>>(),
@@ -288,7 +328,7 @@ fn tp_width_tq_boundary_and_rs_continuation_survive_lowering() {
     assert!(matches!(
         &blocks[1],
         Block::DefinitionList { items, .. }
-            if mant_ir::inline_plain_text(&items[0].terms[0]) == "ALIAS"
+            if mant_ir::inline_plain_text(document.content(), &items[0].terms[0]) == "ALIAS"
     ));
     let Block::List {
         kind: ListKind::Ordered { start: Some(1) },
@@ -303,7 +343,9 @@ fn tp_width_tq_boundary_and_rs_continuation_survive_lowering() {
         .blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(mant_ir::inline_plain_text(children)),
+            Block::Paragraph { children, .. } => {
+                Some(mant_ir::inline_plain_text(document.content(), children))
+            }
             _ => None,
         })
         .collect::<String>();
@@ -409,7 +451,10 @@ fn literal_separator_definition_keeps_its_term() {
     let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
         panic!("definition list retained")
     };
-    assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), "|");
+    assert_eq!(
+        mant_ir::inline_plain_text(document.content(), &items[0].terms[0]),
+        "|"
+    );
 }
 
 #[test]
@@ -444,9 +489,11 @@ fn shared_declaration_grammar_distinguishes_arguments_from_aliases() {
                 .forms
                 .iter()
                 .map(|form| {
-                    EntryOwner::Definition(item)
-                        .form(form)
-                        .map(|form| mant_ir::inline_plain_text(&form))
+                    document
+                        .content()
+                        .entry_form(EntryOwner::Definition(item), form)
+                        .unwrap()
+                        .map(|form| mant_ir::inline_plain_text(document.content(), &form))
                         .expect("form resolves")
                 })
                 .collect::<Vec<_>>()

@@ -4,7 +4,7 @@
 //! separator following a completed argument may introduce another full option;
 //! it never gives a parameter fragment a fresh chance to become a name.
 
-use mant_ir::Inline;
+use mant_ir::{ContentContext, Inline, InlineView};
 use std::collections::HashSet;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -26,11 +26,11 @@ pub(super) struct DeclarationState {
 }
 
 impl DeclarationState {
-    pub(super) fn new(text: String, inlines: &[Inline]) -> Self {
+    pub(super) fn new(content: ContentContext<'_>, text: String, inlines: &[Inline]) -> Self {
         let mut literal_starts = HashSet::new();
-        collect_literal_starts(inlines, false, false, &mut 0, &mut literal_starts);
+        collect_literal_starts(content, inlines, false, false, &mut 0, &mut literal_starts);
         let mut ranges = Vec::new();
-        literal_ranges(inlines, false, false, &mut 0, &mut ranges);
+        literal_ranges(content, inlines, false, false, &mut 0, &mut ranges);
         let argument_starts = ranges
             .iter()
             .filter_map(|&(_, end)| {
@@ -52,6 +52,24 @@ impl DeclarationState {
             uncertain: false,
             literal_starts,
             argument_starts,
+            validated_token: false,
+        }
+    }
+
+    /// Construct the equivalent state for one complete literal Markdown leaf.
+    ///
+    /// This is the same grammar as a single `Inline::Code` node: the whole
+    /// value is literal, contains no styled-argument boundary, and has no
+    /// independently strong declaration restart.
+    pub(super) fn literal(text: &str) -> Self {
+        Self {
+            text: text.to_owned(),
+            offset: 0,
+            closers: Vec::new(),
+            phase: Phase::Name,
+            uncertain: false,
+            literal_starts: HashSet::new(),
+            argument_starts: HashSet::new(),
             validated_token: false,
         }
     }
@@ -144,6 +162,7 @@ impl DeclarationState {
 /// separated unstyled suffix begins an ordinary argument; a multiword literal
 /// command or a new independently styled declaration keeps its full spelling.
 fn literal_ranges(
+    content: ContentContext<'_>,
     nodes: &[Inline],
     literal: bool,
     parameter: bool,
@@ -151,30 +170,32 @@ fn literal_ranges(
     ranges: &mut Vec<(usize, usize)>,
 ) {
     for node in nodes {
-        match node {
-            Inline::Text { value } | Inline::Code { value } => {
+        match content.inline(node).expect("definition content resolves") {
+            InlineView::Text(value) | InlineView::Code(value) => {
                 let end = *offset + value.len();
                 if (literal || matches!(node, Inline::Code { .. })) && !parameter {
                     ranges.push((*offset, end));
                 }
                 *offset = end;
             }
-            Inline::Strong { children } => {
-                literal_ranges(children, true, parameter, offset, ranges);
+            InlineView::Strong(children) => {
+                literal_ranges(content, children, true, parameter, offset, ranges);
             }
-            Inline::Emphasis { children } => {
-                literal_ranges(children, literal, true, offset, ranges);
+            InlineView::Emphasis(children) => {
+                literal_ranges(content, children, literal, true, offset, ranges);
             }
-            Inline::Link { children, .. } => {
-                literal_ranges(children, literal, parameter, offset, ranges);
+            InlineView::Link(link) => {
+                literal_ranges(content, link.children(), literal, parameter, offset, ranges);
             }
-            Inline::LineBreak => *offset += 1,
-            Inline::Anchor { .. } => {}
+            InlineView::LineBreak => *offset += 1,
+            InlineView::Anchor(_) => {}
+            _ => unreachable!("all inline views are handled"),
         }
     }
 }
 
 fn collect_literal_starts(
+    content: ContentContext<'_>,
     inlines: &[Inline],
     strong: bool,
     parameter: bool,
@@ -182,24 +203,25 @@ fn collect_literal_starts(
     starts: &mut HashSet<usize>,
 ) {
     for inline in inlines {
-        match inline {
-            Inline::Text { value } | Inline::Code { value } => {
+        match content.inline(inline).expect("definition content resolves") {
+            InlineView::Text(value) | InlineView::Code(value) => {
                 if strong && !parameter && !value.trim_start().is_empty() {
                     starts.insert(*offset + value.len() - value.trim_start().len());
                 }
                 *offset += value.len();
             }
-            Inline::Strong { children } => {
-                collect_literal_starts(children, true, parameter, offset, starts);
+            InlineView::Strong(children) => {
+                collect_literal_starts(content, children, true, parameter, offset, starts);
             }
-            Inline::Emphasis { children } => {
-                collect_literal_starts(children, strong, true, offset, starts);
+            InlineView::Emphasis(children) => {
+                collect_literal_starts(content, children, strong, true, offset, starts);
             }
-            Inline::Link { children, .. } => {
-                collect_literal_starts(children, strong, parameter, offset, starts);
+            InlineView::Link(link) => {
+                collect_literal_starts(content, link.children(), strong, parameter, offset, starts);
             }
-            Inline::LineBreak => *offset += 1,
-            Inline::Anchor { .. } => {}
+            InlineView::LineBreak => *offset += 1,
+            InlineView::Anchor(_) => {}
+            _ => unreachable!("all inline views are handled"),
         }
     }
 }

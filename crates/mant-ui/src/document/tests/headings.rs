@@ -2,15 +2,13 @@
 use super::*;
 
 fn link(value: &str, target: mant_ir::LinkTarget) -> Inline {
-    Inline::Link {
+    crate::test_content::link(
         target,
-        title: None,
-        children: vec![Inline::Emphasis {
-            children: vec![Inline::Code {
-                value: value.into(),
-            }],
+        None,
+        vec![Inline::Emphasis {
+            children: vec![crate::test_content::code(value)],
         }],
-    }
+    )
 }
 
 #[test]
@@ -33,11 +31,9 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
                     fragment: Some("Mixed.Target".into()),
                 },
             ),
-            Inline::LineBreak,
-            Inline::anchor_with_aliases("second-line", vec!["Second.Line".into()]),
-            Inline::Text {
-                value: "Second row".into(),
-            },
+            crate::test_content::line_break(),
+            crate::test_content::anchor_with_aliases("second-line", vec!["Second.Line".into()]),
+            crate::test_content::text("Second row"),
         ],
         source: None,
     });
@@ -62,14 +58,14 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
         assert_eq!(rendered.anchor_row("Second.Line"), Some(1));
         assert_eq!(rendered.links.len(), 1);
         assert_eq!(
-            rendered.links[0].target,
-            LinkTarget::Document {
+            view.link_targets.get(&rendered.links[0].identity),
+            Some(&LinkTarget::Document {
                 address: DocumentAddress::Markdown {
                     path: "guides/index".into(),
                     origin: mant_ir::MarkdownOrigin::Documents,
                 },
                 fragment: Some("Mixed.Target".into()),
-            }
+            })
         );
         let style = rendered.text.lines[0].spans[0].style;
         assert_eq!(style.fg, Some(theme::LINK));
@@ -93,20 +89,16 @@ fn section_labels_do_not_replace_linked_body_heading_content() {
                     uri: "https://example.com/".into(),
                 },
             ),
-            Inline::Text {
-                value: " and ".into(),
-            },
+            crate::test_content::text(" and "),
             link(
                 "mail",
                 mant_ir::LinkTarget::Email {
                     address: "help@example.com".into(),
                 },
             ),
-            Inline::LineBreak,
-            Inline::anchor("heading-tail"),
-            Inline::Text {
-                value: "tail".into(),
-            },
+            crate::test_content::line_break(),
+            crate::test_content::anchor("heading-tail"),
+            crate::test_content::text("tail"),
         ],
         source: None,
     };
@@ -125,8 +117,8 @@ fn section_labels_do_not_replace_linked_body_heading_content() {
             rendered.anchor_row("heading-tail"),
             Some(rendered.search("tail")[0].row)
         );
-        assert!(rendered.links.iter().any(|region| matches!(&region.target, LinkTarget::External(uri) if uri.as_str() == "https://example.com/")));
-        assert!(rendered.links.iter().any(|region| matches!(&region.target, LinkTarget::External(uri) if uri.as_str() == "mailto:help@example.com")));
+        assert!(rendered.links.iter().any(|region| matches!(view.link_targets.get(&region.identity), Some(LinkTarget::External(uri)) if uri.as_str() == "https://example.com/")));
+        assert!(rendered.links.iter().any(|region| matches!(view.link_targets.get(&region.identity), Some(LinkTarget::External(uri)) if uri.as_str() == "mailto:help@example.com")));
     }
 }
 
@@ -166,8 +158,10 @@ fn parsed_h1_local_link_reveals_the_canonical_root_after_tldr() {
                     rendered
                         .links
                         .iter()
-                        .filter(|link| link.target
-                            == LinkTarget::Section(mant_ir::DOCUMENT_ROOT_ID.into()))
+                        .filter(|link| {
+                            view.link_targets.get(&link.identity)
+                                == Some(&LinkTarget::Section(mant_ir::DOCUMENT_ROOT_ID.into()))
+                        })
                         .count(),
                     1 + usize::from(!body.is_empty())
                 );

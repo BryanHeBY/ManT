@@ -135,7 +135,7 @@ pub enum QueryView {
         /// Case-matching policy.
         #[serde(default)]
         case: SearchCase,
-        /// Semantic content included in the search.
+        /// Search visible text or generated Markdown bytes.
         #[serde(default)]
         scope: SearchScope,
         /// Require matches to be bounded by word boundaries.

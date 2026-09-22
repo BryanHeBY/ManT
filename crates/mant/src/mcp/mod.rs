@@ -375,7 +375,6 @@ mod tests {
             "word": "false",
             "contextLines": "1",
             "maxMatches": "3",
-            "scope": "markdown",
             "offset": "4",
             "startChar": "7",
             "maxChars": "512"
@@ -389,10 +388,19 @@ mod tests {
         assert!(!search.word);
         assert_eq!(search.context_lines, 1);
         assert_eq!(search.max_matches, 3);
-        assert_eq!(search.scope, mant_protocol::SearchScope::Markdown);
         assert_eq!(search.offset, 4);
         assert_eq!(search.page.start_char, 7);
         assert_eq!(search.page.max_chars, 512);
+        let markdown_search: SearchParams = serde_json::from_value(json!({
+            "documents": ["manual/1/git"],
+            "pattern": "index",
+            "scope": "markdown"
+        }))
+        .expect("Markdown scope remains accepted");
+        assert_eq!(
+            markdown_search.validate().unwrap().scope,
+            mant_protocol::SearchScope::Markdown
+        );
 
         let find: FindParams = serde_json::from_value(json!({
             "query": "^git",

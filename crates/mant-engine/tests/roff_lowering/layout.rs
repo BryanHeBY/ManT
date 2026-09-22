@@ -69,10 +69,16 @@ fn unclosed_compact_run_stays_separate_and_resets_at_indent_scope() {
         panic!("expected one outer definition list");
     };
     assert_eq!(items.len(), 3);
-    assert_eq!(inline_text(&items[0].terms[0]), "--loose");
+    assert_eq!(
+        inline_text(document.content(), &items[0].terms[0]),
+        "--loose"
+    );
     assert!(items[0].description.is_empty());
-    assert_eq!(inline_text(&items[1].terms[0]), "--described");
-    assert_eq!(inline_text(&items[2].terms[0]), "outer");
+    assert_eq!(
+        inline_text(document.content(), &items[1].terms[0]),
+        "--described"
+    );
+    assert_eq!(inline_text(document.content(), &items[2].terms[0]), "outer");
     let [
         Block::DefinitionList {
             items: inner_items, ..
@@ -82,7 +88,10 @@ fn unclosed_compact_run_stays_separate_and_resets_at_indent_scope() {
         panic!("expected one nested definition list");
     };
     assert_eq!(inner_items.len(), 1);
-    assert_eq!(inline_text(&inner_items[0].terms[0]), "inner");
+    assert_eq!(
+        inline_text(document.content(), &inner_items[0].terms[0]),
+        "inner"
+    );
     assert!(!inner_items[0].description.is_empty());
 }
 
@@ -117,7 +126,7 @@ fn preserves_man_synopsis_flow_and_alternating_fonts() {
         panic!("expected one synopsis paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "man [man options] [[section] page ...] ...\n\
          man -k [apropos options] regexp ...\n\
          man -w|-W [man options] page ..."
@@ -125,21 +134,21 @@ fn preserves_man_synopsis_flow_and_alternating_fonts() {
     assert_eq!(
         children
             .iter()
-            .filter(|node| matches!(node, Inline::LineBreak))
+            .filter(|node| matches!(node, Inline::LineBreak { .. }))
             .count(),
         2
     );
     assert!(children.iter().any(
-        |node| matches!(node, Inline::Emphasis { children } if inline_text(children) == "man options")
+        |node| matches!(node, Inline::Emphasis { children } if inline_text(document.content(), children) == "man options")
     ));
     assert!(
         children.iter().any(
-            |node| matches!(node, Inline::Strong { children } if inline_text(children) == "-w")
+            |node| matches!(node, Inline::Strong { children } if inline_text(document.content(), children) == "-w")
         )
     );
     assert!(
         children.iter().any(
-            |node| matches!(node, Inline::Strong { children } if inline_text(children) == "-W")
+            |node| matches!(node, Inline::Strong { children } if inline_text(document.content(), children) == "-W")
         )
     );
 }
@@ -164,22 +173,28 @@ fn preserves_man_sy_heads_with_body_content_and_inline_fonts() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one synopsis paragraph");
     };
-    assert_eq!(inline_text(children), "getent [option] database");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "getent [option] database"
+    );
     assert!(matches!(
         children.first(),
-        Some(Inline::Strong { children }) if inline_text(children) == "getent"
+        Some(Inline::Strong { children }) if inline_text(document.content(), children) == "getent"
     ));
 
     let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
         panic!("expected one description paragraph");
     };
-    assert_eq!(inline_text(children), "#!interpreter [optional-arg]");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "#!interpreter [optional-arg]"
+    );
     assert!(matches!(
         children.first(),
         Some(Inline::Strong { children })
             if children.iter().any(|inline| matches!(
                 inline,
-                Inline::Emphasis { children } if inline_text(children) == "interpreter"
+                Inline::Emphasis { children } if inline_text(document.content(), children) == "interpreter"
             ))
     ));
     assert!(
@@ -209,11 +224,14 @@ fn keeps_man_synopsis_lines_together_inside_no_fill_examples() {
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "#!interpreter\n[optional-arg]");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "#!interpreter\n[optional-arg]"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );
@@ -239,11 +257,14 @@ second line\n\
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "first line\n\nsecond line");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "first line\n\nsecond line"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         2
     );
@@ -269,11 +290,14 @@ second line\n\
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "first line\n\nsecond line");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "first line\n\nsecond line"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         2
     );
@@ -302,11 +326,14 @@ second line\n\
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "first line\nsecond line");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "first line\nsecond line"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );
@@ -335,11 +362,14 @@ second line\n\
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "first line\nsecond line");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "first line\nsecond line"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );
@@ -375,7 +405,7 @@ third line\n\
             };
             assert_eq!(layout.indent_columns, 0);
             assert_eq!(layout.spacing_before_lines, 0);
-            inline_text(children)
+            inline_text(document.content(), children)
         })
         .collect::<Vec<_>>();
     assert_eq!(texts.join("\n"), "first line\nsecond line\nthird line");
@@ -402,11 +432,14 @@ second line\n\
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "first line\n\n\nsecond line");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "first line\n\n\nsecond line"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         3
     );
@@ -443,18 +476,18 @@ fn distinguishes_filled_source_wrapping_from_indented_output_lines() {
         panic!("expected synopsis and prose paragraphs");
     };
     assert_eq!(
-        inline_text(synopsis),
+        inline_text(document.content(), synopsis),
         "tool [first]\n    [second]\n    [third]"
     );
     assert_eq!(
         synopsis
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         2
     );
     assert_eq!(
-        inline_text(prose),
+        inline_text(document.content(), prose),
         "Ordinary source wrapping remains one filled paragraph."
     );
 }
@@ -490,8 +523,14 @@ continuation\n\
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(prose), "extsize=nnnn; multi-block; (read(2)");
-    assert_eq!(inline_text(literal), "literal-continuation");
+    assert_eq!(
+        inline_text(document.content(), prose),
+        "extsize=nnnn; multi-block; (read(2)"
+    );
+    assert_eq!(
+        inline_text(document.content(), literal),
+        "literal-continuation"
+    );
 }
 
 #[test]
@@ -508,7 +547,10 @@ The next line.\n",
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one paragraph: {:?}", document.sections[0].blocks);
     };
-    assert_eq!(inline_text(children), " 1. The next line.");
+    assert_eq!(
+        inline_text(document.content(), children),
+        " 1. The next line."
+    );
 }
 
 #[test]
@@ -691,7 +733,10 @@ fn propagates_nested_no_space_and_preserves_prefix_content() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one no-space paragraph");
     };
-    assert_eq!(inline_text(children), "Bell Labs-derived jobs: [-]ddd.ddd");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "Bell Labs-derived jobs: [-]ddd.ddd"
+    );
 }
 
 #[test]
@@ -705,11 +750,14 @@ fn temporary_indent_discards_its_operand_but_retains_the_line_boundary() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one examples paragraph");
     };
-    assert_eq!(inline_text(children), "example% command\nexample% other");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "example% command\nexample% other"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1,
         "each .ti boundary must be represented exactly once: {children:?}"
@@ -791,7 +839,7 @@ T{\nT}@T{\nCore\nT}@T{\nProduction-grade, first-class\nT}\n.TE\n";
         .cells
         .iter()
         .map(|cell| match cell.blocks.as_slice() {
-            [Block::Paragraph { children, .. }] => inline_text(children),
+            [Block::Paragraph { children, .. }] => inline_text(document.content(), children),
             [] => String::new(),
             blocks => panic!("unexpected table cell blocks: {blocks:?}"),
         })
@@ -836,7 +884,7 @@ fn carries_mdoc_spacing_state_into_display_lines() {
     let Block::Preformatted { children, .. } = &document.sections[0].blocks[0] else {
         panic!("expected one display line");
     };
-    assert_eq!(inline_text(children), "name:uid:gid");
+    assert_eq!(inline_text(document.content(), children), "name:uid:gid");
 }
 
 #[test]
@@ -851,8 +899,11 @@ fn carries_mdoc_spacing_state_across_list_item_boundaries() {
     let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
         panic!("expected a command definition list");
     };
-    assert_eq!(inline_text(&items[0].terms[0]), "Odevice");
-    assert_eq!(inline_text(&items[1].terms[0]), "done");
+    assert_eq!(
+        inline_text(document.content(), &items[0].terms[0]),
+        "Odevice"
+    );
+    assert_eq!(inline_text(document.content(), &items[1].terms[0]), "done");
 }
 
 #[test]
@@ -869,7 +920,7 @@ fn carries_mdoc_spacing_state_out_of_nested_synopsis_enclosures() {
         panic!("expected synopsis paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "demo [-m memory] [-o variable=value] name"
     );
 }
@@ -894,13 +945,13 @@ fn adjacent_no_fill_regions_scale_without_changing_their_topology() {
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         REGION_COUNT - 1
     );
-    assert!(inline_text(children).starts_with("line 0\nline 1\n"));
+    assert!(inline_text(document.content(), children).starts_with("line 0\nline 1\n"));
     assert!(
-        inline_text(children).ends_with(&format!("line {}", REGION_COUNT - 1)),
+        inline_text(document.content(), children).ends_with(&format!("line {}", REGION_COUNT - 1)),
         "last no-fill region must remain visible"
     );
 }

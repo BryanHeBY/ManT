@@ -5,6 +5,7 @@ use anstyle::{AnsiColor, Style};
 use mant_ir::{DocumentMeta, EntryKind, ResolvedContent, SourceFormat};
 use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch};
 use mant_render::sanitize_terminal_text;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 /// Keep protocol-owned catalog text intact while applying optional CLI styling.
 pub(crate) fn render_catalog_output(
@@ -124,12 +125,7 @@ fn terminal_content(query: &ResolvedContent) -> ResolvedContent {
     query.label = sanitize_terminal_text(&query.label).into_owned();
     if let Some(document) = query.document.as_mut() {
         sanitize_terminal_meta(&mut document.meta);
-        if let Some(heading) = &mut document.heading {
-            sanitize_terminal_heading(heading);
-        }
-        for section in &mut document.sections {
-            sanitize_terminal_section_headings(section);
-        }
+        sanitize_terminal_document_headings(document);
     }
     query
 }
@@ -156,40 +152,181 @@ pub(super) fn terminal_excerpt(excerpt: &QueryExcerpt) -> QueryExcerpt {
     if let Some(meta) = excerpt.meta.as_mut() {
         sanitize_terminal_meta(meta);
     }
-    for selection in &mut excerpt.selections {
-        match selection {
-            mant_protocol::ExcerptSelection::DocumentRoot {
-                heading: Some(heading),
-                ..
-            } => sanitize_terminal_heading(heading),
-            mant_protocol::ExcerptSelection::DocumentSection { section, .. } => {
-                sanitize_terminal_section_headings(section);
-            }
-            _ => {}
-        }
+    if let Some(projection) = excerpt.content_projection.as_mut() {
+        sanitize_terminal_excerpt_headings(&mut excerpt.selections, &mut projection.content_store);
     }
     excerpt
 }
 
-fn sanitize_terminal_section_headings(section: &mut mant_ir::Section) {
-    sanitize_terminal_heading(&mut section.heading);
-    for child in &mut section.children {
-        sanitize_terminal_section_headings(child);
+fn sanitize_terminal_document_headings(document: &mut mant_ir::Document) {
+    let mut atoms = HashSet::new();
+    if let Some(heading) = &document.heading {
+        collect_heading_atoms(heading, &mut atoms);
+    }
+    for section in &document.sections {
+        collect_section_heading_atoms(section, &mut atoms);
+    }
+    let original = sanitize_terminal_atoms(&mut document.content_store, &atoms);
+    remap_document_content_refs(document, &original);
+}
+
+fn sanitize_terminal_excerpt_headings(
+    selections: &mut [mant_protocol::ExcerptSelection],
+    store: &mut mant_ir::ContentStore,
+) {
+    use mant_ir::visit::VisitMut as _;
+    let mut atoms = HashSet::new();
+    for selection in &*selections {
+        match selection {
+            mant_protocol::ExcerptSelection::DocumentRoot {
+                heading: Some(heading),
+                ..
+            } => collect_heading_atoms(heading, &mut atoms),
+            mant_protocol::ExcerptSelection::DocumentSection { section, .. } => {
+                collect_section_heading_atoms(section, &mut atoms);
+            }
+            mant_protocol::ExcerptSelection::Tldr { .. }
+            | mant_protocol::ExcerptSelection::DocumentRoot { heading: None, .. }
+            | mant_protocol::ExcerptSelection::DocumentEntry { .. } => {}
+        }
+    }
+    let original = sanitize_terminal_atoms(store, &atoms);
+    let mut remap = ContentRefRemap {
+        original: &original,
+    };
+    for selection in selections {
+        match selection {
+            mant_protocol::ExcerptSelection::DocumentRoot {
+                heading: Some(heading),
+                ..
+            } => remap.visit_heading_mut(heading),
+            mant_protocol::ExcerptSelection::DocumentSection { section, .. } => {
+                remap.visit_section_mut(section);
+            }
+            mant_protocol::ExcerptSelection::Tldr { .. }
+            | mant_protocol::ExcerptSelection::DocumentRoot { heading: None, .. }
+            | mant_protocol::ExcerptSelection::DocumentEntry { .. } => {}
+        }
+    }
+    remap_link_label_refs(store, &original);
+}
+
+fn collect_section_heading_atoms(
+    section: &mant_ir::Section,
+    atoms: &mut HashSet<mant_ir::ContentAtomKey>,
+) {
+    collect_heading_atoms(&section.heading, atoms);
+    for child in &section.children {
+        collect_section_heading_atoms(child, atoms);
     }
 }
 
-fn sanitize_terminal_heading(heading: &mut mant_ir::Heading) {
-    use mant_ir::visit::VisitMut;
-    struct Text;
-    impl VisitMut for Text {
-        fn visit_inline_mut(&mut self, inline: &mut mant_ir::Inline) {
-            if let mant_ir::Inline::Text { value } | mant_ir::Inline::Code { value } = inline {
-                *value = sanitize_terminal_text(value).into_owned();
+fn collect_heading_atoms(heading: &mant_ir::Heading, atoms: &mut HashSet<mant_ir::ContentAtomKey>) {
+    fn collect(inline: &mant_ir::Inline, atoms: &mut HashSet<mant_ir::ContentAtomKey>) {
+        match inline {
+            mant_ir::Inline::Text { content } | mant_ir::Inline::Code { content } => {
+                atoms.insert(content.atom);
             }
-            mant_ir::visit::walk_inline_mut(self, inline);
+            mant_ir::Inline::Strong { children }
+            | mant_ir::Inline::Emphasis { children }
+            | mant_ir::Inline::Link { children, .. } => {
+                for child in children {
+                    collect(child, atoms);
+                }
+            }
+            mant_ir::Inline::Anchor { .. } | mant_ir::Inline::LineBreak { .. } => {}
         }
     }
-    Text.visit_heading_mut(heading);
+
+    for inline in &heading.content {
+        collect(inline, atoms);
+    }
+}
+
+fn sanitize_terminal_atoms(
+    store: &mut mant_ir::ContentStore,
+    keys: &HashSet<mant_ir::ContentAtomKey>,
+) -> HashMap<mant_ir::ContentAtomKey, String> {
+    let mut original = HashMap::new();
+    for atom in &mut store.atoms {
+        if !keys.contains(&atom.key) {
+            continue;
+        }
+        let text = match &mut atom.kind {
+            mant_ir::ContentAtomKind::Text { text, .. }
+            | mant_ir::ContentAtomKind::Whitespace { text, .. } => text,
+            mant_ir::ContentAtomKind::BreakOpportunity {}
+            | mant_ir::ContentAtomKind::HardBreak {} => continue,
+        };
+        if matches!(sanitize_terminal_text(text), std::borrow::Cow::Owned(_)) {
+            let value = std::mem::take(text);
+            *text = sanitize_terminal_text(&value).into_owned();
+            original.insert(atom.key, value);
+        }
+    }
+    original
+}
+
+fn remap_document_content_refs(
+    document: &mut mant_ir::Document,
+    original: &HashMap<mant_ir::ContentAtomKey, String>,
+) {
+    use mant_ir::visit::VisitMut as _;
+    ContentRefRemap { original }.visit_document_mut(document);
+    remap_link_label_refs(&mut document.content_store, original);
+}
+
+struct ContentRefRemap<'a> {
+    original: &'a HashMap<mant_ir::ContentAtomKey, String>,
+}
+
+impl mant_ir::visit::VisitMut for ContentRefRemap<'_> {
+    fn visit_inline_mut(&mut self, inline: &mut mant_ir::Inline) {
+        if let mant_ir::Inline::Text { content } | mant_ir::Inline::Code { content } = inline {
+            remap_content_ref(content, self.original);
+        }
+        mant_ir::visit::walk_inline_mut(self, inline);
+    }
+}
+
+fn remap_link_label_refs(
+    store: &mut mant_ir::ContentStore,
+    original: &HashMap<mant_ir::ContentAtomKey, String>,
+) {
+    for occurrence in &mut store.links {
+        for part in &mut occurrence.label {
+            if let mant_ir::LinkLabelPart::Content { content } = part {
+                remap_content_ref(content, original);
+            }
+        }
+    }
+}
+
+fn remap_content_ref(
+    content: &mut mant_ir::ContentRef,
+    original: &HashMap<mant_ir::ContentAtomKey, String>,
+) {
+    let Some(value) = original.get(&content.atom) else {
+        return;
+    };
+    if let Some(start) = sanitized_byte_offset(value, content.bytes.start)
+        && let Some(end) = sanitized_byte_offset(value, content.bytes.end)
+    {
+        content.bytes.start = start;
+        content.bytes.end = end;
+    }
+}
+
+fn sanitized_byte_offset(value: &str, offset: u32) -> Option<u32> {
+    let prefix = value.get(..usize::try_from(offset).ok()?)?;
+    prefix.chars().try_fold(0_u32, |length, character| {
+        let bytes = if character.is_control() {
+            '\u{fffd}'.len_utf8()
+        } else {
+            character.len_utf8()
+        };
+        length.checked_add(u32::try_from(bytes).ok()?)
+    })
 }
 
 pub(super) fn terminal_search(search: &QuerySearch) -> QuerySearch {
@@ -265,5 +402,83 @@ pub(super) fn render_full_query(
         QueryFormat::Json => {
             mant_render::render_query_json(query, pretty).map_err(Failure::operational)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_terminal_document_headings;
+    use mant_ir::{
+        ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Document,
+        DocumentMeta, Heading, Inline, LinkTarget, Provenance, SourceCoordinates, SourceFormat,
+        SourceIdentity, SourceKey, SourceRecord,
+    };
+
+    #[test]
+    fn terminal_heading_sanitization_keeps_store_ranges_and_link_labels_closed() {
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::Heading, Provenance::Unknown);
+        let occurrence = builder.push_link(
+            owner,
+            LinkTarget::External {
+                uri: "https://example.com".to_owned(),
+            },
+            None,
+            Provenance::Unknown,
+        );
+        let content = builder.push_text(
+            root,
+            "safe\u{1b}title".to_owned(),
+            None,
+            ContentStyle::default(),
+            None,
+            Some(occurrence),
+            Provenance::Unknown,
+        );
+        let mut document = Document {
+            parser: None,
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "terminal-test".to_owned(),
+                },
+                format: SourceFormat::Markdown,
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
+            content_store: builder.finish(),
+            meta: DocumentMeta::default(),
+            heading: Some(Heading {
+                content: vec![Inline::Link {
+                    occurrence,
+                    children: vec![Inline::Text { content }],
+                }],
+                source: None,
+            }),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        };
+
+        sanitize_terminal_document_headings(&mut document);
+
+        let document_content = document.content();
+        assert_eq!(
+            document
+                .heading
+                .as_ref()
+                .unwrap()
+                .plain_text(document_content),
+            "safe\u{fffd}title"
+        );
+        assert_eq!(
+            document_content.occurrence_plain_text(occurrence).unwrap(),
+            "safe\u{fffd}title"
+        );
+        mant_ir::validate_content_store(&document.content_store).unwrap();
     }
 }

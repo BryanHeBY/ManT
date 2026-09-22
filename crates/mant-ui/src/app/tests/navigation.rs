@@ -609,7 +609,7 @@ fn overflowing_navigation_exposes_a_scrollbar() {
 fn overflowing_navigation_reserves_its_final_column_for_the_scrollbar() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("manual").sections[0].heading =
-        "A deliberately long option section ending in XYZ".into();
+        crate::test_content::heading("A deliberately long option section ending in XYZ");
     for (height, reserves_gutter) in [(8, true), (14, false)] {
         let backend = TestBackend::new(80, height);
         let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -703,7 +703,7 @@ fn navigation_scrollbar_click_and_drag_do_not_resize_the_sidebar() {
 fn selected_navigation_titles_wrap_with_a_continuous_background() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("manual").sections[0].children[0].heading =
-        "A deliberately long nested section title".into();
+        crate::test_content::heading("A deliberately long nested section title");
     let backend = TestBackend::new(64, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);
@@ -864,23 +864,22 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
             0,
             AstBlock::Paragraph {
                 children: vec![
-                    Inline::Text {
-                        value: "Continue with ".to_owned(),
-                    },
-                    Inline::Link {
-                        target: mant_ir::LinkTarget::Section {
+                    crate::test_content::text("Continue with ".to_owned()),
+                    crate::test_content::link(
+                        mant_ir::LinkTarget::Section {
                             id: "details".into(),
                         },
-                        title: None,
-                        children: vec![Inline::Text {
-                            value: "the nested details section".to_owned(),
-                        }],
-                    },
+                        None,
+                        vec![crate::test_content::text(
+                            "the nested details section".to_owned(),
+                        )],
+                    ),
                 ],
                 layout: LayoutHint::default(),
                 source: None,
             },
         );
+    bundle.document.as_mut().expect("manual").content_store = crate::test_content::store();
     let backend = TestBackend::new(72, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);
@@ -892,6 +891,14 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
         .into_iter()
         .next()
         .expect("visible reference text");
+    assert_eq!(
+        app.session.document.link_target_at(
+            &app.session.rendered_cache[&width],
+            region.row,
+            region.start_column,
+        ),
+        Some(&crate::document::LinkTarget::Section("details".into()))
+    );
 
     click_document_cell(&mut app, region.start_column, region.row);
 
@@ -1008,15 +1015,13 @@ fn clicking_an_external_link_returns_the_uri_to_the_host() {
         .insert(
             0,
             AstBlock::Paragraph {
-                children: vec![Inline::Link {
-                    target: mant_ir::LinkTarget::External {
+                children: vec![crate::test_content::link(
+                    mant_ir::LinkTarget::External {
                         uri: "https://example.test/docs".to_owned(),
                     },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "external docs".to_owned(),
-                    }],
-                }],
+                    None,
+                    vec![crate::test_content::text("external docs".to_owned())],
+                )],
                 layout: LayoutHint::default(),
                 source: None,
             },
@@ -1076,15 +1081,13 @@ fn clicking_encoded_invalid_mailto_links_never_reaches_the_host() {
             .insert(
                 0,
                 AstBlock::Paragraph {
-                    children: vec![Inline::Link {
-                        target: mant_ir::LinkTarget::External {
+                    children: vec![crate::test_content::link(
+                        mant_ir::LinkTarget::External {
                             uri: uri.to_owned(),
                         },
-                        title: None,
-                        children: vec![Inline::Text {
-                            value: label.clone(),
-                        }],
-                    }],
+                        None,
+                        vec![crate::test_content::text(label.clone())],
+                    )],
                     layout: LayoutHint::default(),
                     source: None,
                 },
@@ -1126,9 +1129,7 @@ fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections(
 
     let mut with_overview = navigation_bundle();
     with_overview.document.as_mut().expect("document").blocks = vec![AstBlock::Paragraph {
-        children: vec![Inline::Text {
-            value: "Document overview".to_owned(),
-        }],
+        children: vec![crate::test_content::text("Document overview".to_owned())],
         layout: LayoutHint::default(),
         source: None,
     }];

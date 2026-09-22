@@ -1,7 +1,6 @@
 //! Filled flow preserves font, spacing and pending boundaries across scopes.
-use super::{Font, ZeroAdvanceState, needs_boundary_space, push_text, updated_spacing};
-use mant_ir::Inline;
-use mant_ir::{first_visible_character, has_printable_character, last_visible_character};
+use super::draft::{first_visible_character, has_printable_character, last_visible_character};
+use super::{Font, Inline, ZeroAdvanceState, needs_boundary_space, push_text, updated_spacing};
 
 mod execution;
 mod field;

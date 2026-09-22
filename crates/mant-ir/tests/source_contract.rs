@@ -25,6 +25,9 @@ fn document_value() -> Value {
             }
         ],
         "rootSource": 1,
+        "contentStore": {
+            "owners": [], "roots": [], "atoms": [], "points": [], "links": []
+        },
         "meta": {},
         "sections": []
     })

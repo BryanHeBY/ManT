@@ -1,14 +1,15 @@
 use std::ops::Range;
 
 use libmandoc_rs::structured::{
-    ContentAtomKey, ContentAtomKind, ContentRootKey, NativeItem, NativeRole, StructuredDocument,
+    ContentAtomKey, ContentRootKey, NativeItem, NativeRole, StructuredDocument,
 };
 
-use super::{NativeProjectionError, NativeProseProjection};
+use super::{NativeProjectionError, NativeProseProjection, store::NativeContentMap};
 use crate::definitions::{NativeContentRange, NativeDeclarationEvidence, NativeHeadRole};
 
 pub(super) fn item_term_roots(
     document: &StructuredDocument,
+    content: &NativeContentMap,
     item: &NativeItem,
 ) -> Result<Vec<ContentRootKey>, NativeProjectionError> {
     let forms = document.forms().get(item.forms().clone()).ok_or(
@@ -19,12 +20,7 @@ pub(super) fn item_term_roots(
         let reference = document.content_refs().get(form.refs().start).ok_or(
             NativeProjectionError::InvalidRelation("form has no first content reference"),
         )?;
-        let root = document
-            .content_atom(reference.atom())
-            .ok_or(NativeProjectionError::InvalidRelation(
-                "form references an unknown atom",
-            ))?
-            .root();
+        let root = native_root(content, reference.atom())?;
         if roots.last().is_some_and(|previous| *previous > root) {
             return Err(NativeProjectionError::InvalidRelation(
                 "item term roots are not ordered",
@@ -39,16 +35,17 @@ pub(super) fn item_term_roots(
 
 pub(super) fn native_declaration_evidence(
     projection: &NativeProseProjection,
+    content: &NativeContentMap,
     item: &NativeItem,
 ) -> Result<NativeDeclarationEvidence, NativeProjectionError> {
     let document = projection.document();
-    let roots = item_term_roots(document, item)?;
+    let roots = item_term_roots(document, content, item)?;
     let mut root_offsets = Vec::new();
     root_offsets
         .try_reserve_exact(roots.len())
         .map_err(|_| NativeProjectionError::InvalidRelation("term offset allocation"))?;
     for root in &roots {
-        root_offsets.push(root_atom_offsets(projection, *root)?);
+        root_offsets.push(root_atom_offsets(content, *root)?);
     }
     let forms = document.forms().get(item.forms().clone()).ok_or(
         NativeProjectionError::InvalidRelation("item form range is invalid"),
@@ -57,6 +54,7 @@ pub(super) fn native_declaration_evidence(
     for form in forms {
         form_ranges.push(content_range_for_refs(
             document,
+            content,
             &roots,
             &root_offsets,
             form.refs().clone(),
@@ -85,6 +83,7 @@ pub(super) fn native_declaration_evidence(
     for hint in &hints[hint_start..hint_end] {
         name_hints.push(content_range_for_refs(
             document,
+            content,
             &roots,
             &root_offsets,
             hint.refs().clone(),
@@ -98,6 +97,7 @@ pub(super) fn native_declaration_evidence(
 
 fn content_range_for_refs(
     document: &StructuredDocument,
+    content: &NativeContentMap,
     roots: &[ContentRootKey],
     root_offsets: &[Vec<(ContentAtomKey, usize)>],
     refs: Range<usize>,
@@ -114,12 +114,7 @@ fn content_range_for_refs(
         .ok_or(NativeProjectionError::InvalidRelation(
             "declaration content range is empty",
         ))?;
-    let root = document
-        .content_atom(first.atom())
-        .ok_or(NativeProjectionError::InvalidRelation(
-            "declaration content references an unknown atom",
-        ))?
-        .root();
+    let root = native_root(content, first.atom())?;
     let term = roots.binary_search(&root).map_err(|_| {
         NativeProjectionError::InvalidRelation("declaration content is outside the item term roots")
     })?;
@@ -130,18 +125,13 @@ fn content_range_for_refs(
         ))?;
     let mut parts: Vec<Range<usize>> = Vec::new();
     for reference in references {
-        let atom = document.content_atom(reference.atom()).ok_or(
-            NativeProjectionError::InvalidRelation(
-                "declaration content references an unknown atom",
-            ),
-        )?;
-        if atom.root() != root {
+        if native_root(content, reference.atom())? != root {
             return Err(NativeProjectionError::InvalidRelation(
                 "one declaration range crosses term roots",
             ));
         }
         let atom_offset = atom_offsets
-            .binary_search_by_key(&atom.key(), |(key, _)| *key)
+            .binary_search_by_key(&reference.atom(), |(key, _)| *key)
             .ok()
             .map(|index| atom_offsets[index].1)
             .ok_or(NativeProjectionError::InvalidRelation(
@@ -153,7 +143,6 @@ fn content_range_for_refs(
             && previous.end == range.start
         {
             previous.end = range.end;
-            previous.end = range.end;
         } else {
             parts.push(range);
         }
@@ -162,33 +151,54 @@ fn content_range_for_refs(
 }
 
 fn root_atom_offsets(
-    projection: &NativeProseProjection,
+    content: &NativeContentMap,
     root: ContentRootKey,
 ) -> Result<Vec<(ContentAtomKey, usize)>, NativeProjectionError> {
-    let projected = projection
-        .root(root)
-        .ok_or(NativeProjectionError::InvalidRelation(
-            "term root has no projected leaves",
-        ))?;
+    let public_root = content.root(root)?;
+    let projected =
+        content
+            .store()
+            .root(public_root)
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "term root has no public content record",
+            ))?;
     let mut offsets = Vec::new();
     offsets
-        .try_reserve_exact(projected.leaves.len())
+        .try_reserve_exact(projected.atoms.len())
         .map_err(|_| NativeProjectionError::InvalidRelation("term atom offset allocation"))?;
     let mut offset = 0_usize;
-    for leaf in &projected.leaves {
-        let atom = projection.document().content_atom(leaf.atom()).ok_or(
-            NativeProjectionError::InvalidRelation("projected leaf references an unknown atom"),
-        )?;
-        offsets.push((atom.key(), offset));
-        offset += match atom.kind() {
-            ContentAtomKind::Text { text, .. } | ContentAtomKind::Whitespace { text, .. } => {
-                text.len()
-            }
-            ContentAtomKind::HardBreak => 1,
-            ContentAtomKind::BreakOpportunity => 0,
+    for public_atom in &projected.atoms {
+        let atom =
+            content
+                .store()
+                .atom(*public_atom)
+                .ok_or(NativeProjectionError::InvalidRelation(
+                    "projected atom has no public content record",
+                ))?;
+        let native_atom = content.native_atom(*public_atom)?;
+        offsets.push((native_atom, offset));
+        offset += match &atom.kind {
+            mant_ir::ContentAtomKind::Text { text, .. }
+            | mant_ir::ContentAtomKind::Whitespace { text, .. } => text.len(),
+            mant_ir::ContentAtomKind::HardBreak {} => 1,
+            mant_ir::ContentAtomKind::BreakOpportunity {} => 0,
         };
     }
     Ok(offsets)
+}
+
+fn native_root(
+    content: &NativeContentMap,
+    atom: ContentAtomKey,
+) -> Result<ContentRootKey, NativeProjectionError> {
+    let atom =
+        content
+            .store()
+            .atom(content.atom(atom)?)
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "native atom has no public content record",
+            ))?;
+    content.native_root(atom.root)
 }
 
 pub(super) fn evidence_role(

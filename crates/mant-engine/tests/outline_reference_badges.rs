@@ -111,7 +111,22 @@ fn invalid_empty_and_limited_associations_never_create_form_badges() {
 
 #[test]
 fn duplicate_ids_do_not_merge_structural_owners_or_hide_distinct_fragments() {
-    let mut outline = outline(ReferenceProjectionMode::All, EntryProjection::All, 100);
+    let source = SOURCE.replace(
+        "[`run`](run.md#usage)",
+        "[`run`](run.md#usage) [`run`](run.md#other)",
+    );
+    let query = load_markdown_text(&source, None).unwrap();
+    let mut outline = build_outline_with_references(
+        &query,
+        EntryProjection::All,
+        None,
+        &ReferenceProjection {
+            mode: ReferenceProjectionMode::All,
+            limit: 100,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     let OutlineNode::DocumentSection { children, .. } = &mut outline.nodes[1] else {
         panic!("section")
     };
@@ -119,16 +134,8 @@ fn duplicate_ids_do_not_merge_structural_owners_or_hide_distinct_fragments() {
         *id = "command-run".into();
     }
     let text = tree(&outline);
-    assert!(text.contains("run ↗ run#usage"));
+    assert!(text.contains("run ↗ 2 targets"), "{text}");
     assert!(text.contains("stop ↗ stop"));
-    let mut second = outline.references.records[2].clone();
-    second.target = mant_ir::LinkTarget::Document {
-        name: "run".into(),
-        fragment: Some("other".into()),
-    };
-    outline.references.records.push(second);
-    outline.references.occurrences = mant_protocol::ReferenceCount::Exact { value: 6 };
-    assert!(tree(&outline).contains("run ↗ 2 targets"));
     let mut duplicate = children_snapshot(&outline);
     if let OutlineNode::DocumentSection { children, .. } = &mut outline.nodes[1] {
         children.push(duplicate.remove(0));

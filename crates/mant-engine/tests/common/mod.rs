@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use mant_ir::ResolvedContent;
-use mant_ir::{Block, Document, Inline, Section, SourceFormat};
+use mant_ir::{Block, ContentContext, Document, Inline, InlineView, Section, SourceFormat};
 use mant_protocol::OutlineNode;
 
 pub const LS_SECTIONS: &[&str] = &[
@@ -186,7 +186,7 @@ pub fn section<'a>(document: &'a Document, title: &str) -> &'a Section {
     collect_sections(&document.sections, &mut sections);
     sections
         .into_iter()
-        .find(|section| section.heading.plain_text() == title)
+        .find(|section| section.heading.plain_text(document.content()) == title)
         .unwrap_or_else(|| panic!("missing section {title}"))
 }
 
@@ -194,6 +194,7 @@ pub fn section<'a>(document: &'a Document, title: &str) -> &'a Section {
 /// manuals.  Fedora and Arch package different snapshots of the page, but the
 /// SYNOPSIS uses the same filled-roff convention and must lower identically.
 pub fn assert_gcc_synopsis_layout(document: &Document) {
+    let content = document.content();
     let synopsis = section(document, "SYNOPSIS");
     let synopsis_inlines = synopsis
         .blocks
@@ -203,10 +204,10 @@ pub fn assert_gcc_synopsis_layout(document: &Document) {
             _ => None,
         })
         .expect("GCC synopsis paragraph");
-    assert!(contains_strong(synopsis_inlines, "-std="));
-    assert!(contains_emphasis(synopsis_inlines, "standard"));
+    assert!(contains_strong(content, synopsis_inlines, "-std="));
+    assert!(contains_emphasis(content, synopsis_inlines, "standard"));
     assert_eq!(
-        inline_text(synopsis_inlines),
+        inline_text(content, synopsis_inlines),
         concat!(
             "gcc [-c|-S|-E] [-std=standard]\n",
             "    [-g] [-pg] [-Olevel]\n",
@@ -220,7 +221,7 @@ pub fn assert_gcc_synopsis_layout(document: &Document) {
     assert_eq!(
         synopsis_inlines
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         6
     );
@@ -338,19 +339,23 @@ pub fn count_outline_entries(nodes: &[OutlineNode]) -> usize {
 // Vertical spacing assertions
 // ---------------------------------------------------------------------------
 
-pub fn assert_bounded_vertical_spacing(sections: &[Section], fixture: &str) {
-    for section in sections {
-        // Adjacency or equal row counts cannot establish duplicated source
-        // requests: .sp followed by .PP is intentionally additive. Source
-        // ownership/one-consumption is tested by the explicit request matrix;
-        // the broad fixture guard checks the resolved geometry's bound.
-        assert!(
-            !mant_ir::geometry::has_bounded_gap(&section.blocks),
-            "fixture {fixture} section {} exceeds a resolved gap boundary",
-            section.heading.plain_text()
-        );
-        assert_bounded_vertical_spacing(&section.children, fixture);
+pub fn assert_bounded_vertical_spacing(document: &Document, fixture: &str) {
+    fn assert_sections(content: ContentContext<'_>, sections: &[Section], fixture: &str) {
+        for section in sections {
+            // Adjacency or equal row counts cannot establish duplicated source
+            // requests: .sp followed by .PP is intentionally additive. Source
+            // ownership/one-consumption is tested by the explicit request matrix;
+            // the broad fixture guard checks the resolved geometry's bound.
+            assert!(
+                !mant_ir::geometry::has_bounded_gap(content, &section.blocks),
+                "fixture {fixture} section {} exceeds a resolved gap boundary",
+                section.heading.plain_text(content)
+            );
+            assert_sections(content, &section.children, fixture);
+        }
     }
+
+    assert_sections(document.content(), &document.sections, fixture);
 }
 
 // ---------------------------------------------------------------------------
@@ -358,15 +363,13 @@ pub fn assert_bounded_vertical_spacing(sections: &[Section], fixture: &str) {
 // ---------------------------------------------------------------------------
 
 pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
+    let content = document.content();
     for block in document_blocks(document) {
         visit_block_inlines(block, &mut |inline| {
-            let value = match inline {
-                Inline::Text { value } | Inline::Code { value } => value,
-                Inline::Strong { .. }
-                | Inline::Emphasis { .. }
-                | Inline::Link { .. }
-                | Inline::Anchor { .. }
-                | Inline::LineBreak => return,
+            let (InlineView::Text(value) | InlineView::Code(value)) =
+                content.inline(inline).expect("fixture inline must resolve")
+            else {
+                return;
             };
             assert!(
                 !value.contains("\\f")
@@ -390,8 +393,9 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
 /// this construct, making it a useful full-pipeline guard against presentation
 /// requests leaking into renderer-neutral text.
 pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &Document) {
+    let content = document.content();
     let description = section(document, "DESCRIPTION");
-    let text = block_slice_text(&description.blocks);
+    let text = block_slice_text(content, &description.blocks);
     assert!(
         text.contains("The Git User’s Manual[1] has a more in-depth introduction"),
         "fixture {name} lost generated Git title or footnote: {text:?}",
@@ -405,7 +409,7 @@ pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &Document
     for block in &description.blocks {
         visit_block_inlines(block, &mut |inline| {
             if let Inline::Strong { children } = inline
-                && inline_text(children).contains("Git User’s Manual")
+                && inline_text(content, children).contains("Git User’s Manual")
             {
                 title_is_strong = true;
             }
@@ -442,18 +446,25 @@ pub fn as_preformatted(block: &Block) -> Option<&[Inline]> {
     }
 }
 
-pub fn assert_preformatted(section: &Section, needle: &str, expected_indent: i32) {
-    let (children, indent) = find_preformatted(&section.blocks, needle, 0).unwrap_or_else(|| {
-        panic!(
-            "missing preformatted text {needle:?} in {}",
-            section.heading.plain_text()
-        )
-    });
-    assert!(inline_text(children).contains(needle));
+pub fn assert_preformatted(
+    content: ContentContext<'_>,
+    section: &Section,
+    needle: &str,
+    expected_indent: i32,
+) {
+    let (children, indent) =
+        find_preformatted(content, &section.blocks, needle, 0).unwrap_or_else(|| {
+            panic!(
+                "missing preformatted text {needle:?} in {}",
+                section.heading.plain_text(content)
+            )
+        });
+    assert!(inline_text(content, children).contains(needle));
     assert_eq!(indent, expected_indent);
 }
 
 fn find_preformatted<'a>(
+    content: ContentContext<'a>,
     blocks: &'a [Block],
     needle: &str,
     base_indent: i32,
@@ -462,14 +473,17 @@ fn find_preformatted<'a>(
         match block {
             Block::Preformatted {
                 children, layout, ..
-            } if inline_text(children).contains(needle) => {
+            } if inline_text(content, children).contains(needle) => {
                 return Some((children, base_indent + layout.indent_columns));
             }
             Block::List { items, layout, .. } => {
                 for item in items {
-                    if let Some(found) =
-                        find_preformatted(&item.blocks, needle, base_indent + layout.indent_columns)
-                    {
+                    if let Some(found) = find_preformatted(
+                        content,
+                        &item.blocks,
+                        needle,
+                        base_indent + layout.indent_columns,
+                    ) {
                         return Some(found);
                     }
                 }
@@ -477,6 +491,7 @@ fn find_preformatted<'a>(
             Block::DefinitionList { items, layout, .. } => {
                 for item in items {
                     if let Some(found) = find_preformatted(
+                        content,
                         &item.description,
                         needle,
                         base_indent + layout.indent_columns + item.layout.body_indent_columns,
@@ -487,9 +502,12 @@ fn find_preformatted<'a>(
             }
             Block::Table { rows, layout, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
-                    if let Some(found) =
-                        find_preformatted(&cell.blocks, needle, base_indent + layout.indent_columns)
-                    {
+                    if let Some(found) = find_preformatted(
+                        content,
+                        &cell.blocks,
+                        needle,
+                        base_indent + layout.indent_columns,
+                    ) {
                         return Some(found);
                     }
                 }
@@ -509,27 +527,29 @@ fn find_preformatted<'a>(
 // Inline style helpers
 // ---------------------------------------------------------------------------
 
-pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
+pub fn contains_strong(content: ContentContext<'_>, children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
-        Inline::Strong { children } => inline_text(children) == expected,
+        Inline::Strong { children } => inline_text(content, children) == expected,
         Inline::Emphasis { children } | Inline::Link { children, .. } => {
-            contains_strong(children, expected)
+            contains_strong(content, children, expected)
         }
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak { .. } => false,
     })
 }
 
-pub fn contains_emphasis(children: &[Inline], expected: &str) -> bool {
+pub fn contains_emphasis(content: ContentContext<'_>, children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
-        Inline::Emphasis { children } => inline_text(children) == expected,
+        Inline::Emphasis { children } => inline_text(content, children) == expected,
         Inline::Strong { children } | Inline::Link { children, .. } => {
-            contains_emphasis(children, expected)
+            contains_emphasis(content, children, expected)
         }
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -537,7 +557,7 @@ pub fn count_line_breaks(children: &[Inline]) -> usize {
     children
         .iter()
         .map(|inline| match inline {
-            Inline::LineBreak => 1,
+            Inline::LineBreak { .. } => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => count_line_breaks(children),
@@ -550,32 +570,28 @@ pub fn count_line_breaks(children: &[Inline]) -> usize {
 // Text extraction
 // ---------------------------------------------------------------------------
 
-pub fn inline_text(children: &[Inline]) -> String {
-    children
+pub fn inline_text(content: ContentContext<'_>, children: &[Inline]) -> String {
+    content
+        .plain_text(children)
+        .expect("fixture inline content must resolve")
+}
+
+pub fn block_slice_text(content: ContentContext<'_>, blocks: &[Block]) -> String {
+    blocks
         .iter()
-        .map(|inline| match inline {
-            Inline::Text { value } | Inline::Code { value } => value.clone(),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => inline_text(children),
-            Inline::Anchor { .. } => String::new(),
-            Inline::LineBreak => "\n".to_owned(),
-        })
-        .collect()
+        .map(|block| block_text(content, block))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
-pub fn block_slice_text(blocks: &[Block]) -> String {
-    blocks.iter().map(block_text).collect::<Vec<_>>().join("\n")
-}
-
-fn block_text(block: &Block) -> String {
+fn block_text(content: ContentContext<'_>, block: &Block) -> String {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            inline_text(children)
+            inline_text(content, children)
         }
         Block::List { items, .. } => items
             .iter()
-            .map(|item| block_slice_text(&item.blocks))
+            .map(|item| block_slice_text(content, &item.blocks))
             .collect::<Vec<_>>()
             .join("\n"),
         Block::DefinitionList { items, .. } => items
@@ -585,10 +601,10 @@ fn block_text(block: &Block) -> String {
                     "{} {}",
                     item.terms
                         .iter()
-                        .map(|term| inline_text(term))
+                        .map(|term| inline_text(content, term))
                         .collect::<Vec<_>>()
                         .join(" "),
-                    block_slice_text(&item.description),
+                    block_slice_text(content, &item.description),
                 )
             })
             .collect::<Vec<_>>()
@@ -596,7 +612,7 @@ fn block_text(block: &Block) -> String {
         Block::Table { rows, .. } => rows
             .iter()
             .flat_map(|row| &row.cells)
-            .map(|cell| block_slice_text(&cell.blocks))
+            .map(|cell| block_slice_text(content, &cell.blocks))
             .collect::<Vec<_>>()
             .join(" "),
         Block::Equation { value, .. } => value.clone(),
@@ -669,7 +685,7 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
             Inline::Text { .. }
             | Inline::Code { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 }
@@ -694,7 +710,7 @@ pub fn assert_section_topology(name: &str, document: &Document, expected_titles:
     let section_titles: Vec<String> = document
         .sections
         .iter()
-        .map(|section| section.heading.plain_text())
+        .map(|section| section.heading.plain_text(document.content()))
         .collect();
     assert_eq!(section_titles, expected_titles, "fixture {name}");
 

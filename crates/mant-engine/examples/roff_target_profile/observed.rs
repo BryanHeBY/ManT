@@ -1,6 +1,6 @@
 //! Collects target occurrences from the lowered renderer-neutral IR.
 
-use mant_ir::{Block, Document, FragmentAlias, Inline, Section};
+use mant_ir::{Block, ContentContext, Document, FragmentAlias, Inline, Provenance, Section};
 
 use super::{ObservedRole, ObservedTarget, ObservedTargets, SectionPosition};
 
@@ -13,8 +13,16 @@ struct ObservationLocation {
     ir_path: String,
 }
 
+#[derive(Clone, Copy)]
+struct OwnerContext<'a> {
+    container: &'static str,
+    path: Option<&'a str>,
+    source_line: u32,
+}
+
 pub(super) fn observed_targets(document: &Document) -> ObservedTargets {
     let mut observed = ObservedTargets::default();
+    let content = document.content();
     let root_position = SectionPosition {
         ordinal: 0,
         source_line: 0,
@@ -33,17 +41,21 @@ pub(super) fn observed_targets(document: &Document) -> ObservedTargets {
         },
     );
     collect_blocks(
+        content,
         &document.blocks,
         &mut observed,
         root_position,
         "document",
-        "content",
-        None,
-        0,
+        OwnerContext {
+            container: "content",
+            path: None,
+            source_line: 0,
+        },
     );
     let mut next_section_ordinal = 0;
     for (index, section) in document.sections.iter().enumerate() {
         collect_section(
+            content,
             section,
             &mut observed,
             &format!("section[{index}]"),
@@ -91,6 +103,7 @@ fn record_observed(
 }
 
 fn collect_section(
+    content: ContentContext<'_>,
     section: &Section,
     observed: &mut ObservedTargets,
     path: &str,
@@ -116,16 +129,20 @@ fn collect_section(
     );
     observed.identities.insert(section.id.to_string());
     collect_blocks(
+        content,
         &section.blocks,
         observed,
         section_position,
         path,
-        "content",
-        None,
-        0,
+        OwnerContext {
+            container: "content",
+            path: None,
+            source_line: 0,
+        },
     );
     for (index, child) in section.children.iter().enumerate() {
         collect_section(
+            content,
             child,
             observed,
             &format!("{path}/section[{index}]"),
@@ -134,40 +151,43 @@ fn collect_section(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn collect_blocks(
+    content: ContentContext<'_>,
     blocks: &[Block],
     observed: &mut ObservedTargets,
     section: SectionPosition,
     parent_path: &str,
-    owner_container: &'static str,
-    owner_path: Option<&str>,
-    owner_source_line: u32,
+    owner: OwnerContext<'_>,
 ) {
     for (block_index, block) in blocks.iter().enumerate() {
         let path = format!("{parent_path}/block[{block_index}]");
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                let container = if owner_container == "content" {
+                let container = if owner.container == "content" {
                     match block {
                         Block::Paragraph { .. } => "paragraph",
                         Block::Preformatted { .. } => "preformatted",
                         _ => unreachable!(),
                     }
                 } else {
-                    owner_container
+                    owner.container
                 };
                 let block_source_line = block_source_line(block);
                 collect_inlines(
+                    content,
                     children,
                     observed,
                     section,
                     &path,
-                    container,
-                    owner_path.unwrap_or(&path),
-                    if owner_source_line == 0 {
-                        block_source_line
-                    } else {
-                        owner_source_line
+                    OwnerContext {
+                        container,
+                        path: Some(owner.path.unwrap_or(&path)),
+                        source_line: if owner.source_line == 0 {
+                            block_source_line
+                        } else {
+                            owner.source_line
+                        },
                     },
                 );
             }
@@ -175,13 +195,16 @@ fn collect_blocks(
                 for (item_index, item) in items.iter().enumerate() {
                     let item_path = format!("{path}/item[{item_index}]");
                     collect_blocks(
+                        content,
                         &item.blocks,
                         observed,
                         section,
                         &item_path,
-                        "list-item",
-                        Some(&item_path),
-                        first_block_source_line(&item.blocks),
+                        OwnerContext {
+                            container: "list-item",
+                            path: Some(&item_path),
+                            source_line: first_block_source_line(&item.blocks),
+                        },
                     );
                 }
             }
@@ -205,28 +228,34 @@ fn collect_blocks(
                     }
                     for (term_index, term) in item.terms.iter().enumerate() {
                         collect_inlines(
+                            content,
                             term,
                             observed,
                             section,
                             &format!("{item_path}/term[{term_index}]"),
-                            "definition",
-                            &item_path,
-                            first_block_source_line(&item.description),
+                            OwnerContext {
+                                container: "definition",
+                                path: Some(&item_path),
+                                source_line: first_block_source_line(&item.description),
+                            },
                         );
                     }
                     collect_blocks(
+                        content,
                         &item.description,
                         observed,
                         section,
                         &format!("{item_path}/description"),
-                        "definition",
-                        Some(&item_path),
-                        first_block_source_line(&item.description),
+                        OwnerContext {
+                            container: "definition",
+                            path: Some(&item_path),
+                            source_line: first_block_source_line(&item.description),
+                        },
                     );
                 }
             }
             Block::Table { rows, .. } => {
-                collect_table_cells(rows, observed, section, &path);
+                collect_table_cells(content, rows, observed, section, &path);
             }
             Block::Equation { .. }
             | Block::VerticalSpace { .. }
@@ -237,6 +266,7 @@ fn collect_blocks(
 }
 
 fn collect_table_cells(
+    content: ContentContext<'_>,
     rows: &[mant_ir::TableRow],
     observed: &mut ObservedTargets,
     section: SectionPosition,
@@ -246,26 +276,28 @@ fn collect_table_cells(
         for (cell_index, cell) in row.cells.iter().enumerate() {
             let cell_path = format!("{path}/row[{row_index}]/cell[{cell_index}]");
             collect_blocks(
+                content,
                 &cell.blocks,
                 observed,
                 section,
                 &cell_path,
-                "table-cell",
-                Some(&cell_path),
-                first_block_source_line(&cell.blocks),
+                OwnerContext {
+                    container: "table-cell",
+                    path: Some(&cell_path),
+                    source_line: first_block_source_line(&cell.blocks),
+                },
             );
         }
     }
 }
 
 fn collect_inlines(
+    content: ContentContext<'_>,
     nodes: &[Inline],
     observed: &mut ObservedTargets,
     section: SectionPosition,
     parent_path: &str,
-    container: &'static str,
-    owner_path: &str,
-    owner_source_line: u32,
+    owner: OwnerContext<'_>,
 ) {
     for (index, node) in nodes.iter().enumerate() {
         let path = format!("{parent_path}/inline[{index}]");
@@ -273,19 +305,27 @@ fn collect_inlines(
             Inline::Anchor {
                 id,
                 fragment_aliases,
-                owner_source,
+                point,
             } => {
+                let source = match content
+                    .point(*point)
+                    .expect("valid profile point")
+                    .provenance
+                {
+                    Provenance::Authored { span } => Some(span),
+                    Provenance::Generated { trigger } => trigger,
+                    Provenance::Unknown => None,
+                };
                 record_observed(
                     observed,
                     id.as_str(),
                     fragment_aliases,
                     ObservationLocation {
                         role: ObservedRole::Anchor,
-                        container,
+                        container: owner.container,
                         section,
-                        owner_source_line: owner_source
-                            .map_or(owner_source_line, |source| source.line),
-                        owner_path: owner_path.to_owned(),
+                        owner_source_line: source.map_or(owner.source_line, |source| source.line),
+                        owner_path: owner.path.unwrap_or(parent_path).to_owned(),
                         ir_path: path,
                     },
                 );
@@ -293,24 +333,17 @@ fn collect_inlines(
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {
-                if let Inline::Link {
-                    target: mant_ir::LinkTarget::Section { id },
-                    ..
-                } = node
+                if let Inline::Link { occurrence, .. } = node
+                    && let mant_ir::LinkTarget::Section { id } = &content
+                        .occurrence(*occurrence)
+                        .expect("valid profile occurrence")
+                        .target
                 {
                     observed.section_links.insert(id.to_string());
                 }
-                collect_inlines(
-                    children,
-                    observed,
-                    section,
-                    &path,
-                    container,
-                    owner_path,
-                    owner_source_line,
-                );
+                collect_inlines(content, children, observed, section, &path, owner);
             }
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak { .. } => {}
         }
     }
 }

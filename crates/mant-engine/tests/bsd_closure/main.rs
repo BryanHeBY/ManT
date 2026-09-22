@@ -11,7 +11,7 @@ use fixtures::bsd_manual;
 #[test]
 fn netbsd_drm_decodes_the_authored_caron_name() {
     let document = bsd_manual("netbsd-drm");
-    let authors = block_slice_text(&section(document, "AUTHORS").blocks);
+    let authors = block_slice_text(document.content(), &section(document, "AUTHORS").blocks);
 
     assert!(authors.contains("Jaromír Doleček"), "authors={authors:?}");
     assert!(!authors.contains(r"\[vc]"), "authors={authors:?}");
@@ -20,7 +20,7 @@ fn netbsd_drm_decodes_the_authored_caron_name() {
 #[test]
 fn dragonfly_adduser_carries_sm_off_into_a_display_line() {
     let document = bsd_manual("dragonfly-adduser");
-    let format = block_slice_text(&section(document, "FORMAT").blocks);
+    let format = block_slice_text(document.content(), &section(document, "FORMAT").blocks);
 
     assert!(
         format.contains("name:uid:gid:class:change:expire:gecos:home_dir:shell:password"),
@@ -31,13 +31,14 @@ fn dragonfly_adduser_carries_sm_off_into_a_display_line() {
 #[test]
 fn dragonfly_gdb_preserves_independent_tp_option_declarations() {
     let document = bsd_manual("dragonfly-gdb");
+    let content = document.content();
     let options = section(document, "OPTIONS");
     let aliases = definition_items(options)
         .into_iter()
         .map(|item| {
             item.terms
                 .iter()
-                .map(|term| inline_text(term))
+                .map(|term| inline_text(content, term))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
@@ -86,7 +87,7 @@ fn dragonfly_gdb_restriction_bullets_are_not_semantic_terms() {
 #[test]
 fn openbsd_term_preserves_digits_after_a_signed_legacy_size() {
     let document = bsd_manual("openbsd-current-term");
-    let example = block_slice_text(&section(document, "EXAMPLE").blocks);
+    let example = block_slice_text(document.content(), &section(document, "EXAMPLE").blocks);
 
     assert!(
         example.contains("0000  1a 01 10 00 02 00 03 00  82 00 31 00 61 64 6d 33"),

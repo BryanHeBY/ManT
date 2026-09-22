@@ -15,6 +15,7 @@ fn keeps_section_topology() {
 #[test]
 fn exit_values_retains_literal_o_tags() {
     let doc = archlinux_manual("rsync");
+    let content = doc.content();
     let exit = common::section(doc, "EXIT VALUES");
 
     let has_bullet_list = exit.blocks.iter().any(|block| {
@@ -43,7 +44,7 @@ fn exit_values_retains_literal_o_tags() {
     assert!(common::definition_items(exit).iter().all(|item| {
         item.terms
             .iter()
-            .all(|term| common::inline_text(term) == "o")
+            .all(|term| common::inline_text(content, term) == "o")
     }));
 }
 
@@ -51,8 +52,9 @@ fn exit_values_retains_literal_o_tags() {
 #[test]
 fn exit_values_contain_expected_codes() {
     let doc = archlinux_manual("rsync");
+    let content = doc.content();
     let exit = common::section(doc, "EXIT VALUES");
-    let text = common::block_slice_text(&exit.blocks);
+    let text = common::block_slice_text(content, &exit.blocks);
 
     assert!(text.contains('0'), "exit code 0 missing in: {text:?}");
     assert!(
@@ -93,5 +95,5 @@ fn does_not_leak_roff_markup() {
 /// No duplicate vertical spacing.
 #[test]
 fn does_not_have_duplicate_vertical_spacing() {
-    common::assert_bounded_vertical_spacing(&archlinux_manual("rsync").sections, "archlinux/rsync");
+    common::assert_bounded_vertical_spacing(archlinux_manual("rsync"), "archlinux/rsync");
 }

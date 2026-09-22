@@ -94,7 +94,7 @@ pub fn reference_form_associations(
                 return empty(ReferenceFormAssociationState::Limited(reason));
             }
             if previous.is_some_and(|left| !left.precedes(part))
-                || !valid_slice(context.owner, part)
+                || !valid_slice(occurrence.content, context.owner, part)
             {
                 return empty(ReferenceFormAssociationState::Invalid);
             }
@@ -186,7 +186,11 @@ fn overlapping_paths(part: &[usize], link: &[u32]) -> bool {
         .all(|(left, right)| *left == *right as usize)
 }
 
-fn valid_slice(owner: EntryOwner<'_>, part: &EntryContentSlice) -> bool {
+fn valid_slice(
+    content: crate::ContentContext<'_>,
+    owner: EntryOwner<'_>,
+    part: &EntryContentSlice,
+) -> bool {
     let Some(mut nodes) = owner.inline_root(&part.root) else {
         return false;
     };
@@ -207,7 +211,11 @@ fn valid_slice(owner: EntryOwner<'_>, part: &EntryContentSlice) -> bool {
         if part.path.is_empty() || bytes.start >= bytes.end {
             return false;
         }
-        let [Inline::Text { value } | Inline::Code { value }] = nodes else {
+        let [Inline::Text { content: reference } | Inline::Code { content: reference }] = nodes
+        else {
+            return false;
+        };
+        let Some(value) = content.resolve_text(*reference) else {
             return false;
         };
         value.get(bytes.clone()).is_some()
@@ -235,7 +243,7 @@ mod tests {
             }]
         }]});
         value["blocks"][0]["items"][0]["entry"]["forms"] = forms;
-        serde_json::from_value(value).unwrap()
+        crate::test_support::document_from_legacy_json(value)
     }
 
     #[test]

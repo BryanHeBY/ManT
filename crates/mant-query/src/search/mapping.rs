@@ -4,11 +4,6 @@ use mant_protocol::SearchScope;
 use pulldown_cmark::{Event, Parser, TagEnd};
 use std::ops::Range;
 
-#[cfg(test)]
-pub(super) fn display_markdown_line(line: &str) -> String {
-    LineIndex::new(line).presented_line(line, 0).text
-}
-
 pub(super) struct AnchorStrippedLine {
     pub(super) text: String,
     segments: Vec<OffsetSegment>,
@@ -76,11 +71,6 @@ pub(super) struct LineIndex {
 }
 
 impl LineIndex {
-    #[cfg(test)]
-    pub(super) fn new(text: &str) -> Self {
-        Self::with_anchors(text, Vec::new())
-    }
-
     pub(super) fn with_anchors(text: &str, anchors: Vec<Range<usize>>) -> Self {
         let mut starts = vec![0];
         starts.extend(

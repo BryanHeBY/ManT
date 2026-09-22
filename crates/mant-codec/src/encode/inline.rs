@@ -2,24 +2,51 @@
 
 use std::{borrow::Cow, collections::VecDeque};
 
-use mant_ir::{Inline, LinkTarget};
+use mant_ir::{ContentContext, Inline, InlineView, LinkTarget};
 
 use super::MarkdownOptions;
 
-pub(crate) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    render_inline_content(children, options, false)
+pub(crate) fn render_inline(
+    content: ContentContext<'_>,
+    children: &[Inline],
+    options: MarkdownOptions,
+) -> String {
+    render_inline_content(content, children, options, false)
 }
 
-pub(super) fn render_heading_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    render_inline_content(children, options, true)
+pub(crate) fn render_inline_projected(
+    content: ContentContext<'_>,
+    children: &[Inline],
+    options: MarkdownOptions,
+    ranges: &[std::ops::Range<usize>],
+) -> String {
+    if ranges.is_empty() {
+        return render_inline(content, children, options);
+    }
+    finish_inline(&render_inline_projected_raw(
+        content, children, options, false, ranges, &mut 0, false,
+    ))
+}
+
+pub(super) fn render_heading_inline(
+    content: ContentContext<'_>,
+    children: &[Inline],
+    options: MarkdownOptions,
+) -> String {
+    render_inline_content(content, children, options, true)
 }
 
 fn render_inline_content(
+    content: ContentContext<'_>,
     children: &[Inline],
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    let lines = render_inline_raw(children, options, manual_links)
+    finish_inline(&render_inline_raw(content, children, options, manual_links))
+}
+
+fn finish_inline(rendered: &str) -> String {
+    let lines = rendered
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
         .map(|line| (!line.is_empty()).then(|| protect_block_prefix(line)))
@@ -43,21 +70,136 @@ fn render_inline_content(
     output
 }
 
-pub(super) fn flatten_inline(children: &[Inline]) -> String {
-    let mut output = String::new();
-    for child in children {
-        match child {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => {
-                output.push_str(&flatten_inline(children));
+fn render_inline_projected_raw(
+    content: ContentContext<'_>,
+    nodes: &[Inline],
+    options: MarkdownOptions,
+    manual_links: bool,
+    ranges: &[std::ops::Range<usize>],
+    cursor: &mut usize,
+    already_strong: bool,
+) -> String {
+    let mut pieces = Vec::new();
+    for node in nodes {
+        match content
+            .inline(node)
+            .expect("validated document content resolves through its content store")
+        {
+            InlineView::Text(value) => {
+                push_projected_leaf(&mut pieces, value, false, ranges, cursor, already_strong);
             }
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
+            InlineView::Code(value) => {
+                push_projected_leaf(&mut pieces, value, true, ranges, cursor, already_strong);
+            }
+            InlineView::Strong(children) => {
+                let rendered = render_inline_projected_raw(
+                    content,
+                    children,
+                    options,
+                    manual_links,
+                    ranges,
+                    cursor,
+                    true,
+                );
+                pieces.push(InlinePiece::styled(rendered, "**", "__"));
+            }
+            InlineView::Emphasis(children) => {
+                let rendered = render_inline_projected_raw(
+                    content,
+                    children,
+                    options,
+                    manual_links,
+                    ranges,
+                    cursor,
+                    already_strong,
+                );
+                pieces.push(InlinePiece::styled(rendered, "*", "_"));
+            }
+            InlineView::Link(link) => {
+                let label = render_inline_projected_raw(
+                    content,
+                    link.children(),
+                    options,
+                    manual_links,
+                    ranges,
+                    cursor,
+                    already_strong,
+                );
+                pieces.push(InlinePiece::plain(render_typed_link_label(
+                    link.target(),
+                    link.title(),
+                    label,
+                    options,
+                    manual_links,
+                )));
+            }
+            InlineView::Anchor(anchor) if options.preserve_anchors => {
+                pieces.push(InlinePiece::plain(html_anchors(
+                    anchor.id(),
+                    anchor.fragment_aliases(),
+                )));
+            }
+            InlineView::Anchor(_) => {}
+            InlineView::LineBreak => {
+                *cursor = cursor.saturating_add(1);
+                pieces.push(InlinePiece::plain("\n".to_owned()));
+            }
+            _ => unreachable!("all inline views are handled"),
         }
     }
-    output
+    render_inline_pieces(&mut pieces)
+}
+
+fn push_projected_leaf(
+    pieces: &mut Vec<InlinePiece>,
+    value: &str,
+    code: bool,
+    ranges: &[std::ops::Range<usize>],
+    cursor: &mut usize,
+    already_strong: bool,
+) {
+    let start = *cursor;
+    let end = start.saturating_add(value.chars().count());
+    let mut boundaries = vec![start, end];
+    for range in ranges {
+        if start < range.start && range.start < end {
+            boundaries.push(range.start);
+        }
+        if start < range.end && range.end < end {
+            boundaries.push(range.end);
+        }
+    }
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    let byte_offsets = std::iter::once(0)
+        .chain(value.char_indices().skip(1).map(|(offset, _)| offset))
+        .chain(std::iter::once(value.len()))
+        .collect::<Vec<_>>();
+    for pair in boundaries.windows(2) {
+        let scalar_start = pair[0];
+        let scalar_end = pair[1];
+        let fragment = &value[byte_offsets[scalar_start - start]..byte_offsets[scalar_end - start]];
+        let rendered = if code {
+            code_span(fragment)
+        } else {
+            escape_text(fragment)
+        };
+        let matched = ranges
+            .iter()
+            .any(|range| range.start < scalar_end && scalar_start < range.end);
+        pieces.push(if matched && !already_strong {
+            InlinePiece::styled(rendered, "**", "__")
+        } else {
+            InlinePiece::plain(rendered)
+        });
+    }
+    *cursor = end;
+}
+
+pub(super) fn flatten_inline(content: ContentContext<'_>, children: &[Inline]) -> String {
+    content
+        .plain_text(children)
+        .expect("validated document content resolves through its content store")
 }
 
 pub(crate) fn escape_text(value: &str) -> String {
@@ -163,69 +305,96 @@ impl InlinePiece {
     }
 }
 
-fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: bool) -> String {
+fn render_inline_raw(
+    content: ContentContext<'_>,
+    nodes: &[Inline],
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
     let mut pieces = Vec::with_capacity(nodes.len());
     let mut index = 0;
     while let Some(child) = nodes.get(index) {
-        match child {
-            Inline::Text { value } => {
+        match content
+            .inline(child)
+            .expect("validated document content resolves through its content store")
+        {
+            InlineView::Text(value) => {
                 // AST text segmentation must not change delimiter decisions.
                 // Merge only transparent text siblings: crossing a style or
                 // link would ignore real emitted Markdown punctuation.
-                let mut text = Cow::Borrowed(value.as_str());
+                let mut text = Cow::Borrowed(value);
                 index += 1;
-                while let Some(Inline::Text { value }) = nodes.get(index) {
+                while let Some(value) = nodes.get(index).and_then(|node| {
+                    match content
+                        .inline(node)
+                        .expect("validated document content resolves through its content store")
+                    {
+                        InlineView::Text(value) => Some(value),
+                        _ => None,
+                    }
+                }) {
                     text.to_mut().push_str(value);
                     index += 1;
                 }
                 pieces.push(InlinePiece::plain(escape_text(&text)));
                 continue;
             }
-            Inline::Strong {
-                children: styled_children,
-            } => {
-                let mut rendered = render_inline_raw(styled_children, options, manual_links);
+            InlineView::Strong(styled_children) => {
+                let mut rendered =
+                    render_inline_raw(content, styled_children, options, manual_links);
                 index += 1;
-                while let Some(Inline::Strong { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options, manual_links));
+                while let Some(children) = nodes.get(index).and_then(|node| {
+                    match content
+                        .inline(node)
+                        .expect("validated document content resolves through its content store")
+                    {
+                        InlineView::Strong(children) => Some(children),
+                        _ => None,
+                    }
+                }) {
+                    rendered.push_str(&render_inline_raw(content, children, options, manual_links));
                     index += 1;
                 }
                 pieces.push(InlinePiece::styled(rendered, "**", "__"));
                 continue;
             }
-            Inline::Emphasis {
-                children: styled_children,
-            } => {
-                let mut rendered = render_inline_raw(styled_children, options, manual_links);
+            InlineView::Emphasis(styled_children) => {
+                let mut rendered =
+                    render_inline_raw(content, styled_children, options, manual_links);
                 index += 1;
-                while let Some(Inline::Emphasis { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options, manual_links));
+                while let Some(children) = nodes.get(index).and_then(|node| {
+                    match content
+                        .inline(node)
+                        .expect("validated document content resolves through its content store")
+                    {
+                        InlineView::Emphasis(children) => Some(children),
+                        _ => None,
+                    }
+                }) {
+                    rendered.push_str(&render_inline_raw(content, children, options, manual_links));
                     index += 1;
                 }
                 pieces.push(InlinePiece::styled(rendered, "*", "_"));
                 continue;
             }
-            Inline::Code { value } => pieces.push(InlinePiece::plain(code_span(value))),
-            Inline::Link {
-                target,
-                title,
-                children,
-            } => pieces.push(InlinePiece::plain(render_typed_link(
-                target,
-                title.as_deref(),
-                children,
+            InlineView::Code(value) => pieces.push(InlinePiece::plain(code_span(value))),
+            InlineView::Link(link) => pieces.push(InlinePiece::plain(render_typed_link(
+                content,
+                link.target(),
+                link.title(),
+                link.children(),
                 options,
                 manual_links,
             ))),
-            Inline::Anchor {
-                id,
-                fragment_aliases,
-                ..
-            } if options.preserve_anchors => {
-                pieces.push(InlinePiece::plain(html_anchors(id, fragment_aliases)));
+            InlineView::Anchor(anchor) if options.preserve_anchors => {
+                pieces.push(InlinePiece::plain(html_anchors(
+                    anchor.id(),
+                    anchor.fragment_aliases(),
+                )));
             }
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => pieces.push(InlinePiece::plain("\n".to_owned())),
+            InlineView::Anchor(_) => {}
+            InlineView::LineBreak => pieces.push(InlinePiece::plain("\n".to_owned())),
+            _ => unreachable!("all inline views are handled"),
         }
         index += 1;
     }
@@ -362,15 +531,16 @@ fn render_styled(
 }
 
 fn render_link(
+    content: ContentContext<'_>,
     target: &str,
     title: Option<&str>,
     children: &[Inline],
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    let label = render_inline_raw(children, options, manual_links);
+    let label = render_inline_raw(content, children, options, manual_links);
     if (target.starts_with("http://") || target.starts_with("https://"))
-        && flatten_inline(children) == target
+        && flatten_inline(content, children) == target
         && !target.chars().any(char::is_whitespace)
         && !target.contains(['<', '>'])
     {
@@ -390,6 +560,7 @@ fn render_link(
 /// Share target serialization while keeping portable body and loss-preserving
 /// heading policy explicit. No target is recovered from visible label text.
 fn render_typed_link(
+    content: ContentContext<'_>,
     target: &LinkTarget,
     title: Option<&str>,
     children: &[Inline],
@@ -405,8 +576,44 @@ fn render_typed_link(
         _ => target.to_uri(),
     };
     destination.map_or_else(
-        || render_inline_raw(children, options, manual_links),
-        |destination| render_link(&destination, title, children, options, manual_links),
+        || render_inline_raw(content, children, options, manual_links),
+        |destination| {
+            render_link(
+                content,
+                &destination,
+                title,
+                children,
+                options,
+                manual_links,
+            )
+        },
+    )
+}
+
+fn render_typed_link_label(
+    target: &LinkTarget,
+    title: Option<&str>,
+    label: String,
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
+    let destination = match target {
+        LinkTarget::External { uri } => Some(uri.clone()),
+        LinkTarget::Manual { .. } if !manual_links => None,
+        LinkTarget::Section { .. } if !options.preserve_anchors => None,
+        _ => target.to_uri(),
+    };
+    let Some(target) = destination else {
+        return label;
+    };
+    let target = target
+        .replace('\\', "\\\\")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
+        .replace(' ', "%20");
+    title.map_or_else(
+        || format!("[{label}]({target})"),
+        |title| format!("[{label}]({target} \"{}\")", title.replace('"', "\\\"")),
     )
 }
 

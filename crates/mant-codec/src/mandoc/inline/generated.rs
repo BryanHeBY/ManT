@@ -22,7 +22,7 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
     if block
         && let Some(target) = super::super::targets::part_target_with_source(node, NodeKind::Head)
     {
-        builder.append(vec![target.into_inline()]);
+        builder.append(vec![target.into_draft()]);
     }
     builder.with_font_scope(Font::Strong, |builder| {
         append_inline_nodes(builder, head, name);

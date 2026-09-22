@@ -15,12 +15,15 @@ fn no_break_flush_releases_a_word_boundary_after_fixed_run_in_cells() {
         );
 
         let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower run-in margin");
-        let item = first_definition_item(query.document.as_ref().unwrap());
+        let document = query.document.as_ref().unwrap();
+        let item = first_definition_item(document);
         let description = item
             .description
             .iter()
             .find_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                Block::Paragraph { children, .. } => {
+                    Some(super::inline_text(document.content(), children))
+                }
                 _ => None,
             })
             .expect("run-in description");
@@ -137,7 +140,9 @@ fn invisible_formatter_fields_still_own_their_empty_word_boundary() {
             .blocks
             .iter()
             .find_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                Block::Paragraph { children, .. } => {
+                    Some(super::inline_text(document.content(), children))
+                }
                 _ => None,
             })
             .expect("description paragraph");
@@ -184,12 +189,15 @@ fn run_in_no_break_flush_preserves_fixed_and_pending_cells() {
             "native {style} {head:?}: {native:?}"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower run-in cells");
-        let item = first_definition_item(query.document.as_ref().unwrap());
+        let document = query.document.as_ref().unwrap();
+        let item = first_definition_item(document);
         let description = item
             .description
             .iter()
             .find_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                Block::Paragraph { children, .. } => {
+                    Some(super::inline_text(document.content(), children))
+                }
                 _ => None,
             })
             .expect("run-in description");
@@ -223,7 +231,11 @@ fn repeated_authored_section_titles_remain_ambiguous() {
     );
 
     for id in ["details", "details-2"] {
-        let mut link = AuthoredSectionLink { id, found: false };
+        let mut link = AuthoredSectionLink {
+            id,
+            found: false,
+            content: document.content(),
+        };
         link.visit_document(document);
         assert!(!link.found, "ambiguous authored title resolved to {id}");
     }
@@ -271,7 +283,7 @@ fn font_stack_divergence_is_pinned_in_native_html_and_lowered_ir() {
     assert!(native.contains("<b>TAIL</b>"), "native HTML: {native}");
 
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower the font-stack case");
-    let mut strong_tail = StrongText(false);
+    let mut strong_tail = StrongText(false, query.document.as_ref().unwrap().content());
     strong_tail.visit_document(query.document.as_ref().expect("lowered document"));
     assert!(strong_tail.0, "lowered IR did not retain bold TAIL");
 }

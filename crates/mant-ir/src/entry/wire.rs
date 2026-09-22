@@ -8,7 +8,12 @@ fn cases() -> Value {
 }
 
 fn definition() -> Value {
-    cases()["definition"]["new"].clone()
+    let mut value = cases()["definition"]["new"].clone();
+    value["terms"][0][0] = json!({
+        "type": "code",
+        "content": {"atom": 1, "bytes": {"start": 0, "end": 7}}
+    });
+    value
 }
 
 fn reject_fields<T: DeserializeOwned>(value: &Value, fields: &Value) {
@@ -90,7 +95,15 @@ fn facts_are_closed_but_content_references_are_semantically_validated() {
     bad_reference["forms"][0]["parts"][0]["root"]["index"] = json!(999);
     let mut owner: DefinitionItem = serde_json::from_value(definition()).unwrap();
     owner.entry = Some(serde_json::from_value(bad_reference).unwrap());
-    assert!(crate::EntryOwner::Definition(&owner).forms().is_none());
+    let mut fixture = crate::test_support::ContentFixture::body();
+    let _ = fixture.code("-o FILE");
+    assert!(
+        fixture
+            .content()
+            .entry_forms(crate::EntryOwner::Definition(&owner))
+            .unwrap()
+            .is_none()
+    );
     for kind in [
         json!("option"),
         json!({"kind":"command","unknown":null}),

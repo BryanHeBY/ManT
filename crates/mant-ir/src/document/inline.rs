@@ -1,6 +1,5 @@
 //! Inline content and typed navigation intent, independent of host actions.
-use super::SourceSpan;
-use crate::NodeId;
+use crate::{ContentAtomKey, ContentPointKey, ContentRef, LinkOccurrenceKey, NodeId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -14,8 +13,8 @@ use serde::{Deserialize, Serialize};
 pub enum Inline {
     /// Plain visible text.
     Text {
-        /// Text after source escape processing.
-        value: String,
+        /// Checked slice of the authoritative logical atom.
+        content: ContentRef,
     },
     /// Strongly emphasized content.
     Strong {
@@ -29,8 +28,8 @@ pub enum Inline {
     },
     /// Literal code or symbolic token.
     Code {
-        /// Literal text value.
-        value: String,
+        /// Checked slice of the authoritative logical atom.
+        content: ContentRef,
     },
     /// A typed link whose navigation semantics are explicit in the IR.
     ///
@@ -38,11 +37,8 @@ pub enum Inline {
     /// Section targets remain local, while external and email targets require a
     /// host action and never expand a documentation scope.
     Link {
-        /// Typed navigation destination.
-        target: LinkTarget,
-        /// Optional advisory title.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        title: Option<String>,
+        /// Logical occurrence shared by every structural fragment.
+        occurrence: LinkOccurrenceKey,
         /// Visible linked content.
         children: Vec<Inline>,
     },
@@ -50,54 +46,53 @@ pub enum Inline {
     ///
     /// Anchor IDs and section IDs share one namespace within a document.
     Anchor {
+        /// Exact zero-width logical position.
+        point: ContentPointKey,
         /// Document-local destination identity.
         id: NodeId,
         /// Exact source fragments resolving to this normalized identity.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         fragment_aliases: Vec<crate::FragmentAlias>,
-        /// Source location of the addressable owner receiving this target.
-        ///
-        /// For a standalone target this is the target request itself; when a
-        /// parser attaches the target to a paragraph, definition, list item,
-        /// or table cell, it is that owning construct's location.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        owner_source: Option<SourceSpan>,
     },
     /// Hard line break that renderers must preserve.
-    LineBreak,
+    LineBreak {
+        /// Authoritative linked or unlinked hard-break atom.
+        atom: ContentAtomKey,
+    },
 }
 
 impl Inline {
     /// Construct a normalized local anchor without source-authored aliases.
     #[must_use]
-    pub fn anchor(id: impl Into<NodeId>) -> Self {
+    pub fn anchor(point: ContentPointKey, id: impl Into<NodeId>) -> Self {
         Self::Anchor {
+            point,
             id: id.into(),
             fragment_aliases: Vec::new(),
-            owner_source: None,
         }
     }
 
     /// Construct a normalized local anchor at its addressable source owner.
     #[must_use]
-    pub fn anchor_at(id: impl Into<NodeId>, owner_source: Option<SourceSpan>) -> Self {
+    pub fn anchor_at(point: ContentPointKey, id: impl Into<NodeId>) -> Self {
         Self::Anchor {
+            point,
             id: id.into(),
             fragment_aliases: Vec::new(),
-            owner_source,
         }
     }
 
     /// Construct a normalized local anchor with exact source fragments.
     #[must_use]
     pub fn anchor_with_aliases(
+        point: ContentPointKey,
         id: impl Into<NodeId>,
         fragment_aliases: Vec<crate::FragmentAlias>,
     ) -> Self {
         Self::Anchor {
+            point,
             id: id.into(),
             fragment_aliases,
-            owner_source: None,
         }
     }
 }

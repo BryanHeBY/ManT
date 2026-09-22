@@ -130,10 +130,35 @@ fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
 
 #[test]
 fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
+    let mut store = mant_ir::ContentStoreBuilder::new();
+    let owner = store.push_owner(
+        mant_ir::ContentOwnerKind::Section,
+        mant_ir::Provenance::Unknown,
+    );
+    let root = store.push_root(
+        owner,
+        mant_ir::ContentRootKind::Heading,
+        mant_ir::Provenance::Unknown,
+    );
+    let heading = store.push_text(
+        root,
+        "Common options".into(),
+        None,
+        mant_ir::ContentStyle::default(),
+        None,
+        None,
+        mant_ir::Provenance::Unknown,
+    );
+    let content_projection = mant_ir::ContentProjection {
+        content_store: store.finish(),
+    };
     let section = Section {
         id: "common-3".to_owned().into(),
         fragment_aliases: Vec::new(),
-        heading: "Common options".into(),
+        heading: mant_ir::Heading {
+            content: vec![Inline::Text { content: heading }],
+            source: None,
+        },
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
@@ -153,6 +178,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         source_context: Some(source(SourceFormat::Man, "/man/demo.1")),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
+        content_projection: Some(content_projection),
         selections: vec![ExcerptSelection::DocumentSection {
             outline: OutlineTrail {
                 ancestors: vec![OutlineReference {
@@ -163,7 +189,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
                 node: OutlineNodeReference::DocumentSection {
                     path: "2.1".to_owned().into(),
                     id: section.id.clone(),
-                    title: section.heading.plain_text(),
+                    title: "Common options".to_owned(),
                 },
             },
             section,
@@ -180,6 +206,16 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     assert_eq!(value["selections"][0]["outline"]["node"]["path"], "2.1");
     assert_eq!(value["selections"][0]["section"]["id"], "common-3");
     assert!(value.get("diagnostics").is_none());
+    serde_json::from_value::<QueryExcerpt>(value.clone()).expect("closed projection");
+    let mut missing = value.clone();
+    missing
+        .as_object_mut()
+        .expect("excerpt object")
+        .remove("contentProjection");
+    assert!(serde_json::from_value::<QueryExcerpt>(missing).is_err());
+    let mut dangling = value;
+    dangling["selections"][0]["section"]["heading"]["content"][0]["content"]["atom"] = 2.into();
+    assert!(serde_json::from_value::<QueryExcerpt>(dangling).is_err());
 }
 
 #[test]
@@ -217,6 +253,9 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         source_context: Some(source(SourceFormat::Man, "/man/demo.1")),
         meta: None,
         diagnostics: Vec::new(),
+        content_projection: Some(mant_ir::ContentProjection {
+            content_store: mant_ir::ContentStore::default(),
+        }),
         selections: vec![ExcerptSelection::DocumentEntry {
             outline: OutlineTrail {
                 ancestors: Vec::new(),
@@ -251,10 +290,27 @@ fn excerpt_contract_can_return_one_semantic_definition() {
 
 #[test]
 fn document_root_contract_addresses_content_before_the_first_heading() {
+    let mut store = mant_ir::ContentStoreBuilder::new();
+    let owner = store.push_owner(
+        mant_ir::ContentOwnerKind::Document,
+        mant_ir::Provenance::Unknown,
+    );
+    let root = store.push_root(
+        owner,
+        mant_ir::ContentRootKind::Body,
+        mant_ir::Provenance::Unknown,
+    );
+    let preface = store.push_text(
+        root,
+        "Document preface.".into(),
+        None,
+        mant_ir::ContentStyle::default(),
+        None,
+        None,
+        mant_ir::Provenance::Unknown,
+    );
     let blocks = vec![Block::Paragraph {
-        children: vec![Inline::Text {
-            value: "Document preface.".to_owned(),
-        }],
+        children: vec![Inline::Text { content: preface }],
         layout: LayoutHint::default(),
         source: None,
     }];
@@ -288,6 +344,9 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         source_context: outline.source_context.clone(),
         meta: outline.meta.clone(),
         diagnostics: Vec::new(),
+        content_projection: Some(mant_ir::ContentProjection {
+            content_store: store.finish(),
+        }),
         selections: vec![ExcerptSelection::DocumentRoot {
             heading: None,
             outline: OutlineTrail {
@@ -308,8 +367,12 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
     assert_eq!(outline["nodes"][0]["path"], "root");
     assert_eq!(excerpt["selections"][0]["kind"], "document-root");
     assert_eq!(
-        excerpt["selections"][0]["blocks"][0]["children"][0]["value"],
+        excerpt["contentProjection"]["contentStore"]["atoms"][0]["text"],
         "Document preface."
+    );
+    assert_eq!(
+        excerpt["selections"][0]["blocks"][0]["children"][0]["content"]["atom"],
+        1
     );
 }
 
@@ -353,6 +416,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         source_context: None,
         meta: None,
         diagnostics: Vec::new(),
+        content_projection: None,
         selections: vec![ExcerptSelection::Tldr {
             outline: OutlineTrail {
                 ancestors: Vec::new(),

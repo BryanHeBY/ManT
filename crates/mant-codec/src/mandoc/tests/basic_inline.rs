@@ -14,7 +14,7 @@ fn zero_advance_crosses_alternating_man_macro_arguments() {
     // `\\zX` writes X without advancing. CVS term.c later writes B at that
     // same position even though the operands are separate `term_word()`
     // calls, so the semantic projection must be AB rather than AXB.
-    assert_eq!(inline_text(children), "AB");
+    assert_eq!(inline_text(document.content(), children), "AB");
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn zero_advance_projects_implicit_words_and_generated_op_brackets_in_output_orde
     // preserves X without making the blank visible. man_term.c emits `.OP`
     // brackets through term_word(), so B and ] respectively overprint or
     // preserve the pending glyph according to their actual output order.
-    assert_eq!(inline_text(children), "AXB [AXB] [A]");
+    assert_eq!(inline_text(document.content(), children), "AXB [AXB] [A]");
 }
 
 #[test]
@@ -76,11 +76,16 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
                 document.sections[0].blocks
             );
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         if label == "link-label" {
             assert!(
-                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Text { value: glyph }, Inline::Link { .. }]
-                    if prefix == "A" && glyph == "X"),
+                matches!(children.as_slice(), [Inline::Text { content: prefix }, Inline::Text { content: glyph }, Inline::Link { .. }]
+                    if document.content().resolve_text(*prefix) == Some("A")
+                        && document.content().resolve_text(*glyph) == Some("X")),
                 "the pending glyph must precede the atomically lowered link: {children:?}"
             );
         }

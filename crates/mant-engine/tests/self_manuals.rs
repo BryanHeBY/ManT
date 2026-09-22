@@ -3,7 +3,10 @@
 mod semantic_read;
 
 use mant_codec::encode::render_markdown;
-use mant_ir::{TldrCommandPart, TldrOrigin};
+use mant_ir::{
+    ContentOwnerKind, ContentRootKind, ContentStore, ContentStoreBuilder, ContentStyle, Provenance,
+    TldrCommandPart, TldrOrigin,
+};
 use mant_loader::load_markdown_text;
 use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
 use mant_query::build_outline_with_detail;
@@ -16,10 +19,70 @@ const IR_MANUAL: &str = include_str!("../../../docs/manuals/mant-ir.md");
 const MARKDOWN_MANUAL: &str = include_str!("../../../docs/manuals/mant-markdown.md");
 const ROFF_MANUAL: &str = include_str!("../../../docs/manuals/mant-roff.md");
 
+fn protocol_owner_example_store(definition: bool) -> ContentStore {
+    // The manual deliberately presents fragments. Supply their documented
+    // enclosing store in this test so every key and slice is checked.
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(
+        if definition {
+            ContentOwnerKind::DefinitionItem
+        } else {
+            ContentOwnerKind::ListItem
+        },
+        Provenance::Unknown,
+    );
+    let head = builder.push_root(
+        owner,
+        if definition {
+            ContentRootKind::Term
+        } else {
+            ContentRootKind::Body
+        },
+        Provenance::Unknown,
+    );
+    let first = builder.push_text(
+        head,
+        "--exclude=PATTERN".into(),
+        None,
+        ContentStyle {
+            literal: true,
+            ..ContentStyle::default()
+        },
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    assert_eq!(first.bytes.end, 17);
+    let body = if definition {
+        builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown)
+    } else {
+        head
+    };
+    let second = builder.push_text(
+        body,
+        if definition {
+            "Exclude the pattern."
+        } else {
+            "  Exclude the pattern."
+        }
+        .into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    assert_eq!(second.bytes.end, if definition { 20 } else { 22 });
+    builder.finish()
+}
+
 #[test]
 fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
     let manual = PROTOCOL_REFERENCE.replace("\r\n", "\n");
-    for label in ["Definition-owner example:", "Ordinary-list-owner example:"] {
+    for label in [
+        "Definition-owner fragment (",
+        "Ordinary-list-owner fragment (",
+    ] {
         let json = manual
             .split_once(label)
             .unwrap()
@@ -34,12 +97,23 @@ fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
         let block: mant_ir::Block = serde_json::from_value(value.clone()).unwrap();
         let mut document = load_markdown_text("Body.", None).unwrap().document.unwrap();
         document.blocks = vec![block.clone()];
+        let store = protocol_owner_example_store(value["type"] == "definition-list");
+        document.content_store = store.clone();
         assert!(mant_ir::validate_document(&document).is_empty(), "{label}");
         let roundtrip: mant_ir::Block =
             serde_json::from_str(&serde_json::to_string(&block).unwrap()).unwrap();
         assert_eq!(block, roundtrip);
         let owner = block.entry_owner().unwrap();
-        assert_eq!(owner.forms().unwrap().iter().count(), 1);
+        assert_eq!(
+            document
+                .content()
+                .entry_forms(owner)
+                .unwrap()
+                .unwrap()
+                .iter()
+                .count(),
+            1
+        );
         assert_eq!(owner.facts().unwrap().names, ["--exclude"]);
         let envelope = serde_json::json!({
             "schema":"mant.document/v0.12", "producer":{"name":"test","version":"0"},
@@ -50,7 +124,7 @@ fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
                 "decodedByteLength":0,
                 "coordinates":{"kind":"decoded-utf8-bytes"}
             }],
-            "rootSource":1, "meta":{}, "sections":[], "blocks":[value.clone()]
+            "rootSource":1, "contentStore":store, "meta":{}, "sections":[], "blocks":[value.clone()]
         });
         let response: mant_protocol::DocumentResponse = serde_json::from_value(envelope).unwrap();
         assert_eq!(response.blocks, [block]);
@@ -154,7 +228,7 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         "{name} has a navigable outline"
     );
     assert_eq!(
-        document.sections[0].heading.plain_text(),
+        document.sections[0].heading.plain_text(document.content()),
         "Name",
         "{name} begins its manual body with a conventional Name section"
     );
@@ -369,7 +443,8 @@ fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
         document
             .sections
             .iter()
-            .any(|section| section.heading.plain_text() == "Document Response and IR Projection")
+            .any(|section| section.heading.plain_text(document.content())
+                == "Document Response and IR Projection")
     );
 
     let examples = json_fenced_examples(PROTOCOL_REFERENCE);
@@ -396,7 +471,11 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
             .expect("reference manual query");
         let document = query.document.as_ref().expect("reference manual body");
         assert_eq!(document.display_title().as_deref(), Some(title), "{name}");
-        assert_eq!(document.sections[0].heading.plain_text(), "Name", "{name}");
+        assert_eq!(
+            document.sections[0].heading.plain_text(document.content()),
+            "Name",
+            "{name}"
+        );
         assert!(
             document.diagnostics.is_empty(),
             "{name} must stay inside the supported Markdown subset: {:?}",
@@ -406,7 +485,7 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
             document
                 .sections
                 .iter()
-                .any(|section| section.heading.plain_text() == "See Also"),
+                .any(|section| section.heading.plain_text(document.content()) == "See Also"),
             "{name} should end with conventional cross references"
         );
     }

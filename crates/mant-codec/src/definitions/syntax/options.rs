@@ -3,17 +3,27 @@ use super::forms;
 use crate::definitions::RecognizedName;
 #[cfg(test)]
 use mant_ir::DefinitionItem;
-use mant_ir::Inline;
 use mant_ir::inline_plain_text as plain_text;
+use mant_ir::{ContentContext, Inline};
 
 #[cfg(test)]
-pub(in crate::definitions) fn option_names(item: &DefinitionItem) -> Vec<String> {
-    option_names_from_terms(&item.terms)
+pub(in crate::definitions) fn option_names(
+    content: ContentContext<'_>,
+    item: &DefinitionItem,
+) -> Vec<String> {
+    option_names_from_terms(content, &item.terms)
 }
 
-pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
+#[cfg(test)]
+pub(crate) fn option_names_from_terms(
+    content: ContentContext<'_>,
+    terms: &[Vec<Inline>],
+) -> Vec<String> {
     let mut names = Vec::new();
-    for found in option_occurrences_from_terms(terms).into_iter().flatten() {
+    for found in option_occurrences_from_terms(content, terms)
+        .into_iter()
+        .flatten()
+    {
         if !names.contains(&found.name) {
             names.push(found.name);
         }
@@ -21,11 +31,14 @@ pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     names
 }
 
-pub(crate) fn option_occurrences_from_terms(terms: &[Vec<Inline>]) -> Vec<Vec<RecognizedName>> {
+fn recognize_option_occurrences_from_terms(
+    content: ContentContext<'_>,
+    terms: &[Vec<Inline>],
+) -> Vec<Vec<RecognizedName>> {
     terms
         .iter()
         .map(|term| {
-            forms::AuthoredForm::new(term)
+            forms::AuthoredForm::new(content, term)
                 .option_candidates()
                 .filter_map(|candidate| {
                     let (token, start) = candidate.invocation_token()?;
@@ -36,13 +49,47 @@ pub(crate) fn option_occurrences_from_terms(terms: &[Vec<Inline>]) -> Vec<Vec<Re
         .collect()
 }
 
+#[cfg(test)]
+pub(crate) fn option_occurrences_from_terms(
+    content: ContentContext<'_>,
+    terms: &[Vec<Inline>],
+) -> Vec<Vec<RecognizedName>> {
+    recognize_option_occurrences_from_terms(content, terms)
+}
+
+/// Recognize the option declarations in one complete literal leaf.
+///
+/// Markdown entry discovery uses this instead of manufacturing a detached
+/// `Inline::Code` node with its own copy of the visible text.
+pub(crate) fn option_occurrences_from_literal(value: &str) -> Vec<RecognizedName> {
+    forms::literal_option_tokens(value)
+        .into_iter()
+        .filter_map(|(token, start)| {
+            Some(RecognizedName::contiguous(option_prefix(&token)?, start))
+        })
+        .collect()
+}
+
+pub(crate) fn option_names_from_literal(value: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for found in option_occurrences_from_literal(value) {
+        if !names.contains(&found.name) {
+            names.push(found.name);
+        }
+    }
+    names
+}
+
 /// A validated native Fl head proves punctuation is invocation spelling.
 /// Read it before generic separator grouping can treat the comma in `-,` as
 /// alias punctuation; styled arguments still stop the literal prefix.
-pub(super) fn native_option_occurrences(terms: &[Vec<Inline>]) -> Vec<Vec<RecognizedName>> {
-    let mut result = option_occurrences_from_terms(terms);
+pub(super) fn native_option_occurrences(
+    content: ContentContext<'_>,
+    terms: &[Vec<Inline>],
+) -> Vec<Vec<RecognizedName>> {
+    let mut result = recognize_option_occurrences_from_terms(content, terms);
     for (term, names) in terms.iter().zip(&mut result) {
-        let prefix = forms::literal_prefix(term);
+        let prefix = forms::literal_prefix(content, term);
         let Some(token) = prefix.split_whitespace().next() else {
             continue;
         };
@@ -64,11 +111,12 @@ pub(super) fn native_option_occurrences(terms: &[Vec<Inline>]) -> Vec<Vec<Recogn
 }
 
 pub(in crate::definitions) fn parameter_occurrences(
+    content: ContentContext<'_>,
     terms: &[Vec<Inline>],
 ) -> Vec<Vec<RecognizedName>> {
-    let mut found = option_occurrences_from_terms(terms);
+    let mut found = recognize_option_occurrences_from_terms(content, terms);
     for (term, names) in terms.iter().zip(&mut found) {
-        let text = plain_text(term);
+        let text = plain_text(content, term);
         let Some(token) = text.split_whitespace().next() else {
             continue;
         };
@@ -140,4 +188,20 @@ pub(in crate::definitions) fn is_option_name_body(value: &str) -> bool {
                 .chars()
                 .any(|character| character.is_ascii_alphanumeric() || character == '?')
     })
+}
+
+#[cfg(test)]
+mod literal_tests {
+    use super::{option_names_from_literal, option_occurrences_from_literal};
+
+    #[test]
+    fn literal_entry_api_preserves_alias_argument_and_pair_rules() {
+        assert_eq!(option_names_from_literal("-h, --help"), ["-h", "--help"]);
+        assert_eq!(option_names_from_literal("--set=KEY,VALUE"), ["--set"]);
+        assert_eq!(
+            option_names_from_literal("-q or --quiet"),
+            ["-q", "--quiet"]
+        );
+        assert!(option_occurrences_from_literal("ordinary prose").is_empty());
+    }
 }

@@ -4,7 +4,7 @@ use libmandoc_rs::AuthorMode;
 use super::inline::{AuthorBreakEffect, FontState, InlineBuilder, PreservedInlineState};
 
 pub(super) struct FinishedInlineLine {
-    pub(super) output: Vec<mant_ir::Inline>,
+    pub(super) output: Vec<super::inline::DraftInline>,
     pub(super) definition_field_exited: bool,
     pub(super) definition_body_gap_consumed: bool,
 }
@@ -92,7 +92,7 @@ impl FormatterState {
     pub(super) fn finish_inline_scope(
         &mut self,
         builder: InlineBuilder,
-    ) -> (Vec<mant_ir::Inline>, PreservedInlineState) {
+    ) -> (Vec<super::inline::DraftInline>, PreservedInlineState) {
         self.inherit_inline_registers(&builder);
         self.zero_advance_armed = false;
         builder.finish_preserving_execution()

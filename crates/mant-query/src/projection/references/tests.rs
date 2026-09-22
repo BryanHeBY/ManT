@@ -1,27 +1,113 @@
 use super::*;
-use mant_ir::{ContentReveal, Inline};
+use mant_ir::{
+    ContentOwnerKind, ContentReveal, ContentRootKind, ContentStoreBuilder, ContentStyle,
+    FragmentAlias, Inline, LinkOccurrenceKey, PointBoundary, Provenance,
+};
 use mant_protocol::{
     LoadedFragment, ReferenceCoverageStatus, ReferenceResolution, UnloadedFragment,
 };
 use serde_json::{Value, json};
 
 fn document(children: Vec<Value>) -> Document {
-    let mut value = json!({
-        "parser": null,
-        "sources": [{
-            "key": 1,
-            "identity": {"kind": "anonymous", "name": "test"},
-            "format": "markdown",
-            "decodedByteLength": 0,
-            "coordinates": {"kind": "decoded-utf8-bytes"}
+    fn lower(
+        builder: &mut ContentStoreBuilder,
+        owner: mant_ir::ContentOwnerKey,
+        root: mant_ir::ContentRootKey,
+        value: &Value,
+        active_link: Option<LinkOccurrenceKey>,
+    ) -> Inline {
+        let kind = value["type"].as_str().unwrap();
+        match kind {
+            "text" => {
+                let content = builder.push_text(
+                    root,
+                    value["value"].as_str().unwrap().to_owned(),
+                    None,
+                    ContentStyle::default(),
+                    None,
+                    active_link,
+                    Provenance::Unknown,
+                );
+                Inline::Text { content }
+            }
+            "link" => {
+                let target = serde_json::from_value(value["target"].clone()).unwrap();
+                let title = value["title"].as_str().map(ToOwned::to_owned);
+                let occurrence = builder.push_link(owner, target, title, Provenance::Unknown);
+                let children = value["children"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|child| lower(builder, owner, root, child, Some(occurrence)))
+                    .collect();
+                Inline::Link {
+                    occurrence,
+                    children,
+                }
+            }
+            "anchor" => {
+                let atom_boundary =
+                    u32::try_from(builder.content_store().root(root).unwrap().atoms.len()).unwrap();
+                let scalar_boundary = u32::try_from(
+                    builder
+                        .content_store()
+                        .root_logical_text(root)
+                        .unwrap()
+                        .chars()
+                        .count(),
+                )
+                .unwrap();
+                let point = builder.push_point(
+                    root,
+                    PointBoundary::BetweenAtoms { atom_boundary },
+                    scalar_boundary,
+                    Provenance::Unknown,
+                );
+                let aliases = value
+                    .get("fragmentAliases")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .map(|alias| FragmentAlias::from(alias.as_str().unwrap()))
+                    .collect();
+                Inline::anchor_with_aliases(point, value["id"].as_str().unwrap(), aliases)
+            }
+            _ => panic!("unsupported reference fixture inline {kind}"),
+        }
+    }
+
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let children = children
+        .into_iter()
+        .map(|child| lower(&mut builder, owner, root, &child, None))
+        .collect();
+    Document {
+        parser: None,
+        sources: vec![mant_ir::SourceRecord {
+            key: mant_ir::SourceKey::FIRST,
+            identity: mant_ir::SourceIdentity::Anonymous {
+                name: "test".to_owned(),
+            },
+            format: mant_ir::SourceFormat::Markdown,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
         }],
-        "rootSource": 1,
-        "meta": {},
-        "sections": [],
-        "blocks": [{"type": "paragraph", "children": []}]
-    });
-    value["blocks"][0]["children"] = children.into();
-    serde_json::from_value(value).unwrap()
+        root_source: mant_ir::SourceKey::FIRST,
+        content_store: builder.finish(),
+        meta: mant_ir::DocumentMeta::default(),
+        heading: None,
+        fragment_aliases: Vec::new(),
+        diagnostics: Vec::new(),
+        blocks: vec![mant_ir::Block::Paragraph {
+            children,
+            layout: mant_ir::LayoutHint::default(),
+            source: None,
+        }],
+        sections: Vec::new(),
+    }
 }
 fn link(name: &str, label: &str) -> Value {
     json!({"type":"link","target":{"kind":"document","name":name},"children":[{"type":"text","value":label}]})
@@ -41,6 +127,94 @@ fn all() -> ReferenceProjection {
         ],
         ..Default::default()
     }
+}
+
+fn separate_root_links() -> Document {
+    let mut document = document(Vec::new());
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let mut blocks = Vec::new();
+    for (name, label) in [("first", "A".to_owned()), ("second", "X".repeat(800))] {
+        let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let occurrence = builder.push_link(
+            owner,
+            LinkTarget::Document {
+                name: name.to_owned(),
+                fragment: None,
+            },
+            None,
+            Provenance::Unknown,
+        );
+        let content = builder.push_text(
+            root,
+            label,
+            None,
+            ContentStyle::default(),
+            None,
+            Some(occurrence),
+            Provenance::Unknown,
+        );
+        blocks.push(mant_ir::Block::Paragraph {
+            children: vec![Inline::Link {
+                occurrence,
+                children: vec![Inline::Text { content }],
+            }],
+            layout: mant_ir::LayoutHint::default(),
+            source: None,
+        });
+    }
+    document.content_store = builder.finish();
+    document.blocks = blocks;
+    document
+}
+
+#[test]
+fn projection_budget_preserves_closed_prefix_and_advances_page() {
+    let document = separate_root_links();
+    let mut first_page = None;
+    for bytes in (256..=8192).step_by(64) {
+        let result = project_references_with_limits(
+            &document,
+            None,
+            ReferenceScope::Document,
+            &all(),
+            ReferenceProjectionLimits {
+                materialization_bytes: bytes,
+                ..Default::default()
+            },
+        );
+        if result.page.returned == 1
+            && result.page.limited == Some(ReferencePageLimit::MaterializationBytes)
+            && result.page.next_offset == Some(1)
+        {
+            first_page = Some(result);
+            break;
+        }
+    }
+    let first_page = first_page.expect("the first closed link fits before the second root");
+    assert_eq!(first_page.occurrences, ReferenceCount::Exact { value: 2 });
+    assert_eq!(first_page.records[0].label_preview, "A");
+    assert_eq!(
+        first_page
+            .content_projection
+            .as_ref()
+            .unwrap()
+            .content()
+            .occurrence_plain_text(first_page.records[0].occurrence)
+            .unwrap(),
+        "A"
+    );
+    let decoded: ReferenceInventory =
+        serde_json::from_str(&serde_json::to_string(&first_page).unwrap()).unwrap();
+    assert_eq!(decoded, first_page);
+    let second_page = project_references(
+        &document,
+        None,
+        ReferenceScope::Document,
+        &ReferenceProjection { offset: 1, ..all() },
+    );
+    assert_eq!(second_page.page.returned, 1);
+    assert_eq!(second_page.records[0].label_preview, "X".repeat(800));
 }
 
 #[test]
@@ -104,11 +278,40 @@ fn occurrence_paging_keeps_duplicates_exact_positions_and_target_fragments() {
     assert_eq!(result.targets, ReferenceCount::Exact { value: 2 });
     assert_eq!(result.page.returned, 1);
     assert_eq!(result.page.next_offset, Some(2));
-    assert_eq!(result.records[0].label, "second");
-    assert!(matches!(
-        result.records[0].origin.resolve_link(&document),
-        Some(Inline::Link { .. })
-    ));
+    assert_eq!(result.records[0].label_preview, "second");
+    let Some(Inline::Link {
+        occurrence: original_key,
+        ..
+    }) = result.records[0].origin.resolve_link(&document)
+    else {
+        panic!("origin must resolve to the original link wrapper");
+    };
+    let projected_key = result.records[0].occurrence;
+    // The original and response-local keys inhabit distinct domains even
+    // when dense remapping happens to assign the same numeric value.
+    let original = document.content_store.link(*original_key).unwrap();
+    let projected = result
+        .content_projection
+        .as_ref()
+        .unwrap()
+        .content_store
+        .link(projected_key)
+        .unwrap();
+    assert_eq!(original.target, projected.target);
+    assert_eq!(original.title, projected.title);
+    assert_eq!(
+        document
+            .content()
+            .occurrence_plain_text(*original_key)
+            .unwrap(),
+        result
+            .content_projection
+            .as_ref()
+            .unwrap()
+            .content()
+            .occurrence_plain_text(projected_key)
+            .unwrap(),
+    );
     let rebuilt: ReferenceInventory =
         serde_json::from_str(&serde_json::to_string(&result).unwrap()).unwrap();
     assert_eq!(result, rebuilt);
@@ -118,8 +321,17 @@ fn occurrence_paging_keeps_duplicates_exact_positions_and_target_fragments() {
         ReferenceScope::Document,
         &ReferenceProjection { offset: 2, ..all() },
     );
+    let last: ReferenceInventory =
+        serde_json::from_str(&serde_json::to_string(&last).unwrap()).unwrap();
+    let occurrence = last
+        .content_projection
+        .as_ref()
+        .unwrap()
+        .content_store
+        .link(last.records[0].occurrence)
+        .unwrap();
     assert!(
-        matches!(&last.records[0].target,LinkTarget::Document{fragment:Some(fragment),..} if fragment=="Mixed.Target")
+        matches!(&occurrence.target,LinkTarget::Document{fragment:Some(fragment),..} if fragment=="Mixed.Target")
     );
 }
 
@@ -176,10 +388,10 @@ fn distinct_limits_and_return_limits_do_not_lie_about_scan_counts() {
 fn labels_are_utf8_bounded_and_empty_labels_are_not_replaced() {
     let document = document(vec![link("a", &"é".repeat(3000)), link("b", "")]);
     let result = project_references(&document, None, ReferenceScope::Document, &all());
-    assert_eq!(result.records[0].label.len(), 4096);
-    assert!(result.records[0].label_truncated);
-    assert!(result.records[1].label.is_empty());
-    assert!(!result.records[1].label_truncated);
+    assert_eq!(result.records[0].label_preview.len(), 4096);
+    assert!(result.records[0].label_preview_truncated);
+    assert!(result.records[1].label_preview.is_empty());
+    assert!(!result.records[1].label_preview_truncated);
 }
 
 #[test]
@@ -215,8 +427,40 @@ fn local_resolution_checks_exact_anchors_and_duplicate_logical_locations() {
 
 #[test]
 fn entry_anchor_sharing_identity_is_one_logical_destination_not_ambiguity() {
-    let mut document = document(vec![local("entry")]);
-    document.blocks.push(serde_json::from_value(json!({"type":"list","kind":{"kind":"bullet"},"items":[{"entry":{"id":"entry","kind":{"kind":"command"},"case":"sensitive","names":[],"forms":[],"valueDomain":null},"blocks":[{"type":"paragraph","children":[{"type":"anchor","id":"entry","fragmentAliases":["Entry.Alias"]}]}]}]})).unwrap());
+    let mut document = document(vec![
+        local("entry"),
+        json!({"type":"anchor","id":"entry","fragmentAliases":["Entry.Alias"]}),
+    ]);
+    let anchor = match &mut document.blocks[0] {
+        mant_ir::Block::Paragraph { children, .. } => children.pop().unwrap(),
+        _ => unreachable!(),
+    };
+    document.blocks.push(mant_ir::Block::List {
+        kind: mant_ir::ListKind::Bullet,
+        compact: false,
+        items: vec![mant_ir::ListItem {
+            layout: mant_ir::ListItemLayout::default(),
+            source: None,
+            entry: Some(mant_ir::EntryFacts {
+                name_bindings: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
+                forms: Vec::new(),
+                id: "entry".into(),
+                kind: mant_ir::EntryKind::Command,
+                case: mant_ir::NameCase::Sensitive,
+                names: Vec::new(),
+                value_domain: None,
+            }),
+            blocks: vec![mant_ir::Block::Paragraph {
+                children: vec![anchor],
+                layout: mant_ir::LayoutHint::default(),
+                source: None,
+            }],
+        }],
+        layout: mant_ir::LayoutHint::default(),
+        source: None,
+    });
     let result = project_references(&document, None, ReferenceScope::Document, &all());
     assert!(matches!(
         result.records[0].resolution,
@@ -343,7 +587,11 @@ fn hard_distinct_cap_freezes_a_proven_lower_bound_while_scan_finishes() {
 
 #[test]
 fn repeated_targets_page_by_occurrence_and_large_offset_does_not_allocate_records() {
-    let document = document((0..10_000).map(|_| link("same", "label")).collect());
+    let source = "[label](same.md)\n\n".repeat(10_000);
+    let document = crate::query_fixture::markdown(&source, None)
+        .unwrap()
+        .document
+        .unwrap();
     let result = project_references(
         &document,
         None,

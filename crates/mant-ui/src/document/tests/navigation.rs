@@ -6,10 +6,8 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
     let mut query = bundle();
     let paragraph = |name: &str| Block::Paragraph {
         children: vec![
-            Inline::Code { value: name.into() },
-            Inline::Text {
-                value: ": visible | body".into(),
-            },
+            crate::test_content::code(name),
+            crate::test_content::text(": visible | body"),
         ],
         layout: LayoutHint {
             spacing_before_lines: 2,
@@ -69,17 +67,15 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         .unwrap()
         .blocks
         .push(Block::Paragraph {
-            children: vec![Inline::Link {
-                target: mant_ir::LinkTarget::Section { id: "run".into() },
-                title: None,
-                children: vec![Inline::Text {
-                    value: "Jump to run".into(),
-                }],
-            }],
+            children: vec![crate::test_content::link(
+                mant_ir::LinkTarget::Section { id: "run".into() },
+                None,
+                vec![crate::test_content::text("Jump to run")],
+            )],
             layout: LayoutHint::default(),
             source: None,
         });
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    query.document.as_mut().unwrap().content_store = crate::test_content::store();
     let annotated = DocumentView::new(&query);
     let Block::List { items, .. } = &mut query.document.as_mut().unwrap().sections[0].blocks[0]
     else {
@@ -106,7 +102,8 @@ fn assert_entry_layout_is_unchanged(annotated: &DocumentView, ordinary: &Documen
             rendered
                 .links
                 .iter()
-                .any(|link| link.target == LinkTarget::Section("run".into()))
+                .any(|link| annotated.link_targets.get(&link.identity)
+                    == Some(&LinkTarget::Section("run".into())))
         );
         let line = rendered.text.lines[row].to_string();
         assert!(
@@ -170,8 +167,8 @@ fn width_matrix_keeps_rows_anchors_links_and_search_inside_the_rendered_geometry
             assert!(link.start_column < link.end_column);
             assert!(link.end_column <= width);
             assert_eq!(
-                rendered.link_target_at(link.row, link.start_column),
-                Some(&link.target)
+                view.link_target_at(&rendered, link.row, link.start_column),
+                view.link_targets.get(&link.identity)
             );
         }
         for row in 0..rendered.row_count {
@@ -193,7 +190,7 @@ fn authored_fragments_jump_to_their_canonical_target_rows() {
     section.blocks.insert(
         0,
         Block::Paragraph {
-            children: vec![Inline::anchor_with_aliases(
+            children: vec![crate::test_content::anchor_with_aliases(
                 "option",
                 vec!["--option".into()],
             )],
@@ -211,18 +208,45 @@ fn authored_fragments_jump_to_their_canonical_target_rows() {
 }
 
 #[test]
+fn zero_width_target_after_soft_wrap_lands_on_its_visual_row() {
+    let mut bundle = bundle();
+    let document = bundle.document.as_mut().expect("document");
+    document.heading = None;
+    document.sections.clear();
+    document.blocks = vec![Block::Paragraph {
+        children: vec![
+            crate::test_content::text("alpha beta "),
+            crate::test_content::anchor_with_aliases("after-wrap", vec!["Exact.Target".into()]),
+            crate::test_content::text("gamma"),
+        ],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    crate::test_content::sync_document(document);
+
+    let rendered = DocumentView::new(&bundle).render(7);
+    let gamma_row = rendered
+        .text
+        .lines
+        .iter()
+        .position(|line| line.spans.iter().any(|span| span.content.contains("gamma")))
+        .expect("wrapped content remains visible");
+    assert!(gamma_row > 0);
+    assert_eq!(rendered.anchor_row("after-wrap"), Some(gamma_row));
+    assert_eq!(rendered.anchor_row("Exact.Target"), Some(gamma_row));
+}
+
+#[test]
 fn manual_references_are_typed_clickable_links_when_the_section_is_known() {
-    let lines = styled_inline_lines(
-        &[Inline::Link {
-            target: mant_ir::LinkTarget::Manual {
+    let (lines, targets) = styled_inline_lines_with_targets(
+        &[crate::test_content::link(
+            mant_ir::LinkTarget::Manual {
                 name: "printf".to_owned(),
                 manual_section: Some("3".to_owned()),
             },
-            title: None,
-            children: vec![Inline::Text {
-                value: "printf(3)".to_owned(),
-            }],
-        }],
+            None,
+            vec![crate::test_content::text("printf(3)".to_owned())],
+        )],
         Style::default(),
         None,
     );
@@ -235,14 +259,14 @@ fn manual_references_are_typed_clickable_links_when_the_section_is_known() {
             .contains(Modifier::UNDERLINED)
     );
     assert_eq!(
-        lines[0].links[0].target,
-        LinkTarget::Document {
+        logical_link_target(&lines[0], &targets),
+        Some(&LinkTarget::Document {
             address: DocumentAddress::Manual {
                 name: "printf".to_owned(),
                 manual_section: "3".to_owned(),
             },
             fragment: None,
-        }
+        })
     );
 }
 
@@ -254,24 +278,22 @@ fn markdown_references_keep_the_current_source_and_fragment() {
             name: "pwsh7".to_owned(),
         },
     };
-    let lines = styled_inline_lines(
-        &[Inline::Link {
-            target: mant_ir::LinkTarget::Document {
+    let (lines, targets) = styled_inline_lines_with_targets(
+        &[crate::test_content::link(
+            mant_ir::LinkTarget::Document {
                 name: "Start-Process".to_owned(),
                 fragment: Some("examples".to_owned()),
             },
-            title: None,
-            children: vec![Inline::Text {
-                value: "Start-Process".to_owned(),
-            }],
-        }],
+            None,
+            vec![crate::test_content::text("Start-Process".to_owned())],
+        )],
         Style::default(),
         Some(&current),
     );
 
     assert_eq!(
-        lines[0].links[0].target,
-        LinkTarget::Document {
+        logical_link_target(&lines[0], &targets),
+        Some(&LinkTarget::Document {
             address: DocumentAddress::Markdown {
                 path: "Start-Process".to_owned(),
                 origin: mant_protocol::MarkdownOrigin::Source {
@@ -279,7 +301,7 @@ fn markdown_references_keep_the_current_source_and_fragment() {
                 },
             },
             fragment: Some("examples".to_owned()),
-        }
+        })
     );
 }
 
@@ -290,43 +312,40 @@ fn typed_email_links_use_the_shared_mailto_serializer() {
         ("a/b@example.test", "mailto:a%2Fb@example.test"),
         ("user=tag@example.test", "mailto:user%3Dtag@example.test"),
     ] {
-        let lines = styled_inline_lines(
-            &[Inline::Link {
-                target: mant_ir::LinkTarget::Email {
+        let (lines, targets) = styled_inline_lines_with_targets(
+            &[crate::test_content::link(
+                mant_ir::LinkTarget::Email {
                     address: address.to_owned(),
                 },
-                title: None,
-                children: vec![Inline::Text {
-                    value: "email".to_owned(),
-                }],
-            }],
+                None,
+                vec![crate::test_content::text("email".to_owned())],
+            )],
             Style::default(),
             None,
         );
         assert_eq!(lines[0].spans[0].content, "email");
         assert_eq!(
-            lines[0].links[0].target,
-            LinkTarget::External(
+            logical_link_target(&lines[0], &targets),
+            Some(&LinkTarget::External(
                 ExternalUri::parse(expected_uri).expect("serialized email URI remains valid")
-            )
+            ))
         );
     }
 
-    let invalid = styled_inline_lines(
-        &[Inline::Link {
-            target: mant_ir::LinkTarget::Email {
+    let (invalid, targets) = styled_inline_lines_with_targets(
+        &[crate::test_content::link(
+            mant_ir::LinkTarget::Email {
                 address: ".user@example.test".to_owned(),
             },
-            title: None,
-            children: vec![Inline::Text {
-                value: "invalid email".to_owned(),
-            }],
-        }],
+            None,
+            vec![crate::test_content::text("invalid email".to_owned())],
+        )],
         Style::default(),
         None,
     );
     assert_eq!(invalid[0].spans[0].content, "invalid email");
     assert!(invalid[0].links.is_empty());
+    assert!(targets.is_empty());
 }
 
 #[test]
@@ -350,14 +369,12 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
                 value_domain: None,
             }),
             terms: vec![vec![Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "-h".to_owned(),
-                }],
+                children: vec![crate::test_content::text("-h".to_owned())],
             }]],
             description: vec![Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "Show detailed command help".to_owned(),
-                }],
+                children: vec![crate::test_content::text(
+                    "Show detailed command help".to_owned(),
+                )],
                 layout: LayoutHint::default(),
                 source: None,
             }],
@@ -410,14 +427,15 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
     for nested in [false, true] {
         let mut bundle = bundle();
         let content = vec![
-            paragraph(vec![Inline::Text {
-                value: "preceding words take several wrapped rows".into(),
-            }]),
+            paragraph(vec![crate::test_content::text(
+                "preceding words take several wrapped rows",
+            )]),
             paragraph(vec![
-                Inline::anchor_with_aliases("destination", vec!["Mixed.Target".into()]),
-                Inline::Text {
-                    value: "DESTINATION".into(),
-                },
+                crate::test_content::anchor_with_aliases(
+                    "destination",
+                    vec!["Mixed.Target".into()],
+                ),
+                crate::test_content::text("DESTINATION"),
             ]),
         ];
         let content = if nested {
@@ -426,11 +444,13 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
             content
         };
         bundle.document.as_mut().unwrap().sections[0].blocks = vec![table(vec![
-            cell(vec![paragraph(vec![Inline::Text {
-                value: "NEIGHBOUR".into(),
-            }])]),
+            cell(vec![paragraph(vec![crate::test_content::text(
+                "NEIGHBOUR",
+            )])]),
             cell(content),
-            cell(vec![paragraph(vec![Inline::anchor("empty-target")])]),
+            cell(vec![paragraph(vec![crate::test_content::anchor(
+                "empty-target",
+            )])]),
         ])];
         for width in [8, 24, 48, 90] {
             let rendered = DocumentView::new(&bundle).render(width);
@@ -459,18 +479,14 @@ fn section_reference_hit_regions_follow_wrapped_link_text() {
     let document = bundle.document.as_mut().expect("document");
     document.sections[0].blocks = vec![Block::Paragraph {
         children: vec![
-            Inline::Text {
-                value: "Read ".to_owned(),
-            },
-            Inline::Link {
-                target: mant_ir::LinkTarget::Section {
+            crate::test_content::text("Read ".to_owned()),
+            crate::test_content::link(
+                mant_ir::LinkTarget::Section {
                     id: "details".into(),
                 },
-                title: None,
-                children: vec![Inline::Text {
-                    value: "the detailed section".to_owned(),
-                }],
-            },
+                None,
+                vec![crate::test_content::text("the detailed section".to_owned())],
+            ),
         ],
         layout: LayoutHint::default(),
         source: None,
@@ -478,24 +494,28 @@ fn section_reference_hit_regions_follow_wrapped_link_text() {
     document.sections[0].children.push(Section {
         id: "details".to_owned().into(),
         fragment_aliases: Vec::new(),
-        heading: "Details".into(),
+        heading: crate::test_content::heading("Details"),
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
         source: None,
     });
 
-    let rendered = DocumentView::new(&bundle).render(12);
+    let view = DocumentView::new(&bundle);
+    let rendered = view.render(12);
     let regions = rendered
         .links
         .iter()
-        .filter(|link| link.target == LinkTarget::Section("details".to_owned()))
+        .filter(|link| {
+            view.link_targets.get(&link.identity)
+                == Some(&LinkTarget::Section("details".to_owned()))
+        })
         .collect::<Vec<_>>();
 
     assert!(regions.len() >= 2, "reference should wrap across rows");
     for region in regions {
         assert_eq!(
-            rendered.link_target_at(region.row, region.start_column),
+            view.link_target_at(&rendered, region.row, region.start_column),
             Some(&LinkTarget::Section("details".to_owned()))
         );
     }
@@ -520,10 +540,10 @@ fn safe_tldr_more_information_stays_activatable() {
 
     assert_eq!(link_line.links.len(), 1);
     assert_eq!(
-        link_line.links[0].target,
-        LinkTarget::External(
+        view.link_targets.get(&link_line.links[0].identity),
+        Some(&LinkTarget::External(
             ExternalUri::parse("https://example.test/tldr").expect("valid external URI")
-        )
+        ))
     );
 }
 
@@ -543,9 +563,7 @@ fn terminal_chrome_keeps_the_manual_section_out_of_the_sidebar_label() {
     let document = bundle.document.as_mut().expect("document");
     document.meta.manual_section = Some("1".to_owned());
     document.blocks.push(Block::Paragraph {
-        children: vec![Inline::Text {
-            value: "overview".to_owned(),
-        }],
+        children: vec![crate::test_content::text("overview".to_owned())],
         layout: LayoutHint::default(),
         source: None,
     });

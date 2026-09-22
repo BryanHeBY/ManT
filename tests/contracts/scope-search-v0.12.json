@@ -47,6 +47,15 @@
             "sources": [{"key": 1, "identity": {"kind": "anonymous", "name": "git"}, "format": "man", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}],
             "rootSource": 1
           },
+          "contentProjection": {
+            "contentStore": {
+              "owners": [{"key": 1, "kind": "content", "roots": [1], "provenance": {"kind": "unknown"}}],
+              "roots": [{"key": 1, "owner": 1, "kind": "body", "atoms": [1], "points": [], "provenance": {"kind": "unknown"}}],
+              "atoms": [{"key": 1, "root": 1, "owner": 1, "kind": "text", "text": "the index records content", "provenance": {"kind": "unknown"}}],
+              "points": [],
+              "links": []
+            }
+          },
           "render": {
             "schema": "mant.markdown/v1",
             "format": "markdown",
@@ -69,17 +78,21 @@
               "occurrences": [
                 {
                   "matchedText": "index",
-                  "markdown": {
+                  "root": 1,
+                  "logical": {
+                    "startByte": 4,
+                    "endByte": 9,
+                    "startScalar": 4,
+                    "endScalar": 9
+                  },
+                  "markdownProjections": [{
                     "startByte": 320,
                     "endByte": 325,
                     "startLine": 18,
                     "startColumn": 7,
                     "endLine": 18,
                     "endColumn": 12
-                  },
-                  "lineRanges": [
-                    { "line": 18, "startByte": 6, "endByte": 11 }
-                  ]
+                  }]
                 }
               ],
               "occurrenceCount": 1,
@@ -94,6 +107,15 @@
           "sourceContext": {
             "sources": [{"key": 1, "identity": {"kind": "anonymous", "name": "git-add"}, "format": "man", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}],
             "rootSource": 1
+          },
+          "contentProjection": {
+            "contentStore": {
+              "owners": [{"key": 1, "kind": "content", "roots": [1], "provenance": {"kind": "unknown"}}],
+              "roots": [{"key": 1, "owner": 1, "kind": "body", "atoms": [1], "points": [], "provenance": {"kind": "unknown"}}],
+              "atoms": [{"key": 1, "root": 1, "owner": 1, "kind": "text", "text": "add content to the index", "provenance": {"kind": "unknown"}}],
+              "points": [],
+              "links": []
+            }
           },
           "render": {
             "schema": "mant.markdown/v1",
@@ -117,17 +139,21 @@
               "occurrences": [
                 {
                   "matchedText": "index",
-                  "markdown": {
+                  "root": 1,
+                  "logical": {
+                    "startByte": 19,
+                    "endByte": 24,
+                    "startScalar": 19,
+                    "endScalar": 24
+                  },
+                  "markdownProjections": [{
                     "startByte": 210,
                     "endByte": 215,
                     "startLine": 12,
                     "startColumn": 16,
                     "endLine": 12,
                     "endColumn": 21
-                  },
-                  "lineRanges": [
-                    { "line": 12, "startByte": 15, "endByte": 20 }
-                  ]
+                  }]
                 }
               ],
               "occurrenceCount": 1,

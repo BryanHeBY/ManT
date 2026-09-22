@@ -17,6 +17,8 @@ pub enum ProjectionError {
     InvalidSelector,
     /// Reference projection policy violates its closed bounds.
     InvalidReferenceProjection(&'static str),
+    /// Selected topology could not be closed into one response-local content store.
+    ContentProjection,
     /// The caller exceeded the bounded selection count.
     TooManySelections {
         /// Maximum supported selector count.
@@ -59,6 +61,9 @@ impl fmt::Display for ProjectionError {
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::InvalidSelector => mant_protocol::InvalidContentSelector.fmt(formatter),
             Self::InvalidReferenceProjection(reason) => formatter.write_str(reason),
+            Self::ContentProjection => {
+                formatter.write_str("selected content exceeds the response projection boundary")
+            }
             Self::TooManySelections { maximum } => {
                 write!(formatter, "at most {maximum} outline nodes may be selected")
             }

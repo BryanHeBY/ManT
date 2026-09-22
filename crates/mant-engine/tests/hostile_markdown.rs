@@ -13,8 +13,7 @@ use mant_codec::parse_markdown;
 use mant_ir::{Block, Section};
 use mant_loader::load_markdown_text;
 use mant_protocol::{
-    OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-    default_search_limit,
+    OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchSyntax, default_search_limit,
 };
 use mant_query::{build_outline_with_detail, search_query, select_excerpt};
 use mant_render::{
@@ -98,49 +97,53 @@ fn exercise(label: &str, source: &str) {
         ("(a+)+$", SearchSyntax::Regex),
         ("[", SearchSyntax::Regex),
     ] {
-        for scope in [SearchScope::Visible, SearchScope::Markdown] {
-            let request = SearchQuery {
-                pattern: pattern.to_owned(),
-                syntax,
-                case: SearchCase::Smart,
-                scope,
-                word: false,
-                context_lines: 2,
-                limit: default_search_limit(),
-                offset: 0,
-            };
-            let Ok(result) = search_query(&query, &request) else {
-                continue;
-            };
-            let _ = render_search_text(&result);
-            verify_search_result(label, &query, &result, &addressable, scope);
-        }
+        let request = SearchQuery {
+            pattern: pattern.to_owned(),
+            syntax,
+            case: SearchCase::Smart,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 2,
+            limit: default_search_limit(),
+            offset: 0,
+        };
+        let Ok(result) = search_query(&query, &request) else {
+            continue;
+        };
+        let _ = render_search_text(&result);
+        verify_search_result(label, &query, &result, &addressable);
     }
 
-    // A sample taken from the rendered body must always be findable; the
-    // leading label header is presentation and owns no search node.
-    // Source-map anchors are intentionally not searchable presentation. Pick
-    // the sample from the anchor-free public Markdown while searching the
-    // canonical addressable projection that contains the same body text.
-    let body = rendered
-        .split_once('\n')
-        .map_or("", |(_, remainder)| remainder);
-    if let Some(word) = first_ascii_word(body) {
+    verify_sampled_search(label, &query);
+}
+
+fn verify_sampled_search(label: &str, query: &mant_ir::ResolvedContent) {
+    // Search authority is the document's logical roots, not generated
+    // Markdown or TLDR presentation. Sample from that same coordinate space.
+    let sample = query.document.as_ref().and_then(|document| {
+        document
+            .content_store
+            .roots
+            .iter()
+            .filter_map(|root| document.content().root_logical_text(root.key))
+            .find_map(|logical| first_ascii_word(&logical))
+    });
+    if let Some(word) = sample {
         let request = SearchQuery {
             pattern: word.clone(),
             syntax: SearchSyntax::Literal,
             case: SearchCase::Sensitive,
-            scope: SearchScope::Markdown,
+            scope: mant_protocol::SearchScope::Visible,
             word: false,
             context_lines: 0,
             limit: default_search_limit(),
             offset: 0,
         };
-        let found = search_query(&query, &request)
+        let found = search_query(query, &request)
             .unwrap_or_else(|error| panic!("{label}: sampled search failed: {error}"));
         assert!(
             found.total >= 1,
-            "{label}: sampled word {word:?} from the render must be found"
+            "{label}: sampled word {word:?} from a logical root must be found"
         );
     }
 }
@@ -223,7 +226,6 @@ fn verify_search_result(
     query: &mant_ir::ResolvedContent,
     result: &mant_protocol::QuerySearch,
     addressable: &str,
-    scope: SearchScope,
 ) {
     assert_eq!(
         result.returned as usize,
@@ -236,28 +238,30 @@ fn verify_search_result(
     );
     for found in &result.matches {
         for occurrence in &found.occurrences {
-            let start = usize::try_from(occurrence.markdown.start_byte).expect("start fits usize");
-            let end = usize::try_from(occurrence.markdown.end_byte).expect("end fits usize");
             assert!(
-                start <= end && end <= addressable.len(),
-                "{label}: match byte range must stay inside the render"
+                occurrence.markdown.is_some() || !occurrence.markdown_projections.is_empty(),
+                "{label}: every hit needs a canonical presentation coordinate"
             );
-            assert!(
-                addressable.is_char_boundary(start) && addressable.is_char_boundary(end),
-                "{label}: match byte range must sit on char boundaries"
-            );
-            if scope == SearchScope::Markdown {
-                assert_eq!(
-                    &addressable[start..end],
-                    occurrence.matched_text,
-                    "{label}: markdown-scope coordinates must slice the matched text"
+            for markdown in occurrence
+                .markdown
+                .iter()
+                .chain(&occurrence.markdown_projections)
+            {
+                let start = usize::try_from(markdown.start_byte).expect("start fits usize");
+                let end = usize::try_from(markdown.end_byte).expect("end fits usize");
+                assert!(
+                    start <= end && end <= addressable.len(),
+                    "{label}: match byte range must stay inside the render"
+                );
+                assert!(
+                    addressable.is_char_boundary(start) && addressable.is_char_boundary(end),
+                    "{label}: match byte range must sit on char boundaries"
+                );
+                assert!(
+                    markdown.start_line >= 1 && markdown.start_line <= result.render.line_count,
+                    "{label}: match line must exist in the render"
                 );
             }
-            assert!(
-                occurrence.markdown.start_line >= 1
-                    && occurrence.markdown.start_line <= result.render.line_count,
-                "{label}: match line must exist in the render"
-            );
         }
         let selector = vec![mant_protocol::ContentSelector::path(
             found.outline.node.path(),

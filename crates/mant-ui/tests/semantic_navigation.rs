@@ -1,9 +1,27 @@
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint,
-    NameCase, ParameterKind, ResolvedContent, Section, SourceCoordinates, SourceFormat,
+    Block, ContentOwnerKind, ContentRootKey, ContentRootKind, ContentStoreBuilder, ContentStyle,
+    DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint, NameCase,
+    ParameterKind, Provenance, ResolvedContent, Section, SourceCoordinates, SourceFormat,
     SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_ui::{DocumentView, NavKind};
+
+fn code(builder: &mut ContentStoreBuilder, root: ContentRootKey, value: &str) -> Inline {
+    Inline::Code {
+        content: builder.push_text(
+            root,
+            value.to_owned(),
+            None,
+            ContentStyle {
+                literal: true,
+                ..ContentStyle::default()
+            },
+            None,
+            None,
+            Provenance::Unknown,
+        ),
+    }
+}
 
 fn assert_compact_and_complete_entry_labels(view: &DocumentView) {
     assert_eq!(view.navigation()[1].title, "ENTRIES · 4");
@@ -21,6 +39,9 @@ fn assert_compact_and_complete_entry_labels(view: &DocumentView) {
 #[test]
 #[allow(clippy::too_many_lines)] // Keep the cross-role navigation fixture and expectations together.
 fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
+    let mut content = ContentStoreBuilder::new();
+    let owner = content.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let root = content.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
     let mut entries = [
         (
             EntryKind::Parameter {
@@ -51,9 +72,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             names: vec![name.to_owned()],
             value_domain: None,
         }),
-        terms: vec![vec![Inline::Code {
-            value: name.to_owned(),
-        }]],
+        terms: vec![vec![code(&mut content, root, name)]],
         description: Vec::new(),
         layout: mant_ir::DefinitionLayout {
             inline_term: false,
@@ -63,12 +82,8 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     })
     .collect::<Vec<_>>();
     entries[0].terms = vec![
-        vec![Inline::Code {
-            value: "--help MODE".to_owned(),
-        }],
-        vec![Inline::Code {
-            value: "-h".to_owned(),
-        }],
+        vec![code(&mut content, root, "--help MODE")],
+        vec![code(&mut content, root, "-h")],
     ];
     let facts = entries[0].entry.as_mut().unwrap();
     facts.forms = vec![mant_ir::EntryForm::term(0), mant_ir::EntryForm::term(1)];
@@ -98,9 +113,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 names: vec!["brief".to_owned()],
                 value_domain: None,
             }),
-            terms: vec![vec![Inline::Code {
-                value: "brief".to_owned(),
-            }]],
+            terms: vec![vec![code(&mut content, root, "brief")]],
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
@@ -112,6 +125,20 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         layout: LayoutHint::default(),
         source: None,
     }];
+    let heading = mant_ir::Heading {
+        content: vec![Inline::Text {
+            content: content.push_text(
+                root,
+                "REFERENCE".to_owned(),
+                None,
+                ContentStyle::default(),
+                None,
+                None,
+                Provenance::Unknown,
+            ),
+        }],
+        source: None,
+    };
     let bundle = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
@@ -129,6 +156,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store: content.finish(),
             meta: DocumentMeta::default(),
             heading: None,
             fragment_aliases: Vec::new(),
@@ -137,7 +165,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             sections: vec![Section {
                 id: "reference".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                heading: "REFERENCE".into(),
+                heading,
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
                     declaration_groups: Vec::new(),

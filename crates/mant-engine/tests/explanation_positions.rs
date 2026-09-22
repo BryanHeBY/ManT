@@ -14,6 +14,126 @@ fn query(name: &str, content_bytes: u32) -> ExplanationQuery {
     }
 }
 
+fn test_inline(
+    document: &mut Document,
+    owner: ContentOwnerKey,
+    value: impl Into<String>,
+    literal: bool,
+) -> Inline {
+    let value = value.into();
+    let store = &mut document.content_store;
+    let root = ContentRootKey::new(u32::try_from(store.roots.len() + 1).unwrap()).unwrap();
+    store
+        .owners
+        .iter_mut()
+        .find(|record| record.key == owner)
+        .unwrap()
+        .roots
+        .push(root);
+    store.roots.push(ContentRoot {
+        key: root,
+        owner,
+        kind: ContentRootKind::Term,
+        atoms: Vec::new(),
+        points: Vec::new(),
+        provenance: Provenance::Unknown,
+    });
+    inline_in_root(document, root, value, literal)
+}
+
+fn inline_in_root(
+    document: &mut Document,
+    root: ContentRootKey,
+    value: String,
+    literal: bool,
+) -> Inline {
+    let store = &mut document.content_store;
+    let owner = store.root(root).unwrap().owner;
+    let atom = ContentAtomKey::new(u32::try_from(store.atoms.len() + 1).unwrap()).unwrap();
+    store
+        .roots
+        .iter_mut()
+        .find(|record| record.key == root)
+        .unwrap()
+        .atoms
+        .push(atom);
+    let bytes = ContentByteRange {
+        start: 0,
+        end: u32::try_from(value.len()).unwrap(),
+    };
+    store.atoms.push(ContentAtom {
+        key: atom,
+        root,
+        owner,
+        kind: ContentAtomKind::Text {
+            text: value,
+            display_override: None,
+        },
+        style: ContentStyle {
+            literal,
+            ..ContentStyle::default()
+        },
+        role: None,
+        link: None,
+        provenance: Provenance::Unknown,
+    });
+    let content = ContentRef { atom, bytes };
+    if literal {
+        Inline::Code { content }
+    } else {
+        Inline::Text { content }
+    }
+}
+
+fn rewrite_inline(document: &mut Document, inline: &Inline, value: &str) -> Inline {
+    let Inline::Code { content } = inline else {
+        panic!("synthetic term is code")
+    };
+    let atom = document
+        .content_store
+        .atoms
+        .iter_mut()
+        .find(|atom| atom.key == content.atom)
+        .unwrap();
+    atom.kind = ContentAtomKind::Text {
+        text: value.to_owned(),
+        display_override: None,
+    };
+    Inline::Code {
+        content: ContentRef {
+            atom: content.atom,
+            bytes: ContentByteRange {
+                start: 0,
+                end: u32::try_from(value.len()).unwrap(),
+            },
+        },
+    }
+}
+
+fn add_wrapper_style(document: &mut Document, inline: &Inline, strong: bool, emphasis: bool) {
+    let (Inline::Text { content } | Inline::Code { content }) = inline else {
+        panic!("synthetic leaf")
+    };
+    let atom = document
+        .content_store
+        .atoms
+        .iter_mut()
+        .find(|atom| atom.key == content.atom)
+        .unwrap();
+    atom.style.strong = strong;
+    atom.style.emphasis = emphasis;
+}
+
+fn fixture_owner(document: &Document) -> ContentOwnerKey {
+    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        panic!("definition fixture")
+    };
+    let Inline::Code { content } = &items[0].terms[0][0] else {
+        panic!("first fixture term")
+    };
+    document.content_store.atom(content.atom).unwrap().owner
+}
+
 fn content_block(evidence: &ExplanationEvidence) -> &Block {
     match evidence.content.as_ref().unwrap() {
         ExplanationContent::Entry { block } | ExplanationContent::Block { block } => block,
@@ -23,11 +143,17 @@ fn content_block(evidence: &ExplanationEvidence) -> &Block {
     }
 }
 
-fn text_at(evidence: &ExplanationEvidence, range: &ExplanationContentRange) -> String {
+fn text_at(
+    result: &QueryExplanation,
+    evidence: &ExplanationEvidence,
+    range: &ExplanationContentRange,
+) -> String {
+    let content = result.content_projection.as_ref().unwrap().content();
     let text = range
-        .resolve(content_block(evidence))
+        .resolve(content, content_block(evidence))
         .expect("valid response-local root")
-        .safe_text();
+        .safe_text(content)
+        .unwrap();
     text.chars()
         .skip(range.char_range().start)
         .take(range.char_range().len())
@@ -55,26 +181,38 @@ fn occurrences(evidence: &ExplanationEvidence) -> impl Iterator<Item = &Explanat
     )
 }
 
-fn validate_positions(evidence: &ExplanationEvidence) {
+fn validate_positions(result: &QueryExplanation, evidence: &ExplanationEvidence) {
+    let content = result
+        .content_projection
+        .as_ref()
+        .map(|projection| projection.content());
     let mut count = 0;
     for occurrence in occurrences(evidence) {
         assert!(occurrence.forms.len() <= MAX_EXPLANATION_FRAGMENTS);
         assert!(occurrence.content.len() <= MAX_EXPLANATION_FRAGMENTS);
         for range in &occurrence.forms {
-            assert!(
+            assert!(content.is_some_and(|content| {
                 range
-                    .resolve(&evidence.entry.as_ref().unwrap().forms)
+                    .resolve(content, &evidence.entry.as_ref().unwrap().forms)
                     .is_some()
-            );
+            }));
         }
         for range in &occurrence.content {
-            assert!(range.resolve(content_block(evidence)).is_some());
+            assert!(
+                content.is_some_and(|content| range
+                    .resolve(content, content_block(evidence))
+                    .is_some())
+            );
         }
         count += occurrence.forms.len() + occurrence.content.len();
     }
     for preview in &evidence.previews {
         for range in &preview.content_ranges {
-            assert!(range.resolve(content_block(evidence)).is_some());
+            assert!(
+                content.is_some_and(|content| range
+                    .resolve(content, content_block(evidence))
+                    .is_some())
+            );
         }
         count += preview.content_ranges.len();
     }
@@ -90,7 +228,7 @@ fn direct_names_other_names_and_literal_ranges_are_independent_and_remapped() {
     assert_eq!(decoded, result);
     assert_eq!(result.total, 3);
     for evidence in &result.evidence {
-        validate_positions(evidence);
+        validate_positions(&result, evidence);
     }
     let direct = &result.evidence[0];
     let name = direct
@@ -108,7 +246,7 @@ fn direct_names_other_names_and_literal_ranges_are_independent_and_remapped() {
         range,
         ExplanationContentRange::DefinitionTerm { item_index: 0, .. }
     ));
-    assert_eq!(text_at(direct, range), "-x");
+    assert_eq!(text_at(&result, direct, range), "-x");
     let entry = direct.entry.as_ref().unwrap();
     assert_eq!(entry.name_bindings.len(), 2);
     let language = entry
@@ -117,12 +255,12 @@ fn direct_names_other_names_and_literal_ranges_are_independent_and_remapped() {
         .find(|binding| entry.names[binding.name_index as usize] == "--language")
         .unwrap();
     assert_eq!(
-        text_at(direct, &language.occurrences[0].content[0]),
+        text_at(&result, direct, &language.occurrences[0].content[0]),
         "--language"
     );
     for evidence in &result.evidence {
         assert_eq!(
-            text_at(evidence, &evidence.previews[0].content_ranges[0]),
+            text_at(&result, evidence, &evidence.previews[0].content_ranges[0]),
             "-x"
         );
         assert!(!evidence.match_details_omitted);
@@ -137,19 +275,34 @@ fn direct_names_other_names_and_literal_ranges_are_independent_and_remapped() {
 }
 
 fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
-    let mut content = load_roff_bytes(b".TH PROBE 1\n.SH TERMS\nText.\n").unwrap();
+    // The synthetic list replaces all section blocks.  Start with an empty
+    // section so the source document has no atom orphaned by that replacement.
+    let mut content = load_roff_bytes(b".TH PROBE 1\n.SH TERMS\n").unwrap();
+    let document = content.document.as_mut().unwrap();
     let mut terms = Vec::new();
     let mut forms = Vec::new();
     let mut bindings = Vec::new();
     let mut spellings = Vec::new();
+    let owner =
+        ContentOwnerKey::new(u32::try_from(document.content_store.owners.len() + 1).unwrap())
+            .unwrap();
+    document.content_store.owners.push(ContentOwner {
+        key: owner,
+        kind: ContentOwnerKind::DefinitionItem,
+        roots: Vec::new(),
+        provenance: Provenance::Unknown,
+    });
     for name in 0..names {
         let spelling = format!("name{name}");
         let mut occurrences = Vec::new();
         for _ in 0..repeats {
             let index = terms.len();
-            terms.push(vec![Inline::Code {
-                value: format!("{spelling} ARG"),
-            }]);
+            terms.push(vec![test_inline(
+                document,
+                owner,
+                format!("{spelling} ARG"),
+                true,
+            )]);
             forms.push(EntryForm::term(index));
             occurrences.push(EntryForm {
                 parts: vec![EntryContentSlice {
@@ -166,7 +319,7 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
         });
         spellings.push(spelling);
     }
-    content.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
+    document.sections[0].blocks = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             terms,
@@ -196,26 +349,43 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
 #[test]
 fn split_occurrences_follow_authored_form_order_not_term_indices() {
     let mut content = synthetic(1, 1);
-    let Block::DefinitionList { items, .. } =
-        &mut content.document.as_mut().unwrap().sections[0].blocks[0]
+    let document = content.document.as_mut().unwrap();
+    let owner = fixture_owner(document);
+    let name = test_inline(document, owner, "名", false);
+    let accented = test_inline(document, owner, "é", true);
+    add_wrapper_style(document, &name, false, true);
+    add_wrapper_style(document, &accented, true, false);
+    let ending = test_inline(document, owner, "終", false);
+    let Inline::Text {
+        content: ending_ref,
+    } = &ending
     else {
         unreachable!()
     };
+    let ending_root = document.content_store.atom(ending_ref.atom).unwrap().root;
+    document
+        .content_store
+        .roots
+        .iter_mut()
+        .find(|record| record.key == ending_root)
+        .unwrap()
+        .kind = ContentRootKind::Body;
+    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+        unreachable!()
+    };
     let item = &mut items[0];
+    let unreferenced = std::mem::take(&mut item.terms[0]);
     item.terms = vec![
-        vec![Inline::Emphasis {
-            children: vec![Inline::Text {
-                value: "名".into()
-            }],
-        }],
+        unreferenced,
         vec![Inline::Strong {
-            children: vec![Inline::Code { value: "é".into() }],
+            children: vec![accented],
+        }],
+        vec![Inline::Emphasis {
+            children: vec![name],
         }],
     ];
     item.description = vec![Block::Paragraph {
-        children: vec![Inline::Text {
-            value: "終".into()
-        }],
+        children: vec![ending],
         layout: LayoutHint::default(),
         source: None,
     }];
@@ -239,13 +409,6 @@ fn split_occurrences_follow_authored_form_order_not_term_indices() {
         ],
     };
     // A skipped first term makes formIndex 0 distinct from termIndex 1.
-    item.terms.swap(0, 1);
-    item.terms.insert(
-        0,
-        vec![Inline::Text {
-            value: "unreferenced".into(),
-        }],
-    );
     let facts = item.entry.as_mut().unwrap();
     facts.names = vec!["é名終".into()];
     facts.forms = vec![occurrence.clone()];
@@ -254,7 +417,7 @@ fn split_occurrences_follow_authored_form_order_not_term_indices() {
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
     let result = explain_query(&content, &query("é名終", 1_048_576)).unwrap();
     let evidence = &result.evidence[0];
-    validate_positions(evidence);
+    validate_positions(&result, evidence);
     let EvidenceBasis::Name { matches } = &evidence.bases[0] else {
         panic!("name")
     };
@@ -263,7 +426,7 @@ fn split_occurrences_follow_authored_form_order_not_term_indices() {
         occurrence
             .content
             .iter()
-            .map(|r| text_at(evidence, r))
+            .map(|r| text_at(&result, evidence, r))
             .collect::<String>(),
         "é名終"
     );
@@ -306,7 +469,7 @@ fn records_occurrences_and_total_positions_have_independent_omissions() {
         let result =
             explain_query(&content, &query(request, MAX_EXPLANATION_CONTENT_BYTES)).unwrap();
         let evidence = &result.evidence[0];
-        validate_positions(evidence);
+        validate_positions(&result, evidence);
         let entry = evidence.entry.as_ref().unwrap();
         assert_eq!(entry.names.len(), names);
         assert_eq!(entry.forms.len(), names * repeats);
@@ -347,7 +510,7 @@ fn all_budget_sizes_keep_locations_resolvable_and_account_for_new_payload() {
         assert_eq!(result.total, 1);
         let evidence = &result.evidence[0];
         assert_eq!(evidence.class, EvidenceClass::DirectEntry);
-        validate_positions(evidence);
+        validate_positions(&result, evidence);
         let mut used = 0;
         if let Some(entry) = &evidence.entry {
             used += serde_json::to_vec(entry).unwrap().len();
@@ -379,17 +542,22 @@ fn all_budget_sizes_keep_locations_resolvable_and_account_for_new_payload() {
 #[test]
 fn matched_facts_and_body_survive_when_expanded_form_metadata_does_not_fit() {
     let mut content = synthetic(1, 1);
-    let Block::DefinitionList { items, .. } =
-        &mut content.document.as_mut().unwrap().sections[0].blocks[0]
-    else {
+    let document = content.document.as_mut().unwrap();
+    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
         unreachable!()
     };
     let item = &mut items[0];
-    item.terms[0] = vec![Inline::Code {
-        value: format!("name0 {}", "填".repeat(400)),
-    }];
+    let original = item.terms[0].remove(0);
+    let expanded = rewrite_inline(document, &original, &format!("name0 {}", "填".repeat(400)));
+    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+        unreachable!()
+    };
+    let item = &mut items[0];
+    item.terms[0] = vec![expanded];
     item.entry.as_mut().unwrap().forms = vec![EntryForm::term(0); 100];
-    let result = explain_query(&content, &query("name0", 16384)).unwrap();
+    // Key-backed forms and their shared projection leave this intermediate
+    // budget large enough for the body but not the expanded form metadata.
+    let result = explain_query(&content, &query("name0", 12000)).unwrap();
     let evidence = &result.evidence[0];
     assert!(evidence.details_omitted && evidence.entry.is_none());
     assert!(!evidence.content_omitted && evidence.content.is_some());
@@ -400,24 +568,32 @@ fn matched_facts_and_body_survive_when_expanded_form_metadata_does_not_fit() {
     assert_eq!(matches[0].name, "name0");
     assert!(matches[0].occurrences[0].forms.is_empty());
     assert_eq!(
-        text_at(evidence, &matches[0].occurrences[0].content[0]),
+        text_at(&result, evidence, &matches[0].occurrences[0].content[0]),
         "name0"
     );
-    validate_positions(evidence);
+    validate_positions(&result, evidence);
 }
 
 #[test]
 fn a_fragment_limit_never_returns_half_a_name_occurrence() {
     let mut content = synthetic(1, 1);
-    let Block::DefinitionList { items, .. } =
-        &mut content.document.as_mut().unwrap().sections[0].blocks[0]
-    else {
+    let document = content.document.as_mut().unwrap();
+    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+        panic!("definition")
+    };
+    let original = items[0].terms[0].remove(0);
+    let first = rewrite_inline(document, &original, "é");
+    let Inline::Code { content: first_ref } = first else {
+        unreachable!()
+    };
+    let root = document.content_store.atom(first_ref.atom).unwrap().root;
+    let mut fragments = vec![Inline::Code { content: first_ref }];
+    fragments.extend((1..33).map(|_| inline_in_root(document, root, "é".into(), true)));
+    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
         panic!("definition")
     };
     let item = &mut items[0];
-    item.terms[0] = (0..33)
-        .map(|_| Inline::Code { value: "é".into() })
-        .collect();
+    item.terms[0] = fragments;
     let facts = item.entry.as_mut().unwrap();
     facts.names[0] = "é".repeat(33);
     facts.name_bindings[0].occurrences = vec![EntryForm {

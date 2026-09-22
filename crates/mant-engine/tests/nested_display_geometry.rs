@@ -4,7 +4,7 @@
 //! portability warning, independently of its source geometry.
 
 use mant_ir::{
-    Block, Inline,
+    Block, ContentContext, Inline, InlineView,
     visit::{self, Visit},
 };
 use mant_loader::load_roff_bytes;
@@ -27,22 +27,8 @@ fn assert_column(text: &str, token: &str, column: usize) {
     assert_eq!(line, format!("{}{token}", " ".repeat(column)), "{text}");
 }
 
-fn visible(children: &[Inline]) -> String {
-    struct Text(String);
-    impl<'ir> Visit<'ir> for Text {
-        fn visit_inline(&mut self, inline: &'ir Inline) {
-            match inline {
-                Inline::Text { value } | Inline::Code { value } => self.0.push_str(value),
-                Inline::LineBreak => self.0.push('\n'),
-                _ => visit::walk_inline(self, inline),
-            }
-        }
-    }
-    let mut text = Text(String::new());
-    for inline in children {
-        text.visit_inline(inline);
-    }
-    text.0
+fn visible(content: ContentContext<'_>, children: &[Inline]) -> String {
+    content.plain_text(children).unwrap()
 }
 
 #[test]
@@ -75,7 +61,9 @@ fn nested_display_offsets_compose_and_restore_for_each_mode() {
                     .iter()
                     .find(|block| match block {
                         Block::Paragraph { children, .. }
-                        | Block::Preformatted { children, .. } => visible(children) == "BETA",
+                        | Block::Preformatted { children, .. } => {
+                            visible(document.content(), children) == "BETA"
+                        }
                         _ => false,
                     })
                     .unwrap();
@@ -130,18 +118,19 @@ fn compactness_controls_only_the_nested_display_leading_gap() {
 
 #[test]
 fn nested_display_targets_remain_on_the_inner_body_and_fonts_survive_boundaries() {
-    struct Evidence {
+    struct Evidence<'a> {
+        content: ContentContext<'a>,
         emphasis: bool,
         words: Vec<(String, bool)>,
         targets: Vec<(String, bool)>,
         in_beta: bool,
     }
-    impl<'ir> Visit<'ir> for Evidence {
+    impl<'ir> Visit<'ir> for Evidence<'ir> {
         fn visit_block(&mut self, block: &'ir Block) {
             let previous = self.in_beta;
             self.in_beta = match block {
                 Block::Preformatted { children, .. } | Block::Paragraph { children, .. } => {
-                    visible(children) == "BETA"
+                    visible(self.content, children) == "BETA"
                 }
                 _ => false,
             };
@@ -152,15 +141,22 @@ fn nested_display_targets_remain_on_the_inner_body_and_fonts_survive_boundaries(
             let previous = self.emphasis;
             match inline {
                 Inline::Emphasis { .. } => self.emphasis = true,
-                Inline::Text { value } => self.words.push((value.clone(), self.emphasis)),
+                Inline::Text { .. } => {
+                    let InlineView::Text(value) = self.content.inline(inline).unwrap() else {
+                        unreachable!()
+                    };
+                    self.words.push((value.to_owned(), self.emphasis));
+                }
                 Inline::Anchor {
-                    fragment_aliases,
-                    owner_source,
-                    ..
+                    fragment_aliases, ..
                 } => {
                     for alias in fragment_aliases {
                         if alias.as_str() == "Inner.Target" {
-                            assert!(owner_source.is_some());
+                            let InlineView::Anchor(anchor) = self.content.inline(inline).unwrap()
+                            else {
+                                unreachable!()
+                            };
+                            assert!(anchor.owner_source().is_some());
                             self.targets.push((alias.to_string(), self.in_beta));
                         }
                     }
@@ -175,6 +171,7 @@ fn nested_display_targets_remain_on_the_inner_body_and_fonts_survive_boundaries(
         ".Bd -literal -offset 2n\n.Bf -emphasis\nALPHA\n.Tg Inner.Target\n.Bd -literal -offset 3n\nBETA\n.Ed\nGAMMA\n.Ef\n.Ed",
     );
     let mut evidence = Evidence {
+        content: content.document.as_ref().unwrap().content(),
         emphasis: false,
         words: Vec::new(),
         targets: Vec::new(),
@@ -263,7 +260,10 @@ fn first_child_displays_inherit_only_real_predecessors_across_parent_scopes() {
                         .iter()
                         .find(|block| match block {
                             Block::Paragraph { children, .. }
-                            | Block::Preformatted { children, .. } => visible(children) == "INNER",
+                            | Block::Preformatted { children, .. } => {
+                                visible(content.document.as_ref().unwrap().content(), children)
+                                    == "INNER"
+                            }
                             _ => false,
                         })
                         .unwrap();
@@ -313,13 +313,13 @@ fn empty_displays_preserve_their_independent_requests_without_visible_leaves() {
 
 #[test]
 fn first_item_display_boundaries_follow_the_native_list_kind() {
-    struct Gap(Option<u16>);
-    impl<'a> Visit<'a> for Gap {
+    struct Gap<'a>(Option<u16>, ContentContext<'a>);
+    impl<'a> Visit<'a> for Gap<'a> {
         fn visit_block(&mut self, block: &'a Block) {
             if let Block::Preformatted {
                 children, layout, ..
             } = block
-                && visible(children) == "INNER"
+                && visible(self.1, children) == "INNER"
             {
                 self.0 = Some(layout.spacing_before_lines);
             }
@@ -351,7 +351,7 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
                 ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{before}.Bl {list} -compact\n.It{head}\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n"
             );
             let content = load_roff_bytes(source.as_bytes()).unwrap();
-            let mut gap = Gap(None);
+            let mut gap = Gap(None, content.document.as_ref().unwrap().content());
             gap.visit_document(content.document.as_ref().unwrap());
             assert_eq!(
                 gap.0,

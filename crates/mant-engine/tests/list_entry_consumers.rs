@@ -3,15 +3,71 @@
 mod semantic_read;
 use mant_codec::encode::render_markdown;
 use mant_ir::{
-    Block, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryKind, Inline,
-    LayoutHint, ListItem, ListKind, NameCase, ResolvedContent,
+    Block, ContentAtom, ContentAtomKey, ContentAtomKind, ContentByteRange, ContentOwner,
+    ContentOwnerKey, ContentOwnerKind, ContentRef, ContentRoot, ContentRootKey, ContentRootKind,
+    ContentStore, ContentStyle, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot,
+    EntryKind, Inline, LayoutHint, ListItem, ListKind, NameCase, Provenance, ResolvedContent,
 };
 use mant_loader::load_markdown_text;
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
 use mant_query::build_outline_projection;
 use mant_render::{render_excerpt_markdown, render_excerpt_text, render_query_text};
 
-fn item(name: &str, payload: &str, entry: bool) -> ListItem {
+fn item(store: &mut ContentStore, name: &str, payload: &str, entry: bool) -> ListItem {
+    let owner = ContentOwnerKey::new(u32::try_from(store.owners.len() + 1).unwrap()).unwrap();
+    let root = ContentRootKey::new(u32::try_from(store.roots.len() + 1).unwrap()).unwrap();
+    let code_atom = ContentAtomKey::new(u32::try_from(store.atoms.len() + 1).unwrap()).unwrap();
+    let text_atom = ContentAtomKey::new(u32::try_from(store.atoms.len() + 2).unwrap()).unwrap();
+    let suffix = format!(" — {payload}: punctuation | stays.");
+    store.owners.push(ContentOwner {
+        key: owner,
+        kind: ContentOwnerKind::ListItem,
+        roots: vec![root],
+        provenance: Provenance::Unknown,
+    });
+    store.roots.push(ContentRoot {
+        key: root,
+        owner,
+        kind: ContentRootKind::Body,
+        atoms: vec![code_atom, text_atom],
+        points: Vec::new(),
+        provenance: Provenance::Unknown,
+    });
+    for (key, value, literal) in [
+        (code_atom, name.to_owned(), true),
+        (text_atom, suffix.clone(), false),
+    ] {
+        store.atoms.push(ContentAtom {
+            key,
+            root,
+            owner,
+            kind: ContentAtomKind::Text {
+                text: value,
+                display_override: None,
+            },
+            style: ContentStyle {
+                literal,
+                ..ContentStyle::default()
+            },
+            role: None,
+            link: None,
+            provenance: Provenance::Unknown,
+        });
+    }
+    let code = ContentRef {
+        atom: code_atom,
+        bytes: ContentByteRange {
+            start: 0,
+            end: u32::try_from(name.len()).unwrap(),
+        },
+    };
+    let prose = ContentRef {
+        atom: text_atom,
+        bytes: ContentByteRange {
+            start: 0,
+            end: u32::try_from(suffix.len()).unwrap(),
+        },
+    };
     ListItem {
         layout: mant_ir::ListItemLayout::default(),
         source: None,
@@ -44,10 +100,8 @@ fn item(name: &str, payload: &str, entry: bool) -> ListItem {
         }),
         blocks: vec![Block::Paragraph {
             children: vec![
-                Inline::Code { value: name.into() },
-                Inline::Text {
-                    value: format!(" — {payload}: punctuation | stays."),
-                },
+                Inline::Code { content: code },
+                Inline::Text { content: prose },
             ],
             layout: LayoutHint::default(),
             source: None,
@@ -56,14 +110,14 @@ fn item(name: &str, payload: &str, entry: bool) -> ListItem {
 }
 
 fn query(annotated: bool) -> ResolvedContent {
-    let mut query = load_markdown_text("# Example\n\nPlaceholder.\n", None).unwrap();
-    query.document.as_mut().unwrap().blocks = vec![Block::List {
+    let mut query = load_markdown_text("# Example\n", None).unwrap();
+    let document = query.document.as_mut().unwrap();
+    let intro = item(&mut document.content_store, "intro", "FIRST", false);
+    let run = item(&mut document.content_store, "run", "SECOND", annotated);
+    document.blocks = vec![Block::List {
         kind: ListKind::Ordered { start: Some(7) },
         compact: false,
-        items: vec![
-            item("intro", "FIRST", false),
-            item("run", "SECOND", annotated),
-        ],
+        items: vec![intro, run],
         layout: LayoutHint {
             indent_columns: 2,
             ..LayoutHint::default()
@@ -118,7 +172,8 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
             (*kind, *compact, layout.indent_columns),
             (ListKind::Ordered { start: Some(8) }, false, 2)
         );
-        assert_eq!(items, &[item("run", "SECOND", true)]);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].entry.as_ref().unwrap().names, ["run"]);
         assert_eq!(entry.entry_owner().unwrap().facts().unwrap().names, ["run"]);
         let text = render_excerpt_text(&excerpt);
         assert!(
@@ -148,12 +203,13 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
 fn excerpt_ordinals_preserve_unknown_zero_and_saturated_source_starts() {
     for start in [None, Some(0), Some(7), Some(u64::MAX)] {
         let mut query = query(true);
-        let Block::List { kind, items, .. } = &mut query.document.as_mut().unwrap().blocks[0]
-        else {
+        let document = query.document.as_mut().unwrap();
+        let last = item(&mut document.content_store, "last", "THIRD", true);
+        let Block::List { kind, items, .. } = &mut document.blocks[0] else {
             unreachable!()
         };
         *kind = ListKind::Ordered { start };
-        items.push(item("last", "THIRD", true));
+        items.push(last);
         let original = query.document.as_ref().unwrap().clone();
         let excerpt = semantic_read::semantic_excerpt(&query, &["run", "last"]).unwrap();
         for (index, selection) in excerpt.selections.iter().enumerate() {
@@ -182,13 +238,15 @@ fn excerpt_ordinals_preserve_unknown_zero_and_saturated_source_starts() {
 #[test]
 fn nested_ordinary_owners_share_semantic_paths_without_losing_parent_content() {
     let mut query = query(true);
-    let Block::List { items, .. } = &mut query.document.as_mut().unwrap().blocks[0] else {
+    let document = query.document.as_mut().unwrap();
+    let child = item(&mut document.content_store, "child", "CHILD", true);
+    let Block::List { items, .. } = &mut document.blocks[0] else {
         unreachable!()
     };
     items[1].blocks.push(Block::List {
         kind: ListKind::Bullet,
         compact: true,
-        items: vec![item("child", "CHILD", true)],
+        items: vec![child],
         layout: LayoutHint::default(),
         source: None,
     });
@@ -224,7 +282,7 @@ fn search_maps_ordinary_list_content_to_the_innermost_entry() {
             pattern: "SECOND".into(),
             syntax: mant_protocol::SearchSyntax::default(),
             case: mant_protocol::SearchCase::default(),
-            scope: mant_protocol::SearchScope::default(),
+            scope: mant_protocol::SearchScope::Visible,
             word: false,
             context_lines: 0,
             limit: 10,
@@ -283,7 +341,7 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
                 pattern: "SECOND".into(),
                 syntax: mant_protocol::SearchSyntax::default(),
                 case: mant_protocol::SearchCase::default(),
-                scope: mant_protocol::SearchScope::default(),
+                scope: mant_protocol::SearchScope::Visible,
                 word: false,
                 context_lines: 0,
                 limit: 10,
@@ -311,15 +369,20 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
         }
     }
     for wrapped in [false, true] {
-        let mut parent = item("parent", "BEFORE", true);
+        let mut query = query(false);
+        let document = query.document.as_mut().unwrap();
+        let store = &mut document.content_store;
+        let mut parent = item(store, "parent", "BEFORE", true);
         parent.blocks.push(Block::List {
             kind: ListKind::Bullet,
             compact: false,
-            items: vec![item("child", "日本PAYLOAD", true)],
+            items: vec![item(store, "child", "日本PAYLOAD", true)],
             layout: LayoutHint::default(),
             source: None,
         });
-        parent.blocks.extend(item("tail", "AFTER", false).blocks);
+        parent
+            .blocks
+            .extend(item(store, "tail", "AFTER", false).blocks);
         let ordinary = Block::List {
             kind: ListKind::Plain,
             compact: false,
@@ -327,20 +390,47 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
             layout: LayoutHint::default(),
             source: None,
         };
-        let table: Block = serde_json::from_value(serde_json::json!({
-            "type": "table", "rows": [{"cells": [
-                {"blocks": [ordinary]},
-                {"blocks": [{"type": "definition-list", "items": [{
-                    "terms": [[{"type": "code", "value": "sibling"}]],
-                    "description": item("text", "NEIGHBOR", false).blocks,
-                    "entry": {"id": "sibling", "kind": {"kind": "term"},
-                        "case": "sensitive", "names": []}
-                }]}]}
-            ]}]
-        }))
-        .unwrap();
-        let mut query = query(false);
-        query.document.as_mut().unwrap().blocks = if wrapped {
+        let sibling_item = item(store, "sibling", "unused", false);
+        let Block::Paragraph { children, .. } = &sibling_item.blocks[0] else {
+            unreachable!()
+        };
+        let sibling_term = children[0].clone();
+        let neighbor = item(store, "text", "NEIGHBOR", false);
+        let definition = Block::DefinitionList {
+            items: vec![mant_ir::DefinitionItem {
+                terms: vec![vec![sibling_term]],
+                description: neighbor.blocks,
+                entry: Some(
+                    serde_json::from_value(serde_json::json!({
+                        "id": "sibling", "kind": {"kind": "term"},
+                        "case": "sensitive", "names": []
+                    }))
+                    .unwrap(),
+                ),
+                layout: mant_ir::DefinitionLayout::default(),
+                source: None,
+            }],
+            declaration_groups: Vec::new(),
+            compact: false,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let cell = |blocks| mant_ir::TableCell {
+            kind: mant_ir::TableCellKind::Text,
+            blocks,
+            column_span: 1,
+            row_span: 1,
+            alignment: None,
+        };
+        let table = Block::Table {
+            rows: vec![mant_ir::TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: vec![cell(vec![ordinary]), cell(vec![definition])],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        document.blocks = if wrapped {
             vec![Block::List {
                 kind: ListKind::Bullet,
                 compact: false,
@@ -358,40 +448,35 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
         };
         let text = render_query_text(&query);
         let markdown = render_markdown(&query);
-        for (pattern, path) in [
-            ("BEFORE", "root/e1"),
-            ("日本PAYLOAD", "root/e1/e1"),
-            ("AFTER", "root/e1"),
-            ("NEIGHBOR", "root/e2"),
-        ] {
-            for scope in [
-                mant_protocol::SearchScope::Visible,
-                mant_protocol::SearchScope::Markdown,
-            ] {
-                let result = mant_query::search_query(
-                    &query,
-                    &mant_protocol::SearchQuery {
-                        pattern: pattern.into(),
-                        syntax: mant_protocol::SearchSyntax::default(),
-                        case: mant_protocol::SearchCase::default(),
-                        scope,
-                        word: false,
-                        context_lines: 0,
-                        limit: 10,
-                        offset: 0,
-                    },
-                )
-                .unwrap();
-                assert_eq!(result.matches.len(), 1, "{pattern}: {scope:?}");
-                assert_eq!(
-                    result.matches[0].outline.path(),
-                    path,
-                    "{pattern}: {scope:?}"
-                );
-            }
-        }
+        assert_table_search_owners(&query);
         StripFacts.visit_document_mut(query.document.as_mut().unwrap());
         assert_eq!(text, render_query_text(&query));
         assert_eq!(markdown, render_markdown(&query));
+    }
+}
+
+fn assert_table_search_owners(query: &ResolvedContent) {
+    for (pattern, path) in [
+        ("BEFORE", "root/e1"),
+        ("日本PAYLOAD", "root/e1/e1"),
+        ("AFTER", "root/e1"),
+        ("NEIGHBOR", "root/e2"),
+    ] {
+        let result = mant_query::search_query(
+            query,
+            &mant_protocol::SearchQuery {
+                pattern: pattern.into(),
+                syntax: mant_protocol::SearchSyntax::default(),
+                case: mant_protocol::SearchCase::default(),
+                scope: mant_protocol::SearchScope::Visible,
+                word: false,
+                context_lines: 0,
+                limit: 10,
+                offset: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(result.matches.len(), 1, "{pattern}");
+        assert_eq!(result.matches[0].outline.path(), path, "{pattern}");
     }
 }

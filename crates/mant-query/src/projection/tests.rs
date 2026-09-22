@@ -1,63 +1,132 @@
 use crate::ResolvedContent;
 use mant_ir::{
-    Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentMeta, EntryFacts,
-    EntryKind, Inline, LayoutHint, NameCase, ParameterKind, Section, SourceCoordinates,
-    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
+    Block, ContentAtom, ContentAtomKey, ContentAtomKind, ContentByteRange, ContentOwner,
+    ContentOwnerKey, ContentOwnerKind, ContentRef, ContentRoot, ContentRootKey, ContentRootKind,
+    ContentStore, ContentStyle, DefinitionItem, Diagnostic, DiagnosticLevel, Document,
+    DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint, NameCase, ParameterKind, Provenance,
+    Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    TldrDocument, TldrOrigin,
 };
 use mant_protocol::{ContentSelector, EntryProjection, ExcerptSelection, OutlineNode};
 
 use super::{ProjectionError, build_outline, build_outline_projection, select_excerpt};
 
-fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
+fn inline(
+    document: &mut Document,
+    value: &str,
+    owner_kind: ContentOwnerKind,
+    root_kind: ContentRootKind,
+    literal: bool,
+) -> Inline {
+    let owner =
+        ContentOwnerKey::new(u32::try_from(document.content_store.owners.len() + 1).unwrap())
+            .unwrap();
+    let root = ContentRootKey::new(u32::try_from(document.content_store.roots.len() + 1).unwrap())
+        .unwrap();
+    let atom = ContentAtomKey::new(u32::try_from(document.content_store.atoms.len() + 1).unwrap())
+        .unwrap();
+    document.content_store.owners.push(ContentOwner {
+        key: owner,
+        kind: owner_kind,
+        roots: vec![root],
+        provenance: Provenance::Unknown,
+    });
+    document.content_store.roots.push(ContentRoot {
+        key: root,
+        owner,
+        kind: root_kind,
+        atoms: vec![atom],
+        points: Vec::new(),
+        provenance: Provenance::Unknown,
+    });
+    document.content_store.atoms.push(ContentAtom {
+        key: atom,
+        root,
+        owner,
+        kind: ContentAtomKind::Text {
+            text: value.to_owned(),
+            display_override: None,
+        },
+        style: ContentStyle {
+            literal,
+            ..ContentStyle::default()
+        },
+        role: None,
+        link: None,
+        provenance: Provenance::Unknown,
+    });
+    let content = ContentRef {
+        atom,
+        bytes: ContentByteRange {
+            start: 0,
+            end: u32::try_from(value.len()).unwrap(),
+        },
+    };
+    if literal {
+        Inline::Code { content }
+    } else {
+        Inline::Text { content }
+    }
+}
+
+fn section(document: &mut Document, id: &str, title: &str) -> Section {
     Section {
         id: id.to_owned().into(),
         fragment_aliases: Vec::new(),
-        heading: title.into(),
+        heading: mant_ir::Heading {
+            content: vec![inline(
+                document,
+                title,
+                ContentOwnerKind::Section,
+                ContentRootKind::Heading,
+                false,
+            )],
+            source: None,
+        },
         spacing_before_lines: 0,
         blocks: Vec::new(),
-        children,
+        children: Vec::new(),
         source: None,
     }
 }
 
 fn query() -> ResolvedContent {
+    let mut document = Document {
+        heading: None,
+        parser: None,
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Path {
+                name: "/man/demo.1".to_owned(),
+            },
+            format: SourceFormat::Man,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
+        content_store: ContentStore::default(),
+        meta: DocumentMeta {
+            manual_section: Some("1".to_owned()),
+            ..DocumentMeta::default()
+        },
+        fragment_aliases: Vec::new(),
+        diagnostics: Vec::new(),
+        blocks: Vec::new(),
+        sections: Vec::new(),
+    };
+    let name = section(&mut document, "name-1", "NAME");
+    let mut options = section(&mut document, "options-2", "OPTIONS");
+    options.children = vec![
+        section(&mut document, "common-3", "Common options"),
+        section(&mut document, "other-4", "Other options"),
+    ];
+    let files = section(&mut document, "files-5", "FILES");
+    document.sections = vec![name, options, files];
     ResolvedContent {
         address: None,
         label: "demo".to_owned(),
-        document: Some(Document {
-            heading: None,
-            parser: None,
-            sources: vec![SourceRecord {
-                key: SourceKey::FIRST,
-                identity: SourceIdentity::Path {
-                    name: "/man/demo.1".to_owned(),
-                },
-                format: SourceFormat::Man,
-                decoded_byte_length: 0,
-                content_sha256: None,
-                coordinates: SourceCoordinates::DecodedUtf8Bytes,
-            }],
-            root_source: SourceKey::FIRST,
-            meta: DocumentMeta {
-                manual_section: Some("1".to_owned()),
-                ..DocumentMeta::default()
-            },
-            fragment_aliases: Vec::new(),
-            diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![
-                section("name-1", "NAME", Vec::new()),
-                section(
-                    "options-2",
-                    "OPTIONS",
-                    vec![
-                        section("common-3", "Common options", Vec::new()),
-                        section("other-4", "Other options", Vec::new()),
-                    ],
-                ),
-                section("files-5", "FILES", Vec::new()),
-            ],
-        }),
+        document: Some(document),
         tldr: None,
     }
 }
@@ -76,6 +145,7 @@ fn tldr() -> TldrDocument {
 }
 
 fn definition(
+    document: &mut Document,
     id: &str,
     role: EntryKind,
     names: &[&str],
@@ -118,9 +188,13 @@ fn definition(
         terms: forms
             .iter()
             .map(|form| {
-                vec![Inline::Code {
-                    value: (*form).to_owned(),
-                }]
+                vec![inline(
+                    document,
+                    form,
+                    ContentOwnerKind::DefinitionItem,
+                    ContentRootKind::Term,
+                    true,
+                )]
             })
             .collect(),
         description,
@@ -133,7 +207,10 @@ fn definition(
 }
 
 fn query_with_semantic_entries() -> ResolvedContent {
+    let mut query = query();
+    let document = query.document.as_mut().expect("document");
     let value = definition(
+        document,
         "value-yes",
         EntryKind::Value,
         &["yes"],
@@ -141,6 +218,7 @@ fn query_with_semantic_entries() -> ResolvedContent {
         Vec::new(),
     );
     let local_forward = definition(
+        document,
         "option-local-forward",
         EntryKind::Parameter {
             parameter_kind: mant_ir::ParameterKind::Option,
@@ -156,6 +234,7 @@ fn query_with_semantic_entries() -> ResolvedContent {
         }],
     );
     let marker = definition(
+        document,
         "marker-end-options",
         EntryKind::Parameter {
             parameter_kind: mant_ir::ParameterKind::Marker,
@@ -164,16 +243,13 @@ fn query_with_semantic_entries() -> ResolvedContent {
         &["--"],
         Vec::new(),
     );
-    let mut query = query();
-    query.document.as_mut().expect("document").sections[1]
-        .blocks
-        .push(Block::DefinitionList {
-            declaration_groups: Vec::new(),
-            items: vec![local_forward, marker],
-            compact: true,
-            layout: LayoutHint::default(),
-            source: None,
-        });
+    document.sections[1].blocks.push(Block::DefinitionList {
+        declaration_groups: Vec::new(),
+        items: vec![local_forward, marker],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    });
     query
 }
 
@@ -313,24 +389,31 @@ fn every_projected_entry_path_round_trips_through_read_and_explain() {
     }
 
     let mut query = query_with_semantic_entries();
-    query.document.as_mut().expect("document").sections[1].children[0]
+    let document = query.document.as_mut().expect("document");
+    let description = vec![Block::Paragraph {
+        children: vec![inline(
+            document,
+            "Accept the current line and fetch the next history entry.",
+            ContentOwnerKind::Content,
+            ContentRootKind::Body,
+            false,
+        )],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let entry = definition(
+        document,
+        "generic-readline-term",
+        EntryKind::Term,
+        &[],
+        &["operate-and-get-next (C-o)"],
+        description,
+    );
+    document.sections[1].children[0]
         .blocks
         .push(Block::DefinitionList {
             declaration_groups: Vec::new(),
-            items: vec![definition(
-                "generic-readline-term",
-                EntryKind::Term,
-                &[],
-                &["operate-and-get-next (C-o)"],
-                vec![Block::Paragraph {
-                    children: vec![Inline::Text {
-                        value: "Accept the current line and fetch the next history entry."
-                            .to_owned(),
-                    }],
-                    layout: LayoutHint::default(),
-                    source: None,
-                }],
-            )],
+            items: vec![entry],
             compact: true,
             layout: LayoutHint::default(),
             source: None,
@@ -406,23 +489,24 @@ fn outline_root_preserves_identity_excludes_siblings_and_rejects_names() {
             if id == "option-local-forward" && children.is_empty()
     ));
 
-    query.document.as_mut().expect("document").sections[2]
-        .blocks
-        .push(Block::DefinitionList {
-            declaration_groups: Vec::new(),
-            items: vec![definition(
-                "option-other-local-forward",
-                EntryKind::Parameter {
-                    parameter_kind: mant_ir::ParameterKind::Option,
-                },
-                &["-L"],
-                &["-L path"],
-                Vec::new(),
-            )],
-            compact: true,
-            layout: LayoutHint::default(),
-            source: None,
-        });
+    let document = query.document.as_mut().expect("document");
+    let entry = definition(
+        document,
+        "option-other-local-forward",
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        },
+        &["-L"],
+        &["-L path"],
+        Vec::new(),
+    );
+    document.sections[2].blocks.push(Block::DefinitionList {
+        declaration_groups: Vec::new(),
+        items: vec![entry],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    });
     let error = build_outline_projection(
         &query,
         EntryProjection::All,
@@ -435,30 +519,41 @@ fn outline_root_preserves_identity_excludes_siblings_and_rejects_names() {
 #[test]
 fn explicit_section_ids_are_independent_from_semantic_explanations() {
     let mut query = query();
-    query.document.as_mut().expect("document").sections[0] = Section {
+    let document = query.document.as_mut().expect("document");
+    let heading = mant_ir::Heading {
+        content: vec![inline(
+            document,
+            "Force",
+            ContentOwnerKind::Section,
+            ContentRootKind::Heading,
+            false,
+        )],
+        source: None,
+    };
+    document.sections[0] = Section {
         id: "force".into(),
         fragment_aliases: Vec::new(),
-        heading: "Force".into(),
+        heading,
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
         source: None,
     };
-    query.document.as_mut().expect("document").sections[1]
-        .blocks
-        .push(Block::DefinitionList {
-            declaration_groups: Vec::new(),
-            items: vec![definition(
-                "command-force",
-                EntryKind::Command,
-                &["force"],
-                &["force"],
-                Vec::new(),
-            )],
-            compact: true,
-            layout: LayoutHint::default(),
-            source: None,
-        });
+    let entry = definition(
+        document,
+        "command-force",
+        EntryKind::Command,
+        &["force"],
+        &["force"],
+        Vec::new(),
+    );
+    document.sections[1].blocks.push(Block::DefinitionList {
+        declaration_groups: Vec::new(),
+        items: vec![entry],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    });
 
     let excerpt =
         select_excerpt(&query, &[ContentSelector::id("force")]).expect("exact section ID");
@@ -539,10 +634,15 @@ fn addresses_document_content_before_the_first_heading_as_root() {
     let mut query = query();
     let document = query.document.as_mut().expect("document");
     document.sources[0].format = SourceFormat::Markdown;
+    let children = vec![inline(
+        document,
+        "Document preface.",
+        ContentOwnerKind::Document,
+        ContentRootKind::Body,
+        false,
+    )];
     document.blocks.push(Block::Paragraph {
-        children: vec![Inline::Text {
-            value: "Document preface.".to_owned(),
-        }],
+        children,
         layout: LayoutHint::default(),
         source: None,
     });
@@ -624,39 +724,43 @@ fn child_selection_retains_ancestor_breadcrumbs() {
 #[test]
 fn structural_paths_take_precedence_over_colliding_entry_ids() {
     let mut query = query();
-    query.document.as_mut().expect("document").sections[1]
-        .blocks
-        .push(Block::DefinitionList {
-            declaration_groups: Vec::new(),
-            items: vec![DefinitionItem {
-                source: None,
-                entry: Some(EntryFacts {
-                    name_bindings: Vec::new(),
-                    alias_groups: Vec::new(),
-                    alias_of: None,
-                    forms: Vec::new(),
-                    id: "3".into(),
-                    kind: EntryKind::Parameter {
-                        parameter_kind: mant_ir::ParameterKind::Option,
-                    },
-                    case: NameCase::Sensitive,
-                    names: vec!["-3".to_owned()],
-                    value_domain: None,
-                }),
-                terms: vec![vec![Inline::Code {
-                    value: "-3".to_owned(),
-                }]],
-                description: Vec::new(),
-                layout: mant_ir::DefinitionLayout {
-                    inline_term: false,
-                    spacing_before_lines: None,
-                    ..Default::default()
-                },
-            }],
-            compact: true,
-            layout: LayoutHint::default(),
+    let document = query.document.as_mut().expect("document");
+    let terms = vec![vec![inline(
+        document,
+        "-3",
+        ContentOwnerKind::DefinitionItem,
+        ContentRootKind::Term,
+        true,
+    )]];
+    document.sections[1].blocks.push(Block::DefinitionList {
+        declaration_groups: Vec::new(),
+        items: vec![DefinitionItem {
             source: None,
-        });
+            entry: Some(EntryFacts {
+                name_bindings: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
+                forms: Vec::new(),
+                id: "3".into(),
+                kind: EntryKind::Parameter {
+                    parameter_kind: mant_ir::ParameterKind::Option,
+                },
+                case: NameCase::Sensitive,
+                names: vec!["-3".to_owned()],
+                value_domain: None,
+            }),
+            terms,
+            description: Vec::new(),
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+                ..Default::default()
+            },
+        }],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    });
 
     let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::path("3")])
         .expect("section path wins");

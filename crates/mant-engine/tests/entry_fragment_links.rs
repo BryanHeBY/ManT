@@ -1,6 +1,6 @@
 //! Every indexed content owner is a local navigation destination.
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
-use mant_ir::{Block, DefinitionItem, DocumentIndex, Inline, LayoutHint, LinkTarget};
+use mant_ir::{Block, DefinitionItem, DocumentIndex, LayoutHint, LinkTarget};
 use mant_loader::load_markdown_text;
 
 #[test]
@@ -65,7 +65,7 @@ fn missing_ids_and_identity_collisions_remain_diagnostics() {
     doc.sections.push(mant_ir::Section {
         id: "option-help".into(),
         fragment_aliases: vec!["Mixed.Target".into()],
-        heading: "Collision".into(),
+        heading: doc.heading.as_ref().unwrap().clone(),
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
@@ -82,16 +82,15 @@ fn missing_ids_and_identity_collisions_remain_diagnostics() {
             "{code}"
         );
     }
-    let Block::Paragraph { children, .. } = &mut doc.blocks[0] else {
-        panic!("paragraph")
+    let target = doc
+        .content_store
+        .links
+        .iter_mut()
+        .find(|link| matches!(&link.target, LinkTarget::Section { id } if id.as_str() == "absent"))
+        .expect("the authored missing-fragment occurrence");
+    target.target = LinkTarget::Section {
+        id: "Mixed.Target".into(),
     };
-    children.push(Inline::Link {
-        target: LinkTarget::Section {
-            id: "Mixed.Target".into(),
-        },
-        title: None,
-        children: Vec::new(),
-    });
     // Typed local links use canonical IDs; exact authored aliases resolve at
     // the source boundary, not by loosening canonical identity validation.
     assert!(

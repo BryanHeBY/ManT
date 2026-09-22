@@ -5,7 +5,7 @@
 //! template heads; those do not invalidate a contiguous semantic sub-run.
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::{
-    Block, DefinitionItem, Document, SourceSpan,
+    Block, ContentContext, DefinitionItem, Document, SourceSpan,
     visit::{self, Visit},
 };
 use serde_json::{Value, json};
@@ -13,8 +13,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 type OwnerKey = (u32, u32, usize);
 
-#[derive(Default)]
 struct Observed<'a> {
+    content: ContentContext<'a>,
     owners: BTreeMap<OwnerKey, &'a DefinitionItem>,
     pointers: BTreeMap<usize, OwnerKey>,
     occurrences: BTreeMap<(u32, u32), usize>,
@@ -55,7 +55,7 @@ impl<'a> Visit<'a> for Observed<'a> {
         } = block
         {
             for group in declaration_groups {
-                let sources = group.resolve(items).and_then(|members| {
+                let sources = group.resolve(self.content, items).and_then(|members| {
                     members
                         .iter()
                         .map(|i| i.source.map(|_| std::ptr::from_ref(i) as usize))
@@ -99,12 +99,14 @@ fn paragraph_boundary(node: &Node) -> bool {
         .any(paragraph_boundary)
 }
 
-fn bracket_head(item: &DefinitionItem) -> bool {
+fn bracket_head(content: ContentContext<'_>, item: &DefinitionItem) -> bool {
     // Native text can still contain font escapes before `[`. Inspect the
     // source-correlated visible head, not raw roff bytes or a derived ID.
-    item.terms
-        .first()
-        .is_some_and(|term| super::inline_text(term).trim_start().starts_with('['))
+    item.terms.first().is_some_and(|term| {
+        super::inline_text(content, term)
+            .trim_start()
+            .starts_with('[')
+    })
 }
 
 fn native_numeric_label(node: &Node) -> Option<String> {
@@ -140,11 +142,11 @@ fn literal_numeric_label(text: &str) -> Option<String> {
     (!label.is_empty()).then_some(label)
 }
 
-fn unsigned_numeric_head(node: &Node, item: &DefinitionItem) -> bool {
+fn unsigned_numeric_head(content: ContentContext<'_>, node: &Node, item: &DefinitionItem) -> bool {
     let [term] = item.terms.as_slice() else {
         return false;
     };
-    let text = super::inline_text(term);
+    let text = super::inline_text(content, term);
     native_numeric_label(node).is_some_and(|label| label == text.trim_matches([' ', '\t']))
 }
 
@@ -451,9 +453,9 @@ impl Audit<'_> {
                             .is_none_or(|facts| facts.names.is_empty())
                     })
                     .and_then(|item| {
-                        if bracket_head(item) {
+                        if bracket_head(self.observed.content, item) {
                             Some("parameter-only-head")
-                        } else if unsigned_numeric_head(child, item) {
+                        } else if unsigned_numeric_head(self.observed.content, child, item) {
                             Some("unsigned-numeric-head")
                         } else {
                             None
@@ -544,7 +546,16 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
             native_keys(child, counts, keys, source_nodes, list_owners);
         }
     }
-    let mut observed = Observed::default();
+    let mut observed = Observed {
+        content: document.content(),
+        owners: BTreeMap::new(),
+        pointers: BTreeMap::new(),
+        occurrences: BTreeMap::new(),
+        list_owners: BTreeSet::new(),
+        group_pointers: Vec::new(),
+        groups: Vec::new(),
+        invalid: 0,
+    };
     observed.visit_document(document);
     observed.groups = observed
         .group_pointers
@@ -630,6 +641,16 @@ mod tests {
         let mut document =
             mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
         assert!(violations(&profile(&native.document.root, &document)).is_empty());
+        let atom = document
+            .content_store
+            .atoms
+            .iter_mut()
+            .find(|atom| atom.kind.text() == Some("foo"))
+            .expect("source-proven first term");
+        let mant_ir::ContentAtomKind::Text { text, .. } = &mut atom.kind else {
+            panic!("text term atom");
+        };
+        *text = "422".to_owned();
         let Block::DefinitionList {
             items,
             declaration_groups,
@@ -642,9 +663,6 @@ mod tests {
         assert_eq!(declaration_groups[0].end_item, 3);
         // Coupled corruption must not turn a real source declaration into a
         // numeric exception and then bless the shortened observed group.
-        items[0].terms = vec![vec![mant_ir::Inline::Text {
-            value: "422".into(),
-        }]];
         items[0].entry.as_mut().unwrap().names.clear();
         declaration_groups[0].start_item = 1;
         let changed = profile(&native.document.root, &document);

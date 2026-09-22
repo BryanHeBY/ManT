@@ -57,7 +57,7 @@ fn separates_definition_layout_arguments_from_visible_terms() {
         items
             .iter()
             .flat_map(|item| item.terms.iter())
-            .map(|term| inline_text(term))
+            .map(|term| inline_text(document.content(), term))
             .collect::<Vec<_>>(),
         ["man ls", "4", "1"]
     );
@@ -75,7 +75,7 @@ fn separates_definition_layout_arguments_from_visible_terms() {
         items
             .iter()
             .flat_map(|item| item.terms.iter())
-            .all(|term| !inline_text(term).contains("96u"))
+            .all(|term| !inline_text(document.content(), term).contains("96u"))
     );
 }
 
@@ -103,7 +103,7 @@ fn line_continuations_do_not_merge_independent_tp_owners() {
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["-symbols=file", "-s file"]
     );
@@ -131,13 +131,16 @@ fn keeps_unrelated_consecutive_tp_definitions_separate() {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "-a");
+    assert_eq!(inline_text(document.content(), &items[0].terms[0]), "-a");
     assert!(items[0].description.is_empty());
-    assert_eq!(inline_text(&items[1].terms[0]), "-b");
+    assert_eq!(inline_text(document.content(), &items[1].terms[0]), "-b");
     let Block::Paragraph { children, .. } = &items[1].description[0] else {
         panic!("expected second tagged paragraph description");
     };
-    assert_eq!(inline_text(children), "Description only for b.");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "Description only for b."
+    );
 }
 
 #[test]
@@ -160,13 +163,16 @@ fn paragraph_distance_zero_does_not_turn_tp_items_into_aliases() {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "-a");
+    assert_eq!(inline_text(document.content(), &items[0].terms[0]), "-a");
     assert!(items[0].description.is_empty());
-    assert_eq!(inline_text(&items[1].terms[0]), "-b");
+    assert_eq!(inline_text(document.content(), &items[1].terms[0]), "-b");
     let Block::Paragraph { children, .. } = &items[1].description[0] else {
         panic!("expected second tagged paragraph description");
     };
-    assert_eq!(inline_text(children), "Description only for b.");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "Description only for b."
+    );
 }
 
 #[test]
@@ -193,7 +199,7 @@ fn restoring_paragraph_distance_keeps_tp_owners_independent() {
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["bind first-form", "bind second-form"]
     );
@@ -226,7 +232,7 @@ fn head_paragraph_distance_keeps_tp_owners_independent() {
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["--first", "--second"]
     );
@@ -261,7 +267,7 @@ fn compact_tp_heads_and_preceding_orphan_remain_independent() {
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["orphan", "--first", "--second"]
     );
@@ -301,24 +307,30 @@ fn adjacent_compact_tp_runs_keep_all_owner_boundaries() {
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["--first", "--second", "--third", "--fourth"]
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[0].description.is_empty() && items[2].description.is_empty());
     assert_eq!(
-        inline_text(match &items[1].description[0] {
-            Block::Paragraph { children, .. } => children,
-            _ => panic!("paragraph"),
-        }),
+        inline_text(
+            document.content(),
+            match &items[1].description[0] {
+                Block::Paragraph { children, .. } => children,
+                _ => panic!("paragraph"),
+            }
+        ),
         "First description."
     );
     assert_eq!(
-        inline_text(match &items[3].description[0] {
-            Block::Paragraph { children, .. } => children,
-            _ => panic!("paragraph"),
-        }),
+        inline_text(
+            document.content(),
+            match &items[3].description[0] {
+                Block::Paragraph { children, .. } => children,
+                _ => panic!("paragraph"),
+            }
+        ),
         "Second description."
     );
 }
@@ -347,7 +359,7 @@ fn compact_ip_heads_keep_independent_descriptions() {
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["-a", "--all"]
     );
@@ -378,20 +390,21 @@ fn headless_ip_macros_continue_the_preceding_definition() {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "foo");
+    assert_eq!(inline_text(document.content(), &items[0].terms[0]), "foo");
     assert_eq!(items[0].description.len(), 3);
     assert_eq!(
         items[0]
             .description
             .iter()
             .filter_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(inline_text(children)),
+                Block::Paragraph { children, .. } =>
+                    Some(inline_text(document.content(), children)),
                 _ => None,
             })
             .collect::<Vec<_>>(),
         ["First paragraph.", "Second paragraph.", "Third paragraph."]
     );
-    assert_eq!(inline_text(&items[1].terms[0]), "bar");
+    assert_eq!(inline_text(document.content(), &items[1].terms[0]), "bar");
 }
 
 #[test]
@@ -419,7 +432,7 @@ fn tq_terms_share_one_semantic_option_identity() {
         items[0]
             .terms
             .iter()
-            .map(|term| inline_text(term))
+            .map(|term| inline_text(document.content(), term))
             .collect::<Vec<_>>(),
         ["--alpha", "-a", "--ALPHA"]
     );
@@ -454,7 +467,7 @@ fn ip_does_not_absorb_unproven_definition_heads() {
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["-a", "-b", "-c", "-d"]
     );
@@ -475,7 +488,7 @@ fn expands_mdoc_bsd_lifecycle_and_release_forms() {
         panic!("expected one BSD lifecycle paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "BSD BSD (currently in alpha test) BSD (currently in beta test) BSD (currently under development). 4.3BSD. 4.3BSD-Net/2. 386BSD-0.1."
     );
 }
@@ -492,7 +505,7 @@ fn preserves_mdoc_command_names_in_each_synopsis_form() {
         .blocks
         .iter()
         .map(|block| match block {
-            Block::Paragraph { children, .. } => inline_text(children),
+            Block::Paragraph { children, .. } => inline_text(document.content(), children),
             block => panic!("expected synopsis paragraph, got {block:?}"),
         })
         .collect::<Vec<_>>();
@@ -766,8 +779,14 @@ fn keeps_command_names_in_extended_mdoc_synopsis_terms() {
     let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
         panic!("expected synopsis definition list");
     };
-    assert_eq!(inline_text(&items[0].terms[0]), "zinject");
-    assert_eq!(inline_text(&items[1].terms[0]), "zinject -b bookmark");
+    assert_eq!(
+        inline_text(document.content(), &items[0].terms[0]),
+        "zinject"
+    );
+    assert_eq!(
+        inline_text(document.content(), &items[1].terms[0]),
+        "zinject -b bookmark"
+    );
     assert!(matches!(
         items[0].terms[0].as_slice(),
         [Inline::Anchor { id, .. }, Inline::Strong { .. }]
@@ -793,7 +812,7 @@ fn preserves_nested_mdoc_spacing_state_in_definition_terms() {
         panic!("expected an option definition list");
     };
     assert_eq!(
-        inline_text(&items[0].terms[0]),
+        inline_text(document.content(), &items[0].terms[0]),
         "-L local_socket:host:hostport"
     );
 }
@@ -819,7 +838,7 @@ Forward a local socket.\n.El\n",
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         [
             "-L [bind_address:]port:host:hostport",
@@ -853,7 +872,7 @@ Convert filenames from the specified encoding.\n\
     assert_eq!(
         items
             .iter()
-            .map(|item| inline_text(&item.terms[0]))
+            .map(|item| inline_text(document.content(), &item.terms[0]))
             .collect::<Vec<_>>(),
         ["-I encoding", "-O encoding"]
     );
@@ -891,7 +910,7 @@ fn generic_callable_terms_are_addressable_without_borrowing_a_later_taxonomy_bod
     let Block::Paragraph { children, .. } = &items[3].description[0] else {
         panic!("expected environment paragraph");
     };
-    assert!(inline_text(children).contains("PERL_INSTALL_ROOT"));
+    assert!(inline_text(document.content(), children).contains("PERL_INSTALL_ROOT"));
     assert!(
         declaration_groups.is_empty(),
         "generic index labels must not inherit ENVIRONMENT's body: {declaration_groups:?}"
@@ -928,7 +947,7 @@ Will accept only note events.\n",
     assert!(
         items
             .iter()
-            .any(|item| inline_text(&item.terms[0]) == "router_chan 0 7 0 15")
+            .any(|item| inline_text(document.content(), &item.terms[0]) == "router_chan 0 7 0 15")
     );
     assert!(declaration_groups.is_empty(), "{declaration_groups:?}");
 }
@@ -949,11 +968,14 @@ Select the archive mode without losing this description.\n\
         panic!("expected an option definition list");
     };
     assert_eq!(items.len(), 1);
-    assert_eq!(inline_text(&items[0].terms[0]), "-Z mode");
+    assert_eq!(
+        inline_text(document.content(), &items[0].terms[0]),
+        "-Z mode"
+    );
     assert_eq!(items[0].entry.as_ref().unwrap().names, ["-Z"]);
     assert!(items[0].description.iter().any(|description| {
         matches!(description, Block::Paragraph { children, .. }
-            if inline_text(children)
+            if inline_text(document.content(), children)
                 == "Select the archive mode without losing this description.")
     }));
 }
@@ -973,8 +995,14 @@ fn separates_alternative_terms_in_an_extended_mdoc_definition_head() {
     };
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].terms.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "ipaddr[/masklen]");
-    assert_eq!(inline_text(&items[0].terms[1]), "ipaddr[/prefixlen]");
+    assert_eq!(
+        inline_text(document.content(), &items[0].terms[0]),
+        "ipaddr[/masklen]"
+    );
+    assert_eq!(
+        inline_text(document.content(), &items[0].terms[1]),
+        "ipaddr[/prefixlen]"
+    );
 }
 
 #[test]
@@ -1016,10 +1044,16 @@ fn unclosed_compact_run_does_not_cross_a_section_boundary() {
         panic!("expected second definition list");
     };
     assert_eq!(first_items.len(), 1);
-    assert_eq!(inline_text(&first_items[0].terms[0]), "first");
+    assert_eq!(
+        inline_text(document.content(), &first_items[0].terms[0]),
+        "first"
+    );
     assert!(first_items[0].description.is_empty());
     assert_eq!(second_items.len(), 1);
-    assert_eq!(inline_text(&second_items[0].terms[0]), "second");
+    assert_eq!(
+        inline_text(document.content(), &second_items[0].terms[0]),
+        "second"
+    );
     assert!(!second_items[0].description.is_empty());
 }
 
@@ -1044,13 +1078,13 @@ fn tq_continuation_starts_at_the_immediately_preceding_head() {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "-a");
+    assert_eq!(inline_text(document.content(), &items[0].terms[0]), "-a");
     assert!(items[0].description.is_empty());
     assert_eq!(
         items[1]
             .terms
             .iter()
-            .map(|term| inline_text(term))
+            .map(|term| inline_text(document.content(), term))
             .collect::<Vec<_>>(),
         ["-b", "--beta"]
     );
@@ -1203,5 +1237,8 @@ fn preserves_the_boundary_that_enters_a_compact_mdoc_term() {
     let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
         panic!("expected a keyword definition list");
     };
-    assert_eq!(inline_text(&items[0].terms[0]), "@newuser name:uid:gid");
+    assert_eq!(
+        inline_text(document.content(), &items[0].terms[0]),
+        "@newuser name:uid:gid"
+    );
 }

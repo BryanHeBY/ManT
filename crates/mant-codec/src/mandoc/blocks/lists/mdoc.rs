@@ -2,9 +2,10 @@
 
 use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem,
-    DefinitionListStyle, Inline, ListItem, ListKind, LoweringContext, Node, NodeKind,
-    NormalizedListKind, RunInHeadStyle, TableRow, definition_item, first_part_children, layout,
-    lower_blocks_with_predecessor, ordinal_sequence, part_child_groups, source_span, targets,
+    DefinitionListStyle, ListItem, ListKind, LoweringContext, Node, NodeKind, NormalizedListKind,
+    RunInHeadStyle, TableRow, definition_item, first_part_children, layout,
+    lower_blocks_with_predecessor, part_child_groups, pending_ordinal_sequence, source_span,
+    targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -77,6 +78,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     } in trailing_targets
     {
         append_list_targets(
+            &context.content,
             &mut block,
             vec![target],
             layout(list_indent.content_origin()),
@@ -162,7 +164,7 @@ fn lower_mdoc_plain_list(
                     item_body_predecessor(kind == ListKind::Plain, index, paragraph_predecessor),
                     formatter,
                 );
-                attach_item_targets(&mut blocks, &item, layout(body_origin));
+                attach_item_targets(&context.content, &mut blocks, &item, layout(body_origin));
                 mant_ir::geometry::rebase_roots(&mut blocks, body_columns, marker_width);
                 ListItem {
                     layout: mant_ir::ListItemLayout::default(),
@@ -235,7 +237,7 @@ fn lower_mdoc_definition_list(
         })
         .collect::<Vec<_>>();
     if node.definition_list_style == Some(DefinitionListStyle::Tag)
-        && let Some(first) = ordinal_sequence(&lowered_items)
+        && let Some(first) = pending_ordinal_sequence(&lowered_items)
     {
         return Block::List {
             kind: ListKind::Ordered {
@@ -254,7 +256,12 @@ fn lower_mdoc_definition_list(
                     let marker_width = mant_ir::geometry::coordinate(
                         mant_ir::geometry::text_width(&format!("{ordinal}. ")),
                     );
-                    mdoc_list_item_from_definition(item, marker_width, source_span(node))
+                    super::man::ordered::pending_list_item_from_definition(
+                        &context.content,
+                        item,
+                        marker_width,
+                        source_span(node),
+                    )
                 })
                 .collect(),
             layout: layout(indent_columns),
@@ -263,7 +270,10 @@ fn lower_mdoc_definition_list(
     }
     Block::DefinitionList {
         declaration_groups: Vec::new(),
-        items: lowered_items,
+        items: lowered_items
+            .into_iter()
+            .map(|item| item.commit(context))
+            .collect(),
         compact: node.compact,
         layout: layout(indent_columns),
         source: source_span(node),
@@ -278,7 +288,7 @@ fn lower_mdoc_definition_item(
     geometry: crate::mandoc::layout::DefinitionGeometry,
     style: Option<DefinitionListStyle>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> DefinitionItem {
+) -> super::PendingDefinitionItem {
     context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
     let shares_pending_term_row = style != Some(DefinitionListStyle::Overhang);
     let head = first_part_children(item.node, NodeKind::Head);
@@ -327,7 +337,7 @@ fn lower_mdoc_definition_item(
         owner_source: source,
     } in item.targets().into_iter().rev()
     {
-        targets::attach_definition_targets(&mut lowered, [target], source);
+        lowered.attach_targets([target], source);
     }
     lowered
 }
@@ -335,45 +345,6 @@ fn lower_mdoc_definition_item(
 /// Drop source-visible ordinal terms after a complete mdoc tag list has proved
 /// ordered-list semantics, while retaining any navigation targets attached to
 /// those terms at the same item position.
-fn mdoc_list_item_from_definition(
-    item: DefinitionItem,
-    marker_width: i32,
-    source: Option<mant_ir::SourceSpan>,
-) -> ListItem {
-    let DefinitionItem {
-        source: item_source,
-        terms,
-        mut description,
-        layout: definition_layout,
-        ..
-    } = item;
-    mant_ir::geometry::rebase_roots(
-        &mut description,
-        definition_layout.body_indent_columns,
-        marker_width,
-    );
-    let owner_source = terms
-        .iter()
-        .find_map(|term| targets::inline_anchor_owner_source(term))
-        .or(source);
-    let mut anchors = Vec::new();
-    for term in &terms {
-        targets::inline_anchor_ids(term, &mut anchors);
-    }
-    targets::attach_targets(
-        &mut description,
-        anchors,
-        mant_ir::LayoutHint::default(),
-        owner_source,
-    );
-    ListItem {
-        layout: mant_ir::ListItemLayout::default(),
-        source: item_source,
-        entry: None,
-        blocks: description,
-    }
-}
-
 struct MdocListItem<'a> {
     node: &'a Node,
     leading_controls: &'a [Node],
@@ -402,6 +373,7 @@ impl MdocListItem<'_> {
 }
 
 fn attach_item_targets(
+    content: &crate::mandoc::content::LegacyContent,
     blocks: &mut Vec<Block>,
     item: &MdocListItem<'_>,
     layout: mant_ir::LayoutHint,
@@ -411,7 +383,7 @@ fn attach_item_targets(
         owner_source: source,
     } in item.targets().into_iter().rev()
     {
-        targets::attach_targets(blocks, [target], layout, source);
+        targets::attach_targets(content, blocks, [target], layout, source);
     }
 }
 
@@ -499,13 +471,19 @@ fn lower_mdoc_column_list(
                 .collect::<Vec<_>>();
             if let Some(cell) = cells.first_mut() {
                 attach_item_targets(
+                    &context.content,
                     &mut cell.blocks,
                     &item,
                     layout(cell_indent.content_origin()),
                 );
             } else {
                 let mut blocks = Vec::new();
-                attach_item_targets(&mut blocks, &item, layout(cell_indent.content_origin()));
+                attach_item_targets(
+                    &context.content,
+                    &mut blocks,
+                    &item,
+                    layout(cell_indent.content_origin()),
+                );
                 if !blocks.is_empty() {
                     cells.push(AstTableCell {
                         kind: mant_ir::TableCellKind::Text,
@@ -538,6 +516,7 @@ fn item_body_predecessor(plain: bool, index: usize, inherited: bool) -> bool {
 }
 
 fn append_list_targets(
+    content: &crate::mandoc::content::LegacyContent,
     block: &mut Block,
     targets: Vec<String>,
     layout: mant_ir::LayoutHint,
@@ -557,6 +536,7 @@ fn append_list_targets(
                 });
             }
             targets::append_targets(
+                content,
                 &mut items.last_mut().expect("list item inserted").blocks,
                 targets,
                 layout,
@@ -565,17 +545,12 @@ fn append_list_targets(
         }
         Block::DefinitionList { items, .. } => {
             if let Some(item) = items.last_mut() {
-                targets::append_definition_targets(item, targets, layout, source);
+                targets::append_definition_targets(content, item, targets, layout, source);
             } else {
                 items.push(DefinitionItem {
                     source: None,
                     entry: None,
-                    terms: vec![
-                        targets
-                            .into_iter()
-                            .map(|target| Inline::anchor_at(target, source))
-                            .collect(),
-                    ],
+                    terms: vec![content.anchors(mant_ir::ContentRootKind::Term, targets, source)],
                     description: Vec::new(),
                     layout: mant_ir::DefinitionLayout {
                         inline_term: true,
@@ -602,7 +577,7 @@ fn append_list_targets(
                 .last_mut()
                 .and_then(|row| row.cells.last_mut())
                 .expect("table cell inserted");
-            targets::append_targets(&mut cell.blocks, targets, layout, source);
+            targets::append_targets(content, &mut cell.blocks, targets, layout, source);
         }
         _ => unreachable!("mdoc list lowering returns a list-like block"),
     }

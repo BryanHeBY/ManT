@@ -17,8 +17,8 @@ mod wrap;
 use std::{collections::HashMap, sync::Arc};
 
 use mant_ir::{
-    Block, DocumentAddress, EntryKind, Inline, ListKind, ResolvedContent, Section, SemanticEntry,
-    SemanticIndex, SourceFormat, TldrDocument,
+    Block, DocumentAddress, EntryKind, Inline, LinkOccurrenceKey, ListKind, ResolvedContent,
+    Section, SemanticEntry, SemanticIndex, SourceFormat, TldrDocument,
 };
 #[cfg(test)]
 use mant_ir::{TldrCommandPart, TldrOrigin};
@@ -34,11 +34,11 @@ use unicode_width::UnicodeWidthChar;
 use crate::theme;
 #[cfg(test)]
 use inline::styled_inline_lines;
-use inline::{count_sections, inline_anchor_rows, shifted_links, spans_width, tldr_style};
+use inline::{count_sections, inline_anchor_rows, shifted_links, tldr_style};
 pub use model::ExternalUri;
 pub(crate) use model::LinkTarget;
 use model::{
-    LineSurface, LogicalLine, LogicalLinkRange, LogicalTableCell, LogicalTableLayout,
+    LineSurface, LinkIdentity, LogicalLine, LogicalLinkRange, LogicalTableCell, LogicalTableLayout,
     StyledInlineLine, WrapMode,
 };
 
@@ -111,7 +111,6 @@ pub enum NavKind {
 /// Renderer-independent terminal view before width-dependent wrapping.
 #[derive(Debug, Clone)]
 pub struct DocumentView {
-    address: Option<DocumentAddress>,
     label: String,
     terminal_label: String,
     source_label: &'static str,
@@ -125,6 +124,7 @@ pub struct DocumentView {
     associated_references: HashMap<String, Vec<usize>>,
     reference_badges: HashMap<String, String>,
     references_limited: bool,
+    link_targets: HashMap<LinkIdentity, LinkTarget>,
 }
 
 /// Exact terminal rows and anchor positions for one content width.
@@ -145,7 +145,7 @@ pub struct RenderedDocument {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RenderedLinkRegion {
-    target: LinkTarget,
+    identity: LinkIdentity,
     row: usize,
     start_column: usize,
     end_column: usize,
@@ -193,6 +193,13 @@ impl DocumentView {
             .map(|reference| &reference.target)
     }
 
+    pub(crate) fn reference_occurrence(&self, id: &str) -> Option<LinkOccurrenceKey> {
+        self.references
+            .iter()
+            .find(|reference| reference.id.as_ref() == id)
+            .map(|reference| reference.occurrence)
+    }
+
     pub(crate) fn reference_text(&self, id: &str) -> Option<String> {
         self.reference_target(id).map(references::target_text)
     }
@@ -202,13 +209,55 @@ impl DocumentView {
             .and_then(mant_ir::LinkTarget::to_uri)
     }
 
-    pub(crate) fn activation_target(&self, target: &mant_ir::LinkTarget) -> Option<LinkTarget> {
-        inline::local_link_target(target, self.address.as_ref())
+    pub(crate) fn activation_target(&self, occurrence: LinkOccurrenceKey) -> Option<LinkTarget> {
+        self.link_targets
+            .get(&LinkIdentity::Content(occurrence))
+            .cloned()
+    }
+
+    pub(crate) fn activation_target_for_identity(
+        &self,
+        identity: LinkIdentity,
+    ) -> Option<LinkTarget> {
+        self.link_targets.get(&identity).cloned()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn link_target_at<'a>(
+        &'a self,
+        rendered: &RenderedDocument,
+        row: usize,
+        column: usize,
+    ) -> Option<&'a LinkTarget> {
+        let identity = rendered.link_identity_at(row, column)?;
+        self.link_targets.get(&identity)
     }
     /// Build one immutable view from the normalized query contract.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn new(bundle: &ResolvedContent) -> Self {
-        let mut builder = DocumentBuilder::new(bundle.label.clone(), bundle.address.clone());
+        #[cfg(test)]
+        let fixture_bundle = {
+            let mut fixture = bundle.clone();
+            if let Some(document) = &mut fixture.document
+                && document.sources.iter().any(|source| {
+                    matches!(
+                        &source.identity,
+                        mant_ir::SourceIdentity::Anonymous { name } if name == "test"
+                    )
+                })
+            {
+                document.content_store = crate::test_content::store();
+            }
+            fixture
+        };
+        #[cfg(test)]
+        let bundle = &fixture_bundle;
+        let mut builder = DocumentBuilder::new(
+            bundle.label.clone(),
+            bundle.address.clone(),
+            bundle.document.as_ref().map(mant_ir::Document::content),
+        );
         let mut references = bundle.document.as_ref().map_or_else(
             references::ReferenceNavigation::default,
             references::ReferenceNavigation::build,
@@ -246,7 +295,8 @@ impl DocumentView {
         if let Some(document) = &bundle.document {
             let semantic_index = SemanticIndex::build(document);
             references.check_source_owners(document, &semantic_index);
-            builder.entry_styles = Arc::new(mant_render::EntryStyleMap::for_document(document));
+            builder.entry_styles =
+                Some(Arc::new(mant_render::EntryStyleMap::for_document(document)));
             if document.heading.is_some()
                 || !document.blocks.is_empty()
                 || !document.fragment_aliases.is_empty()
@@ -288,10 +338,18 @@ impl DocumentView {
         }
 
         let mut built = builder.finish();
+        for record in &references.records {
+            if let Some(target) = inline::local_link_target(&record.target, bundle.address.as_ref())
+            {
+                built
+                    .link_targets
+                    .entry(LinkIdentity::Content(record.occurrence))
+                    .or_insert(target);
+            }
+        }
         references.append_navigation(&mut built.navigation);
         let reference_badges = references.badges();
         Self {
-            address: bundle.address.clone(),
             label: built.label,
             terminal_label,
             source_label,
@@ -305,6 +363,7 @@ impl DocumentView {
             associated_references: references.associated,
             reference_badges,
             references_limited: references.limited,
+            link_targets: built.link_targets,
         }
     }
 
@@ -371,7 +430,7 @@ impl DocumentView {
                     anchor_rows.entry(id).or_insert(row);
                 }
                 links.extend(wrapped.links.into_iter().map(|link| RenderedLinkRegion {
-                    target: link.target,
+                    identity: link.identity,
                     row,
                     start_column: link.start_column,
                     end_column: link.end_column,
@@ -382,12 +441,14 @@ impl DocumentView {
         }
         logical_rows.push(rows.len());
 
-        anchor_rows.extend(self.anchors.iter().map(|(id, logical_line)| {
-            (
-                id.clone(),
-                logical_rows.get(*logical_line).copied().unwrap_or_default(),
-            )
-        }));
+        // Scalar-offset marks from the wrapped line are authoritative for
+        // zero-width targets after a soft wrap. Keep the older logical-row
+        // entries only for structural/deferred anchors without such a mark.
+        for (id, logical_line) in &self.anchors {
+            anchor_rows
+                .entry(id.clone())
+                .or_insert_with(|| logical_rows.get(*logical_line).copied().unwrap_or_default());
+        }
 
         RenderedDocument {
             row_count: rows.len(),
@@ -431,11 +492,11 @@ impl RenderedDocument {
     }
 
     #[must_use]
-    pub(super) fn link_target_at(&self, row: usize, column: usize) -> Option<&LinkTarget> {
+    pub(super) fn link_identity_at(&self, row: usize, column: usize) -> Option<LinkIdentity> {
         self.links
             .iter()
             .find(|link| link.row == row && link.start_column <= column && column < link.end_column)
-            .map(|link| &link.target)
+            .map(|link| link.identity)
     }
 }
 

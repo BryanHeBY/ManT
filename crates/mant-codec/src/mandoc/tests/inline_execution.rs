@@ -55,7 +55,7 @@ fn inline_execution_keeps_word_joins_glyph_ownership_and_literal_breaks_distinct
         let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = block else {
             panic!("{label}: expected flow content: {blocks:#?}");
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
     }
 }
 
@@ -298,7 +298,11 @@ fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independen
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -392,7 +396,7 @@ fn private_and_keep_scopes_preserve_incoming_word_end_execution_state() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
     }
 }
 
@@ -420,8 +424,8 @@ fn keep_words_survives_a_paragraph_output_flush() {
             document.sections
         );
     };
-    assert_eq!(inline_text(first), "A");
-    assert_eq!(inline_text(second), "B C");
+    assert_eq!(inline_text(document.content(), first), "A");
+    assert_eq!(inline_text(document.content(), second), "B C");
 }
 
 #[test]
@@ -445,7 +449,11 @@ fn keep_words_tracks_repeated_macro_execution_and_transparent_targets() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         if label == "target-between-lines" {
             assert!(
                 children
@@ -472,7 +480,7 @@ fn transparent_target_preserves_continuation_and_its_exact_anchor() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one paragraph: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "[BEFORE  AFTER");
+    assert_eq!(inline_text(document.content(), children), "[BEFORE  AFTER");
     assert!(
         children
             .iter()
@@ -507,7 +515,11 @@ fn overstrike_projects_one_terminal_cell_through_the_shared_zero_advance_state()
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -527,10 +539,14 @@ fn styled_overstrike_uses_the_complete_nested_escape_extent() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert!(
             children.iter().any(
-                |inline| matches!(inline, Inline::Strong { children } if inline_text(children) == expected)
+                |inline| matches!(inline, Inline::Strong { children } if inline_text(document.content(), children) == expected)
             ),
             "{label}: styled projection escaped its semantic scope: {children:?}"
         );
@@ -581,7 +597,7 @@ fn numbered_and_named_nonbreaking_glyphs_defer_word_end_breaks() {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
         assert_eq!(
-            inline_text(children),
+            inline_text(document.content(), children),
             format!("AB{expected_glyph}C\nD"),
             "{label}: {children:?}"
         );
@@ -599,7 +615,10 @@ fn numbered_and_named_nonbreaking_glyphs_defer_word_end_breaks() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{number}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), format!("AB{expected}C\nD"));
+        assert_eq!(
+            inline_text(document.content(), children),
+            format!("AB{expected}C\nD")
+        );
     }
 }
 
@@ -625,7 +644,11 @@ fn literal_flow_uses_the_same_numbered_and_overstrike_glyph_projection() {
             );
         };
         let expected = format!("{expected}\nD");
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -647,12 +670,14 @@ fn man_no_fill_settles_an_unrealized_word_end_break_at_the_physical_line() {
             panic!("expected one preformatted block: {:#?}", document.sections);
         };
         assert_eq!(
-            inline_text(children).matches('\n').count(),
+            inline_text(document.content(), children)
+                .matches('\n')
+                .count(),
             1,
             "{source}: {children:?}"
         );
         assert_eq!(
-            inline_text(children),
+            inline_text(document.content(), children),
             format!("{expected_first_row}\nNEXT"),
             "{source}: {children:?}"
         );
@@ -681,7 +706,11 @@ fn zero_advance_state_crosses_only_continued_no_fill_rows() {
         let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("expected one preformatted block: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 
     let document = parse_manual_bytes(
@@ -692,7 +721,11 @@ fn zero_advance_state_crosses_only_continued_no_fill_rows() {
     let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one preformatted block: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "AB", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "AB",
+        "{children:?}"
+    );
 }
 
 #[test]
@@ -744,11 +777,15 @@ fn trailing_no_space_preserves_a_pending_word_end_break() {
             [Block::Preformatted { children, .. }] if expected_block == "preformatted" => children,
             blocks => panic!("{label}: unexpected blocks: {blocks:#?}"),
         };
-        assert_eq!(inline_text(children), "BEFOREAFTER\nLAST", "{label}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            "BEFOREAFTER\nLAST",
+            "{label}"
+        );
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             1,
             "{label}: {children:?}"
@@ -763,11 +800,14 @@ fn trailing_no_space_preserves_a_pending_word_end_break() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("unexpected keep blocks: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "BEFOREAFTER LAST");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "BEFOREAFTER LAST"
+    );
     assert!(
         !children
             .iter()
-            .any(|node| matches!(node, Inline::LineBreak))
+            .any(|node| matches!(node, Inline::LineBreak { .. }))
     );
 
     for (label, source, expected) in [
@@ -795,6 +835,6 @@ fn trailing_no_space_preserves_a_pending_word_end_break() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
     }
 }

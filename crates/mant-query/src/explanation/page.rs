@@ -2,25 +2,32 @@
 use super::{
     materialize::{self, Budget},
     plan::CollectionPlan,
+    projection::ProjectionAdmission,
     support::Pool,
 };
 use mant_protocol::{EvidenceClass, ScopedExplanationEvidence};
 
-pub(super) struct Page {
+pub(super) struct Page<'a> {
     pub evidence: Vec<ScopedExplanationEvidence>,
     pub pools: Vec<Pool>,
+    pub projections: Vec<ProjectionAdmission<'a>>,
 }
 
 /// Selection contains (document, candidate, global ordinal). All direct facts
 /// are reserved before any body, all necessary direct bodies before optional
 /// metadata/windows or weaker evidence. Collection/order is never rerun here.
-pub(super) fn materialize(
-    plans: &[CollectionPlan<'_>],
+#[allow(clippy::too_many_lines)]
+pub(super) fn materialize<'a>(
+    plans: &[CollectionPlan<'a>],
     selected: &[(usize, usize, u32)],
     budget: &mut Budget,
-) -> Page {
+) -> Page<'a> {
     let mut pools = (0..plans.len())
         .map(|_| Pool::default())
+        .collect::<Vec<_>>();
+    let mut projections = plans
+        .iter()
+        .map(|plan| ProjectionAdmission::new(plan.content.document.as_ref()))
         .collect::<Vec<_>>();
     let mut evidence = selected
         .iter()
@@ -66,19 +73,28 @@ pub(super) fn materialize(
         let candidate = &plan.candidates[index];
         if candidate.class() == EvidenceClass::DirectEntry {
             plan.supports.attach(
+                plan.document_content(),
                 candidate.located,
                 &mut result.evidence,
                 &plan.located,
                 &mut pools[doc],
                 budget,
+                &mut projections[doc],
             );
             plan.supports.attach_owner(
+                plan.document_content(),
                 candidate.located,
                 &mut result.evidence,
                 &pools[doc],
                 budget,
             );
-            materialize::body(&mut result.evidence, candidate, &plan.located, budget);
+            materialize::body(
+                &mut result.evidence,
+                candidate,
+                &plan.located,
+                budget,
+                &mut projections[doc],
+            );
             plan.supports.share_owner(
                 candidate.located,
                 selected
@@ -102,7 +118,13 @@ pub(super) fn materialize(
         if candidate.class() != EvidenceClass::DirectEntry {
             result.evidence =
                 materialize::prepare(content, ordinal, candidate, &plan.located, budget);
-            materialize::body(&mut result.evidence, candidate, &plan.located, budget);
+            materialize::body(
+                &mut result.evidence,
+                candidate,
+                &plan.located,
+                budget,
+                &mut projections[doc],
+            );
         }
         materialize::materialize(
             content,
@@ -111,7 +133,12 @@ pub(super) fn materialize(
             &plan.located,
             &plan.rejected_aliases,
             budget,
+            &mut projections[doc],
         );
     }
-    Page { evidence, pools }
+    Page {
+        evidence,
+        pools,
+        projections,
+    }
 }

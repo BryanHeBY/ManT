@@ -1,6 +1,6 @@
 //! Shared operations over source-independent inline IR nodes.
 
-use crate::Inline;
+use crate::{ContentContext, Inline};
 
 /// Flatten inline structure into the text visible to readers and search.
 /// Styles and links contribute their original children, anchors contribute no
@@ -9,13 +9,12 @@ use crate::Inline;
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects a directly owned inline
-/// leaf, which violates this compatibility API's representation invariant.
+/// Panics if a retained key or range does not resolve in `content`.
 #[must_use]
-pub fn inline_plain_text(nodes: &[Inline]) -> String {
-    crate::ContentContext::detached()
+pub fn inline_plain_text(content: ContentContext<'_>, nodes: &[Inline]) -> String {
+    content
         .plain_text(nodes)
-        .expect("legacy inline text is self-contained")
+        .expect("inline text resolves in its authoritative content store")
 }
 
 /// Visit borrowed visible text leaves in source order, without decoration.
@@ -27,12 +26,15 @@ pub fn inline_plain_text(nodes: &[Inline]) -> String {
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects a directly owned inline
-/// leaf.
-pub fn visit_inline_plain_text<'a>(nodes: &'a [Inline], mut emit: impl FnMut(&'a str)) {
-    crate::ContentContext::detached()
+/// Panics if a retained key or range does not resolve in `content`.
+pub fn visit_inline_plain_text<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
+    mut emit: impl FnMut(&'a str),
+) {
+    content
         .visit_plain_text(nodes, &mut emit)
-        .expect("legacy inline text is self-contained");
+        .expect("inline text resolves in its authoritative content store");
 }
 
 /// First character visible to a renderer without allocating flattened text.
@@ -40,13 +42,12 @@ pub fn visit_inline_plain_text<'a>(nodes: &'a [Inline], mut emit: impl FnMut(&'a
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects a directly owned inline
-/// leaf.
+/// Panics if a retained key or range does not resolve in `content`.
 #[must_use]
-pub fn first_visible_character(nodes: &[Inline]) -> Option<char> {
-    crate::ContentContext::detached()
+pub fn first_visible_character(content: ContentContext<'_>, nodes: &[Inline]) -> Option<char> {
+    content
         .first_visible_character(nodes)
-        .expect("legacy inline text is self-contained")
+        .expect("inline text resolves in its authoritative content store")
 }
 
 /// Last character visible to a renderer without allocating flattened text.
@@ -54,13 +55,12 @@ pub fn first_visible_character(nodes: &[Inline]) -> Option<char> {
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects a directly owned inline
-/// leaf.
+/// Panics if a retained key or range does not resolve in `content`.
 #[must_use]
-pub fn last_visible_character(nodes: &[Inline]) -> Option<char> {
-    crate::ContentContext::detached()
+pub fn last_visible_character(content: ContentContext<'_>, nodes: &[Inline]) -> Option<char> {
+    content
         .last_visible_character(nodes)
-        .expect("legacy inline text is self-contained")
+        .expect("inline text resolves in its authoritative content store")
 }
 
 /// Whether an inline fragment contains content other than layout-only breaks.
@@ -69,113 +69,144 @@ pub fn last_visible_character(nodes: &[Inline]) -> Option<char> {
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects a directly owned inline
-/// leaf.
+/// Panics if a retained key or range does not resolve in `content`.
 #[must_use]
-pub fn has_printable_character(nodes: &[Inline]) -> bool {
-    crate::ContentContext::detached()
+pub fn has_printable_character(content: ContentContext<'_>, nodes: &[Inline]) -> bool {
+    content
         .has_printable_character(nodes)
-        .expect("legacy inline text is self-contained")
+        .expect("inline text resolves in its authoritative content store")
 }
 
 /// Decide whether definition terms fit beside their first description line.
 #[must_use]
-pub fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
-    crate::geometry::definition_run_in_width(terms)
+pub fn terms_fit_inline(
+    content: ContentContext<'_>,
+    terms: &[Vec<Inline>],
+    max_width: usize,
+) -> bool {
+    content
+        .definition_run_in_width(terms)
+        .ok()
+        .flatten()
         .is_some_and(|width| (1..=max_width).contains(&width))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::ContentFixture;
 
     #[test]
     fn original_text_is_shared_by_heading_and_nested_inline_consumers() {
+        let mut fixture = ContentFixture::body();
+        let start = fixture.anchor("start");
+        let empty = fixture.text(String::new());
+        let link = fixture.link_text(
+            crate::LinkTarget::External {
+                uri: "https://example.test".into(),
+            },
+            Some("not visible".into()),
+            "é👩‍💻",
+            true,
+        );
+        let line_break = fixture.hard_break();
+        let tail = fixture.text("尾\t ");
+        let end = fixture.anchor("end");
         let nodes = vec![
-            Inline::anchor("start"),
+            start,
             Inline::Strong {
                 children: vec![
-                    Inline::Text {
-                        value: String::new(),
-                    },
+                    empty,
                     Inline::Emphasis {
-                        children: vec![Inline::Link {
-                            target: crate::LinkTarget::External {
-                                uri: "https://example.test".into(),
-                            },
-                            title: Some("not visible".into()),
-                            children: vec![Inline::Code {
-                                value: "é👩‍💻".into(),
-                            }],
-                        }],
+                        children: vec![link],
                     },
                 ],
             },
-            Inline::LineBreak,
-            Inline::Text {
-                value: "尾\t ".into(),
-            },
-            Inline::anchor("end"),
+            line_break,
+            tail,
+            end,
         ];
-        assert_eq!(inline_plain_text(&nodes), "é👩‍💻\n尾\t ");
+        let store = fixture.finish();
+        let content = store.content();
+        assert_eq!(inline_plain_text(content, &nodes), "é👩‍💻\n尾\t ");
         let mut pieces = Vec::new();
-        visit_inline_plain_text(&nodes, |text| pieces.push(text));
+        visit_inline_plain_text(content, &nodes, |text| pieces.push(text));
         assert_eq!(pieces, ["", "é👩‍💻", "\n", "尾\t "]);
-        assert_eq!(pieces.concat(), inline_plain_text(&nodes));
-        assert_eq!(first_visible_character(&nodes), Some('é'));
-        assert_eq!(last_visible_character(&nodes), Some(' '));
-        assert!(has_printable_character(&nodes));
+        assert_eq!(pieces.concat(), inline_plain_text(content, &nodes));
+        assert_eq!(first_visible_character(content, &nodes), Some('é'));
+        assert_eq!(last_visible_character(content, &nodes), Some(' '));
+        assert!(has_printable_character(content, &nodes));
         assert_eq!(
             crate::Heading {
                 content: nodes.clone(),
                 source: None
             }
-            .plain_text(),
-            inline_plain_text(&nodes)
+            .plain_text(content),
+            inline_plain_text(content, &nodes)
         );
     }
 
     #[test]
     fn empty_anchors_and_breaks_are_distinct_from_space_content() {
+        let mut fixture = ContentFixture::body();
         let anchors = vec![
-            Inline::anchor("hidden"),
+            fixture.anchor("hidden"),
             Inline::Strong { children: vec![] },
         ];
-        assert_eq!(inline_plain_text(&anchors), "");
-        assert_eq!(first_visible_character(&anchors), None);
-        assert_eq!(last_visible_character(&anchors), None);
-        assert!(!has_printable_character(&anchors));
+        let line_break = fixture.hard_break();
+        let newlines = fixture.styled_text(
+            "\n\n",
+            crate::ContentStyle {
+                emphasis: true,
+                ..crate::ContentStyle::default()
+            },
+        );
         let breaks = vec![
-            Inline::LineBreak,
+            line_break,
             Inline::Emphasis {
-                children: vec![Inline::Text {
-                    value: "\n\n".into(),
-                }],
+                children: vec![newlines],
             },
         ];
-        assert_eq!(inline_plain_text(&breaks), "\n\n\n");
-        assert_eq!(first_visible_character(&breaks), Some('\n'));
-        assert_eq!(last_visible_character(&breaks), Some('\n'));
-        assert!(!has_printable_character(&breaks));
+        let store = fixture.finish();
+        let content = store.content();
+        assert_eq!(inline_plain_text(content, &anchors), "");
+        assert_eq!(first_visible_character(content, &anchors), None);
+        assert_eq!(last_visible_character(content, &anchors), None);
+        assert!(!has_printable_character(content, &anchors));
+        assert_eq!(inline_plain_text(content, &breaks), "\n\n\n");
+        assert_eq!(first_visible_character(content, &breaks), Some('\n'));
+        assert_eq!(last_visible_character(content, &breaks), Some('\n'));
+        assert!(!has_printable_character(content, &breaks));
         for value in [" ", "\t", "\r", "\n \n"] {
-            assert!(has_printable_character(&[Inline::Code {
-                value: value.into()
-            }]));
+            let mut fixture = ContentFixture::body();
+            let code = fixture.code(value);
+            let store = fixture.finish();
+            assert!(has_printable_character(store.content(), &[code]));
         }
     }
 
     #[test]
     fn tag_fit_uses_visible_cells_inside_styles_and_original_hard_lines() {
-        let terms = |text: &str| {
-            vec![vec![Inline::Strong {
-                children: vec![Inline::Text { value: text.into() }],
-            }]]
+        let fits = |text: &str, width| {
+            let mut fixture = ContentFixture::body();
+            let text = fixture.styled_text(
+                text,
+                crate::ContentStyle {
+                    strong: true,
+                    ..crate::ContentStyle::default()
+                },
+            );
+            let terms = vec![vec![Inline::Strong {
+                children: vec![text],
+            }]];
+            let store = fixture.finish();
+            terms_fit_inline(store.content(), &terms, width)
         };
-        assert!(!terms_fit_inline(&terms("日本日本"), 7));
-        assert!(terms_fit_inline(&terms("日本日本"), 8));
-        assert!(terms_fit_inline(&terms("e\u{301}"), 1));
-        assert!(terms_fit_inline(&terms("😀"), 2));
-        assert!(!terms_fit_inline(&terms("😀"), 1));
-        assert!(terms_fit_inline(&terms("abc\ndef"), 3));
+        assert!(!fits("日本日本", 7));
+        assert!(fits("日本日本", 8));
+        assert!(fits("e\u{301}", 1));
+        assert!(fits("😀", 2));
+        assert!(!fits("😀", 1));
+        assert!(fits("abc\ndef", 3));
     }
 }

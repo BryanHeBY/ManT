@@ -290,7 +290,7 @@ mod tests {
 
     use crate::{ManualErrorKind, ManualPage};
     use flate2::{Compression as GzipCompression, write::GzEncoder};
-    use mant_ir::{Inline, visit::Visit};
+    use mant_ir::{ContentContext, Inline, InlineView, visit::Visit};
 
     use super::super::{parse_manual_page, parse_manual_source};
     use super::{
@@ -298,13 +298,15 @@ mod tests {
         resolve_manual_redirects_with_budget,
     };
 
-    #[derive(Default)]
-    struct VisibleText(String);
+    struct VisibleText<'store> {
+        text: String,
+        content: ContentContext<'store>,
+    }
 
-    impl<'ir> Visit<'ir> for VisibleText {
+    impl<'ir> Visit<'ir> for VisibleText<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            match inline {
-                Inline::Text { value } | Inline::Code { value } => self.0.push_str(value),
+            match self.content.inline(inline).unwrap() {
+                InlineView::Text(value) | InlineView::Code(value) => self.text.push_str(value),
                 _ => mant_ir::visit::walk_inline(self, inline),
             }
         }
@@ -449,7 +451,7 @@ mod tests {
             document
                 .sections
                 .iter()
-                .any(|section| section.heading.plain_text() == "NAME")
+                .any(|section| section.heading.plain_text(document.content()) == "NAME")
         );
         assert!(
             document
@@ -457,10 +459,13 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.message.contains(".so"))
         );
-        let mut visible = VisibleText::default();
+        let mut visible = VisibleText {
+            text: String::new(),
+            content: document.content(),
+        };
         visible.visit_document(&document);
-        assert!(visible.0.contains("mixed"));
-        assert!(!visible.0.contains("must not be partially included"));
+        assert!(visible.text.contains("mixed"));
+        assert!(!visible.text.contains("must not be partially included"));
     }
 
     #[test]

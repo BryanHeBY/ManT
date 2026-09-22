@@ -7,18 +7,24 @@ pub(super) fn assert_style(query: &ResolvedContent, word: &str, expected: u8) {
         word: &'a str,
         current: u8,
         found: Vec<u8>,
+        content: ContentContext<'a>,
     }
-    impl<'ir> Visit<'ir> for Styles<'_> {
+    impl<'ir> Visit<'ir> for Styles<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
             let previous = self.current;
             match inline {
                 Inline::Strong { .. } => self.current |= 1,
                 Inline::Emphasis { .. } => self.current |= 2,
-                Inline::Code { value } if value.contains(self.word) => {
-                    self.found.push(self.current | 4);
-                }
-                Inline::Text { value } if value.contains(self.word) => {
-                    self.found.push(self.current);
+                Inline::Code { .. } | Inline::Text { .. } => {
+                    match self.content.inline(inline).unwrap() {
+                        InlineView::Code(value) if value.contains(self.word) => {
+                            self.found.push(self.current | 4);
+                        }
+                        InlineView::Text(value) if value.contains(self.word) => {
+                            self.found.push(self.current);
+                        }
+                        _ => {}
+                    }
                 }
                 _ => {}
             }
@@ -30,6 +36,7 @@ pub(super) fn assert_style(query: &ResolvedContent, word: &str, expected: u8) {
         word,
         current: 0,
         found: Vec::new(),
+        content: query.document.as_ref().unwrap().content(),
     };
     styles.visit_document(query.document.as_ref().unwrap());
     assert!(!styles.found.is_empty(), "missing {word}");
@@ -235,11 +242,22 @@ fn lets_explicit_fonts_override_an_alternating_macro_default() {
         .collect::<Vec<_>>();
 
     assert_eq!(term.len(), 5);
-    assert!(matches!(term[0], Inline::Strong { children } if inline_text(children) == "-r "));
-    assert!(matches!(term[1], Inline::Emphasis { children } if inline_text(children) == "prompt"));
-    assert!(matches!(term[2], Inline::Text { value } if value == ", "));
-    assert!(matches!(term[3], Inline::Strong { children } if inline_text(children) == "--prompt="));
-    assert!(matches!(term[4], Inline::Emphasis { children } if inline_text(children) == "prompt"));
+    assert!(
+        matches!(term[0], Inline::Strong { children } if inline_text(document.content(), children) == "-r ")
+    );
+    assert!(
+        matches!(term[1], Inline::Emphasis { children } if inline_text(document.content(), children) == "prompt")
+    );
+    assert!(matches!(
+        document.content().inline(term[2]),
+        Ok(InlineView::Text(", "))
+    ));
+    assert!(
+        matches!(term[3], Inline::Strong { children } if inline_text(document.content(), children) == "--prompt=")
+    );
+    assert!(
+        matches!(term[4], Inline::Emphasis { children } if inline_text(document.content(), children) == "prompt")
+    );
 }
 
 #[test]
@@ -270,7 +288,7 @@ fn suppresses_pod_font_requests_around_verbatim_blocks() {
         panic!("expected one preformatted block");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "struct A { int a; };\nstruct B : A {};"
     );
 }
@@ -303,7 +321,7 @@ fn lowers_normalized_mdoc_font_and_author_layout() {
         panic!("authors are one paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "Alice Example\nBob Example Carol Example Dave Example"
     );
 
@@ -313,7 +331,7 @@ fn lowers_normalized_mdoc_font_and_author_layout() {
     };
     assert!(matches!(
         children.as_slice(),
-        [Inline::Code { value }] if value == "literal text"
+        [inline] if matches!(document.content().inline(inline), Ok(InlineView::Code("literal text")))
     ));
 }
 
@@ -329,25 +347,25 @@ fn mdoc_author_mode_persists_across_subsections_and_later_sections() {
     let authors = document
         .sections
         .iter()
-        .find(|section| inline_text(&section.heading.content) == "AUTHORS")
+        .find(|section| inline_text(document.content(), &section.heading.content) == "AUTHORS")
         .unwrap();
     let Block::Paragraph { children, .. } = &authors.blocks[0] else {
         panic!("first author is a paragraph")
     };
-    assert_eq!(inline_text(children), "first");
+    assert_eq!(inline_text(document.content(), children), "first");
     let Block::Paragraph { children, .. } = &authors.children[0].blocks[0] else {
         panic!("subsection authors are a paragraph")
     };
-    assert_eq!(inline_text(children), "second\nthird");
+    assert_eq!(inline_text(document.content(), children), "second\nthird");
     let notes = document
         .sections
         .iter()
-        .find(|section| inline_text(&section.heading.content) == "NOTES")
+        .find(|section| inline_text(document.content(), &section.heading.content) == "NOTES")
         .unwrap();
     let Block::Paragraph { children, .. } = &notes.blocks[0] else {
         panic!("later authors are a paragraph")
     };
-    assert_eq!(inline_text(children), "fourth\nfifth");
+    assert_eq!(inline_text(document.content(), children), "fourth\nfifth");
 }
 
 #[test]
@@ -358,19 +376,20 @@ fn visible_cd_nodes_execute_synopsis_pre_without_fd_post_breaks() {
         b".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Cd one\n.Cd two\n.No BODY\n",
     )
     .unwrap();
+    let document = query.document.as_ref().unwrap();
     let synopsis = query
         .document
         .as_ref()
         .unwrap()
         .sections
         .iter()
-        .find(|section| inline_text(&section.heading.content) == "SYNOPSIS")
+        .find(|section| inline_text(document.content(), &section.heading.content) == "SYNOPSIS")
         .unwrap();
     let rows = synopsis
         .blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(document.content(), children)),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -385,6 +404,7 @@ fn styled_authors_heading_does_not_activate_native_author_splitting() {
         b".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh Em AUTHORS\n.An first\n.An second\n.No TAIL\n",
     )
     .unwrap();
+    let document = query.document.as_ref().unwrap();
     let section = &query.document.as_ref().unwrap().sections[0];
     let [Block::Paragraph { children, .. }] = section.blocks.as_slice() else {
         panic!(
@@ -392,7 +412,10 @@ fn styled_authors_heading_does_not_activate_native_author_splitting() {
             section.blocks
         );
     };
-    assert_eq!(inline_text(children), "first second TAIL");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "first second TAIL"
+    );
 }
 
 #[test]
@@ -436,12 +459,15 @@ fn visible_synopsis_predecessors_end_ft_function_pairing() {
             ".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh SYNOPSIS\n.Ft int\n{middle}\n.Fn f\n"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
         let section = &query.document.as_ref().unwrap().sections[0];
         let rows = section
             .blocks
             .iter()
             .filter_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(inline_text(children)),
+                Block::Paragraph { children, .. } => {
+                    Some(inline_text(document.content(), children))
+                }
                 Block::VerticalSpace { .. } => None,
                 block => panic!("expected synopsis paragraph or gap, got {block:?}"),
             })
@@ -460,12 +486,13 @@ fn invisible_synopsis_formatter_cells_still_execute_native_newlines() {
             ".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh SYNOPSIS\n.Cd \\&\n{second}\n.No BODY\n"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
         let section = &query.document.as_ref().unwrap().sections[0];
         assert!(
             matches!(
                 section.blocks.as_slice(),
                 [Block::VerticalSpace { lines: 1, .. }, Block::Paragraph { children, .. }]
-                    if inline_text(children) == "BODY"
+                    if inline_text(document.content(), children) == "BODY"
             ),
             "{second}: {:?}",
             section.blocks

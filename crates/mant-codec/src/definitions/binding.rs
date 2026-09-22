@@ -1,8 +1,8 @@
 //! Bind already recognized native names to exact visible term ranges.
 //! This does not discover names or treat description mentions as names.
 use mant_ir::{
-    DefinitionItem, EntryContentSlice, EntryForm, EntryInlineRoot, EntryNameBinding,
-    EntryNameEvidence, Inline,
+    ContentContext, DefinitionItem, EntryContentSlice, EntryForm, EntryInlineRoot,
+    EntryNameBinding, EntryNameEvidence, Inline, InlineView,
 };
 use std::ops::Range;
 
@@ -12,6 +12,7 @@ struct Leaf {
 }
 
 pub(super) fn native_name_bindings(
+    content: ContentContext<'_>,
     item: &DefinitionItem,
     names: &[String],
     recognized: &[Vec<super::RecognizedName>],
@@ -23,7 +24,7 @@ pub(super) fn native_name_bindings(
         .map(|term| {
             let mut text = String::new();
             let mut leaves = Vec::new();
-            collect(term, &mut Vec::new(), &mut text, &mut leaves);
+            collect(content, term, &mut Vec::new(), &mut text, &mut leaves);
             (text, leaves)
         })
         .collect::<Vec<_>>();
@@ -69,6 +70,7 @@ pub(super) fn native_name_bindings(
 }
 
 pub(super) fn native_forms(
+    content: ContentContext<'_>,
     item: &DefinitionItem,
     native: &super::NativeDeclarationEvidence,
 ) -> Vec<EntryForm> {
@@ -78,7 +80,7 @@ pub(super) fn native_forms(
         .map(|term| {
             let mut text = String::new();
             let mut leaves = Vec::new();
-            collect(term, &mut Vec::new(), &mut text, &mut leaves);
+            collect(content, term, &mut Vec::new(), &mut text, &mut leaves);
             leaves
         })
         .collect::<Vec<_>>();
@@ -89,7 +91,7 @@ pub(super) fn native_forms(
             let Some(leaves) = terms.get(form.term) else {
                 return Vec::new();
             };
-            super::syntax::declaration_group_ranges(&item.terms[form.term])
+            super::syntax::declaration_group_ranges(content, &item.terms[form.term])
                 .into_iter()
                 .filter_map(|group| {
                     let parts = form
@@ -125,11 +127,17 @@ fn slices(
     })
 }
 
-fn collect(nodes: &[Inline], path: &mut Vec<usize>, text: &mut String, leaves: &mut Vec<Leaf>) {
+fn collect(
+    content: ContentContext<'_>,
+    nodes: &[Inline],
+    path: &mut Vec<usize>,
+    text: &mut String,
+    leaves: &mut Vec<Leaf>,
+) {
     for (index, node) in nodes.iter().enumerate() {
         path.push(index);
-        match node {
-            Inline::Text { value } | Inline::Code { value } => {
+        match content.inline(node).expect("definition content resolves") {
+            InlineView::Text(value) | InlineView::Code(value) => {
                 let start = text.len();
                 text.push_str(value);
                 leaves.push(Leaf {
@@ -137,11 +145,15 @@ fn collect(nodes: &[Inline], path: &mut Vec<usize>, text: &mut String, leaves: &
                     range: start..text.len(),
                 });
             }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect(children, path, text, leaves),
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => text.push('\n'),
+            InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                collect(content, children, path, text, leaves);
+            }
+            InlineView::Link(link) => {
+                collect(content, link.children(), path, text, leaves);
+            }
+            InlineView::Anchor(_) => {}
+            InlineView::LineBreak => text.push('\n'),
+            _ => unreachable!("all inline views are handled"),
         }
         path.pop();
     }

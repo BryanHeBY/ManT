@@ -1,26 +1,35 @@
 //! Lowers supported Markdown spans and preserves unsupported inline source.
 
-use mant_ir::{Diagnostic, Inline};
+use mant_ir::{ContentRootKind, Diagnostic, Inline};
 use pulldown_cmark::{Event, LinkType, Tag, TagEnd};
 
-use super::{EventCursor, source::MarkdownSource};
+use super::{
+    EventCursor,
+    content::{InlineRoot, MarkdownContent},
+    source::MarkdownSource,
+};
 
 pub(super) fn parse_inlines(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     diagnostics: &mut Vec<Diagnostic>,
     end: TagEnd,
+    kind: ContentRootKind,
 ) -> (Vec<Inline>, usize) {
-    parse_inline_sequence(cursor, source, diagnostics, Some(end))
+    let mut root = content.root(kind, None);
+    parse_inline_sequence(cursor, source, &mut root, diagnostics, Some(end))
 }
 
 /// Parse the inline-only event stream emitted for a tight list item.
 pub(super) fn parse_inline_run(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> (Vec<Inline>, usize) {
-    parse_inline_sequence(cursor, source, diagnostics, None)
+    let mut root = content.root(ContentRootKind::Body, None);
+    parse_inline_sequence(cursor, source, &mut root, diagnostics, None)
 }
 
 pub(super) fn starts_inline_run(event: &Event<'_>) -> bool {
@@ -52,6 +61,7 @@ pub(super) fn starts_inline_run(event: &Event<'_>) -> bool {
 fn parse_inline_sequence(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    root: &mut InlineRoot<'_>,
     diagnostics: &mut Vec<Diagnostic>,
     expected_end: Option<TagEnd>,
 ) -> (Vec<Inline>, usize) {
@@ -67,29 +77,38 @@ fn parse_inline_sequence(
         match event {
             Event::End(actual) if Some(actual) == expected_end => break,
             Event::End(_) => {}
-            Event::Text(value) => push_text(&mut output, value.into_string()),
-            Event::Code(value) => output.push(Inline::Code {
-                value: value.into_string(),
-            }),
-            Event::SoftBreak => push_text(&mut output, " ".to_owned()),
-            Event::HardBreak => output.push(Inline::LineBreak),
+            Event::Text(value) => push_text(
+                &mut output,
+                root,
+                value.into_string(),
+                Some(source.span(&range)),
+            ),
+            Event::Code(value) => {
+                output.push(root.code(value.into_string(), Some(source.span(&range))));
+            }
+            Event::SoftBreak => {
+                push_text(&mut output, root, " ".to_owned(), Some(source.span(&range)));
+            }
+            Event::HardBreak => output.push(root.hard_break(Some(source.span(&range)))),
             Event::Start(tag @ (Tag::Strong | Tag::Emphasis)) if !cursor.try_descend() => {
                 let name = unsupported_tag_name(&tag);
                 let whole = cursor.consume_balanced(range);
                 end_offset = whole.end;
-                let raw = source.unsupported_inline(name, whole, diagnostics);
-                push_text(&mut output, raw);
+                let raw = source.unsupported_inline(name, whole.clone(), diagnostics);
+                push_text(&mut output, root, raw, Some(source.span(&whole)));
             }
             Event::Start(Tag::Strong) => {
-                let (children, nested_end) =
-                    parse_inlines(cursor, source, diagnostics, TagEnd::Strong);
+                let (children, nested_end) = root.with_strong(|root| {
+                    parse_inline_sequence(cursor, source, root, diagnostics, Some(TagEnd::Strong))
+                });
                 cursor.ascend();
                 end_offset = nested_end;
                 output.push(Inline::Strong { children });
             }
             Event::Start(Tag::Emphasis) => {
-                let (children, nested_end) =
-                    parse_inlines(cursor, source, diagnostics, TagEnd::Emphasis);
+                let (children, nested_end) = root.with_emphasis(|root| {
+                    parse_inline_sequence(cursor, source, root, diagnostics, Some(TagEnd::Emphasis))
+                });
                 cursor.ascend();
                 end_offset = nested_end;
                 output.push(Inline::Emphasis { children });
@@ -100,15 +119,20 @@ fn parse_inline_sequence(
                 title,
                 ..
             }) if supported_link(link_type) && cursor.try_descend() => {
-                let (children, nested_end) =
-                    parse_inlines(cursor, source, diagnostics, TagEnd::Link);
-                cursor.ascend();
-                end_offset = nested_end;
                 let destination = dest_url.into_string();
                 let title = (!title.is_empty()).then(|| title.into_string());
-                output.push(Inline::Link {
-                    target: mant_ir::LinkTarget::from_uri(&destination),
+                let occurrence = root.push_link(
+                    mant_ir::LinkTarget::from_uri(&destination),
                     title,
+                    Some(source.span(&range)),
+                );
+                let (children, nested_end) = root.with_link(occurrence, |root| {
+                    parse_inline_sequence(cursor, source, root, diagnostics, Some(TagEnd::Link))
+                });
+                cursor.ascend();
+                end_offset = nested_end;
+                output.push(Inline::Link {
+                    occurrence,
                     children,
                 });
             }
@@ -116,12 +140,17 @@ fn parse_inline_sequence(
                 let name = unsupported_tag_name(&tag);
                 let whole = cursor.consume_balanced(range);
                 end_offset = whole.end;
-                let raw = source.unsupported_inline(name, whole, diagnostics);
-                push_text(&mut output, raw);
+                let raw = source.unsupported_inline(name, whole.clone(), diagnostics);
+                push_text(&mut output, root, raw, Some(source.span(&whole)));
             }
             Event::InlineMath(_) | Event::DisplayMath(_) => {
-                let raw = source.unsupported_inline("math", range, diagnostics);
-                push_text(&mut output, unescape_commonmark_punctuation(&raw));
+                let raw = source.unsupported_inline("math", range.clone(), diagnostics);
+                push_text(
+                    &mut output,
+                    root,
+                    unescape_commonmark_punctuation(&raw),
+                    Some(source.span(&range)),
+                );
             }
             Event::InlineHtml(_)
             | Event::Html(_)
@@ -129,8 +158,8 @@ fn parse_inline_sequence(
             | Event::TaskListMarker(_)
             | Event::Rule => {
                 let name = unsupported_event_name(&event);
-                let raw = source.unsupported_inline(name, range, diagnostics);
-                push_text(&mut output, raw);
+                let raw = source.unsupported_inline(name, range.clone(), diagnostics);
+                push_text(&mut output, root, raw, Some(source.span(&range)));
             }
         }
     }
@@ -177,28 +206,22 @@ fn unsupported_event_name(event: &Event<'_>) -> &'static str {
     }
 }
 
-fn push_text(output: &mut Vec<Inline>, value: String) {
+fn push_text(
+    output: &mut Vec<Inline>,
+    root: &mut InlineRoot<'_>,
+    value: String,
+    source: Option<mant_ir::SourceSpan>,
+) {
     if value.is_empty() {
         return;
     }
-    if let Some(Inline::Text { value: previous }) = output.last_mut() {
-        previous.push_str(&value);
+    if let Some(Inline::Text { content }) = output.last_mut() {
+        root.merge_text(content, &value);
     } else {
-        output.push(Inline::Text { value });
+        output.push(root.text(value, source));
     }
 }
 
-pub(super) fn inline_text(inlines: &[Inline]) -> String {
-    let mut output = String::new();
-    for inline in inlines {
-        match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push(' '),
-        }
-    }
-    output.trim().to_owned()
+pub(super) fn inline_text(content: &MarkdownContent, inlines: &[Inline]) -> String {
+    content.inline_text(inlines)
 }

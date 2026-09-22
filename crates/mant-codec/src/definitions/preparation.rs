@@ -1,8 +1,9 @@
 //! Normalize ownership and recognize each final head once, then freeze it for
 //! counting and allocation. No consumer repeats role or name inference.
+#![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use std::collections::HashMap;
 
-use mant_ir::{Block, DefinitionItem, Inline, Section, SourceSpan};
+use mant_ir::{Block, ContentContext, DefinitionItem, Inline, Section, SourceSpan};
 
 use super::groups::GroupMatchingPlan;
 use super::{
@@ -38,6 +39,7 @@ impl PreparedDefinition {
 }
 
 pub(super) fn prepare(
+    content: ContentContext<'_>,
     blocks: &mut Vec<Block>,
     sections: &mut [Section],
     context: DefinitionContext,
@@ -47,35 +49,50 @@ pub(super) fn prepare(
     // native pointer matching only after that movement is complete, otherwise
     // a valid macro expansion split by an ordinary paragraph looks like a
     // missing same-coordinate sibling.
-    normalize_blocks(blocks, context, evidence);
-    normalize_sections(sections, context, evidence);
+    normalize_blocks(content, blocks, context, evidence);
+    normalize_sections(content, sections, context, evidence);
     let mut group_matches = evidence.groups.matching_plan(blocks, sections);
     let mut prepared = PreparedDefinitions {
         preferred_counts: HashMap::new(),
         plans: Vec::new(),
     };
-    prepared.blocks(blocks, context, evidence, &mut group_matches);
-    prepared.sections(sections, context, evidence, &mut group_matches);
+    prepared.blocks(content, blocks, context, evidence, &mut group_matches);
+    prepared.sections(content, sections, context, evidence, &mut group_matches);
     prepared
 }
 
 impl PreparedDefinitions {
     fn sections(
         &mut self,
+        content: ContentContext<'_>,
         sections: &mut [Section],
         parent: DefinitionContext,
         evidence: &NativeHeadEvidence,
         group_matches: &mut GroupMatchingPlan,
     ) {
         for section in sections {
-            let context = DefinitionContext::for_section(&section.heading.plain_text(), parent);
-            self.blocks(&mut section.blocks, context, evidence, group_matches);
-            self.sections(&mut section.children, context, evidence, group_matches);
+            let context =
+                DefinitionContext::for_section(&section.heading.plain_text(content), parent);
+            self.blocks(
+                content,
+                &mut section.blocks,
+                context,
+                evidence,
+                group_matches,
+            );
+            self.sections(
+                content,
+                &mut section.children,
+                context,
+                evidence,
+                group_matches,
+            );
         }
     }
 
     fn blocks(
         &mut self,
+        content: ContentContext<'_>,
         blocks: &mut Vec<Block>,
         context: DefinitionContext,
         evidence: &NativeHeadEvidence,
@@ -91,7 +108,13 @@ impl PreparedDefinitions {
                         let child_context = item.entry.as_ref().map_or(context, |facts| {
                             child_definition_context(facts.kind, context)
                         });
-                        self.blocks(&mut item.blocks, child_context, evidence, group_matches);
+                        self.blocks(
+                            content,
+                            &mut item.blocks,
+                            child_context,
+                            evidence,
+                            group_matches,
+                        );
                     }
                 }
                 Block::DefinitionList {
@@ -99,7 +122,7 @@ impl PreparedDefinitions {
                     declaration_groups,
                     ..
                 } => {
-                    let item_context = definition_group_context(items, context);
+                    let item_context = definition_group_context(content, items, context);
                     // Resolve native declaration witnesses while their
                     // parse-local owner markers still exist. Remove those
                     // markers before calculating public content-slice paths:
@@ -108,15 +131,20 @@ impl PreparedDefinitions {
                     let heads = items
                         .iter()
                         .map(|item| {
-                            identity_plan(item, item_context, evidence.role(item)).group_head
+                            identity_plan(content, item, item_context, evidence.role(item))
+                                .group_head
                         })
                         .collect::<Vec<_>>();
-                    *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
+                    *declaration_groups =
+                        evidence
+                            .groups
+                            .resolve(content, items, &heads, group_matches);
                     crate::definitions::remove_native_definition_owner_markers_from_items(items);
                     for item in items.iter_mut() {
-                        let mut identity = identity_plan(item, item_context, evidence.role(item));
+                        let mut identity =
+                            identity_plan(content, item, item_context, evidence.role(item));
                         identity.native_declaration = evidence.declaration(item).cloned();
-                        if has_semantic_spelling(item, &identity) {
+                        if has_semantic_spelling(content, item, &identity) {
                             *self
                                 .preferred_counts
                                 .entry(identity.preferred.clone())
@@ -129,6 +157,7 @@ impl PreparedDefinitions {
                             identity,
                         });
                         self.blocks(
+                            content,
                             &mut item.description,
                             child_context,
                             evidence,
@@ -139,7 +168,13 @@ impl PreparedDefinitions {
                 Block::Table { rows, .. } => {
                     for row in rows {
                         for cell in &mut row.cells {
-                            self.blocks(&mut cell.blocks, context, evidence, group_matches);
+                            self.blocks(
+                                content,
+                                &mut cell.blocks,
+                                context,
+                                evidence,
+                                group_matches,
+                            );
                         }
                     }
                 }
@@ -155,24 +190,26 @@ impl PreparedDefinitions {
 }
 
 fn normalize_sections(
+    content: ContentContext<'_>,
     sections: &mut [Section],
     parent: DefinitionContext,
     evidence: &NativeHeadEvidence,
 ) {
     for section in sections {
-        let context = DefinitionContext::for_section(&section.heading.plain_text(), parent);
-        normalize_blocks(&mut section.blocks, context, evidence);
-        normalize_sections(&mut section.children, context, evidence);
+        let context = DefinitionContext::for_section(&section.heading.plain_text(content), parent);
+        normalize_blocks(content, &mut section.blocks, context, evidence);
+        normalize_sections(content, &mut section.children, context, evidence);
     }
 }
 
 fn normalize_blocks(
+    content: ContentContext<'_>,
     blocks: &mut Vec<Block>,
     context: DefinitionContext,
     evidence: &NativeHeadEvidence,
 ) {
     normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
-    normalize_hanging_definitions(blocks, context);
+    normalize_hanging_definitions(content, blocks, context);
     for block in blocks {
         match block {
             Block::List { items, .. } => {
@@ -180,21 +217,21 @@ fn normalize_blocks(
                     let child_context = item.entry.as_ref().map_or(context, |facts| {
                         child_definition_context(facts.kind, context)
                     });
-                    normalize_blocks(&mut item.blocks, child_context, evidence);
+                    normalize_blocks(content, &mut item.blocks, child_context, evidence);
                 }
             }
             Block::DefinitionList { items, .. } => {
-                let item_context = definition_group_context(items, context);
+                let item_context = definition_group_context(content, items, context);
                 for item in items {
-                    let identity = identity_plan(item, item_context, evidence.role(item));
+                    let identity = identity_plan(content, item, item_context, evidence.role(item));
                     let child_context = child_definition_context(identity.kind, item_context);
-                    normalize_blocks(&mut item.description, child_context, evidence);
+                    normalize_blocks(content, &mut item.description, child_context, evidence);
                 }
             }
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &mut row.cells {
-                        normalize_blocks(&mut cell.blocks, context, evidence);
+                        normalize_blocks(content, &mut cell.blocks, context, evidence);
                     }
                 }
             }
@@ -211,15 +248,14 @@ fn normalize_blocks(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_content as fixture;
 
     #[test]
     fn preparation_freezes_names_before_ids_and_rejects_changed_heads() {
         let mut item = DefinitionItem {
             source: None,
             entry: None,
-            terms: vec![vec![Inline::Text {
-                value: "--mode=fast".into(),
-            }]],
+            terms: vec![vec![fixture::text("--mode=fast")]],
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
@@ -235,6 +271,7 @@ mod tests {
             layout: mant_ir::LayoutHint::default(),
         }];
         let prepared = prepare(
+            fixture::content(),
             &mut blocks,
             &mut [],
             DefinitionContext::Parameters,
@@ -252,11 +289,9 @@ mod tests {
             items[0].entry.is_none(),
             "preparation must not allocate a public ID"
         );
-        item.terms[0].insert(0, Inline::anchor("allocated-later"));
+        item.terms[0].insert(0, fixture::anchor("allocated-later"));
         assert!(plan.matches(&item));
-        item.terms[0].push(Inline::Text {
-            value: " changed".into(),
-        });
+        item.terms[0].push(fixture::text(" changed"));
         assert!(!plan.matches(&item));
     }
 }

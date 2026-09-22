@@ -10,12 +10,13 @@ use crate::{
 #[test]
 fn keeps_include_and_function_declarations_independently_addressable() {
     let document = archlinux_manual("archive_entry_stat");
+    let content = document.content();
     let synopsis = common::section(document, "SYNOPSIS");
     let paragraphs = synopsis
         .blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(content, children)),
             // Fixed CVS places one vertical row between include and function
             // declarations and between successive declarations.
             Block::VerticalSpace { lines: 1, .. } => None,

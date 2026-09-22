@@ -16,6 +16,7 @@ const CMAKE_TOOLCHAIN_SECTIONS: &[&str] = &[
 #[test]
 fn keeps_cross_compiler_and_windows_toolchain_sections() {
     let document = cross_platform_release_manual("cmake-toolchains");
+    let content = document.content();
     common::assert_section_topology(
         "cross-platform-releases/cmake-toolchains",
         document,
@@ -36,11 +37,13 @@ fn keeps_cross_compiler_and_windows_toolchain_sections() {
             cross_compiling
                 .children
                 .iter()
-                .any(|child| child.heading.plain_text() == title),
+                .any(|child| child.heading.plain_text(content) == title),
             "missing reviewed CMake subsection {title}",
         );
     }
-    assert!(block_slice_text(&cross_compiling.blocks).contains("--toolchain path/to/file"));
+    assert!(
+        block_slice_text(content, &cross_compiling.blocks).contains("--toolchain path/to/file")
+    );
 }
 
 #[test]
@@ -50,8 +53,5 @@ fn does_not_leak_roff_markup_or_duplicate_spacing() {
         "cross-platform-releases/cmake-toolchains",
         document,
     );
-    common::assert_bounded_vertical_spacing(
-        &document.sections,
-        "cross-platform-releases/cmake-toolchains",
-    );
+    common::assert_bounded_vertical_spacing(document, "cross-platform-releases/cmake-toolchains");
 }

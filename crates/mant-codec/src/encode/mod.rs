@@ -7,11 +7,13 @@ mod fragments;
 mod inline;
 mod mapped;
 mod semantic;
+mod source_map;
 
-use std::{borrow::Cow, ops::Range};
+use std::ops::Range;
 
 use mant_ir::{
-    EntryOwner, OutlinePath, Section, SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
+    ContentContext, ContentRootKey, EntryOwner, InlineView, OutlinePath, Section, SourceSpan,
+    TldrCommandPart, TldrDocument, TldrOrigin,
 };
 
 use self::{
@@ -23,18 +25,20 @@ use anchors::anchor_markers;
 pub use fragments::{
     MarkdownFragmentOptions, commonmark_code_span, escape_commonmark, html_anchor,
     render_blocks_fragment, render_heading_fragment, render_inline_fragment,
-    render_located_blocks_fragment, render_sections_fragment,
+    render_located_blocks_fragment, render_projected_inline_fragment, render_sections_fragment,
 };
 use mant_ir::DOCUMENT_ROOT_ID;
 
-/// Optional report decoration expressed only as source-neutral inline IR.
+/// Optional report decoration expressed as root-local logical coordinates.
 ///
 /// Document artifacts never accept this projection: their coordinates always
-/// describe the canonical bytes. Report renderers may project one root at a
-/// time, borrowing untouched roots and allocating only decorated roots.
+/// describe the canonical bytes. Report renderers decorate one borrowed root
+/// at a time without cloning content or fabricating store entries.
 pub trait MarkdownInlineProjection {
-    /// Project one original inline root, borrowing it when no decoration is needed.
-    fn project<'a>(&self, nodes: &'a [mant_ir::Inline]) -> Cow<'a, [mant_ir::Inline]>;
+    /// Root-local Unicode-scalar ranges that receive presentation emphasis.
+    ///
+    /// Canonical content is never cloned or replaced with fabricated leaves.
+    fn scalar_ranges(&self, nodes: &[mant_ir::Inline]) -> &[Range<usize>];
 }
 
 /// Markdown serialization controls that do not alter the query IR.
@@ -77,6 +81,7 @@ pub struct MarkdownArtifact<'src> {
     nodes: Vec<MarkdownNodeRange<'src>>,
     sections: Vec<MarkdownSection<'src>>,
     anchors: std::sync::OnceLock<Vec<Range<usize>>>,
+    roots: Vec<source_map::RenderedRootRange>,
 }
 
 impl<'src> MarkdownArtifact<'src> {
@@ -110,6 +115,35 @@ impl<'src> MarkdownArtifact<'src> {
                 .map(|marker| marker.range)
                 .collect()
         })
+    }
+
+    /// Project an authoritative root-relative logical range into canonical
+    /// Markdown byte placements recorded by this render.
+    #[must_use]
+    pub fn markdown_projections(
+        &self,
+        content: ContentContext<'_>,
+        root: ContentRootKey,
+        logical: Range<usize>,
+    ) -> Vec<Range<usize>> {
+        let Some(logical_text) = content.root_logical_text(root) else {
+            return Vec::new();
+        };
+        source_map::project(&self.text, &self.roots, root, &logical_text, logical)
+    }
+
+    /// Rendered Markdown ranges known to contain one logical root.
+    ///
+    /// These broad ranges are intended for assigning presentation-only node
+    /// context. Use [`Self::markdown_projections`] for exact match ranges.
+    pub fn root_markdown_ranges(
+        &self,
+        root: ContentRootKey,
+    ) -> impl Iterator<Item = Range<usize>> + '_ {
+        self.roots
+            .iter()
+            .filter(move |candidate| candidate.root == root)
+            .map(|candidate| candidate.markdown.clone())
     }
 }
 
@@ -208,8 +242,8 @@ fn render_markdown_artifact(
         document
             .heading
             .as_ref()
-            .is_some_and(heading_has_local_link)
-            || section_headings_have_local_links(&document.sections)
+            .is_some_and(|heading| heading_has_local_link(document.content(), heading))
+            || section_headings_have_local_links(document.content(), &document.sections)
     });
     options.preserve_semantics &=
         !heading_links && query.document.as_ref().is_some_and(semantic::supported);
@@ -237,7 +271,12 @@ fn render_markdown_artifact(
                     .fragment_aliases,
             ));
         }
-        let range = output.push(&render_heading(1, heading, options));
+        let document = query.document.as_ref().expect("heading owner");
+        let range = output.push(&render_heading(document.content(), 1, heading, options));
+        output.push_root(
+            blocks::inline_root(document.content(), &heading.content),
+            range.clone(),
+        );
         if track {
             output.nodes.push(MarkdownNodeRange {
                 range,
@@ -263,6 +302,7 @@ fn render_markdown_artifact(
     }
 
     if let Some(document) = &query.document {
+        let content = document.content();
         if !document.blocks.is_empty()
             || (document.heading.is_none() && !document.fragment_aliases.is_empty())
         {
@@ -277,10 +317,18 @@ fn render_markdown_artifact(
                 output.text.len()
             };
             output.begin_root(start);
-            let rendered = render_blocks_with_entries(&document.blocks, options, track);
+            let rendered = render_blocks_with_entries(content, &document.blocks, options, track);
             output.push_scope(rendered, None, None);
         }
-        render_artifact_sections(&mut output, &document.sections, &[], None, 2, options);
+        render_artifact_sections(
+            content,
+            &mut output,
+            &document.sections,
+            &[],
+            None,
+            2,
+            options,
+        );
     }
     output.finish()
 }
@@ -294,6 +342,7 @@ struct ArtifactBuilder<'src> {
     tldr: Option<usize>,
     root: Option<usize>,
     last_section: Option<usize>,
+    roots: Vec<source_map::RenderedRootRange>,
 }
 
 impl<'src> ArtifactBuilder<'src> {
@@ -339,6 +388,12 @@ impl<'src> ArtifactBuilder<'src> {
             return;
         }
         let block = self.push(&rendered.text);
+        self.roots
+            .extend(rendered.roots.into_iter().map(|mut root| {
+                root.markdown.start += block.start;
+                root.markdown.end += block.start;
+                root
+            }));
         for entry in rendered.entries {
             let path = OutlinePath::nested_entry(coordinates, &entry.indices)
                 .expect("enumerated entry paths are one-based");
@@ -352,6 +407,16 @@ impl<'src> ArtifactBuilder<'src> {
                     source: entry.source,
                 },
             });
+        }
+    }
+
+    fn push_root(&mut self, root: Option<ContentRootKey>, markdown: Range<usize>) {
+        if self.track
+            && !markdown.is_empty()
+            && let Some(root) = root
+        {
+            self.roots
+                .push(source_map::RenderedRootRange { root, markdown });
         }
     }
 
@@ -391,11 +456,13 @@ impl<'src> ArtifactBuilder<'src> {
             nodes: self.nodes,
             sections: self.sections,
             anchors: std::sync::OnceLock::new(),
+            roots: self.roots,
         }
     }
 }
 
 fn render_artifact_sections<'src>(
+    content: ContentContext<'src>,
     output: &mut ArtifactBuilder<'src>,
     sections: &'src [Section],
     parent: &[usize],
@@ -408,21 +475,26 @@ fn render_artifact_sections<'src>(
             format!(
                 "{}\n\n{}",
                 inline::html_anchors(&section.id, &section.fragment_aliases),
-                render_heading(depth, &section.heading, options)
+                render_heading(content, depth, &section.heading, options)
             )
         } else {
-            render_heading(depth, &section.heading, options)
+            render_heading(content, depth, &section.heading, options)
         };
         let range = output.push(&rendered_heading);
+        output.push_root(
+            blocks::inline_root(content, &section.heading.content),
+            range.clone(),
+        );
         if !output.track {
             // Stream one scope at a time without retaining the whole document
             // as intermediate block strings or constructing semantic paths.
             output.push_scope(
-                render_blocks_with_entries(&section.blocks, options, false),
+                render_blocks_with_entries(content, &section.blocks, options, false),
                 None,
                 None,
             );
             render_artifact_sections(
+                content,
                 output,
                 &section.children,
                 &[],
@@ -444,11 +516,12 @@ fn render_artifact_sections<'src>(
         });
         output.begin_section(range.start, slot, section.source);
         output.push_scope(
-            render_blocks_with_entries(&section.blocks, options, true),
+            render_blocks_with_entries(content, &section.blocks, options, true),
             Some(slot),
             Some(&coordinates),
         );
         render_artifact_sections(
+            content,
             output,
             &section.children,
             &coordinates,
@@ -460,6 +533,7 @@ fn render_artifact_sections<'src>(
 }
 
 pub(super) fn render_sections(
+    content: ContentContext<'_>,
     output: &mut Vec<String>,
     sections: &[Section],
     depth: usize,
@@ -470,13 +544,19 @@ pub(super) fn render_sections(
             output.push(format!(
                 "{}\n\n{}",
                 inline::html_anchors(&section.id, &section.fragment_aliases),
-                render_heading(depth, &section.heading, options)
+                render_heading(content, depth, &section.heading, options)
             ));
         } else {
-            output.push(render_heading(depth, &section.heading, options));
+            output.push(render_heading(content, depth, &section.heading, options));
         }
-        output.extend(render_blocks(&section.blocks, options));
-        render_sections(output, &section.children, depth.saturating_add(1), options);
+        output.extend(render_blocks(content, &section.blocks, options));
+        render_sections(
+            content,
+            output,
+            &section.children,
+            depth.saturating_add(1),
+            options,
+        );
     }
 }
 
@@ -552,44 +632,50 @@ pub fn heading(depth: usize, title: &str) -> String {
 /// A visible heading must not silently lose a local target merely because
 /// ordinary portable body export omits optional raw-HTML destinations.
 #[must_use]
-pub fn heading_has_local_link(heading: &mant_ir::Heading) -> bool {
-    fn inlines_have_local_link(content: &[mant_ir::Inline]) -> bool {
-        content.iter().any(|inline| match inline {
-            mant_ir::Inline::Link {
-                target: mant_ir::LinkTarget::Section { .. },
-                ..
-            } => true,
-            mant_ir::Inline::Link { children, .. }
-            | mant_ir::Inline::Strong { children }
-            | mant_ir::Inline::Emphasis { children } => inlines_have_local_link(children),
-            mant_ir::Inline::Text { .. }
-            | mant_ir::Inline::Code { .. }
-            | mant_ir::Inline::Anchor { .. }
-            | mant_ir::Inline::LineBreak => false,
+pub fn heading_has_local_link(content: ContentContext<'_>, heading: &mant_ir::Heading) -> bool {
+    fn inlines_have_local_link(content: ContentContext<'_>, nodes: &[mant_ir::Inline]) -> bool {
+        nodes.iter().any(|inline| {
+            match content
+                .inline(inline)
+                .expect("validated heading content resolves through its content store")
+            {
+                InlineView::Link(link) => {
+                    matches!(link.target(), mant_ir::LinkTarget::Section { .. })
+                        || inlines_have_local_link(content, link.children())
+                }
+                InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                    inlines_have_local_link(content, children)
+                }
+                _ => false,
+            }
         })
     }
-    inlines_have_local_link(&heading.content)
+    inlines_have_local_link(content, &heading.content)
 }
 
 /// Whether any heading in this section forest contains a typed local link.
 #[must_use]
-pub fn section_headings_have_local_links(sections: &[Section]) -> bool {
+pub fn section_headings_have_local_links(
+    content: ContentContext<'_>,
+    sections: &[Section],
+) -> bool {
     sections.iter().any(|section| {
-        heading_has_local_link(&section.heading)
-            || section_headings_have_local_links(&section.children)
+        heading_has_local_link(content, &section.heading)
+            || section_headings_have_local_links(content, &section.children)
     })
 }
 
 pub(super) fn render_heading(
+    content: ContentContext<'_>,
     depth: usize,
     heading: &mant_ir::Heading,
     options: MarkdownOptions,
 ) -> String {
-    let content = inline::render_heading_inline(&heading.content, options);
-    if depth <= 2 && content.contains('\n') {
+    let rendered = inline::render_heading_inline(content, &heading.content, options);
+    if depth <= 2 && rendered.contains('\n') {
         // Setext headings are the portable CommonMark form that retains
         // explicit inline breaks; an ATX newline would end the heading.
-        return format!("{content}\n{}", if depth == 1 { "===" } else { "---" });
+        return format!("{rendered}\n{}", if depth == 1 { "===" } else { "---" });
     }
     // CommonMark has no multiline ATX heading. Keep its hierarchy and
     // linked content on one line rather than accidentally emitting body
@@ -597,7 +683,7 @@ pub(super) fn render_heading(
     format!(
         "{} {}",
         "#".repeat(depth.clamp(1, 6)),
-        content.replace("<br>\n", " ").replace("  \n", " ")
+        rendered.replace("<br>\n", " ").replace("  \n", " ")
     )
 }
 

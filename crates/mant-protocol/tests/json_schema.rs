@@ -121,9 +121,10 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
         search["$defs"]["SearchHit"]["properties"]["ordinal"]["minimum"],
         1
     );
+    assert!(search["$defs"].get("SearchLineRange").is_some());
     assert_eq!(
-        search["$defs"]["SearchLineRange"]["properties"]["line"]["minimum"],
-        1
+        required(&search["$defs"]["SearchOccurrence"]),
+        ["matchedText"]
     );
     for coordinate in ["startLine", "startColumn", "endLine", "endColumn"] {
         assert_eq!(

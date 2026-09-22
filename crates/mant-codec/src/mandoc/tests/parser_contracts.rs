@@ -38,12 +38,12 @@ fn retained_man_paragraph_macro_names_reset_persistent_font_state() {
             .collect::<Vec<_>>();
         assert_eq!(paragraphs.len(), 2, "{name}: {document:?}");
         assert!(
-            matches!(paragraphs[0].as_slice(), [Inline::Strong { children }] if inline_text(children) == "BEFORE"),
+            matches!(paragraphs[0].as_slice(), [Inline::Strong { children }] if inline_text(document.content(), children) == "BEFORE"),
             "{name}: {:?}",
             paragraphs[0],
         );
         assert!(
-            matches!(paragraphs[1].as_slice(), [Inline::Text { value }] if value == "AFTER"),
+            matches!(paragraphs[1].as_slice(), [Inline::Text { content }] if document.content().resolve_text(*content) == Some("AFTER")),
             "{name}: {:?}",
             paragraphs[1],
         );
@@ -112,7 +112,7 @@ fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
         .blocks
         .iter()
         .map(|block| match block {
-            Block::Paragraph { children, .. } => inline_text(children),
+            Block::Paragraph { children, .. } => inline_text(document.content(), children),
             block => panic!("expected fallback paragraph, got {block:?}"),
         })
         .collect::<Vec<_>>();

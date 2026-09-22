@@ -5,8 +5,9 @@ use super::{
 };
 use crate::{ManualPage, ManualRequest};
 use mant_ir::{
-    Block, Diagnostic, DiagnosticLevel, Document, DocumentAddress, DocumentMeta, Inline,
-    LayoutHint, MarkdownOrigin, Section, SourceCoordinates, SourceFormat, SourceIdentity,
+    Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Diagnostic,
+    DiagnosticLevel, Document, DocumentAddress, DocumentMeta, Heading, Inline, LayoutHint,
+    MarkdownOrigin, Provenance, Section, SourceCoordinates, SourceFormat, SourceIdentity,
     SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{InputFormat, MAX_DOCUMENT_SELECTOR_CHARS, ScopeTextError};
@@ -217,6 +218,29 @@ impl LoadHost for StubHost {
 }
 
 fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document {
+    let mut content = ContentStoreBuilder::new();
+    let owner = content.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let heading = if readable {
+        let root = content.push_root(owner, ContentRootKind::Heading, Provenance::Unknown);
+        let content = content.push_text(
+            root,
+            "NAME".into(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        Heading {
+            content: vec![Inline::Text { content }],
+            source: None,
+        }
+    } else {
+        Heading {
+            content: Vec::new(),
+            source: None,
+        }
+    };
     Document {
         heading: None,
         parser: None,
@@ -231,6 +255,7 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
+        content_store: content.finish(),
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: unsupported
@@ -248,7 +273,7 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
             .then_some(Section {
                 id: "name-1".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                heading: "NAME".into(),
+                heading,
                 spacing_before_lines: 0,
                 blocks: Vec::new(),
                 children: Vec::new(),
@@ -390,7 +415,14 @@ fn unavailable_native_backend_preserves_markdown_precedence_and_tldr_policy() {
     let content = super::load_with(spec, LoadPolicy::Combined, &host).unwrap();
     let document = content.document.unwrap();
     // A Markdown H1 is a visible heading, not native TH/Dt metadata.
-    assert_eq!(document.heading.as_ref().unwrap().plain_text(), "Fallback");
+    assert_eq!(
+        document
+            .heading
+            .as_ref()
+            .unwrap()
+            .plain_text(document.content()),
+        "Fallback"
+    );
     assert_eq!(document.meta.title, None);
     assert_eq!(document.root_format(), Some(SourceFormat::Markdown));
     assert_eq!(document.root_path(), Some("fallback.md"));
@@ -750,10 +782,21 @@ fn readable_best_effort_document_survives_parser_findings() {
 #[test]
 fn root_only_native_document_is_readable() {
     let mut root_only = document(SourceFormat::Man, false, false);
+    let mut content = ContentStoreBuilder::new();
+    let owner = content.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let root = content.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let text = content.push_text(
+        root,
+        "manual text before any section".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    root_only.content_store = content.finish();
     root_only.blocks.push(Block::Paragraph {
-        children: vec![Inline::Text {
-            value: "manual text before any section".to_owned(),
-        }],
+        children: vec![Inline::Text { content: text }],
         layout: LayoutHint::default(),
         source: None,
     });
@@ -1202,7 +1245,10 @@ Document overview.
 
     let document = result.document.expect("document body");
     assert_eq!(document.display_title().as_deref(), Some("Demo"));
-    assert_eq!(document.sections[0].heading.plain_text(), "Options");
+    assert_eq!(
+        document.sections[0].heading.plain_text(document.content()),
+        "Options"
+    );
     assert!(
         document
             .blocks

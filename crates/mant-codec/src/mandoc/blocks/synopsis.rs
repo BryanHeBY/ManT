@@ -1,7 +1,7 @@
 //! Declaration geometry selected by the native SYNOPSIS flags.
 use super::{
-    Block, Inline, InlineBuilder, LoweringContext, Node, NodeKind, first_part_children, layout,
-    lower_blocks_with_spacing, lower_inline_nodes_with_spacing, source_span,
+    Block, LoweringContext, Node, NodeKind, first_part_children, layout, lower_blocks_with_spacing,
+    lower_inline_nodes_with_spacing, source_span,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -176,16 +176,31 @@ pub(super) fn lower_synopsis_head(
         return;
     }
 
-    let head = vec![Inline::Strong { children: head }];
+    let head = context.content.lower(
+        mant_ir::ContentRootKind::Body,
+        source_span(node),
+        vec![crate::mandoc::inline::DraftInline::Strong { children: head }],
+    );
     if let Some(Block::Paragraph {
         children, source, ..
     }) = nested.first_mut()
     {
-        let body = std::mem::take(children);
-        let mut synopsis = InlineBuilder::with_spacing(spacing_enabled);
-        synopsis.append(head);
-        synopsis.append(body);
-        *children = synopsis.finish();
+        let mut body = std::mem::take(children);
+        let needs_space = context.content.with_context(|content| {
+            crate::mandoc::inline::needs_boundary_space(
+                content.last_visible_character(&head).ok().flatten(),
+                content.first_visible_character(&body).ok().flatten(),
+            )
+        });
+        *children = head;
+        if spacing_enabled && needs_space {
+            children.extend(context.content.lower(
+                mant_ir::ContentRootKind::Body,
+                source_span(node),
+                vec![crate::mandoc::inline::DraftInline::Text { value: " ".into() }],
+            ));
+        }
+        children.append(&mut body);
         *source = source_span(node);
         output.extend(nested);
         return;

@@ -35,11 +35,12 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         mant_ir::EntryKind::EnvironmentVariable
     );
     assert_eq!(deprecated.source.unwrap().line, 2165);
-    assert!(
-        serde_json::to_string(&deprecated.terms)
-            .unwrap()
-            .contains("deprecated")
-    );
+    assert!(deprecated.terms.iter().any(|term| {
+        document
+            .content()
+            .plain_text(term)
+            .is_ok_and(|text| text.contains("deprecated"))
+    }));
 
     let commands: Vec<_> = common::semantic_definition_items(document)
         .into_iter()
@@ -52,13 +53,12 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         .unwrap();
     assert_eq!(add.source.unwrap().line, 351);
     assert!(
-        serde_json::to_string(&add.terms)
-            .unwrap()
-            .contains("git-add(1)")
+        add.terms
+            .iter()
+            .any(|term| { common::inline_text(document.content(), term).contains("git-add(1)") })
     );
     assert!(
-        serde_json::to_string(&add.description)
-            .unwrap()
+        common::block_slice_text(document.content(), &add.description)
             .contains("Add file contents to the index.")
     );
     assert!(
@@ -91,7 +91,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         }] if items.len() == 7
     ));
 
-    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/git");
+    common::assert_bounded_vertical_spacing(document, "fedora44/git");
 }
 
 /// No roff escapes leak into text.

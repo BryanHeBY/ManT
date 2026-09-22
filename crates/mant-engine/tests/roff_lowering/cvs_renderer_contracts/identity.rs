@@ -18,11 +18,15 @@ fn executed_heading_keeps_authored_navigation_identity() {
         .iter()
         .find(|section| section.id.as_str() == "next-section")
         .expect("authored section identity");
-    assert_eq!(section.heading.plain_text(), "EXT SECTION");
+    assert_eq!(
+        section.heading.plain_text(document.content()),
+        "EXT SECTION"
+    );
 
     let mut link = AuthoredSectionLink {
         id: "next-section",
         found: false,
+        content: document.content(),
     };
     link.visit_document(document);
     assert!(
@@ -47,7 +51,12 @@ fn executed_heading_display_cannot_shadow_an_authored_navigation_title() {
     let headings = document
         .sections
         .iter()
-        .map(|section| (section.id.as_str(), section.heading.plain_text()))
+        .map(|section| {
+            (
+                section.id.as_str(),
+                section.heading.plain_text(document.content()),
+            )
+        })
         .collect::<Vec<_>>();
     assert!(headings.contains(&("next", "EXT".to_owned())));
     assert!(headings.contains(&("ext", "EXT".to_owned())));
@@ -55,6 +64,7 @@ fn executed_heading_display_cannot_shadow_an_authored_navigation_title() {
     let mut link = AuthoredSectionLink {
         id: "ext",
         found: false,
+        content: document.content(),
     };
     link.visit_document(document);
     assert!(link.found, "authored EXT reference was shadowed: {query:?}");
@@ -87,6 +97,7 @@ fn sx_display_state_cannot_change_its_authored_destination() {
     let mut correct = AuthoredSectionLink {
         id: "next-section",
         found: false,
+        content: document.content(),
     };
     correct.visit_document(document);
     assert!(correct.found, "Sx target was inferred from display text");
@@ -113,6 +124,7 @@ fn section_and_sx_share_cvs_deroff_authored_normalization() {
         let mut link = AuthoredSectionLink {
             id: "next",
             found: false,
+            content: document.content(),
         };
         link.visit_document(document);
         assert!(link.found, "authored target did not normalize: {query:?}");
@@ -155,6 +167,7 @@ fn sx_authored_escape_cannot_collapse_into_a_display_equivalent_heading() {
     let mut correct = AuthoredSectionLink {
         id: "a-zbc",
         found: false,
+        content: document.content(),
     };
     correct.visit_document(document);
     assert!(correct.found, "Sx target was inferred from projected AC");
@@ -169,14 +182,15 @@ fn nested_heading_author_modes_execute_without_losing_inline_adjacency() {
     let native = native_terminal(source);
     assert!(native.contains("“\nAlice”"), "native terminal: {native:?}");
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower nested An heading");
-    let heading = &query.document.as_ref().unwrap().sections[1].heading.content;
+    let document = query.document.as_ref().unwrap();
+    let heading = &document.sections[1].heading.content;
     assert!(
         heading
             .iter()
-            .any(|inline| matches!(inline, Inline::LineBreak)),
+            .any(|inline| matches!(inline, Inline::LineBreak { .. })),
         "nested An split was not executed: {heading:?}"
     );
-    assert_eq!(super::inline_text(heading), "“\nAlice”");
+    assert_eq!(super::inline_text(document.content(), heading), "“\nAlice”");
 }
 
 #[test]

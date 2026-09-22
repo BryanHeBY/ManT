@@ -2,7 +2,7 @@
 use super::{Distance, SourceIndent};
 use crate::mandoc::LoweringContext;
 use libmandoc_rs::Node;
-use mant_ir::{DefinitionLayout, Inline};
+use mant_ir::DefinitionLayout;
 
 #[derive(Clone, Copy)]
 pub(in crate::mandoc) enum TermPlacement {
@@ -28,12 +28,12 @@ impl DefinitionGeometry {
         context: &LoweringContext<'_>,
         node: &Node,
         origin: SourceIndent,
-        terms: &[Vec<Inline>],
+        terms: &[Vec<crate::mandoc::inline::DraftInline>],
     ) -> (DefinitionLayout, SourceIndent) {
         let body_origin = context.offset_indent(node, origin, self.body);
         let body_indent_columns = body_origin.offset_from(origin);
         let inline_term = match self.placement {
-            TermPlacement::Fit => mant_ir::terms_fit_inline(
+            TermPlacement::Fit => crate::mandoc::inline::terms_fit_inline(
                 terms,
                 usize::try_from(body_indent_columns.saturating_sub(i32::from(self.gap)))
                     .unwrap_or(0),

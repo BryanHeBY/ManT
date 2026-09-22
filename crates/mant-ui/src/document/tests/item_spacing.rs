@@ -76,7 +76,7 @@ fn native_pd_two_zero_two_matches_text_and_tui_item_boundaries() {
 #[test]
 fn explicit_zero_is_distinct_from_inherited_loose_list_spacing() {
     for compact in [false, true] {
-        let mut builder = DocumentBuilder::new("item gaps".into(), None);
+        let mut builder = DocumentBuilder::new("item gaps".into(), None, None);
         builder.blocks(
             &[list(
                 compact,
@@ -113,9 +113,7 @@ fn explicit_zero_is_distinct_from_inherited_loose_list_spacing() {
 fn nonparagraph_body_keeps_item_gap_before_the_whole_marker() {
     let code = Block::Preformatted {
         language: None,
-        children: vec![Inline::Text {
-            value: "CODE".into(),
-        }],
+        children: vec![crate::test_content::text("CODE")],
         layout: LayoutHint::default(),
         source: None,
     };
@@ -123,7 +121,7 @@ fn nonparagraph_body_keeps_item_gap_before_the_whole_marker() {
         paragraph("BEFORE"),
         list(true, 0, vec![item(Some(3), vec![code])]),
     ];
-    let mut builder = DocumentBuilder::new("code item".into(), None);
+    let mut builder = DocumentBuilder::new("code item".into(), None, None);
     builder.blocks(&blocks, 0);
     assert_eq!(builder.lines.len(), 6);
     assert_eq!(builder.lines[4].spans[0].content, "• ");
@@ -147,8 +145,11 @@ fn container_and_item_boundary_share_one_bounded_gap_before_marker() {
                 vec![item(Some(inner), vec![paragraph("AFTER")])],
             ),
         ];
-        assert_eq!(mant_ir::geometry::has_bounded_gap(&blocks), bounded);
-        let mut builder = DocumentBuilder::new("bounded item".into(), None);
+        assert_eq!(
+            mant_ir::geometry::has_bounded_gap(crate::test_content::content(), &blocks),
+            bounded
+        );
+        let mut builder = DocumentBuilder::new("bounded item".into(), None, None);
         builder.blocks(&blocks, 0);
         assert_eq!(builder.lines.len(), 4098);
         assert_eq!(builder.lines[4097].spans[0].content, "• ");

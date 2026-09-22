@@ -1,10 +1,13 @@
-use libmandoc_rs::structured::{
-    ContentAtom, ContentAtomKey, ContentAtomKind, ContentPointKey, ContentRootKey,
-    LinkOccurrenceKey, PointBoundary, ProvenanceKey, StructuredStyle,
+use libmandoc_rs::structured::{ContentAtomKey, ContentPointKey, ContentRootKey, ProvenanceKey};
+use mant_ir::{
+    ContentAtom, ContentAtomKind, ContentByteRange, ContentRef, ContentStyle, Diagnostic,
+    DiagnosticImpact, DiagnosticLevel, Inline, LinkOccurrenceKey, PointBoundary, Provenance,
+    SourceSpan,
 };
-use mant_ir::{Diagnostic, DiagnosticImpact, DiagnosticLevel, Inline, Provenance, SourceSpan};
 
-use super::{NativeProjectionError, NativeProseProjection, address::AddressPlan};
+use super::{
+    NativeProjectionError, NativeProseProjection, address::AddressPlan, store::NativeContentMap,
+};
 
 type PendingLink = Option<(LinkOccurrenceKey, Vec<Inline>)>;
 type InAtomPoints = std::collections::HashMap<ContentAtomKey, Vec<(u32, u32, ContentPointKey)>>;
@@ -17,35 +20,32 @@ struct PointBuckets {
 pub(super) fn root_inlines(
     projection: &NativeProseProjection,
     addresses: &AddressPlan,
+    content: &NativeContentMap,
     root: ContentRootKey,
 ) -> Result<Vec<Inline>, NativeProjectionError> {
-    let document = projection.document();
     let projected = projection
         .root(root)
         .ok_or(NativeProjectionError::InvalidRelation(
             "content root has no projected leaves",
         ))?;
-    let points = collect_point_buckets(document, addresses, root, projected.leaves.len())?;
+    let public_root = content.root(root)?;
+    let points = collect_point_buckets(content, addresses, public_root, projected.leaves.len())?;
     let mut inlines = Vec::new();
     let mut pending_link = None;
 
     for (leaf_index, leaf) in projected.leaves.iter().enumerate() {
-        let atom =
-            document
-                .content_atom(leaf.atom())
-                .ok_or(NativeProjectionError::InvalidRelation(
-                    "projected leaf references an unknown atom",
-                ))?;
-        let continuation = match atom.kind() {
-            ContentAtomKind::BreakOpportunity => {
-                next_visible_link(document, addresses, projected, leaf_index + 1)?
+        let native_atom = leaf.atom();
+        let atom = public_atom(content, native_atom)?;
+        let continuation = match &atom.kind {
+            ContentAtomKind::BreakOpportunity {} => {
+                next_visible_link(content, projected, leaf_index + 1)?
             }
             ContentAtomKind::Text { .. }
             | ContentAtomKind::Whitespace { .. }
-            | ContentAtomKind::HardBreak => retained_link(addresses, atom.link())?,
+            | ContentAtomKind::HardBreak {} => atom.link,
         };
         emit_points(
-            document,
+            content,
             addresses,
             &points.between[leaf_index],
             continuation,
@@ -53,72 +53,83 @@ pub(super) fn root_inlines(
             &mut inlines,
         )?;
 
-        match atom.kind() {
+        match &atom.kind {
             ContentAtomKind::Text { text, .. } | ContentAtomKind::Whitespace { text, .. } => {
                 lower_text_atom(
-                    document,
+                    content,
                     addresses,
                     atom,
                     text,
                     points
                         .inside
-                        .get(&atom.key())
+                        .get(&native_atom)
                         .map_or(&[][..], Vec::as_slice),
                     &mut pending_link,
                     &mut inlines,
                 )?;
             }
-            ContentAtomKind::HardBreak => push_leaf(
-                document,
-                addresses,
-                retained_link(addresses, atom.link())?,
-                styled_leaf(atom, Inline::LineBreak),
+            ContentAtomKind::HardBreak {} => push_leaf(
+                atom.link,
+                styled_leaf(atom, Inline::LineBreak { atom: atom.key }),
                 &mut pending_link,
                 &mut inlines,
-            )?,
-            ContentAtomKind::BreakOpportunity => {}
+            ),
+            ContentAtomKind::BreakOpportunity {} => {}
         }
     }
     emit_points(
-        document,
+        content,
         addresses,
         &points.between[projected.leaves.len()],
         None,
         &mut pending_link,
         &mut inlines,
     )?;
-    flush_link(document, addresses, &mut pending_link, &mut inlines)?;
+    flush_link(&mut pending_link, &mut inlines);
     Ok(inlines)
 }
 
 fn collect_point_buckets(
-    document: &libmandoc_rs::structured::StructuredDocument,
+    content: &NativeContentMap,
     addresses: &AddressPlan,
-    root: ContentRootKey,
+    root: mant_ir::ContentRootKey,
     atom_count: usize,
 ) -> Result<PointBuckets, NativeProjectionError> {
     let mut buckets = PointBuckets {
         between: vec![Vec::new(); atom_count + 1],
         inside: InAtomPoints::new(),
     };
-    for point in document
-        .content_points()
-        .iter()
-        .filter(|point| point.root() == root && addresses.anchor(point.key()).is_some())
-    {
-        match point.boundary() {
+    let root_record = content
+        .store()
+        .root(root)
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "public content root is missing",
+        ))?;
+    for public_key in &root_record.points {
+        let point =
+            content
+                .store()
+                .point(*public_key)
+                .ok_or(NativeProjectionError::InvalidRelation(
+                    "public content point is missing",
+                ))?;
+        let native_key = content.native_point(*public_key)?;
+        if addresses.anchor(native_key).is_none() {
+            continue;
+        }
+        match point.boundary {
             PointBoundary::BetweenAtoms { atom_boundary } => buckets
                 .between
-                .get_mut(*atom_boundary as usize)
+                .get_mut(atom_boundary as usize)
                 .ok_or(NativeProjectionError::InvalidRelation(
                     "content point atom boundary is outside its root",
                 ))?
-                .push(point.key()),
+                .push(native_key),
             PointBoundary::InAtom { atom, byte_offset } => buckets
                 .inside
-                .entry(*atom)
+                .entry(content.native_atom(atom)?)
                 .or_default()
-                .push((*byte_offset, point.ordinal(), point.key())),
+                .push((byte_offset, public_key.get(), native_key)),
         }
     }
     for points in buckets.inside.values_mut() {
@@ -128,15 +139,15 @@ fn collect_point_buckets(
 }
 
 fn lower_text_atom(
-    document: &libmandoc_rs::structured::StructuredDocument,
+    content: &NativeContentMap,
     addresses: &AddressPlan,
-    atom: &ContentAtom,
+    atom: &mant_ir::ContentAtom,
     text: &str,
     points: &[(u32, u32, ContentPointKey)],
     pending: &mut PendingLink,
     output: &mut Vec<Inline>,
 ) -> Result<(), NativeProjectionError> {
-    let link = retained_link(addresses, atom.link())?;
+    let link = atom.link;
     let mut fragments = Vec::with_capacity(points.len().saturating_mul(2).saturating_add(1));
     let mut start = 0_usize;
     let mut point_index = 0;
@@ -148,17 +159,16 @@ fn lower_text_atom(
             .ok_or(NativeProjectionError::InvalidRelation(
                 "content point does not select a UTF-8 atom boundary",
             ))?;
-        push_text_fragment(&mut fragments, atom.style(), value);
+        push_text_fragment(&mut fragments, atom, start, end, value);
         let group_start = point_index;
         while point_index < points.len() && points[point_index].0 == byte_offset {
             point_index += 1;
         }
-        fragments.extend(
-            points[group_start..point_index]
-                .iter()
-                .filter_map(|(_, _, key)| addresses.anchor(*key))
-                .map(super::address::AnchorPlacement::inline),
-        );
+        for (_, _, key) in &points[group_start..point_index] {
+            if let Some(anchor) = addresses.anchor(*key) {
+                fragments.push(anchor.inline(content.point(*key)?));
+            }
+        }
         start = end;
     }
     let tail = text
@@ -166,31 +176,39 @@ fn lower_text_atom(
         .ok_or(NativeProjectionError::InvalidRelation(
             "content point tail is outside its atom",
         ))?;
-    push_text_fragment(&mut fragments, atom.style(), tail);
-    for fragment in wrap_atom_style(atom.style(), fragments) {
-        push_leaf(document, addresses, link, fragment, pending, output)?;
+    push_text_fragment(&mut fragments, atom, start, text.len(), tail);
+    for fragment in wrap_atom_style(atom.style, fragments) {
+        push_leaf(link, fragment, pending, output);
     }
     Ok(())
 }
 
-fn push_text_fragment(fragments: &mut Vec<Inline>, style: StructuredStyle, value: &str) {
+fn push_text_fragment(
+    fragments: &mut Vec<Inline>,
+    atom: &ContentAtom,
+    start: usize,
+    end: usize,
+    value: &str,
+) {
     if value.is_empty() {
         return;
     }
-    fragments.push(if style.is_literal() {
-        Inline::Code {
-            value: value.to_owned(),
-        }
+    let content = ContentRef {
+        atom: atom.key,
+        bytes: ContentByteRange {
+            start: u32::try_from(start).expect("validated native atom byte range fits u32"),
+            end: u32::try_from(end).expect("validated native atom byte range fits u32"),
+        },
+    };
+    fragments.push(if atom.style.literal {
+        Inline::Code { content }
     } else {
-        Inline::Text {
-            value: value.to_owned(),
-        }
+        Inline::Text { content }
     });
 }
 
 fn next_visible_link(
-    document: &libmandoc_rs::structured::StructuredDocument,
-    addresses: &AddressPlan,
+    content: &NativeContentMap,
     root: &super::super::projection::NativeProseRoot,
     start: usize,
 ) -> Result<Option<LinkOccurrenceKey>, NativeProjectionError> {
@@ -201,44 +219,30 @@ fn next_visible_link(
             "projected leaf index is out of bounds",
         ))?;
     for leaf in leaves {
-        let atom =
-            document
-                .content_atom(leaf.atom())
-                .ok_or(NativeProjectionError::InvalidRelation(
-                    "projected leaf references an unknown atom",
-                ))?;
-        match atom.kind() {
-            ContentAtomKind::BreakOpportunity | ContentAtomKind::HardBreak => {}
+        let atom = public_atom(content, leaf.atom())?;
+        match &atom.kind {
+            ContentAtomKind::BreakOpportunity {} | ContentAtomKind::HardBreak {} => {}
             ContentAtomKind::Text { .. } | ContentAtomKind::Whitespace { .. } => {
-                return retained_link(addresses, atom.link());
+                return Ok(atom.link);
             }
         }
     }
     Ok(None)
 }
 
-fn retained_link(
-    addresses: &AddressPlan,
-    link: Option<LinkOccurrenceKey>,
-) -> Result<Option<LinkOccurrenceKey>, NativeProjectionError> {
-    link.map(|key| addresses.link_target(key).map(|target| target.map(|_| key)))
-        .transpose()
-        .map(Option::flatten)
-}
-
 fn styled_leaf(atom: &ContentAtom, leaf: Inline) -> Inline {
-    wrap_atom_style(atom.style(), vec![leaf])
+    wrap_atom_style(atom.style, vec![leaf])
         .pop()
         .expect("one styled leaf remains one inline")
 }
 
-fn wrap_atom_style(style: StructuredStyle, mut fragments: Vec<Inline>) -> Vec<Inline> {
-    if style.is_italic() {
+fn wrap_atom_style(style: ContentStyle, mut fragments: Vec<Inline>) -> Vec<Inline> {
+    if style.emphasis {
         fragments = vec![Inline::Emphasis {
             children: fragments,
         }];
     }
-    if style.is_bold() || style.is_underline() {
+    if style.strong || style.underline {
         fragments = vec![Inline::Strong {
             children: fragments,
         }];
@@ -247,30 +251,27 @@ fn wrap_atom_style(style: StructuredStyle, mut fragments: Vec<Inline>) -> Vec<In
 }
 
 fn push_leaf(
-    document: &libmandoc_rs::structured::StructuredDocument,
-    addresses: &AddressPlan,
     link: Option<LinkOccurrenceKey>,
     leaf: Inline,
     pending: &mut Option<(LinkOccurrenceKey, Vec<Inline>)>,
     output: &mut Vec<Inline>,
-) -> Result<(), NativeProjectionError> {
+) {
     if let (Some((pending_key, children)), Some(link)) = (pending.as_mut(), link)
         && *pending_key == link
     {
         children.push(leaf);
-        return Ok(());
+        return;
     }
-    flush_link(document, addresses, pending, output)?;
+    flush_link(pending, output);
     if let Some(link) = link {
         *pending = Some((link, vec![leaf]));
     } else {
         output.push(leaf);
     }
-    Ok(())
 }
 
 fn emit_points(
-    document: &libmandoc_rs::structured::StructuredDocument,
+    content: &NativeContentMap,
     addresses: &AddressPlan,
     points: &[ContentPointKey],
     continuation: Option<LinkOccurrenceKey>,
@@ -278,13 +279,13 @@ fn emit_points(
     output: &mut Vec<Inline>,
 ) -> Result<(), NativeProjectionError> {
     if pending.as_ref().map(|(key, _)| *key) != continuation {
-        flush_link(document, addresses, pending, output)?;
+        flush_link(pending, output);
     }
     for point in points {
         let Some(anchor) = addresses.anchor(*point) else {
             continue;
         };
-        let anchor = anchor.inline();
+        let anchor = anchor.inline(content.point(*point)?);
         if let Some((key, children)) = pending.as_mut()
             && Some(*key) == continuation
         {
@@ -296,30 +297,26 @@ fn emit_points(
     Ok(())
 }
 
-fn flush_link(
-    document: &libmandoc_rs::structured::StructuredDocument,
-    addresses: &AddressPlan,
-    pending: &mut Option<(LinkOccurrenceKey, Vec<Inline>)>,
-    output: &mut Vec<Inline>,
-) -> Result<(), NativeProjectionError> {
+fn flush_link(pending: &mut Option<(LinkOccurrenceKey, Vec<Inline>)>, output: &mut Vec<Inline>) {
     let Some((key, children)) = pending.take() else {
-        return Ok(());
+        return;
     };
-    let link = document
-        .link(key)
+    output.push(Inline::Link {
+        occurrence: key,
+        children,
+    });
+}
+
+fn public_atom(
+    content: &NativeContentMap,
+    key: ContentAtomKey,
+) -> Result<&ContentAtom, NativeProjectionError> {
+    content
+        .store()
+        .atom(content.atom(key)?)
         .ok_or(NativeProjectionError::InvalidRelation(
-            "atom references an unknown link",
-        ))?;
-    if let Some(target) = addresses.link_target(key)? {
-        output.push(Inline::Link {
-            target: target.clone(),
-            title: link.title().map(ToOwned::to_owned),
-            children,
-        });
-    } else {
-        output.extend(children);
-    }
-    Ok(())
+            "public content atom is missing",
+        ))
 }
 
 pub(super) fn source_for(
@@ -364,8 +361,10 @@ pub(super) fn lower_diagnostics(projection: &NativeProseProjection) -> Vec<Diagn
 
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::structured::StructuredStyle;
-    use mant_ir::{FragmentAlias, Inline, NodeId};
+    use mant_ir::{
+        ContentAtomKey, ContentByteRange, ContentPointKey, ContentRef, ContentStyle, FragmentAlias,
+        Inline, NodeId,
+    };
 
     use super::wrap_atom_style;
 
@@ -373,18 +372,26 @@ mod tests {
     fn in_atom_point_keeps_one_style_wrapper_around_both_text_fragments() {
         let fragments = vec![
             Inline::Text {
-                value: "before".to_owned(),
+                content: content(0, 6),
             },
             Inline::Anchor {
+                point: ContentPointKey::FIRST,
                 id: NodeId::new("point"),
                 fragment_aliases: vec![FragmentAlias::from("Point")],
-                owner_source: None,
             },
             Inline::Text {
-                value: "after".to_owned(),
+                content: content(6, 11),
             },
         ];
-        let styled = wrap_atom_style(StructuredStyle::BoldItalic, fragments);
+        let styled = wrap_atom_style(
+            ContentStyle {
+                strong: true,
+                emphasis: true,
+                literal: false,
+                underline: false,
+            },
+            fragments,
+        );
 
         let [Inline::Strong { children }] = styled.as_slice() else {
             panic!("bold style must have one outer wrapper: {styled:#?}");
@@ -393,7 +400,14 @@ mod tests {
             panic!("italic style must have one inner wrapper: {children:#?}");
         };
         assert!(
-            matches!(children.as_slice(), [Inline::Text { value: before }, Inline::Anchor { id, .. }, Inline::Text { value: after }] if before == "before" && id.as_str() == "point" && after == "after")
+            matches!(children.as_slice(), [Inline::Text { content: before }, Inline::Anchor { id, .. }, Inline::Text { content: after }] if before.bytes == ContentByteRange { start: 0, end: 6 } && id.as_str() == "point" && after.bytes == ContentByteRange { start: 6, end: 11 })
         );
+    }
+
+    fn content(start: u32, end: u32) -> ContentRef {
+        ContentRef {
+            atom: ContentAtomKey::FIRST,
+            bytes: ContentByteRange { start, end },
+        }
     }
 }

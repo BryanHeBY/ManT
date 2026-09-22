@@ -14,6 +14,29 @@ fn explained(source: &str, name: &str) -> mant_protocol::QueryExplanation {
     .unwrap()
 }
 
+fn covered_by_support(
+    response: &mant_protocol::QueryExplanation,
+    evidence: &mant_protocol::ExplanationEvidence,
+) -> bool {
+    response
+        .content_projection
+        .as_ref()
+        .is_some_and(|projection| {
+            evidence.covered_by_support(projection.content(), &response.supports)
+        })
+}
+
+fn first_inline_atom(inline: &mant_ir::Inline) -> Option<mant_ir::ContentAtomKey> {
+    match inline {
+        mant_ir::Inline::Text { content } | mant_ir::Inline::Code { content } => Some(content.atom),
+        mant_ir::Inline::LineBreak { atom } => Some(*atom),
+        mant_ir::Inline::Strong { children }
+        | mant_ir::Inline::Emphasis { children }
+        | mant_ir::Inline::Link { children, .. } => children.iter().find_map(first_inline_atom),
+        mant_ir::Inline::Anchor { .. } => None,
+    }
+}
+
 #[test]
 fn declaration_boundaries_follow_executed_requests_not_physical_source_lines() {
     for (between, grouped) in [
@@ -72,7 +95,23 @@ fn nested_group_context_is_a_source_reference_not_a_second_body_copy() {
         ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\n.It Fl b\nOuter description.\n.Bl -tag -width Ds\n.It Fl a\n.It Fl c\n{body}\n.El\n.El\n"
     );
     let content = load_roff_bytes(source.as_bytes()).unwrap();
-    for bytes in [32768, 40000, 65536] {
+    // C04 serializes authoritative content once in a response-local store.
+    // The complete closure plus group metadata needs about 39 KiB here; a
+    // 32 KiB request must truncate atomically rather than expose dangling keys.
+    let tight = explain_query(
+        &content,
+        &ExplanationQuery {
+            entry: "-a".into(),
+            options: ExplanationOptions {
+                content_bytes: 32768,
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
+    assert!(tight.truncation.content);
+    tight.validate_references().unwrap();
+    for bytes in [40000, 65536] {
         let response = explain_query(
             &content,
             &ExplanationQuery {
@@ -93,14 +132,12 @@ fn nested_group_context_is_a_source_reference_not_a_second_body_copy() {
                 .all(|e| !e.support_omitted && !e.content_omitted),
             "both bodies fit budget {bytes}"
         );
-        if bytes >= 40000 {
-            assert!(!response.truncation.content);
-        }
+        assert!(!response.truncation.content);
         assert!(
             response
                 .evidence
                 .iter()
-                .all(|e| e.covered_by_support(&response.supports))
+                .all(|e| covered_by_support(&response, e))
         );
         response.validate_references().unwrap();
         let encoded = serde_json::to_string(&response).unwrap();
@@ -134,7 +171,9 @@ fn nested_group_context_is_a_source_reference_not_a_second_body_copy() {
         .unwrap();
         assert_eq!(response.supports.len(), 1);
         assert!(
-            response.supports[0].items().is_some(),
+            response.supports[0]
+                .items(response.content_projection.as_ref().unwrap().content())
+                .is_some(),
             "each isolated page owns its own context"
         );
         let text = mant_render::render_explanation_text(&response);
@@ -263,7 +302,12 @@ fn valid_pool_indices_do_not_authorize_wrong_group_or_wrong_evidence_class() {
                 first.support = Some(1);
                 first.content = Some(mant_protocol::ExplanationContent::Entry {
                     block: mant_ir::Block::DefinitionList {
-                        items: vec![response.supports[0].items().unwrap()[0].clone()],
+                        items: vec![
+                            response.supports[0]
+                                .items(response.content_projection.as_ref().unwrap().content())
+                                .unwrap()[0]
+                                .clone(),
+                        ],
                         declaration_groups: vec![],
                         compact: false,
                         layout: mant_ir::LayoutHint::default(),
@@ -301,7 +345,23 @@ fn provider_fallback_is_reused_when_its_complete_declaration_group_does_not_fit(
         "X".repeat(15000)
     );
     let content = load_roff_bytes(source.as_bytes()).unwrap();
-    for bytes in [12000, 18000, 20000, 24000, 30000] {
+    // The original 12 KiB threshold predates the response-local ContentStore:
+    // even the inner group's complete JSON closure now exceeds 13 KiB.  The
+    // smaller response still has to be valid and explicit about truncation.
+    let tight = explain_query(
+        &content,
+        &ExplanationQuery {
+            entry: "-a".into(),
+            options: ExplanationOptions {
+                content_bytes: 12000,
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
+    assert!(tight.truncation.content);
+    tight.validate_references().unwrap();
+    for bytes in [18000, 20000, 24000, 30000] {
         let response = explain_query(
             &content,
             &ExplanationQuery {
@@ -393,7 +453,33 @@ fn invalid_group_heads_and_overlapping_ranges_are_not_semantically_complete() {
             panic!("definition list")
         };
         if empty_head {
-            items[0].terms = vec![vec![mant_ir::Inline::anchor("only-anchor")]];
+            let atom = items[0].terms[0]
+                .iter()
+                .find_map(first_inline_atom)
+                .expect("original head has text");
+            let root = document.content_store.atom(atom).unwrap().root;
+            let owner = document.content_store.root(root).unwrap().owner;
+            let point = mant_ir::ContentPointKey::new(
+                u32::try_from(document.content_store.points.len() + 1).unwrap(),
+            )
+            .unwrap();
+            document.content_store.points.push(mant_ir::ContentPoint {
+                key: point,
+                root,
+                owner,
+                boundary: mant_ir::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+                scalar_boundary: 0,
+                provenance: mant_ir::Provenance::Unknown,
+            });
+            document
+                .content_store
+                .roots
+                .iter_mut()
+                .find(|record| record.key == root)
+                .unwrap()
+                .points
+                .push(point);
+            items[0].terms = vec![vec![mant_ir::Inline::anchor(point, "only-anchor")]];
         } else {
             declaration_groups.push(declaration_groups[0]);
         }
@@ -473,6 +559,7 @@ fn scope_supports_are_document_local_even_when_node_ids_coincide() {
         .enumerate()
         .map(|(i, r)| ScopedExplanation {
             supports: r.supports.clone(),
+            content_projection: r.content_projection.clone(),
             address: mant_ir::DocumentAddress::Manual {
                 name: format!("probe-{i}"),
                 manual_section: "1".into(),
@@ -621,12 +708,15 @@ fn consecutive_declarations_supply_context_without_borrowing_ownership() {
             .content
             .as_ref()
             .unwrap()
-            .referenced_owner(&response.supports)
+            .referenced_owner(
+                response.content_projection.as_ref().unwrap().content(),
+                &response.supports,
+            )
             .unwrap();
         assert!(
             matches!(owner, mant_ir::EntryOwner::Definition(item) if item.description.is_empty())
         );
-        assert!(first.covered_by_support(&response.supports));
+        assert!(covered_by_support(&response, first));
         assert!(
             json["supports"].as_array().is_some_and(|v| !v.is_empty()),
             "{name}: missing declaration-group explanation"
@@ -655,7 +745,7 @@ fn shared_context_is_copied_once_with_valid_owner_local_positions() {
         response
             .evidence
             .iter()
-            .all(|e| e.covered_by_support(&response.supports))
+            .all(|e| covered_by_support(&response, e))
     );
     response.validate_references().unwrap();
     let json = serde_json::to_string(&response).unwrap();
@@ -681,11 +771,19 @@ fn shared_context_is_copied_once_with_valid_owner_local_positions() {
                             .content
                             .as_ref()
                             .unwrap()
-                            .resolve_range(&decoded.supports, range)
+                            .resolve_range(
+                                decoded.content_projection.as_ref().unwrap().content(),
+                                &decoded.supports,
+                                range,
+                            )
                             .unwrap();
                         assert!(
-                            root.safe_text()
-                                .contains(if index == 0 { "=A" } else { "=B" })
+                            root.safe_text(decoded.content_projection.as_ref().unwrap().content())
+                                .is_some_and(|text| text.contains(if index == 0 {
+                                    "=A"
+                                } else {
+                                    "=B"
+                                }))
                         );
                     }
                 }
@@ -732,12 +830,12 @@ fn support_omission_is_explicit_and_each_page_carries_its_context() {
             assert_eq!(response.returned, 1);
             let e = &response.evidence[0];
             assert_eq!(e.ordinal, offset);
-            assert!(e.covered_by_support(&response.supports) || e.support_omitted);
+            assert!(covered_by_support(&response, e) || e.support_omitted);
             if e.support_omitted {
                 assert!(response.truncation.content);
             }
             if bytes == 16_384 {
-                assert!(e.covered_by_support(&response.supports));
+                assert!(covered_by_support(&response, e));
             }
             response.validate_references().unwrap();
             assert!(
@@ -755,7 +853,9 @@ fn explicit_tq_is_one_owner_inside_a_reading_group() {
         "--first",
     );
     assert_eq!(response.supports.len(), 1);
-    let items = response.supports[0].items().unwrap();
+    let items = response.supports[0]
+        .items(response.content_projection.as_ref().unwrap().content())
+        .unwrap();
     assert_eq!(items.len(), 2);
     assert_eq!(items[1].terms.len(), 2);
     assert_eq!(response.counts.direct_entry.total, 1);
@@ -776,7 +876,11 @@ fn empty_ip_after_nested_options_keeps_tail_notes_in_the_provider() {
         assert!(text.contains(witness), "missing {witness}: {text}");
     }
     assert!(!text.contains("Independent next command"));
-    let provider = response.supports[0].items().unwrap().last().unwrap();
+    let provider = response.supports[0]
+        .items(response.content_projection.as_ref().unwrap().content())
+        .unwrap()
+        .last()
+        .unwrap();
     assert_eq!(
         provider.description.len(),
         4,
@@ -840,18 +944,17 @@ fn provider_tables_code_links_and_tail_are_not_preview_clipped() {
     let support = &response.supports[0];
     let body = serde_json::to_value(support).unwrap();
     let encoded = body.to_string();
-    for witness in [
-        "CELL_A",
-        "CELL_B",
-        "example --unrelated",
-        "final note",
-        "table",
-        "preformatted",
-        "link",
-    ] {
+    // The support topology retains keyed content, while the response-local
+    // projection owns the actual text. Inspect the rendered complete support
+    // for prose and keep structural shape checks on the support itself.
+    let rendered = mant_render::render_explanation_text(&response);
+    for witness in ["CELL_A", "CELL_B", "example --unrelated", "final note"] {
+        assert!(rendered.contains(witness), "missing {witness}: {rendered}");
+    }
+    for witness in ["table", "preformatted", "link"] {
         assert!(encoded.contains(witness), "missing {witness}: {encoded}");
     }
-    assert!(!encoded.contains("Independent body"));
+    assert!(!rendered.contains("Independent body"));
     assert_eq!(response.counts.direct_entry.total, 1);
     response.validate_references().unwrap();
 }

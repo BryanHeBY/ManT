@@ -1,19 +1,22 @@
 //! Filled content and its first/last source positions are one reset lifetime.
 use super::{FilledBoundary, InlineBuilder, layout};
+use crate::mandoc::inline::{DraftInline, draft::has_printable_character};
 use mant_ir::{Block, SourceSpan};
 
 pub(super) struct ParagraphFlow {
     builder: InlineBuilder,
     source: Option<SourceSpan>,
     last_line: Option<u32>,
+    content: crate::mandoc::content::LegacyContent,
 }
 
 impl ParagraphFlow {
-    pub(super) const fn new(spacing: bool) -> Self {
+    pub(super) fn new(spacing: bool, content: crate::mandoc::content::LegacyContent) -> Self {
         Self {
             builder: InlineBuilder::with_spacing(spacing),
             source: None,
             last_line: None,
+            content,
         }
     }
 
@@ -161,7 +164,7 @@ impl ParagraphFlow {
         spacing: bool,
         vertical_request: bool,
     ) -> (Option<Block>, bool) {
-        let mut next = Self::new(spacing);
+        let mut next = Self::new(spacing, self.content.clone());
         let invisible_formatter_cell = self.builder.has_invisible_formatter_cell();
         if vertical_request {
             self.builder
@@ -175,14 +178,16 @@ impl ParagraphFlow {
         let empty_word_end_break = self.builder.take_unrepresented_word_end_break();
         let previous = std::mem::replace(self, next);
         let mut children = previous.builder.finish();
-        if invisible_formatter_cell
-            && !empty_word_end_break
-            && !mant_ir::has_printable_character(&children)
+        if invisible_formatter_cell && !empty_word_end_break && !has_printable_character(&children)
         {
-            children.push(mant_ir::Inline::Text {
+            children.push(DraftInline::Text {
                 value: String::new(),
             });
         }
+        let children =
+            previous
+                .content
+                .lower(mant_ir::ContentRootKind::Body, previous.source, children);
         (
             (!children.is_empty()).then(|| Block::Paragraph {
                 children,

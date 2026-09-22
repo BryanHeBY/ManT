@@ -1,6 +1,7 @@
 //! Literal payload, row occupancy and continuation reset as one buffer.
 use super::layout;
-use mant_ir::{Block, Inline, SourceSpan};
+use crate::mandoc::inline::{DraftInline as Inline, draft::has_printable_character};
+use mant_ir::{Block, SourceSpan};
 
 pub(super) struct LiteralFlow {
     nodes: Vec<Inline>,
@@ -9,6 +10,7 @@ pub(super) struct LiteralFlow {
     ordinary_continuation: bool,
     row_occupied: bool,
     formatter_column: FormatterColumn,
+    content: crate::mandoc::content::LegacyContent,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -18,7 +20,7 @@ enum FormatterColumn {
 }
 
 impl LiteralFlow {
-    pub(super) const fn new() -> Self {
+    pub(super) fn new(content: crate::mandoc::content::LegacyContent) -> Self {
         Self {
             nodes: Vec::new(),
             source: None,
@@ -26,6 +28,7 @@ impl LiteralFlow {
             ordinary_continuation: false,
             row_occupied: false,
             formatter_column: FormatterColumn::Origin,
+            content,
         }
     }
 
@@ -82,12 +85,12 @@ impl LiteralFlow {
             .rposition(|node| matches!(node, Inline::LineBreak))
         {
             self.formatter_column =
-                if mant_ir::has_printable_character(&nodes[last_break.saturating_add(1)..]) {
+                if has_printable_character(&nodes[last_break.saturating_add(1)..]) {
                     FormatterColumn::Advanced
                 } else {
                     FormatterColumn::Origin
                 };
-        } else if mant_ir::has_printable_character(&nodes) {
+        } else if has_printable_character(&nodes) {
             self.formatter_column = FormatterColumn::Advanced;
         }
         self.nodes.extend(nodes);
@@ -106,7 +109,7 @@ impl LiteralFlow {
     /// geometry in the IR. Pending cells are committed, while the following
     /// formatter word remains on this visual row at an ordinary boundary.
     pub(super) fn no_break_flush(&mut self, nodes: Vec<Inline>) {
-        let committed_a_cell = mant_ir::has_printable_character(&nodes);
+        let committed_a_cell = has_printable_character(&nodes);
         self.nodes.extend(nodes);
         self.row_occupied |= committed_a_cell;
         // The caller invokes this only for an active formatter cell. `.mc`
@@ -122,14 +125,18 @@ impl LiteralFlow {
     }
 
     pub(super) fn take(&mut self, indent: crate::mandoc::layout::SourceIndent) -> Option<Block> {
-        let mut previous = std::mem::replace(self, Self::new());
+        let mut previous = std::mem::replace(self, Self::new(self.content.clone()));
         // A formatter-only word closes a row without occupying the next one.
         // Actual empty rows end with an explicit empty text sentinel.
         if !previous.row_occupied && matches!(previous.nodes.last(), Some(Inline::LineBreak)) {
             previous.nodes.pop();
         }
         (!previous.nodes.is_empty()).then(|| Block::Preformatted {
-            children: previous.nodes,
+            children: previous.content.lower(
+                mant_ir::ContentRootKind::FixedBody,
+                previous.source,
+                previous.nodes,
+            ),
             language: None,
             layout: layout(indent),
             source: previous.source,

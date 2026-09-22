@@ -10,6 +10,7 @@ use mant_ir::Block;
 #[test]
 fn keeps_option_pairs_and_discards_rst_control_dimensions() {
     let document = archlinux_manual("clang");
+    let content = document.content();
     common::assert_section_topology("archlinux/clang", document, CLANG_SECTIONS);
 
     let stage_options = common::section(document, "Stage Selection Options");
@@ -26,10 +27,10 @@ fn keeps_option_pairs_and_discards_rst_control_dimensions() {
             .find(|item| {
                 item.terms
                     .iter()
-                    .any(|value| common::inline_text(value) == term)
+                    .any(|value| common::inline_text(content, value) == term)
             })
             .unwrap_or_else(|| panic!("missing Clang option {term}"));
-        assert!(common::block_slice_text(&item.description).contains(description));
+        assert!(common::block_slice_text(content, &item.description).contains(description));
     }
 
     let target_options = common::section(document, "Target Selection Options");
@@ -89,7 +90,7 @@ fn keeps_option_pairs_and_discards_rst_control_dimensions() {
     let phantom_dimensions = common::document_blocks(document)
         .into_iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(common::inline_text(children)),
+            Block::Paragraph { children, .. } => Some(common::inline_text(content, children)),
             _ => None,
         })
         .filter(|text| {
@@ -108,7 +109,7 @@ fn keeps_option_pairs_and_discards_rst_control_dimensions() {
         common::document_blocks_from_sections(std::slice::from_ref(language))
             .iter()
             .filter_map(|block| common::as_preformatted(block))
-            .any(|children| common::inline_text(children).contains("iso9899:1990"))
+            .any(|children| common::inline_text(content, children).contains("iso9899:1990"))
     );
 }
 

@@ -4,6 +4,20 @@ use mant_loader::load_markdown_text;
 use mant_protocol::{ReferenceProjection, ReferenceProjectionMode};
 use mant_query::project_references;
 
+fn target<'a>(
+    inventory: &'a mant_protocol::ReferenceInventory,
+    record: &mant_protocol::ReferenceRecord,
+) -> &'a LinkTarget {
+    &inventory
+        .content_projection
+        .as_ref()
+        .unwrap()
+        .content()
+        .occurrence(record.occurrence)
+        .unwrap()
+        .target
+}
+
 #[test]
 fn native_manual_links_work_in_heading_body_and_linked_code_terms() {
     let query = load_markdown_text("# [Heading](man:linkprobe(3))\n\n[Body](man:linkprobe)\n\n<!-- mant:entries role=command case=sensitive -->\n- [`linkprobe`](man:linkprobe(3)): Read its manual.\n", None).unwrap();
@@ -24,10 +38,10 @@ fn native_manual_links_work_in_heading_body_and_linked_code_terms() {
     );
     assert_eq!(inventory.records.len(), 3);
     assert!(inventory.records.iter().all(
-        |record| matches!(&record.target, LinkTarget::Manual { name, .. } if name == "linkprobe")
+        |record| matches!(target(&inventory, record), LinkTarget::Manual { name, .. } if name == "linkprobe")
     ));
     assert!(matches!(
-        &inventory.records[1].target,
+        target(&inventory, &inventory.records[1]),
         LinkTarget::Manual {
             manual_section: None,
             ..
@@ -68,7 +82,7 @@ fn authoring_manuals_expose_real_local_and_implementation_specific_references() 
     };
     let markdown = project_references(&markdown, None, ReferenceScope::Document, &policy);
     for section in [None, Some("1")] {
-        assert!(markdown.records.iter().any(|record| matches!(&record.target, LinkTarget::Manual { name, manual_section } if name == "git" && manual_section.as_deref() == section)));
+        assert!(markdown.records.iter().any(|record| matches!(target(&markdown, record), LinkTarget::Manual { name, manual_section } if name == "git" && manual_section.as_deref() == section)));
     }
     let roff = project_references(&roff, None, ReferenceScope::Document, &policy);
     for (page, labels) in [
@@ -77,24 +91,25 @@ fn authoring_manuals_expose_real_local_and_implementation_specific_references() 
     ] {
         let uri = format!("https://mandoc.bsd.lv/man/{page}.7.html");
         for record in &roff.records {
-            if matches!(&record.target, LinkTarget::External { uri: actual } if actual == &uri) {
+            if matches!(target(&roff, record), LinkTarget::External { uri: actual } if actual == &uri)
+            {
                 assert!(
-                    labels.contains(&record.label.as_str()),
+                    labels.contains(&record.label_preview.as_str()),
                     "prose must not become part of the linked manual name: {}",
-                    record.label
+                    record.label_preview
                 );
             }
         }
     }
     for page in ["man", "mdoc", "roff", "tbl", "eqn"] {
         let uri = format!("https://mandoc.bsd.lv/man/{page}.7.html");
-        assert!(roff.records.iter().any(|record| matches!(&record.target, LinkTarget::External { uri: actual } if actual == &uri)), "real upstream reference for {page}");
+        assert!(roff.records.iter().any(|record| matches!(target(&roff, record), LinkTarget::External { uri: actual } if actual == &uri)), "real upstream reference for {page}");
     }
-    assert!(roff.records.iter().any(|record| matches!(&record.target, LinkTarget::External { uri } if uri == "https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20260920T122115Z/roff.7")));
+    assert!(roff.records.iter().any(|record| matches!(target(&roff, record), LinkTarget::External { uri } if uri == "https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20260920T122115Z/roff.7")));
     let manuals: Vec<_> = roff
         .records
         .iter()
-        .filter_map(|record| match &record.target {
+        .filter_map(|record| match target(&roff, record) {
             LinkTarget::Manual {
                 name,
                 manual_section,

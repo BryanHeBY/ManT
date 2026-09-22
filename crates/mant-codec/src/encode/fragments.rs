@@ -1,6 +1,6 @@
 //! Safe report-facing fragments, without document-wide semantic declarations.
 
-use mant_ir::{Block, Heading, Inline, Section};
+use mant_ir::{Block, ContentContext, Heading, Inline, Section};
 
 use super::{MarkdownInlineProjection, MarkdownOptions};
 
@@ -26,14 +26,38 @@ impl MarkdownFragmentOptions {
 
 /// Encode a detached inline root without semantic declaration metadata.
 #[must_use]
-pub fn render_inline_fragment(children: &[Inline], options: MarkdownFragmentOptions) -> String {
-    super::inline::render_inline(children, options.document_options())
+pub fn render_inline_fragment(
+    content: ContentContext<'_>,
+    children: &[Inline],
+    options: MarkdownFragmentOptions,
+) -> String {
+    super::inline::render_inline(content, children, options.document_options())
+}
+
+/// Encode one inline root with operation-local presentation emphasis.
+#[must_use]
+pub fn render_projected_inline_fragment(
+    content: ContentContext<'_>,
+    children: &[Inline],
+    options: MarkdownFragmentOptions,
+    projection: &dyn MarkdownInlineProjection,
+) -> String {
+    super::inline::render_inline_projected(
+        content,
+        children,
+        options.document_options(),
+        projection.scalar_ranges(children),
+    )
 }
 
 /// Encode detached blocks without semantic declaration metadata.
 #[must_use]
-pub fn render_blocks_fragment(blocks: &[Block], options: MarkdownFragmentOptions) -> Vec<String> {
-    super::blocks::render_blocks(blocks, options.document_options())
+pub fn render_blocks_fragment(
+    content: ContentContext<'_>,
+    blocks: &[Block],
+    options: MarkdownFragmentOptions,
+) -> Vec<String> {
+    super::blocks::render_blocks(content, blocks, options.document_options())
 }
 
 /// Encode report blocks with optional decoration of their original inline roots.
@@ -42,31 +66,34 @@ pub fn render_blocks_fragment(blocks: &[Block], options: MarkdownFragmentOptions
 /// document artifacts or their source-coordinate maps.
 #[must_use]
 pub fn render_located_blocks_fragment(
+    content: ContentContext<'_>,
     blocks: &[Block],
     options: MarkdownFragmentOptions,
     projection: Option<&dyn MarkdownInlineProjection>,
 ) -> Vec<String> {
-    super::blocks::render_located_blocks(blocks, options.document_options(), projection)
+    super::blocks::render_located_blocks(content, blocks, options.document_options(), projection)
 }
 
 /// Append a detached section forest as Markdown blocks, starting at `depth`.
 pub fn render_sections_fragment(
+    content: ContentContext<'_>,
     output: &mut Vec<String>,
     sections: &[Section],
     depth: usize,
     options: MarkdownFragmentOptions,
 ) {
-    super::render_sections(output, sections, depth, options.document_options());
+    super::render_sections(content, output, sections, depth, options.document_options());
 }
 
 /// Encode a rich heading without semantic declaration metadata.
 #[must_use]
 pub fn render_heading_fragment(
+    content: ContentContext<'_>,
     depth: usize,
     heading: &Heading,
     options: MarkdownFragmentOptions,
 ) -> String {
-    super::render_heading(depth, heading, options.document_options())
+    super::render_heading(content, depth, heading, options.document_options())
 }
 
 /// Encode literal text as a `CommonMark` code span with safe delimiters.

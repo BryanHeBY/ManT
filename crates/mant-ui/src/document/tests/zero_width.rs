@@ -20,7 +20,7 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
-            terms: vec![vec![Inline::anchor_with_aliases(
+            terms: vec![vec![crate::test_content::anchor_with_aliases(
                 "target",
                 vec!["Exact.Target".into()],
             )]],
@@ -42,7 +42,7 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
 fn target_only_definitions_do_not_create_rows_or_reset_pending_gaps() {
     for inline_term in [false, true] {
         for (before, after) in [(2, 3), (3000, 2000)] {
-            let mut builder = DocumentBuilder::new("targets".into(), None);
+            let mut builder = DocumentBuilder::new("targets".into(), None, None);
             builder.blocks(
                 &[
                     paragraph("BEFORE"),
@@ -76,7 +76,7 @@ fn body_only_definition_uses_body_origin_without_synthetic_term_gap() {
         if let Block::Paragraph { layout, .. } = &mut body {
             layout.spacing_before_lines = 2;
         }
-        let mut builder = DocumentBuilder::new("body-only".into(), None);
+        let mut builder = DocumentBuilder::new("body-only".into(), None, None);
         builder.blocks(&[target_only_definition(vec![body], inline_term)], 0);
         let built = builder.finish();
         assert_eq!(built.content.lines.len(), 3);
@@ -86,7 +86,7 @@ fn body_only_definition_uses_body_origin_without_synthetic_term_gap() {
     }
     // Also cover the inline-eligible zero-gap body, which formerly gained
     // min_term_gap_columns despite having no printable term.
-    let mut builder = DocumentBuilder::new("body-only".into(), None);
+    let mut builder = DocumentBuilder::new("body-only".into(), None, None);
     builder.blocks(&[target_only_definition(vec![paragraph("BODY")], true)], 0);
     assert_eq!(builder.lines.len(), 1);
     assert_eq!(builder.lines[0].indent, 0);
@@ -96,7 +96,7 @@ fn body_only_definition_uses_body_origin_without_synthetic_term_gap() {
 #[test]
 fn standalone_zero_width_targets_cross_spacing_and_use_an_eof_sentinel() {
     let target = Block::Paragraph {
-        children: vec![Inline::anchor_with_aliases(
+        children: vec![crate::test_content::anchor_with_aliases(
             "target",
             vec!["Exact.Target".into()],
         )],
@@ -104,7 +104,7 @@ fn standalone_zero_width_targets_cross_spacing_and_use_an_eof_sentinel() {
         source: None,
     };
     for eof in [false, true] {
-        let mut builder = DocumentBuilder::new("target-only".into(), None);
+        let mut builder = DocumentBuilder::new("target-only".into(), None, None);
         builder.blocks(
             &[
                 paragraph("BEFORE"),
@@ -124,7 +124,7 @@ fn standalone_zero_width_targets_cross_spacing_and_use_an_eof_sentinel() {
         assert_eq!(built.content.anchors.get("target"), Some(&4));
         assert_eq!(built.content.anchors.get("Exact.Target"), Some(&4));
     }
-    let mut builder = DocumentBuilder::new("empty-definition".into(), None);
+    let mut builder = DocumentBuilder::new("empty-definition".into(), None, None);
     builder.blocks(&[target_only_definition(vec![], true)], 0);
     let built = builder.finish();
     assert!(built.content.lines.is_empty());
@@ -133,18 +133,20 @@ fn standalone_zero_width_targets_cross_spacing_and_use_an_eof_sentinel() {
 
 #[test]
 fn real_literal_empty_lines_keep_their_rows_and_precise_anchor_positions() {
-    let mut builder = DocumentBuilder::new("literal".into(), None);
-    builder.inline_lines(&[Inline::anchor("deferred")], 0, Style::default());
+    let mut builder = DocumentBuilder::new("literal".into(), None, None);
+    builder.inline_lines(
+        &[crate::test_content::anchor("deferred")],
+        0,
+        Style::default(),
+    );
     builder.blocks(
         &[Block::Preformatted {
             language: None,
             children: vec![
-                Inline::anchor("first"),
-                Inline::LineBreak,
-                Inline::anchor("second"),
-                Inline::Text {
-                    value: "\nBODY".into(),
-                },
+                crate::test_content::anchor("first"),
+                crate::test_content::line_break(),
+                crate::test_content::anchor("second"),
+                crate::test_content::text("\nBODY"),
             ],
             layout: LayoutHint::default(),
             source: None,

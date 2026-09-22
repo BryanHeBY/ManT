@@ -26,6 +26,14 @@ fn success(output: &Output) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn link_for_record<'a>(references: &'a Value, record: &Value) -> &'a Value {
+    let key = record["occurrence"].as_u64().expect("link occurrence key");
+    let index = usize::try_from(key.checked_sub(1).expect("nonzero link key")).unwrap();
+    let link = &references["contentProjection"]["contentStore"]["links"][index];
+    assert_eq!(link["key"], record["occurrence"]);
+    link
+}
+
 #[test]
 fn installed_manifest_supports_catalog_outline_and_explicit_reads() {
     let home = std::env::temp_dir().join(format!("mant-installed-links-{}", std::process::id()));
@@ -96,11 +104,21 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
         ));
         let records = outline["references"]["records"].as_array().unwrap();
         assert_eq!(records.len(), 3);
-        assert_eq!(records[0]["target"]["manualSection"], "3");
+        assert_eq!(
+            link_for_record(&outline["references"], &records[0])["target"]["manualSection"],
+            "3"
+        );
         assert_eq!(records[1]["resolution"]["kind"], "not-queried");
-        assert_eq!(records[2]["target"]["name"], "linkabsent");
+        assert_eq!(
+            link_for_record(&outline["references"], &records[2])["target"]["name"],
+            "linkabsent"
+        );
         // No implicit section is introduced into the unqualified link's target.
-        assert!(records[1]["target"].get("manualSection").is_none());
+        assert!(
+            link_for_record(&outline["references"], &records[1])["target"]
+                .get("manualSection")
+                .is_none()
+        );
         let exact = success(&run(&home, &["manual/3/linkprobe"]));
         assert!(exact.to_string().contains("test manual 3"));
         let unqualified = success(&run(&home, &["linkprobe", "--manual"]));

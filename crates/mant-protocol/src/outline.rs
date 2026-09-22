@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
-    Block, Diagnostic, DocumentAddress, DocumentMeta, DocumentReference, EntryKind, EntrySummary,
-    NameCase, NodeId, Section, TldrDocument,
+    Block, ContentProjection, Diagnostic, DocumentAddress, DocumentMeta, DocumentReference,
+    EntryKind, EntrySummary, NameCase, NodeId, Section, TldrDocument,
 };
 
 use crate::{ContentSelector, NodePath, Producer, SourceContext};
@@ -162,6 +162,11 @@ impl<'de> Deserialize<'de> for QueryOutline {
                 .diagnostics
                 .iter()
                 .filter_map(|diagnostic| diagnostic.source),
+        )
+        .map_err(serde::de::Error::custom)?;
+        crate::document::validate_projection_sources(
+            value.source_context.as_ref(),
+            value.references.content_projection.as_ref(),
         )
         .map_err(serde::de::Error::custom)?;
         Ok(value)
@@ -399,6 +404,9 @@ pub struct QueryExcerpt {
     /// Recoverable parser and validation findings.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
+    /// Closed response-local content store for retained document selections.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_projection: Option<ContentProjection>,
     /// Selected nodes in canonical source order after duplicate selectors are removed.
     pub selections: Vec<ExcerptSelection>,
 }
@@ -417,6 +425,8 @@ struct QueryExcerptWire {
     pub meta: Option<DocumentMeta>,
     #[serde(default)]
     pub diagnostics: Vec<Diagnostic>,
+    #[serde(default)]
+    pub content_projection: Option<ContentProjection>,
     pub selections: Vec<ExcerptSelection>,
 }
 
@@ -451,6 +461,12 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
                 .source_context
                 .as_ref()
                 .map_or(mant_ir::SourceKey::FIRST, |context| context.root_source),
+            content_store: value
+                .content_projection
+                .as_ref()
+                .map_or_else(mant_ir::ContentStore::default, |projection| {
+                    projection.content_store.clone()
+                }),
             meta: value.meta.clone().unwrap_or_default(),
             heading: None,
             fragment_aliases: Vec::new(),
@@ -480,6 +496,13 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
                 "source-qualified excerpt content requires a source context",
             ));
         }
+        crate::document::validate_projected_content(
+            value.content_projection.as_ref(),
+            document.heading.as_ref(),
+            &document.blocks,
+            &document.sections,
+        )
+        .map_err(serde::de::Error::custom)?;
         mant_ir::validate_document_sources(&document).map_err(serde::de::Error::custom)?;
         Ok(value)
     }

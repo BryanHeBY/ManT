@@ -195,9 +195,10 @@ known forms explicitly; missing forms never imply “use the terms”.
 
 ```rust
 use mant_ir::{
-    Block, DefinitionItem, DefinitionLayout, EntryContentSlice, EntryFacts,
-    EntryForm, EntryInlineRoot, EntryKind, EntryNameBinding, EntryNameEvidence,
-    EntryOwner, Inline, LayoutHint, ListItem, NameCase,
+    Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle,
+    DefinitionItem, DefinitionLayout, EntryContentSlice, EntryFacts, EntryForm,
+    EntryInlineRoot, EntryKind, EntryNameBinding, EntryNameEvidence, EntryOwner,
+    Inline, LayoutHint, ListItem, NameCase, Provenance,
 };
 
 fn facts(form: EntryForm) -> EntryFacts {
@@ -216,13 +217,36 @@ fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph { children, layout: LayoutHint::default(), source: None }
 }
 
+let mut content = ContentStoreBuilder::new();
+let owner = content.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+let body = content.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+let term = content.push_root(owner, ContentRootKind::Term, Provenance::Unknown);
+let run = content.push_text(
+    body, "run".into(), None,
+    ContentStyle { literal: true, ..ContentStyle::default() },
+    None, None, Provenance::Unknown,
+);
+let description = content.push_text(
+    body, ": Start the task.".into(), None, ContentStyle::default(),
+    None, None, Provenance::Unknown,
+);
+let term_run = content.push_text(
+    term, "run".into(), None,
+    ContentStyle { literal: true, ..ContentStyle::default() },
+    None, None, Provenance::Unknown,
+);
+let term_description = content.push_text(
+    body, "Start the task.".into(), None, ContentStyle::default(),
+    None, None, Provenance::Unknown,
+);
+
 // 1. Ordinary content is useful on its own, with no semantic owner.
 let ordinary = ListItem {
     layout: mant_ir::ListItemLayout::default(),
     source: None, entry: None,
     blocks: vec![paragraph(vec![
-        Inline::Code { value: "run".into() },
-        Inline::Text { value: ": Start the task.".into() },
+        Inline::Code { content: run },
+        Inline::Text { content: description },
     ])],
 };
 assert!(EntryOwner::List(&ordinary).facts().is_none());
@@ -233,20 +257,28 @@ annotated.entry = Some(facts(EntryForm { parts: vec![EntryContentSlice {
     root: EntryInlineRoot::Block { index: 0 }, path: vec![0], bytes: None,
 }] }));
 assert_eq!(ordinary.blocks, annotated.blocks);
-assert_eq!(EntryOwner::List(&annotated).validated_names().unwrap(), ["run"]);
 
 // 3. A source-neutral definition owns actual terms and a separate description.
 // This is an alternative owner, not another node with the same ID in one tree.
 let definition = DefinitionItem {
     source: None, layout: DefinitionLayout::default(),
-    terms: vec![vec![Inline::Code { value: "run".into() }]],
+    terms: vec![vec![Inline::Code { content: term_run }]],
     description: vec![paragraph(vec![Inline::Text {
-        value: "Start the task.".into(),
+        content: term_description,
     }])],
     entry: Some(facts(EntryForm::term(0))),
 };
-assert_eq!(EntryOwner::Definition(&definition).validated_names().unwrap(), ["run"]);
-assert!(EntryOwner::Definition(&definition).forms().is_some());
+let store = content.finish();
+let content = store.content();
+assert_eq!(
+    content.entry_validated_names(EntryOwner::List(&annotated)).unwrap().unwrap(),
+    ["run"],
+);
+assert_eq!(
+    content.entry_validated_names(EntryOwner::Definition(&definition)).unwrap().unwrap(),
+    ["run"],
+);
+assert!(content.entry_forms(EntryOwner::Definition(&definition)).unwrap().is_some());
 ```
 
 `source: None` here denotes synthetic content. Parsers retain the original item

@@ -9,6 +9,8 @@ mod layout;
 mod navigation;
 mod reader;
 mod scrollbar;
+#[cfg(test)]
+mod test_content;
 mod text;
 mod theme;
 

@@ -6,9 +6,11 @@ use mant_ir::{
     TableCell as AstTableCell, TableRow,
 };
 
+#[cfg(test)]
+use super::super::inline::terms_fit_inline;
 use super::super::{
     LoweringContext, first_part_children,
-    inline::{InlineBuilder, plain_text, terms_fit_inline},
+    inline::InlineBuilder,
     layout::{block_indent, layout, layout_with_spacing, paragraph_distance_lines},
     part_child_groups, source_span, targets,
 };
@@ -21,9 +23,12 @@ mod mdoc;
 #[cfg(test)]
 use definition::split_definition_terms;
 use definition::{
-    DefinitionFlow, DefinitionHeadFlow, RunInHeadStyle, definition_item, prepend_definition_heads,
+    DefinitionFlow, DefinitionHeadFlow, PendingDefinitionItem, RunInHeadStyle, definition_item,
+    prepend_definition_heads,
 };
-use man::ordered::{ManListState, append_ordered, ordinal_marker, ordinal_sequence};
+use man::ordered::{
+    ManListState, append_pending_ordered, ordinal_marker_text, pending_ordinal_sequence,
+};
 pub(super) use man::{ManDefinitionState, lower_man_definition};
 
 pub(super) use mdoc::lower_mdoc_list;
@@ -33,7 +38,11 @@ mod tests {
     use mant_ir::{Block, DefinitionItem, Inline, LayoutHint};
 
     fn text(value: &str) -> Vec<Inline> {
-        vec![Inline::Text {
+        vec![crate::test_content::text(value.to_owned())]
+    }
+
+    fn draft(value: &str) -> Vec<crate::mandoc::inline::DraftInline> {
+        vec![crate::mandoc::inline::DraftInline::Text {
             value: value.to_owned(),
         }]
     }
@@ -79,30 +88,33 @@ mod tests {
     fn short_terms_hang_inline_but_long_ones_do_not() {
         // Matches man(1): a tag that fits the default hanging indent shares the
         // first description line; wider tags take their own line.
-        assert!(super::terms_fit_inline(&[text("space")], 6));
-        assert!(super::terms_fit_inline(&[text("* / %")], 6));
-        assert!(!super::terms_fit_inline(&[text("--listed-incremental")], 6));
+        assert!(super::terms_fit_inline(&[draft("space")], 6));
+        assert!(super::terms_fit_inline(&[draft("* / %")], 6));
+        assert!(!super::terms_fit_inline(
+            &[draft("--listed-incremental")],
+            6
+        ));
         assert!(!super::terms_fit_inline(&[], 6));
     }
 
     #[test]
     fn extended_definition_terms_split_only_at_semantic_line_breaks() {
         let terms = super::split_definition_terms(vec![
-            Inline::Text {
+            crate::mandoc::inline::DraftInline::Text {
                 value: "first".to_owned(),
             },
-            Inline::LineBreak,
-            Inline::Strong {
-                children: text("second"),
+            crate::mandoc::inline::DraftInline::LineBreak,
+            crate::mandoc::inline::DraftInline::Strong {
+                children: draft("second"),
             },
         ]);
 
         assert_eq!(
             terms,
             [
-                text("first"),
-                vec![Inline::Strong {
-                    children: text("second")
+                draft("first"),
+                vec![crate::mandoc::inline::DraftInline::Strong {
+                    children: draft("second")
                 }]
             ]
         );

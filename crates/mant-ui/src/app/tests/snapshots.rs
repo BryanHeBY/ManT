@@ -16,10 +16,11 @@ fn snapshot(text: &str, addressed: bool) -> Arc<ResolvedContent> {
     let document = bundle.document.as_mut().expect("document");
     document.sections.clear();
     document.blocks = vec![AstBlock::Paragraph {
-        children: vec![Inline::Text { value: text.into() }],
+        children: vec![crate::test_content::text(text)],
         layout: LayoutHint::default(),
         source: None,
     }];
+    crate::test_content::sync_document(document);
     Arc::new(bundle)
 }
 

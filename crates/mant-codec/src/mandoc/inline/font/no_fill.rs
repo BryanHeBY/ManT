@@ -1,6 +1,7 @@
 use super::{
     FontState, Inline, Node, ZeroAdvanceState, append_inline_nodes, builder_with_zero_advance,
 };
+use crate::mandoc::inline::draft::has_printable_character;
 
 /// Lower one executed no-fill input row.
 ///
@@ -52,7 +53,7 @@ impl NoFillInlineState {
             }
         }
         if self.pending_word_end_break {
-            if mant_ir::has_printable_character(output) {
+            if has_printable_character(output) {
                 output.push(Inline::LineBreak);
             } else {
                 // A control-only `\p` still occupies one native no-fill row.
@@ -141,7 +142,7 @@ pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
     inline_state.zero_advance = execution.zero_advance;
     inline_state.pending_word_end_break = execution.word_end_break;
     inline_state.continued = continues_line;
-    if mant_ir::has_printable_character(&output) {
+    if has_printable_character(&output) {
         inline_state.formatter_cell = NoFillFormatterCell::Visible;
     } else if execution.formatter_cell_occupied
         && inline_state.formatter_cell == NoFillFormatterCell::Origin

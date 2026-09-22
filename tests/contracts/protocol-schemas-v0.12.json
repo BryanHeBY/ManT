@@ -646,6 +646,17 @@
           }
         ]
       },
+      "contentProjection": {
+        "description": "Closed response-local content store for retained document selections.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ContentProjection"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "diagnostics": {
         "description": "Recoverable parser and validation findings.",
         "type": "array",
@@ -1073,6 +1084,551 @@
             ]
           }
         ]
+      },
+      "ContentAtom": {
+        "description": "One atom in global retained execution order.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "link": {
+            "description": "Logical link occurrence containing this atom.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LinkOccurrenceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "description": "Owner repeated for bounded validation.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the atom.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "role": {
+            "description": "Optional native semantic role.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root": {
+            "description": "Logical root containing this atom.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "style": {
+            "description": "Native style attributes.",
+            "$ref": "#/$defs/ContentStyle"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Visible non-whitespace text.",
+            "type": "object",
+            "properties": {
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "description": "Searchable and copyable logical text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Visible logical whitespace.",
+            "type": "object",
+            "properties": {
+              "breakable": {
+                "description": "Whether ordinary flow may wrap after this atom.",
+                "type": "boolean"
+              },
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "whitespace"
+              },
+              "text": {
+                "description": "Searchable and copyable logical whitespace.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text",
+              "breakable"
+            ]
+          },
+          {
+            "description": "Zero-width legal wrapping boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "break-opportunity"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One logical newline.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentAtomKey": {
+        "description": "Document-local logical atom key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentByteRange": {
+        "description": "Half-open UTF-8 byte range in one text or whitespace atom.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "description": "Inclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "ContentOwner": {
+        "description": "One owner of roots and structural blocks.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "kind": {
+            "description": "Stable owner category.",
+            "$ref": "#/$defs/ContentOwnerKind"
+          },
+          "provenance": {
+            "description": "Authorship of the owner boundary.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "roots": {
+            "description": "Roots owned in logical source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRootKey"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "roots",
+          "provenance"
+        ]
+      },
+      "ContentOwnerKey": {
+        "description": "Document-local content owner key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentOwnerKind": {
+        "description": "Stable source-neutral owner category.",
+        "oneOf": [
+          {
+            "description": "Whole normalized document.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Section subtree.",
+            "type": "string",
+            "const": "section"
+          },
+          {
+            "description": "Ordinary list item.",
+            "type": "string",
+            "const": "list-item"
+          },
+          {
+            "description": "Definition-list item.",
+            "type": "string",
+            "const": "definition-item"
+          },
+          {
+            "description": "Table cell.",
+            "type": "string",
+            "const": "table-cell"
+          },
+          {
+            "description": "Other producer-defined content boundary.",
+            "type": "string",
+            "const": "content"
+          }
+        ]
+      },
+      "ContentPoint": {
+        "description": "One zero-width logical position.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentPointKey"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the target position.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "root": {
+            "description": "Logical root containing the point.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "scalarBoundary": {
+            "description": "Derived root-relative Unicode-scalar boundary.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Boundary between root atom slots.",
+            "type": "object",
+            "properties": {
+              "atomBoundary": {
+                "description": "Zero-based boundary in the root atom vector.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "between-atoms"
+              }
+            },
+            "required": [
+              "kind",
+              "atomBoundary"
+            ]
+          },
+          {
+            "description": "UTF-8 byte boundary inside a text or whitespace atom.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Atom containing the point.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "byteOffset": {
+                "description": "UTF-8 byte offset in the atom text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "in-atom"
+              }
+            },
+            "required": [
+              "kind",
+              "atom",
+              "byteOffset"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "scalarBoundary",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentPointKey": {
+        "description": "Document-local zero-width point key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentProjection": {
+        "description": "Response-local store for retained topology that does not embed a Document.",
+        "type": "object",
+        "properties": {
+          "contentStore": {
+            "description": "Complete closed store for all retained response-local references.",
+            "$ref": "#/$defs/ContentStore"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "contentStore"
+        ]
+      },
+      "ContentRef": {
+        "description": "A checked slice of one authoritative logical atom.",
+        "type": "object",
+        "properties": {
+          "atom": {
+            "description": "Referenced text or whitespace atom.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "bytes": {
+            "description": "UTF-8 byte range in that atom's logical text.",
+            "$ref": "#/$defs/ContentByteRange"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "atom",
+          "bytes"
+        ]
+      },
+      "ContentRole": {
+        "description": "Optional native semantic role, distinct from inferred entry facts.",
+        "oneOf": [
+          {
+            "description": "Command-line flag.",
+            "type": "string",
+            "const": "flag"
+          },
+          {
+            "description": "Environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Command argument or placeholder.",
+            "type": "string",
+            "const": "argument"
+          },
+          {
+            "description": "Command or configuration directive.",
+            "type": "string",
+            "const": "command-or-directive"
+          },
+          {
+            "description": "Filesystem-like path.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ContentRoot": {
+        "description": "One independently searchable logical inline sequence.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Atoms in authoritative logical order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtomKey"
+            }
+          },
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "kind": {
+            "description": "Stable root category.",
+            "$ref": "#/$defs/ContentRootKind"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "points": {
+            "description": "Zero-width points in root order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPointKey"
+            }
+          },
+          "provenance": {
+            "description": "Authorship of this root.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "kind",
+          "atoms",
+          "points",
+          "provenance"
+        ]
+      },
+      "ContentRootKey": {
+        "description": "Document-local logical inline-root key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentRootKind": {
+        "description": "Stable logical-root category.",
+        "oneOf": [
+          {
+            "description": "Visible document or section heading.",
+            "type": "string",
+            "const": "heading"
+          },
+          {
+            "description": "Ordinary flow body.",
+            "type": "string",
+            "const": "body"
+          },
+          {
+            "description": "Definition or list term.",
+            "type": "string",
+            "const": "term"
+          },
+          {
+            "description": "Table-cell body.",
+            "type": "string",
+            "const": "cell"
+          },
+          {
+            "description": "Fixed-display logical body.",
+            "type": "string",
+            "const": "fixed-body"
+          }
+        ]
+      },
+      "ContentStore": {
+        "description": "The single authoritative content store for one document or projection.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Logical atoms in global retained order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtom"
+            }
+          },
+          "links": {
+            "description": "Logical link occurrences in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkOccurrence"
+            }
+          },
+          "owners": {
+            "description": "Structural owners in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentOwner"
+            }
+          },
+          "points": {
+            "description": "Zero-width points in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPoint"
+            }
+          },
+          "roots": {
+            "description": "Logical roots in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRoot"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "owners",
+          "roots",
+          "atoms",
+          "points",
+          "links"
+        ]
+      },
+      "ContentStyle": {
+        "description": "Native text attributes attached to one atom.",
+        "type": "object",
+        "properties": {
+          "emphasis": {
+            "description": "Emphasized/italic presentation.",
+            "type": "boolean"
+          },
+          "literal": {
+            "description": "Literal/code presentation.",
+            "type": "boolean"
+          },
+          "strong": {
+            "description": "Strong/bold presentation.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Underline presentation retained from native output.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
@@ -1955,18 +2511,18 @@
             "description": "Plain visible text.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "text"
-              },
-              "value": {
-                "description": "Text after source escape processing.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -2015,18 +2571,18 @@
             "description": "Literal code or symbolic token.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "code"
-              },
-              "value": {
-                "description": "Literal text value.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -2040,16 +2596,9 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
-              "target": {
-                "description": "Typed navigation destination.",
-                "$ref": "#/$defs/LinkTarget"
-              },
-              "title": {
-                "description": "Optional advisory title.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+              "occurrence": {
+                "description": "Logical occurrence shared by every structural fragment.",
+                "$ref": "#/$defs/LinkOccurrenceKey"
               },
               "type": {
                 "type": "string",
@@ -2058,7 +2607,7 @@
             },
             "required": [
               "type",
-              "target",
+              "occurrence",
               "children"
             ]
           },
@@ -2077,16 +2626,9 @@
                 "description": "Document-local destination identity.",
                 "$ref": "#/$defs/NodeId"
               },
-              "ownerSource": {
-                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/SourceSpan"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+              "point": {
+                "description": "Exact zero-width logical position.",
+                "$ref": "#/$defs/ContentPointKey"
               },
               "type": {
                 "type": "string",
@@ -2095,6 +2637,7 @@
             },
             "required": [
               "type",
+              "point",
               "id"
             ]
           },
@@ -2102,13 +2645,18 @@
             "description": "Hard line break that renderers must preserve.",
             "type": "object",
             "properties": {
+              "atom": {
+                "description": "Authoritative linked or unlinked hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"
               }
             },
             "required": [
-              "type"
+              "type",
+              "atom"
             ]
           }
         ]
@@ -2136,6 +2684,99 @@
           }
         },
         "additionalProperties": false
+      },
+      "LinkLabelPart": {
+        "description": "One ordered component of a complete logical link label.",
+        "oneOf": [
+          {
+            "description": "Text or whitespace content.",
+            "type": "object",
+            "properties": {
+              "content": {
+                "description": "Exact atom slice.",
+                "$ref": "#/$defs/ContentRef"
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "content"
+            ]
+          },
+          {
+            "description": "One linked logical newline.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "atom"
+            ]
+          }
+        ]
+      },
+      "LinkOccurrence": {
+        "description": "One logical link occurrence, possibly represented by several wrappers.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/LinkOccurrenceKey"
+          },
+          "label": {
+            "description": "Complete ordered logical label, which may span roots.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkLabelPart"
+            }
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the destination.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "target": {
+            "description": "Typed destination shared by every display fragment.",
+            "$ref": "#/$defs/LinkTarget"
+          },
+          "title": {
+            "description": "Optional non-visible advisory title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "target",
+          "label",
+          "provenance"
+        ]
+      },
+      "LinkOccurrenceKey": {
+        "description": "Document-local logical link occurrence key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
@@ -2657,6 +3298,69 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "Provenance": {
+        "description": "Authorship provenance for content that may not map to an exact range.",
+        "oneOf": [
+          {
+            "description": "Content copied directly from authored source.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored"
+              },
+              "span": {
+                "description": "Exact authored location.",
+                "$ref": "#/$defs/SourceSpan"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span"
+            ]
+          },
+          {
+            "description": "Content generated by normalization, optionally attributed to a trigger.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated"
+              },
+              "trigger": {
+                "description": "Authored construct that caused generation.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Provenance is unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
         ]
       },
       "Range_of_uint": {
@@ -3410,6 +4114,17 @@
           }
         ]
       },
+      "contentProjection": {
+        "description": "Closed response-local content store shared by supports and evidence.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ContentProjection"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "counts": {
         "description": "Per-class collected and returned owners; zero categories remain present.",
         "$ref": "#/$defs/EvidenceCounts"
@@ -3878,6 +4593,150 @@
           }
         ]
       },
+      "ContentAtom": {
+        "description": "One atom in global retained execution order.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "link": {
+            "description": "Logical link occurrence containing this atom.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LinkOccurrenceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "description": "Owner repeated for bounded validation.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the atom.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "role": {
+            "description": "Optional native semantic role.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root": {
+            "description": "Logical root containing this atom.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "style": {
+            "description": "Native style attributes.",
+            "$ref": "#/$defs/ContentStyle"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Visible non-whitespace text.",
+            "type": "object",
+            "properties": {
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "description": "Searchable and copyable logical text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Visible logical whitespace.",
+            "type": "object",
+            "properties": {
+              "breakable": {
+                "description": "Whether ordinary flow may wrap after this atom.",
+                "type": "boolean"
+              },
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "whitespace"
+              },
+              "text": {
+                "description": "Searchable and copyable logical whitespace.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text",
+              "breakable"
+            ]
+          },
+          {
+            "description": "Zero-width legal wrapping boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "break-opportunity"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One logical newline.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentAtomKey": {
+        "description": "Document-local logical atom key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "ContentBlockStep": {
         "description": "A checked transition through block arrays and their containing items/cells.",
         "oneOf": [
@@ -3973,6 +4832,407 @@
             ]
           }
         ]
+      },
+      "ContentByteRange": {
+        "description": "Half-open UTF-8 byte range in one text or whitespace atom.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "description": "Inclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "ContentOwner": {
+        "description": "One owner of roots and structural blocks.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "kind": {
+            "description": "Stable owner category.",
+            "$ref": "#/$defs/ContentOwnerKind"
+          },
+          "provenance": {
+            "description": "Authorship of the owner boundary.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "roots": {
+            "description": "Roots owned in logical source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRootKey"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "roots",
+          "provenance"
+        ]
+      },
+      "ContentOwnerKey": {
+        "description": "Document-local content owner key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentOwnerKind": {
+        "description": "Stable source-neutral owner category.",
+        "oneOf": [
+          {
+            "description": "Whole normalized document.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Section subtree.",
+            "type": "string",
+            "const": "section"
+          },
+          {
+            "description": "Ordinary list item.",
+            "type": "string",
+            "const": "list-item"
+          },
+          {
+            "description": "Definition-list item.",
+            "type": "string",
+            "const": "definition-item"
+          },
+          {
+            "description": "Table cell.",
+            "type": "string",
+            "const": "table-cell"
+          },
+          {
+            "description": "Other producer-defined content boundary.",
+            "type": "string",
+            "const": "content"
+          }
+        ]
+      },
+      "ContentPoint": {
+        "description": "One zero-width logical position.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentPointKey"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the target position.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "root": {
+            "description": "Logical root containing the point.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "scalarBoundary": {
+            "description": "Derived root-relative Unicode-scalar boundary.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Boundary between root atom slots.",
+            "type": "object",
+            "properties": {
+              "atomBoundary": {
+                "description": "Zero-based boundary in the root atom vector.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "between-atoms"
+              }
+            },
+            "required": [
+              "kind",
+              "atomBoundary"
+            ]
+          },
+          {
+            "description": "UTF-8 byte boundary inside a text or whitespace atom.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Atom containing the point.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "byteOffset": {
+                "description": "UTF-8 byte offset in the atom text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "in-atom"
+              }
+            },
+            "required": [
+              "kind",
+              "atom",
+              "byteOffset"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "scalarBoundary",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentPointKey": {
+        "description": "Document-local zero-width point key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentProjection": {
+        "description": "Response-local store for retained topology that does not embed a Document.",
+        "type": "object",
+        "properties": {
+          "contentStore": {
+            "description": "Complete closed store for all retained response-local references.",
+            "$ref": "#/$defs/ContentStore"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "contentStore"
+        ]
+      },
+      "ContentRef": {
+        "description": "A checked slice of one authoritative logical atom.",
+        "type": "object",
+        "properties": {
+          "atom": {
+            "description": "Referenced text or whitespace atom.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "bytes": {
+            "description": "UTF-8 byte range in that atom's logical text.",
+            "$ref": "#/$defs/ContentByteRange"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "atom",
+          "bytes"
+        ]
+      },
+      "ContentRole": {
+        "description": "Optional native semantic role, distinct from inferred entry facts.",
+        "oneOf": [
+          {
+            "description": "Command-line flag.",
+            "type": "string",
+            "const": "flag"
+          },
+          {
+            "description": "Environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Command argument or placeholder.",
+            "type": "string",
+            "const": "argument"
+          },
+          {
+            "description": "Command or configuration directive.",
+            "type": "string",
+            "const": "command-or-directive"
+          },
+          {
+            "description": "Filesystem-like path.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ContentRoot": {
+        "description": "One independently searchable logical inline sequence.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Atoms in authoritative logical order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtomKey"
+            }
+          },
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "kind": {
+            "description": "Stable root category.",
+            "$ref": "#/$defs/ContentRootKind"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "points": {
+            "description": "Zero-width points in root order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPointKey"
+            }
+          },
+          "provenance": {
+            "description": "Authorship of this root.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "kind",
+          "atoms",
+          "points",
+          "provenance"
+        ]
+      },
+      "ContentRootKey": {
+        "description": "Document-local logical inline-root key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentRootKind": {
+        "description": "Stable logical-root category.",
+        "oneOf": [
+          {
+            "description": "Visible document or section heading.",
+            "type": "string",
+            "const": "heading"
+          },
+          {
+            "description": "Ordinary flow body.",
+            "type": "string",
+            "const": "body"
+          },
+          {
+            "description": "Definition or list term.",
+            "type": "string",
+            "const": "term"
+          },
+          {
+            "description": "Table-cell body.",
+            "type": "string",
+            "const": "cell"
+          },
+          {
+            "description": "Fixed-display logical body.",
+            "type": "string",
+            "const": "fixed-body"
+          }
+        ]
+      },
+      "ContentStore": {
+        "description": "The single authoritative content store for one document or projection.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Logical atoms in global retained order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtom"
+            }
+          },
+          "links": {
+            "description": "Logical link occurrences in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkOccurrence"
+            }
+          },
+          "owners": {
+            "description": "Structural owners in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentOwner"
+            }
+          },
+          "points": {
+            "description": "Zero-width points in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPoint"
+            }
+          },
+          "roots": {
+            "description": "Logical roots in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRoot"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "owners",
+          "roots",
+          "atoms",
+          "points",
+          "links"
+        ]
+      },
+      "ContentStyle": {
+        "description": "Native text attributes attached to one atom.",
+        "type": "object",
+        "properties": {
+          "emphasis": {
+            "description": "Emphasized/italic presentation.",
+            "type": "boolean"
+          },
+          "literal": {
+            "description": "Literal/code presentation.",
+            "type": "boolean"
+          },
+          "strong": {
+            "description": "Strong/bold presentation.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Underline presentation retained from native output.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
@@ -5691,18 +6951,18 @@
             "description": "Plain visible text.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "text"
-              },
-              "value": {
-                "description": "Text after source escape processing.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -5751,18 +7011,18 @@
             "description": "Literal code or symbolic token.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "code"
-              },
-              "value": {
-                "description": "Literal text value.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -5776,16 +7036,9 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
-              "target": {
-                "description": "Typed navigation destination.",
-                "$ref": "#/$defs/LinkTarget"
-              },
-              "title": {
-                "description": "Optional advisory title.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+              "occurrence": {
+                "description": "Logical occurrence shared by every structural fragment.",
+                "$ref": "#/$defs/LinkOccurrenceKey"
               },
               "type": {
                 "type": "string",
@@ -5794,7 +7047,7 @@
             },
             "required": [
               "type",
-              "target",
+              "occurrence",
               "children"
             ]
           },
@@ -5813,16 +7066,9 @@
                 "description": "Document-local destination identity.",
                 "$ref": "#/$defs/NodeId"
               },
-              "ownerSource": {
-                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/SourceSpan"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+              "point": {
+                "description": "Exact zero-width logical position.",
+                "$ref": "#/$defs/ContentPointKey"
               },
               "type": {
                 "type": "string",
@@ -5831,6 +7077,7 @@
             },
             "required": [
               "type",
+              "point",
               "id"
             ]
           },
@@ -5838,13 +7085,18 @@
             "description": "Hard line break that renderers must preserve.",
             "type": "object",
             "properties": {
+              "atom": {
+                "description": "Authoritative linked or unlinked hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"
               }
             },
             "required": [
-              "type"
+              "type",
+              "atom"
             ]
           }
         ]
@@ -5872,6 +7124,99 @@
           }
         },
         "additionalProperties": false
+      },
+      "LinkLabelPart": {
+        "description": "One ordered component of a complete logical link label.",
+        "oneOf": [
+          {
+            "description": "Text or whitespace content.",
+            "type": "object",
+            "properties": {
+              "content": {
+                "description": "Exact atom slice.",
+                "$ref": "#/$defs/ContentRef"
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "content"
+            ]
+          },
+          {
+            "description": "One linked logical newline.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "atom"
+            ]
+          }
+        ]
+      },
+      "LinkOccurrence": {
+        "description": "One logical link occurrence, possibly represented by several wrappers.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/LinkOccurrenceKey"
+          },
+          "label": {
+            "description": "Complete ordered logical label, which may span roots.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkLabelPart"
+            }
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the destination.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "target": {
+            "description": "Typed destination shared by every display fragment.",
+            "$ref": "#/$defs/LinkTarget"
+          },
+          "title": {
+            "description": "Optional non-visible advisory title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "target",
+          "label",
+          "provenance"
+        ]
+      },
+      "LinkOccurrenceKey": {
+        "description": "Document-local logical link occurrence key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
@@ -6393,6 +7738,69 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "Provenance": {
+        "description": "Authorship provenance for content that may not map to an exact range.",
+        "oneOf": [
+          {
+            "description": "Content copied directly from authored source.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored"
+              },
+              "span": {
+                "description": "Exact authored location.",
+                "$ref": "#/$defs/SourceSpan"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span"
+            ]
+          },
+          {
+            "description": "Content generated by normalization, optionally attributed to a trigger.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated"
+              },
+              "trigger": {
+                "description": "Authored construct that caused generation.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Provenance is unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
         ]
       },
       "Range_of_uint": {
@@ -7034,6 +8442,150 @@
       "nodes"
     ],
     "$defs": {
+      "ContentAtom": {
+        "description": "One atom in global retained execution order.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "link": {
+            "description": "Logical link occurrence containing this atom.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LinkOccurrenceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "description": "Owner repeated for bounded validation.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the atom.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "role": {
+            "description": "Optional native semantic role.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root": {
+            "description": "Logical root containing this atom.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "style": {
+            "description": "Native style attributes.",
+            "$ref": "#/$defs/ContentStyle"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Visible non-whitespace text.",
+            "type": "object",
+            "properties": {
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "description": "Searchable and copyable logical text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Visible logical whitespace.",
+            "type": "object",
+            "properties": {
+              "breakable": {
+                "description": "Whether ordinary flow may wrap after this atom.",
+                "type": "boolean"
+              },
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "whitespace"
+              },
+              "text": {
+                "description": "Searchable and copyable logical whitespace.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text",
+              "breakable"
+            ]
+          },
+          {
+            "description": "Zero-width legal wrapping boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "break-opportunity"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One logical newline.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentAtomKey": {
+        "description": "Document-local logical atom key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "ContentBlockStep": {
         "description": "A checked transition through block arrays and their containing items/cells.",
         "oneOf": [
@@ -7128,6 +8680,29 @@
               "index"
             ]
           }
+        ]
+      },
+      "ContentByteRange": {
+        "description": "Half-open UTF-8 byte range in one text or whitespace atom.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "description": "Inclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
         ]
       },
       "ContentInlineRoot": {
@@ -7287,6 +8862,201 @@
           }
         ]
       },
+      "ContentOwner": {
+        "description": "One owner of roots and structural blocks.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "kind": {
+            "description": "Stable owner category.",
+            "$ref": "#/$defs/ContentOwnerKind"
+          },
+          "provenance": {
+            "description": "Authorship of the owner boundary.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "roots": {
+            "description": "Roots owned in logical source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRootKey"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "roots",
+          "provenance"
+        ]
+      },
+      "ContentOwnerKey": {
+        "description": "Document-local content owner key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentOwnerKind": {
+        "description": "Stable source-neutral owner category.",
+        "oneOf": [
+          {
+            "description": "Whole normalized document.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Section subtree.",
+            "type": "string",
+            "const": "section"
+          },
+          {
+            "description": "Ordinary list item.",
+            "type": "string",
+            "const": "list-item"
+          },
+          {
+            "description": "Definition-list item.",
+            "type": "string",
+            "const": "definition-item"
+          },
+          {
+            "description": "Table cell.",
+            "type": "string",
+            "const": "table-cell"
+          },
+          {
+            "description": "Other producer-defined content boundary.",
+            "type": "string",
+            "const": "content"
+          }
+        ]
+      },
+      "ContentPoint": {
+        "description": "One zero-width logical position.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentPointKey"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the target position.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "root": {
+            "description": "Logical root containing the point.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "scalarBoundary": {
+            "description": "Derived root-relative Unicode-scalar boundary.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Boundary between root atom slots.",
+            "type": "object",
+            "properties": {
+              "atomBoundary": {
+                "description": "Zero-based boundary in the root atom vector.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "between-atoms"
+              }
+            },
+            "required": [
+              "kind",
+              "atomBoundary"
+            ]
+          },
+          {
+            "description": "UTF-8 byte boundary inside a text or whitespace atom.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Atom containing the point.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "byteOffset": {
+                "description": "UTF-8 byte offset in the atom text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "in-atom"
+              }
+            },
+            "required": [
+              "kind",
+              "atom",
+              "byteOffset"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "scalarBoundary",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentPointKey": {
+        "description": "Document-local zero-width point key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentProjection": {
+        "description": "Response-local store for retained topology that does not embed a Document.",
+        "type": "object",
+        "properties": {
+          "contentStore": {
+            "description": "Complete closed store for all retained response-local references.",
+            "$ref": "#/$defs/ContentStore"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "contentStore"
+        ]
+      },
+      "ContentRef": {
+        "description": "A checked slice of one authoritative logical atom.",
+        "type": "object",
+        "properties": {
+          "atom": {
+            "description": "Referenced text or whitespace atom.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "bytes": {
+            "description": "UTF-8 byte range in that atom's logical text.",
+            "$ref": "#/$defs/ContentByteRange"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "atom",
+          "bytes"
+        ]
+      },
       "ContentReveal": {
         "description": "Exact destination in an already loaded document, not a readable selector.",
         "oneOf": [
@@ -7388,6 +9158,117 @@
           }
         ]
       },
+      "ContentRole": {
+        "description": "Optional native semantic role, distinct from inferred entry facts.",
+        "oneOf": [
+          {
+            "description": "Command-line flag.",
+            "type": "string",
+            "const": "flag"
+          },
+          {
+            "description": "Environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Command argument or placeholder.",
+            "type": "string",
+            "const": "argument"
+          },
+          {
+            "description": "Command or configuration directive.",
+            "type": "string",
+            "const": "command-or-directive"
+          },
+          {
+            "description": "Filesystem-like path.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ContentRoot": {
+        "description": "One independently searchable logical inline sequence.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Atoms in authoritative logical order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtomKey"
+            }
+          },
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "kind": {
+            "description": "Stable root category.",
+            "$ref": "#/$defs/ContentRootKind"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "points": {
+            "description": "Zero-width points in root order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPointKey"
+            }
+          },
+          "provenance": {
+            "description": "Authorship of this root.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "kind",
+          "atoms",
+          "points",
+          "provenance"
+        ]
+      },
+      "ContentRootKey": {
+        "description": "Document-local logical inline-root key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentRootKind": {
+        "description": "Stable logical-root category.",
+        "oneOf": [
+          {
+            "description": "Visible document or section heading.",
+            "type": "string",
+            "const": "heading"
+          },
+          {
+            "description": "Ordinary flow body.",
+            "type": "string",
+            "const": "body"
+          },
+          {
+            "description": "Definition or list term.",
+            "type": "string",
+            "const": "term"
+          },
+          {
+            "description": "Table-cell body.",
+            "type": "string",
+            "const": "cell"
+          },
+          {
+            "description": "Fixed-display logical body.",
+            "type": "string",
+            "const": "fixed-body"
+          }
+        ]
+      },
       "ContentSelector": {
         "description": "One exact local owner in the document actually loaded for this operation.\n\nPaths are snapshot-relative: after edits a still-valid path can denote a\ndifferent owner. Neither variant provides cross-call stale detection.",
         "oneOf": [
@@ -7430,6 +9311,78 @@
             ]
           }
         ]
+      },
+      "ContentStore": {
+        "description": "The single authoritative content store for one document or projection.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Logical atoms in global retained order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtom"
+            }
+          },
+          "links": {
+            "description": "Logical link occurrences in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkOccurrence"
+            }
+          },
+          "owners": {
+            "description": "Structural owners in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentOwner"
+            }
+          },
+          "points": {
+            "description": "Zero-width points in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPoint"
+            }
+          },
+          "roots": {
+            "description": "Logical roots in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRoot"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "owners",
+          "roots",
+          "atoms",
+          "points",
+          "links"
+        ]
+      },
+      "ContentStyle": {
+        "description": "Native text attributes attached to one atom.",
+        "type": "object",
+        "properties": {
+          "emphasis": {
+            "description": "Emphasized/italic presentation.",
+            "type": "boolean"
+          },
+          "literal": {
+            "description": "Literal/code presentation.",
+            "type": "boolean"
+          },
+          "strong": {
+            "description": "Strong/bold presentation.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Underline presentation retained from native output.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -8016,6 +9969,99 @@
           }
         ]
       },
+      "LinkLabelPart": {
+        "description": "One ordered component of a complete logical link label.",
+        "oneOf": [
+          {
+            "description": "Text or whitespace content.",
+            "type": "object",
+            "properties": {
+              "content": {
+                "description": "Exact atom slice.",
+                "$ref": "#/$defs/ContentRef"
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "content"
+            ]
+          },
+          {
+            "description": "One linked logical newline.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "atom"
+            ]
+          }
+        ]
+      },
+      "LinkOccurrence": {
+        "description": "One logical link occurrence, possibly represented by several wrappers.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/LinkOccurrenceKey"
+          },
+          "label": {
+            "description": "Complete ordered logical label, which may span roots.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkLabelPart"
+            }
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the destination.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "target": {
+            "description": "Typed destination shared by every display fragment.",
+            "$ref": "#/$defs/LinkTarget"
+          },
+          "title": {
+            "description": "Optional non-visible advisory title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "target",
+          "label",
+          "provenance"
+        ]
+      },
+      "LinkOccurrenceKey": {
+        "description": "Document-local logical link occurrence key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
         "oneOf": [
@@ -8545,6 +10591,69 @@
           }
         ]
       },
+      "Provenance": {
+        "description": "Authorship provenance for content that may not map to an exact range.",
+        "oneOf": [
+          {
+            "description": "Content copied directly from authored source.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored"
+              },
+              "span": {
+                "description": "Exact authored location.",
+                "$ref": "#/$defs/SourceSpan"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span"
+            ]
+          },
+          {
+            "description": "Content generated by normalization, optionally attributed to a trigger.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated"
+              },
+              "trigger": {
+                "description": "Authored construct that caused generation.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Provenance is unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "ReferenceAssociation": {
         "description": "Validation state of optional original form bindings.",
         "oneOf": [
@@ -8771,6 +10880,17 @@
         "description": "Independent reference output embedded alongside an outline's content tree.",
         "type": "object",
         "properties": {
+          "contentProjection": {
+            "description": "Closed response-local store resolving every retained occurrence.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentProjection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "coverage": {
             "description": "Source content scan coverage.",
             "$ref": "#/$defs/ReferenceCoverage"
@@ -8997,13 +11117,17 @@
             "description": "Atomic validation outcome of original form bindings.",
             "$ref": "#/$defs/ReferenceAssociation"
           },
-          "label": {
-            "description": "Visible plain label from original children; may be empty.",
+          "labelPreview": {
+            "description": "Bounded presentation preview; never authoritative link content.",
             "type": "string"
           },
-          "labelTruncated": {
-            "description": "Whether the UTF-8-safe label prefix was bounded.",
+          "labelPreviewTruncated": {
+            "description": "Whether the UTF-8-safe presentation preview was bounded.",
             "type": "boolean"
+          },
+          "occurrence": {
+            "description": "Document-local logical occurrence in this inventory's content projection.",
+            "$ref": "#/$defs/LinkOccurrenceKey"
           },
           "origin": {
             "description": "Snapshot-local location of the original `Inline::Link`.",
@@ -9027,20 +11151,16 @@
           "sourceRead": {
             "description": "Explicit containing readable source subtree. This is not the occurrence\nitself and never follows the reference's destination.",
             "$ref": "#/$defs/ContentSelector"
-          },
-          "target": {
-            "description": "Complete original typed target, including its fragment.",
-            "$ref": "#/$defs/LinkTarget"
           }
         },
         "additionalProperties": false,
         "required": [
+          "occurrence",
           "origin",
           "sourceRead",
           "owner",
-          "label",
-          "labelTruncated",
-          "target",
+          "labelPreview",
+          "labelPreviewTruncated",
           "association",
           "resolution"
         ]
@@ -9941,6 +12061,537 @@
           }
         ]
       },
+      "ContentAtom": {
+        "description": "One atom in global retained execution order.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "link": {
+            "description": "Logical link occurrence containing this atom.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LinkOccurrenceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "description": "Owner repeated for bounded validation.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the atom.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "role": {
+            "description": "Optional native semantic role.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root": {
+            "description": "Logical root containing this atom.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "style": {
+            "description": "Native style attributes.",
+            "$ref": "#/$defs/ContentStyle"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Visible non-whitespace text.",
+            "type": "object",
+            "properties": {
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "description": "Searchable and copyable logical text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Visible logical whitespace.",
+            "type": "object",
+            "properties": {
+              "breakable": {
+                "description": "Whether ordinary flow may wrap after this atom.",
+                "type": "boolean"
+              },
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "whitespace"
+              },
+              "text": {
+                "description": "Searchable and copyable logical whitespace.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text",
+              "breakable"
+            ]
+          },
+          {
+            "description": "Zero-width legal wrapping boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "break-opportunity"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One logical newline.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentAtomKey": {
+        "description": "Document-local logical atom key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentByteRange": {
+        "description": "Half-open UTF-8 byte range in one text or whitespace atom.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "description": "Inclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "ContentOwner": {
+        "description": "One owner of roots and structural blocks.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "kind": {
+            "description": "Stable owner category.",
+            "$ref": "#/$defs/ContentOwnerKind"
+          },
+          "provenance": {
+            "description": "Authorship of the owner boundary.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "roots": {
+            "description": "Roots owned in logical source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRootKey"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "roots",
+          "provenance"
+        ]
+      },
+      "ContentOwnerKey": {
+        "description": "Document-local content owner key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentOwnerKind": {
+        "description": "Stable source-neutral owner category.",
+        "oneOf": [
+          {
+            "description": "Whole normalized document.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Section subtree.",
+            "type": "string",
+            "const": "section"
+          },
+          {
+            "description": "Ordinary list item.",
+            "type": "string",
+            "const": "list-item"
+          },
+          {
+            "description": "Definition-list item.",
+            "type": "string",
+            "const": "definition-item"
+          },
+          {
+            "description": "Table cell.",
+            "type": "string",
+            "const": "table-cell"
+          },
+          {
+            "description": "Other producer-defined content boundary.",
+            "type": "string",
+            "const": "content"
+          }
+        ]
+      },
+      "ContentPoint": {
+        "description": "One zero-width logical position.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentPointKey"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the target position.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "root": {
+            "description": "Logical root containing the point.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "scalarBoundary": {
+            "description": "Derived root-relative Unicode-scalar boundary.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Boundary between root atom slots.",
+            "type": "object",
+            "properties": {
+              "atomBoundary": {
+                "description": "Zero-based boundary in the root atom vector.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "between-atoms"
+              }
+            },
+            "required": [
+              "kind",
+              "atomBoundary"
+            ]
+          },
+          {
+            "description": "UTF-8 byte boundary inside a text or whitespace atom.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Atom containing the point.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "byteOffset": {
+                "description": "UTF-8 byte offset in the atom text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "in-atom"
+              }
+            },
+            "required": [
+              "kind",
+              "atom",
+              "byteOffset"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "scalarBoundary",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentPointKey": {
+        "description": "Document-local zero-width point key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentRef": {
+        "description": "A checked slice of one authoritative logical atom.",
+        "type": "object",
+        "properties": {
+          "atom": {
+            "description": "Referenced text or whitespace atom.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "bytes": {
+            "description": "UTF-8 byte range in that atom's logical text.",
+            "$ref": "#/$defs/ContentByteRange"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "atom",
+          "bytes"
+        ]
+      },
+      "ContentRole": {
+        "description": "Optional native semantic role, distinct from inferred entry facts.",
+        "oneOf": [
+          {
+            "description": "Command-line flag.",
+            "type": "string",
+            "const": "flag"
+          },
+          {
+            "description": "Environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Command argument or placeholder.",
+            "type": "string",
+            "const": "argument"
+          },
+          {
+            "description": "Command or configuration directive.",
+            "type": "string",
+            "const": "command-or-directive"
+          },
+          {
+            "description": "Filesystem-like path.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ContentRoot": {
+        "description": "One independently searchable logical inline sequence.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Atoms in authoritative logical order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtomKey"
+            }
+          },
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "kind": {
+            "description": "Stable root category.",
+            "$ref": "#/$defs/ContentRootKind"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "points": {
+            "description": "Zero-width points in root order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPointKey"
+            }
+          },
+          "provenance": {
+            "description": "Authorship of this root.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "kind",
+          "atoms",
+          "points",
+          "provenance"
+        ]
+      },
+      "ContentRootKey": {
+        "description": "Document-local logical inline-root key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentRootKind": {
+        "description": "Stable logical-root category.",
+        "oneOf": [
+          {
+            "description": "Visible document or section heading.",
+            "type": "string",
+            "const": "heading"
+          },
+          {
+            "description": "Ordinary flow body.",
+            "type": "string",
+            "const": "body"
+          },
+          {
+            "description": "Definition or list term.",
+            "type": "string",
+            "const": "term"
+          },
+          {
+            "description": "Table-cell body.",
+            "type": "string",
+            "const": "cell"
+          },
+          {
+            "description": "Fixed-display logical body.",
+            "type": "string",
+            "const": "fixed-body"
+          }
+        ]
+      },
+      "ContentStore": {
+        "description": "The single authoritative content store for one document or projection.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Logical atoms in global retained order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtom"
+            }
+          },
+          "links": {
+            "description": "Logical link occurrences in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkOccurrence"
+            }
+          },
+          "owners": {
+            "description": "Structural owners in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentOwner"
+            }
+          },
+          "points": {
+            "description": "Zero-width points in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPoint"
+            }
+          },
+          "roots": {
+            "description": "Logical roots in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRoot"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "owners",
+          "roots",
+          "atoms",
+          "points",
+          "links"
+        ]
+      },
+      "ContentStyle": {
+        "description": "Native text attributes attached to one atom.",
+        "type": "object",
+        "properties": {
+          "emphasis": {
+            "description": "Emphasized/italic presentation.",
+            "type": "boolean"
+          },
+          "literal": {
+            "description": "Literal/code presentation.",
+            "type": "boolean"
+          },
+          "strong": {
+            "description": "Strong/bold presentation.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Underline presentation retained from native output.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
         "type": "object",
@@ -10317,6 +12968,10 @@
               "$ref": "#/$defs/Block"
             }
           },
+          "contentStore": {
+            "description": "Authoritative logical content referenced by all retained IR below.",
+            "$ref": "#/$defs/ContentStore"
+          },
           "diagnostics": {
             "description": "Recoverable parsing and validation findings.",
             "type": "array",
@@ -10379,6 +13034,7 @@
           "producer",
           "sources",
           "rootSource",
+          "contentStore",
           "meta",
           "sections"
         ]
@@ -10784,18 +13440,18 @@
             "description": "Plain visible text.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "text"
-              },
-              "value": {
-                "description": "Text after source escape processing.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -10844,18 +13500,18 @@
             "description": "Literal code or symbolic token.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "code"
-              },
-              "value": {
-                "description": "Literal text value.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -10869,16 +13525,9 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
-              "target": {
-                "description": "Typed navigation destination.",
-                "$ref": "#/$defs/LinkTarget"
-              },
-              "title": {
-                "description": "Optional advisory title.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+              "occurrence": {
+                "description": "Logical occurrence shared by every structural fragment.",
+                "$ref": "#/$defs/LinkOccurrenceKey"
               },
               "type": {
                 "type": "string",
@@ -10887,7 +13536,7 @@
             },
             "required": [
               "type",
-              "target",
+              "occurrence",
               "children"
             ]
           },
@@ -10906,16 +13555,9 @@
                 "description": "Document-local destination identity.",
                 "$ref": "#/$defs/NodeId"
               },
-              "ownerSource": {
-                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/SourceSpan"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+              "point": {
+                "description": "Exact zero-width logical position.",
+                "$ref": "#/$defs/ContentPointKey"
               },
               "type": {
                 "type": "string",
@@ -10924,6 +13566,7 @@
             },
             "required": [
               "type",
+              "point",
               "id"
             ]
           },
@@ -10931,13 +13574,18 @@
             "description": "Hard line break that renderers must preserve.",
             "type": "object",
             "properties": {
+              "atom": {
+                "description": "Authoritative linked or unlinked hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"
               }
             },
             "required": [
-              "type"
+              "type",
+              "atom"
             ]
           }
         ]
@@ -10965,6 +13613,99 @@
           }
         },
         "additionalProperties": false
+      },
+      "LinkLabelPart": {
+        "description": "One ordered component of a complete logical link label.",
+        "oneOf": [
+          {
+            "description": "Text or whitespace content.",
+            "type": "object",
+            "properties": {
+              "content": {
+                "description": "Exact atom slice.",
+                "$ref": "#/$defs/ContentRef"
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "content"
+            ]
+          },
+          {
+            "description": "One linked logical newline.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "atom"
+            ]
+          }
+        ]
+      },
+      "LinkOccurrence": {
+        "description": "One logical link occurrence, possibly represented by several wrappers.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/LinkOccurrenceKey"
+          },
+          "label": {
+            "description": "Complete ordered logical label, which may span roots.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkLabelPart"
+            }
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the destination.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "target": {
+            "description": "Typed destination shared by every display fragment.",
+            "$ref": "#/$defs/LinkTarget"
+          },
+          "title": {
+            "description": "Optional non-visible advisory title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "target",
+          "label",
+          "provenance"
+        ]
+      },
+      "LinkOccurrenceKey": {
+        "description": "Document-local logical link occurrence key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
@@ -11298,6 +14039,69 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "Provenance": {
+        "description": "Authorship provenance for content that may not map to an exact range.",
+        "oneOf": [
+          {
+            "description": "Content copied directly from authored source.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored"
+              },
+              "span": {
+                "description": "Exact authored location.",
+                "$ref": "#/$defs/SourceSpan"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span"
+            ]
+          },
+          {
+            "description": "Content generated by normalization, optionally attributed to a trigger.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated"
+              },
+              "trigger": {
+                "description": "Authored construct that caused generation.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Provenance is unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
         ]
       },
       "QuerySchema": {
@@ -12575,7 +15379,7 @@
                 "minLength": 1
               },
               "scope": {
-                "description": "Semantic content included in the search.",
+                "description": "Search visible text or generated Markdown bytes.",
                 "$ref": "#/$defs/SearchScope",
                 "default": "visible"
               },
@@ -12716,15 +15520,15 @@
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains the coordinate basis.",
+        "description": "Text representation searched while Markdown remains available for presentation.",
         "oneOf": [
           {
-            "description": "Search the text visible after parsing `ManT`'s generated `CommonMark`.",
+            "description": "Search visible document text.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search the generated CommonMark bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }
@@ -13127,6 +15931,150 @@
           }
         ]
       },
+      "ContentAtom": {
+        "description": "One atom in global retained execution order.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "link": {
+            "description": "Logical link occurrence containing this atom.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LinkOccurrenceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "description": "Owner repeated for bounded validation.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the atom.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "role": {
+            "description": "Optional native semantic role.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root": {
+            "description": "Logical root containing this atom.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "style": {
+            "description": "Native style attributes.",
+            "$ref": "#/$defs/ContentStyle"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Visible non-whitespace text.",
+            "type": "object",
+            "properties": {
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "description": "Searchable and copyable logical text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Visible logical whitespace.",
+            "type": "object",
+            "properties": {
+              "breakable": {
+                "description": "Whether ordinary flow may wrap after this atom.",
+                "type": "boolean"
+              },
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "whitespace"
+              },
+              "text": {
+                "description": "Searchable and copyable logical whitespace.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text",
+              "breakable"
+            ]
+          },
+          {
+            "description": "Zero-width legal wrapping boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "break-opportunity"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One logical newline.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentAtomKey": {
+        "description": "Document-local logical atom key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "ContentBlockStep": {
         "description": "A checked transition through block arrays and their containing items/cells.",
         "oneOf": [
@@ -13222,6 +16170,407 @@
             ]
           }
         ]
+      },
+      "ContentByteRange": {
+        "description": "Half-open UTF-8 byte range in one text or whitespace atom.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "description": "Inclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "ContentOwner": {
+        "description": "One owner of roots and structural blocks.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "kind": {
+            "description": "Stable owner category.",
+            "$ref": "#/$defs/ContentOwnerKind"
+          },
+          "provenance": {
+            "description": "Authorship of the owner boundary.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "roots": {
+            "description": "Roots owned in logical source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRootKey"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "roots",
+          "provenance"
+        ]
+      },
+      "ContentOwnerKey": {
+        "description": "Document-local content owner key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentOwnerKind": {
+        "description": "Stable source-neutral owner category.",
+        "oneOf": [
+          {
+            "description": "Whole normalized document.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Section subtree.",
+            "type": "string",
+            "const": "section"
+          },
+          {
+            "description": "Ordinary list item.",
+            "type": "string",
+            "const": "list-item"
+          },
+          {
+            "description": "Definition-list item.",
+            "type": "string",
+            "const": "definition-item"
+          },
+          {
+            "description": "Table cell.",
+            "type": "string",
+            "const": "table-cell"
+          },
+          {
+            "description": "Other producer-defined content boundary.",
+            "type": "string",
+            "const": "content"
+          }
+        ]
+      },
+      "ContentPoint": {
+        "description": "One zero-width logical position.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentPointKey"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the target position.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "root": {
+            "description": "Logical root containing the point.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "scalarBoundary": {
+            "description": "Derived root-relative Unicode-scalar boundary.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Boundary between root atom slots.",
+            "type": "object",
+            "properties": {
+              "atomBoundary": {
+                "description": "Zero-based boundary in the root atom vector.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "between-atoms"
+              }
+            },
+            "required": [
+              "kind",
+              "atomBoundary"
+            ]
+          },
+          {
+            "description": "UTF-8 byte boundary inside a text or whitespace atom.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Atom containing the point.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "byteOffset": {
+                "description": "UTF-8 byte offset in the atom text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "in-atom"
+              }
+            },
+            "required": [
+              "kind",
+              "atom",
+              "byteOffset"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "scalarBoundary",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentPointKey": {
+        "description": "Document-local zero-width point key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentProjection": {
+        "description": "Response-local store for retained topology that does not embed a Document.",
+        "type": "object",
+        "properties": {
+          "contentStore": {
+            "description": "Complete closed store for all retained response-local references.",
+            "$ref": "#/$defs/ContentStore"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "contentStore"
+        ]
+      },
+      "ContentRef": {
+        "description": "A checked slice of one authoritative logical atom.",
+        "type": "object",
+        "properties": {
+          "atom": {
+            "description": "Referenced text or whitespace atom.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "bytes": {
+            "description": "UTF-8 byte range in that atom's logical text.",
+            "$ref": "#/$defs/ContentByteRange"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "atom",
+          "bytes"
+        ]
+      },
+      "ContentRole": {
+        "description": "Optional native semantic role, distinct from inferred entry facts.",
+        "oneOf": [
+          {
+            "description": "Command-line flag.",
+            "type": "string",
+            "const": "flag"
+          },
+          {
+            "description": "Environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Command argument or placeholder.",
+            "type": "string",
+            "const": "argument"
+          },
+          {
+            "description": "Command or configuration directive.",
+            "type": "string",
+            "const": "command-or-directive"
+          },
+          {
+            "description": "Filesystem-like path.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ContentRoot": {
+        "description": "One independently searchable logical inline sequence.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Atoms in authoritative logical order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtomKey"
+            }
+          },
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "kind": {
+            "description": "Stable root category.",
+            "$ref": "#/$defs/ContentRootKind"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "points": {
+            "description": "Zero-width points in root order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPointKey"
+            }
+          },
+          "provenance": {
+            "description": "Authorship of this root.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "kind",
+          "atoms",
+          "points",
+          "provenance"
+        ]
+      },
+      "ContentRootKey": {
+        "description": "Document-local logical inline-root key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentRootKind": {
+        "description": "Stable logical-root category.",
+        "oneOf": [
+          {
+            "description": "Visible document or section heading.",
+            "type": "string",
+            "const": "heading"
+          },
+          {
+            "description": "Ordinary flow body.",
+            "type": "string",
+            "const": "body"
+          },
+          {
+            "description": "Definition or list term.",
+            "type": "string",
+            "const": "term"
+          },
+          {
+            "description": "Table-cell body.",
+            "type": "string",
+            "const": "cell"
+          },
+          {
+            "description": "Fixed-display logical body.",
+            "type": "string",
+            "const": "fixed-body"
+          }
+        ]
+      },
+      "ContentStore": {
+        "description": "The single authoritative content store for one document or projection.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Logical atoms in global retained order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtom"
+            }
+          },
+          "links": {
+            "description": "Logical link occurrences in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkOccurrence"
+            }
+          },
+          "owners": {
+            "description": "Structural owners in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentOwner"
+            }
+          },
+          "points": {
+            "description": "Zero-width points in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPoint"
+            }
+          },
+          "roots": {
+            "description": "Logical roots in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRoot"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "owners",
+          "roots",
+          "atoms",
+          "points",
+          "links"
+        ]
+      },
+      "ContentStyle": {
+        "description": "Native text attributes attached to one atom.",
+        "type": "object",
+        "properties": {
+          "emphasis": {
+            "description": "Emphasized/italic presentation.",
+            "type": "boolean"
+          },
+          "literal": {
+            "description": "Literal/code presentation.",
+            "type": "boolean"
+          },
+          "strong": {
+            "description": "Strong/bold presentation.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Underline presentation retained from native output.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
@@ -15092,18 +18441,18 @@
             "description": "Plain visible text.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "text"
-              },
-              "value": {
-                "description": "Text after source escape processing.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -15152,18 +18501,18 @@
             "description": "Literal code or symbolic token.",
             "type": "object",
             "properties": {
+              "content": {
+                "description": "Checked slice of the authoritative logical atom.",
+                "$ref": "#/$defs/ContentRef"
+              },
               "type": {
                 "type": "string",
                 "const": "code"
-              },
-              "value": {
-                "description": "Literal text value.",
-                "type": "string"
               }
             },
             "required": [
               "type",
-              "value"
+              "content"
             ]
           },
           {
@@ -15177,16 +18526,9 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
-              "target": {
-                "description": "Typed navigation destination.",
-                "$ref": "#/$defs/LinkTarget"
-              },
-              "title": {
-                "description": "Optional advisory title.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+              "occurrence": {
+                "description": "Logical occurrence shared by every structural fragment.",
+                "$ref": "#/$defs/LinkOccurrenceKey"
               },
               "type": {
                 "type": "string",
@@ -15195,7 +18537,7 @@
             },
             "required": [
               "type",
-              "target",
+              "occurrence",
               "children"
             ]
           },
@@ -15214,16 +18556,9 @@
                 "description": "Document-local destination identity.",
                 "$ref": "#/$defs/NodeId"
               },
-              "ownerSource": {
-                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/SourceSpan"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+              "point": {
+                "description": "Exact zero-width logical position.",
+                "$ref": "#/$defs/ContentPointKey"
               },
               "type": {
                 "type": "string",
@@ -15232,6 +18567,7 @@
             },
             "required": [
               "type",
+              "point",
               "id"
             ]
           },
@@ -15239,13 +18575,18 @@
             "description": "Hard line break that renderers must preserve.",
             "type": "object",
             "properties": {
+              "atom": {
+                "description": "Authoritative linked or unlinked hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"
               }
             },
             "required": [
-              "type"
+              "type",
+              "atom"
             ]
           }
         ]
@@ -15273,6 +18614,99 @@
           }
         },
         "additionalProperties": false
+      },
+      "LinkLabelPart": {
+        "description": "One ordered component of a complete logical link label.",
+        "oneOf": [
+          {
+            "description": "Text or whitespace content.",
+            "type": "object",
+            "properties": {
+              "content": {
+                "description": "Exact atom slice.",
+                "$ref": "#/$defs/ContentRef"
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "content"
+            ]
+          },
+          {
+            "description": "One linked logical newline.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "atom"
+            ]
+          }
+        ]
+      },
+      "LinkOccurrence": {
+        "description": "One logical link occurrence, possibly represented by several wrappers.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/LinkOccurrenceKey"
+          },
+          "label": {
+            "description": "Complete ordered logical label, which may span roots.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkLabelPart"
+            }
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the destination.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "target": {
+            "description": "Typed destination shared by every display fragment.",
+            "$ref": "#/$defs/LinkTarget"
+          },
+          "title": {
+            "description": "Optional non-visible advisory title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "target",
+          "label",
+          "provenance"
+        ]
+      },
+      "LinkOccurrenceKey": {
+        "description": "Document-local logical link occurrence key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
@@ -15806,6 +19240,69 @@
           "version"
         ]
       },
+      "Provenance": {
+        "description": "Authorship provenance for content that may not map to an exact range.",
+        "oneOf": [
+          {
+            "description": "Content copied directly from authored source.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored"
+              },
+              "span": {
+                "description": "Exact authored location.",
+                "$ref": "#/$defs/SourceSpan"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span"
+            ]
+          },
+          {
+            "description": "Content generated by normalization, optionally attributed to a trigger.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated"
+              },
+              "trigger": {
+                "description": "Authored construct that caused generation.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Provenance is unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "Range_of_uint": {
         "type": "object",
         "properties": {
@@ -16178,7 +19675,7 @@
         ]
       },
       "ScopeSearch": {
-        "description": "Globally paginated search over a resolved document scope.",
+        "description": "Globally paginated logical-root search over a resolved document scope.",
         "type": "object",
         "properties": {
           "documents": {
@@ -16278,6 +19775,17 @@
           "address": {
             "description": "Stable logical document identity.",
             "$ref": "#/$defs/DocumentAddress"
+          },
+          "contentProjection": {
+            "description": "Closed document-local content store shared by supports and global evidence.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentProjection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "counts": {
             "description": "Local contributions to each global evidence category.",
@@ -16410,12 +19918,23 @@
         ]
       },
       "ScopedSearchDocument": {
-        "description": "One document's search hits inside a globally paginated scope result.",
+        "description": "One document's logical hits inside a globally paginated scope result.",
         "type": "object",
         "properties": {
           "address": {
             "description": "Stable logical document identity.",
             "$ref": "#/$defs/DocumentAddress"
+          },
+          "contentProjection": {
+            "description": "Closed response-local store resolving every retained logical root.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentProjection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "depth": {
             "description": "Distance retained from the resolved scope.",
@@ -16475,11 +19994,11 @@
         ]
       },
       "SearchContextLine": {
-        "description": "One rendered Markdown line surrounding a match.",
+        "description": "One logical-root line surrounding a match.",
         "type": "object",
         "properties": {
           "line": {
-            "description": "One-based line number in the deterministic Markdown render.",
+            "description": "One-based line number inside the authoritative logical root.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
@@ -16500,7 +20019,7 @@
         ]
       },
       "SearchHit": {
-        "description": "One rendered line or line span containing one or more exact occurrences.",
+        "description": "One matching logical occurrence or rendered line group with presentation context.",
         "type": "object",
         "properties": {
           "context": {
@@ -16522,13 +20041,13 @@
             ]
           },
           "occurrenceCount": {
-            "description": "Total exact matcher occurrences represented by this line group.",
+            "description": "Total exact occurrences, including any omitted to bound the response.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
           },
           "occurrences": {
-            "description": "Exact matcher occurrences on this rendered line or line span.",
+            "description": "Retained exact occurrences represented by this hit.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/SearchOccurrence"
@@ -16537,11 +20056,11 @@
             "minItems": 1
           },
           "occurrencesTruncated": {
-            "description": "Whether [`Self::occurrences`] omits exact ranges to remain bounded.",
+            "description": "Whether occurrence ranges were omitted to bound a rendered line group.",
             "type": "boolean"
           },
           "ordinal": {
-            "description": "One-based line-group number in the unpaginated result set.",
+            "description": "One-based logical-hit number in the unpaginated result set.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
@@ -16569,7 +20088,7 @@
         "type": "object",
         "properties": {
           "endByte": {
-            "description": "Exclusive zero-based UTF-8 byte offset within the presented Markdown line.",
+            "description": "Exclusive zero-based UTF-8 byte offset within the presented line.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
@@ -16581,7 +20100,7 @@
             "minimum": 1
           },
           "startByte": {
-            "description": "Inclusive zero-based UTF-8 byte offset within the presented Markdown line.",
+            "description": "Inclusive zero-based UTF-8 byte offset within the presented line.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
@@ -16591,6 +20110,43 @@
           "line",
           "startByte",
           "endByte"
+        ]
+      },
+      "SearchLogicalRange": {
+        "description": "Half-open root-relative logical coordinates for one matcher occurrence.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive UTF-8 byte offset in the root's canonical logical sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "endScalar": {
+            "description": "Exclusive Unicode-scalar offset in the same sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "startByte": {
+            "description": "Inclusive UTF-8 byte offset in the root's canonical logical sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "startScalar": {
+            "description": "Inclusive Unicode-scalar offset in the same sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startByte",
+          "endByte",
+          "startScalar",
+          "endScalar"
         ]
       },
       "SearchMarkdownRange": {
@@ -16644,30 +20200,64 @@
         ]
       },
       "SearchOccurrence": {
-        "description": "One exact matcher occurrence in the canonical Markdown render.",
+        "description": "One exact matcher occurrence in either a logical root or the rendered document.",
         "type": "object",
         "properties": {
           "lineRanges": {
-            "description": "Exact ranges within the anchor-free Markdown lines used for presentation.",
+            "description": "Anchor-free presentation fragments for a render-only hit.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/SearchLineRange"
-            },
-            "minItems": 1
+            }
+          },
+          "logical": {
+            "description": "Root-relative logical UTF-8 byte and Unicode-scalar range, when available.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SearchLogicalRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "markdown": {
-            "description": "Location in the deterministic full Markdown render.",
-            "$ref": "#/$defs/SearchMarkdownRange"
+            "description": "Authoritative Markdown range for a render-only hit, including TLDR text.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SearchMarkdownRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "markdownProjections": {
+            "description": "Zero or more presentation-only placements in canonical Markdown v1.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchMarkdownRange"
+            }
           },
           "matchedText": {
-            "description": "Exact text consumed by the matcher.",
+            "description": "Bounded presentation echo; the logical range remains authoritative.",
             "type": "string"
+          },
+          "root": {
+            "description": "Response-local logical root containing the complete match, when available.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRootKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
+        "additionalProperties": false,
         "required": [
-          "matchedText",
-          "markdown",
-          "lineRanges"
+          "matchedText"
         ]
       },
       "SearchQuery": {
@@ -16680,7 +20270,7 @@
             "default": "insensitive"
           },
           "contextLines": {
-            "description": "Neighboring rendered lines included around each match.",
+            "description": "Neighboring logical-root lines included around each match.",
             "type": "integer",
             "format": "uint16",
             "default": 0,
@@ -16688,7 +20278,7 @@
             "minimum": 0
           },
           "limit": {
-            "description": "Maximum number of matching line groups returned.",
+            "description": "Maximum number of logical occurrences returned.",
             "type": "integer",
             "format": "uint32",
             "default": 100,
@@ -16696,7 +20286,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching line groups skipped before collection.",
+            "description": "Number of logical occurrences skipped before collection.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -16803,15 +20393,15 @@
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains the coordinate basis.",
+        "description": "Text representation searched while Markdown remains available for presentation.",
         "oneOf": [
           {
-            "description": "Search the text visible after parsing `ManT`'s generated `CommonMark`.",
+            "description": "Search visible document text.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search the generated CommonMark bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }
@@ -17624,7 +21214,7 @@
                 "minLength": 1
               },
               "scope": {
-                "description": "Semantic representation searched.",
+                "description": "Search visible text or generated Markdown bytes.",
                 "$ref": "#/$defs/SearchScope",
                 "default": "visible"
               },
@@ -17678,15 +21268,15 @@
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains the coordinate basis.",
+        "description": "Text representation searched while Markdown remains available for presentation.",
         "oneOf": [
           {
-            "description": "Search the text visible after parsing `ManT`'s generated `CommonMark`.",
+            "description": "Search visible document text.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search the generated CommonMark bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }
@@ -17716,12 +21306,23 @@
     "description": "Complete, paginatable search result returned to agents and scripts.",
     "type": "object",
     "properties": {
+      "contentProjection": {
+        "description": "Closed response-local store resolving every returned logical root.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ContentProjection"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "label": {
         "description": "Human-readable selected-document label.",
         "type": "string"
       },
       "matches": {
-        "description": "Matching line groups in render order.",
+        "description": "Logical occurrences in document/root order.",
         "type": "array",
         "items": {
           "$ref": "#/$defs/SearchHit"
@@ -17748,7 +21349,7 @@
         "minimum": 0
       },
       "offset": {
-        "description": "Applied zero-based matching-line offset.",
+        "description": "Applied zero-based logical-occurrence offset.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -17762,7 +21363,7 @@
         "$ref": "#/$defs/SearchRender"
       },
       "returned": {
-        "description": "Number of matching line groups present in [`Self::matches`].",
+        "description": "Number of logical occurrences present in [`Self::matches`].",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -17783,7 +21384,7 @@
         ]
       },
       "total": {
-        "description": "Total matching line groups before pagination.",
+        "description": "Total logical occurrences before pagination.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -17805,6 +21406,551 @@
       "matches"
     ],
     "$defs": {
+      "ContentAtom": {
+        "description": "One atom in global retained execution order.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "link": {
+            "description": "Logical link occurrence containing this atom.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LinkOccurrenceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "description": "Owner repeated for bounded validation.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the atom.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "role": {
+            "description": "Optional native semantic role.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root": {
+            "description": "Logical root containing this atom.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "style": {
+            "description": "Native style attributes.",
+            "$ref": "#/$defs/ContentStyle"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Visible non-whitespace text.",
+            "type": "object",
+            "properties": {
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "description": "Searchable and copyable logical text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Visible logical whitespace.",
+            "type": "object",
+            "properties": {
+              "breakable": {
+                "description": "Whether ordinary flow may wrap after this atom.",
+                "type": "boolean"
+              },
+              "displayOverride": {
+                "description": "Optional profile-specific glyph projection.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "whitespace"
+              },
+              "text": {
+                "description": "Searchable and copyable logical whitespace.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text",
+              "breakable"
+            ]
+          },
+          {
+            "description": "Zero-width legal wrapping boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "break-opportunity"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One logical newline.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentAtomKey": {
+        "description": "Document-local logical atom key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentByteRange": {
+        "description": "Half-open UTF-8 byte range in one text or whitespace atom.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "description": "Inclusive byte offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "ContentOwner": {
+        "description": "One owner of roots and structural blocks.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "kind": {
+            "description": "Stable owner category.",
+            "$ref": "#/$defs/ContentOwnerKind"
+          },
+          "provenance": {
+            "description": "Authorship of the owner boundary.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "roots": {
+            "description": "Roots owned in logical source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRootKey"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "roots",
+          "provenance"
+        ]
+      },
+      "ContentOwnerKey": {
+        "description": "Document-local content owner key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentOwnerKind": {
+        "description": "Stable source-neutral owner category.",
+        "oneOf": [
+          {
+            "description": "Whole normalized document.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Section subtree.",
+            "type": "string",
+            "const": "section"
+          },
+          {
+            "description": "Ordinary list item.",
+            "type": "string",
+            "const": "list-item"
+          },
+          {
+            "description": "Definition-list item.",
+            "type": "string",
+            "const": "definition-item"
+          },
+          {
+            "description": "Table cell.",
+            "type": "string",
+            "const": "table-cell"
+          },
+          {
+            "description": "Other producer-defined content boundary.",
+            "type": "string",
+            "const": "content"
+          }
+        ]
+      },
+      "ContentPoint": {
+        "description": "One zero-width logical position.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentPointKey"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the target position.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "root": {
+            "description": "Logical root containing the point.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "scalarBoundary": {
+            "description": "Derived root-relative Unicode-scalar boundary.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Boundary between root atom slots.",
+            "type": "object",
+            "properties": {
+              "atomBoundary": {
+                "description": "Zero-based boundary in the root atom vector.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "between-atoms"
+              }
+            },
+            "required": [
+              "kind",
+              "atomBoundary"
+            ]
+          },
+          {
+            "description": "UTF-8 byte boundary inside a text or whitespace atom.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Atom containing the point.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "byteOffset": {
+                "description": "UTF-8 byte offset in the atom text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "in-atom"
+              }
+            },
+            "required": [
+              "kind",
+              "atom",
+              "byteOffset"
+            ]
+          }
+        ],
+        "required": [
+          "key",
+          "root",
+          "owner",
+          "scalarBoundary",
+          "provenance"
+        ],
+        "unevaluatedProperties": false
+      },
+      "ContentPointKey": {
+        "description": "Document-local zero-width point key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentProjection": {
+        "description": "Response-local store for retained topology that does not embed a Document.",
+        "type": "object",
+        "properties": {
+          "contentStore": {
+            "description": "Complete closed store for all retained response-local references.",
+            "$ref": "#/$defs/ContentStore"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "contentStore"
+        ]
+      },
+      "ContentRef": {
+        "description": "A checked slice of one authoritative logical atom.",
+        "type": "object",
+        "properties": {
+          "atom": {
+            "description": "Referenced text or whitespace atom.",
+            "$ref": "#/$defs/ContentAtomKey"
+          },
+          "bytes": {
+            "description": "UTF-8 byte range in that atom's logical text.",
+            "$ref": "#/$defs/ContentByteRange"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "atom",
+          "bytes"
+        ]
+      },
+      "ContentRole": {
+        "description": "Optional native semantic role, distinct from inferred entry facts.",
+        "oneOf": [
+          {
+            "description": "Command-line flag.",
+            "type": "string",
+            "const": "flag"
+          },
+          {
+            "description": "Environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Command argument or placeholder.",
+            "type": "string",
+            "const": "argument"
+          },
+          {
+            "description": "Command or configuration directive.",
+            "type": "string",
+            "const": "command-or-directive"
+          },
+          {
+            "description": "Filesystem-like path.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ContentRoot": {
+        "description": "One independently searchable logical inline sequence.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Atoms in authoritative logical order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtomKey"
+            }
+          },
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/ContentRootKey"
+          },
+          "kind": {
+            "description": "Stable root category.",
+            "$ref": "#/$defs/ContentRootKind"
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "points": {
+            "description": "Zero-width points in root order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPointKey"
+            }
+          },
+          "provenance": {
+            "description": "Authorship of this root.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "kind",
+          "atoms",
+          "points",
+          "provenance"
+        ]
+      },
+      "ContentRootKey": {
+        "description": "Document-local logical inline-root key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "ContentRootKind": {
+        "description": "Stable logical-root category.",
+        "oneOf": [
+          {
+            "description": "Visible document or section heading.",
+            "type": "string",
+            "const": "heading"
+          },
+          {
+            "description": "Ordinary flow body.",
+            "type": "string",
+            "const": "body"
+          },
+          {
+            "description": "Definition or list term.",
+            "type": "string",
+            "const": "term"
+          },
+          {
+            "description": "Table-cell body.",
+            "type": "string",
+            "const": "cell"
+          },
+          {
+            "description": "Fixed-display logical body.",
+            "type": "string",
+            "const": "fixed-body"
+          }
+        ]
+      },
+      "ContentStore": {
+        "description": "The single authoritative content store for one document or projection.",
+        "type": "object",
+        "properties": {
+          "atoms": {
+            "description": "Logical atoms in global retained order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentAtom"
+            }
+          },
+          "links": {
+            "description": "Logical link occurrences in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkOccurrence"
+            }
+          },
+          "owners": {
+            "description": "Structural owners in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentOwner"
+            }
+          },
+          "points": {
+            "description": "Zero-width points in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentPoint"
+            }
+          },
+          "roots": {
+            "description": "Logical roots in key order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ContentRoot"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "owners",
+          "roots",
+          "atoms",
+          "points",
+          "links"
+        ]
+      },
+      "ContentStyle": {
+        "description": "Native text attributes attached to one atom.",
+        "type": "object",
+        "properties": {
+          "emphasis": {
+            "description": "Emphasized/italic presentation.",
+            "type": "boolean"
+          },
+          "literal": {
+            "description": "Literal/code presentation.",
+            "type": "boolean"
+          },
+          "strong": {
+            "description": "Strong/bold presentation.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Underline presentation retained from native output.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "DocumentMeta": {
         "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
         "type": "object",
@@ -17971,6 +22117,213 @@
             "additionalProperties": false,
             "required": [
               "kind"
+            ]
+          }
+        ]
+      },
+      "LinkLabelPart": {
+        "description": "One ordered component of a complete logical link label.",
+        "oneOf": [
+          {
+            "description": "Text or whitespace content.",
+            "type": "object",
+            "properties": {
+              "content": {
+                "description": "Exact atom slice.",
+                "$ref": "#/$defs/ContentRef"
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "content"
+            ]
+          },
+          {
+            "description": "One linked logical newline.",
+            "type": "object",
+            "properties": {
+              "atom": {
+                "description": "Hard-break atom.",
+                "$ref": "#/$defs/ContentAtomKey"
+              },
+              "kind": {
+                "type": "string",
+                "const": "hard-break"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "atom"
+            ]
+          }
+        ]
+      },
+      "LinkOccurrence": {
+        "description": "One logical link occurrence, possibly represented by several wrappers.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position.",
+            "$ref": "#/$defs/LinkOccurrenceKey"
+          },
+          "label": {
+            "description": "Complete ordered logical label, which may span roots.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LinkLabelPart"
+            }
+          },
+          "owner": {
+            "description": "Owning structural object.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the destination.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "target": {
+            "description": "Typed destination shared by every display fragment.",
+            "$ref": "#/$defs/LinkTarget"
+          },
+          "title": {
+            "description": "Optional non-visible advisory title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "target",
+          "label",
+          "provenance"
+        ]
+      },
+      "LinkOccurrenceKey": {
+        "description": "Document-local logical link occurrence key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "LinkTarget": {
+        "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
+        "oneOf": [
+          {
+            "description": "An external URI from mdoc `Lk`, man `UR`, or Markdown links.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "external"
+              },
+              "uri": {
+                "description": "Absolute URI.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "uri"
+            ]
+          },
+          {
+            "description": "An email address without a `mailto:` prefix.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Mailbox address without a URI scheme.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "email"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "address"
+            ]
+          },
+          {
+            "description": "A relative Markdown link to another document in the current source.\n\nThis is a logical cross-document graph edge, not a physical path.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local destination.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed reference to another installed manual page.\n\nThis is a logical cross-document graph edge resolved through the manual\ncatalog and its normal ambiguity rules.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when specified by the source.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A reference to addressable content in this document, including a\nsection, entry-backed owner, or inline anchor (such as mdoc `Sx`).\n\nThe target is a canonical document-local identity in [`crate::DocumentIndex`],\nnot a rendered heading slug or unresolved authored fragment.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Canonical target identity in the current document.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "section"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id"
             ]
           }
         ]
@@ -18212,6 +22565,69 @@
           }
         ]
       },
+      "Provenance": {
+        "description": "Authorship provenance for content that may not map to an exact range.",
+        "oneOf": [
+          {
+            "description": "Content copied directly from authored source.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored"
+              },
+              "span": {
+                "description": "Exact authored location.",
+                "$ref": "#/$defs/SourceSpan"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span"
+            ]
+          },
+          {
+            "description": "Content generated by normalization, optionally attributed to a trigger.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated"
+              },
+              "trigger": {
+                "description": "Authored construct that caused generation.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Provenance is unavailable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "SearchCase": {
         "description": "Case-folding policy applied when compiling the matcher.",
         "oneOf": [
@@ -18233,11 +22649,11 @@
         ]
       },
       "SearchContextLine": {
-        "description": "One rendered Markdown line surrounding a match.",
+        "description": "One logical-root line surrounding a match.",
         "type": "object",
         "properties": {
           "line": {
-            "description": "One-based line number in the deterministic Markdown render.",
+            "description": "One-based line number inside the authoritative logical root.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
@@ -18258,7 +22674,7 @@
         ]
       },
       "SearchHit": {
-        "description": "One rendered line or line span containing one or more exact occurrences.",
+        "description": "One matching logical occurrence or rendered line group with presentation context.",
         "type": "object",
         "properties": {
           "context": {
@@ -18280,13 +22696,13 @@
             ]
           },
           "occurrenceCount": {
-            "description": "Total exact matcher occurrences represented by this line group.",
+            "description": "Total exact occurrences, including any omitted to bound the response.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
           },
           "occurrences": {
-            "description": "Exact matcher occurrences on this rendered line or line span.",
+            "description": "Retained exact occurrences represented by this hit.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/SearchOccurrence"
@@ -18295,11 +22711,11 @@
             "minItems": 1
           },
           "occurrencesTruncated": {
-            "description": "Whether [`Self::occurrences`] omits exact ranges to remain bounded.",
+            "description": "Whether occurrence ranges were omitted to bound a rendered line group.",
             "type": "boolean"
           },
           "ordinal": {
-            "description": "One-based line-group number in the unpaginated result set.",
+            "description": "One-based logical-hit number in the unpaginated result set.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
@@ -18327,7 +22743,7 @@
         "type": "object",
         "properties": {
           "endByte": {
-            "description": "Exclusive zero-based UTF-8 byte offset within the presented Markdown line.",
+            "description": "Exclusive zero-based UTF-8 byte offset within the presented line.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
@@ -18339,7 +22755,7 @@
             "minimum": 1
           },
           "startByte": {
-            "description": "Inclusive zero-based UTF-8 byte offset within the presented Markdown line.",
+            "description": "Inclusive zero-based UTF-8 byte offset within the presented line.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
@@ -18349,6 +22765,43 @@
           "line",
           "startByte",
           "endByte"
+        ]
+      },
+      "SearchLogicalRange": {
+        "description": "Half-open root-relative logical coordinates for one matcher occurrence.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive UTF-8 byte offset in the root's canonical logical sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "endScalar": {
+            "description": "Exclusive Unicode-scalar offset in the same sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "startByte": {
+            "description": "Inclusive UTF-8 byte offset in the root's canonical logical sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "startScalar": {
+            "description": "Inclusive Unicode-scalar offset in the same sequence.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startByte",
+          "endByte",
+          "startScalar",
+          "endScalar"
         ]
       },
       "SearchMarkdownRange": {
@@ -18402,30 +22855,64 @@
         ]
       },
       "SearchOccurrence": {
-        "description": "One exact matcher occurrence in the canonical Markdown render.",
+        "description": "One exact matcher occurrence in either a logical root or the rendered document.",
         "type": "object",
         "properties": {
           "lineRanges": {
-            "description": "Exact ranges within the anchor-free Markdown lines used for presentation.",
+            "description": "Anchor-free presentation fragments for a render-only hit.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/SearchLineRange"
-            },
-            "minItems": 1
+            }
+          },
+          "logical": {
+            "description": "Root-relative logical UTF-8 byte and Unicode-scalar range, when available.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SearchLogicalRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "markdown": {
-            "description": "Location in the deterministic full Markdown render.",
-            "$ref": "#/$defs/SearchMarkdownRange"
+            "description": "Authoritative Markdown range for a render-only hit, including TLDR text.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SearchMarkdownRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "markdownProjections": {
+            "description": "Zero or more presentation-only placements in canonical Markdown v1.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchMarkdownRange"
+            }
           },
           "matchedText": {
-            "description": "Exact text consumed by the matcher.",
+            "description": "Bounded presentation echo; the logical range remains authoritative.",
             "type": "string"
+          },
+          "root": {
+            "description": "Response-local logical root containing the complete match, when available.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentRootKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
+        "additionalProperties": false,
         "required": [
-          "matchedText",
-          "markdown",
-          "lineRanges"
+          "matchedText"
         ]
       },
       "SearchQuery": {
@@ -18438,7 +22925,7 @@
             "default": "insensitive"
           },
           "contextLines": {
-            "description": "Neighboring rendered lines included around each match.",
+            "description": "Neighboring logical-root lines included around each match.",
             "type": "integer",
             "format": "uint16",
             "default": 0,
@@ -18446,7 +22933,7 @@
             "minimum": 0
           },
           "limit": {
-            "description": "Maximum number of matching line groups returned.",
+            "description": "Maximum number of logical occurrences returned.",
             "type": "integer",
             "format": "uint32",
             "default": 100,
@@ -18454,7 +22941,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching line groups skipped before collection.",
+            "description": "Number of logical occurrences skipped before collection.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -18571,15 +23058,15 @@
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains the coordinate basis.",
+        "description": "Text representation searched while Markdown remains available for presentation.",
         "oneOf": [
           {
-            "description": "Search the text visible after parsing `ManT`'s generated `CommonMark`.",
+            "description": "Search visible document text.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search the generated CommonMark bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }

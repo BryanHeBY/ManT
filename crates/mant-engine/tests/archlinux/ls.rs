@@ -8,6 +8,7 @@ use crate::fixtures::archlinux_manual;
 #[test]
 fn keeps_section_topology_and_definition_lists() {
     let document = archlinux_manual("ls");
+    let content = document.content();
     common::assert_section_topology("archlinux/ls", document, LS_SECTIONS);
 
     let description = common::section(document, "DESCRIPTION");
@@ -18,20 +19,22 @@ fn keeps_section_topology_and_definition_lists() {
         .find(|item| {
             item.terms
                 .iter()
-                .any(|term| common::inline_text(term).contains("--all"))
+                .any(|term| common::inline_text(content, term).contains("--all"))
         })
         .expect("ls --all option");
     assert!(
         all.terms
             .iter()
-            .any(|term| common::contains_strong(term, "-a, --all"))
+            .any(|term| common::contains_strong(content, term, "-a, --all"))
     );
 
     let exit = common::section(document, "Exit status:");
     let exit_items = common::definition_items(exit);
     assert_eq!(exit_items.len(), 3);
-    assert_eq!(common::inline_text(&exit_items[0].terms[0]), "0");
-    assert!(common::block_slice_text(&exit_items[2].description).contains("serious trouble"));
+    assert_eq!(common::inline_text(content, &exit_items[0].terms[0]), "0");
+    assert!(
+        common::block_slice_text(content, &exit_items[2].description).contains("serious trouble")
+    );
 }
 
 /// No roff escapes, HTML markup, or ASCII control characters leak into

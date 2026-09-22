@@ -149,7 +149,9 @@ fn query_validation_failure(error: QueryValidationError) -> Failure {
 
 fn projection_failure(error: ProjectionError) -> Failure {
     match error {
-        ProjectionError::MissingContent { .. } => Failure::operational(error),
+        ProjectionError::MissingContent { .. } | ProjectionError::ContentProjection => {
+            Failure::operational(error)
+        }
         ProjectionError::UnknownSelector { document, selector } => Failure::usage_lines(
             format!("document '{document}' has no outline node '{selector}'"),
             [format!(

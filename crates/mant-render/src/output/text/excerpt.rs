@@ -2,6 +2,7 @@
 
 use super::{blocks, body::render_tldr_text, document_label};
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole};
+use mant_ir::ContentContext;
 use mant_protocol::{ExcerptSelection, QueryExcerpt};
 
 /// Render selected query nodes as unstyled text with outline context.
@@ -39,55 +40,74 @@ fn render_excerpt_with(
         parts.push("Semantic entries are incomplete; use search to inspect unclassified or rejected content.".to_owned());
     }
     for selection in &excerpt.selections {
-        parts.push(render_selection(selection, decorate, styled));
+        parts.push(render_selection(
+            selection,
+            excerpt
+                .content_projection
+                .as_ref()
+                .map(mant_ir::ContentProjection::content),
+            decorate,
+            styled,
+        ));
     }
     join_parts(parts)
 }
 
-fn render_selection(
-    selection: &ExcerptSelection,
+fn render_selection<'a>(
+    selection: &'a ExcerptSelection,
+    content: Option<ContentContext<'a>>,
     decorate: &dyn Fn(TextPresentation, &str) -> String,
     styled: bool,
 ) -> String {
-    let context = decorate(
+    let breadcrumb = decorate(
         TextRole::Heading.into(),
         &render_outline_trail(selection.outline()),
     );
-    let names = styled.then(|| match selection {
-        ExcerptSelection::DocumentRoot { blocks, .. } => EntryStyleMap::for_blocks(blocks),
-        ExcerptSelection::DocumentSection { section, .. } => EntryStyleMap::for_section(section),
-        ExcerptSelection::DocumentEntry { entry, .. } => {
-            EntryStyleMap::for_blocks(std::slice::from_ref(entry))
-        }
-        ExcerptSelection::Tldr { .. } => EntryStyleMap::default(),
-    });
-    let renderer = blocks::BlockRenderer {
-        content: None,
-        names,
-        decorate,
-        locations: None,
-    };
     match selection {
         ExcerptSelection::Tldr { document, .. } => {
-            join_parts(vec![context, render_tldr_text(document)])
+            join_parts(vec![breadcrumb, render_tldr_text(document)])
         }
-        ExcerptSelection::DocumentRoot {
-            heading, blocks, ..
-        } => join_parts(vec![
-            context,
-            heading
-                .as_ref()
-                .map(|heading| renderer.inline_text(&heading.content, TextRole::Heading))
-                .unwrap_or_default(),
-            renderer.render_blocks(blocks, 0),
-        ]),
-        ExcerptSelection::DocumentSection { section, .. } => {
-            join_parts(vec![context, renderer.render_section(section, 0)])
+        selection => {
+            let content = content.expect("validated retained excerpt has a content projection");
+            let names = styled.then(|| match selection {
+                ExcerptSelection::DocumentRoot { blocks, .. } => {
+                    EntryStyleMap::for_blocks(content, blocks)
+                }
+                ExcerptSelection::DocumentSection { section, .. } => {
+                    EntryStyleMap::for_section(content, section)
+                }
+                ExcerptSelection::DocumentEntry { entry, .. } => {
+                    EntryStyleMap::for_blocks(content, std::slice::from_ref(entry))
+                }
+                ExcerptSelection::Tldr { .. } => unreachable!(),
+            });
+            let renderer = blocks::BlockRenderer {
+                content,
+                names,
+                decorate,
+                locations: None,
+            };
+            match selection {
+                ExcerptSelection::DocumentRoot {
+                    heading, blocks, ..
+                } => join_parts(vec![
+                    breadcrumb,
+                    heading
+                        .as_ref()
+                        .map(|heading| renderer.inline_text(&heading.content, TextRole::Heading))
+                        .unwrap_or_default(),
+                    renderer.render_blocks(blocks, 0),
+                ]),
+                ExcerptSelection::DocumentSection { section, .. } => {
+                    join_parts(vec![breadcrumb, renderer.render_section(section, 0)])
+                }
+                ExcerptSelection::DocumentEntry { entry, .. } => join_parts(vec![
+                    breadcrumb,
+                    renderer.render_blocks(std::slice::from_ref(entry), 0),
+                ]),
+                ExcerptSelection::Tldr { .. } => unreachable!(),
+            }
         }
-        ExcerptSelection::DocumentEntry { entry, .. } => join_parts(vec![
-            context,
-            renderer.render_blocks(std::slice::from_ref(entry), 0),
-        ]),
     }
 }
 

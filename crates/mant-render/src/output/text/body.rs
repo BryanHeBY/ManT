@@ -10,7 +10,9 @@ pub(in crate::output) fn render_located_blocks<'a>(
     decorate: &'a dyn Fn(TextPresentation, &str) -> String,
 ) -> String {
     blocks::BlockRenderer {
-        content: None,
+        content: locations
+            .content()
+            .expect("retained explanation block has a content projection"),
         names: None,
         locations: Some(locations),
         decorate,
@@ -80,7 +82,7 @@ fn render_query_body_with(
                 },
                 |heading| {
                     blocks::BlockRenderer {
-                        content: Some(document.content()),
+                        content: document.content(),
                         names: None,
                         decorate,
                         locations: None,
@@ -97,7 +99,7 @@ fn render_query_body_with(
     }
     if let Some(document) = &query.document {
         let renderer = blocks::BlockRenderer {
-            content: Some(document.content()),
+            content: document.content(),
             names: styled.then(|| EntryStyleMap::for_document(document)),
             decorate,
             locations: None,

@@ -1,5 +1,5 @@
 //! One DTO-only decision shared by Forms and body presentation.
-use mant_ir::{Block, EntryOwner};
+use mant_ir::{Block, ContentContext, EntryOwner};
 use mant_protocol::{EvidenceClass, ExplanationContent, ExplanationEvidence};
 
 pub(super) struct DefinitionDisplay<'a> {
@@ -8,7 +8,10 @@ pub(super) struct DefinitionDisplay<'a> {
 }
 
 impl<'a> DefinitionDisplay<'a> {
-    pub(super) fn new(evidence: &'a ExplanationEvidence) -> Option<Self> {
+    pub(super) fn new(
+        content_context: Option<ContentContext<'a>>,
+        evidence: &'a ExplanationEvidence,
+    ) -> Option<Self> {
         if !matches!(
             evidence.class,
             EvidenceClass::DirectEntry | EvidenceClass::RelatedEntry
@@ -20,6 +23,7 @@ impl<'a> DefinitionDisplay<'a> {
         else {
             return None;
         };
+        let content_context = content_context?;
         let owner = if evidence.content_omitted
             || !matches!(content, ExplanationContent::Entry { .. })
         {
@@ -32,7 +36,7 @@ impl<'a> DefinitionDisplay<'a> {
                 Block::List { items, .. } if items.len() == 1 => Some(EntryOwner::List(&items[0])),
                 _ => None,
             }
-            .filter(|owner| complete_forms(*owner, evidence))
+            .filter(|owner| complete_forms(content_context, *owner, evidence))
         };
         Some(Self { block, owner })
     }
@@ -46,20 +50,25 @@ impl<'a> DefinitionDisplay<'a> {
     }
 }
 
-fn complete_forms(owner: EntryOwner<'_>, evidence: &ExplanationEvidence) -> bool {
+fn complete_forms<'a>(
+    content: ContentContext<'a>,
+    owner: EntryOwner<'a>,
+    evidence: &ExplanationEvidence,
+) -> bool {
     let Some(facts) = owner.facts() else {
         return false;
     };
     if facts.id.as_str() != evidence.outline.node.id() {
         return false;
     }
-    let Some(forms) = owner.forms() else {
+    let Ok(Some(forms)) = content.entry_forms(owner) else {
         return false;
     };
     if forms.iter().next().is_none()
-        || forms
-            .iter()
-            .any(|form| mant_ir::inline_plain_text(form).trim().is_empty())
+        || forms.iter().any(|form| match content.plain_text(form) {
+            Ok(text) => text.trim().is_empty(),
+            Err(_) => true,
+        })
     {
         return false;
     }

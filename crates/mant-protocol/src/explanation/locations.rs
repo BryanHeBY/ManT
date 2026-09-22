@@ -1,6 +1,6 @@
 //! Conservative validation of response-relative locations from any producer.
 use super::{ExplanationBlockStep as Step, ExplanationContentRange, ExplanationFormRange};
-use mant_ir::{Block, Inline};
+use mant_ir::{Block, ContentContext, Inline};
 
 /// A borrowed original text root; not a flattened compound block or rendered line.
 #[derive(Debug, Clone, Copy)]
@@ -11,10 +11,10 @@ pub enum ExplanationTextRoot<'a> {
     Text(&'a str),
 }
 
-impl ExplanationTextRoot<'_> {
+impl<'a> ExplanationTextRoot<'a> {
     /// Canonical safe text whose Unicode scalars define the location domain.
     #[must_use]
-    pub fn safe_text(self) -> String {
+    pub fn safe_text(self, content: ContentContext<'a>) -> Option<String> {
         let mut text = String::new();
         let mut append = |value: &str| {
             text.extend(value.chars().map(|c| {
@@ -26,18 +26,16 @@ impl ExplanationTextRoot<'_> {
             }));
         };
         match self {
-            Self::Inline(nodes) => {
-                mant_ir::visit_inline_plain_text(nodes, &mut append);
-            }
+            Self::Inline(nodes) => content.visit_plain_text(nodes, &mut append).ok()?,
             Self::Text(value) => append(value),
         }
-        text
+        Some(text)
     }
 
-    fn scalar_len(self) -> usize {
+    fn scalar_len(self, content: ContentContext<'a>) -> Option<usize> {
         match self {
-            Self::Text(value) => value.chars().count(),
-            Self::Inline(nodes) => mant_ir::inline_scalar_len(nodes),
+            Self::Text(value) => Some(value.chars().count()),
+            Self::Inline(nodes) => content.scalar_len(nodes).ok(),
         }
     }
 }
@@ -47,9 +45,13 @@ impl ExplanationContentRange {
     /// Invalid paths, wrong owner kinds, empty/inverted or out-of-range spans
     /// return None. Consumers must not compensate by searching the text again.
     #[must_use]
-    pub fn resolve<'a>(&self, content: &'a Block) -> Option<ExplanationTextRoot<'a>> {
+    pub fn resolve<'a>(
+        &self,
+        context: ContentContext<'a>,
+        block: &'a Block,
+    ) -> Option<ExplanationTextRoot<'a>> {
         let root = match self {
-            Self::BlockText { path, .. } => match block_at(content, path)? {
+            Self::BlockText { path, .. } => match block_at(block, path)? {
                 Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
                     ExplanationTextRoot::Inline(children)
                 }
@@ -64,7 +66,7 @@ impl ExplanationContentRange {
                 term_index,
                 ..
             } => {
-                let Block::DefinitionList { items, .. } = block_at(content, path)? else {
+                let Block::DefinitionList { items, .. } = block_at(block, path)? else {
                     return None;
                 };
                 ExplanationTextRoot::Inline(
@@ -76,7 +78,7 @@ impl ExplanationContentRange {
             }
         };
         let range = self.char_range();
-        (range.start < range.end && range.end <= root.scalar_len()).then_some(root)
+        (range.start < range.end && range.end <= root.scalar_len(context)?).then_some(root)
     }
 
     /// Half-open scalar range, to be used only after target validation.
@@ -99,10 +101,14 @@ impl ExplanationContentRange {
 impl ExplanationFormRange {
     /// Resolve a complete, nonempty scalar range in returned metadata forms.
     #[must_use]
-    pub fn resolve<'a>(&self, forms: &'a [Vec<Inline>]) -> Option<&'a [Inline]> {
+    pub fn resolve<'a>(
+        &self,
+        content: ContentContext<'a>,
+        forms: &'a [Vec<Inline>],
+    ) -> Option<&'a [Inline]> {
         let form = forms.get(self.form_index as usize)?;
         (self.start_char < self.end_char
-            && self.end_char as usize <= ExplanationTextRoot::Inline(form).scalar_len())
+            && self.end_char as usize <= ExplanationTextRoot::Inline(form).scalar_len(content)?)
         .then_some(form)
     }
 }
@@ -119,44 +125,105 @@ mod tests {
     fn safe_text_preserves_scalar_positions_and_layout_controls() {
         let raw = "\0A\r\x1b\t\n\u{85}e\u{301}👩‍💻";
         let expected = "\u{fffd}A\u{fffd}\u{fffd}\t\n\u{fffd}e\u{301}👩‍💻";
+        let projection = mant_ir::ContentProjection {
+            content_store: mant_ir::ContentStore::default(),
+        };
         let root = ExplanationTextRoot::Text(raw);
-        assert_eq!(root.safe_text(), expected);
-        assert_eq!(root.scalar_len(), expected.chars().count());
+        assert_eq!(
+            root.safe_text(projection.content()).as_deref(),
+            Some(expected)
+        );
+        assert_eq!(
+            root.scalar_len(projection.content()),
+            Some(expected.chars().count())
+        );
         assert_eq!(raw.chars().count(), expected.chars().count());
     }
 
     #[test]
     fn safe_inline_text_uses_only_original_visible_leaves() {
+        let mut store = mant_ir::ContentStoreBuilder::new();
+        let owner = store.push_owner(
+            mant_ir::ContentOwnerKind::Content,
+            mant_ir::Provenance::Unknown,
+        );
+        let root = store.push_root(
+            owner,
+            mant_ir::ContentRootKind::Body,
+            mant_ir::Provenance::Unknown,
+        );
+        let point = store.push_point(
+            root,
+            mant_ir::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+            0,
+            mant_ir::Provenance::Unknown,
+        );
+        let empty = store.push_text(
+            root,
+            String::new(),
+            None,
+            mant_ir::ContentStyle::default(),
+            None,
+            None,
+            mant_ir::Provenance::Unknown,
+        );
+        let link = store.push_link(
+            owner,
+            mant_ir::LinkTarget::External {
+                uri: "https://not-visible.test".into(),
+            },
+            Some("not visible".into()),
+            mant_ir::Provenance::Unknown,
+        );
+        let code = store.push_text(
+            root,
+            "e\u{301}👩‍💻\r".into(),
+            None,
+            mant_ir::ContentStyle::default(),
+            None,
+            Some(link),
+            mant_ir::Provenance::Unknown,
+        );
+        let hard_break = store.push_hard_break(root, None, mant_ir::Provenance::Unknown);
+        let tail = store.push_text(
+            root,
+            "尾\t\0".into(),
+            None,
+            mant_ir::ContentStyle::default(),
+            None,
+            None,
+            mant_ir::Provenance::Unknown,
+        );
         let nodes = vec![
-            Inline::anchor("invisible-target"),
+            Inline::anchor(point, "invisible-target"),
             Inline::Strong {
                 children: vec![
-                    Inline::Text {
-                        value: String::new(),
-                    },
+                    Inline::Text { content: empty },
                     Inline::Emphasis {
                         children: vec![Inline::Link {
-                            target: mant_ir::LinkTarget::External {
-                                uri: "https://not-visible.test".into(),
-                            },
-                            title: Some("not visible".into()),
-                            children: vec![Inline::Code {
-                                value: "e\u{301}👩‍💻\r".into(),
-                            }],
+                            occurrence: link,
+                            children: vec![Inline::Code { content: code }],
                         }],
                     },
                 ],
             },
-            Inline::LineBreak,
-            Inline::Text {
-                value: "尾\t\0".into(),
-            },
+            Inline::LineBreak { atom: hard_break },
+            Inline::Text { content: tail },
             Inline::Emphasis { children: vec![] },
         ];
+        let projection = mant_ir::ContentProjection {
+            content_store: store.finish(),
+        };
         let expected = "e\u{301}👩‍💻\u{fffd}\n尾\t\u{fffd}";
         let root = ExplanationTextRoot::Inline(&nodes);
-        assert_eq!(root.safe_text(), expected);
-        assert_eq!(root.scalar_len(), expected.chars().count());
+        assert_eq!(
+            root.safe_text(projection.content()).as_deref(),
+            Some(expected)
+        );
+        assert_eq!(
+            root.scalar_len(projection.content()),
+            Some(expected.chars().count())
+        );
 
         let form_range = ExplanationFormRange {
             form_index: 0,
@@ -164,8 +231,15 @@ mod tests {
             end_char: u32::try_from(expected.chars().count()).expect("small fixture"),
         };
         let forms = vec![nodes];
-        let resolved = form_range.resolve(&forms).expect("unchanged scalar domain");
+        let resolved = form_range
+            .resolve(projection.content(), &forms)
+            .expect("unchanged scalar domain");
         assert!(std::ptr::eq(resolved, forms[0].as_slice()));
-        assert_eq!(ExplanationTextRoot::Inline(resolved).safe_text(), expected);
+        assert_eq!(
+            ExplanationTextRoot::Inline(resolved)
+                .safe_text(projection.content())
+                .as_deref(),
+            Some(expected)
+        );
     }
 }

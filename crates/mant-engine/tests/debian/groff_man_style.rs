@@ -6,7 +6,7 @@
 
 use crate::common::{self, DEBIAN_GROFF_MAN_STYLE_SECTIONS};
 use crate::fixtures::debian_manual;
-use mant_ir::Inline;
+use mant_ir::InlineView;
 
 /// 8-section topology (Name through See also).
 #[test]
@@ -23,7 +23,7 @@ fn keeps_complete_section_topology() {
 #[test]
 fn does_not_have_duplicate_vertical_spacing() {
     common::assert_bounded_vertical_spacing(
-        &debian_manual("groff_man_style").sections,
+        debian_manual("groff_man_style"),
         "debian/groff_man_style",
     );
 }
@@ -36,14 +36,11 @@ fn keeps_mr_fallbacks_as_typed_manual_references() {
     let document = debian_manual("groff_man_style");
     let mut references = Vec::new();
     common::visit_document_inlines(document, &mut |inline| {
-        if let Inline::Link {
-            target:
-                mant_ir::LinkTarget::Manual {
-                    name,
-                    manual_section: Some(manual_section),
-                },
-            ..
-        } = inline
+        if let Ok(InlineView::Link(link)) = document.content().inline(inline)
+            && let mant_ir::LinkTarget::Manual {
+                name,
+                manual_section: Some(manual_section),
+            } = link.target()
         {
             references.push((name.clone(), manual_section.clone()));
         }

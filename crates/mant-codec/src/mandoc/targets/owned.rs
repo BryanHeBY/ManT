@@ -1,5 +1,5 @@
 //! Keep target spelling and its chosen native owner together while pending.
-use super::{Block, Inline, LayoutHint, SourceSpan, attach_targets};
+use super::{Block, LayoutHint, SourceSpan, attach_targets};
 
 #[derive(Clone, Debug)]
 pub(in crate::mandoc) struct OwnedTarget {
@@ -10,6 +10,7 @@ pub(in crate::mandoc) struct OwnedTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mant_ir::Inline;
 
     #[test]
     fn pending_batches_preserve_anchor_order_and_owner_provenance() {
@@ -27,26 +28,55 @@ mod tests {
         pending.queue(["first".into(), "alias".into()], source(3));
         pending.queue(["first".into(), "last".into()], source(9));
         let mut blocks = Vec::new();
-        pending.attach_leading(&mut blocks, LayoutHint::default());
+        let content = crate::mandoc::content::LegacyContent::default();
+        pending.attach_leading(&content, &mut blocks, LayoutHint::default());
 
         assert!(pending.is_empty());
+        let [
+            Block::Paragraph {
+                children,
+                layout,
+                source: owner,
+            },
+        ] = blocks.as_slice()
+        else {
+            panic!("one target paragraph: {blocks:?}");
+        };
+        assert_eq!(*layout, LayoutHint::default());
+        // Reverse-prepend creates the fallback at the last batch; prepending
+        // earlier anchors must not overwrite that source.
+        assert_eq!(*owner, source(9));
         assert_eq!(
-            blocks,
-            [Block::Paragraph {
-                children: vec![
-                    Inline::anchor_at("first", source(3)),
-                    Inline::anchor_at("alias", source(3)),
-                    Inline::anchor_at("last", source(9)),
-                ],
-                layout: LayoutHint::default(),
-                // Reverse-prepend creates the fallback at the last batch;
-                // prepending earlier anchors must not overwrite that source.
-                source: source(9),
-            }]
+            children
+                .iter()
+                .filter_map(|inline| match inline {
+                    Inline::Anchor { id, .. } => Some(id.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            ["first", "alias", "last"]
         );
         let attached = blocks.clone();
-        pending.attach_leading(&mut blocks, LayoutHint::default());
+        pending.attach_leading(&content, &mut blocks, LayoutHint::default());
         assert_eq!(blocks, attached);
+
+        let store = content.finish();
+        let view = store.content();
+        let Block::Paragraph { children, .. } = &blocks[0] else {
+            unreachable!()
+        };
+        let lines = children
+            .iter()
+            .filter_map(|inline| match inline {
+                Inline::Anchor { point, .. } => view.point(*point),
+                _ => None,
+            })
+            .map(|point| match point.provenance {
+                mant_ir::Provenance::Authored { span } => span.line,
+                _ => 0,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(lines, [3, 3, 9]);
     }
 }
 
@@ -55,8 +85,8 @@ impl OwnedTarget {
         Self { name, owner_source }
     }
 
-    pub(in crate::mandoc) fn into_inline(self) -> Inline {
-        Inline::anchor_at(self.name, self.owner_source)
+    pub(in crate::mandoc) fn into_draft(self) -> crate::mandoc::inline::DraftInline {
+        crate::mandoc::inline::DraftInline::anchor_at(self.name, self.owner_source)
     }
 }
 
@@ -102,13 +132,14 @@ impl PendingTargets {
 
     pub(in crate::mandoc) fn attach_leading(
         &mut self,
+        content: &crate::mandoc::content::LegacyContent,
         blocks: &mut Vec<Block>,
         layout: LayoutHint,
     ) {
         // Each call prepends. Reverse batches, not names within a batch, so
         // both source order and the existing fallback owner remain unchanged.
         for batch in std::mem::take(&mut self.batches).into_iter().rev() {
-            attach_targets(blocks, batch.names, layout, batch.owner_source);
+            attach_targets(content, blocks, batch.names, layout, batch.owner_source);
         }
     }
 }

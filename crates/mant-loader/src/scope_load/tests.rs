@@ -189,11 +189,17 @@ fn decoded_document_paths_still_respect_the_registered_namespace() {
         let Block::Paragraph { children, .. } = &document.blocks[0] else {
             panic!("paragraph")
         };
-        let Inline::Link { target, .. } = &children[0] else {
+        let Inline::Link { occurrence, .. } = &children[0] else {
             panic!("link")
         };
+        let target = document
+            .content()
+            .occurrence(*occurrence)
+            .unwrap()
+            .target
+            .clone();
         let reference = ScopeReference {
-            target: DocumentReference::from_link_target(target).unwrap(),
+            target: DocumentReference::from_link_target(&target).unwrap(),
             kind: DocumentEdgeKind::Document,
             source_offset: None,
             sequence: 0,

@@ -1,20 +1,40 @@
 //! Query-to-report contracts: query DTOs remain useful after source disposal.
 use mant_ir::ResolvedContent;
 use mant_ir::{
-    Diagnostic, DiagnosticLevel, Document, DocumentMeta, Inline, LinkTarget, ReferenceScope,
-    Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Diagnostic,
+    DiagnosticLevel, Document, DocumentMeta, Heading, Inline, LinkTarget, Provenance,
+    ReferenceScope, Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey,
+    SourceRecord,
 };
 use mant_protocol::{
     ReferenceInventory, ReferenceProjection, ReferenceProjectionMode, ReferenceTargetType,
 };
 use mant_query::{build_outline, project_references, select_excerpt};
-use serde_json::{Value, json};
 
-fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
+fn section(
+    builder: &mut ContentStoreBuilder,
+    id: &str,
+    title: &str,
+    children: Vec<Section>,
+) -> Section {
+    let owner = builder.push_owner(ContentOwnerKind::Section, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Heading, Provenance::Unknown);
+    let content = builder.push_text(
+        root,
+        title.to_owned(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
     Section {
         id: id.to_owned().into(),
         fragment_aliases: Vec::new(),
-        heading: title.into(),
+        heading: Heading {
+            content: vec![Inline::Text { content }],
+            source: None,
+        },
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children,
@@ -23,6 +43,12 @@ fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
 }
 
 fn query() -> ResolvedContent {
+    let mut builder = ContentStoreBuilder::new();
+    let name = section(&mut builder, "name-1", "NAME", Vec::new());
+    let common = section(&mut builder, "common-3", "Common options", Vec::new());
+    let other = section(&mut builder, "other-4", "Other options", Vec::new());
+    let options = section(&mut builder, "options-2", "OPTIONS", vec![common, other]);
+    let files = section(&mut builder, "files-5", "FILES", Vec::new());
     ResolvedContent {
         address: None,
         label: "demo".to_owned(),
@@ -40,6 +66,7 @@ fn query() -> ResolvedContent {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store: builder.finish(),
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()
@@ -47,27 +74,62 @@ fn query() -> ResolvedContent {
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: Vec::new(),
-            sections: vec![
-                section("name-1", "NAME", Vec::new()),
-                section(
-                    "options-2",
-                    "OPTIONS",
-                    vec![
-                        section("common-3", "Common options", Vec::new()),
-                        section("other-4", "Other options", Vec::new()),
-                    ],
-                ),
-                section("files-5", "FILES", Vec::new()),
-            ],
+            sections: vec![name, options, files],
         }),
         tldr: None,
     }
 }
 
-fn document(children: Vec<Value>) -> Document {
-    let mut value = json!({"parser":null,"sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],"rootSource":1,"meta":{},"sections":[],"blocks":[{"type":"paragraph","children":[]}]});
-    value["blocks"][0]["children"] = children.into();
-    serde_json::from_value(value).unwrap()
+fn document() -> Document {
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let occurrence = builder.push_link(
+        owner,
+        LinkTarget::Document {
+            name: "target".into(),
+            fragment: Some("Mixed.Target".into()),
+        },
+        None,
+        Provenance::Unknown,
+    );
+    let label = builder.push_text(
+        root,
+        "label\u{1b}[2J".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(occurrence),
+        Provenance::Unknown,
+    );
+    Document {
+        parser: None,
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Anonymous {
+                name: "test".into(),
+            },
+            format: SourceFormat::Markdown,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
+        content_store: builder.finish(),
+        meta: DocumentMeta::default(),
+        heading: None,
+        fragment_aliases: Vec::new(),
+        diagnostics: Vec::new(),
+        sections: Vec::new(),
+        blocks: vec![mant_ir::Block::Paragraph {
+            children: vec![Inline::Link {
+                occurrence,
+                children: vec![Inline::Text { content: label }],
+            }],
+            layout: mant_ir::LayoutHint::default(),
+            source: None,
+        }],
+    }
 }
 fn all() -> ReferenceProjection {
     ReferenceProjection {
@@ -196,7 +258,9 @@ fn snapshot_relative_positions_can_remain_legal_after_an_unrelated_insertion() {
         .origin
         .resolve_link(after.document.as_ref().unwrap())
         .unwrap();
-    assert!(matches!(target,Inline::Link{target:LinkTarget::Document{name,..},..} if name=="new"));
+    assert!(
+        matches!(after.document.as_ref().unwrap().content().link(target).unwrap().unwrap().target(), LinkTarget::Document { name, .. } if name == "new")
+    );
     let excerpt =
         mant_query::select_excerpt(&after, std::slice::from_ref(&old_record.source_read)).unwrap();
     assert!(mant_render::render_excerpt_text(&excerpt).contains("New"));
@@ -210,9 +274,7 @@ fn snapshot_relative_positions_can_remain_legal_after_an_unrelated_insertion() {
 
 #[test]
 fn offline_reference_rendering_uses_only_serialized_facts_and_preserves_decorated_text() {
-    let document = document(vec![
-        json!({"type":"link","target":{"kind":"document","name":"target","fragment":"Mixed.Target"},"children":[{"type":"text","value":"label\u{1b}[2J"}]}),
-    ]);
+    let document = document();
     let inventory = project_references(&document, None, ReferenceScope::Document, &all());
     let wire = serde_json::to_vec(&inventory).unwrap();
     drop(inventory);

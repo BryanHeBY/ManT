@@ -17,7 +17,7 @@ fn paragraph(children: Vec<Inline>) -> Block {
     }
 }
 
-fn manual(sections: Vec<Section>) -> Document {
+fn manual() -> Document {
     Document {
         heading: None,
         parser: None,
@@ -32,19 +32,25 @@ fn manual(sections: Vec<Section>) -> Document {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
+        content_store: mant_ir::ContentStore::default(),
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
         blocks: Vec::new(),
-        sections,
+        sections: Vec::new(),
     }
 }
 
-fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
+fn section(
+    document: &mut Document,
+    title: &str,
+    blocks: Vec<Block>,
+    children: Vec<Section>,
+) -> Section {
     Section {
         id: title.to_lowercase().into(),
         fragment_aliases: Vec::new(),
-        heading: title.into(),
+        heading: super::heading(document, title),
         spacing_before_lines: 0,
         blocks,
         children,
@@ -54,10 +60,13 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 
 #[test]
 fn renders_tldr_before_manual_and_resolves_placeholders() {
+    let mut document = manual();
+    let name = section(&mut document, "NAME", Vec::new(), Vec::new());
+    document.sections.push(name);
     let query = ResolvedContent {
         address: None,
         label: "ls".to_owned(),
-        document: Some(manual(vec![section("NAME", Vec::new(), Vec::new())])),
+        document: Some(document),
         tldr: Some(TldrDocument {
             title: "ls".to_owned(),
             description: vec!["List directory contents.".to_owned()],
@@ -102,11 +111,12 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
 
 #[test]
 fn renders_and_selects_content_before_the_first_heading() {
-    let mut document = manual(vec![section("GUIDE", Vec::new(), Vec::new())]);
+    let mut document = manual();
+    let guide = section(&mut document, "GUIDE", Vec::new(), Vec::new());
+    document.sections.push(guide);
     document.sources[0].format = SourceFormat::Markdown;
-    document.blocks = vec![paragraph(vec![Inline::Text {
-        value: "Document preface.".to_owned(),
-    }])];
+    let preface = super::text_inline(&mut document, "Document preface.", false);
+    document.blocks = vec![paragraph(vec![preface])];
     let query = ResolvedContent {
         address: None,
         label: "guide.md".to_owned(),
@@ -135,12 +145,12 @@ fn renders_and_selects_content_before_the_first_heading() {
 
 #[test]
 fn uses_markdown_document_title_without_changing_its_logical_label() {
-    let mut document = manual(Vec::new());
+    let mut document = manual();
     document.sources[0].format = SourceFormat::Markdown;
-    document.heading = Some("Actual Doc Title".into());
-    document.blocks = vec![paragraph(vec![Inline::Text {
-        value: "body".to_owned(),
-    }])];
+    let title = super::heading(&mut document, "Actual Doc Title");
+    document.heading = Some(title);
+    let body = super::text_inline(&mut document, "body", false);
+    document.blocks = vec![paragraph(vec![body])];
     let query = ResolvedContent {
         address: None,
         label: "filename.md".to_owned(),
@@ -167,21 +177,24 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
         address: None,
         label: "demo".to_owned(),
         document: Some({
-            let mut document = manual(vec![section(
-                "OPTIONS",
-                vec![paragraph(vec![Inline::Text {
-                    value: "parent details".to_owned(),
+            let mut document = manual();
+            let child_details = super::text_inline(&mut document, "child details", false);
+            let child = section(
+                &mut document,
+                "Common options",
+                vec![paragraph(vec![Inline::Strong {
+                    children: vec![child_details],
                 }])],
-                vec![section(
-                    "Common options",
-                    vec![paragraph(vec![Inline::Strong {
-                        children: vec![Inline::Text {
-                            value: "child details".to_owned(),
-                        }],
-                    }])],
-                    Vec::new(),
-                )],
-            )]);
+                Vec::new(),
+            );
+            let parent_details = super::text_inline(&mut document, "parent details", false);
+            let parent = section(
+                &mut document,
+                "OPTIONS",
+                vec![paragraph(vec![parent_details])],
+                vec![child],
+            );
+            document.sections.push(parent);
             document.meta.manual_section = Some("1".to_owned());
             document
         }),

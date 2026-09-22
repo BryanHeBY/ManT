@@ -1,4 +1,5 @@
 //! Definition normalize policy; coordinated by the parent discovery passes.
+#![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use super::{context::DefinitionContext, syntax::is_inferred_head};
 use mant_ir::geometry::{block_layout, block_layout_mut};
 use mant_ir::{Block, DefinitionItem, LayoutHint};
@@ -88,19 +89,23 @@ fn last_definition_mut(block: &mut Block) -> Option<&mut DefinitionItem> {
 /// layout, but neither representation is a definition list on its own.
 /// Recognising the shared visible shape here keeps identity independent of
 /// the source macro set or source parser used by the query pipeline.
-pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: DefinitionContext) {
+pub(super) fn normalize_hanging_definitions(
+    content: mant_ir::ContentContext<'_>,
+    blocks: &mut Vec<Block>,
+    context: DefinitionContext,
+) {
     let mut pending: VecDeque<Block> = mem::take(blocks).into();
     let mut normalized = Vec::with_capacity(pending.len());
 
     while let Some(block) = pending.pop_front() {
-        let Some(term_indent) = hanging_term_indent(&block, context) else {
+        let Some(term_indent) = hanging_term_indent(content, &block, context) else {
             normalized.push(block);
             continue;
         };
 
         let mut description = Vec::new();
         while let Some(next) = pending.front() {
-            if hanging_term_indent(next, context) == Some(term_indent) {
+            if hanging_term_indent(content, next, context) == Some(term_indent) {
                 break;
             }
             if pending
@@ -170,14 +175,18 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
     *blocks = normalized;
 }
 
-fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<i32> {
+fn hanging_term_indent(
+    content: mant_ir::ContentContext<'_>,
+    block: &Block,
+    context: DefinitionContext,
+) -> Option<i32> {
     let Block::Paragraph {
         children, layout, ..
     } = block
     else {
         return None;
     };
-    let recognized = is_inferred_head(children, context);
+    let recognized = is_inferred_head(content, children, context);
     recognized.then_some(layout.indent_columns)
 }
 
@@ -190,11 +199,12 @@ fn shift_block_indent(block: &mut Block, origin: i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_content as fixture;
     use mant_ir::Inline;
 
     fn paragraph(text: &str, indent_columns: i32) -> Block {
         Block::Paragraph {
-            children: vec![Inline::Text { value: text.into() }],
+            children: vec![fixture::text(text)],
             layout: LayoutHint {
                 indent_columns,
                 spacing_before_lines: 0,
@@ -210,9 +220,7 @@ mod tests {
             items: vec![DefinitionItem {
                 source: None,
                 entry: None,
-                terms: vec![vec![Inline::Text {
-                    value: "--owner".into(),
-                }]],
+                terms: vec![vec![fixture::text("--owner")]],
                 description: vec![paragraph("Initial description.", 4)],
                 layout: mant_ir::DefinitionLayout {
                     inline_term: false,
@@ -301,9 +309,8 @@ mod tests {
                         unreachable!()
                     };
                     items[0].layout.inline_term = inline_term;
-                    items[0].terms = vec![vec![Inline::Text {
-                        value: label.into(),
-                    }]];
+                    items[0].terms = vec![vec![fixture::text(label)]];
+                    let expected_terms = items[0].terms.clone();
                     let mut blocks = vec![
                         owner,
                         space(1),
@@ -326,12 +333,7 @@ mod tests {
                     };
                     assert_eq!(items[0].description.len(), 8);
                     assert_eq!(items[0].layout.inline_term, inline_term);
-                    assert_eq!(
-                        items[0].terms,
-                        [vec![Inline::Text {
-                            value: label.into()
-                        }]]
-                    );
+                    assert_eq!(items[0].terms, expected_terms);
                     let once = blocks.clone();
                     normalize_definition_nesting(&mut blocks);
                     assert_eq!(blocks, once);
@@ -371,7 +373,7 @@ mod tests {
             paragraph("Next description.", 4),
             space(5),
         ];
-        normalize_hanging_definitions(&mut blocks, DefinitionContext::Generic);
+        normalize_hanging_definitions(fixture::content(), &mut blocks, DefinitionContext::Generic);
         assert_eq!(blocks.len(), 4);
         assert_eq!(blocks[1], space(3));
         assert_eq!(blocks[3], space(5));
@@ -388,7 +390,11 @@ mod tests {
             let mut blocks = vec![paragraph("--option", 0), space(spacing)];
             blocks.push(paragraph("Description.", 4));
             let before = absolute_geometry(&blocks);
-            normalize_hanging_definitions(&mut blocks, DefinitionContext::Parameters);
+            normalize_hanging_definitions(
+                fixture::content(),
+                &mut blocks,
+                DefinitionContext::Parameters,
+            );
             assert_eq!(absolute_geometry(&blocks), before, "spacing={spacing}");
             let Block::DefinitionList { items, .. } = &blocks[0] else {
                 panic!("inferred definition")
@@ -409,7 +415,11 @@ mod tests {
                         paragraph("Description.", origin + offset),
                     ];
                     let before = absolute_geometry(&blocks);
-                    normalize_hanging_definitions(&mut blocks, DefinitionContext::Parameters);
+                    normalize_hanging_definitions(
+                        fixture::content(),
+                        &mut blocks,
+                        DefinitionContext::Parameters,
+                    );
                     let Block::DefinitionList { items, .. } = &blocks[0] else {
                         panic!("inferred definition")
                     };

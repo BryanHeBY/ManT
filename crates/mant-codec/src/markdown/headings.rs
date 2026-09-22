@@ -6,11 +6,17 @@ use mant_ir::{
 use pulldown_cmark::HeadingLevel;
 use std::collections::{HashMap, HashSet};
 
-pub(super) fn take_explicit_heading_id(children: &mut Vec<Inline>) -> Option<String> {
-    let (id, empty) = {
-        let Inline::Text { value } = children.last_mut()? else {
+use super::content::MarkdownContent;
+
+pub(super) fn take_explicit_heading_id(
+    content_store: &mut MarkdownContent,
+    children: &mut [Inline],
+) -> Option<String> {
+    let id = {
+        let Inline::Text { content } = children.last_mut()? else {
             return None;
         };
+        let value = content_store.text(*content)?;
         let trimmed = value.trim_end();
         let opening = trimmed.rfind("{#")?;
         if !trimmed.ends_with('}') {
@@ -35,12 +41,13 @@ pub(super) fn take_explicit_heading_id(children: &mut Vec<Inline>) -> Option<Str
             return None;
         }
         let title_end = trimmed[..opening].trim_end().len();
-        value.truncate(title_end);
-        (id, value.is_empty())
+        let replacement = value[..title_end].to_owned();
+        assert!(
+            content_store.replace_text(content, replacement),
+            "a Markdown heading text leaf is one complete content atom"
+        );
+        id
     };
-    if empty {
-        children.pop();
-    }
     Some(id)
 }
 
@@ -138,7 +145,23 @@ impl SectionIds {
     }
 
     pub(super) fn resolve_links(&self, document: &mut Document) {
-        LocalLinkResolver::new(&self.targets).visit_document_mut(document);
+        let Document {
+            content_store,
+            heading,
+            blocks,
+            sections,
+            ..
+        } = document;
+        let mut resolver = LocalLinkResolver::new(&self.targets, content_store);
+        if let Some(heading) = heading {
+            resolver.visit_heading_mut(heading);
+        }
+        for block in blocks {
+            resolver.visit_block_mut(block);
+        }
+        for section in sections {
+            resolver.visit_section_mut(section);
+        }
     }
 
     pub(super) fn allocate(&mut self, title: &str, explicit: Option<&str>) -> String {
@@ -236,20 +259,28 @@ fn slug(value: &str) -> String {
 
 struct LocalLinkResolver<'targets> {
     targets: &'targets HashMap<String, String>,
+    content_store: &'targets mut mant_ir::ContentStore,
 }
 
 impl<'targets> LocalLinkResolver<'targets> {
-    fn new(targets: &'targets HashMap<String, String>) -> Self {
-        Self { targets }
+    fn new(
+        targets: &'targets HashMap<String, String>,
+        content_store: &'targets mut mant_ir::ContentStore,
+    ) -> Self {
+        Self {
+            targets,
+            content_store,
+        }
     }
 }
 
 impl VisitMut for LocalLinkResolver<'_> {
     fn visit_inline_mut(&mut self, inline: &mut Inline) {
-        if let Inline::Link {
-            target: mant_ir::LinkTarget::Section { id },
-            ..
-        } = inline
+        if let Inline::Link { occurrence, .. } = inline
+            && let Some(mant_ir::LinkOccurrence {
+                target: mant_ir::LinkTarget::Section { id },
+                ..
+            }) = self.content_store.link_mut(*occurrence)
         {
             // URI syntax and percent decoding were consumed by link_target.
             // The remaining fragment is an exact identity, not another URI

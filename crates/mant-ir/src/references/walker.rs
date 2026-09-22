@@ -72,6 +72,7 @@ struct Scan<'ir, F> {
     blocks: Vec<Step>,
     path: Vec<u32>,
     owners: OwnerFrames<'ir>,
+    seen_links: Vec<bool>,
 }
 
 impl<'ir, F> Scan<'ir, F>
@@ -94,6 +95,7 @@ where
             blocks: Vec::new(),
             path: Vec::new(),
             owners: OwnerFrames::default(),
+            seen_links: vec![false; content.occurrence_count()],
         }
     }
 
@@ -338,6 +340,7 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn inlines(
         &mut self,
         nodes: &'ir [Inline],
@@ -370,6 +373,21 @@ where
                 && self.options.links.contains(link.target())
             {
                 self.charge(self.depth(), 0, target_bytes(link.target()))?;
+                let occurrence_index = usize::try_from(link.occurrence().get() - 1)
+                    .map_err(|_| ReferenceScanStop::InvalidRoot)?;
+                let Some(seen) = self.seen_links.get_mut(occurrence_index) else {
+                    return Err(ReferenceScanStop::InvalidRoot);
+                };
+                let first_fragment = !*seen;
+                *seen = true;
+                if !first_fragment {
+                    match view {
+                        InlineView::Link(link) => self.inlines(link.children(), root, source)?,
+                        _ => unreachable!("link view remains a link"),
+                    }
+                    self.path.pop();
+                    continue;
+                }
                 // Summary does not inspect labels. A materializing callback
                 // charges actual label work against this same budget.
                 // Encoded-size validation walks the whole current position;
@@ -404,6 +422,8 @@ where
                 self.report.occurrences += 1;
                 if (self.visit)(
                     NavigationEvent::Link(LinkOccurrenceRef {
+                        key: link.occurrence(),
+                        content: self.content,
                         link: node,
                         target: link.target(),
                         label: link.children(),

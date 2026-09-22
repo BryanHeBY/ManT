@@ -7,7 +7,8 @@ use crate::{OutlineTrail, Producer, SourceContext};
 pub use classification::*;
 pub use locations::ExplanationTextRoot;
 use mant_ir::{
-    Diagnostic, DocumentAddress, EntryKind, Inline, NameCase, NodeId, SourceSpan, ValueDomain,
+    ContentProjection, Diagnostic, DocumentAddress, EntryKind, Inline, NameCase, NodeId,
+    SourceSpan, ValueDomain,
 };
 pub use matches::*;
 use schemars::JsonSchema;
@@ -311,6 +312,9 @@ pub enum ExplanationContent {
 pub struct QueryExplanation {
     /// Source-qualified context shared by the direct owners on this page.
     pub supports: Vec<ExplanationSupport>,
+    /// Closed response-local content store shared by supports and evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_projection: Option<ContentProjection>,
     /// Normative category-first ordering, before result pagination.
     pub order: EvidenceOrder,
     /// Per-class collected and returned owners; zero categories remain present.
@@ -372,6 +376,8 @@ pub struct ExplanationTruncation {
 )]
 struct QueryExplanationWire {
     pub supports: Vec<ExplanationSupport>,
+    #[serde(default)]
+    pub content_projection: Option<ContentProjection>,
     pub order: EvidenceOrder,
     pub counts: EvidenceCounts,
     pub schema: ExplanationSchema,
@@ -400,6 +406,7 @@ impl<'de> Deserialize<'de> for QueryExplanation {
             .validate_references()
             .map_err(serde::de::Error::custom)?;
         validate_explanation_sources(
+            value.content_projection.as_ref(),
             value.source_context.as_ref(),
             &value.diagnostics,
             &value.supports,
@@ -411,6 +418,7 @@ impl<'de> Deserialize<'de> for QueryExplanation {
 }
 
 pub(crate) fn validate_explanation_sources<'a>(
+    content_projection: Option<&'a ContentProjection>,
     source_context: Option<&SourceContext>,
     diagnostics: &[Diagnostic],
     supports: &[ExplanationSupport],
@@ -438,6 +446,10 @@ pub(crate) fn validate_explanation_sources<'a>(
         root_source: source_context
             .as_ref()
             .map_or(mant_ir::SourceKey::FIRST, |context| context.root_source),
+        content_store: content_projection
+            .map_or_else(mant_ir::ContentStore::default, |projection| {
+                projection.content_store.clone()
+            }),
         meta: mant_ir::DocumentMeta::default(),
         heading: None,
         fragment_aliases: Vec::new(),
@@ -471,6 +483,7 @@ pub(crate) fn validate_explanation_sources<'a>(
     if source_context.is_none() && mant_ir::document_has_source_spans(&document) {
         return Err("source-qualified explanation content requires a source context".to_owned());
     }
+    crate::document::validate_projected_content(content_projection, None, &document.blocks, &[])?;
     match source_context {
         Some(_) => mant_ir::validate_document_sources(&document).map_err(|error| error.to_string()),
         None => Ok(()),

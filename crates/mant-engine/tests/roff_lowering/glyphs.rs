@@ -28,7 +28,7 @@ fn lowers_documented_mdoc_delimiters_and_common_roff_characters() {
         .blocks
         .iter()
         .map(|block| match block {
-            Block::Paragraph { children, .. } => inline_text(children),
+            Block::Paragraph { children, .. } => inline_text(document.content(), children),
             _ => String::new(),
         })
         .collect::<Vec<_>>()
@@ -52,7 +52,10 @@ fn lowers_documented_mdoc_delimiters_and_common_roff_characters() {
     let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
         panic!("expected one special-character paragraph");
     };
-    assert_eq!(inline_text(children), "– — ' \" © ® ™ • ^ ~ \\");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "– — ' \" © ® ™ • ^ ~ \\"
+    );
 }
 
 #[test]
@@ -71,7 +74,7 @@ unknown=\\[future-glyph]\n",
         panic!("expected one character paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "at=@ ga=` oq=‘ arrow=→ larrow=← mu=× de=° pl=+ dg=† ua=↑ da=↓ lB=[ rB=] unknown=\\[future-glyph]"
     );
 }
@@ -90,7 +93,7 @@ fn lowers_documented_groff_caron_spellings_missing_from_mandoc() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one character paragraph");
     };
-    assert_eq!(inline_text(children), "Čč Šš Žž");
+    assert_eq!(inline_text(document.content(), children), "Čč Šš Žž");
 }
 
 #[test]
@@ -104,7 +107,7 @@ fn lowers_historical_single_character_escapes_through_the_pinned_catalog() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one character paragraph");
     };
-    assert_eq!(inline_text(children), "`left´right _");
+    assert_eq!(inline_text(document.content(), children), "`left´right _");
 }
 
 #[test]
@@ -119,7 +122,7 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one Unicode paragraph");
     };
-    let rendered = inline_text(children);
+    let rendered = inline_text(document.content(), children);
     assert!(rendered.contains("Raw UTF-8: Mašláňová café — naïve."));
     assert!(rendered.contains("Escaped: Mašlá and — dash."));
     assert!(!rendered.contains(r"\[u"));

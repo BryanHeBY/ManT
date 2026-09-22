@@ -4,6 +4,72 @@ use crate::{ContentBlockStep as Step, Document, EntryOwnerLocationRef, Inline, L
 use serde_json::{Value, json};
 use std::ops::ControlFlow;
 
+#[test]
+fn one_occurrence_spanning_two_roots_has_one_bounded_complete_label() {
+    use crate::{ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Provenance};
+
+    let mut document = document(Vec::new(), Vec::new());
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let first_root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let second_root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let key = builder.push_link(
+        owner,
+        LinkTarget::External {
+            uri: "https://example.test".to_owned(),
+        },
+        None,
+        Provenance::Unknown,
+    );
+    let first = builder.push_text(
+        first_root,
+        "first ".to_owned(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(key),
+        Provenance::Unknown,
+    );
+    let second = builder.push_text(
+        second_root,
+        "second".to_owned(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(key),
+        Provenance::Unknown,
+    );
+    document.content_store = builder.finish();
+    document.blocks = [first, second]
+        .into_iter()
+        .map(|content| crate::Block::Paragraph {
+            children: vec![Inline::Link {
+                occurrence: key,
+                children: vec![Inline::Text { content }],
+            }],
+            layout: crate::LayoutHint::default(),
+            source: None,
+        })
+        .collect();
+    assert!(crate::validate_document(&document).is_empty());
+
+    let mut labels = Vec::new();
+    let report = scan_references(&document, ReferenceScanLimits::default(), |occurrence| {
+        assert_eq!(occurrence.key, key);
+        let mut budget = ReferenceWorkBudget::new(ReferenceScanLimits::default());
+        labels.push(
+            occurrence
+                .content
+                .reference_occurrence_label(key, occurrence.location.depth(), &mut budget, 4096)
+                .expect("complete bounded label")
+                .text,
+        );
+        ControlFlow::Continue(())
+    });
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(labels, ["first second"]);
+}
+
 fn link(name: &str) -> Value {
     json!({"type":"link","target":{"kind":"document","name":name},"children":[{"type":"text","value":name}]})
 }
@@ -13,10 +79,20 @@ fn paragraph(children: Vec<Value>) -> Value {
     value
 }
 fn document(blocks: Vec<Value>, sections: Vec<Value>) -> Document {
+    document_with_heading(blocks, sections, None)
+}
+fn document_with_heading(
+    blocks: Vec<Value>,
+    sections: Vec<Value>,
+    heading: Option<Value>,
+) -> Document {
     let mut value = json!({"parser":null,"sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],"rootSource":1,"meta":{}});
     value["blocks"] = blocks.into();
     value["sections"] = sections.into();
-    serde_json::from_value(value).unwrap()
+    if let Some(heading) = heading {
+        value["heading"] = json!({"content":[heading]});
+    }
+    crate::test_support::document_from_legacy_json(value)
 }
 fn facts(id: &str) -> Value {
     json!({"id":id,"kind":{"kind":"term"},"case":"sensitive","names":[],"forms":[],"valueDomain":null})
@@ -24,7 +100,7 @@ fn facts(id: &str) -> Value {
 
 #[test]
 fn all_content_roots_and_repeated_links_rebuild_after_serde() {
-    let mut document = document(
+    let document = document_with_heading(
         vec![
             paragraph(vec![link("root"), link("same"), link("same")]),
             json!({"type":"preformatted","children":[link("pre")]}),
@@ -37,11 +113,8 @@ fn all_content_roots_and_repeated_links_rebuild_after_serde() {
                 {"id":"child","heading":{"content":[link("child-heading")]},"blocks":[],"children":[]}
             ]}),
         ],
+        Some(link("document-heading")),
     );
-    document.heading = Some(crate::Heading {
-        content: vec![serde_json::from_value(link("document-heading")).unwrap()],
-        source: None,
-    });
     let collect = |document: &Document| {
         let mut locations = Vec::new();
         let report = scan_references(document, ReferenceScanLimits::default(), |occurrence| {

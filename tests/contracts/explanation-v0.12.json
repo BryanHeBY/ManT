@@ -96,7 +96,13 @@
           [
             {
               "type": "code",
-              "value": "--help"
+              "content": {
+                "atom": 1,
+                "bytes": {
+                  "start": 0,
+                  "end": 6
+                }
+              }
             }
           ]
         ],
@@ -152,7 +158,13 @@
           "children": [
             {
               "type": "text",
-              "value": "See --help."
+              "content": {
+                "atom": 2,
+                "bytes": {
+                  "start": 0,
+                  "end": 11
+                }
+              }
             }
           ]
         }
@@ -203,5 +215,63 @@
       "returned": 1
     }
   },
-  "supports": []
+  "supports": [],
+  "contentProjection": {
+    "contentStore": {
+      "owners": [
+        {
+          "key": 1,
+          "kind": "document",
+          "roots": [
+            1
+          ],
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "roots": [
+        {
+          "key": 1,
+          "owner": 1,
+          "kind": "body",
+          "atoms": [
+            1,
+            2
+          ],
+          "points": [],
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "atoms": [
+        {
+          "key": 1,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "--help",
+          "style": {
+            "literal": true
+          },
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 2,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "See --help.",
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "points": [],
+      "links": []
+    }
+  }
 }

@@ -3,8 +3,7 @@ use mant_ir::{EntryKind, ParameterKind};
 use mant_protocol::CatalogDocumentKind;
 use mant_protocol::{
     CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, InputFormat,
-    QueryInput, QueryRequest, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope,
-    SearchSyntax,
+    QueryInput, QueryRequest, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchSyntax,
 };
 
 use super::{
@@ -242,7 +241,7 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
                     pattern: "worktree".to_owned(),
                     syntax: SearchSyntax::Literal,
                     case: SearchCase::Insensitive,
-                    scope: SearchScope::Visible,
+                    scope: mant_protocol::SearchScope::Visible,
                     word: false,
                     context_lines: 0,
                     limit: 100,
@@ -924,7 +923,7 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
                     pattern: "--acls".to_owned(),
                     syntax: SearchSyntax::Literal,
                     case: SearchCase::Insensitive,
-                    scope: SearchScope::Visible,
+                    scope: mant_protocol::SearchScope::Visible,
                     word: false,
                     context_lines: 0,
                     limit: 100,
@@ -950,8 +949,6 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
             "--case",
             "smart",
             "--word",
-            "--scope",
-            "markdown",
             "--context",
             "2",
             "--limit",
@@ -974,7 +971,7 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
                     pattern: "worktree|branch".to_owned(),
                     syntax: SearchSyntax::Regex,
                     case: SearchCase::Smart,
-                    scope: SearchScope::Markdown,
+                    scope: mant_protocol::SearchScope::Visible,
                     word: true,
                     context_lines: 2,
                     limit: 20,
@@ -991,6 +988,27 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
             preserve_anchors: false,
         }
     );
+}
+
+#[test]
+fn search_scope_is_exposed_without_changing_the_visible_default() {
+    let command = parse(&args(&[
+        "git", "--search", "worktree", "--scope", "markdown",
+    ]))
+    .expect("Markdown search scope");
+    assert!(matches!(
+        command,
+        Command::Query {
+            source: QuerySource::Arguments(QueryRequest {
+                view: QueryView::Search {
+                    scope: mant_protocol::SearchScope::Markdown,
+                    ..
+                },
+                ..
+            }),
+            ..
+        }
+    ));
 }
 
 #[test]

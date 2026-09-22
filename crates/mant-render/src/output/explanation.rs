@@ -81,10 +81,17 @@ fn render(result: &QueryExplanation, report: &Report<'_>) -> String {
         .map(mant_ir::DocumentAddress::catalog_path);
     report.records(
         &mut output,
-        result
-            .evidence
-            .iter()
-            .map(|e| (e, address.as_deref(), result.supports.as_slice())),
+        result.evidence.iter().map(|e| {
+            (
+                e,
+                address.as_deref(),
+                result.supports.as_slice(),
+                result
+                    .content_projection
+                    .as_ref()
+                    .map(mant_ir::ContentProjection::content),
+            )
+        }),
     );
     output
 }
@@ -116,13 +123,14 @@ fn render_scope(result: &ScopeExplanation, report: &Report<'_>) -> String {
     report.records(
         &mut output,
         result.evidence.iter().map(|e| {
+            let document = result.documents.get(e.document_index);
             (
                 &e.evidence,
                 addresses.get(e.document_index).map(String::as_str),
-                result
-                    .documents
-                    .get(e.document_index)
-                    .map_or(&[][..], |d| d.supports.as_slice()),
+                document.map_or(&[][..], |d| d.supports.as_slice()),
+                document
+                    .and_then(|document| document.content_projection.as_ref())
+                    .map(mant_ir::ContentProjection::content),
             )
         }),
     );

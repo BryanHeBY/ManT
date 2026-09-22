@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use mant_ir::{DocumentMeta, SourceSpan};
+use mant_ir::{ContentProjection, ContentRootKey, DocumentMeta, SourceSpan};
 
 use crate::{OutlineTrail, SourceContext};
 
@@ -34,11 +34,11 @@ pub enum SearchCase {
     Smart,
 }
 
-/// Text representation searched while Markdown remains the coordinate basis.
+/// Text representation searched while Markdown remains available for presentation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum SearchScope {
-    /// Search the text visible after parsing `ManT`'s generated `CommonMark`.
+    /// Search visible document text.
     #[default]
     Visible,
     /// Search the generated `CommonMark` bytes, including markup.
@@ -155,6 +155,9 @@ pub struct QuerySearch {
     /// Document metadata, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<DocumentMeta>,
+    /// Closed response-local store resolving every returned logical root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_projection: Option<ContentProjection>,
     /// Normalized query applied by the engine.
     pub query: SearchQuery,
     /// Coordinate-space description shared by all matching line groups.
@@ -163,14 +166,14 @@ pub struct QuerySearch {
     pub total: u32,
     /// Number of matching line groups present in [`Self::matches`].
     pub returned: u32,
-    /// Applied zero-based matching-line offset.
+    /// Applied zero-based matching-line-group offset.
     pub offset: u32,
     /// Whether additional matching line groups remain.
     pub truncated: bool,
     /// Offset for the next page, when one exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<u32>,
-    /// Matching line groups in render order.
+    /// Matching line groups in canonical render order.
     pub matches: Vec<SearchHit>,
 }
 
@@ -181,6 +184,8 @@ struct QuerySearchWire {
     pub label: String,
     pub source_context: Option<SourceContext>,
     pub meta: Option<DocumentMeta>,
+    #[serde(default)]
+    pub content_projection: Option<ContentProjection>,
     pub query: SearchQuery,
     pub render: SearchRender,
     pub total: u32,
@@ -194,16 +199,55 @@ struct QuerySearchWire {
 impl<'de> Deserialize<'de> for QuerySearch {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = QuerySearchWire::deserialize(deserializer)?;
+        validate_search_page(&value).map_err(serde::de::Error::custom)?;
+        if value.query.scope == SearchScope::Markdown && value.content_projection.is_some() {
+            return Err(serde::de::Error::custom(
+                "Markdown-scope search must use rendered coordinates",
+            ));
+        }
         crate::document::validate_optional_source_spans(
             value.source_context.as_ref(),
             value.matches.iter().filter_map(|hit| hit.node_source),
         )
         .map_err(serde::de::Error::custom)?;
+        crate::document::validate_projection_sources(
+            value.source_context.as_ref(),
+            value.content_projection.as_ref(),
+        )
+        .map_err(serde::de::Error::custom)?;
+        validate_search_content(value.content_projection.as_ref(), &value.matches)
+            .map_err(serde::de::Error::custom)?;
         Ok(value)
     }
 }
 
-/// One rendered line or line span containing one or more exact occurrences.
+fn validate_search_page(value: &QuerySearch) -> Result<(), &'static str> {
+    if usize::try_from(value.returned).ok() != Some(value.matches.len()) {
+        return Err("search returned count does not match retained hits");
+    }
+    let end = value.offset.saturating_add(value.returned);
+    if (value.returned != 0 && end > value.total)
+        || (value.returned == 0 && value.offset < value.total)
+    {
+        return Err("search pagination metadata is inconsistent");
+    }
+    let truncated = value.returned != 0 && end < value.total;
+    if value.truncated != truncated || value.next_offset != truncated.then_some(end) {
+        return Err("search pagination metadata is inconsistent");
+    }
+    for (index, hit) in value.matches.iter().enumerate() {
+        let expected = value
+            .offset
+            .saturating_add(u32::try_from(index).unwrap_or(u32::MAX))
+            .saturating_add(1);
+        if hit.ordinal != expected {
+            return Err("search hit ordinal disagrees with pagination order");
+        }
+    }
+    Ok(())
+}
+
+/// One rendered line group containing one or more exact occurrences.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchHit {
@@ -212,13 +256,13 @@ pub struct SearchHit {
     pub ordinal: u32,
     /// Complete logical location of the nearest addressable node.
     pub outline: OutlineTrail,
-    /// Exact matcher occurrences on this rendered line or line span.
+    /// Retained exact occurrences represented by this hit.
     #[schemars(length(min = 1, max = 256))]
     pub occurrences: Vec<SearchOccurrence>,
-    /// Total exact matcher occurrences represented by this line group.
+    /// Total exact occurrences, including any omitted to bound the response.
     #[schemars(range(min = 1))]
     pub occurrence_count: u32,
-    /// Whether [`Self::occurrences`] omits exact ranges to remain bounded.
+    /// Whether occurrence ranges were omitted to bound a rendered line group.
     pub occurrences_truncated: bool,
     /// Original-source location of the owning outline node, when retained.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -230,16 +274,26 @@ pub struct SearchHit {
     pub context: Vec<SearchContextLine>,
 }
 
-/// One exact matcher occurrence in the canonical Markdown render.
+/// One exact matcher occurrence in either a logical root or the rendered document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SearchOccurrence {
-    /// Exact text consumed by the matcher.
+    /// Bounded presentation echo; the logical range remains authoritative.
     pub matched_text: String,
-    /// Location in the deterministic full Markdown render.
-    pub markdown: SearchMarkdownRange,
-    /// Exact ranges within the anchor-free Markdown lines used for presentation.
-    #[schemars(length(min = 1))]
+    /// Response-local logical root containing the complete match, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root: Option<ContentRootKey>,
+    /// Root-relative logical UTF-8 byte and Unicode-scalar range, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logical: Option<SearchLogicalRange>,
+    /// Zero or more presentation-only placements in canonical Markdown v1.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub markdown_projections: Vec<SearchMarkdownRange>,
+    /// Authoritative Markdown range for a render-only hit, including TLDR text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub markdown: Option<SearchMarkdownRange>,
+    /// Anchor-free presentation fragments for a render-only hit.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub line_ranges: Vec<SearchLineRange>,
 }
 
@@ -250,10 +304,24 @@ pub struct SearchLineRange {
     /// One-based line number in the deterministic full Markdown render.
     #[schemars(range(min = 1))]
     pub line: u32,
-    /// Inclusive zero-based UTF-8 byte offset within the presented Markdown line.
+    /// Inclusive zero-based UTF-8 byte offset within the presented line.
     pub start_byte: u32,
-    /// Exclusive zero-based UTF-8 byte offset within the presented Markdown line.
+    /// Exclusive zero-based UTF-8 byte offset within the presented line.
     pub end_byte: u32,
+}
+
+/// Half-open root-relative logical coordinates for one matcher occurrence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SearchLogicalRange {
+    /// Inclusive UTF-8 byte offset in the root's canonical logical sequence.
+    pub start_byte: u64,
+    /// Exclusive UTF-8 byte offset in the root's canonical logical sequence.
+    pub end_byte: u64,
+    /// Inclusive Unicode-scalar offset in the same sequence.
+    pub start_scalar: u64,
+    /// Exclusive Unicode-scalar offset in the same sequence.
+    pub end_scalar: u64,
 }
 
 /// Half-open byte range plus one-based human coordinates in full Markdown.
@@ -278,11 +346,112 @@ pub struct SearchMarkdownRange {
     pub end_column: u32,
 }
 
-/// One rendered Markdown line surrounding a match.
+pub(crate) fn validate_search_content(
+    projection: Option<&ContentProjection>,
+    matches: &[SearchHit],
+) -> Result<(), &'static str> {
+    for hit in matches {
+        if hit.occurrences.is_empty()
+            || hit.occurrences.len() > 256
+            || hit.occurrence_count < u32::try_from(hit.occurrences.len()).unwrap_or(u32::MAX)
+            || hit.occurrences_truncated != (hit.occurrence_count as usize > hit.occurrences.len())
+        {
+            return Err("search hit occurrence count is inconsistent");
+        }
+        if projection.is_some()
+            && (hit.occurrences.len() != 1
+                || hit.occurrence_count != 1
+                || hit.occurrences_truncated)
+        {
+            return Err("logical search hit must contain exactly one complete occurrence");
+        }
+    }
+    if matches.is_empty() {
+        return if projection.is_none() {
+            Ok(())
+        } else {
+            Err("search without retained hits must not carry a content projection")
+        };
+    }
+    for occurrence in matches.iter().flat_map(|hit| &hit.occurrences) {
+        match (occurrence.root, occurrence.logical, occurrence.markdown) {
+            (Some(root), Some(logical), None) => {
+                let projection =
+                    projection.ok_or("logical search hits require a content projection")?;
+                let text = projection
+                    .content_store
+                    .root_logical_text(root)
+                    .ok_or("search hit root does not resolve in its content projection")?;
+                validate_logical_range(&text, logical)?;
+                let start = usize::try_from(logical.start_byte)
+                    .map_err(|_| "search byte range is too large")?;
+                let end = usize::try_from(logical.end_byte)
+                    .map_err(|_| "search byte range is too large")?;
+                if text.get(start..end) != Some(occurrence.matched_text.as_str()) {
+                    return Err(
+                        "search matched text does not equal its authoritative logical range",
+                    );
+                }
+                if !occurrence.line_ranges.is_empty() {
+                    return Err("logical search hit must not carry render-only line ranges");
+                }
+                for markdown in &occurrence.markdown_projections {
+                    validate_markdown_range(*markdown)?;
+                }
+            }
+            (None, None, Some(markdown)) => {
+                if projection.is_some() || !occurrence.markdown_projections.is_empty() {
+                    return Err("render-only search hit must not carry a logical projection");
+                }
+                validate_markdown_range(markdown)?;
+                if occurrence.line_ranges.is_empty()
+                    || occurrence
+                        .line_ranges
+                        .iter()
+                        .any(|range| range.line == 0 || range.start_byte >= range.end_byte)
+                {
+                    return Err("render-only search hit has no valid presented line range");
+                }
+            }
+            _ => return Err("search hit must have exactly one complete coordinate basis"),
+        }
+    }
+    Ok(())
+}
+
+fn validate_logical_range(text: &str, range: SearchLogicalRange) -> Result<(), &'static str> {
+    let start = usize::try_from(range.start_byte).map_err(|_| "search byte range is too large")?;
+    let end = usize::try_from(range.end_byte).map_err(|_| "search byte range is too large")?;
+    if start >= end || text.get(start..end).is_none() {
+        return Err("search byte range is empty or outside its logical root");
+    }
+    let start_scalar = text[..start].chars().count() as u64;
+    let end_scalar = start_scalar.saturating_add(text[start..end].chars().count() as u64);
+    if range.start_scalar != start_scalar || range.end_scalar != end_scalar {
+        return Err("search scalar range does not match its logical byte range");
+    }
+    Ok(())
+}
+
+fn validate_markdown_range(range: SearchMarkdownRange) -> Result<(), &'static str> {
+    if range.start_byte >= range.end_byte
+        || range.start_line == 0
+        || range.end_line == 0
+        || range.start_column == 0
+        || range.end_column == 0
+        || range.start_line > range.end_line
+        || (range.start_line == range.end_line && range.start_column >= range.end_column)
+    {
+        return Err("search Markdown projection range is empty or unordered");
+    }
+    Ok(())
+}
+
+/// One logical-root line surrounding a match.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchContextLine {
-    /// One-based line number in the deterministic Markdown render.
+    /// One-based line number inside the authoritative logical root.
     #[schemars(range(min = 1))]
     pub line: u32,
     /// Complete rendered line without its newline terminator.

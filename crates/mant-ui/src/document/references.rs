@@ -5,7 +5,10 @@ use std::{
     sync::Arc,
 };
 
-use mant_ir::{ContentLocation, ContentLocationRef, Document, LinkTarget, ReferenceScanLimits};
+use mant_ir::{
+    ContentLocation, ContentLocationRef, Document, LinkOccurrenceKey, LinkTarget,
+    ReferenceScanLimits,
+};
 
 use super::{NavKind, NavNode, ROOT_ID};
 
@@ -13,12 +16,13 @@ const MAX_RECORDS: usize = 1000;
 const MAX_PAYLOAD: usize = 1024 * 1024;
 const MAX_LABEL: usize = 4096;
 
-/// Operation-only identity map; pointer keys never leave this build or its IR.
-pub(super) type ReferenceOrigins = HashMap<usize, Arc<str>>;
+/// Operation-only map from authoritative occurrence identity to its reveal ID.
+pub(super) type ReferenceOrigins = HashMap<LinkOccurrenceKey, Arc<str>>;
 
 #[derive(Debug, Clone)]
 pub(super) struct ReferenceRecord {
     pub(super) id: Arc<str>,
+    pub(super) occurrence: LinkOccurrenceKey,
     pub(super) location: ContentLocation,
     pub(super) owner: String,
     fallback_owner: String,
@@ -120,16 +124,14 @@ impl ReferenceNavigation {
                 // The key contains only typed structural coordinates, never label,
                 // target, page ordinal or a rendered row. Debug spelling is private
                 // to this immutable view; it is not a public selector or wire ID.
-                let id: Arc<str> = format!("reference:{location:?}").into();
+                let id: Arc<str> = format!("reference:{}", occurrence.key.get()).into();
                 let (attachment, limited) =
                     reference_attachment(&occurrence, budget, &location, semantic_owner.is_some());
                 result.limited |= limited;
-                result.origins.insert(
-                    std::ptr::from_ref(occurrence.target).addr(),
-                    Arc::clone(&id),
-                );
+                result.origins.insert(occurrence.key, Arc::clone(&id));
                 result.records.push(ReferenceRecord {
                     id,
+                    occurrence: occurrence.key,
                     location,
                     owner: owner.to_owned(),
                     fallback_owner: fallback_owner.to_owned(),
@@ -417,7 +419,7 @@ fn append_owner_navigation(
                 target_id: first.id.to_string(),
                 title: format!(
                     "{} · {} locations",
-                    bounded_display(&target_text(&first.target)),
+                    bounded_display_limit(&target_text(&first.target), MAX_LABEL),
                     records.len()
                 ),
                 full_title: None,
@@ -444,9 +446,14 @@ fn display_label(
     budget: &mut mant_ir::ReferenceWorkBudget,
     limit: usize,
 ) -> Option<String> {
-    let label =
-        mant_ir::reference_label(occurrence.label, occurrence.location.depth(), budget, limit)
-            .ok()?;
+    let label = mant_ir::reference_occurrence_label(
+        occurrence.content,
+        occurrence.key,
+        occurrence.location.depth(),
+        budget,
+        limit,
+    )
+    .ok()?;
     if label.text.is_empty() && !label.truncated {
         return Some(format!(
             "{} (unlabelled)",
@@ -497,10 +504,6 @@ fn target_bytes(target: &LinkTarget) -> usize {
     }
 }
 
-fn bounded_display(value: &str) -> String {
-    bounded_display_limit(value, MAX_LABEL)
-}
-
 fn bounded_display_limit(value: &str, limit: usize) -> String {
     let mut end = value.len().min(limit);
     while !value.is_char_boundary(end) {
@@ -515,8 +518,8 @@ fn bounded_display_limit(value: &str, limit: usize) -> String {
     }
 }
 
-// Length framing preserves full typed-target equality without Debug escaping
-// or conflating absent fragments with empty fragments in unchecked input IR.
+// Group equal typed destinations for presentation while each child keeps its
+// own logical occurrence key and reveal identity.
 fn target_key(target: &LinkTarget) -> String {
     match target {
         LinkTarget::Document { name, fragment } => format!(

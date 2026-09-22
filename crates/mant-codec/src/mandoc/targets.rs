@@ -199,6 +199,7 @@ pub(super) fn part_target_with_source(node: &Node, kind: NodeKind) -> Option<Own
 /// a structure contains no such descendant, an anchor-only paragraph retains
 /// the destination without adding visible text or spacing.
 pub(super) fn attach_targets(
+    content: &super::content::LegacyContent,
     blocks: &mut Vec<Block>,
     targets: impl IntoIterator<Item = String>,
     layout: LayoutHint,
@@ -212,13 +213,10 @@ pub(super) fn attach_targets(
     if targets.is_empty() {
         return;
     }
-    if prepend_to_first_descendant(blocks, &targets, source) {
+    if prepend_to_first_descendant(content, blocks, &targets, source) {
         return;
     }
-    let children = targets
-        .drain(..)
-        .map(|target| Inline::anchor_at(target, source))
-        .collect();
+    let children = content.anchors(mant_ir::ContentRootKind::Body, targets.drain(..), source);
     let insertion = blocks
         .iter()
         .position(|block| !matches!(block, Block::VerticalSpace { .. }))
@@ -233,47 +231,9 @@ pub(super) fn attach_targets(
     );
 }
 
-/// Attach targets to a definition term, falling back to its description.
-///
-/// An empty mdoc `.It` has no visible term, but its authored target must still
-/// survive as zero-width content. Keeping that anchor in the item prevents it
-/// from being reassigned to a neighbouring definition.
-pub(super) fn attach_definition_targets(
-    item: &mut DefinitionItem,
-    targets: impl IntoIterator<Item = String>,
-    source: Option<SourceSpan>,
-) {
-    let mut seen = HashSet::new();
-    let targets = targets
-        .into_iter()
-        .filter(|target| {
-            seen.insert(target.clone())
-                && !item
-                    .terms
-                    .iter()
-                    .any(|term| inlines_contain_anchor(term, target))
-                && !contains_anchor(&item.description, target)
-        })
-        .collect::<Vec<_>>();
-    if targets.is_empty() {
-        return;
-    }
-    if let Some(term) = item.terms.first_mut() {
-        prepend_inlines(term, &targets, source);
-    } else if prepend_to_first_descendant(&mut item.description, &targets, source) {
-    } else {
-        item.terms.push(
-            targets
-                .into_iter()
-                .map(|target| Inline::anchor_at(target, source))
-                .collect(),
-        );
-        item.layout.inline_term = true;
-    }
-}
-
 /// Attach targets after the final addressable descendant of a definition.
 pub(super) fn append_definition_targets(
+    content: &super::content::LegacyContent,
     item: &mut DefinitionItem,
     targets: impl IntoIterator<Item = String>,
     layout: LayoutHint,
@@ -295,26 +255,19 @@ pub(super) fn append_definition_targets(
         return;
     }
     if !item.description.is_empty() {
-        append_targets(&mut item.description, targets, layout, source);
+        append_targets(content, &mut item.description, targets, layout, source);
     } else if let Some(term) = item.terms.last_mut() {
-        term.extend(
-            targets
-                .into_iter()
-                .map(|target| Inline::anchor_at(target, source)),
-        );
+        term.extend(content.anchors(mant_ir::ContentRootKind::Term, targets, source));
     } else {
-        item.terms.push(
-            targets
-                .into_iter()
-                .map(|target| Inline::anchor_at(target, source))
-                .collect(),
-        );
+        item.terms
+            .push(content.anchors(mant_ir::ContentRootKind::Term, targets, source));
         item.layout.inline_term = true;
     }
 }
 
 /// Attach targets after the final addressable descendant in a block sequence.
 pub(super) fn append_targets(
+    content: &super::content::LegacyContent,
     blocks: &mut Vec<Block>,
     targets: impl IntoIterator<Item = String>,
     layout: LayoutHint,
@@ -328,20 +281,18 @@ pub(super) fn append_targets(
     if targets.is_empty() {
         return;
     }
-    if append_to_last_descendant(blocks, &targets, source) {
+    if append_to_last_descendant(content, blocks, &targets, source) {
         return;
     }
     blocks.push(Block::Paragraph {
-        children: targets
-            .into_iter()
-            .map(|target| Inline::anchor_at(target, source))
-            .collect(),
+        children: content.anchors(mant_ir::ContentRootKind::Body, targets, source),
         layout,
         source,
     });
 }
 
 /// Collect zero-width anchor identities nested in an inline sequence.
+#[cfg(test)]
 pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
     for node in nodes {
         match node {
@@ -349,23 +300,13 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_anchor_ids(children, output),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak { .. } => {}
         }
     }
 }
 
-/// Return the first structural owner location carried by an inline anchor.
-pub(super) fn inline_anchor_owner_source(nodes: &[Inline]) -> Option<SourceSpan> {
-    nodes.iter().find_map(|node| match node {
-        Inline::Anchor { owner_source, .. } => *owner_source,
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => inline_anchor_owner_source(children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => None,
-    })
-}
-
 fn prepend_to_first_descendant(
+    content: &super::content::LegacyContent,
     blocks: &mut [Block],
     targets: &[String],
     source: Option<SourceSpan>,
@@ -373,15 +314,31 @@ fn prepend_to_first_descendant(
     for block in blocks {
         match block {
             Block::VerticalSpace { .. } => {}
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                prepend_inlines(children, targets, source);
+            Block::Paragraph { children, .. } => {
+                prepend_inlines(
+                    content,
+                    mant_ir::ContentRootKind::Body,
+                    children,
+                    targets,
+                    source,
+                );
+                return true;
+            }
+            Block::Preformatted { children, .. } => {
+                prepend_inlines(
+                    content,
+                    mant_ir::ContentRootKind::FixedBody,
+                    children,
+                    targets,
+                    source,
+                );
                 return true;
             }
             Block::List { items, .. } => {
                 let Some(item) = items.first_mut() else {
                     return false;
                 };
-                if prepend_to_first_descendant(&mut item.blocks, targets, source) {
+                if prepend_to_first_descendant(content, &mut item.blocks, targets, source) {
                     return true;
                 }
                 return false;
@@ -391,10 +348,16 @@ fn prepend_to_first_descendant(
                     return false;
                 };
                 if let Some(term) = item.terms.first_mut() {
-                    prepend_inlines(term, targets, source);
+                    prepend_inlines(
+                        content,
+                        mant_ir::ContentRootKind::Term,
+                        term,
+                        targets,
+                        source,
+                    );
                     return true;
                 }
-                if prepend_to_first_descendant(&mut item.description, targets, source) {
+                if prepend_to_first_descendant(content, &mut item.description, targets, source) {
                     return true;
                 }
                 return false;
@@ -403,7 +366,7 @@ fn prepend_to_first_descendant(
                 let Some(cell) = rows.first_mut().and_then(|row| row.cells.first_mut()) else {
                     return false;
                 };
-                if prepend_to_first_descendant(&mut cell.blocks, targets, source) {
+                if prepend_to_first_descendant(content, &mut cell.blocks, targets, source) {
                     return true;
                 }
                 return false;
@@ -417,6 +380,7 @@ fn prepend_to_first_descendant(
 }
 
 fn append_to_last_descendant(
+    content: &super::content::LegacyContent,
     blocks: &mut [Block],
     targets: &[String],
     source: Option<SourceSpan>,
@@ -424,35 +388,41 @@ fn append_to_last_descendant(
     for block in blocks.iter_mut().rev() {
         match block {
             Block::VerticalSpace { .. } => {}
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                children.extend(
-                    targets
-                        .iter()
-                        .cloned()
-                        .map(|target| Inline::anchor_at(target, source)),
-                );
+            Block::Paragraph { children, .. } => {
+                children.extend(content.anchors(
+                    mant_ir::ContentRootKind::Body,
+                    targets.iter().cloned(),
+                    source,
+                ));
+                return true;
+            }
+            Block::Preformatted { children, .. } => {
+                children.extend(content.anchors(
+                    mant_ir::ContentRootKind::FixedBody,
+                    targets.iter().cloned(),
+                    source,
+                ));
                 return true;
             }
             Block::List { items, .. } => {
                 let Some(item) = items.last_mut() else {
                     return false;
                 };
-                return append_to_last_descendant(&mut item.blocks, targets, source);
+                return append_to_last_descendant(content, &mut item.blocks, targets, source);
             }
             Block::DefinitionList { items, .. } => {
                 let Some(item) = items.last_mut() else {
                     return false;
                 };
-                if append_to_last_descendant(&mut item.description, targets, source) {
+                if append_to_last_descendant(content, &mut item.description, targets, source) {
                     return true;
                 }
                 if let Some(term) = item.terms.last_mut() {
-                    term.extend(
-                        targets
-                            .iter()
-                            .cloned()
-                            .map(|target| Inline::anchor_at(target, source)),
-                    );
+                    term.extend(content.anchors(
+                        mant_ir::ContentRootKind::Term,
+                        targets.iter().cloned(),
+                        source,
+                    ));
                     return true;
                 }
                 return false;
@@ -461,7 +431,7 @@ fn append_to_last_descendant(
                 let Some(cell) = rows.last_mut().and_then(|row| row.cells.last_mut()) else {
                     return false;
                 };
-                return append_to_last_descendant(&mut cell.blocks, targets, source);
+                return append_to_last_descendant(content, &mut cell.blocks, targets, source);
             }
             Block::Equation { .. } | Block::ThematicBreak { .. } | Block::Unsupported { .. } => {
                 return false;
@@ -471,17 +441,17 @@ fn append_to_last_descendant(
     false
 }
 
-fn prepend_inlines(children: &mut Vec<Inline>, targets: &[String], source: Option<SourceSpan>) {
-    children.splice(
-        0..0,
-        targets
-            .iter()
-            .cloned()
-            .map(|target| Inline::anchor_at(target, source)),
-    );
+fn prepend_inlines(
+    content: &super::content::LegacyContent,
+    kind: mant_ir::ContentRootKind,
+    children: &mut Vec<Inline>,
+    targets: &[String],
+    source: Option<SourceSpan>,
+) {
+    children.splice(0..0, content.anchors(kind, targets.iter().cloned(), source));
 }
 
-fn contains_anchor(blocks: &[Block], target: &str) -> bool {
+pub(in crate::mandoc) fn contains_anchor(blocks: &[Block], target: &str) -> bool {
     blocks.iter().any(|block| match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
             inlines_contain_anchor(children, target)
@@ -513,7 +483,7 @@ fn inlines_contain_anchor(nodes: &[Inline], target: &str) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => inlines_contain_anchor(children, target),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => false,
+        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -705,9 +675,7 @@ mod tests {
                 source: None,
                 entry: None,
                 blocks: vec![Block::Preformatted {
-                    children: vec![Inline::Text {
-                        value: "body".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("body")],
                     language: None,
                     layout: LayoutHint::default(),
                     source: None,
@@ -717,7 +685,9 @@ mod tests {
             source: None,
         }];
 
+        let content = crate::mandoc::content::LegacyContent::default();
         super::attach_targets(
+            &content,
             &mut blocks,
             ["nested-target".to_owned()],
             LayoutHint::default(),
@@ -739,7 +709,9 @@ mod tests {
     #[test]
     fn empty_structures_receive_only_zero_width_content() {
         let mut blocks = Vec::new();
+        let content = crate::mandoc::content::LegacyContent::default();
         super::attach_targets(
+            &content,
             &mut blocks,
             ["empty-target".to_owned()],
             LayoutHint::default(),

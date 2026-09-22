@@ -4,6 +4,25 @@ use mant_ir::{Block, EntryKind, Inline, ListKind, SourceFormat, TableAlignment, 
 
 use super::{parse_document, parse_markdown};
 
+fn link_target<'a>(
+    document: &'a mant_ir::Document,
+    inline: &'a Inline,
+) -> Option<&'a mant_ir::LinkTarget> {
+    document
+        .content()
+        .link(inline)
+        .ok()
+        .flatten()
+        .map(mant_ir::LinkView::target)
+}
+
+fn inline_text<'a>(document: &'a mant_ir::Document, inline: &'a Inline) -> Option<&'a str> {
+    match document.content().inline(inline).ok()? {
+        mant_ir::InlineView::Text(value) | mant_ir::InlineView::Code(value) => Some(value),
+        _ => None,
+    }
+}
+
 mod entry_forms;
 mod source_contracts;
 
@@ -17,19 +36,13 @@ fn classifies_mailto_schemes_without_ascii_case_distinctions() {
         panic!("link paragraph");
     };
     assert!(matches!(
-        &children[0],
-        Inline::Link {
-            target: mant_ir::LinkTarget::Email { address },
-            title: Some(title),
-            ..
-        } if address == "user@example.test" && title == "mail title"
+        document.content().link(&children[0]).unwrap(),
+        Some(link) if matches!(link.target(), mant_ir::LinkTarget::Email { address } if address == "user@example.test")
+            && link.title() == Some("mail title")
     ));
     assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link {
-            target: mant_ir::LinkTarget::External { uri },
-            ..
-        } if uri == "mailto:user@example.test?subject=hello"
+        link_target(&document, inline),
+        Some(mant_ir::LinkTarget::External { uri }) if uri == "mailto:user@example.test?subject=hello"
     )));
 }
 
@@ -53,10 +66,7 @@ fn classifies_mailto_only_after_decoding_and_validating_the_mailbox() {
     };
     let targets = children
         .iter()
-        .filter_map(|inline| match inline {
-            Inline::Link { target, .. } => Some(target),
-            _ => None,
-        })
+        .filter_map(|inline| link_target(&document, inline))
         .collect::<Vec<_>>();
     assert!(matches!(
         targets[0],
@@ -110,7 +120,12 @@ fn heading_attributes_consume_only_an_explicit_id() {
     let titles = document
         .sections
         .iter()
-        .map(|section| (section.heading.plain_text(), section.id.as_str()))
+        .map(|section| {
+            (
+                section.heading.plain_text(document.content()),
+                section.id.as_str(),
+            )
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         titles
@@ -154,7 +169,7 @@ fn unsupported_math_does_not_leak_markdown_bracket_escapes() {
         document
             .sections
             .iter()
-            .map(|section| section.heading.plain_text())
+            .map(|section| section.heading.plain_text(document.content()))
             .collect::<Vec<_>>(),
         vec!["$a ([$b])", "a ([$b])", "$a ([b])", "[$b]", "$a [$b]"]
     );
@@ -180,7 +195,7 @@ fn markdown_extension_does_not_turn_uri_schemes_or_authorities_into_documents() 
             panic!("link paragraph")
         };
         assert!(
-            matches!(&children[0], Inline::Link { target: mant_ir::LinkTarget::External { uri: actual }, .. } if actual == uri),
+            matches!(link_target(&document, &children[0]), Some(mant_ir::LinkTarget::External { uri: actual }) if actual == uri),
             "{uri}: {children:?}"
         );
     }
@@ -218,10 +233,7 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
     };
     let visible = children
         .iter()
-        .filter_map(|inline| match inline {
-            Inline::Text { value } => Some(value.as_str()),
-            _ => None,
-        })
+        .filter_map(|inline| inline_text(&document, inline))
         .collect::<String>();
     assert!(visible.contains("~~strike~~"));
     assert!(visible.contains("![alt](image.png)"));
@@ -278,7 +290,7 @@ Document introduction.
     assert!(matches!(
         parsed.document.blocks.as_slice(),
         [Block::Paragraph { children, source, .. }]
-            if matches!(children.as_slice(), [Inline::Text { value }] if value == "Document introduction.")
+            if matches!(children.as_slice(), [inline] if inline_text(&parsed.document, inline) == Some("Document introduction."))
                 && source.is_some_and(|span| span.line == 13)
     ));
     assert_eq!(parsed.document.sections[0].id, "same");
@@ -311,7 +323,7 @@ Duplicate heading.
     assert!(
         children.iter().any(|inline| matches!(
             inline,
-            Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "options"
+            inline if matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Section { id: target }) if target == "options")
         )),
         "a #options link must resolve to the first section, not options-2"
     );
@@ -350,9 +362,7 @@ fn terminal_control_characters_are_masked_with_a_diagnostic() {
     let Block::Paragraph { children, .. } = &document.blocks[0] else {
         panic!("prose survives sanitizing");
     };
-    let Inline::Text { value } = &children[0] else {
-        panic!("text inline survives sanitizing");
-    };
+    let value = inline_text(document, &children[0]).expect("text inline survives sanitizing");
     assert!(!value.contains('\u{1b}') && !value.contains('\u{8}') && !value.contains('\u{7}'));
     assert!(value.contains("red") && value.contains('z'));
 }
@@ -376,7 +386,10 @@ Normal manual content.
         None,
     );
 
-    assert_eq!(document.sections[1].heading.plain_text(), "TLDR");
+    assert_eq!(
+        document.sections[1].heading.plain_text(document.content()),
+        "TLDR"
+    );
     assert_eq!(
         document.sections[1].id, "tldr-section",
         "an ordinary TLDR heading must not shadow the reserved tldr selector"

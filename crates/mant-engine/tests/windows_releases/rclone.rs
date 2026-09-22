@@ -12,6 +12,7 @@ use crate::fixtures::{windows_release_manual, windows_release_query};
 #[test]
 fn keeps_the_large_release_topology_and_windows_specific_sections() {
     let document = windows_release_manual("rclone");
+    let content = document.content();
     assert_eq!(document.meta.title.as_deref(), Some("rclone"));
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("July 31, 2026"));
@@ -36,7 +37,7 @@ fn keeps_the_large_release_topology_and_windows_specific_sections() {
         assert!(
             sections
                 .iter()
-                .any(|section| section.heading.plain_text() == title),
+                .any(|section| section.heading.plain_text(content) == title),
             "missing reviewed rclone section {title}",
         );
     }
@@ -45,7 +46,11 @@ fn keeps_the_large_release_topology_and_windows_specific_sections() {
 #[test]
 fn preserves_windows_paths_and_powershell_commands() {
     let document = windows_release_manual("rclone");
-    let paths = block_slice_text(&common::section(document, "Paths on Windows").blocks);
+    let content = document.content();
+    let paths = block_slice_text(
+        content,
+        &common::section(document, "Paths on Windows").blocks,
+    );
     assert!(paths.contains(r"C:\path\to\wherever"));
     assert!(paths.contains(r"\\server\share"));
     assert!(paths.contains(r"\\?\D:\some\very\long\path"));
@@ -55,8 +60,8 @@ fn preserves_windows_paths_and_powershell_commands() {
     let powershell = powershell_section
         .children
         .iter()
-        .find(|section| section.heading.plain_text() == "Synopsis")
-        .map(|section| block_slice_text(&section.blocks))
+        .find(|section| section.heading.plain_text(content) == "Synopsis")
+        .map(|section| block_slice_text(content, &section.blocks))
         .expect("rclone PowerShell synopsis");
     assert!(powershell.contains("rclone completion powershell | Out-String | Invoke-Expression"));
 }
@@ -97,7 +102,10 @@ fn preserves_pandoc_verbatim_font_semantics() {
 #[test]
 fn keeps_tier_table_text_blocks_in_their_own_columns() {
     let document = windows_release_manual("rclone");
-    let tiers = block_slice_text(&common::section(document, "Tiers").blocks);
+    let tiers = block_slice_text(
+        document.content(),
+        &common::section(document, "Tiers").blocks,
+    );
     for meaning in [
         "Production-grade, first-class",
         "Well-supported, minor gaps",

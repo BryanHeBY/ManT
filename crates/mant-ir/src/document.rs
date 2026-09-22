@@ -29,6 +29,8 @@ pub struct Document {
     pub sources: Vec<SourceRecord>,
     /// Source containing the normalized document root.
     pub root_source: SourceKey,
+    /// Single authoritative logical content store for all topology below.
+    pub content_store: crate::ContentStore,
     /// Metadata normalized across all supported source formats.
     pub meta: DocumentMeta,
     /// Original visible document heading, distinct from native bibliographic metadata.
@@ -82,6 +84,7 @@ struct DocumentWire {
     parser: Option<ParserInfo>,
     sources: Vec<SourceRecord>,
     root_source: SourceKey,
+    content_store: crate::ContentStore,
     meta: DocumentMeta,
     #[serde(default)]
     heading: Option<Heading>,
@@ -104,6 +107,7 @@ impl<'de> Deserialize<'de> for Document {
             parser: wire.parser,
             sources: wire.sources,
             root_source: wire.root_source,
+            content_store: wire.content_store,
             meta: wire.meta,
             heading: wire.heading,
             fragment_aliases: wire.fragment_aliases,
@@ -111,6 +115,7 @@ impl<'de> Deserialize<'de> for Document {
             blocks: wire.blocks,
             sections: wire.sections,
         };
+        crate::validate_content_store(&document.content_store).map_err(serde::de::Error::custom)?;
         crate::validate_document_sources(&document).map_err(serde::de::Error::custom)?;
         Ok(document)
     }

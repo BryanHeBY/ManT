@@ -6,18 +6,21 @@ use super::{
     TLDR_ID, TLDR_VERTICAL_PADDING_ROWS, TldrDocument, WrapMode, inline_anchor_rows, theme,
     tldr_style,
 };
+use mant_ir::ContentContext;
 use mant_ir::geometry::{compose_origin, coordinate, padding};
 
 mod lists;
 mod table;
 pub(super) struct DocumentBuilder<'a> {
-    pub(super) entry_styles: Arc<mant_render::EntryStyleMap<'a>>,
+    pub(super) content: Option<ContentContext<'a>>,
+    pub(super) entry_styles: Option<Arc<mant_render::EntryStyleMap<'a>>>,
     pub(super) label: String,
     pub(super) address: Option<DocumentAddress>,
     pub(super) lines: Vec<LogicalLine>,
     pub(super) navigation: Vec<NavNode>,
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
+    pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
     pending_anchors: Vec<String>,
     pending_gap: mant_ir::geometry::GapPlan,
 }
@@ -32,9 +35,10 @@ pub(super) struct BuiltDocument {
     pub(super) label: String,
     pub(super) navigation: Vec<NavNode>,
     pub(super) content: LogicalFragment,
+    pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
 }
 
-impl DocumentBuilder<'_> {
+impl<'a> DocumentBuilder<'a> {
     pub(super) fn finish(mut self) -> BuiltDocument {
         // No source content follows these targets. Keep the end-of-document
         // sentinel rather than inventing a visible row or landing in a gap.
@@ -46,17 +50,24 @@ impl DocumentBuilder<'_> {
                 lines: self.lines,
                 anchors: self.anchors,
             },
+            link_targets: self.link_targets,
         }
     }
-    pub(super) fn new(label: String, address: Option<DocumentAddress>) -> Self {
+    pub(super) fn new(
+        label: String,
+        address: Option<DocumentAddress>,
+        content: Option<ContentContext<'a>>,
+    ) -> Self {
         Self {
-            entry_styles: Arc::default(),
+            content,
+            entry_styles: None,
             label,
             address,
             lines: Vec::new(),
             navigation: Vec::new(),
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
+            link_targets: HashMap::new(),
             pending_anchors: Vec::new(),
             pending_gap: mant_ir::geometry::GapPlan::default(),
         }
@@ -85,6 +96,12 @@ impl DocumentBuilder<'_> {
         source_label: &'static str,
         document_gap: u16,
     ) {
+        let information_link = tldr.more_information.as_deref().and_then(|value| {
+            let target = ExternalUri::parse(value).map(LinkTarget::External)?;
+            let identity = super::LinkIdentity::TldrMoreInformation;
+            self.link_targets.insert(identity, target);
+            Some(identity)
+        });
         self.anchor(NavNode {
             id: TLDR_ID.to_owned(),
             target_id: TLDR_ID.to_owned(),
@@ -117,14 +134,11 @@ impl DocumentBuilder<'_> {
                 })
                 .filter(|(span, _, _)| span.role == mant_render::TldrRole::Link)
                 .filter_map(|(_, start_scalar, end_scalar)| {
-                    tldr.more_information
-                        .as_deref()
-                        .and_then(ExternalUri::parse)
-                        .map(|uri| LogicalLinkRange {
-                            target: LinkTarget::External(uri),
-                            start_scalar,
-                            end_scalar,
-                        })
+                    information_link.map(|identity| LogicalLinkRange {
+                        identity,
+                        start_scalar,
+                        end_scalar,
+                    })
                 })
                 .collect();
             self.push(LogicalLine {
@@ -135,6 +149,7 @@ impl DocumentBuilder<'_> {
                     .into_iter()
                     .map(|span| Span::styled(span.text, tldr_style(span.role)))
                     .collect(),
+                glyph_projections: Vec::new(),
                 surface: LineSurface::Tldr,
                 wrap_mode: if command {
                     WrapMode::Character
@@ -179,21 +194,26 @@ impl DocumentBuilder<'_> {
         self.navigation.push(node);
     }
 
-    pub(super) fn section_with_position(
+    pub(super) fn section_with_position<'b>(
         &mut self,
-        section: &Section,
+        section: &'b Section,
         semantic_index: &SemanticIndex,
         depth: usize,
         is_last: bool,
         parent_id: Option<&str>,
-    ) {
+    ) where
+        'a: 'b,
+    {
         self.spacing(section.spacing_before_lines);
         let entries = semantic_index.section(&section.id);
         let has_children = !entries.is_empty() || !section.children.is_empty();
         self.anchor(NavNode {
             id: section.id.to_string(),
             target_id: section.id.to_string(),
-            title: section.heading.single_line_text(),
+            title: self
+                .content()
+                .heading_single_line_text(&section.heading)
+                .expect("validated document heading must resolve"),
             full_title: None,
             depth,
             kind: NavKind::Section,
@@ -232,7 +252,10 @@ impl DocumentBuilder<'_> {
 
     /// Headings use the same original inline path as prose: links, anchors,
     /// hard lines and nested source styles must not pass through a plain label.
-    pub(super) fn heading(&mut self, heading: &mant_ir::Heading, indent: i32) {
+    pub(super) fn heading<'b>(&mut self, heading: &'b mant_ir::Heading, indent: i32)
+    where
+        'a: 'b,
+    {
         self.inline_lines(
             &heading.content,
             indent,
@@ -242,7 +265,10 @@ impl DocumentBuilder<'_> {
         );
     }
 
-    pub(super) fn blocks(&mut self, blocks: &[Block], base_indent: i32) {
+    pub(super) fn blocks<'b>(&mut self, blocks: &'b [Block], base_indent: i32)
+    where
+        'a: 'b,
+    {
         let mut gap = mant_ir::geometry::GapPlan::default();
         for block in blocks {
             gap.append_resolved(mant_ir::geometry::block_gap(block));
@@ -256,7 +282,10 @@ impl DocumentBuilder<'_> {
         self.spacing(gap.rows(0));
     }
 
-    pub(super) fn block(&mut self, block: &Block, base_indent: i32) {
+    pub(super) fn block<'b>(&mut self, block: &'b Block, base_indent: i32)
+    where
+        'a: 'b,
+    {
         match block {
             Block::Paragraph {
                 children, layout, ..
@@ -347,40 +376,64 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    pub(super) fn inline_lines(&mut self, nodes: &[Inline], indent: i32, base_style: Style) {
+    pub(super) fn inline_lines<'b>(&mut self, nodes: &'b [Inline], indent: i32, base_style: Style)
+    where
+        'a: 'b,
+    {
         self.inline_lines_with_surface(nodes, indent, base_style, LineSurface::Normal);
     }
 
-    fn styled_inlines(&self, nodes: &[Inline], style: Style) -> Vec<super::StyledInlineLine> {
+    fn styled_inlines<'b>(
+        &mut self,
+        nodes: &'b [Inline],
+        style: Style,
+    ) -> Vec<super::StyledInlineLine>
+    where
+        'a: 'b,
+    {
         styled_reference_inline_lines(
+            self.content(),
             nodes,
             style,
             self.address.as_ref(),
-            self.entry_styles.ranges(nodes),
+            self.entry_styles
+                .as_ref()
+                .map_or(&[][..], |styles| styles.ranges(nodes)),
             false,
             &self.reference_origins,
+            &mut self.link_targets,
         )
     }
 
-    pub(super) fn inline_lines_with_surface(
+    pub(super) fn inline_lines_with_surface<'b>(
         &mut self,
-        nodes: &[Inline],
+        nodes: &'b [Inline],
         indent: i32,
         base_style: Style,
         surface: LineSurface,
-    ) {
-        let targets = inline_anchor_rows(nodes);
+    ) where
+        'a: 'b,
+    {
+        let content = self.content();
+        let targets = inline_anchor_rows(content, nodes);
         let lines = styled_reference_inline_lines(
+            content,
             nodes,
             base_style,
             self.address.as_ref(),
-            self.entry_styles.ranges(nodes),
+            self.entry_styles
+                .as_ref()
+                .map_or(&[][..], |styles| styles.ranges(nodes)),
             surface == LineSurface::Code,
             &self.reference_origins,
+            &mut self.link_targets,
         );
         if lines.len() == 1
             && lines[0].spans.is_empty()
-            && !(surface == LineSurface::Code && mant_ir::geometry::has_literal_rows(nodes))
+            && !(surface == LineSurface::Code
+                && content
+                    .has_literal_rows(nodes)
+                    .expect("validated document content must resolve"))
         {
             self.defer_anchors(targets.into_iter().map(|(id, _)| id));
             self.defer_anchors(
@@ -400,6 +453,7 @@ impl DocumentBuilder<'_> {
                 indent: padding(indent),
                 continuation_indent: padding(indent),
                 spans: line.spans,
+                glyph_projections: line.glyph_projections,
                 surface,
                 wrap_mode: if surface == LineSurface::Code {
                     WrapMode::Character
@@ -415,5 +469,14 @@ impl DocumentBuilder<'_> {
         for line in lines {
             self.push(line);
         }
+    }
+
+    pub(super) fn content(&self) -> ContentContext<'a> {
+        #[cfg(test)]
+        if self.content.is_none() {
+            return crate::test_content::content();
+        }
+        self.content
+            .expect("document lowering requires an authoritative content store")
     }
 }

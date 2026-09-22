@@ -12,11 +12,12 @@ use crate::{
 #[test]
 fn distinct_option_heads_do_not_borrow_the_following_mdoc_description() {
     let document = archlinux_manual("bsdunzip");
+    let content = document.content();
     let mut sections = Vec::new();
     collect_sections(&document.sections, &mut sections);
     let description = sections
         .into_iter()
-        .find(|section| section.heading.plain_text() == "DESCRIPTION")
+        .find(|section| section.heading.plain_text(content) == "DESCRIPTION")
         .expect("DESCRIPTION section");
     let items = description
         .blocks
@@ -43,7 +44,7 @@ fn distinct_option_heads_do_not_borrow_the_following_mdoc_description() {
         encoding
             .terms
             .iter()
-            .map(|term| inline_text(term))
+            .map(|term| inline_text(content, term))
             .collect::<Vec<_>>(),
         ["-O encoding"]
     );

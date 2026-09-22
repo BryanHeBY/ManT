@@ -10,12 +10,13 @@ use crate::{
 #[test]
 fn separates_multiple_operands_from_one_fa_invocation() {
     let document = archlinux_manual("expand_number");
+    let content = document.content();
     let synopsis = common::section(document, "SYNOPSIS");
     let declarations = synopsis
         .blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(content, children)),
             _ => None,
         })
         .collect::<Vec<_>>();

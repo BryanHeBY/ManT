@@ -19,11 +19,12 @@ fn nested_fl_macros_produce_double_dash_options() {
         .join("../..")
         .join("tests/fixtures/roff/nested-fl-mdoc.1");
     let document = parse_manual_source(&path).expect("parse nested-fl fixture");
+    let content = document.content();
 
     let options = common::section(&document, "OPTIONS");
     let terms: Vec<String> = common::definition_items(options)
         .iter()
-        .map(|item| common::inline_text(&item.terms[0]))
+        .map(|item| common::inline_text(content, &item.terms[0]))
         .collect();
 
     assert_eq!(terms, ["-a, --acls", "--no-acls", "-v"]);

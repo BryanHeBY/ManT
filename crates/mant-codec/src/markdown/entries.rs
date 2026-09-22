@@ -6,7 +6,10 @@ mod names;
 mod signature;
 /// Prove that one list-wide declaration reconstructs the final visible bindings.
 /// This is producer grammar reuse, not a hidden spelling or parser-state export.
-pub(crate) fn export_attached_policy(items: &[ListItem]) -> Option<&'static str> {
+pub(crate) fn export_attached_policy(
+    content: mant_ir::ContentContext<'_>,
+    items: &[ListItem],
+) -> Option<&'static str> {
     [AttachedValuePolicy::Infer, AttachedValuePolicy::Fixed]
         .into_iter()
         .find(|policy| {
@@ -14,7 +17,8 @@ pub(crate) fn export_attached_policy(items: &[ListItem]) -> Option<&'static str>
                 let Some(facts) = &item.entry else {
                     return false;
                 };
-                let Ok(signature) = entry_signature(item, facts.kind, true, *policy) else {
+                let Ok(signature) = entry_signature(content, item, facts.kind, true, *policy)
+                else {
                     return false;
                 };
                 let rebuilt =
@@ -37,15 +41,16 @@ use super::directives::{
     AttachedValuePolicy, DomainDeclaration, DomainDeclarationState, SemanticDeclarations,
     domain_diagnostic, semantic_diagnostic,
 };
-use mant_ir::{Block, Diagnostic, EntryKind, Inline, ListItem, ListKind, SourceSpan, ValueDomain};
+use mant_ir::{Block, Diagnostic, EntryKind, ListItem, ListKind, SourceSpan, ValueDomain};
 
 /// Attach facts to each declared owner without consuming its head or delimiter.
 pub(super) fn normalize_entry_lists(
+    content: &super::content::MarkdownContent,
     blocks: &mut [Block],
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    entry_coverage(blocks, declarations, diagnostics);
+    entry_coverage(content, blocks, declarations, diagnostics);
 }
 
 /// Coverage of direct semantic children through transparent containers. A
@@ -56,7 +61,9 @@ struct EntryCoverage {
     rejected: bool,
 }
 
+#[allow(clippy::too_many_lines)] // This pass retains list ownership and coverage in one traversal.
 fn entry_coverage(
+    content: &super::content::MarkdownContent,
     blocks: &mut [Block],
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
@@ -70,7 +77,8 @@ fn entry_coverage(
             ..
         } = block
         else {
-            coverage.rejected |= normalize_nested_blocks(block, declarations, diagnostics).rejected;
+            coverage.rejected |=
+                normalize_nested_blocks(content, block, declarations, diagnostics).rejected;
             continue;
         };
         let owner_offsets = declarations.bindings.items(*source).to_vec();
@@ -79,6 +87,7 @@ fn entry_coverage(
             .enumerate()
             .map(|(index, item)| {
                 item_child_coverage(
+                    content,
                     item,
                     owner_offsets.get(index).copied(),
                     declarations,
@@ -105,14 +114,22 @@ fn entry_coverage(
         let attached = declaration.map_or(AttachedValuePolicy::Infer, |value| value.attached);
         let signatures = items
             .iter()
-            .map(|item| entry_signature(item, role, declaration.is_some(), attached))
+            .map(|item| {
+                entry_signature(
+                    content.content(),
+                    item,
+                    role,
+                    declaration.is_some(),
+                    attached,
+                )
+            })
             .collect::<Vec<_>>();
         // Undeclared option recognition retains its conservative whole-list
         // admission rule. An explicit declaration instead owns each item's
         // validation independently; one rejection cannot erase valid siblings.
         if declaration.is_none() && signatures.iter().any(Result::is_err) {
             coverage.rejected |= child_coverage.iter().any(|value| value.rejected);
-            warn_incomplete_option_list(items, *source, diagnostics);
+            warn_incomplete_option_list(content, items, *source, diagnostics);
             continue;
         }
         for (item_index, ((item, signature), children)) in items
@@ -158,11 +175,12 @@ fn entry_coverage(
 }
 
 fn warn_incomplete_option_list(
+    content: &super::content::MarkdownContent,
     items: &[ListItem],
     source: Option<SourceSpan>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if resembles_rejected_option_list(items) {
+    if resembles_rejected_option_list(content, items) {
         semantic_diagnostic(
             diagnostics,
             source.unwrap_or(SourceSpan {
@@ -202,6 +220,7 @@ fn attach_domain(
 /// semantic owner. Ordinary bullet/ordered containers must carry declaration
 /// failures upward just like failures returned by their nested content.
 fn item_child_coverage(
+    content: &super::content::MarkdownContent,
     item: &mut ListItem,
     owner_offset: Option<OriginalItemId>,
     declarations: &mut SemanticDeclarations,
@@ -213,12 +232,13 @@ fn item_child_coverage(
             .incomplete_entry_children
             .remove(&offset)
     });
-    let mut coverage = entry_coverage(&mut item.blocks, declarations, diagnostics);
+    let mut coverage = entry_coverage(content, &mut item.blocks, declarations, diagnostics);
     coverage.rejected |= rejected_declaration;
     coverage
 }
 
 fn normalize_nested_blocks(
+    content: &super::content::MarkdownContent,
     block: &mut Block,
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
@@ -226,17 +246,22 @@ fn normalize_nested_blocks(
     let mut coverage = EntryCoverage::default();
     match block {
         Block::List { .. } => {
-            return entry_coverage(std::slice::from_mut(block), declarations, diagnostics);
+            return entry_coverage(
+                content,
+                std::slice::from_mut(block),
+                declarations,
+                diagnostics,
+            );
         }
         Block::DefinitionList { items, .. } => {
             for item in items {
-                normalize_entry_lists(&mut item.description, declarations, diagnostics);
+                normalize_entry_lists(content, &mut item.description, declarations, diagnostics);
             }
         }
         Block::Table { rows, .. } => {
             for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
                 coverage.rejected |=
-                    entry_coverage(&mut cell.blocks, declarations, diagnostics).rejected;
+                    entry_coverage(content, &mut cell.blocks, declarations, diagnostics).rejected;
             }
         }
         Block::Paragraph { .. }
@@ -249,14 +274,19 @@ fn normalize_nested_blocks(
     coverage
 }
 
-fn resembles_rejected_option_list(items: &[ListItem]) -> bool {
+fn resembles_rejected_option_list(
+    content: &super::content::MarkdownContent,
+    items: &[ListItem],
+) -> bool {
     let option_like = items
         .iter()
         .filter(|item| {
             matches!(
                 item.blocks.first(),
                 Some(Block::Paragraph { children, .. })
-                    if children.iter().any(|inline| matches!(inline, Inline::Code { value } if is_option_code(value)))
+                    if children.iter().any(|inline| {
+                        matches!(content.content().inline(inline), Ok(mant_ir::InlineView::Code(value)) if is_option_code(value))
+                    })
             )
         })
         .count();
@@ -264,8 +294,9 @@ fn resembles_rejected_option_list(items: &[ListItem]) -> bool {
 }
 
 #[cfg(test)]
-fn normalize_option_lists(blocks: &mut [Block]) {
+fn normalize_option_lists(content: &super::content::MarkdownContent, blocks: &mut [Block]) {
     normalize_entry_lists(
+        content,
         blocks,
         &mut SemanticDeclarations::default(),
         &mut Vec::new(),
@@ -274,9 +305,21 @@ fn normalize_option_lists(blocks: &mut [Block]) {
 
 #[cfg(test)]
 mod tests {
-    use mant_ir::{Block, EntryKind, Inline, LayoutHint, ListItem, ListKind, NameCase};
+    use mant_ir::{
+        Block, ContentRootKind, EntryKind, Inline, InlineView, LayoutHint, ListItem, ListKind,
+        NameCase,
+    };
 
     use super::normalize_option_lists;
+    use crate::markdown::content::MarkdownContent;
+
+    fn option_text(content: &mut MarkdownContent, name: &str, description: &str) -> Vec<Inline> {
+        let mut root = content.root(ContentRootKind::Body, None);
+        vec![
+            root.code(name.to_owned(), None),
+            root.text(format!(": {description}"), None),
+        ]
+    }
 
     fn paragraph(children: Vec<Inline>) -> Block {
         Block::Paragraph {
@@ -288,18 +331,12 @@ mod tests {
 
     #[test]
     fn annotates_only_complete_undeclared_option_lists() {
-        let option = |name: &str, description: &str| ListItem {
+        let mut content = MarkdownContent::new();
+        let mut option = |name: &str, description: &str| ListItem {
             layout: mant_ir::ListItemLayout::default(),
             source: None,
             entry: None,
-            blocks: vec![paragraph(vec![
-                Inline::Code {
-                    value: name.to_owned(),
-                },
-                Inline::Text {
-                    value: format!(": {description}"),
-                },
-            ])],
+            blocks: vec![paragraph(option_text(&mut content, name, description))],
         };
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
@@ -312,7 +349,7 @@ mod tests {
             source: None,
         }];
 
-        normalize_option_lists(&mut blocks);
+        normalize_option_lists(&content, &mut blocks);
 
         let Block::List { items, .. } = &blocks[0] else {
             panic!("ordinary list must remain intact");
@@ -330,12 +367,17 @@ mod tests {
         assert!(matches!(
             &items[0].blocks[0],
             Block::Paragraph { children, .. }
-                if matches!(&children[1], Inline::Text { value } if value == ": Show help.")
+                if matches!(content.content().inline(&children[1]), Ok(InlineView::Text(": Show help.")))
         ));
     }
 
     #[test]
     fn keeps_trailing_content_blocks_in_the_original_item() {
+        let mut content = MarkdownContent::new();
+        let paragraph_content = option_text(&mut content, "--config", "Read configuration.");
+        let preformatted = content
+            .root(ContentRootKind::FixedBody, None)
+            .text("tool --config path".to_owned(), None);
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
             compact: false,
@@ -344,18 +386,9 @@ mod tests {
                 source: None,
                 entry: None,
                 blocks: vec![
-                    paragraph(vec![
-                        Inline::Code {
-                            value: "--config".to_owned(),
-                        },
-                        Inline::Text {
-                            value: ": Read configuration.".to_owned(),
-                        },
-                    ]),
+                    paragraph(paragraph_content),
                     Block::Preformatted {
-                        children: vec![Inline::Text {
-                            value: "tool --config path".to_owned(),
-                        }],
+                        children: vec![preformatted],
                         language: None,
                         layout: LayoutHint::default(),
                         source: None,
@@ -366,7 +399,7 @@ mod tests {
             source: None,
         }];
 
-        normalize_option_lists(&mut blocks);
+        normalize_option_lists(&content, &mut blocks);
 
         let Block::List { items, .. } = &blocks[0] else {
             panic!("ordinary list must remain intact");
@@ -374,12 +407,17 @@ mod tests {
         assert!(matches!(
             items[0].blocks.as_slice(),
             [Block::Paragraph { .. }, Block::Preformatted { children, .. }]
-                if matches!(&children[0], Inline::Text { value } if value == "tool --config path")
+                if matches!(content.content().inline(&children[0]), Ok(InlineView::Text("tool --config path")))
         ));
     }
 
     #[test]
     fn leaves_mixed_lists_unchanged() {
+        let mut content = MarkdownContent::new();
+        let option = option_text(&mut content, "--color", "Control colour.");
+        let prose = content
+            .root(ContentRootKind::Body, None)
+            .text("ordinary prose".to_owned(), None);
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
             compact: true,
@@ -388,22 +426,13 @@ mod tests {
                     layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
-                    blocks: vec![paragraph(vec![
-                        Inline::Code {
-                            value: "--color".to_owned(),
-                        },
-                        Inline::Text {
-                            value: ": Control colour.".to_owned(),
-                        },
-                    ])],
+                    blocks: vec![paragraph(option)],
                 },
                 ListItem {
                     layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
-                    blocks: vec![paragraph(vec![Inline::Text {
-                        value: "ordinary prose".to_owned(),
-                    }])],
+                    blocks: vec![paragraph(vec![prose])],
                 },
             ],
             layout: LayoutHint::default(),
@@ -411,7 +440,7 @@ mod tests {
         }];
         let original = blocks.clone();
 
-        normalize_option_lists(&mut blocks);
+        normalize_option_lists(&content, &mut blocks);
 
         assert_eq!(blocks, original, "a rejected mixed list remains untouched");
     }

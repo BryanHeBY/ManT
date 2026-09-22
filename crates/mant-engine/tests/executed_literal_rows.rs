@@ -287,16 +287,19 @@ fn explicit_request_budgets_do_not_turn_into_unbounded_literal_content() {
 #[test]
 fn font_and_target_survive_literal_request_splits() {
     use mant_ir::visit::{Visit, walk_inline};
-    #[derive(Debug, Default)]
-    struct Emphasized(Vec<String>);
-    impl<'a> Visit<'a> for Emphasized {
+    #[derive(Debug)]
+    struct Emphasized<'a> {
+        words: Vec<String>,
+        content: mant_ir::ContentContext<'a>,
+    }
+    impl<'a> Visit<'a> for Emphasized<'a> {
         fn visit_inline(&mut self, inline: &'a mant_ir::Inline) {
             if let mant_ir::Inline::Emphasis { children } = inline {
-                self.0.push(
+                self.words.push(
                     children
                         .iter()
-                        .filter_map(|child| match child {
-                            mant_ir::Inline::Text { value } => Some(value.as_str()),
+                        .filter_map(|child| match self.content.inline(child).unwrap() {
+                            mant_ir::InlineView::Text(value) => Some(value),
                             _ => None,
                         })
                         .collect::<String>(),
@@ -307,18 +310,21 @@ fn font_and_target_survive_literal_request_splits() {
     }
     let query = load_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bd -literal -compact\n.Bf -emphasis\nALPHA\n.sp 2\n.Tg destination\n.Em BETA\n.Ef\nGAMMA\n.Ed\n").unwrap();
     let document = query.document.as_ref().unwrap();
-    let mut styled = Emphasized::default();
+    let mut styled = Emphasized {
+        words: Vec::new(),
+        content: document.content(),
+    };
     styled.visit_document(document);
     assert!(
-        styled.0.iter().any(|value| value.contains("ALPHA")),
+        styled.words.iter().any(|value| value.contains("ALPHA")),
         "{styled:?}"
     );
     assert!(
-        styled.0.iter().any(|value| value.contains("BETA")),
+        styled.words.iter().any(|value| value.contains("BETA")),
         "{styled:?}"
     );
     assert!(
-        !styled.0.iter().any(|value| value.contains("GAMMA")),
+        !styled.words.iter().any(|value| value.contains("GAMMA")),
         "{styled:?}"
     );
     assert!(mant_ir::DocumentIndex::build(document).contains("destination"));

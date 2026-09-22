@@ -237,7 +237,10 @@ fn empty_independent_definition_is_not_reported_as_budget_omission() {
         .content
         .as_ref()
         .unwrap()
-        .referenced_owner(&report.supports)
+        .referenced_owner(
+            report.content_projection.as_ref().unwrap().content(),
+            &report.supports,
+        )
         .unwrap();
     assert!(matches!(own, mant_ir::EntryOwner::Definition(item) if item.description.is_empty()));
     assert!(!text.contains("\nForms:"));
@@ -321,6 +324,7 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
         });
         explanation.documents.push(ScopedExplanation {
             supports: Vec::new(),
+            content_projection: result.content_projection.take(),
             address: mant_ir::DocumentAddress::Manual {
                 name: format!("doc{index}"),
                 manual_section: "1".into(),

@@ -80,33 +80,36 @@ fn arrows_cycle_confirmed_search_results_without_requerying() {
 
 #[test]
 fn confirmed_search_moves_across_a_pre_resolved_document_scope() {
-    let scoped = |name: &str, text: &str| ResolvedContent {
-        address: Some(DocumentAddress::Markdown {
-            path: name.to_owned(),
-            origin: MarkdownOrigin::Documents,
-        }),
-        label: name.to_owned(),
-        document: Some(Document {
-            parser: None,
-            sources: sources(SourceFormat::Markdown),
-            root_source: SourceKey::FIRST,
-            meta: DocumentMeta {
-                title: Some(name.to_owned()),
-                ..DocumentMeta::default()
-            },
-            heading: None,
-            fragment_aliases: Vec::new(),
-            diagnostics: Vec::new(),
-            blocks: vec![AstBlock::Paragraph {
-                children: vec![Inline::Text {
-                    value: text.to_owned(),
+    let scoped = |name: &str, text: &str| {
+        let mut bundle = ResolvedContent {
+            address: Some(DocumentAddress::Markdown {
+                path: name.to_owned(),
+                origin: MarkdownOrigin::Documents,
+            }),
+            label: name.to_owned(),
+            document: Some(Document {
+                parser: None,
+                sources: sources(SourceFormat::Markdown),
+                root_source: SourceKey::FIRST,
+                content_store: crate::test_content::store(),
+                meta: DocumentMeta {
+                    title: Some(name.to_owned()),
+                    ..DocumentMeta::default()
+                },
+                heading: None,
+                fragment_aliases: Vec::new(),
+                diagnostics: Vec::new(),
+                blocks: vec![AstBlock::Paragraph {
+                    children: vec![crate::test_content::text(text.to_owned())],
+                    layout: LayoutHint::default(),
+                    source: None,
                 }],
-                layout: LayoutHint::default(),
-                source: None,
-            }],
-            sections: Vec::new(),
-        }),
-        tldr: None,
+                sections: Vec::new(),
+            }),
+            tldr: None,
+        };
+        crate::test_content::sync_document(bundle.document.as_mut().expect("document"));
+        bundle
     };
     let alpha = scoped("alpha", "ordinary first document");
     let beta = scoped("beta", "unique recursive match");

@@ -203,63 +203,6 @@ impl<'a> EntryOwner<'a> {
             },
         }
     }
-
-    /// Project one validated slice; invalid references never produce partial text.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal legacy backend rejects directly owned inline
-    /// content.
-    #[must_use]
-    pub fn content_slice(self, slice: &EntryContentSlice) -> Option<Vec<Inline>> {
-        ContentContext::detached()
-            .entry_content_slice(self, slice)
-            .expect("legacy inline text is self-contained")
-    }
-
-    /// Project complete authored forms, failing atomically on invalid bindings.
-    /// Empty bindings are unknown even when displayed native terms exist.
-    /// An absent owner or any invalid form returns `None`, never a partial set.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal legacy backend rejects directly owned inline
-    /// content.
-    #[must_use]
-    pub fn forms(self) -> Option<EntryForms<'a>> {
-        ContentContext::detached()
-            .entry_forms(self)
-            .expect("legacy inline text is self-contained")
-    }
-
-    /// Count complete valid form bindings without copying inline content or names.
-    ///
-    /// This has the same atomic validity rule as [`Self::forms`]; invalid bindings
-    /// yield `None`, and an explicitly unrecorded form set yields zero.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal legacy backend rejects directly owned inline
-    /// content.
-    #[must_use]
-    pub fn validated_form_count(self) -> Option<usize> {
-        ContentContext::detached()
-            .entry_validated_form_count(self)
-            .expect("legacy inline text is self-contained")
-    }
-
-    /// Project one ordered form without accepting a partial binding.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal legacy backend rejects directly owned inline
-    /// content.
-    #[must_use]
-    pub fn form(self, form: &EntryForm) -> Option<Cow<'a, [Inline]>> {
-        ContentContext::detached()
-            .entry_form(self, form)
-            .expect("legacy inline text is self-contained")
-    }
 }
 
 impl<'store> ContentContext<'store> {
@@ -371,16 +314,30 @@ impl<'store> ContentContext<'store> {
             let (InlineView::Text(value) | InlineView::Code(value)) = view else {
                 return Ok(None);
             };
-            let Some(value) = value.get(range.clone()) else {
+            let Some(_) = value.get(range.clone()) else {
                 return Ok(None);
             };
+            let source = match node {
+                Inline::Text { content } | Inline::Code { content } => *content,
+                _ => return Ok(None),
+            };
+            let start = u32::try_from(range.start)
+                .ok()
+                .and_then(|offset| source.bytes.start.checked_add(offset));
+            let end = u32::try_from(range.end)
+                .ok()
+                .and_then(|offset| source.bytes.start.checked_add(offset));
+            let Some((start, end)) = start.zip(end).filter(|(_, end)| *end <= source.bytes.end)
+            else {
+                return Ok(None);
+            };
+            let content = crate::ContentRef {
+                atom: source.atom,
+                bytes: crate::ContentByteRange { start, end },
+            };
             match view {
-                InlineView::Code(_) => Inline::Code {
-                    value: value.into(),
-                },
-                _ => Inline::Text {
-                    value: value.into(),
-                },
+                InlineView::Code(_) => Inline::Code { content },
+                _ => Inline::Text { content },
             }
         } else {
             self.scalar_len(std::slice::from_ref(node))?;
@@ -392,8 +349,7 @@ impl<'store> ContentContext<'store> {
                 InlineView::Strong(_) => Inline::Strong { children },
                 InlineView::Emphasis(_) => Inline::Emphasis { children },
                 InlineView::Link(link) => Inline::Link {
-                    target: link.target().clone(),
-                    title: link.title().map(str::to_owned),
+                    occurrence: link.occurrence(),
                     children,
                 },
                 _ => return Ok(None),
@@ -631,7 +587,12 @@ mod tests {
         ValueDomain,
     };
 
-    fn item(id: &str, kind: EntryKind, name: &str) -> ListItem {
+    fn item(
+        fixture: &mut crate::test_support::ContentFixture,
+        id: &str,
+        kind: EntryKind,
+        name: &str,
+    ) -> ListItem {
         ListItem {
             layout: crate::ListItemLayout::default(),
             source: None,
@@ -663,12 +624,7 @@ mod tests {
                 }],
             }),
             blocks: vec![Block::Paragraph {
-                children: vec![
-                    Inline::Code { value: name.into() },
-                    Inline::Text {
-                        value: ": Body — unchanged.".into(),
-                    },
-                ],
+                children: vec![fixture.code(name), fixture.text(": Body — unchanged.")],
                 layout: LayoutHint::default(),
                 source: None,
             }],
@@ -685,7 +641,7 @@ mod tests {
         }
     }
 
-    fn document(blocks: Vec<Block>) -> Document {
+    fn document(content_store: crate::ContentStore, blocks: Vec<Block>) -> Document {
         Document {
             heading: None,
             parser: None,
@@ -700,6 +656,7 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
@@ -710,7 +667,9 @@ mod tests {
 
     #[test]
     fn ordinary_owners_rebuild_indexes_and_choices_without_rewriting_content() {
+        let mut fixture = crate::test_support::ContentFixture::body();
         let mut parent = item(
+            &mut fixture,
             "option-color",
             EntryKind::Parameter {
                 parameter_kind: crate::ParameterKind::Option,
@@ -718,14 +677,18 @@ mod tests {
             "--color",
         );
         let original = parent.blocks.clone();
-        parent
-            .blocks
-            .push(list(vec![item("value-auto", EntryKind::Value, "auto")]));
+        parent.blocks.push(list(vec![item(
+            &mut fixture,
+            "value-auto",
+            EntryKind::Value,
+            "auto",
+        )]));
         parent.entry.as_mut().unwrap().value_domain =
             Some(ValueDomain::Choices { exhaustive: true });
         assert!(parent.has_value_choices());
-        let doc = document(vec![list(vec![parent])]);
-        assert!(crate::validate_document(&doc).is_empty());
+        let doc = document(fixture.finish(), vec![list(vec![parent])]);
+        let diagnostics = crate::validate_document(&doc);
+        assert!(diagnostics.is_empty(), "{diagnostics:#?}");
         let rebuilt: Document =
             serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
         assert_eq!(rebuilt, doc);
@@ -755,7 +718,10 @@ mod tests {
 
     #[test]
     fn borrowed_form_count_agrees_with_atomic_projection_for_valid_and_invalid_bindings() {
-        let original = item("term-name", EntryKind::Term, "é名");
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let original = item(&mut fixture, "term-name", EntryKind::Term, "é名");
+        let store = fixture.finish();
+        let content = store.content();
         for parts in [
             vec![],
             vec![EntryContentSlice {
@@ -788,43 +754,74 @@ mod tests {
             item.entry.as_mut().unwrap().forms = vec![EntryForm { parts }];
             let owner = EntryOwner::List(&item);
             assert_eq!(
-                owner.validated_form_count(),
-                owner.forms().map(|forms| forms.iter().count())
+                content.entry_validated_form_count(owner).unwrap(),
+                content
+                    .entry_forms(owner)
+                    .unwrap()
+                    .map(|forms| forms.iter().count())
             );
         }
         let mut item = original;
         item.entry.as_mut().unwrap().forms.clear();
-        assert_eq!(EntryOwner::List(&item).validated_form_count(), Some(0));
+        assert_eq!(
+            content
+                .entry_validated_form_count(EntryOwner::List(&item))
+                .unwrap(),
+            Some(0)
+        );
     }
 
     #[test]
     fn form_slices_preserve_link_style_and_reject_invalid_utf8_and_owner_paths() {
-        let mut item = item("term-name", EntryKind::Term, "é名");
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let mut item = item(&mut fixture, "term-name", EntryKind::Term, "é名");
+        let link = fixture.link_text(
+            crate::LinkTarget::Document {
+                name: "other".into(),
+                fragment: None,
+            },
+            None,
+            "é名",
+            true,
+        );
+        let Inline::Link {
+            occurrence,
+            children: link_children,
+        } = link
+        else {
+            unreachable!();
+        };
         let Block::Paragraph { children, .. } = &mut item.blocks[0] else {
             panic!("paragraph");
         };
         children[0] = Inline::Link {
-            target: crate::LinkTarget::Document {
-                name: "other".into(),
-                fragment: None,
-            },
-            title: None,
+            occurrence,
             children: vec![Inline::Strong {
-                children: vec![Inline::Code {
-                    value: "é名".into(),
-                }],
+                children: link_children,
             }],
         };
+        let store = fixture.finish();
+        let content = store.content();
         let slice = EntryContentSlice {
             root: EntryInlineRoot::Block { index: 0 },
             path: vec![0, 0, 0],
             bytes: Some(0..2),
         };
         let owner = EntryOwner::List(&item);
-        assert!(
-            matches!(owner.content_slice(&slice).unwrap().as_slice(), [Inline::Link { children, .. }]
-            if matches!(children.as_slice(), [Inline::Strong { children }] if matches!(children.as_slice(), [Inline::Code { value }] if value == "é")))
-        );
+        let projected = content.entry_content_slice(owner, &slice).unwrap().unwrap();
+        let [Inline::Link { children, .. }] = projected.as_slice() else {
+            panic!("projected link wrapper");
+        };
+        let [Inline::Strong { children }] = children.as_slice() else {
+            panic!("projected strong wrapper");
+        };
+        let [code @ Inline::Code { .. }] = children.as_slice() else {
+            panic!("projected code leaf");
+        };
+        assert!(matches!(
+            content.inline(code),
+            Ok(crate::InlineView::Code("é"))
+        ));
         for invalid in [
             EntryContentSlice {
                 bytes: Some(1..2),
@@ -847,7 +844,12 @@ mod tests {
                 ..slice.clone()
             },
         ] {
-            assert!(owner.content_slice(&invalid).is_none());
+            assert!(
+                content
+                    .entry_content_slice(owner, &invalid)
+                    .unwrap()
+                    .is_none()
+            );
         }
         assert_eq!(owner.facts().unwrap().names, ["é名"]);
     }
@@ -855,7 +857,9 @@ mod tests {
     #[test]
     fn invalid_form_bindings_are_diagnostics_not_partial_index_facts() {
         for parts in [vec![], vec![0, 0], vec![1, 0], vec![0, 9]] {
+            let mut fixture = crate::test_support::ContentFixture::body();
             let mut entry = item(
+                &mut fixture,
                 "option-probe",
                 EntryKind::Parameter {
                     parameter_kind: crate::ParameterKind::Option,
@@ -870,7 +874,7 @@ mod tests {
                     bytes: None,
                 })
                 .collect();
-            let doc = document(vec![list(vec![entry])]);
+            let doc = document(fixture.finish(), vec![list(vec![entry])]);
             let diagnostics = crate::validate_document(&doc);
             assert!(diagnostics.iter().any(|d| {
                 d.code.as_deref() == Some("ir.invalid-entry-content")
@@ -886,19 +890,20 @@ mod tests {
 
     #[test]
     fn explicit_terms_borrow_and_unrecorded_forms_do_not_remove_owners() {
-        let list_item = item("parent", EntryKind::Term, "one");
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let one = fixture.code("one");
+        let two = fixture.code("two");
+        // The shared fixture root follows final document traversal: explicit
+        // definition terms precede the parent's description and nested item.
+        let list_item = item(&mut fixture, "parent", EntryKind::Term, "one");
+        let child = item(&mut fixture, "child", EntryKind::Value, "auto");
+        let mut description = list_item.blocks;
+        description.push(list(vec![child]));
         let mut native = DefinitionItem {
             source: None,
             entry: list_item.entry,
-            terms: vec![
-                vec![Inline::Code {
-                    value: "one".into(),
-                }],
-                vec![Inline::Code {
-                    value: "two".into(),
-                }],
-            ],
-            description: vec![list(vec![item("child", EntryKind::Value, "auto")])],
+            terms: vec![vec![one], vec![two]],
+            description,
             layout: crate::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
@@ -909,45 +914,60 @@ mod tests {
         facts.names.clear();
         facts.name_bindings.clear();
         facts.forms = vec![EntryForm::term(0), EntryForm::term(1)];
+        let store = fixture.finish();
+        let content = store.content();
         let owner = EntryOwner::Definition(&native);
-        let Some(EntryForms::Borrowed(terms)) = owner.forms() else {
+        let Some(EntryForms::Borrowed(terms)) = content.entry_forms(owner).unwrap() else {
             panic!("complete terms must borrow")
         };
         assert!(std::ptr::eq(terms, native.terms.as_slice()));
         assert!(
-            matches!(owner.form(&EntryForm::term(1)), Some(Cow::Borrowed(term)) if std::ptr::eq(term, native.terms[1].as_slice()))
+            matches!(content.entry_form(owner, &EntryForm::term(1)).unwrap(), Some(Cow::Borrowed(term)) if std::ptr::eq(term, native.terms[1].as_slice()))
         );
         native.entry.as_mut().unwrap().forms = vec![EntryForm::term(1), EntryForm::term(0)];
-        let Some(EntryForms::Projected(forms)) = EntryOwner::Definition(&native).forms() else {
+        let Some(EntryForms::Projected(forms)) = content
+            .entry_forms(EntryOwner::Definition(&native))
+            .unwrap()
+        else {
             panic!("separate borrowed forms")
         };
         assert!(forms.iter().all(|form| matches!(form, Cow::Borrowed(_))));
         native.entry.as_mut().unwrap().forms.clear();
         assert!(matches!(
-            EntryOwner::Definition(&native).forms(),
+            content
+                .entry_forms(EntryOwner::Definition(&native))
+                .unwrap(),
             Some(EntryForms::Unrecorded)
         ));
-        let doc = document(vec![Block::DefinitionList {
-            declaration_groups: Vec::new(),
-            items: vec![native],
-            compact: true,
-            layout: LayoutHint::default(),
-            source: None,
-        }]);
+        let doc = document(
+            store,
+            vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
+                items: vec![native],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+        );
         let index = SemanticIndex::build(&doc);
         assert!(index.root()[0].forms.is_empty());
         assert_eq!(index.root()[0].children[0].id, "child");
-        assert!(crate::validate_document(&doc).is_empty());
+        let diagnostics = crate::validate_document(&doc);
+        assert!(diagnostics.is_empty(), "{diagnostics:#?}");
     }
 
     #[test]
     fn invalid_names_leave_valid_forms_and_children_intact() {
-        let mut parent = item("parent", EntryKind::Command, "run");
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let mut parent = item(&mut fixture, "parent", EntryKind::Command, "run");
         parent.entry.as_mut().unwrap().name_bindings.clear();
-        parent
-            .blocks
-            .push(list(vec![item("child", EntryKind::Value, "auto")]));
-        let doc = document(vec![list(vec![parent])]);
+        parent.blocks.push(list(vec![item(
+            &mut fixture,
+            "child",
+            EntryKind::Value,
+            "auto",
+        )]));
+        let doc = document(fixture.finish(), vec![list(vec![parent])]);
         let index = SemanticIndex::build(&doc);
         assert!(index.root()[0].names.is_empty());
         assert_eq!(index.root()[0].forms, ["run"]);
@@ -963,13 +983,14 @@ mod tests {
     fn empty_group_projection_never_bypasses_name_or_nonempty_group_validation() {
         for valid_names in [false, true] {
             for groups in [Vec::new(), vec![vec!["run".into(), "unbound".into()]]] {
-                let mut owner = item("run", EntryKind::Command, "run");
+                let mut fixture = crate::test_support::ContentFixture::body();
+                let mut owner = item(&mut fixture, "run", EntryKind::Command, "run");
                 let facts = owner.entry.as_mut().unwrap();
                 facts.alias_groups = groups;
                 if !valid_names {
                     facts.name_bindings.clear();
                 }
-                let doc = document(vec![list(vec![owner])]);
+                let doc = document(fixture.finish(), vec![list(vec![owner])]);
                 let projected = SemanticIndex::build(&doc);
                 assert_eq!(projected.root()[0].id, "run");
                 assert_eq!(projected.root()[0].forms, ["run"]);

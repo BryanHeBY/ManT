@@ -1,6 +1,5 @@
 //! commands recognition; complete forms retain their role-specific grammar.
-use mant_ir::Inline;
-use mant_ir::inline_plain_text as plain_text;
+use mant_ir::{ContentContext, Inline, InlineView};
 
 /// Extract the command token from an unstyled authored form.
 pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Option<&str> {
@@ -16,9 +15,12 @@ pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Op
 }
 
 /// Read a formatter-emphasized command name without adjacent placeholders.
-pub(in crate::definitions) fn leading_styled_command_name(term: &[Inline]) -> Option<String> {
+pub(in crate::definitions) fn leading_styled_command_name(
+    content: ContentContext<'_>,
+    term: &[Inline],
+) -> Option<String> {
     let mut name = String::new();
-    append_literal_head(term, &mut name);
+    append_literal_head(content, term, &mut name);
     let name = styled_command_prefix(name.trim());
     is_command_name(name).then(|| name.to_owned())
 }
@@ -26,17 +28,25 @@ pub(in crate::definitions) fn leading_styled_command_name(term: &[Inline]) -> Op
 // Nm/Cm and adjacent font runs can form one multiword literal head. Preserve
 // their actual whitespace and stop at the first argument or unstyled token;
 // never scan later literals in the invocation for additional names.
-fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
+fn append_literal_head(
+    content: ContentContext<'_>,
+    inlines: &[Inline],
+    output: &mut String,
+) -> bool {
     for inline in inlines {
-        match inline {
-            Inline::Anchor { .. } => {}
-            Inline::Text { value } if value.chars().all(char::is_whitespace) => {
+        match content.inline(inline).expect("definition content resolves") {
+            InlineView::Anchor(_) => {}
+            InlineView::Text(value) if value.chars().all(char::is_whitespace) => {
                 output.push_str(value);
             }
-            Inline::Strong { children } => output.push_str(&plain_text(children)),
-            Inline::Code { value } => output.push_str(value),
-            Inline::Link { children, .. } => {
-                if !append_literal_head(children, output) {
+            InlineView::Strong(children) => output.push_str(
+                &content
+                    .plain_text(children)
+                    .expect("definition content resolves"),
+            ),
+            InlineView::Code(value) => output.push_str(value),
+            InlineView::Link(link) => {
+                if !append_literal_head(content, link.children(), output) {
                     return false;
                 }
             }
@@ -74,6 +84,7 @@ pub(in crate::definitions) fn is_command_name(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_content as fixture;
 
     #[test]
     fn styled_multiword_heads_stop_at_syntax_not_at_every_space() {
@@ -86,10 +97,10 @@ mod tests {
             ("query user <NAME>", "query user"),
         ] {
             let term = [Inline::Strong {
-                children: vec![Inline::Text { value: form.into() }],
+                children: vec![fixture::text(form)],
             }];
             assert_eq!(
-                leading_styled_command_name(&term).as_deref(),
+                leading_styled_command_name(fixture::content(), &term).as_deref(),
                 Some(expected)
             );
         }

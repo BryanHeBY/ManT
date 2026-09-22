@@ -18,6 +18,7 @@ pub(super) struct BlockState {
     indent_columns: crate::mandoc::layout::SourceIndent,
     hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
     spacing_enabled: bool,
+    content: crate::mandoc::content::LegacyContent,
 }
 
 impl BlockState {
@@ -55,19 +56,21 @@ impl BlockState {
             self.flush_paragraph();
         }
     }
-    pub(super) const fn with_output(
+    pub(super) fn with_output(
         indent_columns: crate::mandoc::layout::SourceIndent,
         spacing_enabled: bool,
         output: Vec<Block>,
+        content: crate::mandoc::content::LegacyContent,
     ) -> Self {
         Self {
             output,
-            paragraph: ParagraphFlow::new(spacing_enabled),
-            literal: LiteralFlow::new(),
+            paragraph: ParagraphFlow::new(spacing_enabled, content.clone()),
+            literal: LiteralFlow::new(content.clone()),
             pending_targets: targets::PendingTargets::new(),
             indent_columns,
             hanging_origin: None,
             spacing_enabled,
+            content,
         }
     }
 
@@ -96,7 +99,7 @@ impl BlockState {
 
     pub(super) fn push_inline(
         &mut self,
-        nodes: Vec<Inline>,
+        nodes: Vec<crate::mandoc::inline::DraftInline>,
         source: Option<mant_ir::SourceSpan>,
         starts_indented_line: bool,
         continues_line: bool,
@@ -173,14 +176,17 @@ impl BlockState {
             return;
         }
         let mut lowered = self.output.split_off(output_start.min(self.output.len()));
-        self.pending_targets
-            .attach_leading(&mut lowered, layout(self.indent_columns));
+        self.pending_targets.attach_leading(
+            &self.content,
+            &mut lowered,
+            layout(self.indent_columns),
+        );
         self.output.append(&mut lowered);
     }
 
     pub(super) fn push_preformatted(
         &mut self,
-        nodes: Vec<Inline>,
+        nodes: Vec<crate::mandoc::inline::DraftInline>,
         source: Option<mant_ir::SourceSpan>,
         continues_line: bool,
         starts_line: bool,
@@ -196,7 +202,10 @@ impl BlockState {
             .append(nodes, source, continues_line, starts_line, occupies_row);
     }
 
-    pub(super) fn no_break_formatter_flush(&mut self, nodes: Vec<Inline>) {
+    pub(super) fn no_break_formatter_flush(
+        &mut self,
+        nodes: Vec<crate::mandoc::inline::DraftInline>,
+    ) {
         self.paragraph.no_break_flush();
         self.literal.no_break_flush(nodes);
     }
@@ -281,10 +290,15 @@ impl BlockState {
                     children,
                     layout,
                     source,
-                } if !mant_ir::has_printable_character(&children)
-                    && children.iter().any(
-                        |inline| matches!(inline, Inline::Text { value } if value.is_empty()),
-                    ) =>
+                } if self.content.with_context(|content| {
+                    !mant_ir::has_printable_character(content, &children)
+                        && children.iter().any(|inline| match inline {
+                            Inline::Text { content: text } => {
+                                content.resolve_text(*text).is_some_and(str::is_empty)
+                            }
+                            _ => false,
+                        })
+                }) =>
                 {
                     // An explicit empty formatter cell (for example `\&`)
                     // owns one physical row. Empty paragraphs are otherwise
@@ -341,12 +355,16 @@ impl BlockState {
         let start = self.output.len();
         self.flush_preformatted();
         self.flush_paragraph();
-        if !has_flushed_row(&self.output[start..]) {
+        if !has_flushed_row(&self.content, &self.output[start..]) {
             let start = self.output.len();
             self.output.push(Block::Preformatted {
-                children: vec![Inline::Text {
-                    value: String::new(),
-                }],
+                children: self.content.lower(
+                    mant_ir::ContentRootKind::FixedBody,
+                    source,
+                    vec![crate::mandoc::inline::DraftInline::Text {
+                        value: String::new(),
+                    }],
+                ),
                 language: None,
                 layout: layout(self.indent_columns),
                 source,
@@ -383,10 +401,19 @@ impl BlockState {
 
 /// Only actual buffered rows satisfy an unconditional formatter flush.
 /// Zero-width target blocks remain available without masquerading as rows.
-pub(super) fn has_flushed_row(blocks: &[Block]) -> bool {
-    blocks.iter().any(|block| match block {
-        Block::Preformatted { children, .. } => mant_ir::geometry::has_literal_rows(children),
-        Block::Paragraph { children, .. } => mant_ir::has_printable_character(children),
-        _ => false,
+pub(super) fn has_flushed_row(
+    content: &crate::mandoc::content::LegacyContent,
+    blocks: &[Block],
+) -> bool {
+    content.with_context(|content| {
+        blocks.iter().any(|block| match block {
+            Block::Preformatted { children, .. } => {
+                mant_ir::geometry::has_literal_rows(content, children)
+            }
+            Block::Paragraph { children, .. } => {
+                mant_ir::has_printable_character(content, children)
+            }
+            _ => false,
+        })
     })
 }

@@ -215,11 +215,20 @@ impl From<SearchCaseMode> for SearchCase {
     }
 }
 
-/// Representation searched while results retain full-Markdown coordinates.
+/// Representation searched while results retain Markdown presentation coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum SearchScopeMode {
     Visible,
     Markdown,
+}
+
+impl From<SearchScopeMode> for SearchScope {
+    fn from(value: SearchScopeMode) -> Self {
+        match value {
+            SearchScopeMode::Visible => Self::Visible,
+            SearchScopeMode::Markdown => Self::Markdown,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -237,15 +246,6 @@ impl From<InputFormatMode> for InputFormat {
             InputFormatMode::Markdown => Self::Markdown,
             #[cfg(feature = "roff")]
             InputFormatMode::Roff => Self::Roff,
-        }
-    }
-}
-
-impl From<SearchScopeMode> for SearchScope {
-    fn from(value: SearchScopeMode) -> Self {
-        match value {
-            SearchScopeMode::Visible => Self::Visible,
-            SearchScopeMode::Markdown => Self::Markdown,
         }
     }
 }

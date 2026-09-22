@@ -45,14 +45,16 @@ fn operands_never_become_text_in_filled_and_literal_flows() {
 #[test]
 fn omitted_page_controls_preserve_continuations_and_font_state() {
     use mant_ir::visit::{Visit, walk_inline};
-    #[derive(Default)]
-    struct BoldWords(Vec<String>);
-    impl<'ir> Visit<'ir> for BoldWords {
+    struct BoldWords<'a> {
+        words: Vec<String>,
+        content: mant_ir::ContentContext<'a>,
+    }
+    impl<'ir> Visit<'ir> for BoldWords<'ir> {
         fn visit_inline(&mut self, inline: &'ir mant_ir::Inline) {
             if let mant_ir::Inline::Strong { children } = inline {
                 for child in children {
-                    if let mant_ir::Inline::Text { value } = child {
-                        self.0.push(value.clone());
+                    if let Ok(mant_ir::InlineView::Text(value)) = self.content.inline(child) {
+                        self.words.push(value.to_owned());
                     }
                 }
             }
@@ -67,10 +69,20 @@ fn omitted_page_controls_preserve_continuations_and_font_state() {
         let query = load_roff_bytes(input.as_bytes()).unwrap();
         let text = render_query_text(&query);
         assert!(text.contains("ALPHABETA"), "{input}\n{text}");
-        let mut bold = BoldWords::default();
-        bold.visit_document(query.document.as_ref().unwrap());
-        assert!(bold.0.iter().any(|word| word.contains("GAMMA")), "{input}");
-        assert!(!bold.0.iter().any(|word| word.contains("DELTA")), "{input}");
+        let document = query.document.as_ref().unwrap();
+        let mut bold = BoldWords {
+            words: Vec::new(),
+            content: document.content(),
+        };
+        bold.visit_document(document);
+        assert!(
+            bold.words.iter().any(|word| word.contains("GAMMA")),
+            "{input}"
+        );
+        assert!(
+            !bold.words.iter().any(|word| word.contains("DELTA")),
+            "{input}"
+        );
         assert!(!text.contains("50n") && !text.contains("0n"), "{text}");
     }
 }

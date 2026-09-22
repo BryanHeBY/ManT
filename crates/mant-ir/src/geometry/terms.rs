@@ -1,5 +1,5 @@
 //! Measure the open final label row, independently of preceding label rows.
-use crate::Inline;
+use crate::{ContentContext, Inline};
 
 /// Display cells occupied by the final open definition-label row.
 ///
@@ -11,86 +11,110 @@ use crate::Inline;
 ///
 /// # Panics
 ///
-/// Panics only if the internal legacy backend rejects directly owned inline
-/// content.
+/// Panics if a retained key or range does not resolve in `content`.
 #[must_use]
-pub fn definition_run_in_width(terms: &[Vec<Inline>]) -> Option<usize> {
-    crate::ContentContext::detached()
+pub fn definition_run_in_width(
+    content: ContentContext<'_>,
+    terms: &[Vec<Inline>],
+) -> Option<usize> {
+    content
         .definition_run_in_width(terms)
-        .expect("legacy inline text is self-contained")
+        .expect("definition terms resolve in their authoritative content store")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn text(value: &str) -> Inline {
-        Inline::Text {
-            value: value.into(),
-        }
-    }
+    use crate::test_support::ContentFixture;
 
     #[test]
     fn preceding_labels_and_hard_rows_do_not_measure_the_final_open_row() {
+        let mut fixture = ContentFixture::body();
+        let long_1 = fixture.text("long-label");
+        let short_1 = fixture.text("-b");
+        let joined = fixture.text("long-label\n-b");
+        let short_2 = fixture.text("-b");
+        let long_2 = fixture.text("long-label");
+        let padded = fixture.text("  -b ");
+        let store = fixture.finish();
+        let content = store.content();
         assert_eq!(
-            definition_run_in_width(&[vec![text("long-label")], vec![text("-b")]]),
+            definition_run_in_width(content, &[vec![long_1], vec![short_1]]),
             Some(2)
         );
+        assert_eq!(definition_run_in_width(content, &[vec![joined]]), Some(2));
         assert_eq!(
-            definition_run_in_width(&[vec![text("long-label\n-b")]]),
-            Some(2)
-        );
-        assert_eq!(
-            definition_run_in_width(&[vec![text("-b")], vec![text("long-label")]]),
+            definition_run_in_width(content, &[vec![short_2], vec![long_2]]),
             Some(10)
         );
-        assert_eq!(definition_run_in_width(&[vec![text("  -b ")]]), Some(5));
+        assert_eq!(definition_run_in_width(content, &[vec![padded]]), Some(5));
     }
 
     #[test]
     fn anchors_and_wrappers_do_not_reopen_a_closed_label_row() {
-        let anchor = Inline::anchor("target");
-        for boundary in [Inline::LineBreak, text("\n")] {
+        let mut fixture = ContentFixture::body();
+        let anchor = fixture.anchor("target");
+        let hard_break = fixture.hard_break();
+        let newline = fixture.text("\n");
+        let labels = [fixture.text("-b"), fixture.text("-b")];
+        let standalone_label = fixture.text("-b");
+        let before_break = fixture.text("-b");
+        let final_break = fixture.hard_break();
+        let after_break = fixture.text("-c");
+        let store = fixture.finish();
+        let content = store.content();
+        for (label, boundary) in labels.into_iter().zip([hard_break, newline]) {
             assert_eq!(
-                definition_run_in_width(&[vec![text("-b"), boundary, anchor.clone()]]),
+                definition_run_in_width(content, &[vec![label, boundary, anchor.clone()]]),
                 None
             );
         }
         assert_eq!(
-            definition_run_in_width(&[vec![text("-b")], vec![anchor]]),
+            definition_run_in_width(content, &[vec![standalone_label], vec![anchor]]),
             Some(2)
         );
         assert_eq!(
-            definition_run_in_width(&[vec![Inline::Emphasis {
-                children: Vec::new()
-            }]]),
+            definition_run_in_width(
+                content,
+                &[vec![Inline::Emphasis {
+                    children: Vec::new()
+                }]]
+            ),
             None
         );
         assert_eq!(
-            definition_run_in_width(&[vec![text("-b"), Inline::LineBreak, text("-c")]]),
+            definition_run_in_width(content, &[vec![before_break, final_break, after_break]]),
             Some(2)
         );
     }
 
     #[test]
     fn styled_link_fragments_share_unicode_cell_measurement() {
+        let mut fixture = ContentFixture::body();
+        let long = fixture.text("long-label");
+        let line_break = fixture.hard_break();
+        let japanese = fixture.text("日");
+        let link = fixture.link_text(
+            crate::LinkTarget::External {
+                uri: "https://example.org".into(),
+            },
+            None,
+            "本e",
+            false,
+        );
+        let combining = fixture.text("\u{301}");
         let terms = vec![vec![
-            text("long-label"),
-            Inline::LineBreak,
+            long,
+            line_break,
             Inline::Strong {
-                children: vec![text("日")],
+                children: vec![japanese],
             },
-            Inline::Link {
-                target: crate::LinkTarget::External {
-                    uri: "https://example.org".into(),
-                },
-                title: None,
-                children: vec![text("本e")],
-            },
+            link,
             Inline::Emphasis {
-                children: vec![text("\u{301}")],
+                children: vec![combining],
             },
         ]];
-        assert_eq!(definition_run_in_width(&terms), Some(5));
+        let store = fixture.finish();
+        assert_eq!(definition_run_in_width(store.content(), &terms), Some(5));
     }
 }

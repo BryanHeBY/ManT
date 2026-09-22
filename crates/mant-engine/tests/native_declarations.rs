@@ -5,6 +5,10 @@ use mant_ir::{
 };
 use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
 
+#[path = "common/mod.rs"]
+#[allow(dead_code)]
+mod common;
+
 #[path = "native_declarations/boundaries.rs"]
 mod boundaries;
 #[path = "native_declarations/hanging.rs"]
@@ -101,13 +105,20 @@ fn an_explicit_tq_after_a_body_does_not_steal_that_body() {
     let source =
         b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\nFIRST_BODY\n.TQ\n.B --second\nSECOND_BODY\n";
     let query = mant_loader::load_roff_bytes(source).unwrap();
-    let items = definitions(query.document.as_ref().unwrap());
+    let document = query.document.as_ref().unwrap();
+    let items = definitions(document);
     assert_eq!(items.len(), 2);
     for (item, expected) in items.iter().zip(["FIRST_BODY", "SECOND_BODY"]) {
         let [Block::Paragraph { children, .. }] = item.description.as_slice() else {
             panic!("body")
         };
-        assert!(serde_json::to_string(children).unwrap().contains(expected));
+        assert!(
+            document
+                .content()
+                .plain_text(children)
+                .unwrap()
+                .contains(expected)
+        );
     }
 }
 
@@ -313,11 +324,7 @@ fn native_head_evidence_survives_nesting_without_promoting_body_macros() {
                 })
             })
             .unwrap_or_else(|| panic!("missing {name} {kind:?}: {items:?}"));
-        assert!(
-            serde_json::to_string(&item.description)
-                .unwrap()
-                .contains(body)
-        );
+        assert!(common::block_slice_text(document.content(), &item.description).contains(body));
         assert!(!item.entry.as_ref().unwrap().name_bindings.is_empty());
     }
     let literals: Vec<_> = items

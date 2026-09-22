@@ -1,15 +1,25 @@
 //! List markers, definition heads, and their shared content/anchor ownership.
-use super::super::inline::{shifted_reference_marks, spans_scalars};
+use super::super::inline::{
+    projected_spans_width, shifted_glyph_projections, shifted_reference_marks, spans_scalars,
+};
 use super::super::{
     Block, ListKind, LogicalLine, Span, Style, StyledInlineLine, inline_anchor_rows, shifted_links,
-    spans_width, theme,
+    theme,
 };
 use super::DocumentBuilder;
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
 use mant_ir::{DefinitionItem, ListItem};
 
-impl DocumentBuilder<'_> {
-    pub(super) fn list(&mut self, kind: ListKind, compact: bool, items: &[ListItem], indent: i32) {
+impl<'a> DocumentBuilder<'a> {
+    pub(super) fn list<'b>(
+        &mut self,
+        kind: ListKind,
+        compact: bool,
+        items: &'b [ListItem],
+        indent: i32,
+    ) where
+        'a: 'b,
+    {
         for (index, item) in items.iter().enumerate() {
             self.spacing(
                 item.layout
@@ -33,7 +43,7 @@ impl DocumentBuilder<'_> {
                 && let Some(gap) = marker_run_in_gap(indent, marker_width, layout.indent_columns)
             {
                 self.spacing(layout.spacing_before_lines);
-                for (id, row) in inline_anchor_rows(children) {
+                for (id, row) in inline_anchor_rows(self.content(), children) {
                     self.anchors.entry(id).or_insert(self.lines.len() + row);
                 }
                 let content_indent = compose_origin(
@@ -52,6 +62,10 @@ impl DocumentBuilder<'_> {
                 spans.extend(first.spans);
                 self.push(
                     LogicalLine::hanging(padding(indent), padding(continuation_indent), spans)
+                        .with_glyph_projections(shifted_glyph_projections(
+                            first.glyph_projections,
+                            marker_width.saturating_add(gap),
+                        ))
                         .with_links(shifted_links(first.links, marker_width.saturating_add(gap)))
                         .with_reference_marks(shifted_reference_marks(
                             first.reference_marks,
@@ -65,6 +79,7 @@ impl DocumentBuilder<'_> {
                             padding(continuation_indent),
                             line.spans,
                         )
+                        .with_glyph_projections(line.glyph_projections)
                         .with_links(line.links)
                         .with_reference_marks(line.reference_marks),
                     );
@@ -97,7 +112,14 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    pub(super) fn definitions(&mut self, items: &[DefinitionItem], compact: bool, indent: i32) {
+    pub(super) fn definitions<'b>(
+        &mut self,
+        items: &'b [DefinitionItem],
+        compact: bool,
+        indent: i32,
+    ) where
+        'a: 'b,
+    {
         for (index, item) in items.iter().enumerate() {
             let spacing = item
                 .layout
@@ -122,14 +144,17 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    fn definition_head(
-        &self,
-        item: &mant_ir::DefinitionItem,
-    ) -> (Vec<StyledInlineLine>, Vec<(String, usize)>) {
+    fn definition_head<'b>(
+        &mut self,
+        item: &'b mant_ir::DefinitionItem,
+    ) -> (Vec<StyledInlineLine>, Vec<(String, usize)>)
+    where
+        'a: 'b,
+    {
         let mut head_lines = Vec::new();
         let mut head_targets = Vec::new();
         for term in &item.terms {
-            for (id, row) in inline_anchor_rows(term) {
+            for (id, row) in inline_anchor_rows(self.content(), term) {
                 head_targets.push((id, head_lines.len() + row));
             }
             let lines = self.styled_inlines(term, Style::default().fg(theme::TEXT));
@@ -147,7 +172,10 @@ impl DocumentBuilder<'_> {
         (head_lines, head_targets)
     }
 
-    fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
+    fn inline_definition<'b>(&mut self, item: &'b mant_ir::DefinitionItem, indent: i32)
+    where
+        'a: 'b,
+    {
         let (mut head_lines, head_targets) = self.definition_head(item);
         let block_origin = compose_origin(indent, item.layout.body_indent_columns);
         if head_lines.is_empty() {
@@ -171,18 +199,20 @@ impl DocumentBuilder<'_> {
         for line in head_lines {
             self.push(
                 LogicalLine::hanging(padding(indent), padding(indent), line.spans)
+                    .with_glyph_projections(line.glyph_projections)
                     .with_links(line.links)
                     .with_reference_marks(line.reference_marks),
             );
         }
         let mut term_spans = last.spans;
+        let mut term_projections = last.glyph_projections;
         let mut term_links = last.links;
         let mut term_marks = last.reference_marks;
         // Terminal placement measures the final visible head's graphemes;
         // whole-string shaping can charge adjacent glyphs differently.
-        let term_width = spans_width(&term_spans);
+        let term_width = projected_spans_width(&term_spans, &term_projections);
         if let Some((children, layout)) = item.inline_description() {
-            for (id, row) in inline_anchor_rows(children) {
+            for (id, row) in inline_anchor_rows(self.content(), children) {
                 self.anchors.entry(id).or_insert(self.lines.len() + row);
             }
             let first_indent = compose_origin(block_origin, layout.indent_columns);
@@ -207,6 +237,10 @@ impl DocumentBuilder<'_> {
                 .first_mut()
                 .map_or_else(StyledInlineLine::default, std::mem::take);
             let description_scalar_offset = spans_scalars(&term_spans);
+            term_projections.extend(shifted_glyph_projections(
+                first.glyph_projections,
+                description_scalar_offset,
+            ));
             term_links.extend(shifted_links(first.links, description_scalar_offset));
             term_marks.extend(shifted_reference_marks(
                 first.reference_marks,
@@ -215,6 +249,7 @@ impl DocumentBuilder<'_> {
             term_spans.extend(first.spans);
             self.push(
                 LogicalLine::hanging(padding(indent), padding(continuation_indent), term_spans)
+                    .with_glyph_projections(term_projections)
                     .with_links(term_links)
                     .with_reference_marks(term_marks),
             );
@@ -225,6 +260,7 @@ impl DocumentBuilder<'_> {
                         padding(continuation_indent),
                         line.spans,
                     )
+                    .with_glyph_projections(line.glyph_projections)
                     .with_links(line.links)
                     .with_reference_marks(line.reference_marks),
                 );
@@ -233,6 +269,7 @@ impl DocumentBuilder<'_> {
         } else {
             self.push(
                 LogicalLine::hanging(padding(indent), padding(indent), term_spans)
+                    .with_glyph_projections(term_projections)
                     .with_links(term_links)
                     .with_reference_marks(term_marks),
             );

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use mant_ir::{DocumentAddress, TableAlignment, TableRuleCellKind};
+use mant_ir::{DocumentAddress, LinkOccurrenceKey, TableAlignment, TableRuleCellKind};
 use ratatui::{style::Style, text::Span};
 
 /// External URI that passed `ManT`'s host-activation policy.
@@ -62,6 +62,8 @@ pub(super) struct LogicalLine {
     pub(super) indent: usize,
     pub(super) continuation_indent: usize,
     pub(super) spans: Vec<Span<'static>>,
+    /// Profile glyphs keyed by original logical scalar, never searchable text.
+    pub(super) glyph_projections: Vec<GlyphProjection>,
     pub(super) surface: LineSurface,
     pub(super) wrap_mode: WrapMode,
     pub(super) table_row: Option<LogicalTableRow>,
@@ -76,12 +78,34 @@ pub(super) struct ReferenceMark {
     pub(super) scalar_offset: usize,
 }
 
+/// View-local click identity without inventing content-store keys for TLDR.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum LinkIdentity {
+    /// A link occurrence that resolves in the document content store.
+    Content(LinkOccurrenceKey),
+    /// The generated TLDR more-information link, which has no content store.
+    TldrMoreInformation,
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct LogicalLinkRange {
-    pub(super) target: LinkTarget,
+    pub(super) identity: LinkIdentity,
     /// Source scalar range, before complete-row grapheme shaping and tab expansion.
     pub(super) start_scalar: usize,
     pub(super) end_scalar: usize,
+}
+
+#[cfg(test)]
+mod link_identity_tests {
+    use super::LinkIdentity;
+
+    #[test]
+    fn tldr_identity_cannot_alias_even_the_largest_content_occurrence_key() {
+        let content = LinkIdentity::Content(
+            mant_ir::LinkOccurrenceKey::new(u32::MAX).expect("largest key is valid"),
+        );
+        assert_ne!(content, LinkIdentity::TldrMoreInformation);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -151,8 +175,15 @@ impl LogicalTableCell {
 #[derive(Debug, Clone, Default)]
 pub(super) struct StyledInlineLine {
     pub(super) spans: Vec<Span<'static>>,
+    pub(super) glyph_projections: Vec<GlyphProjection>,
     pub(super) links: Vec<LogicalLinkRange>,
     pub(super) reference_marks: Vec<ReferenceMark>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct GlyphProjection {
+    pub(super) scalar: usize,
+    pub(super) glyphs: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,6 +210,7 @@ impl LogicalLine {
             indent: 0,
             continuation_indent: 0,
             spans: Vec::new(),
+            glyph_projections: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_row: None,
@@ -192,6 +224,7 @@ impl LogicalLine {
             indent,
             continuation_indent: indent,
             spans: vec![Span::styled(value.into(), style)],
+            glyph_projections: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_row: None,
@@ -215,6 +248,11 @@ impl LogicalLine {
         self
     }
 
+    pub(super) fn with_glyph_projections(mut self, projections: Vec<GlyphProjection>) -> Self {
+        self.glyph_projections = projections;
+        self
+    }
+
     pub(super) fn with_reference_marks(mut self, marks: Vec<ReferenceMark>) -> Self {
         self.reference_marks = marks;
         self
@@ -229,6 +267,7 @@ impl LogicalLine {
             indent,
             continuation_indent,
             spans,
+            glyph_projections: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_row: None,
@@ -246,6 +285,7 @@ impl LogicalLine {
             indent,
             continuation_indent: indent,
             spans: Vec::new(),
+            glyph_projections: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_row: Some(LogicalTableRow {
@@ -267,6 +307,7 @@ impl LogicalLine {
             indent,
             continuation_indent: indent,
             spans: Vec::new(),
+            glyph_projections: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_row: Some(LogicalTableRow {
@@ -297,7 +338,7 @@ impl LogicalLine {
 
     fn preferred_width(&self) -> usize {
         let content = self.table_row.as_ref().map_or_else(
-            || super::inline::spans_width(&self.spans),
+            || super::inline::projected_spans_width(&self.spans, &self.glyph_projections),
             |table| table.layout.preferred_width(),
         );
         self.indent.saturating_add(content)

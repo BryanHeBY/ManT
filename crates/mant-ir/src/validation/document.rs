@@ -21,6 +21,7 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
     crate::DocumentValidation::new(document).into_diagnostics()
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn validate_with_index(
     document: &Document,
     index: &DocumentIndex,
@@ -104,8 +105,38 @@ pub(super) fn validate_with_index(
         ));
     }
 
-    let mut collector = InvariantCollector::default();
+    let mut collector = InvariantCollector {
+        content: document.content(),
+        positions: document.content().inline_position_index(),
+        section_targets: Vec::new(),
+        diagnostics: Vec::new(),
+        seen_atoms: vec![0; document.content_store.atoms.len()],
+        strong_depth: 0,
+        emphasis_depth: 0,
+        active_link: None,
+        linked_leaf_count: 0,
+    };
     collector.visit_document(document);
+    for atom in &document.content_store.atoms {
+        let seen = usize::try_from(atom.key.get() - 1)
+            .ok()
+            .and_then(|index| collector.seen_atoms.get(index))
+            .copied()
+            .unwrap_or(0);
+        let expected = usize::from(!matches!(
+            atom.kind,
+            crate::ContentAtomKind::BreakOpportunity {}
+        ));
+        if seen != expected {
+            collector.diagnostics.push(invariant(
+                "ir.invalid-content-coverage",
+                format!(
+                    "content atom {} must occur exactly {expected} time(s) in inline topology, found {seen}",
+                    atom.key.get()
+                ),
+            ));
+        }
+    }
     diagnostics.extend(collector.diagnostics);
     for id in collector.section_targets {
         if !index.contains(id.as_str()) {
@@ -193,18 +224,55 @@ fn invariant_impact(code: &str) -> crate::DiagnosticImpact {
     }
 }
 
-#[derive(Default)]
-struct InvariantCollector {
+struct InvariantCollector<'a> {
+    content: crate::ContentContext<'a>,
+    positions: Option<crate::InlinePositionIndex<'a>>,
     section_targets: Vec<NodeId>,
     diagnostics: Vec<Diagnostic>,
+    seen_atoms: Vec<usize>,
+    strong_depth: usize,
+    emphasis_depth: usize,
+    active_link: Option<crate::LinkOccurrenceKey>,
+    linked_leaf_count: usize,
 }
 
-impl InvariantCollector {
+impl InvariantCollector<'_> {
+    fn invalid_content(&mut self, detail: impl Into<String>) {
+        self.diagnostics
+            .push(invariant("ir.invalid-content-reference", detail.into()));
+    }
+
+    fn record_atom(&mut self, key: crate::ContentAtomKey) {
+        let Some(index) = usize::try_from(key.get() - 1)
+            .ok()
+            .filter(|index| *index < self.seen_atoms.len())
+        else {
+            self.invalid_content("inline leaf references an unknown content atom");
+            return;
+        };
+        self.seen_atoms[index] = self.seen_atoms[index].saturating_add(1);
+        if self.active_link.is_some() {
+            self.linked_leaf_count = self.linked_leaf_count.saturating_add(1);
+        }
+    }
+
+    fn validate_inline_sequence(&mut self, nodes: &[Inline]) {
+        if !self
+            .positions
+            .as_mut()
+            .is_some_and(|positions| positions.is_positioned_in_document(nodes))
+        {
+            self.invalid_content(
+                "inline sequence roots and zero-width points must match their logical positions",
+            );
+        }
+    }
+
     fn validate_entry(&mut self, item: crate::EntryOwner<'_>) {
         if let Some(source) = item.source() {
             validate_source_span(&mut self.diagnostics, source);
         }
-        if item.facts().is_some() && item.forms().is_none() {
+        if item.facts().is_some() && self.content.entry_forms(item).ok().flatten().is_none() {
             self.diagnostics.push(invariant(
                 "ir.invalid-entry-content",
                 "entry form references must address valid owner content".to_owned(),
@@ -255,11 +323,12 @@ impl InvariantCollector {
     }
 }
 
-impl<'ir> Visit<'ir> for InvariantCollector {
+impl<'ir> Visit<'ir> for InvariantCollector<'ir> {
     fn visit_heading(&mut self, heading: &'ir crate::Heading) {
         if let Some(source) = heading.source {
             validate_source_span(&mut self.diagnostics, source);
         }
+        self.validate_inline_sequence(&heading.content);
         visit::walk_heading(self, heading);
     }
     fn visit_section(&mut self, section: &'ir Section) {
@@ -270,6 +339,9 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_block(&mut self, block: &'ir Block) {
+        if let Block::Paragraph { children, .. } | Block::Preformatted { children, .. } = block {
+            self.validate_inline_sequence(children);
+        }
         if let Block::DefinitionList {
             items,
             declaration_groups,
@@ -278,7 +350,7 @@ impl<'ir> Visit<'ir> for InvariantCollector {
         {
             let mut end = 0;
             for group in declaration_groups {
-                if group.start_item < end || group.resolve(items).is_none() {
+                if group.start_item < end || group.resolve(self.content, items).is_none() {
                     self.diagnostics.push(invariant(
                         "ir.invalid-declaration-group",
                         "declaration groups must be ordered, disjoint, in bounds and end in readable context after empty heads".to_owned(),
@@ -338,6 +410,9 @@ impl<'ir> Visit<'ir> for InvariantCollector {
 
     fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
         self.validate_entry(crate::EntryOwner::Definition(item));
+        for term in &item.terms {
+            self.validate_inline_sequence(term);
+        }
         visit::walk_definition_item(self, item);
     }
 
@@ -346,29 +421,124 @@ impl<'ir> Visit<'ir> for InvariantCollector {
         visit::walk_list_item(self, item);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        match inline {
-            Inline::Link {
-                target: LinkTarget::Section { id },
-                ..
-            } => self.section_targets.push(id.clone()),
-            Inline::Link {
-                target: LinkTarget::External { uri },
-                ..
-            } if !is_valid_external_uri(uri) => self.diagnostics.push(invariant(
-                "ir.invalid-external-uri",
-                format!("external link target '{uri}' is not an absolute URI"),
-            )),
-            Inline::Link {
-                target: LinkTarget::Email { address },
-                ..
-            } if !is_valid_email_address(address) => self.diagnostics.push(invariant(
-                "ir.invalid-email-address",
-                format!("email link target '{address}' is not a valid mailbox"),
-            )),
+        let Ok(view) = self.content.inline(inline) else {
+            self.invalid_content("inline content does not resolve in the document content store");
+            return;
+        };
+        let target = match view {
+            crate::InlineView::Link(link) => Some(link.target()),
+            _ => None,
+        };
+        match target {
+            Some(LinkTarget::Section { id }) => self.section_targets.push(id.clone()),
+            Some(LinkTarget::External { uri }) if !is_valid_external_uri(uri) => {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-external-uri",
+                    format!("external link target '{uri}' is not an absolute URI"),
+                ));
+            }
+            Some(LinkTarget::Email { address }) if !is_valid_email_address(address) => {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-email-address",
+                    format!("email link target '{address}' is not a valid mailbox"),
+                ));
+            }
             _ => {}
         }
-        visit::walk_inline(self, inline);
+        match (inline, view) {
+            (
+                Inline::Text { content } | Inline::Code { content },
+                crate::InlineView::Text(_) | crate::InlineView::Code(_),
+            ) => {
+                self.record_atom(content.atom);
+                let Some(atom) = self.content.atom(content.atom) else {
+                    return;
+                };
+                let Some(text) = atom.kind.text() else {
+                    self.invalid_content("text leaf references a non-text content atom");
+                    return;
+                };
+                if content.bytes.start != 0 || content.bytes.end as usize != text.len() {
+                    self.invalid_content(
+                        "structural inline leaves must cover their complete content atom",
+                    );
+                }
+                if atom.link != self.active_link {
+                    self.invalid_content(
+                        "inline link wrapper does not agree with the atom occurrence",
+                    );
+                }
+                if self.strong_depth > 0 && !atom.style.strong {
+                    self.invalid_content("strong wrapper does not agree with atom style");
+                }
+                if self.emphasis_depth > 0 && !atom.style.emphasis {
+                    self.invalid_content("emphasis wrapper does not agree with atom style");
+                }
+                if matches!(inline, Inline::Code { .. }) != atom.style.literal {
+                    self.invalid_content("code leaf does not agree with atom literal style");
+                }
+            }
+            (Inline::Strong { children }, crate::InlineView::Strong(_)) => {
+                self.strong_depth = self.strong_depth.saturating_add(1);
+                for child in children {
+                    self.visit_inline(child);
+                }
+                self.strong_depth -= 1;
+            }
+            (Inline::Emphasis { children }, crate::InlineView::Emphasis(_)) => {
+                self.emphasis_depth = self.emphasis_depth.saturating_add(1);
+                for child in children {
+                    self.visit_inline(child);
+                }
+                self.emphasis_depth -= 1;
+            }
+            (
+                Inline::Link {
+                    occurrence,
+                    children,
+                },
+                crate::InlineView::Link(_),
+            ) => {
+                if self.active_link.is_some() {
+                    self.invalid_content("link wrappers cannot be nested");
+                }
+                let previous = self.active_link.replace(*occurrence);
+                let before = self.linked_leaf_count;
+                for child in children {
+                    self.visit_inline(child);
+                }
+                if self.linked_leaf_count == before
+                    && self
+                        .content
+                        .occurrence(*occurrence)
+                        .is_some_and(|link| !link.label.is_empty())
+                {
+                    self.invalid_content(
+                        "link wrapper borrows an occurrence with visible label atoms elsewhere",
+                    );
+                }
+                self.active_link = previous;
+            }
+            (Inline::Anchor { point, .. }, crate::InlineView::Anchor(_)) => {
+                if self.content.point(*point).is_none() {
+                    self.invalid_content("anchor references an unknown content point");
+                }
+            }
+            (Inline::LineBreak { atom }, crate::InlineView::LineBreak) => {
+                self.record_atom(*atom);
+                let Some(record) = self.content.atom(*atom) else {
+                    return;
+                };
+                if record.link != self.active_link {
+                    self.invalid_content(
+                        "linked hard break does not agree with its structural wrapper",
+                    );
+                }
+            }
+            _ => self.invalid_content("inline node resolved to a mismatched content view"),
+        }
     }
 }
 
@@ -417,6 +587,14 @@ mod tests {
     use super::*;
 
     fn document(sections: Vec<Section>, blocks: Vec<Block>) -> Document {
+        document_with_store(crate::ContentStore::default(), sections, blocks)
+    }
+
+    fn document_with_store(
+        content_store: crate::ContentStore,
+        sections: Vec<Section>,
+        blocks: Vec<Block>,
+    ) -> Document {
         Document {
             heading: None,
             parser: None,
@@ -431,6 +609,7 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store,
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
@@ -443,7 +622,10 @@ mod tests {
         Section {
             id: id.into(),
             fragment_aliases: Vec::new(),
-            heading: id.into(),
+            heading: crate::Heading {
+                content: Vec::new(),
+                source: None,
+            },
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: Vec::new(),
@@ -467,28 +649,149 @@ mod tests {
 
     #[test]
     fn accepts_links_to_sections_and_inline_anchors() {
-        let link = |id: &str| Inline::Link {
-            target: LinkTarget::Section { id: id.into() },
-            title: None,
-            children: vec![Inline::Text {
-                value: id.to_owned(),
-            }],
-        };
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let anchor = fixture.anchor("anchor");
+        let section_link = fixture.link_text(
+            LinkTarget::Section {
+                id: "section".into(),
+            },
+            None,
+            "section",
+            false,
+        );
+        let anchor_link = fixture.link_text(
+            LinkTarget::Section {
+                id: "anchor".into(),
+            },
+            None,
+            "anchor",
+            false,
+        );
+        let missing_link = fixture.link_text(
+            LinkTarget::Section {
+                id: "missing".into(),
+            },
+            None,
+            "missing",
+            false,
+        );
         let blocks = vec![Block::Paragraph {
-            children: vec![
-                Inline::anchor("anchor"),
-                link("section"),
-                link("anchor"),
-                link("missing"),
-            ],
+            children: vec![anchor, section_link, anchor_link, missing_link],
             layout: LayoutHint::default(),
             source: None,
         }];
-        let diagnostics = validate_document(&document(vec![section("section")], blocks));
+        let diagnostics = validate_document(&document_with_store(
+            fixture.finish(),
+            vec![section("section")],
+            blocks,
+        ));
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(
             diagnostics[0].code.as_deref(),
             Some("ir.dangling-section-link")
+        );
+    }
+
+    #[test]
+    fn zero_width_target_must_stay_at_its_root_scalar_boundary() {
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let anchor = fixture.anchor("target");
+        let text = fixture.text("prefix");
+        let store = fixture.finish();
+        crate::validate_content_store(&store).unwrap();
+        let blocks = vec![Block::Paragraph {
+            children: vec![text, anchor],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let codes = validate_document(&document_with_store(store, Vec::new(), blocks))
+            .into_iter()
+            .filter_map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>();
+        assert!(
+            codes
+                .iter()
+                .any(|code| code == "ir.invalid-content-reference")
+        );
+    }
+
+    #[test]
+    fn point_only_root_can_precede_visible_content_in_one_inline_container() {
+        let mut builder = crate::ContentStoreBuilder::new();
+        let point_owner =
+            builder.push_owner(crate::ContentOwnerKind::Content, crate::Provenance::Unknown);
+        let point_root = builder.push_root(
+            point_owner,
+            crate::ContentRootKind::Body,
+            crate::Provenance::Unknown,
+        );
+        let text_owner =
+            builder.push_owner(crate::ContentOwnerKind::Content, crate::Provenance::Unknown);
+        let text_root = builder.push_root(
+            text_owner,
+            crate::ContentRootKind::Body,
+            crate::Provenance::Unknown,
+        );
+        let point = builder.push_point(
+            point_root,
+            crate::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+            0,
+            crate::Provenance::Unknown,
+        );
+        let text = builder.push_text(
+            text_root,
+            "BODY".to_owned(),
+            None,
+            crate::ContentStyle::default(),
+            None,
+            None,
+            crate::Provenance::Unknown,
+        );
+        let store = builder.finish();
+        crate::validate_content_store(&store).unwrap();
+        let blocks = vec![Block::Paragraph {
+            children: vec![
+                Inline::anchor(point, "target"),
+                Inline::Text { content: text },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let diagnostics = validate_document(&document_with_store(store, Vec::new(), blocks));
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn empty_link_wrapper_cannot_borrow_another_fragment_occurrence() {
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let linked = fixture.link_text(
+            LinkTarget::External {
+                uri: "https://example.test/".into(),
+            },
+            None,
+            "label",
+            false,
+        );
+        let Inline::Link { occurrence, .. } = &linked else {
+            panic!("fixture creates a link");
+        };
+        let borrowed = Inline::Link {
+            occurrence: *occurrence,
+            children: Vec::new(),
+        };
+        let blocks = vec![Block::Paragraph {
+            children: vec![linked, borrowed],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let codes = validate_document(&document_with_store(fixture.finish(), Vec::new(), blocks))
+            .into_iter()
+            .filter_map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>();
+        assert!(
+            codes
+                .iter()
+                .any(|code| code == "ir.invalid-content-reference")
         );
     }
 
@@ -511,7 +814,9 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn reports_invalid_ids_role_collisions_ranges_tables_and_uris() {
+        let mut fixture = crate::test_support::ContentFixture::body();
         let source = SourceSpan {
             source: SourceKey::FIRST,
             byte_range: Some(TextRange {
@@ -524,10 +829,26 @@ mod tests {
             end_column: Some(0),
         };
         let shared: NodeId = "Bad ID".into();
+        let shared_anchor = fixture.anchor(shared.clone());
+        let external = fixture.empty_link(
+            LinkTarget::External {
+                uri: "relative target".to_owned(),
+            },
+            None,
+        );
+        let email = fixture.empty_link(
+            LinkTarget::Email {
+                address: "missing-domain".to_owned(),
+            },
+            None,
+        );
         let section = Section {
             id: shared.clone(),
             fragment_aliases: Vec::new(),
-            heading: "invalid".into(),
+            heading: crate::Heading {
+                content: Vec::new(),
+                source: None,
+            },
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -544,7 +865,7 @@ mod tests {
                         names: vec!["term".to_owned()],
                         value_domain: None,
                     }),
-                    terms: vec![vec![Inline::anchor(shared.clone())]],
+                    terms: vec![vec![shared_anchor]],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
                         inline_term: false,
@@ -561,22 +882,7 @@ mod tests {
         };
         let blocks = vec![
             Block::Paragraph {
-                children: vec![
-                    Inline::Link {
-                        target: LinkTarget::External {
-                            uri: "relative target".to_owned(),
-                        },
-                        title: None,
-                        children: Vec::new(),
-                    },
-                    Inline::Link {
-                        target: LinkTarget::Email {
-                            address: "missing-domain".to_owned(),
-                        },
-                        title: None,
-                        children: Vec::new(),
-                    },
-                ],
+                children: vec![external, email],
                 layout: LayoutHint::default(),
                 source: None,
             },
@@ -596,7 +902,11 @@ mod tests {
             },
         ];
 
-        let diagnostics = validate_document(&document(vec![section], blocks));
+        let diagnostics = validate_document(&document_with_store(
+            fixture.finish(),
+            vec![section],
+            blocks,
+        ));
         let codes = diagnostics
             .iter()
             .filter_map(|diagnostic| diagnostic.code.as_deref())
@@ -819,6 +1129,9 @@ mod tests {
 
     #[test]
     fn reports_invalid_cross_document_entry_domains() {
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let anchor = fixture.anchor("option-output");
+        let store = fixture.finish();
         let mut definition = DefinitionItem {
             source: None,
             entry: Some(EntryFacts {
@@ -841,7 +1154,7 @@ mod tests {
                     source: None,
                 }),
             }),
-            terms: vec![vec![Inline::anchor("option-output")]],
+            terms: vec![vec![anchor]],
             description: Vec::new(),
             layout: crate::DefinitionLayout {
                 inline_term: false,
@@ -856,7 +1169,8 @@ mod tests {
             layout: LayoutHint::default(),
             source: None,
         }];
-        let diagnostics = validate_document(&document(Vec::new(), blocks));
+        let diagnostics =
+            validate_document(&document_with_store(store.clone(), Vec::new(), blocks));
         let codes = diagnostics
             .iter()
             .filter_map(|diagnostic| diagnostic.code.as_deref())
@@ -876,7 +1190,8 @@ mod tests {
                 ],
                 source: None,
             });
-        let diagnostics = validate_document(&document(
+        let diagnostics = validate_document(&document_with_store(
+            store,
             Vec::new(),
             vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),

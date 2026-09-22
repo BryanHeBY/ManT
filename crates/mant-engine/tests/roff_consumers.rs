@@ -19,7 +19,7 @@ fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
         document
             .sections
             .iter()
-            .any(|section| section.heading.plain_text() == "DESCRIPTION")
+            .any(|section| section.heading.plain_text(document.content()) == "DESCRIPTION")
     );
     assert!(
         document
@@ -75,36 +75,45 @@ fn every_complete_consumer_fixture_has_an_executed_behavior_check() {
 }
 
 fn description(query: &mant_ir::ResolvedContent) -> String {
+    let document = query.document.as_ref().unwrap();
     common::block_slice_text(
-        &common::section(query.document.as_ref().unwrap(), "DESCRIPTION").blocks,
+        document.content(),
+        &common::section(document, "DESCRIPTION").blocks,
     )
 }
 
 fn style(query: &mant_ir::ResolvedContent, word: &str, expected: u8) {
-    struct Styles<'a> {
+    struct Styles<'a, 'store> {
         word: &'a str,
+        content: mant_ir::ContentContext<'store>,
         active: u8,
         found: Vec<u8>,
     }
-    impl<'ir> Visit<'ir> for Styles<'_> {
+    impl<'ir> Visit<'ir> for Styles<'_, 'ir> {
         fn visit_inline(&mut self, inline: &'ir mant_ir::Inline) {
-            use mant_ir::Inline;
+            use mant_ir::{Inline, InlineView};
             let saved = self.active;
             match inline {
                 Inline::Strong { .. } => self.active |= 1,
                 Inline::Emphasis { .. } => self.active |= 2,
-                Inline::Code { value } if value.contains(self.word) => {
+                Inline::Code { .. } if matches!(self.content.inline(inline), Ok(InlineView::Code(value)) if value.contains(self.word)) =>
+                {
                     self.found.push(self.active | 4);
                 }
-                Inline::Text { value } if value.contains(self.word) => self.found.push(self.active),
+                Inline::Text { .. } if matches!(self.content.inline(inline), Ok(InlineView::Text(value)) if value.contains(self.word)) =>
+                {
+                    self.found.push(self.active);
+                }
                 _ => {}
             }
             visit::walk_inline(self, inline);
             self.active = saved;
         }
     }
+    let document = query.document.as_ref().unwrap();
     let mut styles = Styles {
         word,
+        content: document.content(),
         active: 0,
         found: Vec::new(),
     };
@@ -181,7 +190,8 @@ fn two_level_containers_preserve_each_structural_payload() {
                 for word in ["WORD", "CELLTWO", "[", "]"] {
                     assert_eq!(text.matches(word).count(), 1, "{source}: {text}");
                 }
-                let blocks = common::document_blocks(query.document.as_ref().unwrap());
+                let document = query.document.as_ref().unwrap();
+                let blocks = common::document_blocks(document);
                 if table {
                     assert_eq!(
                         blocks
@@ -199,7 +209,7 @@ fn two_level_containers_preserve_each_structural_payload() {
                                 // Enclosure punctuation may attach to an edge cell;
                                 // each original payload must still occupy its own cell.
                                 assert_eq!(
-                                    common::block_slice_text(&cell.blocks)
+                                    common::block_slice_text(document.content(), &cell.blocks)
                                         .trim()
                                         .trim_matches(['[', ']']),
                                     word
@@ -256,16 +266,16 @@ fn link_and_include_font_state() {
 
 #[test]
 fn address_sequence_shares_one_font_scope_without_merging_email_targets() {
-    #[derive(Default)]
-    struct Addresses(Vec<String>);
-    impl<'ir> Visit<'ir> for Addresses {
+    struct Addresses<'a> {
+        names: Vec<String>,
+        content: mant_ir::ContentContext<'a>,
+    }
+    impl<'ir> Visit<'ir> for Addresses<'ir> {
         fn visit_inline(&mut self, inline: &'ir mant_ir::Inline) {
-            if let mant_ir::Inline::Link {
-                target: mant_ir::LinkTarget::Email { address },
-                ..
-            } = inline
+            if let Ok(mant_ir::InlineView::Link(link)) = self.content.inline(inline)
+                && let mant_ir::LinkTarget::Email { address } = link.target()
             {
-                self.0.push(address.clone());
+                self.names.push(address.clone());
             }
             visit::walk_inline(self, inline);
         }
@@ -281,9 +291,13 @@ fn address_sequence_shares_one_font_scope_without_merging_email_targets() {
         style(&query, "NEXT", next_style);
         style(&query, "TAIL", 0);
         style(&query, "RESUMED", resumed_style);
-        let mut addresses = Addresses::default();
-        addresses.visit_document(query.document.as_ref().unwrap());
-        assert_eq!(addresses.0, ["WORD@example.org", "NEXT@example.org"]);
+        let document = query.document.as_ref().unwrap();
+        let mut addresses = Addresses {
+            names: Vec::new(),
+            content: document.content(),
+        };
+        addresses.visit_document(document);
+        assert_eq!(addresses.names, ["WORD@example.org", "NEXT@example.org"]);
         assert!(description(&query).contains("WORD@example.org NEXT@example.org"));
     }
 }
@@ -336,13 +350,13 @@ fn literal_macro_descendants_keep_source_lines() {
 
 #[test]
 fn real_groff_font_escape_definition_preserves_all_four_literal_terms() {
-    struct Terms(bool);
-    impl<'ir> Visit<'ir> for Terms {
+    struct Terms<'store>(bool, mant_ir::ContentContext<'store>);
+    impl<'ir> Visit<'ir> for Terms<'ir> {
         fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
             self.0 |= item
                 .terms
                 .iter()
-                .any(|term| common::inline_text(term) == r"\fB, \fI, \fR, \fP");
+                .any(|term| common::inline_text(self.1, term) == r"\fB, \fI, \fR, \fP");
             visit::walk_definition_item(self, item);
         }
     }
@@ -351,7 +365,7 @@ fn real_groff_font_escape_definition_preserves_all_four_literal_terms() {
         "/../../tests/fixtures/roff/real/debian/groff_man_style.7.gz"
     )))
     .unwrap();
-    let mut terms = Terms(false);
+    let mut terms = Terms(false, document.content());
     terms.visit_document(&document);
     assert!(
         terms.0,

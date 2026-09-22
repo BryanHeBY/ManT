@@ -11,6 +11,7 @@ use mant_query::build_outline_with_detail;
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("gcc");
+    let content = document.content();
     assert_eq!(document.root_format(), Some(SourceFormat::Man));
     assert_eq!(document.sections.len(), 10);
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
@@ -33,7 +34,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         .into_iter()
         .find(|item| {
             item.terms.iter().any(|term| {
-                common::inline_text(term)
+                common::inline_text(content, term)
                     .split_whitespace()
                     .any(|form| form == "-fvisibility-ms-compat")
             })
@@ -65,7 +66,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
 
     common::assert_gcc_synopsis_layout(document);
 
-    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/gcc");
+    common::assert_bounded_vertical_spacing(document, "fedora44/gcc");
 }
 
 /// No roff escapes leak into inline text.

@@ -2,6 +2,7 @@
 //! before optional previews and weaker evidence.
 use super::{Candidate, ExplanationQuery, LocatedNode, plan::CollectionPlan};
 use mant_ir::DOCUMENT_ROOT_ID;
+use mant_ir::EntryOwner;
 use mant_protocol::{
     ExplanationContent, ExplanationEvidence, ExplanationOutcome, ExplanationSchema,
     OutlineNodeReference, OutlineTrail, QueryExplanation,
@@ -32,11 +33,19 @@ pub(super) fn response(
         }
     }
     let mut page = super::page::materialize(std::slice::from_ref(&plan), &selection, &mut budget);
-    let evidence = page
+    let mut evidence = page
         .evidence
         .into_iter()
         .map(|e| e.evidence)
         .collect::<Vec<_>>();
+    let mut supports = std::mem::take(&mut page.pools[0].values);
+    let content_projection = super::projection::attach(
+        plan.content.document.as_ref(),
+        &mut supports,
+        &mut evidence,
+        &mut budget,
+        page.projections[0].reserved(),
+    );
     let returned = u32::try_from(evidence.len()).expect("bounded result page");
     let end = query.options.offset.saturating_add(returned);
     let mut truncation = plan.truncation;
@@ -47,7 +56,8 @@ pub(super) fn response(
         .saturating_sub(u32::try_from(budget.0).expect("bounded copy budget"));
     (
         QueryExplanation {
-            supports: std::mem::take(&mut page.pools[0].values),
+            supports,
+            content_projection,
             schema: ExplanationSchema::V0Dot12,
             order: mant_protocol::EvidenceOrder::ClassThenSource,
             counts,
@@ -128,6 +138,7 @@ pub(super) fn materialize(
     located: &[LocatedNode<'_>],
     rejected_aliases: &std::collections::BTreeSet<mant_ir::NodeId>,
     budget: &mut Budget,
+    projection: &mut super::projection::ProjectionAdmission<'_>,
 ) {
     let owner = candidate
         .located
@@ -137,8 +148,9 @@ pub(super) fn materialize(
     // Page facts were reserved before any optional payload. References keep
     // owner-local positions while avoiding a second copy of the group body.
     let content = record.content.take();
-    let mut entry = owner
-        .and_then(|owner| super::details::entry(content_context, owner, rejected_aliases, budget));
+    let mut entry = owner.and_then(|owner| {
+        super::details::entry(content_context, owner, rejected_aliases, budget, projection)
+    });
     let details_omitted = owner.is_some() && entry.is_none();
     let mut name_bindings_omitted = false;
     let mut positions = super::positions::PositionBudget::default();
@@ -219,9 +231,10 @@ pub(super) fn body(
     candidate: &Candidate<'_>,
     located: &[LocatedNode<'_>],
     budget: &mut Budget,
+    projection: &mut super::projection::ProjectionAdmission<'_>,
 ) {
     if record.content.is_none() {
-        record.content = copy_body(candidate, located, budget);
+        record.content = copy_body(candidate, located, budget, projection);
     }
 }
 
@@ -229,6 +242,7 @@ fn copy_body(
     candidate: &Candidate<'_>,
     located: &[LocatedNode<'_>],
     budget: &mut Budget,
+    projection: &mut super::projection::ProjectionAdmission<'_>,
 ) -> Option<ExplanationContent> {
     // This remains the response-projection boundary: complete blocks are
     // cloned only after budget admission until protocol ContentProjection is
@@ -240,11 +254,20 @@ fn copy_body(
     }
     if let Some(index) = candidate.located {
         match &located[index] {
-            LocatedNode::Entry { entry, .. } => budget
-                .take(&Body {
-                    kind: "entry",
-                    block: entry,
-                })
+            LocatedNode::Entry { entry, .. } => projection
+                .reserve(
+                    budget,
+                    &Body {
+                        kind: "entry",
+                        block: entry,
+                    },
+                    |builder| match entry.owner() {
+                        EntryOwner::Definition(item) => {
+                            builder.include_definition_items(std::slice::from_ref(item))
+                        }
+                        EntryOwner::List(item) => builder.include_blocks(&item.blocks),
+                    },
+                )
                 .then(|| ExplanationContent::Entry {
                     block: entry.content(),
                 }),
@@ -254,10 +277,14 @@ fn copy_body(
         candidate
             .ordinary
             .filter(|block| {
-                budget.take(&Body {
-                    kind: "block",
-                    block: *block,
-                })
+                projection.reserve(
+                    budget,
+                    &Body {
+                        kind: "block",
+                        block: *block,
+                    },
+                    |builder| builder.include_blocks(std::slice::from_ref(block)),
+                )
             })
             .map(|block| ExplanationContent::Block {
                 block: block.clone(),
@@ -345,7 +372,19 @@ impl Budget {
         true
     }
 
-    fn size(value: &impl serde::Serialize, limit: usize) -> Option<usize> {
+    pub(super) fn charge(&mut self, bytes: usize) -> bool {
+        let Some(remaining) = self.0.checked_sub(bytes) else {
+            return false;
+        };
+        self.0 = remaining;
+        true
+    }
+
+    pub(super) fn refund(&mut self, bytes: usize) {
+        self.0 = self.0.saturating_add(bytes);
+    }
+
+    pub(super) fn size(value: &impl serde::Serialize, limit: usize) -> Option<usize> {
         struct Count {
             remaining: usize,
         }

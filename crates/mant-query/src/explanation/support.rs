@@ -2,6 +2,7 @@
 use super::{
     LocatedNode,
     materialize::{Budget, trail},
+    projection::ProjectionAdmission,
 };
 use mant_ir::{Block, DeclarationGroup};
 use mant_protocol::{EvidenceClass, ExplanationEvidence, ExplanationSupport};
@@ -80,6 +81,7 @@ impl<'a> SupportIndex<'a> {
 
     pub(super) fn attach_owner(
         &self,
+        content_context: mant_ir::ContentContext<'_>,
         owner: Option<usize>,
         evidence: &mut ExplanationEvidence,
         pool: &Pool,
@@ -97,11 +99,14 @@ impl<'a> SupportIndex<'a> {
                 path,
                 item_index: origin.item,
             };
-            if content.referenced_owner(&pool.values).is_some_and(|owner| {
-                owner
-                    .facts()
-                    .is_some_and(|facts| facts.id.as_str() == evidence.outline.node.id())
-            }) && budget.take(&content)
+            if content
+                .referenced_owner(content_context, &pool.values)
+                .is_some_and(|owner| {
+                    owner
+                        .facts()
+                        .is_some_and(|facts| facts.id.as_str() == evidence.outline.node.id())
+                })
+                && budget.take(&content)
             {
                 evidence.content = Some(content);
                 return;
@@ -157,7 +162,13 @@ impl<'a> SupportIndex<'a> {
                 )
             }))
     }
-    pub(super) fn record(&mut self, block: &'a Block, path: &str, owners: &HashMap<usize, usize>) {
+    pub(super) fn record(
+        &mut self,
+        content: mant_ir::ContentContext<'a>,
+        block: &'a Block,
+        path: &str,
+        owners: &HashMap<usize, usize>,
+    ) {
         let path: std::sync::Arc<str> = path.into();
         let pointers = match block {
             Block::List { items, .. } => items
@@ -196,7 +207,7 @@ impl<'a> SupportIndex<'a> {
                 continue;
             }
             end = range.end_item;
-            let Some(members) = range.resolve(items) else {
+            let Some(members) = range.resolve(content, items) else {
                 continue;
             };
             let located = members
@@ -220,13 +231,16 @@ impl<'a> SupportIndex<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn attach(
         &self,
+        content_context: mant_ir::ContentContext<'_>,
         owner: Option<usize>,
         evidence: &mut ExplanationEvidence,
         located: &[LocatedNode<'_>],
         pool: &mut Pool,
         budget: &mut Budget,
+        projection: &mut ProjectionAdmission<'_>,
     ) {
         if evidence.class != EvidenceClass::DirectEntry {
             return;
@@ -276,9 +290,9 @@ impl<'a> SupportIndex<'a> {
                     path,
                 }
             });
-            if let Some(value) =
-                value.filter(|value| value.items_in(&pool.values).is_some() && budget.take(value))
-            {
+            if let Some(value) = value.filter(|value| {
+                value.items_in(content_context, &pool.values).is_some() && budget.take(value)
+            }) {
                 pool.values.push(value);
                 pool.copied.insert(index, reference);
                 evidence.support = Some(reference);
@@ -290,7 +304,7 @@ impl<'a> SupportIndex<'a> {
             evidence.support_omitted = true;
             return;
         }
-        if let Some(value) = group.copy(located, budget, reference) {
+        if let Some(value) = group.copy(content_context, located, budget, projection, reference) {
             pool.values.push(value);
             pool.copied.insert(index, reference);
             evidence.support = Some(reference);
@@ -377,8 +391,10 @@ impl Group<'_> {
 
     fn copy(
         &self,
+        content: mant_ir::ContentContext<'_>,
         located: &[LocatedNode<'_>],
         budget: &mut Budget,
+        projection: &mut ProjectionAdmission<'_>,
         reference: usize,
     ) -> Option<ExplanationSupport> {
         let members = self.members(located, budget)?;
@@ -392,7 +408,7 @@ impl Group<'_> {
         else {
             return None;
         };
-        let items = self.range.resolve(items)?;
+        let items = self.range.resolve(content, items)?;
         let rebased = DeclarationGroup {
             start_item: 0,
             end_item: items.len(),
@@ -413,7 +429,9 @@ impl Group<'_> {
         };
         // Tuple accounts for the evidence reference too. No body is cloned
         // until the whole original context has passed the bounded writer.
-        if !budget.take(&(reference, &value)) {
+        if !projection.reserve(budget, &(reference, &value), |builder| {
+            builder.include_definition_items(items)
+        }) {
             return None;
         }
         Some(ExplanationSupport::DeclarationGroup {

@@ -7,8 +7,36 @@ use unicode_width::UnicodeWidthStr;
 
 use super::*;
 
+fn styled_inline_lines_with_targets(
+    nodes: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+) -> (Vec<StyledInlineLine>, HashMap<LinkIdentity, LinkTarget>) {
+    let mut targets = HashMap::new();
+    let lines = inline::styled_reference_inline_lines(
+        crate::test_content::content(),
+        nodes,
+        style,
+        current_address,
+        &[],
+        false,
+        &HashMap::new(),
+        &mut targets,
+    );
+    (lines, targets)
+}
+
+fn logical_link_target<'a>(
+    line: &StyledInlineLine,
+    targets: &'a HashMap<LinkIdentity, LinkTarget>,
+) -> Option<&'a LinkTarget> {
+    line.links
+        .first()
+        .and_then(|link| targets.get(&link.identity))
+}
+
 fn bundle() -> ResolvedContent {
-    ResolvedContent {
+    let mut bundle = ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: Some(Document {
@@ -24,6 +52,7 @@ fn bundle() -> ResolvedContent {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store: crate::test_content::store(),
             meta: DocumentMeta::default(),
             heading: None,
             fragment_aliases: Vec::new(),
@@ -32,12 +61,12 @@ fn bundle() -> ResolvedContent {
             sections: vec![Section {
                 id: "description".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                heading: "Description".into(),
+                heading: crate::test_content::heading("Description"),
                 spacing_before_lines: 0,
                 blocks: vec![Block::Paragraph {
-                    children: vec![Inline::Text {
-                        value: "a deliberately long sentence".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text(
+                        "a deliberately long sentence".to_owned(),
+                    )],
                     layout: LayoutHint::default(),
                     source: None,
                 }],
@@ -46,7 +75,9 @@ fn bundle() -> ResolvedContent {
             }],
         }),
         tldr: None,
-    }
+    };
+    crate::test_content::sync_document(bundle.document.as_mut().expect("document"));
+    bundle
 }
 
 fn geometry_bundle() -> ResolvedContent {
@@ -69,29 +100,23 @@ fn geometry_bundle() -> ResolvedContent {
     document.sections[0].blocks = vec![
         Block::Paragraph {
             children: vec![
-                Inline::Text {
-                    value: "Read 多语言 documentation in ".to_owned(),
-                },
-                Inline::Link {
-                    target: mant_ir::LinkTarget::Section {
+                crate::test_content::text("Read 多语言 documentation in ".to_owned()),
+                crate::test_content::link(
+                    mant_ir::LinkTarget::Section {
                         id: "details".into(),
                     },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "the detailed section".to_owned(),
-                    }],
-                },
-                Inline::Text {
-                    value: ".".to_owned(),
-                },
+                    None,
+                    vec![crate::test_content::text("the detailed section".to_owned())],
+                ),
+                crate::test_content::text(".".to_owned()),
             ],
             layout: LayoutHint::default(),
             source: None,
         },
         Block::Preformatted {
-            children: vec![Inline::Text {
-                value: "git status --short\n路径/with spaces".to_owned(),
-            }],
+            children: vec![crate::test_content::text(
+                "git status --short\n路径/with spaces".to_owned(),
+            )],
             language: Some("sh".to_owned()),
             layout: LayoutHint::default(),
             source: None,
@@ -123,20 +148,19 @@ fn geometry_bundle() -> ResolvedContent {
     document.sections[0].children.push(Section {
         id: "details".to_owned().into(),
         fragment_aliases: Vec::new(),
-        heading: "Details".into(),
+        heading: crate::test_content::heading("Details"),
         spacing_before_lines: 0,
         blocks: vec![paragraph("Nothing is lost after resizing.")],
         children: Vec::new(),
         source: None,
     });
+    crate::test_content::sync_document(document);
     bundle
 }
 
 fn paragraph(value: &str) -> Block {
     Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     }
@@ -172,15 +196,13 @@ fn a_tldr_only_result_explains_why_no_manual_body_follows() {
 #[test]
 fn unsafe_external_schemes_remain_visible_but_inert() {
     let lines = styled_inline_lines(
-        &[Inline::Link {
-            target: mant_ir::LinkTarget::External {
+        &[crate::test_content::link(
+            mant_ir::LinkTarget::External {
                 uri: "file:///etc/passwd".to_owned(),
             },
-            title: None,
-            children: vec![Inline::Text {
-                value: "local file".to_owned(),
-            }],
-        }],
+            None,
+            vec![crate::test_content::text("local file".to_owned())],
+        )],
         Style::default(),
         None,
     );
@@ -371,7 +393,7 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
     let cell = |text: &str, column_span| TableCell {
         kind: mant_ir::TableCellKind::Text,
         blocks: vec![Block::Paragraph {
-            children: vec![Inline::Text { value: text.into() }],
+            children: vec![crate::test_content::text(text)],
             layout: LayoutHint::default(),
             source: None,
         }],

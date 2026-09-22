@@ -1,6 +1,6 @@
 //! Reading context is distinct from ownership and name equivalence.
 use crate::{
-    Block, DefinitionItem, Inline,
+    Block, ContentContext, DefinitionItem, Inline, InlineView,
     visit::{self, Visit},
 };
 use schemars::JsonSchema;
@@ -24,19 +24,25 @@ pub struct DeclarationGroup {
 impl DeclarationGroup {
     /// Resolve a structurally valid group without trusting producer indices.
     #[must_use]
-    pub fn resolve(self, items: &[DefinitionItem]) -> Option<&[DefinitionItem]> {
+    pub fn resolve<'a>(
+        self,
+        content: ContentContext<'a>,
+        items: &'a [DefinitionItem],
+    ) -> Option<&'a [DefinitionItem]> {
         if self.end_item.checked_sub(self.start_item)? < 2 {
             return None;
         }
         let members = items.get(self.start_item..self.end_item)?;
         let (tail, heads) = members.split_last()?;
-        (members
-            .iter()
-            .all(|item| item.terms.iter().flatten().any(readable_inline))
-            && blocks_have_readable_content(&tail.description)
+        (members.iter().all(|item| {
+            item.terms
+                .iter()
+                .flatten()
+                .any(|inline| readable_inline(content, inline))
+        }) && blocks_have_readable_content(content, &tail.description)
             && heads
                 .iter()
-                .all(|head| !blocks_have_readable_content(&head.description)))
+                .all(|head| !blocks_have_readable_content(content, &head.description)))
         .then_some(members)
     }
 
@@ -53,63 +59,119 @@ impl DeclarationGroup {
     }
 }
 
-fn readable_inline(inline: &Inline) -> bool {
-    match inline {
-        Inline::Text { value } | Inline::Code { value } => !value.trim().is_empty(),
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => children.iter().any(readable_inline),
-        Inline::LineBreak | Inline::Anchor { .. } => false,
+fn readable_inline(content: ContentContext<'_>, inline: &Inline) -> bool {
+    match content.inline(inline) {
+        Ok(InlineView::Text(value) | InlineView::Code(value)) => !value.trim().is_empty(),
+        Ok(InlineView::Strong(children) | InlineView::Emphasis(children)) => children
+            .iter()
+            .any(|inline| readable_inline(content, inline)),
+        Ok(InlineView::Link(link)) => link
+            .children()
+            .iter()
+            .any(|inline| readable_inline(content, inline)),
+        Ok(InlineView::LineBreak | InlineView::Anchor(_)) | Err(_) => false,
     }
 }
 
 /// Whether blocks contain readable content rather than just spacing/anchors.
 /// Used by producer grouping and shared structural validation alike.
 #[must_use]
-pub fn blocks_have_readable_content(blocks: &[Block]) -> bool {
-    struct Readable(bool);
-    impl<'a> Visit<'a> for Readable {
+pub fn blocks_have_readable_content(content: ContentContext<'_>, blocks: &[Block]) -> bool {
+    struct Readable<'a> {
+        content: ContentContext<'a>,
+        found: bool,
+    }
+    impl<'a> Visit<'a> for Readable<'a> {
         fn visit_block(&mut self, block: &'a Block) {
-            if self.0 {
+            if self.found {
                 return;
             }
             match block {
-                Block::Equation { value, .. } => self.0 |= !value.trim().is_empty(),
-                Block::Unsupported { text, .. } => self.0 |= !text.trim().is_empty(),
+                Block::Equation { value, .. } => self.found |= !value.trim().is_empty(),
+                Block::Unsupported { text, .. } => self.found |= !text.trim().is_empty(),
                 _ => visit::walk_block(self, block),
             }
         }
         fn visit_inline(&mut self, inline: &'a Inline) {
-            if self.0 {
+            if self.found {
                 return;
             }
-            match inline {
-                Inline::Text { value } | Inline::Code { value } => {
-                    self.0 |= !value.trim().is_empty();
+            match self.content.inline(inline) {
+                Ok(InlineView::Text(value) | InlineView::Code(value)) => {
+                    self.found |= !value.trim().is_empty();
                 }
-                _ => visit::walk_inline(self, inline),
+                Ok(_) => visit::walk_inline(self, inline),
+                Err(_) => {}
             }
         }
     }
-    let mut readable = Readable(false);
+    let mut readable = Readable {
+        content,
+        found: false,
+    };
     for block in blocks {
         readable.visit_block(block);
     }
-    readable.0
+    readable.found
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn item(text: &str) -> DefinitionItem {
+    use crate::{
+        ContentOwnerKey, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle,
+        PointBoundary, Provenance,
+    };
+
+    struct Fixture {
+        builder: ContentStoreBuilder,
+        owner: ContentOwnerKey,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let mut builder = ContentStoreBuilder::new();
+            let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+            Self { builder, owner }
+        }
+
+        fn text(&mut self, value: &str, kind: ContentRootKind) -> Inline {
+            let root = self
+                .builder
+                .push_root(self.owner, kind, Provenance::Unknown);
+            let content = self.builder.push_text(
+                root,
+                value.to_owned(),
+                None,
+                ContentStyle::default(),
+                None,
+                None,
+                Provenance::Unknown,
+            );
+            Inline::Text { content }
+        }
+
+        fn anchor(&mut self, id: &str) -> Inline {
+            let root =
+                self.builder
+                    .push_root(self.owner, ContentRootKind::Body, Provenance::Unknown);
+            let point = self.builder.push_point(
+                root,
+                PointBoundary::BetweenAtoms { atom_boundary: 0 },
+                0,
+                Provenance::Unknown,
+            );
+            Inline::anchor(point, id)
+        }
+    }
+
+    fn item(fixture: &mut Fixture, text: &str) -> DefinitionItem {
         DefinitionItem {
             source: None,
             entry: None,
-            terms: vec![vec![Inline::Text {
-                value: "--name".into(),
-            }]],
+            terms: vec![vec![fixture.text("--name", ContentRootKind::Term)]],
             description: vec![Block::Paragraph {
-                children: vec![Inline::Text { value: text.into() }],
+                children: vec![fixture.text(text, ContentRootKind::Body)],
                 layout: crate::LayoutHint::default(),
                 source: None,
             }],
@@ -122,12 +184,20 @@ mod tests {
     }
     #[test]
     fn ranges_are_checked_and_partial_excerpts_cannot_borrow_context() {
-        let items = vec![item(""), item(""), item("body"), item("next")];
+        let mut fixture = Fixture::new();
+        let items = vec![
+            item(&mut fixture, ""),
+            item(&mut fixture, ""),
+            item(&mut fixture, "body"),
+            item(&mut fixture, "next"),
+        ];
+        let store = fixture.builder.finish();
+        let content = store.content();
         let group = DeclarationGroup {
             start_item: 0,
             end_item: 3,
         };
-        assert_eq!(group.resolve(&items).unwrap().len(), 3);
+        assert_eq!(group.resolve(content, &items).unwrap().len(), 3);
         for bad in [
             DeclarationGroup {
                 start_item: 1,
@@ -150,7 +220,7 @@ mod tests {
                 end_item: 4,
             },
         ] {
-            assert!(bad.resolve(&items).is_none(), "{bad:?}");
+            assert!(bad.resolve(content, &items).is_none(), "{bad:?}");
         }
         assert_eq!(group.within(0, 3), Some(group));
         assert_eq!(group.within(1, 3), None);
@@ -169,29 +239,37 @@ mod tests {
     }
     #[test]
     fn anchors_and_spacing_do_not_count_as_readable_descriptions() {
+        let mut fixture = Fixture::new();
+        let anchor = fixture.anchor("target");
+        let store = fixture.builder.finish();
+        let content = store.content();
         let blocks = vec![
             Block::VerticalSpace {
                 lines: 3,
                 source: None,
             },
             Block::Paragraph {
-                children: vec![Inline::anchor("target")],
+                children: vec![anchor],
                 layout: crate::LayoutHint::default(),
                 source: None,
             },
         ];
-        assert!(!blocks_have_readable_content(&blocks));
-        assert!(blocks_have_readable_content(&[Block::Equation {
-            value: "x + y".into(),
-            display: true,
-            layout: crate::LayoutHint::default(),
-            source: None
-        }]));
+        assert!(!blocks_have_readable_content(content, &blocks));
+        assert!(blocks_have_readable_content(
+            content,
+            &[Block::Equation {
+                value: "x + y".into(),
+                display: true,
+                layout: crate::LayoutHint::default(),
+                source: None
+            }]
+        ));
     }
     #[test]
     fn group_wire_is_closed_and_round_trip_keeps_original_items() {
+        let mut fixture = Fixture::new();
         let block = Block::DefinitionList {
-            items: vec![item(""), item("body")],
+            items: vec![item(&mut fixture, ""), item(&mut fixture, "body")],
             declaration_groups: vec![DeclarationGroup {
                 start_item: 0,
                 end_item: 2,

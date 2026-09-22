@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{Document, Inline, SourceSpan};
+use crate::{ContentContext, Document, Inline, SourceSpan};
 
 /// One visible heading with the same inline vocabulary as document prose.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -20,9 +20,15 @@ pub struct Heading {
 
 impl Heading {
     /// Derive the displayed words without losing the authoritative inline nodes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the heading refers to content absent from `content`.
     #[must_use]
-    pub fn plain_text(&self) -> String {
-        crate::inline_plain_text(&self.content)
+    pub fn plain_text(&self, content: ContentContext<'_>) -> String {
+        content
+            .plain_text(&self.content)
+            .expect("heading content must resolve in its store")
     }
 
     /// Derive a safe one-line label for outlines, breadcrumbs, and tabs.
@@ -31,26 +37,11 @@ impl Heading {
     /// but a tree label cannot embed rows. Whitespace is normalized at that
     /// presentation boundary instead of being mistaken for tree layout.
     #[must_use]
-    pub fn single_line_text(&self) -> String {
-        self.plain_text()
+    pub fn single_line_text(&self, content: ContentContext<'_>) -> String {
+        self.plain_text(content)
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
-    }
-}
-
-impl From<String> for Heading {
-    fn from(value: String) -> Self {
-        Self {
-            content: vec![Inline::Text { value }],
-            source: None,
-        }
-    }
-}
-
-impl From<&str> for Heading {
-    fn from(value: &str) -> Self {
-        value.to_owned().into()
     }
 }
 

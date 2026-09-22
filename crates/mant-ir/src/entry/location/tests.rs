@@ -1,8 +1,8 @@
 use super::*;
 use crate::{
     DefinitionItem, DefinitionLayout, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot,
-    EntryKind, EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, ListItem, ListItemLayout,
-    ListKind, NameCase, TableCell, TableRow,
+    EntryKind, EntryNameBinding, EntryNameEvidence, LayoutHint, ListItem, ListItemLayout, ListKind,
+    NameCase, TableCell, TableRow,
 };
 
 fn facts(name: &str, root: EntryInlineRoot) -> EntryFacts {
@@ -30,9 +30,13 @@ fn facts(name: &str, root: EntryInlineRoot) -> EntryFacts {
     }
 }
 
-fn definition(name: &str, children: Vec<Block>) -> DefinitionItem {
+fn definition(
+    fixture: &mut crate::test_support::ContentFixture,
+    name: &str,
+    children: Vec<Block>,
+) -> DefinitionItem {
     DefinitionItem {
-        terms: vec![vec![Inline::Code { value: name.into() }]],
+        terms: vec![vec![fixture.code(name)]],
         description: children,
         entry: Some(facts(name, EntryInlineRoot::Term { index: 0 })),
         layout: DefinitionLayout::default(),
@@ -60,11 +64,11 @@ fn definitions(items: Vec<DefinitionItem>) -> Block {
     }
 }
 
-fn item(name: &str) -> ListItem {
+fn item(fixture: &mut crate::test_support::ContentFixture, name: &str) -> ListItem {
     ListItem {
         entry: Some(facts(name, EntryInlineRoot::Block { index: 0 })),
         blocks: vec![Block::Paragraph {
-            children: vec![Inline::Code { value: name.into() }],
+            children: vec![fixture.code(name)],
             layout: LayoutHint::default(),
             source: None,
         }],
@@ -77,20 +81,21 @@ fn item(name: &str) -> ListItem {
 
 #[test]
 fn borrowed_serialization_matches_owned_excerpts_and_preserves_ordinals() {
+    let mut fixture = crate::test_support::ContentFixture::body();
     let blocks = vec![
         definitions(vec![
-            definition("first", Vec::new()),
-            definition("second", Vec::new()),
+            definition(&mut fixture, "first", Vec::new()),
+            definition(&mut fixture, "second", Vec::new()),
         ]),
         Block::List {
             kind: ListKind::Ordered { start: Some(7) },
-            items: vec![item("third"), item("fourth")],
+            items: vec![item(&mut fixture, "third"), item(&mut fixture, "fourth")],
             compact: false,
             layout: LayoutHint::default(),
             source: None,
         },
     ];
-    let entries = content_entries(&blocks);
+    let entries = content_entries(fixture.content(), &blocks);
     assert_eq!(entries.len(), 4);
     for entry in &entries {
         assert_eq!(
@@ -115,20 +120,18 @@ fn borrowed_serialization_matches_owned_excerpts_and_preserves_ordinals() {
 #[test]
 fn transparent_table_and_list_paths_keep_nested_semantic_coordinates() {
     use ContentBlockStep::{Block as B, DefinitionItem as D, ListItem as L, TableCell as T};
-    let mut transparent = item("unused");
+    let mut fixture = crate::test_support::ContentFixture::body();
+    let mut transparent = item(&mut fixture, "unused");
+    let child = definition(&mut fixture, "child", Vec::new());
+    let parent = definition(&mut fixture, "parent", vec![definitions(vec![child])]);
+    let sibling = definition(&mut fixture, "sibling", Vec::new());
     transparent.entry = None;
     transparent.blocks = vec![Block::Table {
         rows: vec![TableRow {
             kind: crate::TableRowKind::Data,
             cells: vec![TableCell {
                 kind: crate::TableCellKind::Text,
-                blocks: vec![definitions(vec![
-                    definition(
-                        "parent",
-                        vec![definitions(vec![definition("child", Vec::new())])],
-                    ),
-                    definition("sibling", Vec::new()),
-                ])],
+                blocks: vec![definitions(vec![parent, sibling])],
                 column_span: 1,
                 row_span: 1,
                 alignment: None,
@@ -144,7 +147,7 @@ fn transparent_table_and_list_paths_keep_nested_semantic_coordinates() {
         layout: LayoutHint::default(),
         source: None,
     }];
-    let entries = content_entries(&blocks);
+    let entries = content_entries(fixture.content(), &blocks);
     let base = vec![
         B { index: 0 },
         L { index: 0 },
@@ -178,11 +181,10 @@ fn transparent_table_and_list_paths_keep_nested_semantic_coordinates() {
 
 #[test]
 fn invalid_names_remain_addressable_and_location_only_scan_skips_names() {
-    let valid = definition("valid", Vec::new());
-    let mut invalid = definition(
-        "invalid",
-        vec![definitions(vec![definition("child", Vec::new())])],
-    );
+    let mut fixture = crate::test_support::ContentFixture::body();
+    let valid = definition(&mut fixture, "valid", Vec::new());
+    let child = definition(&mut fixture, "child", Vec::new());
+    let mut invalid = definition(&mut fixture, "invalid", vec![definitions(vec![child])]);
     invalid.entry.as_mut().unwrap().name_bindings.clear();
     invalid.source = Some(SourceSpan {
         source: crate::SourceKey::FIRST,
@@ -193,7 +195,7 @@ fn invalid_names_remain_addressable_and_location_only_scan_skips_names() {
         end_column: None,
     });
     let blocks = vec![definitions(vec![valid, invalid])];
-    let detailed = content_entries(&blocks);
+    let detailed = content_entries(fixture.content(), &blocks);
     let locations = content_entry_locations(&blocks);
     assert_eq!(detailed.len(), 3);
     assert_eq!(detailed[0].names(), ["valid"]);
@@ -211,16 +213,14 @@ fn invalid_names_remain_addressable_and_location_only_scan_skips_names() {
 
 #[test]
 fn borrowed_locations_and_semantic_index_share_root_and_section_owners() {
-    let mut transparent = definition(
-        "unused",
-        vec![definitions(vec![definition(
-            "parent",
-            vec![definitions(vec![definition("child", Vec::new())])],
-        )])],
-    );
+    let mut fixture = crate::test_support::ContentFixture::body();
+    let child = definition(&mut fixture, "child", Vec::new());
+    let parent = definition(&mut fixture, "parent", vec![definitions(vec![child])]);
+    let mut transparent = definition(&mut fixture, "unused", vec![definitions(vec![parent])]);
     transparent.entry = None;
     let blocks = vec![definitions(vec![transparent])];
     let document = crate::Document {
+        content_store: fixture.finish(),
         heading: None,
         parser: None,
         sources: vec![crate::SourceRecord {
@@ -241,9 +241,7 @@ fn borrowed_locations_and_semantic_index_share_root_and_section_owners() {
         sections: vec![crate::Section {
             id: "section".into(),
             heading: crate::Heading {
-                content: vec![Inline::Text {
-                    value: "Section".into(),
-                }],
+                content: Vec::new(),
                 source: None,
             },
             fragment_aliases: Vec::new(),

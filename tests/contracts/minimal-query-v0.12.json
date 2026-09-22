@@ -20,19 +20,36 @@
         },
         "format": "man",
         "decodedByteLength": 0,
-        "coordinates": { "kind": "native-normalized-bytes" }
+        "coordinates": {
+          "kind": "native-normalized-bytes"
+        }
       }
     ],
     "rootSource": 1,
     "meta": {
       "title": "LS",
       "manualSection": "1",
-      "names": ["ls"]
+      "names": [
+        "ls"
+      ]
     },
     "sections": [
       {
         "id": "section-0",
-        "heading": { "content": [{ "type": "text", "value": "NAME" }] },
+        "heading": {
+          "content": [
+            {
+              "type": "text",
+              "content": {
+                "atom": 1,
+                "bytes": {
+                  "start": 0,
+                  "end": 4
+                }
+              }
+            }
+          ]
+        },
         "blocks": [
           {
             "type": "paragraph",
@@ -40,53 +57,120 @@
               {
                 "type": "strong",
                 "children": [
-                  { "type": "text", "value": "ls" }
+                  {
+                    "type": "text",
+                    "content": {
+                      "atom": 2,
+                      "bytes": {
+                        "start": 0,
+                        "end": 2
+                      }
+                    }
+                  }
                 ]
               },
-              { "type": "text", "value": " - list directory contents; see " },
+              {
+                "type": "text",
+                "content": {
+                  "atom": 3,
+                  "bytes": {
+                    "start": 0,
+                    "end": 32
+                  }
+                }
+              },
               {
                 "type": "link",
-                "target": {
-                  "kind": "manual",
-                  "name": "dir",
-                  "manualSection": "1"
-                },
+                "occurrence": 1,
                 "children": [
-                  { "type": "text", "value": "dir(1)" }
+                  {
+                    "type": "text",
+                    "content": {
+                      "atom": 4,
+                      "bytes": {
+                        "start": 0,
+                        "end": 6
+                      }
+                    }
+                  }
                 ]
               },
-              { "type": "text", "value": "; visit " },
+              {
+                "type": "text",
+                "content": {
+                  "atom": 5,
+                  "bytes": {
+                    "start": 0,
+                    "end": 8
+                  }
+                }
+              },
               {
                 "type": "link",
-                "target": {
-                  "kind": "external",
-                  "uri": "https://example.test/ls"
-                },
-                "title": "Project documentation",
+                "occurrence": 2,
                 "children": [
-                  { "type": "text", "value": "the project site" }
+                  {
+                    "type": "text",
+                    "content": {
+                      "atom": 6,
+                      "bytes": {
+                        "start": 0,
+                        "end": 16
+                      }
+                    }
+                  }
                 ]
               },
-              { "type": "text", "value": ", contact " },
+              {
+                "type": "text",
+                "content": {
+                  "atom": 7,
+                  "bytes": {
+                    "start": 0,
+                    "end": 10
+                  }
+                }
+              },
               {
                 "type": "link",
-                "target": {
-                  "kind": "email",
-                  "address": "docs@example.test"
-                },
+                "occurrence": 3,
                 "children": [
-                  { "type": "text", "value": "the documentation team" }
+                  {
+                    "type": "text",
+                    "content": {
+                      "atom": 8,
+                      "bytes": {
+                        "start": 0,
+                        "end": 22
+                      }
+                    }
+                  }
                 ]
               },
-              { "type": "text", "value": ", or read " },
+              {
+                "type": "text",
+                "content": {
+                  "atom": 9,
+                  "bytes": {
+                    "start": 0,
+                    "end": 10
+                  }
+                }
+              },
               {
                 "type": "link",
-                "target": {
-                  "kind": "section",
-                  "id": "options-1"
-                },
+                "occurrence": 4,
                 "children": [
-                  { "type": "text", "value": "OPTIONS" }
+                  {
+                    "type": "text",
+                    "content": {
+                      "atom": 10,
+                      "bytes": {
+                        "start": 0,
+                        "end": 7
+                      }
+                    }
+                  }
                 ]
               }
             ]
@@ -96,14 +180,49 @@
       },
       {
         "id": "options-1",
-        "heading": { "content": [{ "type": "text", "value": "OPTIONS" }] },
+        "heading": {
+          "content": [
+            {
+              "type": "text",
+              "content": {
+                "atom": 11,
+                "bytes": {
+                  "start": 0,
+                  "end": 7
+                }
+              }
+            }
+          ]
+        },
         "blocks": [
           {
             "type": "paragraph",
             "children": [
-              { "type": "anchor", "id": "all-option" },
-              { "type": "code", "value": "--all" },
-              { "type": "text", "value": " includes hidden entries." }
+              {
+                "type": "anchor",
+                "point": 1,
+                "id": "all-option"
+              },
+              {
+                "type": "code",
+                "content": {
+                  "atom": 12,
+                  "bytes": {
+                    "start": 0,
+                    "end": 5
+                  }
+                }
+              },
+              {
+                "type": "text",
+                "content": {
+                  "atom": 13,
+                  "bytes": {
+                    "start": 0,
+                    "end": 25
+                  }
+                }
+              }
             ]
           },
           {
@@ -112,25 +231,118 @@
               {
                 "entry": {
                   "id": "almost-all-option",
-                  "kind": {"kind":"parameter","parameterKind":"option"},
+                  "kind": {
+                    "kind": "parameter",
+                    "parameterKind": "option"
+                  },
                   "case": "sensitive",
-                  "names": ["-A", "--almost-all"],
-                  "forms": [{"parts":[{"root":{"kind":"term","index":0},"path":[]}]}],
+                  "names": [
+                    "-A",
+                    "--almost-all"
+                  ],
+                  "forms": [
+                    {
+                      "parts": [
+                        {
+                          "root": {
+                            "kind": "term",
+                            "index": 0
+                          },
+                          "path": []
+                        }
+                      ]
+                    }
+                  ],
                   "nameBindings": [
-                    {"name":0,"evidence":"declared","occurrences":[{"parts":[{"root":{"kind":"term","index":0},"path":[1,0],"bytes":{"start":0,"end":2}}]}]},
-                    {"name":1,"evidence":"declared","occurrences":[{"parts":[{"root":{"kind":"term","index":0},"path":[1,0],"bytes":{"start":4,"end":16}}]}]}
+                    {
+                      "name": 0,
+                      "evidence": "declared",
+                      "occurrences": [
+                        {
+                          "parts": [
+                            {
+                              "root": {
+                                "kind": "term",
+                                "index": 0
+                              },
+                              "path": [
+                                1,
+                                0
+                              ],
+                              "bytes": {
+                                "start": 0,
+                                "end": 2
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": 1,
+                      "evidence": "declared",
+                      "occurrences": [
+                        {
+                          "parts": [
+                            {
+                              "root": {
+                                "kind": "term",
+                                "index": 0
+                              },
+                              "path": [
+                                1,
+                                0
+                              ],
+                              "bytes": {
+                                "start": 4,
+                                "end": 16
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
                   ]
                 },
                 "terms": [
                   [
-                    { "type": "anchor", "id": "almost-all-option" },
-                    { "type": "strong", "children": [{ "type": "text", "value": "-A, --almost-all" }] }
+                    {
+                      "type": "anchor",
+                      "point": 2,
+                      "id": "almost-all-option"
+                    },
+                    {
+                      "type": "strong",
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": {
+                            "atom": 14,
+                            "bytes": {
+                              "start": 0,
+                              "end": 16
+                            }
+                          }
+                        }
+                      ]
+                    }
                   ]
                 ],
                 "description": [
                   {
                     "type": "paragraph",
-                    "children": [{ "type": "text", "value": "Do not list implied dot entries." }]
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": {
+                          "atom": 15,
+                          "bytes": {
+                            "start": 0,
+                            "end": 32
+                          }
+                        }
+                      }
+                    ]
                   }
                 ]
               }
@@ -139,18 +351,353 @@
         ],
         "children": []
       }
-    ]
+    ],
+    "contentStore": {
+      "owners": [
+        {
+          "key": 1,
+          "kind": "document",
+          "roots": [
+            1
+          ],
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "roots": [
+        {
+          "key": 1,
+          "owner": 1,
+          "kind": "body",
+          "atoms": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "points": [
+            1,
+            2
+          ],
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "atoms": [
+        {
+          "key": 1,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "NAME",
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 2,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "ls",
+          "style": {
+            "strong": true
+          },
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 3,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": " - list directory contents; see ",
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 4,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "dir(1)",
+          "link": 1,
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 5,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "; visit ",
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 6,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "the project site",
+          "link": 2,
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 7,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": ", contact ",
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 8,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "the documentation team",
+          "link": 3,
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 9,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": ", or read ",
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 10,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "OPTIONS",
+          "link": 4,
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 11,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "OPTIONS",
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 12,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "--all",
+          "style": {
+            "literal": true
+          },
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 13,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": " includes hidden entries.",
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 14,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "-A, --almost-all",
+          "style": {
+            "strong": true
+          },
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 15,
+          "root": 1,
+          "owner": 1,
+          "kind": "text",
+          "text": "Do not list implied dot entries.",
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "points": [
+        {
+          "key": 1,
+          "root": 1,
+          "owner": 1,
+          "kind": "between-atoms",
+          "atomBoundary": 11,
+          "scalarBoundary": 124,
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 2,
+          "root": 1,
+          "owner": 1,
+          "kind": "between-atoms",
+          "atomBoundary": 13,
+          "scalarBoundary": 154,
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "links": [
+        {
+          "key": 1,
+          "owner": 1,
+          "target": {
+            "kind": "manual",
+            "name": "dir",
+            "manualSection": "1"
+          },
+          "label": [
+            {
+              "kind": "content",
+              "content": {
+                "atom": 4,
+                "bytes": {
+                  "start": 0,
+                  "end": 6
+                }
+              }
+            }
+          ],
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 2,
+          "owner": 1,
+          "target": {
+            "kind": "external",
+            "uri": "https://example.test/ls"
+          },
+          "title": "Project documentation",
+          "label": [
+            {
+              "kind": "content",
+              "content": {
+                "atom": 6,
+                "bytes": {
+                  "start": 0,
+                  "end": 16
+                }
+              }
+            }
+          ],
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 3,
+          "owner": 1,
+          "target": {
+            "kind": "email",
+            "address": "docs@example.test"
+          },
+          "label": [
+            {
+              "kind": "content",
+              "content": {
+                "atom": 8,
+                "bytes": {
+                  "start": 0,
+                  "end": 22
+                }
+              }
+            }
+          ],
+          "provenance": {
+            "kind": "unknown"
+          }
+        },
+        {
+          "key": 4,
+          "owner": 1,
+          "target": {
+            "kind": "section",
+            "id": "options-1"
+          },
+          "label": [
+            {
+              "kind": "content",
+              "content": {
+                "atom": 10,
+                "bytes": {
+                  "start": 0,
+                  "end": 7
+                }
+              }
+            }
+          ],
+          "provenance": {
+            "kind": "unknown"
+          }
+        }
+      ]
+    }
   },
   "tldr": {
     "title": "ls",
-    "description": ["List directory contents."],
+    "description": [
+      "List directory contents."
+    ],
     "moreInformation": "https://www.gnu.org/software/coreutils/manual/html_node/ls-invocation.html",
     "examples": [
       {
         "description": "List all files:",
         "command": "ls --all",
         "commandParts": [
-          { "type": "text", "value": "ls --all" }
+          {
+            "type": "text",
+            "value": "ls --all"
+          }
         ]
       }
     ],

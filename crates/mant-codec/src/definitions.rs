@@ -18,9 +18,9 @@ mod syntax;
 use context::DefinitionContext;
 #[cfg(feature = "roff")]
 pub(crate) use diagnostics::manual_discovery_diagnostics;
-pub(crate) use evidence::{
-    NativeContentRange, NativeDeclarationEvidence, NativeHeadEvidence, NativeHeadRole,
-};
+#[cfg(feature = "native-structured")]
+pub(crate) use evidence::NativeContentRange;
+pub(crate) use evidence::{NativeDeclarationEvidence, NativeHeadEvidence, NativeHeadRole};
 #[cfg(feature = "roff")]
 pub(crate) use groups::mark_native_definition_owner;
 pub(crate) use groups::{
@@ -29,11 +29,11 @@ pub(crate) use groups::{
 };
 pub(crate) use identity::document_id_slug;
 use identity::{document_anchor_ids, identify_item, identify_list_item};
-use mant_ir::{Block, Section};
+use mant_ir::{Block, ContentStore, Section};
 pub(crate) use recognized::RecognizedName;
 use std::collections::{HashMap, HashSet};
 pub(crate) use syntax::{
-    environment_variable_alias, option_names_from_terms, option_occurrences_from_terms,
+    environment_variable_alias, option_names_from_literal, option_occurrences_from_literal,
     option_prefix, slash_option_forms,
 };
 #[cfg(test)]
@@ -42,12 +42,14 @@ use syntax::{is_value_name, option_names};
 /// Annotate reliably recognizable command-line options and return every
 /// inline anchor that the navigation resolver must retain.
 pub(crate) fn identify_definitions(
+    content_store: &mut ContentStore,
     blocks: &mut Vec<Block>,
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
     document_name: Option<&str>,
 ) -> HashSet<String> {
     identify_definitions_with_evidence(
+        content_store,
         blocks,
         sections,
         reserved_targets,
@@ -57,6 +59,7 @@ pub(crate) fn identify_definitions(
 }
 
 pub(crate) fn identify_definitions_with_evidence(
+    content_store: &mut ContentStore,
     blocks: &mut Vec<Block>,
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
@@ -71,7 +74,13 @@ pub(crate) fn identify_definitions_with_evidence(
             DefinitionContext::Generic
         }
     });
-    let prepared = preparation::prepare(blocks, sections, root_context, evidence);
+    let prepared = preparation::prepare(
+        content_store.content(),
+        blocks,
+        sections,
+        root_context,
+        evidence,
+    );
 
     let used = document_anchor_ids(blocks, sections);
     let mut discovery = DefinitionDiscovery {
@@ -80,6 +89,7 @@ pub(crate) fn identify_definitions_with_evidence(
         reserved: reserved_targets,
         preferred_counts: &prepared.preferred_counts,
         plans: prepared.plans.into_iter(),
+        content_store,
     };
     discovery.identify_blocks(blocks);
     discovery.identify_sections(sections);
@@ -94,6 +104,7 @@ pub(crate) fn identify_definitions_with_evidence(
 }
 
 struct DefinitionDiscovery<'a> {
+    content_store: &'a mut ContentStore,
     plans: std::vec::IntoIter<preparation::PreparedDefinition>,
     used: HashSet<String>,
     reserved: &'a HashSet<String>,
@@ -115,6 +126,7 @@ impl DefinitionDiscovery<'_> {
                 Block::List { items, .. } => {
                     for item in items {
                         identify_list_item(
+                            self.content_store.content(),
                             item,
                             &mut self.used,
                             self.reserved,
@@ -132,6 +144,7 @@ impl DefinitionDiscovery<'_> {
                             .expect("every final definition was prepared")
                             .for_item(item);
                         identify_item(
+                            self.content_store,
                             item,
                             plan,
                             &mut self.used,

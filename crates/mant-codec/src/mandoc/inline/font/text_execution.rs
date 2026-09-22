@@ -282,7 +282,7 @@ fn finish_text_execution(
     source_continuation: Option<bool>,
     pending_word_end_break: bool,
 ) -> TextExecution {
-    let trailing_output = match mant_ir::last_visible_character(&output) {
+    let trailing_output = match crate::mandoc::inline::draft::last_visible_character(&output) {
         None | Some('\n') => TrailingOutput::None,
         Some(character) if !character.is_whitespace() => TrailingOutput::NonBlank,
         Some(_) => {

@@ -5,10 +5,10 @@ mod resolution;
 mod tests;
 
 use mant_ir::{
-    ContentRevealRef, Document, DocumentAddress, LinkOccurrenceRef, LinkTarget, NavigationEvent,
-    NavigationScanOptions, ReferenceFormAssociationState, ReferenceLinkFilter, ReferenceScanLimits,
-    ReferenceScope, ReferenceTargetType, ReferenceWorkBudget, reference_form_associations,
-    scan_navigation_scope_with_budget,
+    ContentProjectionBuilder, ContentRevealRef, Document, DocumentAddress, LinkOccurrenceRef,
+    LinkTarget, NavigationEvent, NavigationScanOptions, ReferenceFormAssociationState,
+    ReferenceLinkFilter, ReferenceScanLimits, ReferenceScope, ReferenceTargetType,
+    ReferenceWorkBudget, reference_form_associations, scan_navigation_scope_with_budget,
 };
 use mant_protocol::{
     ReferenceAssociation, ReferenceCount, ReferenceCoverage, ReferenceInventory,
@@ -60,7 +60,13 @@ pub fn project_references(
 }
 
 /// Project under explicit hard-clamped budgets, including all skipped offset work.
+///
+/// # Panics
+///
+/// Only if an admitted link is absent from its completed projection, which
+/// violates the internal closure invariant.
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn project_references_with_limits(
     document: &Document,
     source_address: Option<&DocumentAddress>,
@@ -84,6 +90,7 @@ pub fn project_references_with_limits(
     let mut targets_complete = true;
     let mut occurrences = 0usize;
     let mut retained_bytes = 0usize;
+    let mut record_bytes = Vec::new();
     let source_bytes = source_address.map_or(0, address_bytes);
     let content = document.content();
     let report = scan_navigation_scope_with_budget(
@@ -136,6 +143,7 @@ pub fn project_references_with_limits(
                 result.page.limited = Some(ReferencePageLimit::Records);
                 return ControlFlow::Continue(());
             }
+            let before = retained_bytes;
             match materialize(
                 content,
                 &occurrence,
@@ -145,18 +153,21 @@ pub fn project_references_with_limits(
                 &mut retained_bytes,
                 limits.materialization_bytes,
             ) {
-                Ok(record) => result.records.push(record),
+                Ok(record) => {
+                    record_bytes.push(retained_bytes - before);
+                    result.records.push(record);
+                }
                 Err(limit) => result.page.limited = Some(limit),
             }
             ControlFlow::Continue(())
         },
     );
-    finish_inventory(
+    let remap = attach_projection(
+        document,
         &mut result,
-        report,
-        occurrences,
-        targets.len(),
-        targets_complete,
+        &record_bytes,
+        &mut retained_bytes,
+        limits.materialization_bytes,
     );
     result.target_coverage = resolution::validate_local(
         document,
@@ -165,6 +176,22 @@ pub fn project_references_with_limits(
         &mut budget,
         &mut retained_bytes,
         limits.materialization_bytes,
+    );
+    if let Some(remap) = remap {
+        // Local target validation uses original occurrence keys; remap only
+        // after that pass has finished reading the document's source store.
+        for record in &mut result.records {
+            remap
+                .remap_link(&mut record.occurrence)
+                .expect("admitted link belongs to the completed projection");
+        }
+    }
+    finish_inventory(
+        &mut result,
+        report,
+        occurrences,
+        targets.len(),
+        targets_complete,
     );
     result
 }
@@ -262,7 +289,6 @@ fn materialize(
         .saturating_mul(2)
         .saturating_add(owner_bytes)
         .saturating_add(semantic_owner.map_or(0, ContentRevealRef::encoded_size_bound))
-        .saturating_add(target_size(occurrence.target).saturating_mul(3))
         .saturating_add(source_bytes.saturating_mul(2))
         .saturating_add(forms_reservation)
         .saturating_add(256);
@@ -278,8 +304,8 @@ fn materialize(
         None => None,
     };
     let label = content
-        .reference_label(
-            occurrence.label,
+        .reference_occurrence_label(
+            occurrence.key,
             occurrence.location.depth(),
             budget,
             4096.min(limit.saturating_sub(*retained).saturating_sub(bytes)),
@@ -306,15 +332,96 @@ fn materialize(
     }
     *retained += total;
     Ok(ReferenceRecord {
+        occurrence: occurrence.key,
         source_read: source_read(occurrence.location),
         origin,
         owner,
-        label,
-        label_truncated,
-        target: occurrence.target.clone(),
+        label_preview: label,
+        label_preview_truncated: label_truncated,
         association,
         resolution: resolution::initial(occurrence.target, source_address),
     })
+}
+
+fn attach_projection(
+    document: &Document,
+    result: &mut ReferenceInventory,
+    record_bytes: &[usize],
+    retained: &mut usize,
+    limit: usize,
+) -> Option<mant_ir::ContentKeyRemap> {
+    if result.records.is_empty() {
+        return None;
+    }
+    debug_assert_eq!(result.records.len(), record_bytes.len());
+    let mut prefix_bytes = Vec::with_capacity(record_bytes.len() + 1);
+    prefix_bytes.push(0usize);
+    for &bytes in record_bytes {
+        prefix_bytes.push(prefix_bytes.last().unwrap().saturating_add(bytes));
+    }
+    // Both the retained record bytes and the closed store grow with a source
+    // prefix. Dense remapping cannot make an existing key shorter when a new
+    // earlier key is inserted, so feasibility is monotone. At most ten
+    // projections are needed for the maximum 1,000-record page.
+    let mut admitted = 0usize;
+    let mut rejected = result.records.len() + 1;
+    let mut selected = None;
+    while admitted + 1 < rejected {
+        let candidate = admitted + (rejected - admitted) / 2;
+        let mut builder = ContentProjectionBuilder::new(&document.content_store);
+        let included = result
+            .records
+            .iter()
+            .take(candidate)
+            .try_for_each(|record| builder.include_link(record.occurrence));
+        let projected =
+            included
+                .ok()
+                .and_then(|()| builder.finish().ok())
+                .and_then(|(projection, remap)| {
+                    let available = limit.checked_sub(prefix_bytes[candidate])?;
+                    let bytes = serialized_size(&projection, available)?;
+                    Some((projection, remap, bytes))
+                });
+        if let Some(projection) = projected {
+            admitted = candidate;
+            selected = Some(projection);
+        } else {
+            rejected = candidate;
+        }
+    }
+    if admitted < result.records.len() {
+        result.records.truncate(admitted);
+        result.page.limited = Some(ReferencePageLimit::MaterializationBytes);
+    }
+    let Some((projection, remap, projection_bytes)) = selected else {
+        *retained = 0;
+        return None;
+    };
+    *retained = prefix_bytes[admitted].saturating_add(projection_bytes);
+    result.content_projection = Some(projection);
+    Some(remap)
+}
+
+fn serialized_size(value: &impl serde::Serialize, limit: usize) -> Option<usize> {
+    struct Count {
+        remaining: usize,
+    }
+    impl std::io::Write for Count {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.remaining = self
+                .remaining
+                .checked_sub(bytes.len())
+                .ok_or_else(|| std::io::Error::other("reference projection budget"))?;
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut writer = Count { remaining: limit };
+    serde_json::to_writer(&mut writer, value).ok()?;
+    Some(limit - writer.remaining)
 }
 
 fn source_read(location: mant_ir::ContentLocationRef<'_>) -> mant_protocol::ContentSelector {

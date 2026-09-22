@@ -1,11 +1,11 @@
 //! Preserves no-fill and literal display content as preformatted blocks.
 
 use libmandoc_rs::{Node, NodeKind};
-use mant_ir::{Block, Inline};
+use mant_ir::Block;
 
 use super::super::{
     LoweringContext,
-    inline::{InlineBuilder, append_inline_node_with_next},
+    inline::{DraftInline as Inline, InlineBuilder, append_inline_node_with_next},
     layout::{layout, vertical_space_delta},
     source_span,
 };
@@ -96,11 +96,15 @@ impl DisplayFlow<'_, '_> {
                 Event::FlushLine => {
                     let start = self.output.len();
                     self.flush();
-                    if !super::flow::has_flushed_row(&self.output[start..]) {
+                    if !super::flow::has_flushed_row(&self.context.content, &self.output[start..]) {
                         self.output.push(Block::Preformatted {
-                            children: vec![Inline::Text {
-                                value: String::new(),
-                            }],
+                            children: self.context.content.lower(
+                                mant_ir::ContentRootKind::FixedBody,
+                                source_span(node),
+                                vec![Inline::Text {
+                                    value: String::new(),
+                                }],
+                            ),
                             language: None,
                             layout: layout(self.indent_columns),
                             source: source_span(node),
@@ -147,18 +151,25 @@ impl DisplayFlow<'_, '_> {
         let empty_word_end_break = self.line.take_unrepresented_word_end_break();
         let children = std::mem::replace(&mut self.line, next).finish();
         if !children.is_empty() {
+            let root_kind = if self.literal {
+                mant_ir::ContentRootKind::FixedBody
+            } else {
+                mant_ir::ContentRootKind::Body
+            };
+            let source = self.source.take();
+            let children = self.context.content.lower(root_kind, source, children);
             self.output.push(if self.literal {
                 Block::Preformatted {
                     children,
                     language: None,
                     layout: layout(self.indent_columns),
-                    source: self.source.take(),
+                    source,
                 }
             } else {
                 Block::Paragraph {
                     children,
                     layout: layout(self.indent_columns),
-                    source: self.source.take(),
+                    source,
                 }
             });
         }
@@ -338,7 +349,7 @@ impl DisplayFlow<'_, '_> {
 
 #[cfg(test)]
 mod tests {
-    use mant_ir::Inline;
+    use crate::mandoc::inline::{DraftInline as Inline, plain_text};
 
     #[test]
     fn font_styling_preserves_line_boundaries() {
@@ -356,7 +367,7 @@ mod tests {
                 Inline::Strong { children: first },
                 Inline::LineBreak,
                 Inline::Strong { children: second },
-            ] if mant_ir::inline_plain_text(first) == "first" && mant_ir::inline_plain_text(second) == "second"
+            ] if plain_text(first) == "first" && plain_text(second) == "second"
         ));
     }
 }

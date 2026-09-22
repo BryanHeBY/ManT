@@ -19,7 +19,7 @@ fn parses_the_posix_shell_manual_from_its_real_section() {
         assert!(
             sections
                 .iter()
-                .any(|section| section.heading.plain_text() == title)
+                .any(|section| section.heading.plain_text(document.content()) == title)
         );
     }
 }
@@ -28,5 +28,5 @@ fn parses_the_posix_shell_manual_from_its_real_section() {
 fn keeps_the_posix_shell_page_structurally_clean() {
     let document = archlinux_manual("sh");
     common::assert_document_has_no_source_markup("archlinux/sh", document);
-    common::assert_bounded_vertical_spacing(&document.sections, "archlinux/sh");
+    common::assert_bounded_vertical_spacing(document, "archlinux/sh");
 }

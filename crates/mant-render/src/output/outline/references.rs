@@ -46,6 +46,13 @@ impl Badges {
         if inventory.policy.mode != ReferenceProjectionMode::All {
             return Self::default();
         }
+        let Some(content) = inventory
+            .content_projection
+            .as_ref()
+            .map(mant_ir::ContentProjection::content)
+        else {
+            return Self::default();
+        };
         let mut groups: HashMap<Owner, Group<'_>> = HashMap::new();
         for record in inventory.records.iter().take(1000) {
             let forms = match &record.association {
@@ -68,12 +75,14 @@ impl Badges {
                 },
                 ReferenceAttachment::Body => None,
             };
-            if let Some(owner) = owner {
+            if let Some(owner) = owner
+                && let Some(occurrence) = content.occurrence(record.occurrence)
+            {
                 groups
                     .entry(owner)
                     .or_default()
                     .targets
-                    .push(&record.target);
+                    .push(&occurrence.target);
             }
         }
         match_nodes(&outline.nodes, &mut groups);

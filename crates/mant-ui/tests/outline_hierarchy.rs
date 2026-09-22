@@ -133,7 +133,7 @@ fn both_git_sources_preserve_root_sections_and_real_subsections_in_ir_and_outlin
             let section = document
                 .sections
                 .iter()
-                .find(|section| section.heading.plain_text() == title)
+                .find(|section| section.heading.plain_text(document.content()) == title)
                 .unwrap_or_else(|| panic!("{fixture}: {title} must be a source .SH"));
             assert!(outline.nodes.iter().any(|node| matches!(node,
                 OutlineNode::DocumentSection { id, title: found, .. } if id == &section.id && found == title)));
@@ -144,13 +144,15 @@ fn both_git_sources_preserve_root_sections_and_real_subsections_in_ir_and_outlin
         let environment = document
             .sections
             .iter()
-            .find(|section| section.heading.plain_text() == "ENVIRONMENT VARIABLES")
+            .find(|section| {
+                section.heading.plain_text(document.content()) == "ENVIRONMENT VARIABLES"
+            })
             .unwrap();
         assert_eq!(
             environment
                 .children
                 .iter()
-                .map(|section| section.heading.plain_text())
+                .map(|section| section.heading.plain_text(document.content()))
                 .collect::<Vec<_>>(),
             ENVIRONMENT_CHILDREN
         );

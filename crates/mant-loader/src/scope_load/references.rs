@@ -366,16 +366,19 @@ mod tests {
             None,
         )
         .unwrap();
-        let Block::Paragraph { children, .. } = &mut query.document.as_mut().unwrap().blocks[0]
-        else {
+        let document = query.document.as_mut().unwrap();
+        let Block::Paragraph { children, .. } = &document.blocks[0] else {
             panic!("paragraph")
         };
-        let mant_ir::Inline::Link {
-            target: mant_ir::LinkTarget::External { uri },
-            ..
-        } = &mut children[0]
-        else {
+        let mant_ir::Inline::Link { occurrence, .. } = &children[0] else {
             panic!("external")
+        };
+        let Some(mant_ir::LinkTarget::External { uri }) = document
+            .content_store
+            .link_mut(*occurrence)
+            .map(|link| &mut link.target)
+        else {
+            panic!("external target")
         };
         *uri = "x".repeat(2 * 1024 * 1024);
         let result = collect_references(

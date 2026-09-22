@@ -13,6 +13,7 @@ pub(super) enum MdocSectionContext {
 }
 
 pub(super) struct LoweringContext<'a> {
+    pub(super) content: super::content::LegacyContent,
     pub(super) macro_set: MacroSet,
     pub(super) native_heads: RefCell<crate::definitions::NativeHeadEvidence>,
     // Immutable source services. Formatter execution is passed separately;
@@ -106,6 +107,7 @@ fn roff_line_without_comment(line: &str, escape: Option<u8>) -> (&str, bool) {
 impl<'a> LoweringContext<'a> {
     pub(super) fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
+            content: super::content::LegacyContent::default(),
             macro_set: MacroSet::None,
             native_heads: RefCell::default(),
             default_name,
@@ -152,6 +154,26 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
     ) -> (Vec<mant_ir::Inline>, bool, bool) {
+        let (output, definition_field_exited, definition_body_gap_consumed) = self
+            .lower_inline_draft_with_author_break(nodes, spacing, formatter, author_break_effect);
+        (
+            self.content.lower(
+                mant_ir::ContentRootKind::Body,
+                nodes.first().and_then(super::source_span),
+                output,
+            ),
+            definition_field_exited,
+            definition_body_gap_consumed,
+        )
+    }
+
+    pub(super) fn lower_inline_draft_with_author_break(
+        &self,
+        nodes: &[Node],
+        spacing: bool,
+        formatter: &mut formatter::FormatterState,
+        author_break_effect: inline::AuthorBreakEffect,
+    ) -> (Vec<inline::DraftInline>, bool, bool) {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
@@ -178,7 +200,8 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         strong_scope: bool,
-    ) -> (Vec<mant_ir::Inline>, inline::PreservedInlineState) {
+    ) -> (Vec<inline::DraftInline>, inline::PreservedInlineState) {
+        let groups = groups.into_iter().collect::<Vec<_>>();
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
@@ -227,7 +250,12 @@ impl<'a> LoweringContext<'a> {
                 builder.font.pop_heading_scope(heading_font);
             }
         }
-        remove_structural_heading_bold(formatter.finish_inline_line(builder).output)
+        let output = remove_structural_heading_bold(formatter.finish_inline_line(builder).output);
+        self.content.lower(
+            mant_ir::ContentRootKind::Heading,
+            nodes.first().and_then(super::source_span),
+            output,
+        )
     }
 
     pub(super) fn lower_text(
@@ -235,6 +263,16 @@ impl<'a> LoweringContext<'a> {
         source: &str,
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
+        let output = self.lower_text_draft(source, formatter);
+        self.content
+            .lower(mant_ir::ContentRootKind::Cell, None, output)
+    }
+
+    pub(super) fn lower_text_draft(
+        &self,
+        source: &str,
+        formatter: &mut formatter::FormatterState,
+    ) -> Vec<inline::DraftInline> {
         let mut zero_advance = inline::ZeroAdvanceState::new();
         zero_advance.inherit_armed(std::mem::take(&mut formatter.zero_advance_armed));
         let execution = inline::parse_roff_text_with_zero_advance(
@@ -246,7 +284,7 @@ impl<'a> LoweringContext<'a> {
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
-            output.push(mant_ir::Inline::LineBreak);
+            output.push(inline::DraftInline::LineBreak);
         }
         // Even a control-only tbl word enters term_word(): it clears
         // formatter-global skipvsp and can leave a bare BACKAFTER request for
@@ -276,12 +314,13 @@ impl<'a> LoweringContext<'a> {
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
-            output.push(mant_ir::Inline::LineBreak);
+            output.push(inline::DraftInline::LineBreak);
         }
         formatter.execute_word();
         formatter.zero_advance_armed = zero_advance.take_armed();
         zero_advance.finish_into(&mut output);
-        output
+        self.content
+            .lower(mant_ir::ContentRootKind::Cell, None, output)
     }
 
     pub(super) fn table_execution_source(source: &str, escape: Option<u8>) -> String {
@@ -394,21 +433,23 @@ impl<'a> LoweringContext<'a> {
 /// Heading strength is carried by `Heading`, not by its inline children.
 /// Remove exactly the implicit terminal bold layer while retaining explicit
 /// emphasis/code information produced inside that scope.
-fn remove_structural_heading_bold(nodes: Vec<mant_ir::Inline>) -> Vec<mant_ir::Inline> {
+fn remove_structural_heading_bold(nodes: Vec<inline::DraftInline>) -> Vec<inline::DraftInline> {
     let mut output = Vec::with_capacity(nodes.len());
     for node in nodes {
         match node {
-            mant_ir::Inline::Strong { children } => {
+            inline::DraftInline::Strong { children } => {
                 output.extend(remove_structural_heading_bold(children));
             }
-            mant_ir::Inline::Emphasis { children } => output.push(mant_ir::Inline::Emphasis {
-                children: remove_structural_heading_bold(children),
-            }),
-            mant_ir::Inline::Link {
+            inline::DraftInline::Emphasis { children } => {
+                output.push(inline::DraftInline::Emphasis {
+                    children: remove_structural_heading_bold(children),
+                });
+            }
+            inline::DraftInline::Link {
                 target,
                 title,
                 children,
-            } => output.push(mant_ir::Inline::Link {
+            } => output.push(inline::DraftInline::Link {
                 target,
                 title,
                 children: remove_structural_heading_bold(children),

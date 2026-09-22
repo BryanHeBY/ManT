@@ -1,6 +1,6 @@
 use super::*;
 use mant_ir::{
-    DefinitionItem, DefinitionLayout, EntryFacts, EntryKind, Heading, Inline, LayoutHint, NameCase,
+    DefinitionItem, DefinitionLayout, EntryFacts, EntryKind, Heading, LayoutHint, NameCase,
 };
 
 fn span(line: u32) -> SourceSpan {
@@ -16,9 +16,7 @@ fn span(line: u32) -> SourceSpan {
 
 fn definition(id: &str, line: u32, children: Vec<Block>) -> DefinitionItem {
     DefinitionItem {
-        terms: vec![vec![Inline::Code {
-            value: "same-name".into(),
-        }]],
+        terms: vec![vec![crate::test_content::code("same-name")]],
         description: children,
         entry: Some(EntryFacts {
             id: id.into(),
@@ -52,9 +50,7 @@ fn section(id: &str, line: u32, blocks: Vec<Block>, children: Vec<Section>) -> S
     Section {
         id: id.into(),
         heading: Heading {
-            content: vec![Inline::Text {
-                value: "heading".into(),
-            }],
+            content: vec![crate::test_content::text("heading")],
             source: None,
         },
         fragment_aliases: Vec::new(),
@@ -208,11 +204,7 @@ fn declared_definition(
         }),
         terms: forms
             .iter()
-            .map(|form| {
-                vec![Inline::Code {
-                    value: (*form).to_owned(),
-                }]
-            })
+            .map(|form| vec![crate::test_content::code(*form)])
             .collect(),
         description,
         layout: mant_ir::DefinitionLayout {
@@ -250,7 +242,10 @@ fn repeated_names_do_not_create_content_identity_diagnostics() {
     let sections = vec![Section {
         id: "mode".into(),
         fragment_aliases: Vec::new(),
-        heading: "Mode".into(),
+        heading: Heading {
+            content: vec![crate::test_content::text("Mode")],
+            source: None,
+        },
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),

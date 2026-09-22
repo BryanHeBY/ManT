@@ -9,8 +9,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
 use mant_codec::lower_mandoc_document;
 use mant_ir::{
-    Block, Document, EntryKind, Inline, ParameterKind, Section, SemanticEntry, SemanticIndex,
-    ValueDomain,
+    Block, ContentContext, Document, EntryKind, ParameterKind, Section, SemanticEntry,
+    SemanticIndex, ValueDomain,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -282,9 +282,19 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
 
 fn ordinal_definition_candidates(document: &Document) -> Vec<DefinitionCandidate> {
     let mut candidates = Vec::new();
-    collect_definition_candidates(&document.blocks, None, None, 0, "document", &mut candidates);
+    let content = document.content();
+    collect_definition_candidates(
+        content,
+        &document.blocks,
+        None,
+        None,
+        0,
+        "document",
+        &mut candidates,
+    );
     for (index, section) in document.sections.iter().enumerate() {
         collect_section_definition_candidates(
+            content,
             section,
             &format!("section[{index}]"),
             &mut candidates,
@@ -298,12 +308,13 @@ fn entry_records(document: &Document) -> Vec<EntryRecord> {
     let mut output = Vec::new();
     collect_entries(index.root(), None, None, 0, 0, &mut output);
     for section in &document.sections {
-        collect_section_entries(section, &index, &mut output);
+        collect_section_entries(document.content(), section, &index, &mut output);
     }
     output
 }
 
 fn collect_section_entries(
+    content: ContentContext<'_>,
     section: &Section,
     index: &SemanticIndex,
     output: &mut Vec<EntryRecord>,
@@ -311,13 +322,13 @@ fn collect_section_entries(
     collect_entries(
         index.section(section.id.as_str()),
         Some(section.id.as_str()),
-        Some(&section.heading.plain_text()),
+        Some(&section.heading.plain_text(content)),
         section.source.map_or(0, |source| source.line),
         0,
         output,
     );
     for child in &section.children {
-        collect_section_entries(child, index, output);
+        collect_section_entries(content, child, index, output);
     }
 }
 
@@ -392,25 +403,33 @@ const fn value_domain_origin(domain: &ValueDomain) -> &'static str {
 }
 
 fn collect_section_definition_candidates(
+    content: ContentContext<'_>,
     section: &Section,
     path: &str,
     output: &mut Vec<DefinitionCandidate>,
 ) {
     let line = section.source.map_or(0, |source| source.line);
     collect_definition_candidates(
+        content,
         &section.blocks,
         Some(section.id.as_str()),
-        Some(&section.heading.plain_text()),
+        Some(&section.heading.plain_text(content)),
         line,
         path,
         output,
     );
     for (index, child) in section.children.iter().enumerate() {
-        collect_section_definition_candidates(child, &format!("{path}/section[{index}]"), output);
+        collect_section_definition_candidates(
+            content,
+            child,
+            &format!("{path}/section[{index}]"),
+            output,
+        );
     }
 }
 
 fn collect_definition_candidates(
+    content: ContentContext<'_>,
     blocks: &[Block],
     section: Option<&str>,
     section_title: Option<&str>,
@@ -423,7 +442,7 @@ fn collect_definition_candidates(
         match block {
             Block::DefinitionList { items, .. } => {
                 for (item_index, item) in items.iter().enumerate() {
-                    for form in item.terms.iter().map(|term| inline_text(term)) {
+                    for form in item.terms.iter().map(|term| inline_text(content, term)) {
                         if ordinal_marker(&form) {
                             output.push(DefinitionCandidate {
                                 form,
@@ -443,6 +462,7 @@ fn collect_definition_candidates(
                         }
                     }
                     collect_definition_candidates(
+                        content,
                         &item.description,
                         section,
                         section_title,
@@ -455,6 +475,7 @@ fn collect_definition_candidates(
             Block::List { items, .. } => {
                 for (item_index, item) in items.iter().enumerate() {
                     collect_definition_candidates(
+                        content,
                         &item.blocks,
                         section,
                         section_title,
@@ -468,6 +489,7 @@ fn collect_definition_candidates(
                 for (row_index, row) in rows.iter().enumerate() {
                     for (cell_index, cell) in row.cells.iter().enumerate() {
                         collect_definition_candidates(
+                            content,
                             &cell.blocks,
                             section,
                             section_title,
@@ -488,19 +510,8 @@ fn collect_definition_candidates(
     }
 }
 
-fn inline_text(nodes: &[Inline]) -> String {
-    let mut output = String::new();
-    for node in nodes {
-        match node {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
-            Inline::LineBreak => output.push('\n'),
-            Inline::Anchor { .. } => {}
-        }
-    }
-    output
+fn inline_text(content: ContentContext<'_>, nodes: &[mant_ir::Inline]) -> String {
+    content.plain_text(nodes).expect("valid profile content")
 }
 
 fn ordinal_marker(value: &str) -> bool {

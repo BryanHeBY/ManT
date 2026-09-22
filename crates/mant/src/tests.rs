@@ -8,8 +8,9 @@ use mant_sources::{
 };
 
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline, LayoutHint,
-    NameCase, Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, DefinitionItem,
+    Document, DocumentMeta, EntryFacts, EntryKind, Heading, Inline, LayoutHint, NameCase,
+    Provenance, Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
     TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
@@ -657,7 +658,16 @@ fn invoke_with_terminal_output(
 #[test]
 fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exact() {
     let mut document = semantic_markdown();
-    document.heading = Some("ris\u{1b}c".into());
+    let heading = document.heading.as_mut().expect("fixture heading");
+    let Inline::Text { content } = &mut heading.content[0] else {
+        panic!("plain fixture heading");
+    };
+    let atom = &mut document.content_store.atoms[(content.atom.get() - 1) as usize];
+    let mant_ir::ContentAtomKind::Text { text, .. } = &mut atom.kind else {
+        panic!("text fixture atom");
+    };
+    *text = "ris\u{1b}c".to_owned();
+    content.bytes.end = u32::try_from(text.len()).unwrap();
     let host = FakeHost {
         document: Some(document),
         ..FakeHost::new()
@@ -678,6 +688,29 @@ fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exac
 }
 
 fn manual() -> Document {
+    manual_with_option(false)
+}
+
+fn manual_with_option(explainable: bool) -> Document {
+    let mut content = ContentStoreBuilder::new();
+    let common = section(
+        &mut content,
+        "common-3",
+        "Common options",
+        "common details",
+        Vec::new(),
+    );
+    let mut options = section(
+        &mut content,
+        "options-2",
+        "OPTIONS",
+        "all options",
+        vec![common],
+    );
+    if explainable {
+        options.blocks.push(explainable_option(&mut content));
+    }
+    let name = section(&mut content, "name-1", "NAME", "demo - a test", Vec::new());
     Document {
         heading: None,
         parser: None,
@@ -692,6 +725,7 @@ fn manual() -> Document {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
+        content_store: content.finish(),
         meta: DocumentMeta {
             manual_section: Some("1".to_owned()),
             ..DocumentMeta::default()
@@ -699,31 +733,16 @@ fn manual() -> Document {
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
         blocks: Vec::new(),
-        sections: vec![
-            section("name-1", "NAME", "demo - a test", Vec::new()),
-            section(
-                "options-2",
-                "OPTIONS",
-                "all options",
-                vec![section(
-                    "common-3",
-                    "Common options",
-                    "common details",
-                    Vec::new(),
-                )],
-            ),
-        ],
+        sections: vec![name, options],
     }
 }
 
 fn explainable_manual() -> Document {
-    let mut manual = manual();
-    let options = manual
-        .sections
-        .iter_mut()
-        .find(|section| section.id == "options-2")
-        .expect("options section");
-    options.blocks.push(Block::DefinitionList {
+    manual_with_option(true)
+}
+
+fn explainable_option(content: &mut ContentStoreBuilder) -> Block {
+    Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
@@ -755,13 +774,17 @@ fn explainable_manual() -> Document {
                 names: vec!["--exclude".to_owned()],
                 value_domain: None,
             }),
-            terms: vec![vec![Inline::Text {
-                value: "--exclude=PATTERN".to_owned(),
-            }]],
+            terms: vec![vec![test_text(
+                content,
+                ContentRootKind::Term,
+                "--exclude=PATTERN",
+            )]],
             description: vec![Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "Exclude matching files from the archive.".to_owned(),
-                }],
+                children: vec![test_text(
+                    content,
+                    ContentRootKind::Body,
+                    "Exclude matching files from the archive.",
+                )],
                 layout: LayoutHint::default(),
                 source: None,
             }],
@@ -769,8 +792,7 @@ fn explainable_manual() -> Document {
         compact: true,
         layout: LayoutHint::default(),
         source: None,
-    });
-    manual
+    }
 }
 
 fn semantic_markdown() -> Document {
@@ -795,16 +817,39 @@ fn tldr() -> TldrDocument {
     }
 }
 
-fn section(id: &str, title: &str, text: &str, children: Vec<Section>) -> Section {
+fn test_text(content: &mut ContentStoreBuilder, kind: ContentRootKind, value: &str) -> Inline {
+    let owner = content.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+    let root = content.push_root(owner, kind, Provenance::Unknown);
+    Inline::Text {
+        content: content.push_text(
+            root,
+            value.to_owned(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        ),
+    }
+}
+
+fn section(
+    content: &mut ContentStoreBuilder,
+    id: &str,
+    title: &str,
+    text: &str,
+    children: Vec<Section>,
+) -> Section {
     Section {
         id: id.to_owned().into(),
         fragment_aliases: Vec::new(),
-        heading: title.into(),
+        heading: Heading {
+            content: vec![test_text(content, ContentRootKind::Heading, title)],
+            source: None,
+        },
         spacing_before_lines: 0,
         blocks: vec![Block::Paragraph {
-            children: vec![Inline::Text {
-                value: text.to_owned(),
-            }],
+            children: vec![test_text(content, ContentRootKind::Body, text)],
             layout: LayoutHint::default(),
             source: None,
         }],
@@ -907,8 +952,15 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
     let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
     assert_eq!(value["schema"], "mant.excerpt/v0.12");
     assert_eq!(value["selections"][0]["outline"]["node"]["path"], "2.1");
+    let excerpt: mant_protocol::QueryExcerpt = serde_json::from_value(value).unwrap();
+    let mant_protocol::ExcerptSelection::DocumentSection { section, .. } = &excerpt.selections[0]
+    else {
+        panic!("section selection");
+    };
     assert_eq!(
-        value["selections"][0]["section"]["heading"]["content"][0]["value"],
+        section
+            .heading
+            .plain_text(excerpt.content_projection.as_ref().unwrap().content()),
         "Common options"
     );
     assert!(diagnostics.is_empty());

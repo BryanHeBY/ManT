@@ -8,9 +8,9 @@ use std::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ir::{
-    Block as AstBlock, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, Inline,
-    LayoutHint, NameCase, ResolvedContent, Section, SourceCoordinates, SourceFormat,
-    SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
+    Block as AstBlock, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, LayoutHint,
+    NameCase, ResolvedContent, Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey,
+    SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     CatalogSchema, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin,
@@ -90,12 +90,55 @@ fn tldr_bundle() -> ResolvedContent {
 
 fn navigation_bundle() -> ResolvedContent {
     let paragraph = |value: &str| AstBlock::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     };
+    let sections = vec![Section {
+        id: "options".to_owned().into(),
+        fragment_aliases: Vec::new(),
+        heading: crate::test_content::heading("OPTIONS"),
+        spacing_before_lines: 0,
+        blocks: vec![AstBlock::DefinitionList {
+            declaration_groups: Vec::new(),
+            items: vec![DefinitionItem {
+                source: None,
+                entry: Some(EntryFacts {
+                    name_bindings: Vec::new(),
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: Vec::new(),
+                    id: "help-option".to_owned().into(),
+                    kind: EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
+                    names: vec!["-h".to_owned(), "--help".to_owned()],
+                    value_domain: None,
+                }),
+                terms: vec![vec![crate::test_content::text("-h, --help".to_owned())]],
+                description: vec![paragraph("Show help")],
+                layout: mant_ir::DefinitionLayout {
+                    inline_term: false,
+                    spacing_before_lines: None,
+                    ..Default::default()
+                },
+            }],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        children: vec![Section {
+            id: "details".to_owned().into(),
+            fragment_aliases: Vec::new(),
+            heading: crate::test_content::heading("Details"),
+            spacing_before_lines: 0,
+            blocks: vec![paragraph("Nested details")],
+            children: Vec::new(),
+            source: None,
+        }],
+        source: None,
+    }];
     ResolvedContent {
         address: None,
         label: "demo".to_owned(),
@@ -103,58 +146,13 @@ fn navigation_bundle() -> ResolvedContent {
             parser: None,
             sources: sources(SourceFormat::Man),
             root_source: SourceKey::FIRST,
+            content_store: crate::test_content::store(),
             meta: DocumentMeta::default(),
             heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: Vec::new(),
-            sections: vec![Section {
-                id: "options".to_owned().into(),
-                fragment_aliases: Vec::new(),
-                heading: "OPTIONS".into(),
-                spacing_before_lines: 0,
-                blocks: vec![AstBlock::DefinitionList {
-                    declaration_groups: Vec::new(),
-                    items: vec![DefinitionItem {
-                        source: None,
-                        entry: Some(EntryFacts {
-                            name_bindings: Vec::new(),
-                            alias_groups: Vec::new(),
-                            alias_of: None,
-                            forms: Vec::new(),
-                            id: "help-option".to_owned().into(),
-                            kind: EntryKind::Parameter {
-                                parameter_kind: mant_ir::ParameterKind::Option,
-                            },
-                            case: NameCase::Sensitive,
-                            names: vec!["-h".to_owned(), "--help".to_owned()],
-                            value_domain: None,
-                        }),
-                        terms: vec![vec![Inline::Text {
-                            value: "-h, --help".to_owned(),
-                        }]],
-                        description: vec![paragraph("Show help")],
-                        layout: mant_ir::DefinitionLayout {
-                            inline_term: false,
-                            spacing_before_lines: None,
-                            ..Default::default()
-                        },
-                    }],
-                    compact: true,
-                    layout: LayoutHint::default(),
-                    source: None,
-                }],
-                children: vec![Section {
-                    id: "details".to_owned().into(),
-                    fragment_aliases: Vec::new(),
-                    heading: "Details".into(),
-                    spacing_before_lines: 0,
-                    blocks: vec![paragraph("Nested details")],
-                    children: Vec::new(),
-                    source: None,
-                }],
-                source: None,
-            }],
+            sections,
         }),
         tldr: None,
     }
@@ -166,16 +164,15 @@ fn reflow_navigation_bundle() -> ResolvedContent {
         .map(|index| Section {
             id: format!("section-{index}").into(),
             fragment_aliases: Vec::new(),
-            heading: format!("Section {index}").into(),
+            heading: crate::test_content::heading(format!("Section {index}")),
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: vec![Section {
                 id: format!("section-{index}-child").into(),
                 fragment_aliases: Vec::new(),
-                heading: format!(
+                heading: crate::test_content::heading(format!(
                     "A deliberately long nested section title before selected node {index}"
-                )
-                .into(),
+                )),
                 spacing_before_lines: 0,
                 blocks: Vec::new(),
                 children: Vec::new(),
@@ -184,6 +181,7 @@ fn reflow_navigation_bundle() -> ResolvedContent {
             source: None,
         })
         .collect();
+    crate::test_content::sync_document(bundle.document.as_mut().expect("document"));
     bundle
 }
 
@@ -525,16 +523,14 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
         .insert(
             0,
             AstBlock::Paragraph {
-                children: vec![Inline::Link {
-                    target: mant_ir::LinkTarget::Manual {
+                children: vec![crate::test_content::link(
+                    mant_ir::LinkTarget::Manual {
                         name: "git-add".to_owned(),
                         manual_section: Some("1".to_owned()),
                     },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "git-add(1)".to_owned(),
-                    }],
-                }],
+                    None,
+                    vec![crate::test_content::text("git-add(1)".to_owned())],
+                )],
                 layout: LayoutHint::default(),
                 source: None,
             },

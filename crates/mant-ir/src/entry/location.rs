@@ -139,23 +139,30 @@ impl serde::Serialize for ContentEntry<'_> {
 /// containers retain physical coordinates without consuming semantic ordinals.
 #[must_use]
 pub fn content_entry_locations(blocks: &[Block]) -> Vec<ContentEntry<'_>> {
-    collect::<false>(blocks)
+    collect::<false>(None, blocks)
 }
 
 /// Locate semantic owners and validate their names once for this borrowed scan.
 /// This reads finalized facts; it never discovers entries or infers names.
 #[must_use]
-pub fn content_entries(blocks: &[Block]) -> Vec<ContentEntry<'_>> {
-    collect::<true>(blocks)
+pub fn content_entries<'a>(
+    content: crate::ContentContext<'a>,
+    blocks: &'a [Block],
+) -> Vec<ContentEntry<'a>> {
+    collect::<true>(Some(content), blocks)
 }
 
-fn collect<const NAMES: bool>(blocks: &[Block]) -> Vec<ContentEntry<'_>> {
+fn collect<'a, const NAMES: bool>(
+    content: Option<crate::ContentContext<'a>>,
+    blocks: &'a [Block],
+) -> Vec<ContentEntry<'a>> {
     let mut output = Vec::new();
-    collect_scope::<NAMES>(blocks, &[], &mut Vec::new(), &[], &mut output);
+    collect_scope::<NAMES>(content, blocks, &[], &mut Vec::new(), &[], &mut output);
     output
 }
 
 fn collect_scope<'a, const NAMES: bool>(
+    content: Option<crate::ContentContext<'a>>,
     blocks: &'a [Block],
     parent_indices: &[usize],
     ancestors: &mut Vec<EntryOwner<'a>>,
@@ -170,7 +177,11 @@ fn collect_scope<'a, const NAMES: bool>(
         output.push(ContentEntry {
             item,
             names: if NAMES {
-                item.validated_names().unwrap_or_default()
+                content
+                    .expect("named entry collection requires document content")
+                    .entry_validated_names(item)
+                    .expect("document entry content resolves in its store")
+                    .unwrap_or_default()
             } else {
                 &[]
             },
@@ -184,7 +195,14 @@ fn collect_scope<'a, const NAMES: bool>(
         ancestors.push(item);
         let mut child_path = path.to_vec();
         child_path.push(owner_child_step(item, item_index));
-        collect_scope::<NAMES>(item.blocks(), &indices, ancestors, &child_path, output);
+        collect_scope::<NAMES>(
+            content,
+            item.blocks(),
+            &indices,
+            ancestors,
+            &child_path,
+            output,
+        );
         ancestors.pop();
     });
 }

@@ -5,13 +5,43 @@ use mant_protocol::{
 };
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn typed_term_roots_validate_indices_ranges_and_canonical_unicode() {
+    let mut store = mant_ir::ContentStoreBuilder::new();
+    let owner = store.push_owner(
+        mant_ir::ContentOwnerKind::DefinitionItem,
+        mant_ir::Provenance::Unknown,
+    );
+    let root = store.push_root(
+        owner,
+        mant_ir::ContentRootKind::Term,
+        mant_ir::Provenance::Unknown,
+    );
+    let term = store.push_text(
+        root,
+        "é\u{1b}名\n".into(),
+        None,
+        mant_ir::ContentStyle::default(),
+        None,
+        None,
+        mant_ir::Provenance::Unknown,
+    );
+    let form = store.push_text(
+        root,
+        "é名".into(),
+        None,
+        mant_ir::ContentStyle::default(),
+        None,
+        None,
+        mant_ir::Provenance::Unknown,
+    );
+    let projection = mant_ir::ContentProjection {
+        content_store: store.finish(),
+    };
     let body = Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
-            terms: vec![vec![Inline::Code {
-                value: "é\u{1b}名\n".into(),
-            }]],
+            terms: vec![vec![Inline::Code { content: term }]],
             description: vec![],
             source: None,
             layout: DefinitionLayout::default(),
@@ -28,7 +58,14 @@ fn typed_term_roots_validate_indices_ranges_and_canonical_unicode() {
         start_char: 0,
         end_char: 4,
     };
-    assert_eq!(valid.resolve(&body).unwrap().safe_text(), "é�名\n");
+    assert_eq!(
+        valid
+            .resolve(projection.content(), &body)
+            .unwrap()
+            .safe_text(projection.content())
+            .as_deref(),
+        Some("é�名\n")
+    );
     let encoded = serde_json::to_value(&valid).unwrap();
     assert_eq!(
         serde_json::from_value::<Range>(encoded.clone()).unwrap(),
@@ -46,7 +83,7 @@ fn typed_term_roots_validate_indices_ranges_and_canonical_unicode() {
         assert!(
             serde_json::from_value::<Range>(bad)
                 .unwrap()
-                .resolve(&body)
+                .resolve(projection.content(), &body)
                 .is_none()
         );
     }
@@ -61,23 +98,21 @@ fn typed_term_roots_validate_indices_ranges_and_canonical_unicode() {
                 start_char: 0,
                 end_char: 1
             }
-            .resolve(&body)
+            .resolve(projection.content(), &body)
             .is_none()
         );
     }
     let mut unknown = encoded;
     unknown["byteStart"] = 0.into();
     assert!(serde_json::from_value::<Range>(unknown).is_err());
-    let forms = vec![vec![Inline::Code {
-        value: "é名".into(),
-    }]];
+    let forms = vec![vec![Inline::Code { content: form }]];
     assert!(
         ExplanationFormRange {
             form_index: 0,
             start_char: 0,
             end_char: 2
         }
-        .resolve(&forms)
+        .resolve(projection.content(), &forms)
         .is_some()
     );
     assert!(
@@ -86,7 +121,7 @@ fn typed_term_roots_validate_indices_ranges_and_canonical_unicode() {
             start_char: 0,
             end_char: 2
         }
-        .resolve(&forms)
+        .resolve(projection.content(), &forms)
         .is_none()
     );
     assert!(
@@ -95,7 +130,7 @@ fn typed_term_roots_validate_indices_ranges_and_canonical_unicode() {
             start_char: 1,
             end_char: 3
         }
-        .resolve(&forms)
+        .resolve(projection.content(), &forms)
         .is_none()
     );
 }

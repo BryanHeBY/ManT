@@ -17,11 +17,15 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
@@ -43,17 +47,24 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
         let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
         );
     }
+}
 
+#[test]
+fn formatter_request_boundaries_execute_inside_nested_mdoc_scopes() {
     for (label, request, expected) in [
         ("margin", ".mc |", "[AX B"),
         ("temporary-indent", ".ti 4n", "[AX\nB"),
@@ -72,7 +83,11 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
                 document.sections
             );
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 
     for (label, request, expected, breaks) in [
@@ -90,11 +105,15 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
@@ -116,7 +135,11 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), "\nB C", "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            "\nB C",
+            "{label}: {children:?}"
+        );
     }
 
     for (label, first, expected) in [
@@ -134,7 +157,11 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 
     let document = parse_manual_bytes(
@@ -148,11 +175,15 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
             document.sections
         );
     };
-    assert_eq!(inline_text(children), "A\nB", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "A\nB",
+        "{children:?}"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|node| matches!(node, Inline::LineBreak))
+            .filter(|node| matches!(node, Inline::LineBreak { .. }))
             .count(),
         1,
         "{children:?}"
@@ -180,14 +211,14 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
             blocks[0],
             Block::Paragraph { ref children, .. }
                 | Block::Preformatted { ref children, .. }
-                if inline_text(children) == "A"
+                if inline_text(document.content(), children) == "A"
         ));
         assert!(matches!(blocks[1], Block::VerticalSpace { lines: 1, .. }));
         assert!(matches!(
             blocks[2],
             Block::Paragraph { ref children, .. }
                 | Block::Preformatted { ref children, .. }
-                if inline_text(children) == "B"
+                if inline_text(document.content(), children) == "B"
         ));
         assert!(!visible_document_text(&document).contains("bogus"));
     }
@@ -200,7 +231,11 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
     let [Block::Paragraph { children, .. }] = nested.sections[0].blocks.as_slice() else {
         panic!("unexpected nested spacing blocks: {:#?}", nested.sections);
     };
-    assert_eq!(inline_text(children), "[A\n\nB", "{children:?}");
+    assert_eq!(
+        inline_text(nested.content(), children),
+        "[A\n\nB",
+        "{children:?}"
+    );
 
     let armed = parse_manual_bytes(
         std::path::Path::new("vertical-space-armed-zero.1"),
@@ -214,7 +249,7 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
     else {
         panic!("unexpected armed spacing blocks: {:#?}", armed.sections);
     };
-    assert_eq!(inline_text(children), "BC", "{children:?}");
+    assert_eq!(inline_text(armed.content(), children), "BC", "{children:?}");
 
     for (label, escape, spacing) in [
         ("pending", r"\p", ".sp 1"),
@@ -244,7 +279,11 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
                 document.sections
             );
         };
-        assert_eq!(inline_text(children), "B C", "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            "B C",
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -276,7 +315,7 @@ fn pending_inline_execution_is_settled_before_structural_owners() {
         let after_index = blocks
             .iter()
             .position(|block| {
-                matches!(block, Block::Paragraph { children, .. } if inline_text(children) == "AFTER LAST")
+                matches!(block, Block::Paragraph { children, .. } if inline_text(document.content(), children) == "AFTER LAST")
             })
             .expect("retain the paragraph after the list");
         assert_eq!(after_index, list_index + 1, "{label}: {blocks:#?}");
@@ -394,7 +433,11 @@ fn bsd_two_operand_forms_execute_generated_words_and_joiners() {
             [Block::Preformatted { children, .. }] => children,
             blocks => panic!("{label}: unexpected blocks: {blocks:#?}"),
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 
     for (label, opening, closing, operands, follower, expected) in [
@@ -426,7 +469,11 @@ fn bsd_two_operand_forms_execute_generated_words_and_joiners() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -471,7 +518,11 @@ fn filled_margin_flush_settles_the_current_cell_without_a_hard_break() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -524,9 +575,16 @@ fn margin_flush_obeys_current_cell_and_continuation_state() {
         let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
+}
 
+#[test]
+fn margin_flush_preserves_nested_and_continued_execution() {
     let document = parse_manual_bytes(
         std::path::Path::new("inline-nested-vertical-space.1"),
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Eo [\n.No A\n.sp 2\n.No B\n.Ec\n",
@@ -538,7 +596,11 @@ fn margin_flush_obeys_current_cell_and_continuation_state() {
             document.sections
         );
     };
-    assert_eq!(inline_text(children), "[A\n\n\nB", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "[A\n\n\nB",
+        "{children:?}"
+    );
 
     let document = parse_manual_bytes(
         std::path::Path::new("inline-repeated-margin-flush.1"),
@@ -551,7 +613,11 @@ fn margin_flush_obeys_current_cell_and_continuation_state() {
             document.sections
         );
     };
-    assert_eq!(inline_text(children), "A B", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "A B",
+        "{children:?}"
+    );
     assert!(children.iter().any(|node| matches!(
         node,
         Inline::Anchor { id, .. } if id == "between-margins"
@@ -578,7 +644,11 @@ fn margin_flush_obeys_current_cell_and_continuation_state() {
         let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -603,11 +673,15 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
             [Block::Preformatted { children, .. }] if label == "literal" => children,
             blocks => panic!("{label}: unexpected blocks: {blocks:#?}"),
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
@@ -634,7 +708,7 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
                 panic!("{operand_label}/{boundary_label}: {:#?}", document.sections);
             };
             assert_eq!(
-                inline_text(children),
+                inline_text(document.content(), children),
                 expected,
                 "{operand_label}/{boundary_label}: {children:?}"
             );
@@ -649,11 +723,15 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("unexpected kept Bx blocks: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "BSD\nAFTER LAST", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "BSD\nAFTER LAST",
+        "{children:?}"
+    );
     assert_eq!(
         children
             .iter()
-            .filter(|node| matches!(node, Inline::LineBreak))
+            .filter(|node| matches!(node, Inline::LineBreak { .. }))
             .count(),
         1,
         "{children:?}"
@@ -672,11 +750,15 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
         let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("expected one preformatted block: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), "AB", "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            "AB",
+            "{label}: {children:?}"
+        );
         if label == "font" {
             assert!(children.iter().any(|inline| matches!(
                 inline,
-                Inline::Strong { children } if inline_text(children) == "B"
+                Inline::Strong { children } if inline_text(document.content(), children) == "B"
             )));
         }
     }
@@ -700,7 +782,7 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
             .iter()
             .map(|block| match block {
                 Block::Preformatted { children, .. } | Block::Paragraph { children, .. } => {
-                    inline_text(children)
+                    inline_text(document.content(), children)
                 }
                 Block::VerticalSpace { .. } => "\n".to_owned(),
                 _ => String::new(),
@@ -720,7 +802,11 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
     let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one preformatted block: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "AX B", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "AX B",
+        "{children:?}"
+    );
 
     let document = parse_manual_bytes(
         std::path::Path::new("inline-man-no-fill-margin-pending-cell.1"),
@@ -730,7 +816,11 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
     let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one preformatted block: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "X B", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "X B",
+        "{children:?}"
+    );
 
     for (label, first, expected) in [
         ("plain", "A", "A B"),
@@ -745,7 +835,11 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -794,7 +888,11 @@ fn invisible_continued_no_fill_cells_reach_temporary_and_no_break_flushes() {
         let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: unexpected blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -819,8 +917,12 @@ fn no_fill_exit_and_document_end_settle_continued_zero_advance_state() {
             document.sections
         );
     };
-    assert_eq!(inline_text(literal), "AX", "{literal:?}");
-    assert_eq!(inline_text(filled), "B", "{filled:?}");
+    assert_eq!(
+        inline_text(document.content(), literal),
+        "AX",
+        "{literal:?}"
+    );
+    assert_eq!(inline_text(document.content(), filled), "B", "{filled:?}");
 
     let document = parse_manual_bytes(
         std::path::Path::new("inline-man-zero-advance-at-eof.1"),
@@ -830,7 +932,11 @@ fn no_fill_exit_and_document_end_settle_continued_zero_advance_state() {
     let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one preformatted block: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "AX", "{children:?}");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "AX",
+        "{children:?}"
+    );
 }
 
 #[test]
@@ -911,10 +1017,7 @@ fn semantic_link_identity_executes_zero_advance_controls_without_guessing_displa
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        let target = children.iter().find_map(|inline| match inline {
-            Inline::Link { target, .. } => Some(target),
-            _ => None,
-        });
+        let target = children.iter().find_map(|inline| link_target(&document, inline));
         match macro_name {
             "Mt" => assert!(
                 matches!(target, Some(mant_ir::LinkTarget::Email { address }) if address == expected),
@@ -950,7 +1053,7 @@ fn zero_advance_treats_every_empty_enclosure_delimiter_as_a_formatter_word() {
             panic!("{macro_name}: expected one paragraph");
         };
         assert_eq!(
-            inline_text(children),
+            inline_text(document.content(), children),
             format!("AX{delimiters} B"),
             "{macro_name}: {children:?}"
         );

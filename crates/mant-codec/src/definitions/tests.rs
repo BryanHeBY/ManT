@@ -1,10 +1,38 @@
 use std::collections::{HashMap, HashSet};
 
 use mant_ir::{
-    Block, DefinitionItem, EntryFacts, EntryKind, Inline, LayoutHint, NameCase, Section,
+    Block, DefinitionItem, EntryFacts, EntryKind, Heading, Inline, LayoutHint, NameCase, Section,
 };
 
-use super::{environment_variable_alias, identify_definitions, option_names, option_prefix};
+use super::{environment_variable_alias, option_prefix};
+use crate::test_content as fixture;
+
+fn heading(value: &str) -> Heading {
+    Heading {
+        content: vec![fixture::text(value)],
+        source: None,
+    }
+}
+
+fn option_names(item: &DefinitionItem) -> Vec<String> {
+    super::option_names(fixture::content(), item)
+}
+
+fn identify_definitions(
+    blocks: &mut Vec<Block>,
+    sections: &mut [Section],
+    reserved_targets: &HashSet<String>,
+    document_name: Option<&str>,
+) -> HashSet<String> {
+    let mut content_store = fixture::store();
+    super::identify_definitions(
+        &mut content_store,
+        blocks,
+        sections,
+        reserved_targets,
+        document_name,
+    )
+}
 
 fn item(value: &str) -> DefinitionItem {
     DefinitionItem {
@@ -15,9 +43,7 @@ fn item(value: &str) -> DefinitionItem {
             spacing_before_lines: None,
             ..Default::default()
         },
-        terms: vec![vec![Inline::Text {
-            value: value.into(),
-        }]],
+        terms: vec![vec![fixture::text(value)]],
         description: Vec::new(),
     }
 }
@@ -32,9 +58,7 @@ fn strong_item(value: &str) -> DefinitionItem {
             ..Default::default()
         },
         terms: vec![vec![Inline::Strong {
-            children: vec![Inline::Text {
-                value: value.into(),
-            }],
+            children: vec![fixture::text(value)],
         }]],
         description: Vec::new(),
     }
@@ -87,7 +111,7 @@ fn semantic_id_allocation_ignores_a_prefilled_producer_id() {
     let mut sections = vec![Section {
         id: "options".into(),
         fragment_aliases: Vec::new(),
-        heading: "OPTIONS".into(),
+        heading: heading("OPTIONS"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -121,13 +145,13 @@ fn target_only_definitions_retain_anchors_without_becoming_entries() {
             spacing_before_lines: None,
             ..Default::default()
         },
-        terms: vec![vec![Inline::anchor("native-target")]],
+        terms: vec![vec![fixture::anchor("native-target")]],
         description: Vec::new(),
     };
     let mut sections = vec![Section {
         id: "notes".into(),
         fragment_aliases: Vec::new(),
-        heading: "NOTES".into(),
+        heading: heading("NOTES"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -176,7 +200,7 @@ fn composite_environment_options_use_parameter_semantics() {
     let mut sections = vec![Section {
         id: "environment-options".into(),
         fragment_aliases: Vec::new(),
-        heading: "ENVIRONMENT OPTIONS".into(),
+        heading: heading("ENVIRONMENT OPTIONS"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -216,7 +240,7 @@ fn command_discovery_requires_a_structural_or_syntactic_boundary() {
         Section {
             id: "commands".into(),
             fragment_aliases: Vec::new(),
-            heading: "COMMANDS".into(),
+            heading: heading("COMMANDS"),
             spacing_before_lines: 0,
             blocks: vec![definition_list(vec![
                 strong_item("Send Env"),
@@ -231,7 +255,7 @@ fn command_discovery_requires_a_structural_or_syntactic_boundary() {
         Section {
             id: "variables".into(),
             fragment_aliases: Vec::new(),
-            heading: "VARIABLES".into(),
+            heading: heading("VARIABLES"),
             spacing_before_lines: 0,
             blocks: vec![definition_list(vec![
                 item("real-name"),
@@ -313,7 +337,7 @@ fn colliding_generated_ids_follow_semantics_not_sibling_order() {
             sections.push(Section {
                 id: "option-v".into(),
                 fragment_aliases: Vec::new(),
-                heading: "Unrelated notes".into(),
+                heading: heading("Unrelated notes"),
                 spacing_before_lines: 0,
                 blocks: Vec::new(),
                 children: Vec::new(),
@@ -323,7 +347,7 @@ fn colliding_generated_ids_follow_semantics_not_sibling_order() {
         sections.push(Section {
             id: "options".into(),
             fragment_aliases: Vec::new(),
-            heading: "OPTIONS".into(),
+            heading: heading("OPTIONS"),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -362,9 +386,7 @@ fn colliding_generated_ids_follow_semantics_not_sibling_order() {
 #[test]
 fn normalizes_hanging_option_layout_before_assigning_identity() {
     let paragraph = |value: &str, indent_columns, spacing_before_lines| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![fixture::text(value)],
         layout: LayoutHint {
             indent_columns,
             spacing_before_lines,
@@ -375,7 +397,7 @@ fn normalizes_hanging_option_layout_before_assigning_identity() {
     let mut sections = vec![Section {
         id: "options".to_owned().into(),
         fragment_aliases: Vec::new(),
-        heading: "OPTIONS".into(),
+        heading: heading("OPTIONS"),
         spacing_before_lines: 0,
         blocks: vec![
             paragraph("-v, --version", 0, 1),
@@ -416,9 +438,7 @@ fn normalizes_hanging_option_layout_before_assigning_identity() {
 #[test]
 fn normalizes_cross_platform_hanging_environment_definitions() {
     let paragraph = |value: &str, indent_columns| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![fixture::text(value)],
         layout: LayoutHint {
             indent_columns,
             spacing_before_lines: 0,
@@ -429,7 +449,7 @@ fn normalizes_cross_platform_hanging_environment_definitions() {
     let mut sections = vec![Section {
         id: "environment".into(),
         fragment_aliases: Vec::new(),
-        heading: "ENVIRONMENT VARIABLES".into(),
+        heading: heading("ENVIRONMENT VARIABLES"),
         spacing_before_lines: 0,
         blocks: vec![
             paragraph("HOME", 0),
@@ -471,11 +491,11 @@ fn normalizes_cross_platform_hanging_environment_definitions() {
 #[test]
 fn keeps_native_navigation_anchors_separate_from_semantic_ids() {
     let mut command = item("set-mark");
-    command.terms[0].insert(0, Inline::anchor("set"));
+    command.terms[0].insert(0, fixture::anchor("set"));
     let mut sections = vec![Section {
         id: "commands".into(),
         fragment_aliases: Vec::new(),
-        heading: "COMMANDS".into(),
+        heading: heading("COMMANDS"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -504,7 +524,7 @@ fn generic_terms_receive_the_anchor_their_projected_entry_advertises() {
     let mut sections = vec![Section {
         id: "glossary".into(),
         fragment_aliases: Vec::new(),
-        heading: "GLOSSARY".into(),
+        heading: heading("GLOSSARY"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -535,7 +555,7 @@ fn qualified_technical_terms_are_addressable_without_colon_widening() {
     let mut sections = vec![Section {
         id: "modules".into(),
         fragment_aliases: Vec::new(),
-        heading: "MODULES".into(),
+        heading: heading("MODULES"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -560,7 +580,7 @@ fn generic_terms_bind_complete_invocation_heads_and_optional_parameters() {
     let mut sections = vec![Section {
         id: "definitions".into(),
         fragment_aliases: Vec::new(),
-        heading: "DEFINITIONS".into(),
+        heading: heading("DEFINITIONS"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -595,7 +615,7 @@ fn retained_ordinal_labels_are_presentation_not_semantic_entries() {
         let mut sections = vec![Section {
             id: "notes".into(),
             fragment_aliases: Vec::new(),
-            heading: "NOTES".into(),
+            heading: heading("NOTES"),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -613,14 +633,17 @@ fn retained_ordinal_labels_are_presentation_not_semantic_entries() {
             panic!("expected retained ordinal definition");
         };
         assert!(items[0].entry.is_none(), "{label} became a semantic entry");
-        assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), label);
+        assert_eq!(
+            mant_ir::inline_plain_text(fixture::content(), &items[0].terms[0]),
+            label
+        );
     }
 
     // Ordinary literal labels remain eligible for generic-term discovery.
     let mut sections = vec![Section {
         id: "glossary".into(),
         fragment_aliases: Vec::new(),
-        heading: "GLOSSARY".into(),
+        heading: heading("GLOSSARY"),
         spacing_before_lines: 0,
         blocks: vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -661,7 +684,7 @@ fn classifies_environment_configuration_and_nested_parameter_semantics() {
     let section = |id: &str, title: &str, items| Section {
         id: id.into(),
         fragment_aliases: Vec::new(),
-        heading: title.into(),
+        heading: heading(title),
         spacing_before_lines: 0,
         blocks: vec![definition_list(items)],
         children: Vec::new(),

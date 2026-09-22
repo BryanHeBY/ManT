@@ -140,14 +140,13 @@ pub(super) fn matcher_error(error: impl fmt::Display) -> SearchError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mant_protocol::SearchScope;
 
     fn request() -> SearchQuery {
         SearchQuery {
             pattern: "(?i)\\b(alpha|beta|gamma|delta|epsilon)\\b".into(),
             syntax: SearchSyntax::Regex,
             case: SearchCase::Sensitive,
-            scope: SearchScope::Visible,
+            scope: mant_protocol::SearchScope::Visible,
             word: false,
             context_lines: 0,
             offset: 0,

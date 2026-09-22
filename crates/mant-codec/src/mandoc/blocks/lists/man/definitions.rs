@@ -1,8 +1,9 @@
 //! Man tagged paragraphs: independent owners and explicit TQ head continuation.
 use super::super::{
-    Block, DefinitionItem, ListKind, LoweringContext, ManListState, Node, NodeKind, append_ordered,
-    block_indent, definition_item, first_part_children, layout_with_spacing, ordinal_marker,
-    paragraph_distance_lines, plain_text, prepend_definition_heads, source_span, terms_fit_inline,
+    Block, DefinitionItem, ListKind, LoweringContext, ManListState, Node, NodeKind,
+    PendingDefinitionItem, append_pending_ordered, block_indent, definition_item,
+    first_part_children, layout_with_spacing, ordinal_marker_text, paragraph_distance_lines,
+    prepend_definition_heads, source_span,
 };
 
 pub(in crate::mandoc::blocks) fn lower_man_definition(
@@ -36,17 +37,13 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     let spacing_before =
         crate::mandoc::layout::man_paragraph_spacing(spacing_before, has_predecessor);
     let macro_name = node.macro_name.as_deref();
-    let bullet = matches!(macro_name, Some("IP" | "TP")) && is_explicit_bullet(node, &item);
+    let bullet =
+        matches!(macro_name, Some("IP" | "TP")) && is_explicit_bullet(node, &item, context);
     if macro_name == Some("IP") && !bullet {
-        record_ambiguous_ip_mark(&item, context);
+        record_ambiguous_ip_mark(&mut item);
     }
     let ordinal = matches!(macro_name, Some("IP" | "TP"))
-        .then(|| {
-            ordinal_marker(
-                &item,
-                macro_name == Some("IP") && context.man_ip_uses_incrementing_register(node.line),
-            )
-        })
+        .then(|| pending_ordinal_marker(&item, context, node, macro_name))
         .flatten();
     // Only TQ explicitly adds another tag to the immediately preceding empty
     // definition. Paragraph distance and empty independent IP/TP items never
@@ -63,10 +60,26 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         .filter_map(mant_ir::geometry::block_source)
         .map(|s| (s.line, s.column))
         .collect::<Vec<_>>();
-    if node.macro_name.as_deref() == Some("IP")
-        && item.terms.is_empty()
-        && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
-    {
+    if node.macro_name.as_deref() == Some("IP") && item.terms.is_empty() {
+        let mut item = item.commit(context);
+        if !append_ip_continuation(output, &mut item, indent_columns, spacing_before) {
+            emit_man_definition(
+                context,
+                output,
+                list_state,
+                ManDefinitionEmission {
+                    item: PendingOrCommitted::Committed(Box::new(item)),
+                    source: source_span(node),
+                    indent_columns,
+                    spacing_before,
+                    max_width,
+                    ordinal,
+                    merge,
+                    bullet,
+                },
+            );
+            return;
+        }
         context
             .native_heads
             .borrow_mut()
@@ -75,10 +88,11 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         return;
     }
     emit_man_definition(
+        context,
         output,
         list_state,
         ManDefinitionEmission {
-            item,
+            item: PendingOrCommitted::Pending(item),
             source: source_span(node),
             indent_columns,
             spacing_before,
@@ -100,8 +114,24 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     }
 }
 
+fn pending_ordinal_marker(
+    item: &PendingDefinitionItem,
+    context: &LoweringContext<'_>,
+    node: &Node,
+    macro_name: Option<&str>,
+) -> Option<super::ordered::ManOrdinalMarker> {
+    let [term] = item.terms.as_slice() else {
+        return None;
+    };
+    ordinal_marker_text(
+        &crate::mandoc::inline::plain_text(term),
+        !item.description.is_empty(),
+        macro_name == Some("IP") && context.man_ip_uses_incrementing_register(node.line),
+    )
+}
+
 struct ManDefinitionEmission {
-    item: DefinitionItem,
+    item: PendingOrCommitted,
     source: Option<mant_ir::SourceSpan>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_before: u16,
@@ -111,7 +141,13 @@ struct ManDefinitionEmission {
     bullet: bool,
 }
 
+enum PendingOrCommitted {
+    Pending(PendingDefinitionItem),
+    Committed(Box<DefinitionItem>),
+}
+
 fn emit_man_definition(
+    context: &LoweringContext<'_>,
     output: &mut Vec<Block>,
     list_state: &mut ManListState,
     emission: ManDefinitionEmission,
@@ -128,10 +164,24 @@ fn emit_man_definition(
     } = emission;
     if bullet {
         list_state.reset();
-        append_ip_bullet(output, item, indent_columns, spacing_before, source);
+        let PendingOrCommitted::Pending(item) = item else {
+            unreachable!("headless committed items are never bullets")
+        };
+        append_ip_bullet(
+            &context.content,
+            output,
+            item,
+            indent_columns,
+            spacing_before,
+            source,
+        );
     } else {
         if let Some(marker) = ordinal {
-            append_ordered(
+            let PendingOrCommitted::Pending(item) = item else {
+                unreachable!("headless committed items are never ordinals")
+            };
+            append_pending_ordered(
+                &context.content,
                 output,
                 item,
                 indent_columns,
@@ -142,7 +192,12 @@ fn emit_man_definition(
             );
             return;
         }
+        let item = match item {
+            PendingOrCommitted::Pending(item) => item.commit(context),
+            PendingOrCommitted::Committed(item) => *item,
+        };
         append_definition(
+            &context.content,
             output,
             item,
             indent_columns,
@@ -156,7 +211,7 @@ fn emit_man_definition(
 }
 
 struct LoweredManItem {
-    item: DefinitionItem,
+    item: PendingDefinitionItem,
     spacing_before: u16,
     max_width: usize,
 }
@@ -336,7 +391,9 @@ fn append_ip_continuation(
     true
 }
 
+#[allow(clippy::too_many_arguments)] // Physical list placement needs all source layout dimensions.
 fn append_definition(
+    content: &crate::mandoc::content::LegacyContent,
     output: &mut Vec<Block>,
     mut item: DefinitionItem,
     indent_columns: crate::mandoc::layout::SourceIndent,
@@ -369,7 +426,9 @@ fn append_definition(
                 // this does not assert semantic name equivalence.
                 // Adding earlier TQ heads can tighten width fitting, but
                 // cannot reopen the final head's explicitly closed line.
-                item.layout.inline_term &= terms_fit_inline(&item.terms, max_term_width);
+                item.layout.inline_term &= content.with_context(|content| {
+                    mant_ir::terms_fit_inline(content, &item.terms, max_term_width)
+                });
             }
         }
         item.layout.spacing_before_lines = Some(if items.is_empty() {
@@ -432,13 +491,15 @@ fn first_node_text(node: &Node) -> Option<&str> {
 /// at this boundary preserves explicit named-bullet lists without erasing
 /// punctuation-only definition terms or literal key names.
 fn append_ip_bullet(
+    content: &crate::mandoc::content::LegacyContent,
     output: &mut Vec<Block>,
-    item: DefinitionItem,
+    item: PendingDefinitionItem,
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
 ) {
-    let list_item = super::ordered::spaced_man_list_item(item, 2, source, paragraph_distance);
+    let mut list_item = super::ordered::pending_list_item_from_definition(content, item, 2, source);
+    list_item.layout.spacing_before_lines = Some(paragraph_distance);
     if let Some(Block::List {
         kind: ListKind::Bullet,
         compact,
@@ -465,14 +526,18 @@ fn append_ip_bullet(
 /// IP and TP both print authored tags; neither authorizes replacing arbitrary
 /// glyphs with bullets. Require a complete named bullet, not a section-name,
 /// styling, or adjacent-item heuristic: even `*` and `o` can name editor keys.
-fn is_explicit_bullet(node: &Node, item: &DefinitionItem) -> bool {
+fn is_explicit_bullet(
+    node: &Node,
+    item: &PendingDefinitionItem,
+    _context: &LoweringContext<'_>,
+) -> bool {
     fn contains_bullet_escape(node: &Node) -> bool {
         node.text
             .as_ref()
             .is_some_and(|text| text.contains(r"\(bu") || text.contains(r"\[bu]"))
             || node.children.iter().any(contains_bullet_escape)
     }
-    matches!(item.terms.as_slice(), [term] if plain_text(term).trim() == "•")
+    matches!(item.terms.as_slice(), [term] if crate::mandoc::inline::plain_text(term).trim() == "•")
         && super::super::definition::visible_definition_head(node)
             .iter()
             .any(contains_bullet_escape)
@@ -481,38 +546,35 @@ fn is_explicit_bullet(node: &Node, item: &DefinitionItem) -> bool {
 /// Preserve literal tags without turning typographical marks into discovered
 /// values or terms. Explicit bold/code marking is positive key-name evidence;
 /// section names and the role of a containing option are not.
-fn record_ambiguous_ip_mark(item: &DefinitionItem, context: &LoweringContext<'_>) {
+fn record_ambiguous_ip_mark(item: &mut PendingDefinitionItem) {
     use crate::definitions::NativeHeadRole;
-    use mant_ir::Inline;
+    use crate::mandoc::inline::DraftInline;
 
-    fn styled(inlines: &[Inline], in_style: bool) -> bool {
+    fn styled(inlines: &[DraftInline], in_style: bool) -> bool {
         inlines.iter().all(|inline| match inline {
-            Inline::Anchor { .. } | Inline::Code { .. } => true,
-            Inline::Text { value } => value.trim().is_empty() || in_style,
-            Inline::Strong { children } => styled(children, true),
-            Inline::Emphasis { children } | Inline::Link { children, .. } => {
+            DraftInline::Anchor { .. } | DraftInline::Code { .. } => true,
+            DraftInline::Text { value } => value.trim().is_empty() || in_style,
+            DraftInline::Strong { children } => styled(children, true),
+            DraftInline::Emphasis { children } | DraftInline::Link { children, .. } => {
                 styled(children, in_style)
             }
-            Inline::LineBreak => false,
+            DraftInline::LineBreak => false,
         })
     }
     let [term] = item.terms.as_slice() else {
         return;
     };
-    let text = plain_text(term);
+    let text = crate::mandoc::inline::plain_text(term);
     let mut chars = text.trim().chars();
     let Some(mark) = chars.next() else { return };
     if chars.next().is_some() || !mark.is_ascii() || (mark.is_ascii_alphanumeric() && mark != 'o') {
         return;
     }
-    context.native_heads.borrow_mut().record(
-        item,
-        if styled(term, false) {
-            NativeHeadRole::LiteralTerm
-        } else {
-            NativeHeadRole::Presentation
-        },
-    );
+    item.role = Some(if styled(term, false) {
+        NativeHeadRole::LiteralTerm
+    } else {
+        NativeHeadRole::Presentation
+    });
 }
 
 #[cfg(test)]
@@ -543,7 +605,10 @@ mod tests {
             let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
                 panic!("literal {mark:?} must retain its authored tag");
             };
-            assert_eq!(super::plain_text(&items[0].terms[0]), expected);
+            assert_eq!(
+                mant_ir::inline_plain_text(document.content(), &items[0].terms[0]),
+                expected
+            );
         }
     }
 

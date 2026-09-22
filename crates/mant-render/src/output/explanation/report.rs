@@ -60,6 +60,7 @@ impl Report<'_> {
             .expect("String writer");
         }
     }
+    #[allow(clippy::too_many_lines)]
     pub(super) fn records<'a>(
         &self,
         output: &mut String,
@@ -68,24 +69,29 @@ impl Report<'_> {
                 &'a ExplanationEvidence,
                 Option<&'a str>,
                 &'a [mant_protocol::ExplanationSupport],
+                Option<mant_ir::ContentContext<'a>>,
             ),
         >,
     ) {
         let records = records.collect::<Vec<_>>();
         let mut previous = None;
         let mut displayed = std::collections::HashMap::new();
-        for &(e, address, supports) in &records {
+        for &(e, address, supports, content) in &records {
             self.record_separator(output, e.class, previous == Some(e.class));
             previous = Some(e.class);
-            let reference = e.source_reference(supports);
+            let retained =
+                || content.expect("retained explanation support has a content projection");
+            let reference = (!supports.is_empty() || e.support.is_some())
+                .then(|| e.source_reference(retained(), supports))
+                .flatten();
             let covered = reference.is_some();
-            self.owner(output, e, address, covered);
+            self.owner(output, e, address, covered, content);
             if let Some(support) = reference.and_then(|index| supports.get(index)) {
-                let Some(block) = support.materialized(supports) else {
+                let Some(block) = support.materialized(retained(), supports) else {
                     continue;
                 };
                 let block_key = std::ptr::from_ref(block) as usize;
-                let grouped = e.covered_by_support(supports);
+                let grouped = e.covered_by_support(retained(), supports);
                 let context_label = if grouped {
                     "Declaration-group context"
                 } else {
@@ -108,17 +114,24 @@ impl Report<'_> {
                         ),
                     );
                     let locations = spans::LocatedStyles::for_support(
+                        content.expect("materialized explanation support has a content projection"),
                         block,
-                        records.iter().filter_map(|&(other, _, pool)| {
-                            let context = other
-                                .source_reference(pool)
-                                .and_then(|index| pool.get(index))?
-                                .materialized(pool)?;
-                            std::ptr::eq(context, block).then_some((other, pool))
-                        }),
+                        records
+                            .iter()
+                            .filter_map(|&(other, _, pool, other_content)| {
+                                let other_content = other_content?;
+                                let context = other
+                                    .source_reference(other_content, pool)
+                                    .and_then(|index| pool.get(index))?
+                                    .materialized(other_content, pool)?;
+                                std::ptr::eq(context, block).then_some((other, pool, other_content))
+                            }),
                     );
                     let text = if self.markdown {
                         mant_codec::encode::render_located_blocks_fragment(
+                            locations
+                                .content()
+                                .expect("retained explanation support has a content projection"),
                             std::slice::from_ref(block),
                             mant_codec::encode::MarkdownFragmentOptions::default(),
                             Some(&locations),
@@ -175,14 +188,15 @@ impl Report<'_> {
         };
         write!(output, "\n\n{separator}").expect("String writer");
     }
-    fn owner(
+    fn owner<'a>(
         &self,
         output: &mut String,
-        e: &ExplanationEvidence,
+        e: &'a ExplanationEvidence,
         address: Option<&str>,
         covered: bool,
+        content: Option<mant_ir::ContentContext<'a>>,
     ) {
-        let locations = spans::LocatedStyles::new(e);
+        let locations = spans::LocatedStyles::new(content, e);
         write!(
             output,
             "\n\n{}{} [{}]",
@@ -256,7 +270,8 @@ impl Report<'_> {
         let Some(entry) = &evidence.entry else { return };
         if !covered
             && !entry.forms.is_empty()
-            && !DefinitionDisplay::new(evidence).is_some_and(|body| body.includes_forms())
+            && !DefinitionDisplay::new(locations.content(), evidence)
+                .is_some_and(|body| body.includes_forms())
         {
             self.line(output, TextRole::Metadata, "Forms:");
             for form in &entry.forms {
@@ -319,11 +334,14 @@ impl Report<'_> {
             e.class,
             EvidenceClass::DirectEntry | EvidenceClass::RelatedEntry
         ) {
-            if let Some(display) = DefinitionDisplay::new(e) {
+            if let Some(display) = DefinitionDisplay::new(locations.content(), e) {
                 let block = display.block;
                 self.line(output, TextRole::Metadata, "Definition:");
                 let body = if self.markdown {
                     mant_codec::encode::render_located_blocks_fragment(
+                        locations
+                            .content()
+                            .expect("retained explanation body has a content projection"),
                         std::slice::from_ref(block),
                         mant_codec::encode::MarkdownFragmentOptions::default(),
                         Some(locations),

@@ -27,6 +27,14 @@ fn success(output: &Output) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn link_for_record<'a>(references: &'a Value, record: &Value) -> &'a Value {
+    let key = record["occurrence"].as_u64().expect("link occurrence key");
+    let index = usize::try_from(key.checked_sub(1).expect("nonzero link key")).unwrap();
+    let link = &references["contentProjection"]["contentStore"]["links"][index];
+    assert_eq!(link["key"], record["occurrence"]);
+    link
+}
+
 #[test]
 fn outline_reference_paging_and_strict_reads_share_one_source_snapshot() {
     let root = std::env::temp_dir().join(format!("mant-navigation-process-{}", std::process::id()));
@@ -57,7 +65,10 @@ fn outline_reference_paging_and_strict_reads_share_one_source_snapshot() {
         "json",
     ));
     let record = &all["references"]["records"][0];
-    assert_eq!(record["target"]["fragment"], "Mixed.Target");
+    assert_eq!(
+        link_for_record(&all["references"], record)["target"]["fragment"],
+        "Mixed.Target"
+    );
     assert_eq!(record["resolution"]["kind"], "logical-address");
     assert_eq!(record["resolution"]["fragment"]["kind"], "unchecked");
     assert_eq!(record["sourceRead"], json!({"kind":"path", "path":"root"}));
@@ -72,7 +83,13 @@ fn outline_reference_paging_and_strict_reads_share_one_source_snapshot() {
         ],
         "json",
     ));
-    assert_eq!(later["references"]["records"][0]["label"], "run");
+    let later_record = &later["references"]["records"][0];
+    assert_eq!(later_record["labelPreview"], "run");
+    assert_eq!(later_record["labelPreviewTruncated"], false);
+    assert_eq!(
+        link_for_record(&later["references"], later_record)["target"]["fragment"],
+        "Mixed.Target"
+    );
     assert_ne!(
         record["origin"],
         later["references"]["records"][0]["origin"]

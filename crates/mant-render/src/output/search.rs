@@ -6,13 +6,14 @@ use std::ops::Range;
 use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch};
 
 mod context;
+mod legacy_context;
 mod line;
 mod markdown;
+mod render_compat;
 use context::{
-    context_group_end, merged_context, occurrence_line_ranges, text_group_coordinates,
-    truncated_occurrence_summary,
+    context_group_end, group_coordinates, merged_context, occurrence_line_ranges,
+    occurrence_start_line, truncated_occurrence_summary,
 };
-use line::render_search_line;
 pub use markdown::render_search_markdown;
 
 /// Semantic roles in the grep-like search presentation.
@@ -36,11 +37,6 @@ pub enum SearchTextRole {
     Muted,
 }
 
-#[cfg(test)]
-fn render_search_line_text(markdown: &str) -> String {
-    render_search_line(markdown, &[]).0
-}
-
 /// Render grep-like results with stable Markdown coordinates and node paths.
 #[must_use]
 pub fn render_search_text(search: &QuerySearch) -> String {
@@ -52,11 +48,19 @@ pub fn render_search_text(search: &QuerySearch) -> String {
 /// The callback may add terminal styling around a span, but must preserve its
 /// visible text. This keeps layout, Markdown projection, and match boundaries
 /// identical between coloured and uncoloured frontends.
+///
+/// # Panics
+///
+/// Panics only when a caller constructs an invalid in-memory response with
+/// logical hits but without their required response-local content projection.
 #[must_use]
 pub fn render_search_text_with(
     search: &QuerySearch,
     decorate: impl FnMut(SearchTextRole, &str) -> String,
 ) -> String {
+    if search.content_projection.is_none() && !search.matches.is_empty() {
+        return render_compat::render_search_text_with(search, decorate);
+    }
     let label = document_label(search);
     let mut output = SearchTextRenderer::new(decorate);
     if search.total == 0 {
@@ -79,6 +83,11 @@ pub fn render_search_text_with(
         output.plain(" total).");
         return output.finish();
     }
+    let content = search
+        .content_projection
+        .as_ref()
+        .expect("logical search hits require a content projection")
+        .content();
 
     let mut previous_outline = None;
     let mut index = 0;
@@ -86,8 +95,7 @@ pub fn render_search_text_with(
         let found = &search.matches[index];
         if previous_outline != Some(&found.outline) {
             if index > 0 {
-                output.line();
-                output.line();
+                output.paragraph_break();
             }
             output.push(SearchTextRole::Document, &label);
             output.plain("  ");
@@ -97,10 +105,7 @@ pub fn render_search_text_with(
         let group = &search.matches[index..end];
         output.line();
         output.plain("  ");
-        output.push(
-            SearchTextRole::Coordinate,
-            &text_group_coordinates(group, search.query.scope),
-        );
+        output.push(SearchTextRole::Coordinate, &group_coordinates(group));
         if let Some(summary) = truncated_occurrence_summary(group) {
             output.plain("  [");
             output.push(SearchTextRole::Muted, &summary);
@@ -108,15 +113,18 @@ pub fn render_search_text_with(
         }
         if found.context.is_empty() {
             output.plain("  ");
-            let line = found
+            let occurrence = found
                 .occurrences
                 .first()
-                .map_or(0, |occurrence| occurrence.markdown.start_line);
-            let ranges = occurrence_line_ranges(found, line);
-            let (visible, highlights) = render_search_line(&found.preview, &ranges);
-            output.matching_line(&visible, highlights);
+                .expect("validated search hit has one logical occurrence");
+            let logical = content
+                .root_logical_text(occurrence.root.expect("validated logical hit has a root"))
+                .expect("validated logical search root must resolve");
+            let line = occurrence_start_line(&logical, occurrence).unwrap_or(1);
+            let ranges = occurrence_line_ranges(found, &logical, line);
+            output.matching_line(&found.preview, ranges);
         } else {
-            for (line_number, (text, matched, source_ranges)) in merged_context(group) {
+            for (line_number, (text, matched, source_ranges)) in merged_context(content, group) {
                 output.line();
                 output.plain("    ");
                 output.push(
@@ -130,11 +138,10 @@ pub fn render_search_text_with(
                 output.plain(" ");
                 output.push(SearchTextRole::Coordinate, &line_number.to_string());
                 output.plain(" ");
-                let (visible, highlights) = render_search_line(text, &source_ranges);
                 if matched {
-                    output.matching_line(&visible, highlights);
+                    output.matching_line(text, source_ranges);
                 } else {
-                    output.plain(&visible);
+                    output.plain(text);
                 }
             }
         }
@@ -142,10 +149,9 @@ pub fn render_search_text_with(
         index = end;
     }
     if let Some(next_offset) = search.next_offset {
-        output.line();
-        output.line();
+        output.paragraph_break();
         output.push(SearchTextRole::Coordinate, &search.total.to_string());
-        output.plain(" total matching lines; continue with ");
+        output.plain(" total logical matches; continue with ");
         output.push(SearchTextRole::Heading, "--offset");
         output.plain(" ");
         output.push(SearchTextRole::Coordinate, &next_offset.to_string());
@@ -180,6 +186,11 @@ where
 
     fn line(&mut self) {
         self.rendered.push('\n');
+    }
+
+    fn paragraph_break(&mut self) {
+        self.line();
+        self.line();
     }
 
     fn matching_line(&mut self, line: &str, matched: impl IntoIterator<Item = Range<usize>>) {
@@ -263,20 +274,41 @@ fn document_label(search: &QuerySearch) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Range;
+
+    use mant_ir::{
+        ContentOwnerKind, ContentProjection, ContentRootKind, ContentStoreBuilder, ContentStyle,
+        Provenance,
+    };
     use mant_protocol::{
-        MarkdownSchema, OutlineNodeReference, OutlineReference, OutlineTrail, QuerySearch,
-        SearchCase, SearchContextLine, SearchHit, SearchLineRange, SearchMarkdownRange,
-        SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope,
-        SearchSchema, SearchScope, SearchSyntax,
-    };
-    use pulldown_cmark::{Event, Parser};
-
-    use super::{
-        SearchTextRenderer, SearchTextRole, render_search_line_text, render_search_markdown,
-        render_search_text, render_search_text_with,
+        MarkdownSchema, OutlineNodeReference, OutlineTrail, QuerySearch, SearchCase, SearchHit,
+        SearchLineRange, SearchLogicalRange, SearchMarkdownRange, SearchOccurrence, SearchQuery,
+        SearchRender, SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope,
+        SearchSyntax,
     };
 
-    fn result() -> QuerySearch {
+    use super::{SearchTextRole, render_search_markdown, render_search_text_with};
+
+    fn result(
+        logical: &str,
+        found: Range<usize>,
+        markdown_projections: Vec<SearchMarkdownRange>,
+    ) -> QuerySearch {
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let _ = builder.push_text(
+            root,
+            logical.to_owned(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        let matched_text = logical[found.clone()].to_owned();
+        let start_scalar = logical[..found.start].chars().count() as u64;
+        let end_scalar = logical[..found.end].chars().count() as u64;
         QuerySearch {
             schema: SearchSchema::V0Dot12,
             label: "tar".to_owned(),
@@ -285,8 +317,11 @@ mod tests {
                 manual_section: Some("1".to_owned()),
                 ..mant_ir::DocumentMeta::default()
             }),
+            content_projection: Some(ContentProjection {
+                content_store: builder.finish(),
+            }),
             query: SearchQuery {
-                pattern: "--acls".to_owned(),
+                pattern: matched_text.clone(),
                 syntax: SearchSyntax::Literal,
                 case: SearchCase::Insensitive,
                 scope: SearchScope::Visible,
@@ -301,7 +336,7 @@ mod tests {
                 scope: SearchRenderScope::Full,
                 line_base: 1,
                 column_base: 1,
-                line_count: 900,
+                line_count: 1,
             },
             total: 1,
             returned: 1,
@@ -311,240 +346,105 @@ mod tests {
             matches: vec![SearchHit {
                 ordinal: 1,
                 outline: OutlineTrail {
-                    ancestors: vec![OutlineReference {
-                        path: "5.3".to_owned().into(),
-                        id: "archive-options".to_owned().into(),
-                        title: "Archive options".to_owned(),
-                    }],
-                    node: OutlineNodeReference::DocumentEntry {
-                        path: "5.3/e17".to_owned().into(),
-                        id: "acls-option".to_owned().into(),
-                        title: "--acls".to_owned(),
-                        entry_kind: mant_ir::EntryKind::Parameter {
-                            parameter_kind: mant_ir::ParameterKind::Option,
-                        },
-                        case: mant_ir::NameCase::Sensitive,
-                        names: vec!["--acls".to_owned()],
+                    ancestors: Vec::new(),
+                    node: OutlineNodeReference::DocumentRoot {
+                        path: "root".into(),
+                        id: mant_ir::DOCUMENT_ROOT_ID.into(),
+                        title: "OVERVIEW".into(),
                     },
                 },
                 occurrences: vec![SearchOccurrence {
-                    matched_text: "--acls".to_owned(),
-                    markdown: SearchMarkdownRange {
-                        start_byte: 10,
-                        end_byte: 16,
-                        start_line: 824,
-                        start_column: 3,
-                        end_line: 824,
-                        end_column: 9,
-                    },
-                    line_ranges: vec![SearchLineRange {
-                        line: 824,
-                        start_byte: 3,
-                        end_byte: 9,
-                    }],
+                    matched_text,
+                    root: Some(root),
+                    logical: Some(SearchLogicalRange {
+                        start_byte: found.start as u64,
+                        end_byte: found.end as u64,
+                        start_scalar,
+                        end_scalar,
+                    }),
+                    markdown_projections,
+                    markdown: None,
+                    line_ranges: Vec::new(),
                 }],
                 occurrence_count: 1,
                 occurrences_truncated: false,
                 node_source: None,
-                preview: "- `--acls`".to_owned(),
+                preview: logical.to_owned(),
                 context: Vec::new(),
             }],
         }
     }
 
     #[test]
-    fn search_reports_are_human_readable_but_keep_machine_node_paths() {
-        let result = result();
-        assert!(
-            render_search_text(&result)
-                .contains("tar(1)  Outline 5.3/e17: Archive options > --acls\n  824:1  --acls")
-        );
-        assert!(render_search_text(&result).contains("  --acls"));
-        assert!(!render_search_text(&result).contains("`--acls`"));
-        let markdown = render_search_markdown(&result);
-        assert!(markdown.contains("# Search results for `--acls` in tar(1)"));
-        assert!(markdown.contains("- Outline: `5.3/e17`"));
-        assert!(markdown.contains("- Trail: `Archive options` → `--acls`"));
-    }
-
-    #[test]
-    fn search_markdown_uses_canonical_commonmark_escaping() {
-        let mut result = result();
-        result.query.pattern = "`ticked start".to_owned();
-        result.label = "a|b~c^d:e".to_owned();
-        result.matches[0].outline.node = OutlineNodeReference::DocumentSection {
-            path: "1".to_owned().into(),
-            id: "ticked".to_owned().into(),
-            title: "`ticked start".to_owned(),
-        };
-
-        let markdown = render_search_markdown(&result);
-        assert!(markdown.contains("`` `ticked start ``"), "{markdown}");
-        assert!(markdown.contains("a\\|b\\~c\\^d\\:e"), "{markdown}");
-        assert_eq!(
-            Parser::new(&markdown)
-                .filter_map(|event| match event {
-                    Event::Code(value) => Some(value.into_string()),
-                    _ => None,
-                })
-                .filter(|value| value == "`ticked start")
-                .count(),
-            3
-        );
-    }
-
-    #[test]
-    fn text_search_coordinates_follow_the_presented_scope() {
-        let mut visible = result();
-        visible.matches[0].occurrences[0].markdown.start_column = 35;
-        assert!(render_search_text(&visible).contains("  824:1  --acls"));
-
-        visible.query.scope = SearchScope::Markdown;
-        assert!(render_search_text(&visible).contains("  824:35  --acls"));
-    }
-
-    #[test]
-    fn search_text_lines_hide_markdown_presentation_syntax() {
-        assert_eq!(
-            render_search_line_text("- **Use** [`mant`](https://example.test) with `--color`."),
-            "Use mant with --color."
-        );
-    }
-
-    #[test]
-    fn semantic_search_text_marks_only_the_visible_match() {
-        let rendered = render_search_text_with(&result(), |role, value| {
+    fn logical_preview_highlights_the_authoritative_range() {
+        let search = result("before --acls after", 7..13, Vec::new());
+        let rendered = render_search_text_with(&search, |role, value| {
             if role == SearchTextRole::Match {
                 format!("<match>{value}</match>")
             } else {
                 value.to_owned()
             }
         });
-
-        assert!(rendered.contains("  <match>--acls</match>"));
-        assert!(!rendered.contains("<match>  --acls</match>"));
-        assert!(!rendered.contains('`'));
+        assert!(rendered.contains("before <match>--acls</match> after"));
+        assert!(rendered.contains("logical-root-1:8"));
     }
 
     #[test]
-    fn semantic_search_text_does_not_rehighlight_nonmatching_substrings() {
-        let mut result = result();
-        result.query.pattern = "foo".to_owned();
-        result.matches[0].preview = "foobar foo".to_owned();
-        result.matches[0].occurrences[0].matched_text = "foo".to_owned();
-        result.matches[0].occurrences[0].markdown.start_line = 824;
-        result.matches[0].occurrences[0].markdown.end_line = 824;
-        result.matches[0].occurrences[0].line_ranges = vec![SearchLineRange {
-            line: 824,
+    fn logical_preview_is_not_reparsed_as_markdown() {
+        let search = result("literal *asterisks*", 8..19, Vec::new());
+        let rendered = render_search_text_with(&search, |_, value| value.to_owned());
+        assert!(rendered.contains("literal *asterisks*"));
+    }
+
+    #[test]
+    fn markdown_report_distinguishes_projection_from_logical_fallback() {
+        let logical = result("alpha", 0..5, Vec::new());
+        assert!(render_search_markdown(&logical).contains("- Logical: logical-root-1:1"));
+
+        let projected = result(
+            "alpha",
+            0..5,
+            vec![SearchMarkdownRange {
+                start_byte: 10,
+                end_byte: 15,
+                start_line: 4,
+                start_column: 3,
+                end_line: 4,
+                end_column: 8,
+            }],
+        );
+        assert!(render_search_markdown(&projected).contains("- Markdown: 4:3"));
+    }
+
+    #[test]
+    fn render_only_search_highlights_without_a_content_projection() {
+        let mut search = result("prefix needle suffix", 7..13, Vec::new());
+        search.content_projection = None;
+        search.query.scope = SearchScope::Markdown;
+        let occurrence = &mut search.matches[0].occurrences[0];
+        occurrence.root = None;
+        occurrence.logical = None;
+        occurrence.markdown = Some(SearchMarkdownRange {
             start_byte: 7,
-            end_byte: 10,
+            end_byte: 13,
+            start_line: 1,
+            start_column: 8,
+            end_line: 1,
+            end_column: 14,
+        });
+        occurrence.line_ranges = vec![SearchLineRange {
+            line: 1,
+            start_byte: 7,
+            end_byte: 13,
         }];
-
-        let rendered = render_search_text_with(&result, |role, value| {
+        let rendered = render_search_text_with(&search, |role, value| {
             if role == SearchTextRole::Match {
                 format!("<match>{value}</match>")
             } else {
                 value.to_owned()
             }
         });
-
-        assert!(rendered.contains("foobar <match>foo</match>"));
-        assert!(!rendered.contains("<match>foo</match>bar"));
-    }
-
-    #[test]
-    fn matching_lines_ignore_ranges_inside_utf8_characters() {
-        let mut renderer = SearchTextRenderer::new(|_, value| value.to_owned());
-
-        renderer.matching_line("é", std::iter::once(1..2));
-
-        assert_eq!(renderer.finish(), "é");
-    }
-
-    #[test]
-    fn search_text_groups_adjacent_matches_by_exact_outline_node() {
-        let mut result = result();
-        result.matches[0].preview = "- `--acls` and `--acls`".to_owned();
-        let mut same_line = result.matches[0].occurrences[0].clone();
-        same_line.markdown.start_column = 14;
-        same_line.markdown.end_column = 20;
-        same_line.line_ranges[0].start_byte = 16;
-        same_line.line_ranges[0].end_byte = 22;
-        result.matches[0].occurrences.push(same_line);
-        let mut second = result.matches[0].clone();
-        second.ordinal = 2;
-        second.occurrences.truncate(1);
-        second.occurrences[0].markdown.start_line = 825;
-        second.occurrences[0].markdown.end_line = 825;
-        second.occurrences[0].markdown.start_column = 7;
-        second.occurrences[0].markdown.end_column = 13;
-        second.occurrences[0].line_ranges[0].line = 825;
-        second.occurrences[0].line_ranges[0].start_byte = 3;
-        second.occurrences[0].line_ranges[0].end_byte = 9;
-        second.preview = "- `--acls`".to_owned();
-
-        let mut third = second.clone();
-        third.ordinal = 3;
-        third.occurrences[0].markdown.start_line = 900;
-        third.occurrences[0].markdown.end_line = 900;
-        third.outline.node = OutlineNodeReference::DocumentSection {
-            path: "6".to_owned().into(),
-            id: "examples".to_owned().into(),
-            title: "Examples".to_owned(),
-        };
-        third.outline.ancestors.clear();
-
-        result.total = 3;
-        result.returned = 3;
-        result.matches.extend([second, third]);
-        let rendered = render_search_text(&result);
-
-        assert_eq!(rendered.matches("Outline 5.3/e17").count(), 1);
-        assert!(rendered.contains("  824:1,12  --acls and --acls\n  825:1  --acls"));
-        assert_eq!(rendered.matches("Outline 6: Examples").count(), 1);
-        assert!(rendered.contains("\n\ntar(1)  Outline 6: Examples\n  900:7  --acls"));
-    }
-
-    #[test]
-    fn search_text_merges_overlapping_context_windows() {
-        let mut result = result();
-        result.matches[0].context = vec![
-            context(823, "before", false),
-            context(824, "first --acls", true),
-            context(825, "between", false),
-        ];
-        result.matches[0].occurrences[0].line_ranges[0].start_byte = 6;
-        result.matches[0].occurrences[0].line_ranges[0].end_byte = 12;
-        let mut second = result.matches[0].clone();
-        second.ordinal = 2;
-        second.occurrences[0].markdown.start_line = 826;
-        second.occurrences[0].markdown.end_line = 826;
-        second.occurrences[0].markdown.start_column = 8;
-        second.occurrences[0].line_ranges[0].line = 826;
-        second.occurrences[0].line_ranges[0].start_byte = 7;
-        second.occurrences[0].line_ranges[0].end_byte = 13;
-        second.context = vec![
-            context(825, "between", false),
-            context(826, "second --acls", true),
-            context(827, "after", false),
-        ];
-        result.total = 2;
-        result.returned = 2;
-        result.matches.push(second);
-
-        let rendered = render_search_text(&result);
-
-        assert!(rendered.contains("  824:7; 826:8"));
-        assert_eq!(rendered.matches(" 825 between").count(), 1);
-        assert_eq!(rendered.matches(" 824 first --acls").count(), 1);
-        assert_eq!(rendered.matches(" 826 second --acls").count(), 1);
-    }
-
-    fn context(line: u32, text: &str, matched: bool) -> SearchContextLine {
-        SearchContextLine {
-            line,
-            text: text.to_owned(),
-            matched,
-        }
+        assert!(rendered.contains("prefix <match>needle</match> suffix"));
+        assert!(rendered.contains("1:8"));
     }
 }

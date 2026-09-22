@@ -58,7 +58,7 @@ fn parses_the_real_bash_backed_shell_manual() {
         assert!(
             sections
                 .iter()
-                .any(|section| section.heading.plain_text() == title)
+                .any(|section| section.heading.plain_text(document.content()) == title)
         );
     }
 }
@@ -67,7 +67,7 @@ fn parses_the_real_bash_backed_shell_manual() {
 fn keeps_the_bash_shell_page_spacing_and_anchors_normalized() {
     let document = fedora44_manual("sh");
     common::assert_anchor_ids_are_clean("fedora44/sh", document);
-    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/sh");
+    common::assert_bounded_vertical_spacing(document, "fedora44/sh");
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         .iter()
         .filter(|section| {
             matches!(
-                section.heading.plain_text().as_str(),
+                section.heading.plain_text(document.content()).as_str(),
                 "Commands for Manipulating the History" | "Miscellaneous"
             )
         })
@@ -229,7 +229,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
     collect_sections(&document.sections, &mut sections);
     let readline = sections
         .iter()
-        .find(|section| section.heading.plain_text() == "Readline Variables")
+        .find(|section| section.heading.plain_text(document.content()) == "Readline Variables")
         .expect("Readline Variables section");
     let variables = index.section(&readline.id);
 

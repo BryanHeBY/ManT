@@ -434,7 +434,11 @@ mod tests {
                     serde_json::to_string(&missing).unwrap()
                 );
                 assert_eq!(matched.len(), native.expected.len());
-                assert!(unexpected_targets(&observed, &used).is_empty(), "{source}");
+                assert!(
+                    unexpected_targets(&observed, &used).is_empty(),
+                    "{source}: {}",
+                    serde_json::to_string(&unexpected_targets(&observed, &used)).unwrap()
+                );
             }
         }
     }
@@ -525,7 +529,11 @@ Escape.
             serde_json::to_string(&missing).unwrap()
         );
         assert_eq!(matched.len(), native.expected.len());
-        assert!(unexpected_targets(&observed, &used).is_empty());
+        assert!(
+            unexpected_targets(&observed, &used).is_empty(),
+            "{}",
+            serde_json::to_string(&unexpected_targets(&observed, &used)).unwrap()
+        );
     }
 
     #[test]

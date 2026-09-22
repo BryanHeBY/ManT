@@ -67,9 +67,10 @@ impl EntryOwnerLocationRef<'_> {
             if path.is_empty() || bytes.start >= bytes.end {
                 return None;
             }
-            let [Inline::Text { value } | Inline::Code { value }] = selected else {
+            let [Inline::Text { content } | Inline::Code { content }] = selected else {
                 return None;
             };
+            let value = document.content_store.text(*content)?;
             value.get(bytes.clone())?;
         }
         let mut block_storage = [ContentBlockStep::Block { index: 0 }; MAX_CONTENT_DEPTH];

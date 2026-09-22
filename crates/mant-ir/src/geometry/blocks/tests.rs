@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
-    DefinitionItem, DefinitionLayout, Inline, ListItem, ListItemLayout, ListKind, TableCell,
-    TableRow, TextRange,
+    DefinitionItem, DefinitionLayout, ListItem, ListItemLayout, ListKind, TableCell, TableRow,
+    TextRange,
 };
 
 fn source() -> SourceSpan {
@@ -142,13 +142,12 @@ fn reparenting_all_variants_changes_only_root_origins() {
 
 #[test]
 fn nested_reparenting_never_translates_descendants_or_source_twice() {
+    let mut fixture = crate::test_support::ContentFixture::body();
+    let anchor = fixture.anchor("target");
+    let unchanged = fixture.text("UNCHANGED");
+    let term = fixture.text("TERM");
     let paragraph = Block::Paragraph {
-        children: vec![
-            Inline::anchor("target"),
-            Inline::Text {
-                value: "UNCHANGED".into(),
-            },
-        ],
+        children: vec![anchor, unchanged],
         layout: layout(),
         source: Some(source()),
     };
@@ -168,9 +167,7 @@ fn nested_reparenting_never_translates_descendants_or_source_twice() {
     };
     let definition = Block::DefinitionList {
         items: vec![DefinitionItem {
-            terms: vec![vec![Inline::Text {
-                value: "TERM".into(),
-            }]],
+            terms: vec![vec![term]],
             description: vec![table],
             entry: None,
             source: Some(source()),

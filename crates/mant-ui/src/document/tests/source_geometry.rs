@@ -69,10 +69,12 @@ fn markdown_semantic_annotation_does_not_change_translated_content_geometry() {
             mant_render::render_query_text(&annotated)
         );
         for query in [&plain, &annotated] {
-            let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
+            let document = query.document.as_ref().unwrap();
+            let blocks = &document.sections[0].blocks;
             let mut baseline: Option<Vec<(usize, String)>> = None;
             for shift in [0, 2, 5] {
-                let mut builder = DocumentBuilder::new("translation".into(), None);
+                let mut builder =
+                    DocumentBuilder::new("translation".into(), None, Some(document.content()));
                 builder.blocks(blocks, shift);
                 let rows = builder
                     .lines
@@ -217,8 +219,9 @@ fn nested_literal_display_origins_and_targets_survive_tui_lowering() {
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let before = query.clone();
-        let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
-        let mut builder = DocumentBuilder::new("probe".into(), None);
+        let document = query.document.as_ref().unwrap();
+        let blocks = &document.sections[0].blocks;
+        let mut builder = DocumentBuilder::new("probe".into(), None, Some(document.content()));
         builder.blocks(blocks, 0);
         for (target, witness) in [("outer-target", "ALPHA"), ("inner-target", "BETA")] {
             let row = *builder
@@ -303,44 +306,26 @@ fn all_blank_literal_rows_are_not_confused_with_zero_width_targets() {
     }
     for (nodes, expected_rows) in [
         (Vec::new(), 0),
-        (vec![Inline::anchor("target")], 0),
+        (vec![crate::test_content::anchor("target")], 0),
         (
             vec![Inline::Strong {
-                children: vec![Inline::anchor("target")],
+                children: vec![crate::test_content::anchor("target")],
             }],
             0,
         ),
-        (
-            vec![Inline::Text {
-                value: String::new(),
-            }],
-            1,
-        ),
-        (
-            vec![Inline::Code {
-                value: String::new(),
-            }],
-            1,
-        ),
+        (vec![crate::test_content::text(String::new())], 1),
+        (vec![crate::test_content::code(String::new())], 1),
         (
             vec![Inline::Strong {
-                children: vec![Inline::Text {
-                    value: String::new(),
-                }],
+                children: vec![crate::test_content::text(String::new())],
             }],
             1,
         ),
     ] {
-        let mut builder = DocumentBuilder::new("literal".into(), None);
+        let mut builder = DocumentBuilder::new("literal".into(), None, None);
         builder.inline_lines_with_surface(&nodes, 0, Style::default(), LineSurface::Code);
         assert_eq!(builder.lines.len(), expected_rows, "{nodes:?}");
-        builder.inline_lines(
-            &[Inline::Text {
-                value: "AFTER".into(),
-            }],
-            0,
-            Style::default(),
-        );
+        builder.inline_lines(&[crate::test_content::text("AFTER")], 0, Style::default());
         if let Some(row) = builder.anchors.get("target") {
             assert_eq!(*row, expected_rows, "{nodes:?}");
         }

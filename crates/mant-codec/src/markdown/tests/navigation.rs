@@ -20,7 +20,10 @@ fn section_ids_do_not_shadow_independent_semantic_names() {
 fn unrelated_semantic_looking_sections_do_not_perturb_entry_ids() {
     let entry_id = |source: &str| {
         let parsed = parse_markdown(source, None).expect("semantic ID fixture");
-        let entries = mant_ir::content_entries(&parsed.document.sections[1].blocks);
+        let entries = mant_ir::content_entries(
+            parsed.document.content(),
+            &parsed.document.sections[1].blocks,
+        );
         entries[0]
             .owner()
             .facts()
@@ -50,9 +53,13 @@ fn preserves_titles_for_every_supported_markdown_link_target() {
     };
     let titles = children
         .iter()
-        .filter_map(|inline| match inline {
-            Inline::Link { title, .. } => title.as_deref(),
-            _ => None,
+        .filter_map(|inline| {
+            document
+                .content()
+                .link(inline)
+                .ok()
+                .flatten()
+                .and_then(mant_ir::LinkView::title)
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -85,7 +92,7 @@ fn markdown_link_components_decode_once_and_validate_before_navigation() {
             panic!("link paragraph")
         };
         assert!(
-            matches!(&children[0], Inline::Link { target: LinkTarget::Document { name, fragment }, .. } if name == expected_name && fragment.as_deref() == expected_fragment),
+            matches!(link_target(&document, &children[0]), Some(LinkTarget::Document { name, fragment }) if name == expected_name && fragment.as_deref() == expected_fragment),
             "{uri}: {children:?}"
         );
     }
@@ -108,11 +115,8 @@ fn markdown_link_components_decode_once_and_validate_before_navigation() {
         };
         assert!(
             matches!(
-                &children[0],
-                Inline::Link {
-                    target: LinkTarget::External { .. },
-                    ..
-                }
+                link_target(&document, &children[0]),
+                Some(LinkTarget::External { .. })
             ),
             "{uri}: {children:?}"
         );
@@ -137,17 +141,17 @@ fn lowers_hierarchical_markdown_links_into_same_source_document_references() {
     };
 
     assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link { target: mant_ir::LinkTarget::Document { name, fragment: None }, .. } if name == "Start-Process"
+        link_target(&document, inline),
+        Some(mant_ir::LinkTarget::Document { name, fragment: None }) if name == "Start-Process"
     )));
     assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link { target: mant_ir::LinkTarget::Document { name, fragment: Some(fragment) }, .. }
+        link_target(&document, inline),
+        Some(mant_ir::LinkTarget::Document { name, fragment: Some(fragment) })
             if name == "about_Profiles" && fragment == "examples"
     )));
     assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link { target: mant_ir::LinkTarget::Document { name, fragment: None }, .. } if name == "../other"
+        link_target(&document, inline),
+        Some(mant_ir::LinkTarget::Document { name, fragment: None }) if name == "../other"
     )));
 }
 

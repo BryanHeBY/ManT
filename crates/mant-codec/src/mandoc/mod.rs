@@ -3,6 +3,7 @@
 mod adjacency;
 mod blocks;
 mod containers;
+mod content;
 mod controls;
 mod declaration_groups;
 mod diagnostics;
@@ -124,7 +125,10 @@ fn lower_mandoc_document_with_source(
     navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, explicit_targets);
     let mut retained_targets = navigation::native_anchor_ids(&root_blocks, &sections);
     retained_targets.extend(explicit_targets.iter().cloned());
+    navigation::promote_manual_navigation(&context.content, &mut root_blocks, &mut sections);
+    let mut content_store = context.content.finish();
     retained_targets.extend(crate::definitions::identify_definitions_with_evidence(
+        &mut content_store,
         &mut root_blocks,
         &mut sections,
         explicit_targets,
@@ -136,8 +140,12 @@ fn lower_mandoc_document_with_source(
         &sections,
         "manual",
     ));
-    diagnostics.extend(crate::definitions::manual_discovery_diagnostics(&sections));
+    diagnostics.extend(crate::definitions::manual_discovery_diagnostics(
+        content_store.content(),
+        &sections,
+    ));
     navigation::resolve_navigation(
+        &mut content_store,
         &mut root_blocks,
         &mut sections,
         &context.authored_section_targets,
@@ -164,6 +172,7 @@ fn lower_mandoc_document_with_source(
             coordinates: SourceCoordinates::NativeNormalizedBytes,
         }],
         root_source: SourceKey::FIRST,
+        content_store,
         meta: DocumentMeta {
             title: normalize_metadata(parsed.metadata.title.as_deref()),
             manual_section: normalize_metadata(parsed.metadata.section.as_deref()),

@@ -30,7 +30,7 @@ fn annotates_explicit_option_lists_without_rewriting_their_heads() {
     assert_eq!(items[0].entry.as_ref().unwrap().id, "option-h");
     assert!(
         matches!(&items[0].blocks[0], Block::Paragraph { children, .. }
-        if matches!(&children[0], Inline::Code { value } if value == "-h"))
+        if matches!(document.content().inline(&children[0]), Ok(mant_ir::InlineView::Code(value)) if value == "-h"))
     );
 
     let outline = build_outline_with_detail(

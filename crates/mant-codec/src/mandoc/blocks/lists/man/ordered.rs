@@ -1,9 +1,10 @@
 //! Reconstructs source-proven lists expressed with man(7) tagged paragraphs.
 
-use mant_ir::{Block, DefinitionItem, ListItem, ListKind, SourceSpan};
+#[cfg(test)]
+use mant_ir::DefinitionItem;
+use mant_ir::{Block, ListItem, ListKind, SourceSpan};
 
 use crate::mandoc::{
-    inline::plain_text,
     layout::{layout, layout_with_spacing},
     targets,
 };
@@ -85,7 +86,9 @@ enum IpOrdinalStyle {
 /// the source line used roff's pre-increment register form. Punctuation is
 /// retained as a sequence style so `1.` followed by `2)` cannot accidentally
 /// merge across unrelated tagged paragraphs.
+#[cfg(test)]
 pub(in crate::mandoc::blocks) fn ordinal_marker(
+    content: mant_ir::ContentContext<'_>,
     item: &DefinitionItem,
     uses_incrementing_register: bool,
 ) -> Option<ManOrdinalMarker> {
@@ -95,7 +98,18 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
     let [term] = item.terms.as_slice() else {
         return None;
     };
-    let text = plain_text(term);
+    let text = mant_ir::inline_plain_text(content, term);
+    ordinal_marker_text(&text, true, uses_incrementing_register)
+}
+
+pub(in crate::mandoc::blocks) fn ordinal_marker_text(
+    text: &str,
+    has_description: bool,
+    uses_incrementing_register: bool,
+) -> Option<ManOrdinalMarker> {
+    if !has_description {
+        return None;
+    }
     let text = text.trim();
     let (digits, style) = if let Some(digits) = text.strip_suffix('.') {
         (digits, IpOrdinalStyle::Period)
@@ -120,20 +134,50 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
 /// definition list. Override it only when at least two described items form a
 /// complete, consecutive sequence with one punctuation style. This leaves
 /// singleton numeric terms and value domains untouched.
+#[cfg(test)]
 pub(in crate::mandoc::blocks) fn ordinal_sequence(
+    content: mant_ir::ContentContext<'_>,
     items: &[DefinitionItem],
 ) -> Option<ManOrdinalMarker> {
     if items.len() < 2 {
         return None;
     }
-    let first = ordinal_marker(&items[0], false)?;
+    let first = ordinal_marker(content, &items[0], false)?;
     let mut previous = first;
     for item in &items[1..] {
-        let marker = ordinal_marker(item, false)?;
+        let marker = ordinal_marker(content, item, false)?;
         if marker.style != previous.style || previous.value.checked_add(1) != Some(marker.value) {
             return None;
         }
         previous = marker;
+    }
+    Some(first)
+}
+
+pub(in crate::mandoc::blocks::lists) fn pending_ordinal_sequence(
+    items: &[super::super::PendingDefinitionItem],
+) -> Option<ManOrdinalMarker> {
+    if items.len() < 2 {
+        return None;
+    }
+    let marker = |item: &super::super::PendingDefinitionItem| {
+        let [term] = item.terms.as_slice() else {
+            return None;
+        };
+        ordinal_marker_text(
+            &crate::mandoc::inline::plain_text(term),
+            !item.description.is_empty(),
+            false,
+        )
+    };
+    let first = marker(&items[0])?;
+    let mut previous = first;
+    for item in &items[1..] {
+        let current = marker(item)?;
+        if current.style != previous.style || previous.value.checked_add(1) != Some(current.value) {
+            return None;
+        }
+        previous = current;
     }
     Some(first)
 }
@@ -145,9 +189,63 @@ pub(in crate::mandoc::blocks) fn ordinal_sequence(
 /// evidence even when a list contains only one item.  Requiring a second item
 /// used to leak singleton footnote labels such as `1.` into the semantic entry
 /// index.  Bare literal integers remain excluded by [`ordinal_marker`].
+#[cfg(test)]
 pub(in crate::mandoc::blocks) fn append_ordered(
     output: &mut Vec<Block>,
     item: DefinitionItem,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    paragraph_distance: u16,
+    source: Option<SourceSpan>,
+    marker: ManOrdinalMarker,
+    state: &mut ManListState,
+) {
+    let content = crate::mandoc::content::LegacyContent::default();
+    let list_item = spaced_man_list_item(
+        &content,
+        item,
+        ordinal_width(marker.value),
+        source,
+        paragraph_distance,
+    );
+    append_ordered_list_item(
+        output,
+        list_item,
+        indent_columns,
+        paragraph_distance,
+        source,
+        marker,
+        state,
+    );
+}
+
+#[allow(clippy::too_many_arguments)] // Carries source layout and list continuity together.
+pub(in crate::mandoc::blocks::lists) fn append_pending_ordered(
+    content: &crate::mandoc::content::LegacyContent,
+    output: &mut Vec<Block>,
+    item: super::super::PendingDefinitionItem,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    paragraph_distance: u16,
+    source: Option<SourceSpan>,
+    marker: ManOrdinalMarker,
+    state: &mut ManListState,
+) {
+    let mut list_item =
+        pending_list_item_from_definition(content, item, ordinal_width(marker.value), source);
+    list_item.layout.spacing_before_lines = Some(paragraph_distance);
+    append_ordered_list_item(
+        output,
+        list_item,
+        indent_columns,
+        paragraph_distance,
+        source,
+        marker,
+        state,
+    );
+}
+
+fn append_ordered_list_item(
+    output: &mut Vec<Block>,
+    item: ListItem,
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<SourceSpan>,
@@ -160,12 +258,7 @@ pub(in crate::mandoc::blocks) fn append_ordered(
         && let Some((compact, items)) = previous.last_list(output)
     {
         *compact = *compact && paragraph_distance == 0;
-        items.push(spaced_man_list_item(
-            item,
-            ordinal_width(marker.value),
-            source,
-            paragraph_distance,
-        ));
+        items.push(item);
         state.active = Some(ActiveOrdinal {
             block: previous.block,
             marker,
@@ -185,7 +278,7 @@ pub(in crate::mandoc::blocks) fn append_ordered(
 
 fn append_new_ordered(
     output: &mut Vec<Block>,
-    item: DefinitionItem,
+    item: ListItem,
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<SourceSpan>,
@@ -198,12 +291,7 @@ fn append_new_ordered(
             start: Some(marker.value),
         },
         compact: paragraph_distance == 0,
-        items: vec![spaced_man_list_item(
-            item,
-            ordinal_width(marker.value),
-            source,
-            paragraph_distance,
-        )],
+        items: vec![item],
         layout: layout_with_spacing(indent_columns, 0),
         source,
     });
@@ -246,20 +334,24 @@ fn ordinal_width(value: u64) -> i32 {
 
 /// The tagged paragraph's leading boundary precedes its marker, not its
 /// first body block. Store it once on the item, regardless of list grouping.
+#[cfg(test)]
 pub(in crate::mandoc::blocks) fn spaced_man_list_item(
+    content: &crate::mandoc::content::LegacyContent,
     item: DefinitionItem,
     marker_width: i32,
     source: Option<SourceSpan>,
     paragraph_distance: u16,
 ) -> ListItem {
-    let mut item = list_item_from_definition(item, marker_width, source);
+    let mut item = list_item_from_definition(content, item, marker_width, source);
     item.layout.spacing_before_lines = Some(paragraph_distance);
     item
 }
 
 /// Remove an `.IP`/`.TP` mark from visible content while conserving any target
 /// it owned and making item indentation relative to the new list container.
+#[cfg(test)]
 pub(in crate::mandoc::blocks) fn list_item_from_definition(
+    content: &crate::mandoc::content::LegacyContent,
     item: DefinitionItem,
     marker_width: i32,
     source: Option<SourceSpan>,
@@ -283,6 +375,7 @@ pub(in crate::mandoc::blocks) fn list_item_from_definition(
         targets::inline_anchor_ids(term, &mut anchors);
     }
     targets::attach_targets(
+        content,
         &mut description,
         anchors,
         layout(crate::mandoc::layout::SourceIndent::default()),
@@ -293,6 +386,74 @@ pub(in crate::mandoc::blocks) fn list_item_from_definition(
         source: item_source,
         entry: None,
         blocks: description,
+    }
+}
+
+pub(in crate::mandoc::blocks::lists) fn pending_list_item_from_definition(
+    content: &crate::mandoc::content::LegacyContent,
+    item: super::super::PendingDefinitionItem,
+    marker_width: i32,
+    source: Option<SourceSpan>,
+) -> ListItem {
+    let super::super::PendingDefinitionItem {
+        source: item_source,
+        terms,
+        mut description,
+        layout: definition_layout,
+        ..
+    } = item;
+    rebase_roots(
+        &mut description,
+        definition_layout.body_indent_columns,
+        marker_width,
+    );
+    let mut anchors = Vec::new();
+    let mut anchor_source = None;
+    for term in &terms {
+        draft_anchors(term, &mut anchors, &mut anchor_source);
+    }
+    targets::attach_targets(
+        content,
+        &mut description,
+        anchors,
+        layout(crate::mandoc::layout::SourceIndent::default()),
+        anchor_source.or(source),
+    );
+    ListItem {
+        layout: mant_ir::ListItemLayout::default(),
+        source: item_source,
+        entry: None,
+        blocks: description,
+    }
+}
+
+fn draft_anchors(
+    nodes: &[crate::mandoc::inline::DraftInline],
+    output: &mut Vec<String>,
+    owner_source: &mut Option<SourceSpan>,
+) {
+    for node in nodes {
+        match node {
+            crate::mandoc::inline::DraftInline::Anchor {
+                id,
+                owner_source: source,
+            } => {
+                if owner_source.is_none() {
+                    *owner_source = *source;
+                }
+                if !output.iter().any(|candidate| candidate == id.as_str()) {
+                    output.push(id.to_string());
+                }
+            }
+            crate::mandoc::inline::DraftInline::Strong { children }
+            | crate::mandoc::inline::DraftInline::Emphasis { children }
+            | crate::mandoc::inline::DraftInline::Link { children, .. } => {
+                draft_anchors(children, output, owner_source);
+            }
+            crate::mandoc::inline::DraftInline::Text { .. }
+            | crate::mandoc::inline::DraftInline::Code { .. }
+            | crate::mandoc::inline::DraftInline::LineBreak => {}
+        }
     }
 }
 
@@ -309,13 +470,9 @@ mod tests {
                 spacing_before_lines: None,
                 ..Default::default()
             },
-            terms: vec![vec![Inline::Text {
-                value: term.to_owned(),
-            }]],
+            terms: vec![vec![crate::test_content::text(term.to_owned())]],
             description: vec![Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: description.to_owned(),
-                }],
+                children: vec![crate::test_content::text(description.to_owned())],
                 layout: LayoutHint::default(),
                 source: None,
             }],
@@ -325,15 +482,20 @@ mod tests {
     #[test]
     fn recognizes_only_unambiguous_ordinal_spellings() {
         for marker in ["1.", "2)", "(3)"] {
-            assert!(super::ordinal_marker(&definition(marker, "item"), false).is_some());
+            let item = definition(marker, "item");
+            assert!(super::ordinal_marker(crate::test_content::content(), &item, false).is_some());
         }
-        assert!(super::ordinal_marker(&definition("1", "item"), true).is_some());
+        let incrementing = definition("1", "item");
+        assert!(
+            super::ordinal_marker(crate::test_content::content(), &incrementing, true).is_some()
+        );
         for value in ["1", "[4]", "2.2", "v1.", "1.2."] {
-            assert!(super::ordinal_marker(&definition(value, "value"), false).is_none());
+            let item = definition(value, "value");
+            assert!(super::ordinal_marker(crate::test_content::content(), &item, false).is_none());
         }
         let mut empty = definition("1.", "");
         empty.description.clear();
-        assert!(super::ordinal_marker(&empty, false).is_none());
+        assert!(super::ordinal_marker(crate::test_content::content(), &empty, false).is_none());
     }
 
     #[test]
@@ -344,31 +506,29 @@ mod tests {
             definition("3.", "three"),
         ];
         assert_eq!(
-            super::ordinal_sequence(&sequence).map(super::ManOrdinalMarker::value),
+            super::ordinal_sequence(crate::test_content::content(), &sequence)
+                .map(super::ManOrdinalMarker::value),
             Some(1)
         );
 
-        assert!(super::ordinal_sequence(&sequence[..1]).is_none());
-        assert!(
-            super::ordinal_sequence(&[definition("1.", "one"), definition("3.", "three")])
-                .is_none()
-        );
-        assert!(
-            super::ordinal_sequence(&[definition("1.", "one"), definition("2)", "two")]).is_none()
-        );
-        assert!(
-            super::ordinal_sequence(&[definition("0", "off"), definition("1", "on")]).is_none()
-        );
+        assert!(super::ordinal_sequence(crate::test_content::content(), &sequence[..1]).is_none());
+        for pair in [
+            [definition("1.", "one"), definition("3.", "three")],
+            [definition("1.", "one"), definition("2)", "two")],
+            [definition("0", "off"), definition("1", "on")],
+        ] {
+            assert!(super::ordinal_sequence(crate::test_content::content(), &pair).is_none());
+        }
     }
 
     #[test]
     fn ordered_conversion_conserves_a_native_term_target() {
         let mut item = definition("1.", "item");
-        item.terms[0].insert(0, Inline::anchor("native-target"));
-        let marker = super::ordinal_marker(&item, false).expect("punctuated ordinal");
+        item.terms[0].insert(0, crate::test_content::anchor("native-target"));
+        let marker = super::ordinal_marker(crate::test_content::content(), &item, false)
+            .expect("punctuated ordinal");
         let mut output = Vec::new();
         let mut state = super::ManListState::new();
-
         super::append_ordered(
             &mut output,
             item,
@@ -398,7 +558,7 @@ mod tests {
 
     fn append(output: &mut Vec<Block>, state: &mut super::ManListState, term: &str, distance: u16) {
         let item = definition(term, term);
-        let marker = super::ordinal_marker(&item, false).unwrap();
+        let marker = super::ordinal_marker(crate::test_content::content(), &item, false).unwrap();
         super::append_ordered(output, item, 0.into(), distance, None, marker, state);
     }
 
@@ -459,12 +619,16 @@ mod tests {
 
     #[test]
     fn native_spacing_between_relative_scopes_does_not_detach_item_contents() {
-        #[derive(Default)]
-        struct Text(String);
-        impl<'ir> mant_ir::visit::Visit<'ir> for Text {
+        struct Text<'store> {
+            content: mant_ir::ContentContext<'store>,
+            value: String,
+        }
+        impl<'ir> mant_ir::visit::Visit<'ir> for Text<'ir> {
             fn visit_inline(&mut self, inline: &'ir Inline) {
-                if let Inline::Text { value } | Inline::Code { value } = inline {
-                    self.0.push_str(value);
+                if let Ok(mant_ir::InlineView::Text(value) | mant_ir::InlineView::Code(value)) =
+                    self.content.inline(inline)
+                {
+                    self.value.push_str(value);
                 }
                 mant_ir::visit::walk_inline(self, inline);
             }
@@ -486,11 +650,14 @@ mod tests {
                     _ => None,
                 })
                 .unwrap();
-            let mut text = Text::default();
+            let mut text = Text {
+                content: document.content(),
+                value: String::new(),
+            };
             for block in &first.blocks {
                 mant_ir::visit::Visit::visit_block(&mut text, block);
             }
-            let text = text.0;
+            let text = text.value;
             assert!(
                 text.contains("FIRST") && text.contains("LEFT") && text.contains("RIGHT"),
                 "{source}\n{document:?}"
@@ -569,8 +736,14 @@ mod tests {
         let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
             panic!("bracketed IP labels must not be rewritten as decimal list markers");
         };
-        assert_eq!(crate::mandoc::inline::plain_text(&items[0].terms[0]), "[0]");
-        assert_eq!(crate::mandoc::inline::plain_text(&items[1].terms[0]), "[1]");
+        assert_eq!(
+            mant_ir::inline_plain_text(document.content(), &items[0].terms[0]),
+            "[0]"
+        );
+        assert_eq!(
+            mant_ir::inline_plain_text(document.content(), &items[1].terms[0]),
+            "[1]"
+        );
         assert!(items.iter().all(|item| item.entry.is_none()));
     }
 }

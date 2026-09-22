@@ -77,6 +77,7 @@ impl NativeHeadEvidence {
         matches.all(|witness| witness.role == role).then_some(role)
     }
 
+    #[cfg(feature = "native-structured")]
     pub(crate) fn record_declaration(
         &mut self,
         item: &DefinitionItem,
@@ -124,12 +125,10 @@ pub(super) fn head_content(terms: &[Vec<Inline>]) -> Vec<Vec<Inline>> {
                     },
                     Inline::Link {
                         children,
-                        target,
-                        title,
+                        occurrence,
                     } => Inline::Link {
                         children: without_anchors(children),
-                        target: target.clone(),
-                        title: title.clone(),
+                        occurrence: *occurrence,
                     },
                     _ => inline.clone(),
                 })
@@ -142,6 +141,7 @@ pub(super) fn head_content(terms: &[Vec<Inline>]) -> Vec<Vec<Inline>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_content as fixture;
 
     fn item() -> DefinitionItem {
         DefinitionItem {
@@ -155,9 +155,7 @@ mod tests {
             }),
             entry: None,
             terms: vec![vec![Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "PATH".into(),
-                }],
+                children: vec![fixture::text("PATH")],
             }]],
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
@@ -174,21 +172,17 @@ mod tests {
         let mut evidence = NativeHeadEvidence::default();
         evidence.record(&original, NativeHeadRole::Environment);
         let mut moved = Box::new(original.clone());
-        moved.terms[0].insert(0, Inline::anchor("new-navigation-id"));
+        moved.terms[0].insert(0, fixture::anchor("new-navigation-id"));
         assert_eq!(evidence.role(&moved), Some(NativeHeadRole::Environment));
         moved.source.as_mut().unwrap().column += 1;
         assert_eq!(evidence.role(&moved), None);
         moved.source = original.source;
         moved.terms[0] = vec![Inline::Emphasis {
-            children: vec![Inline::Text {
-                value: "PATH".into(),
-            }],
+            children: vec![fixture::text("PATH")],
         }];
         assert_eq!(evidence.role(&moved), None);
         moved.terms = original.terms.clone();
-        moved.terms.push(vec![Inline::Text {
-            value: "OTHER".into(),
-        }]);
+        moved.terms.push(vec![fixture::text("OTHER")]);
         assert_eq!(evidence.role(&moved), None);
         evidence.record(&original, NativeHeadRole::Literal);
         assert_eq!(evidence.role(&original), None);

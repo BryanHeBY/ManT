@@ -78,6 +78,21 @@ fn global_classification_paging_and_source_report_counts_are_consistent() {
         );
     }
     query.options.limit = 1;
+    let fingerprint = |record: &mant_protocol::ScopedExplanationEvidence| {
+        (
+            record.document_index,
+            record.evidence.class,
+            record.evidence.ordinal,
+            record.evidence.outline.path().to_owned(),
+            record
+                .evidence
+                .previews
+                .iter()
+                .map(|preview| preview.text.clone())
+                .collect::<Vec<_>>(),
+        )
+    };
+    let expected = full.evidence.iter().map(fingerprint).collect::<Vec<_>>();
     let mut paged = Vec::new();
     loop {
         let page = super::explain(input, &query).unwrap();
@@ -93,14 +108,18 @@ fn global_classification_paging_and_source_report_counts_are_consistent() {
                     .sum::<u32>()
             );
         }
-        paged.extend(page.evidence);
+        paged.extend(page.evidence.iter().map(fingerprint));
+        serde_json::from_value::<mant_protocol::ScopeExplanation>(
+            serde_json::to_value(&page).unwrap(),
+        )
+        .unwrap();
         if let Some(next) = page.next_offset {
             query.options.offset = next;
         } else {
             break;
         }
     }
-    assert_eq!(paged, full.evidence);
+    assert_eq!(paged, expected);
     query.options.offset = 0;
     query.options.content_bytes = 1;
     let bounded = super::explain(input, &query).unwrap();

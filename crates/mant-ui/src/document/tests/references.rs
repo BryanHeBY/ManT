@@ -17,7 +17,7 @@ fn roff_manual_name_link_excludes_surrounding_prose_after_wrapping() {
         for (row, line) in rendered.text.lines.iter().enumerate() {
             let mut column = 0;
             for character in line.to_string().chars() {
-                if rendered.link_target_at(row, column) == Some(&target) {
+                if view.link_target_at(&rendered, row, column) == Some(&target) {
                     clickable.push(character);
                 }
                 column += character.to_string().width();
@@ -28,24 +28,20 @@ fn roff_manual_name_link_excludes_surrounding_prose_after_wrapping() {
 }
 
 fn document_link(label: &str, fragment: Option<&str>) -> Inline {
-    Inline::Link {
-        target: mant_ir::LinkTarget::Document {
+    crate::test_content::link(
+        mant_ir::LinkTarget::Document {
             name: "target".into(),
             fragment: fragment.map(str::to_owned),
         },
-        title: None,
-        children: vec![Inline::Text {
-            value: label.into(),
-        }],
-    }
+        None,
+        vec![crate::test_content::text(label)],
+    )
 }
 
 fn linked_block(prefix: &str, label: &str) -> Block {
     Block::Paragraph {
         children: vec![
-            Inline::Text {
-                value: prefix.into(),
-            },
+            crate::test_content::text(prefix),
             document_link(label, None),
         ],
         layout: LayoutHint::default(),
@@ -256,9 +252,7 @@ fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
     query.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
         children: vec![
             document_link("first", None),
-            Inline::Text {
-                value: " then ".into(),
-            },
+            crate::test_content::text(" then "),
             document_link("second", None),
             document_link("fragment", Some("part")),
             document_link("", None),
@@ -266,6 +260,7 @@ fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
         layout: LayoutHint::default(),
         source: None,
     }];
+    crate::test_content::sync_document(query.document.as_mut().expect("document"));
     let before = query.clone();
     let view = DocumentView::new(&query);
     assert_eq!(view.references.len(), 4);
@@ -286,7 +281,9 @@ fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
     assert!(
         view.navigation()
             .iter()
-            .any(|node| node.title.ends_with("3 locations"))
+            .any(|node| node.title.ends_with("3 locations")),
+        "navigation: {:#?}",
+        view.navigation(),
     );
     assert!(
         view.references
@@ -431,9 +428,7 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
             declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
                 terms: vec![vec![
-                    Inline::Text {
-                        value: "日本 ".into(),
-                    },
+                    crate::test_content::text("日本 "),
                     document_link("TERM", None),
                 ]],
                 description: vec![linked_block("body prefix ", "TAILREF")],

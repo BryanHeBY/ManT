@@ -8,11 +8,10 @@ use mant_protocol::{ReferenceCoverageStatus, ReferenceProjection, ReferenceProje
 use mant_query::project_references;
 use std::{collections::BTreeMap, fs, path::Path};
 
-#[test]
-fn manifest_manual_links_close_inside_the_installed_namespace() {
+fn shipped_documents() -> BTreeMap<String, mant_ir::Document> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/manuals");
     let manifest = include_str!("../../../docs/manuals/manifest.txt");
-    let documents: BTreeMap<_, _> = manifest
+    manifest
         .lines()
         .filter(|line| !line.is_empty())
         .map(|file| {
@@ -24,7 +23,12 @@ fn manifest_manual_links_close_inside_the_installed_namespace() {
                 load_markdown_text(&fs::read_to_string(root.join(file)).unwrap(), None).unwrap();
             (name, query.document.unwrap())
         })
-        .collect();
+        .collect()
+}
+
+#[test]
+fn manifest_manual_links_close_inside_the_installed_namespace() {
+    let documents = shipped_documents();
     let mut incoming = BTreeMap::<String, usize>::new();
     for (name, document) in &documents {
         let address = DocumentAddress::Markdown {
@@ -53,12 +57,18 @@ fn manifest_manual_links_close_inside_the_installed_namespace() {
             inventory.page.next_offset.is_none() && inventory.page.limited.is_none(),
             "{name}"
         );
-        for record in inventory.records {
+        let projection = inventory.content_projection.as_ref().unwrap();
+        for record in &inventory.records {
             assert!(
                 record.origin.resolve_link(document).is_some(),
                 "actual IR occurrence"
             );
-            match record.target {
+            match &projection
+                .content()
+                .occurrence(record.occurrence)
+                .unwrap()
+                .target
+            {
                 LinkTarget::Document {
                     name: target,
                     fragment,
@@ -83,7 +93,7 @@ fn manifest_manual_links_close_inside_the_installed_namespace() {
                     if let Some(fragment) = fragment {
                         assert!(
                             DocumentIndex::build(destination)
-                                .fragment_target(&fragment)
+                                .fragment_target(fragment)
                                 .is_some(),
                             "{name}: {path}#{fragment}"
                         );
@@ -128,6 +138,6 @@ fn fenced_link_examples_are_not_link_occurrences() {
     );
     assert_eq!(inventory.records.len(), 1);
     assert!(
-        matches!(&inventory.records[0].target, LinkTarget::Document { name, fragment: Some(fragment) } if name == "other" && fragment == "part")
+        matches!(&inventory.content_projection.as_ref().unwrap().content().occurrence(inventory.records[0].occurrence).unwrap().target, LinkTarget::Document { name, fragment: Some(fragment) } if name == "other" && fragment == "part")
     );
 }

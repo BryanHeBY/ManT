@@ -24,7 +24,7 @@ fn root_level_subsections_lower_into_visible_sections() {
     let titles: Vec<String> = document
         .sections
         .iter()
-        .map(|section| section.heading.plain_text())
+        .map(|section| section.heading.plain_text(document.content()))
         .collect();
     assert_eq!(
         titles,

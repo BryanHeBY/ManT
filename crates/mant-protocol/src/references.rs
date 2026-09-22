@@ -2,8 +2,8 @@
 
 pub use mant_ir::ReferenceTargetType;
 use mant_ir::{
-    ContentLocation, ContentReveal, DocumentAddress, LinkTarget, ReferenceScanReport,
-    ReferenceScanStop,
+    ContentLocation, ContentProjection, ContentReveal, DocumentAddress, LinkOccurrenceKey,
+    ReferenceScanReport, ReferenceScanStop,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -302,6 +302,8 @@ pub enum ReferenceResolution {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReferenceRecord {
+    /// Document-local logical occurrence in this inventory's content projection.
+    pub occurrence: LinkOccurrenceKey,
     /// Snapshot-local location of the original `Inline::Link`.
     pub origin: ContentLocation,
     /// Explicit containing readable source subtree. This is not the occurrence
@@ -309,12 +311,10 @@ pub struct ReferenceRecord {
     pub source_read: crate::ContentSelector,
     /// Nearest original content item, when present.
     pub owner: Option<ContentReveal>,
-    /// Visible plain label from original children; may be empty.
-    pub label: String,
-    /// Whether the UTF-8-safe label prefix was bounded.
-    pub label_truncated: bool,
-    /// Complete original typed target, including its fragment.
-    pub target: LinkTarget,
+    /// Bounded presentation preview; never authoritative link content.
+    pub label_preview: String,
+    /// Whether the UTF-8-safe presentation preview was bounded.
+    pub label_preview_truncated: bool,
     /// Atomic validation outcome of original form bindings.
     pub association: ReferenceAssociation,
     /// Facts established without loading other documents or probing external URIs.
@@ -322,9 +322,12 @@ pub struct ReferenceRecord {
 }
 
 /// Independent reference output embedded alongside an outline's content tree.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReferenceInventory {
+    /// Closed response-local store resolving every retained occurrence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_projection: Option<ContentProjection>,
     /// Effective request policy.
     pub policy: ReferenceProjection,
     /// Source content scan coverage.
@@ -342,6 +345,45 @@ pub struct ReferenceInventory {
     pub records: Vec<ReferenceRecord>,
 }
 
+#[derive(Deserialize)]
+#[serde(
+    remote = "ReferenceInventory",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ReferenceInventoryWire {
+    #[serde(default)]
+    pub content_projection: Option<ContentProjection>,
+    pub policy: ReferenceProjection,
+    pub coverage: ReferenceCoverage,
+    pub target_coverage: Option<ReferenceCoverage>,
+    pub occurrences: ReferenceCount,
+    pub targets: ReferenceCount,
+    pub page: ReferencePage,
+    pub records: Vec<ReferenceRecord>,
+}
+
+impl<'de> Deserialize<'de> for ReferenceInventory {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ReferenceInventoryWire::deserialize(deserializer)?;
+        if !value.records.is_empty() && value.content_projection.is_none() {
+            return Err(serde::de::Error::custom(
+                "retained reference records require a content projection",
+            ));
+        }
+        if let Some(projection) = &value.content_projection {
+            for record in &value.records {
+                if projection.content_store.link(record.occurrence).is_none() {
+                    return Err(serde::de::Error::custom(
+                        "reference occurrence does not resolve in its content projection",
+                    ));
+                }
+            }
+        }
+        Ok(value)
+    }
+}
+
 impl ReferenceInventory {
     /// Empty, explicitly unscanned result, including tldr-only responses.
     #[must_use]
@@ -352,6 +394,7 @@ impl ReferenceInventory {
             ReferenceUnknownReason::NotScanned
         };
         Self {
+            content_projection: None,
             page: ReferencePage {
                 offset: policy.offset,
                 returned: 0,
@@ -443,5 +486,88 @@ mod tests {
             serde_json::from_str::<ReferenceResolution>(&wire).unwrap(),
             valid
         );
+    }
+
+    #[test]
+    fn retained_records_require_resolvable_occurrences() {
+        let mut store = mant_ir::ContentStoreBuilder::new();
+        let owner = store.push_owner(
+            mant_ir::ContentOwnerKind::Document,
+            mant_ir::Provenance::Unknown,
+        );
+        let root = store.push_root(
+            owner,
+            mant_ir::ContentRootKind::Body,
+            mant_ir::Provenance::Unknown,
+        );
+        let occurrence = store.push_link(
+            owner,
+            mant_ir::LinkTarget::External {
+                uri: "https://example.test".to_owned(),
+            },
+            None,
+            mant_ir::Provenance::Unknown,
+        );
+        let _label = store.push_text(
+            root,
+            "authoritative label".to_owned(),
+            None,
+            mant_ir::ContentStyle::default(),
+            None,
+            Some(occurrence),
+            mant_ir::Provenance::Unknown,
+        );
+        let mut inventory = ReferenceInventory {
+            content_projection: Some(ContentProjection {
+                content_store: store.finish(),
+            }),
+            ..ReferenceInventory::default()
+        };
+        inventory.page.returned = 1;
+        inventory.records.push(ReferenceRecord {
+            occurrence,
+            origin: ContentLocation::DocumentHeading { path: vec![0] },
+            source_read: crate::ContentSelector::path("root"),
+            owner: None,
+            label_preview: "authoritative…".to_owned(),
+            label_preview_truncated: true,
+            association: ReferenceAssociation::Unrecorded {},
+            resolution: ReferenceResolution::NotApplicable {},
+        });
+
+        let encoded = serde_json::to_value(&inventory).expect("reference inventory");
+        let restored = serde_json::from_value::<ReferenceInventory>(encoded.clone())
+            .expect("closed occurrence");
+        assert_eq!(restored.records[0].occurrence, occurrence);
+        let projection = restored
+            .content_projection
+            .as_ref()
+            .expect("record projection");
+        assert_eq!(
+            projection
+                .content()
+                .occurrence_plain_text(occurrence)
+                .expect("complete label"),
+            "authoritative label"
+        );
+        assert!(matches!(
+            &projection
+                .content_store
+                .link(occurrence)
+                .expect("complete target")
+                .target,
+            mant_ir::LinkTarget::External { uri } if uri == "https://example.test"
+        ));
+
+        let mut missing = encoded.clone();
+        missing
+            .as_object_mut()
+            .expect("inventory object")
+            .remove("contentProjection");
+        assert!(serde_json::from_value::<ReferenceInventory>(missing).is_err());
+
+        let mut dangling = encoded;
+        dangling["records"][0]["occurrence"] = 2.into();
+        assert!(serde_json::from_value::<ReferenceInventory>(dangling).is_err());
     }
 }

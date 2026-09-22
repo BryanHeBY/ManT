@@ -40,6 +40,7 @@ fn large_entry_source_maps_keep_monotonic_exact_ownership() {
     let query = parse_content(&source, None).unwrap();
     let document = query.document.unwrap();
     let rendered = super::blocks::render_blocks_with_entries(
+        document.content(),
         &document.blocks,
         MarkdownOptions {
             preserve_anchors: true,
@@ -52,6 +53,37 @@ fn large_entry_source_maps_keep_monotonic_exact_ownership() {
         assert!(rendered.text[entry.start..entry.end].contains(&format!("Payload{index}.")));
         if let Some(next) = rendered.entries.get(index + 1) {
             assert!(entry.end <= next.start);
+        }
+    }
+}
+
+#[test]
+fn flattened_table_cells_keep_distinct_exact_root_ranges() {
+    let query = parse_content(
+        "# Table\n\n| Left | Right |\n| --- | --- |\n| LEFT | RIGHT |\n",
+        None,
+    )
+    .unwrap();
+    let artifact = render_addressable_markdown(&query);
+    assert_eq!(
+        artifact.text(),
+        render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE)
+    );
+    let document = query.document.as_ref().unwrap();
+    for (needle, other) in [("LEFT", "RIGHT"), ("RIGHT", "LEFT")] {
+        let root = document
+            .content_store
+            .atoms
+            .iter()
+            .find(|atom| atom.kind.text() == Some(needle))
+            .expect("table cell atom")
+            .root;
+        let ranges = artifact.root_markdown_ranges(root).collect::<Vec<_>>();
+        assert!(!ranges.is_empty(), "missing {needle} root range");
+        for range in ranges {
+            let fragment = &artifact.text()[range];
+            assert_eq!(fragment, needle);
+            assert!(!fragment.contains(other));
         }
     }
 }
@@ -128,7 +160,8 @@ fn maps_borrow_owners_from_their_exact_source_snapshot() {
         a_owner.facts().unwrap(),
         b_owner.facts().unwrap()
     ));
-    let original = mant_ir::content_entries(&first.document.as_ref().unwrap().blocks);
+    let first_document = first.document.as_ref().unwrap();
+    let original = mant_ir::content_entries(first_document.content(), &first_document.blocks);
     assert!(std::ptr::eq(
         a_owner.facts().unwrap(),
         original[0].owner().facts().unwrap()
@@ -137,12 +170,11 @@ fn maps_borrow_owners_from_their_exact_source_snapshot() {
 
 #[test]
 fn logical_link_serialization_preserves_literal_percent_and_unicode_components() {
-    #[derive(Default)]
-    struct Links(Vec<mant_ir::LinkTarget>);
-    impl<'a> Visit<'a> for Links {
+    struct Links<'a>(Vec<mant_ir::LinkTarget>, mant_ir::ContentContext<'a>);
+    impl<'a> Visit<'a> for Links<'a> {
         fn visit_inline(&mut self, inline: &'a Inline) {
-            if let Inline::Link { target, .. } = inline {
-                self.0.push(target.clone());
+            if let Ok(Some(link)) = self.1.link(inline) {
+                self.0.push(link.target().clone());
             }
             walk_inline(self, inline);
         }
@@ -168,23 +200,25 @@ fn logical_link_serialization_preserves_literal_percent_and_unicode_components()
             .iter()
             .any(|d| d.code.as_deref() == Some("ir.dangling-section-link"))
     );
-    let mut original_links = Links::default();
+    let mut original_links = Links(Vec::new(), query.document.as_ref().unwrap().content());
     original_links.visit_document(query.document.as_ref().unwrap());
-    let mut reparsed_links = Links::default();
+    let mut reparsed_links = Links(Vec::new(), reparsed.document.as_ref().unwrap().content());
     reparsed_links.visit_document(reparsed.document.as_ref().unwrap());
     assert_eq!(reparsed_links.0, original_links.0);
 }
 
 #[test]
 fn underscore_escaping_is_independent_of_text_segmentation_but_respects_styles() {
-    let text = |value: &str| Inline::Text {
-        value: value.to_owned(),
-    };
+    let text = |value: &str| crate::test_content::text(value.to_owned());
     for parts in [
         vec![text("NAME_PID")],
         vec![text("NAME"), text("_"), text("PID")],
     ] {
-        let rendered = super::inline::render_inline(&parts, MarkdownOptions::default());
+        let rendered = super::inline::render_inline(
+            crate::test_content::content(),
+            &parts,
+            MarkdownOptions::default(),
+        );
         assert_eq!(rendered, "NAME_PID");
     }
     let styled = vec![
@@ -193,7 +227,11 @@ fn underscore_escaping_is_independent_of_text_segmentation_but_respects_styles()
         },
         text("_PID suffix_"),
     ];
-    let rendered = super::inline::render_inline(&styled, MarkdownOptions::default());
+    let rendered = super::inline::render_inline(
+        crate::test_content::content(),
+        &styled,
+        MarkdownOptions::default(),
+    );
     let events = Parser::new(&rendered).collect::<Vec<_>>();
     assert_eq!(
         events
@@ -238,6 +276,7 @@ fn manual(sections: Vec<Section>) -> Document {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
+        content_store: crate::test_content::store(),
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
@@ -250,7 +289,10 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
     Section {
         id: title.to_lowercase().into(),
         fragment_aliases: Vec::new(),
-        heading: title.into(),
+        heading: mant_ir::Heading {
+            content: vec![crate::test_content::text(title)],
+            source: None,
+        },
         spacing_before_lines: 0,
         blocks,
         children,
@@ -262,7 +304,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 fn addressable_markdown_emits_canonical_and_authored_fragments() {
     let mut section = section(
         "Mixed target",
-        vec![paragraph(vec![Inline::anchor_with_aliases(
+        vec![paragraph(vec![crate::test_content::anchor_with_aliases(
             "option",
             vec!["--option".into()],
         )])],
@@ -287,9 +329,10 @@ fn addressable_markdown_emits_canonical_and_authored_fragments() {
 #[test]
 fn addressable_markdown_emits_document_root_fragments() {
     let mut document = manual(Vec::new());
-    document.blocks = vec![paragraph(vec![Inline::Text {
-        value: "Preface.".to_owned(),
-    }])];
+    document.blocks = vec![paragraph(vec![crate::test_content::text(
+        "Preface.".to_owned(),
+    )])];
+    document.content_store = crate::test_content::store();
     document.fragment_aliases = vec!["Mixed.Root".into()];
     let query = ResolvedContent {
         address: None,
@@ -304,15 +347,12 @@ fn addressable_markdown_emits_document_root_fragments() {
 }
 
 fn email_addresses(document: &Document) -> Vec<String> {
-    #[derive(Default)]
-    struct EmailCollector(Vec<String>);
+    struct EmailCollector<'a>(Vec<String>, mant_ir::ContentContext<'a>);
 
-    impl<'ir> Visit<'ir> for EmailCollector {
+    impl<'ir> Visit<'ir> for EmailCollector<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Link {
-                target: mant_ir::LinkTarget::Email { address },
-                ..
-            } = inline
+            if let Ok(Some(link)) = self.1.link(inline)
+                && let mant_ir::LinkTarget::Email { address } = link.target()
             {
                 self.0.push(address.clone());
             }
@@ -320,7 +360,7 @@ fn email_addresses(document: &Document) -> Vec<String> {
         }
     }
 
-    let mut collector = EmailCollector::default();
+    let mut collector = EmailCollector(Vec::new(), document.content());
     collector.visit_document(document);
     collector.0
 }
@@ -329,28 +369,16 @@ fn email_addresses(document: &Document) -> Vec<String> {
 fn preserves_inline_lists_definitions_and_nested_headings() {
     let rich_paragraph = paragraph(vec![
         Inline::Strong {
-            children: vec![Inline::Text {
-                value: " demo ".to_owned(),
-            }],
+            children: vec![crate::test_content::text(" demo ".to_owned())],
         },
-        Inline::Text {
-            value: "reads ".to_owned(),
-        },
+        crate::test_content::text("reads ".to_owned()),
         Inline::Emphasis {
-            children: vec![Inline::Text {
-                value: "files".to_owned(),
-            }],
+            children: vec![crate::test_content::text("files".to_owned())],
         },
-        Inline::Text {
-            value: " with ".to_owned(),
-        },
-        Inline::Code {
-            value: "a`b".to_owned(),
-        },
-        Inline::LineBreak,
-        Inline::Text {
-            value: " a second line; see <<https://example.com/docs>>. ".to_owned(),
-        },
+        crate::test_content::text(" with ".to_owned()),
+        crate::test_content::code("a`b".to_owned()),
+        crate::test_content::line_break(),
+        crate::test_content::text(" a second line; see <<https://example.com/docs>>. ".to_owned()),
     ]);
     let list = Block::List {
         kind: ListKind::Bullet,
@@ -359,9 +387,9 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
             layout: mant_ir::ListItemLayout::default(),
             source: None,
             entry: None,
-            blocks: vec![paragraph(vec![Inline::Text {
-                value: "first item".to_owned(),
-            }])],
+            blocks: vec![paragraph(vec![crate::test_content::text(
+                "first item".to_owned(),
+            )])],
         }],
         layout: LayoutHint::default(),
         source: None,
@@ -378,19 +406,15 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
             },
             terms: vec![
                 vec![Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "-a".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("-a".to_owned())],
                 }],
                 vec![Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "--all".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("--all".to_owned())],
                 }],
             ],
-            description: vec![paragraph(vec![Inline::Text {
-                value: "Show all entries.".to_owned(),
-            }])],
+            description: vec![paragraph(vec![crate::test_content::text(
+                "Show all entries.".to_owned(),
+            )])],
         }],
         compact: false,
         layout: LayoutHint::default(),
@@ -432,32 +456,22 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
             },
             terms: vec![vec![
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "-r ".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("-r ".to_owned())],
                 },
                 Inline::Emphasis {
-                    children: vec![Inline::Text {
-                        value: "prompt".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("prompt".to_owned())],
                 },
-                Inline::Text {
-                    value: ", ".to_owned(),
-                },
+                crate::test_content::text(", ".to_owned()),
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "--prompt=".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("--prompt=".to_owned())],
                 },
                 Inline::Emphasis {
-                    children: vec![Inline::Text {
-                        value: "prompt".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("prompt".to_owned())],
                 },
             ]],
-            description: vec![paragraph(vec![Inline::Text {
-                value: "Set the pager prompt.".to_owned(),
-            }])],
+            description: vec![paragraph(vec![crate::test_content::text(
+                "Set the pager prompt.".to_owned(),
+            )])],
         }],
         compact: true,
         layout: LayoutHint::default(),
@@ -511,30 +525,18 @@ fn coalesces_adjacent_roff_styles_and_uses_minimal_intraword_escaping() {
         document: Some(manual(vec![section(
             "INVOCATION",
             vec![paragraph(vec![
-                Inline::Text {
-                    value: "The long option `".to_owned(),
+                crate::test_content::text("The long option `".to_owned()),
+                Inline::Strong {
+                    children: vec![crate::test_content::text("-".to_owned())],
                 },
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "-".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("-emulate".to_owned())],
                 },
+                crate::test_content::text("' and ".to_owned()),
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "-emulate".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("PATH_SCRIPT".to_owned())],
                 },
-                Inline::Text {
-                    value: "' and ".to_owned(),
-                },
-                Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "PATH_SCRIPT".to_owned(),
-                    }],
-                },
-                Inline::Text {
-                    value: " are literal tokens.".to_owned(),
-                },
+                crate::test_content::text(" are literal tokens.".to_owned()),
             ])],
             Vec::new(),
         )])),
@@ -565,14 +567,10 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
             vec![
                 Block::Preformatted {
                     children: vec![
-                        Inline::Text {
-                            value: "before ``` marker".to_owned(),
-                        },
-                        Inline::LineBreak,
+                        crate::test_content::text("before ``` marker".to_owned()),
+                        crate::test_content::line_break(),
                         Inline::Strong {
-                            children: vec![Inline::Text {
-                                value: "after".to_owned(),
-                            }],
+                            children: vec![crate::test_content::text("after".to_owned())],
                         },
                     ],
                     language: None,
@@ -585,18 +583,18 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                         cells: vec![
                             TableCell {
                                 kind: mant_ir::TableCellKind::Text,
-                                blocks: vec![paragraph(vec![Inline::Text {
-                                    value: "left".to_owned(),
-                                }])],
+                                blocks: vec![paragraph(vec![crate::test_content::text(
+                                    "left".to_owned(),
+                                )])],
                                 column_span: 1,
                                 row_span: 1,
                                 alignment: None,
                             },
                             TableCell {
                                 kind: mant_ir::TableCellKind::Text,
-                                blocks: vec![paragraph(vec![Inline::Text {
-                                    value: "right".to_owned(),
-                                }])],
+                                blocks: vec![paragraph(vec![crate::test_content::text(
+                                    "right".to_owned(),
+                                )])],
                                 column_span: 1,
                                 row_span: 1,
                                 alignment: None,
@@ -633,51 +631,39 @@ fn serializes_typed_email_links_through_the_shared_mailto_boundary() {
         document: Some(manual(vec![section(
             "CONTACT",
             vec![paragraph(vec![
-                Inline::Link {
-                    target: mant_ir::LinkTarget::Email {
+                crate::test_content::link(
+                    mant_ir::LinkTarget::Email {
                         address: "user%tag@example.test".to_owned(),
                     },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "percent".to_owned(),
-                    }],
-                },
-                Inline::Text {
-                    value: " ".to_owned(),
-                },
-                Inline::Link {
-                    target: mant_ir::LinkTarget::Email {
+                    None,
+                    vec![crate::test_content::text("percent".to_owned())],
+                ),
+                crate::test_content::text(" ".to_owned()),
+                crate::test_content::link(
+                    mant_ir::LinkTarget::Email {
                         address: "a/b@example.test".to_owned(),
                     },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "slash".to_owned(),
-                    }],
-                },
-                Inline::Text {
-                    value: " ".to_owned(),
-                },
-                Inline::Link {
-                    target: mant_ir::LinkTarget::Email {
+                    None,
+                    vec![crate::test_content::text("slash".to_owned())],
+                ),
+                crate::test_content::text(" ".to_owned()),
+                crate::test_content::link(
+                    mant_ir::LinkTarget::Email {
                         address: "user=tag@example.test".to_owned(),
                     },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "equals".to_owned(),
-                    }],
-                },
-                Inline::Text {
-                    value: " ".to_owned(),
-                },
-                Inline::Link {
-                    target: mant_ir::LinkTarget::Email {
+                    None,
+                    vec![crate::test_content::text("equals".to_owned())],
+                ),
+                crate::test_content::text(" ".to_owned()),
+                crate::test_content::link(
+                    mant_ir::LinkTarget::Email {
                         address: ".invalid@example.test".to_owned(),
                     },
-                    title: None,
-                    children: vec![Inline::Text {
-                        value: "invalid remains visible".to_owned(),
-                    }],
-                },
+                    None,
+                    vec![crate::test_content::text(
+                        "invalid remains visible".to_owned(),
+                    )],
+                ),
             ])],
             Vec::new(),
         )])),
@@ -732,29 +718,17 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
         document: Some(manual(vec![section(
             "TEXT",
             vec![paragraph(vec![
-                Inline::Text {
-                    value: "- not a list".to_owned(),
-                },
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "1. not an ordered list".to_owned(),
-                },
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "# not a heading".to_owned(),
-                },
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "-".to_owned(),
-                },
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "===".to_owned(),
-                },
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "```".to_owned(),
-                },
+                crate::test_content::text("- not a list".to_owned()),
+                crate::test_content::line_break(),
+                crate::test_content::text("1. not an ordered list".to_owned()),
+                crate::test_content::line_break(),
+                crate::test_content::text("# not a heading".to_owned()),
+                crate::test_content::line_break(),
+                crate::test_content::text("-".to_owned()),
+                crate::test_content::line_break(),
+                crate::test_content::text("===".to_owned()),
+                crate::test_content::line_break(),
+                crate::test_content::text("```".to_owned()),
             ])],
             Vec::new(),
         )])),
@@ -783,16 +757,12 @@ fn preserves_leading_consecutive_and_trailing_hard_breaks() {
         document: Some(manual(vec![section(
             "TEXT",
             vec![paragraph(vec![
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "before".to_owned(),
-                },
-                Inline::LineBreak,
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "after".to_owned(),
-                },
-                Inline::LineBreak,
+                crate::test_content::line_break(),
+                crate::test_content::text("before".to_owned()),
+                crate::test_content::line_break(),
+                crate::test_content::line_break(),
+                crate::test_content::text("after".to_owned()),
+                crate::test_content::line_break(),
             ])],
             Vec::new(),
         )])),
@@ -813,9 +783,9 @@ fn preserves_literal_html_entity_spellings_across_commonmark() {
         label: "entities".to_owned(),
         document: Some(manual(vec![section(
             "ENTITY TEXT",
-            vec![paragraph(vec![Inline::Text {
-                value: "literal a & b; spellings &amp;, &pound;, &#163;, and &notreal;".to_owned(),
-            }])],
+            vec![paragraph(vec![crate::test_content::text(
+                "literal a & b; spellings &amp;, &pound;, &#163;, and &notreal;".to_owned(),
+            )])],
             Vec::new(),
         )])),
         tldr: None,
@@ -909,17 +879,11 @@ fn nested_styles_preserve_contiguous_intraword_spellings() {
             "TEXT",
             vec![paragraph(vec![Inline::Emphasis {
                 children: vec![
-                    Inline::Text {
-                        value: "x".to_owned(),
-                    },
+                    crate::test_content::text("x".to_owned()),
                     Inline::Strong {
-                        children: vec![Inline::Text {
-                            value: "-".to_owned(),
-                        }],
+                        children: vec![crate::test_content::text("-".to_owned())],
                     },
-                    Inline::Text {
-                        value: "y".to_owned(),
-                    },
+                    crate::test_content::text("y".to_owned()),
                 ],
             }])],
             Vec::new(),
@@ -947,56 +911,32 @@ fn styles_only_flatten_when_commonmark_cannot_delimit_them() {
         document: Some(manual(vec![section(
             "TEXT",
             vec![paragraph(vec![
-                Inline::Text {
-                    value: "disabled with --".to_owned(),
-                },
+                crate::test_content::text("disabled with --".to_owned()),
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "no-".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("no-".to_owned())],
                 },
-                Inline::Text {
-                    value: "option; safe ".to_owned(),
-                },
+                crate::test_content::text("option; safe ".to_owned()),
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "!".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("!".to_owned())],
                 },
-                Inline::Text {
-                    value: " and ".to_owned(),
-                },
+                crate::test_content::text(" and ".to_owned()),
                 Inline::Emphasis {
                     children: vec![
-                        Inline::Text {
-                            value: "an ".to_owned(),
-                        },
+                        crate::test_content::text("an ".to_owned()),
                         Inline::Strong {
-                            children: vec![Inline::Text {
-                                value: "important".to_owned(),
-                            }],
+                            children: vec![crate::test_content::text("important".to_owned())],
                         },
-                        Inline::Text {
-                            value: " word".to_owned(),
-                        },
+                        crate::test_content::text(" word".to_owned()),
                     ],
                 },
-                Inline::Text {
-                    value: ". chained --".to_owned(),
-                },
+                crate::test_content::text(". chained --".to_owned()),
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "no-".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("no-".to_owned())],
                 },
                 Inline::Emphasis {
-                    children: vec![Inline::Text {
-                        value: "option-".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("option-".to_owned())],
                 },
-                Inline::Text {
-                    value: "word.".to_owned(),
-                },
+                crate::test_content::text("word.".to_owned()),
             ])],
             Vec::new(),
         )])),
@@ -1055,12 +995,10 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
                 items: vec![DefinitionItem {
                     source: None,
                     entry: None,
-                    terms: vec![vec![Inline::Text {
-                        value: "1.".to_owned(),
-                    }]],
-                    description: vec![paragraph(vec![Inline::Text {
-                        value: "first reference".to_owned(),
-                    }])],
+                    terms: vec![vec![crate::test_content::text("1.".to_owned())]],
+                    description: vec![paragraph(vec![crate::test_content::text(
+                        "first reference".to_owned(),
+                    )])],
                     layout: mant_ir::DefinitionLayout {
                         inline_term: true,
                         spacing_before_lines: None,
@@ -1096,13 +1034,9 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
                 spacing_before_lines: None,
                 ..Default::default()
             },
-            terms: vec![vec![Inline::Text {
-                value: "plain".to_owned(),
-            }]],
+            terms: vec![vec![crate::test_content::text("plain".to_owned())]],
             description: vec![Block::Preformatted {
-                children: vec![Inline::Text {
-                    value: "code_line();".to_owned(),
-                }],
+                children: vec![crate::test_content::text("code_line();".to_owned())],
                 language: None,
                 layout: LayoutHint::default(),
                 source: None,
@@ -1141,17 +1075,11 @@ fn escapes_literal_roff_quote_backticks_without_hiding_styles() {
         document: Some(manual(vec![section(
             "TEXT",
             vec![paragraph(vec![
-                Inline::Text {
-                    value: "For example, `".to_owned(),
-                },
+                crate::test_content::text("For example, `".to_owned()),
                 Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "!".to_owned(),
-                    }],
+                    children: vec![crate::test_content::text("!".to_owned())],
                 },
-                Inline::Text {
-                    value: "' remains bold.".to_owned(),
-                },
+                crate::test_content::text("' remains bold.".to_owned()),
             ])],
             Vec::new(),
         )])),
@@ -1185,14 +1113,12 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
             value_domain: None,
         }),
         terms: vec![vec![
-            Inline::anchor("help-entry"),
-            Inline::Code {
-                value: "--help".to_owned(),
-            },
+            crate::test_content::anchor("help-entry"),
+            crate::test_content::code("--help".to_owned()),
         ]],
-        description: vec![paragraph(vec![Inline::Text {
-            value: "Show help.".to_owned(),
-        }])],
+        description: vec![paragraph(vec![crate::test_content::text(
+            "Show help.".to_owned(),
+        )])],
         layout: mant_ir::DefinitionLayout {
             inline_term: false,
             spacing_before_lines: None,
@@ -1212,9 +1138,9 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
                     layout: LayoutHint::default(),
                     source: None,
                 },
-                paragraph(vec![Inline::Text {
-                    value: "Following section prose.".to_owned(),
-                }]),
+                paragraph(vec![crate::test_content::text(
+                    "Following section prose.".to_owned(),
+                )]),
             ],
             Vec::new(),
         )])),
@@ -1297,7 +1223,13 @@ fn public_artifact_section_lookup_rejects_out_of_range_slots() {
     assert_eq!(artifact.section(0).unwrap().path().to_string(), "1");
     let child = artifact.section(1).unwrap();
     assert_eq!(child.parent(), Some(0));
-    assert_eq!(child.section().heading.plain_text(), "Child");
+    assert_eq!(
+        child
+            .section()
+            .heading
+            .plain_text(content.document.as_ref().unwrap().content()),
+        "Child"
+    );
     assert!(artifact.section(2).is_none());
     assert!(artifact.section(usize::MAX).is_none());
     for mapped in artifact.nodes() {
@@ -1328,9 +1260,15 @@ fn detached_fragment_export_accepts_ir_beyond_markdown_metadata_limits() {
     assert!(!super::semantic::supported(document));
     for preserve_anchors in [false, true] {
         let options = super::MarkdownFragmentOptions { preserve_anchors };
-        let plain = super::render_blocks_fragment(&document.blocks, options).join("\n\n");
-        let located =
-            super::render_located_blocks_fragment(&document.blocks, options, None).join("\n\n");
+        let plain = super::render_blocks_fragment(document.content(), &document.blocks, options)
+            .join("\n\n");
+        let located = super::render_located_blocks_fragment(
+            document.content(),
+            &document.blocks,
+            options,
+            None,
+        )
+        .join("\n\n");
         assert_eq!(plain, located);
         assert!(plain.contains("Kept body."));
         assert!(!plain.contains("mant:entry"));
@@ -1338,9 +1276,17 @@ fn detached_fragment_export_accepts_ir_beyond_markdown_metadata_limits() {
         for name in &names {
             assert!(plain.contains(name));
         }
-        let sections = [section("OPTIONS", document.blocks.clone(), Vec::new())];
+        let sections = [Section {
+            id: "options".into(),
+            fragment_aliases: Vec::new(),
+            heading: mant_ir::Heading::default(),
+            spacing_before_lines: 0,
+            blocks: document.blocks.clone(),
+            children: Vec::new(),
+            source: None,
+        }];
         let mut rendered = Vec::new();
-        super::render_sections_fragment(&mut rendered, &sections, 2, options);
+        super::render_sections_fragment(document.content(), &mut rendered, &sections, 2, options);
         assert_eq!(rendered[1..].join("\n\n"), plain);
     }
 }

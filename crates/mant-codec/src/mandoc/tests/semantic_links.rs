@@ -31,7 +31,11 @@ fn zero_advance_crosses_empty_enclosures_and_atomic_mdoc_output() {
                 document.sections[0].blocks
             );
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
     }
 }
 
@@ -50,40 +54,23 @@ fn bsd_reference_executes_suppressed_font_operands_before_generated_text() {
     // processing. A control-only operand remains executable even though the
     // semantic lifecycle form replaces its visible spelling.
     assert_eq!(
-        children,
-        &[
-            Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "BSD".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: " ".to_owned(),
-            },
-            Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "Z".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: " ".to_owned(),
-            },
-            Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "BSD (currently under development)".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: " ".to_owned(),
-            },
-            Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "Z".to_owned(),
-                }],
-            },
-        ],
+        children.len(),
+        7,
         "suppressed Bx operands must retain their font transitions"
     );
+    for (index, expected) in [
+        (0, "BSD"),
+        (2, "Z"),
+        (4, "BSD (currently under development)"),
+        (6, "Z"),
+    ] {
+        assert!(
+            matches!(&children[index], Inline::Strong { children } if inline_text(document.content(), children) == expected)
+        );
+    }
+    for index in [1, 3, 5] {
+        assert_eq!(leaf_text(&document, &children[index]), Some(" "));
+    }
 }
 
 #[test]
@@ -120,7 +107,11 @@ fn bsd_reference_replacements_execute_complete_hidden_word_state() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}"
+        );
     }
 
     let document = parse_manual_bytes(
@@ -132,7 +123,7 @@ fn bsd_reference_replacements_execute_complete_hidden_word_state() {
         panic!("expected one paragraph: {:#?}", document.sections);
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "BSD (currently under development)\nZ"
     );
     assert!(
@@ -157,7 +148,7 @@ fn bsd_reference_replacement_preserves_boundaries_and_exact_arity() {
     };
 
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "A BSD Z A BSD\nZ -alphaBSD- 4.3BSD-Tahoe"
     );
     assert!(
@@ -193,17 +184,20 @@ fn mail_and_link_labels_share_the_zero_advance_stream() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph");
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert!(
             children
                 .iter()
                 .any(|inline| matches!(inline, Inline::Link { .. })),
             "{label}: preserving formatter state must not discard link identity"
         );
-        let target = children.iter().find_map(|inline| match inline {
-            Inline::Link { target, .. } => Some(target),
-            _ => None,
-        });
+        let target = children
+            .iter()
+            .find_map(|inline| link_target(&document, inline));
         match label {
             "mail-address" => assert!(
                 matches!(target, Some(mant_ir::LinkTarget::Email { address }) if address == "b@example.org"),
@@ -244,10 +238,14 @@ fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
                 document.sections
             );
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert!(
             children.iter().any(|inline| {
-                matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.org")
+                matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::External { uri }) if uri == "https://example.org")
             }),
             "{label}: visible text must retain the typed external target"
         );
@@ -265,7 +263,7 @@ fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
         );
     };
     assert!(
-        matches!(children.last(), Some(Inline::Strong { children }) if inline_text(children) == "Z"),
+        matches!(children.last(), Some(Inline::Strong { children }) if inline_text(link_controls.content(), children) == "Z"),
         "controls hidden with the URI must still affect following siblings: {children:?}"
     );
 
@@ -282,9 +280,9 @@ fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
     };
     assert!(
         children.iter().any(|inline| {
-            matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, children, .. }
-                if address == "a@example.org"
-                    && matches!(children.as_slice(), [Inline::Strong { children }] if inline_text(children) == "a@example.org"))
+            matches!(inline, Inline::Link { children, .. }
+                if matches!(link_target(&mail_controls, inline), Some(mant_ir::LinkTarget::Email { address }) if address == "a@example.org")
+                    && matches!(children.as_slice(), [Inline::Strong { children }] if inline_text(mail_controls.content(), children) == "a@example.org"))
         }),
         "a control-only Mt operand must set the address font: {children:?}"
     );
@@ -326,7 +324,11 @@ fn semantic_links_choose_visible_output_after_executing_operands() {
                 document.sections
             );
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert!(
             !children.iter().any(|inline| {
                 matches!(inline, Inline::Link { children, .. } if children.is_empty())
@@ -336,14 +338,14 @@ fn semantic_links_choose_visible_output_after_executing_operands() {
         match label {
             "mail-zero-width" => assert!(
                 children.iter().any(|inline| {
-                    matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, .. }
+                    matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Email { address })
                         if address == "a@example.org")
                 }),
                 "{label}: the recovered address must retain its email target: {children:?}"
             ),
             "hidden-uri-zero-width" | "projected-empty-label" => assert!(
                 children.iter().any(|inline| {
-                    matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. }
+                    matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::External { uri })
                         if uri == "https://example.org/Y" || uri == "https://example.org")
                 }),
                 "{label}: the visible link must retain its external target: {children:?}"
@@ -354,7 +356,7 @@ fn semantic_links_choose_visible_output_after_executing_operands() {
                     "{label}: an empty target must degrade to ordinary text: {children:?}"
                 );
                 assert!(
-                    matches!(children.last(), Some(Inline::Strong { children }) if inline_text(children) == "Z"),
+                    matches!(children.last(), Some(Inline::Strong { children }) if inline_text(document.content(), children) == "Z"),
                     "{label}: hidden target controls must still affect later siblings: {children:?}"
                 );
             }
@@ -377,12 +379,15 @@ fn control_only_link_labels_keep_their_structural_font_scope() {
         );
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "https://example.org Z",
         "{children:?}"
     );
     assert!(
-        matches!(children.last(), Some(Inline::Text { value }) if value == "Z"),
+        children
+            .last()
+            .and_then(|inline| leaf_text(&document, inline))
+            == Some("Z"),
         "the Lk scope must not turn the URI or following Z bold: {children:?}"
     );
 }
@@ -438,7 +443,11 @@ fn semantic_links_execute_hidden_word_boundaries_and_native_delimiters() {
                 document.sections
             );
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert!(
             !children.iter().any(|inline| {
                 matches!(inline, Inline::Link { children, .. } if children.is_empty())
@@ -447,7 +456,10 @@ fn semantic_links_execute_hidden_word_boundaries_and_native_delimiters() {
         );
         if label == "escaped-punctuation-label" {
             assert!(
-                matches!(children.last(), Some(Inline::Text { value }) if value == "Z"),
+                children
+                    .last()
+                    .and_then(|inline| leaf_text(&document, inline))
+                    == Some("Z"),
                 "{label}: an authored label font scope must not leak: {children:?}"
             );
         }
@@ -476,7 +488,7 @@ fn semantic_link_continuations_preserve_literal_rows() {
         let [Block::Preformatted { children, .. }] = document.sections[1].blocks.as_slice() else {
             panic!("{label}: expected one literal display: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
     }
 }
 
@@ -521,7 +533,7 @@ fn semantic_link_compaction_preserves_layout_and_final_execution_boundaries() {
         let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = block else {
             panic!("{label}: expected one flow block: {blocks:#?}");
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
     }
 }
 
@@ -547,10 +559,10 @@ fn empty_operands_are_words_before_generated_semantic_punctuation() {
         let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
             panic!("{label}: expected one paragraph: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
         if label == "link-label" {
             assert!(
-                matches!(children.first(), Some(Inline::Link { children, .. }) if inline_text(children) == "X"),
+                matches!(children.first(), Some(Inline::Link { children, .. }) if inline_text(document.content(), children) == "X"),
                 "{label}: the resolved label must remain a visible link: {children:?}"
             );
         }

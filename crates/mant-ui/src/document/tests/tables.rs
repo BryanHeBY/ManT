@@ -10,14 +10,17 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
             kind: mant_ir::TableCellKind::Text,
             blocks: vec![Block::Paragraph {
                 children: vec![
-                    Inline::anchor_with_aliases(id, vec![format!("Exact.{id}").into()]),
-                    Inline::Link {
-                        target: mant_ir::LinkTarget::Section {
+                    crate::test_content::anchor_with_aliases(
+                        id,
+                        vec![format!("Exact.{id}").into()],
+                    ),
+                    crate::test_content::link(
+                        mant_ir::LinkTarget::Section {
                             id: "description".into(),
                         },
-                        title: None,
-                        children: vec![Inline::Text { value: text.into() }],
-                    },
+                        None,
+                        vec![crate::test_content::text(text)],
+                    ),
                 ],
                 layout: LayoutHint {
                     indent_columns: child_indent,
@@ -43,7 +46,8 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
             source: None,
         }];
         document.sections.clear();
-        let rendered = DocumentView::new(&query).render((expected_column + 20).max(80));
+        let view = DocumentView::new(&query);
+        let rendered = view.render((expected_column + 20).max(80));
         let expected_column = usize::from(expected_column);
         let rows = rendered
             .text
@@ -59,7 +63,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
             assert_eq!(rendered.anchor_row(id), Some(row));
             assert_eq!(rendered.anchor_row(&format!("Exact.{id}")), Some(row));
             assert_eq!(
-                rendered.link_target_at(row, expected_column),
+                view.link_target_at(&rendered, row, expected_column),
                 Some(&LinkTarget::Section("description".into()))
             );
         }
@@ -71,9 +75,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
 fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
     let mut bundle = bundle();
     let paragraph = |value: &str| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     };
@@ -122,9 +124,7 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
 #[test]
 fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
     let paragraph = |value: &str| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     };
@@ -167,9 +167,7 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
 #[test]
 fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
     let paragraph = |value: &str| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     };
@@ -241,9 +239,7 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
                 TableCell {
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
-                        children: vec![Inline::Text {
-                            value: "VISIBLE".to_owned(),
-                        }],
+                        children: vec![crate::test_content::text("VISIBLE".to_owned())],
                         layout: LayoutHint::default(),
                         source: None,
                     }],
@@ -292,9 +288,7 @@ fn stacked_partial_rule_cells_are_not_dropped() {
                 TableCell {
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
-                        children: vec![Inline::Text {
-                            value: "VISIBLE".to_owned(),
-                        }],
+                        children: vec![crate::test_content::text("VISIBLE".to_owned())],
                         layout: LayoutHint {
                             indent_columns: -1,
                             ..LayoutHint::default()
@@ -329,9 +323,7 @@ fn stacked_partial_rule_cells_are_not_dropped() {
 #[test]
 fn rule_rows_do_not_split_table_wide_column_measurement() {
     let paragraph = |value: &str| Block::Paragraph {
-        children: vec![Inline::Text {
-            value: value.to_owned(),
-        }],
+        children: vec![crate::test_content::text(value.to_owned())],
         layout: LayoutHint::default(),
         source: None,
     };

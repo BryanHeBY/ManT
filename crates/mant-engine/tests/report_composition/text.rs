@@ -10,56 +10,61 @@ use mant_query::{build_outline, build_outline_projection, select_excerpt};
 use mant_render::{render_excerpt_text, render_outline_markdown, render_outline_text};
 
 fn query() -> ResolvedContent {
+    let mut document = Document {
+        heading: None,
+        parser: None,
+        sources: vec![SourceRecord {
+            key: SourceKey::FIRST,
+            identity: SourceIdentity::Anonymous {
+                name: "test".to_owned(),
+            },
+            format: SourceFormat::Man,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
+        content_store: mant_ir::ContentStore::default(),
+        meta: DocumentMeta {
+            manual_section: Some("1".to_owned()),
+            ..DocumentMeta::default()
+        },
+        fragment_aliases: Vec::new(),
+        diagnostics: Vec::new(),
+        blocks: Vec::new(),
+        sections: Vec::new(),
+    };
+    let parent_details = paragraph(&mut document, "parent details", true);
+    let child_details = paragraph(&mut document, "child details", false);
+    let child_heading = super::heading(&mut document, "Common options");
+    let parent_heading = super::heading(&mut document, "OPTIONS");
+    document.sections = vec![Section {
+        id: "options-1".to_owned().into(),
+        fragment_aliases: Vec::new(),
+        heading: parent_heading,
+        spacing_before_lines: 0,
+        blocks: vec![parent_details],
+        children: vec![Section {
+            id: "common-2".to_owned().into(),
+            fragment_aliases: Vec::new(),
+            heading: child_heading,
+            spacing_before_lines: 1,
+            blocks: vec![child_details],
+            children: Vec::new(),
+            source: None,
+        }],
+        source: None,
+    }];
     ResolvedContent {
         address: None,
         label: "demo".to_owned(),
-        document: Some(Document {
-            heading: None,
-            parser: None,
-            sources: vec![SourceRecord {
-                key: SourceKey::FIRST,
-                identity: SourceIdentity::Anonymous {
-                    name: "test".to_owned(),
-                },
-                format: SourceFormat::Man,
-                decoded_byte_length: 0,
-                content_sha256: None,
-                coordinates: SourceCoordinates::DecodedUtf8Bytes,
-            }],
-            root_source: SourceKey::FIRST,
-            meta: DocumentMeta {
-                manual_section: Some("1".to_owned()),
-                ..DocumentMeta::default()
-            },
-            fragment_aliases: Vec::new(),
-            diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![Section {
-                id: "options-1".to_owned().into(),
-                fragment_aliases: Vec::new(),
-                heading: "OPTIONS".into(),
-                spacing_before_lines: 0,
-                blocks: vec![paragraph("parent details", true)],
-                children: vec![Section {
-                    id: "common-2".to_owned().into(),
-                    fragment_aliases: Vec::new(),
-                    heading: "Common options".into(),
-                    spacing_before_lines: 1,
-                    blocks: vec![paragraph("child details", false)],
-                    children: Vec::new(),
-                    source: None,
-                }],
-                source: None,
-            }],
-        }),
+        document: Some(document),
         tldr: None,
     }
 }
 
-fn paragraph(value: &str, strong: bool) -> Block {
-    let text = vec![Inline::Text {
-        value: value.to_owned(),
-    }];
+fn paragraph(document: &mut Document, value: &str, strong: bool) -> Block {
+    let text = vec![super::text_inline(document, value, false)];
     Block::Paragraph {
         children: if strong {
             vec![Inline::Strong { children: text }]

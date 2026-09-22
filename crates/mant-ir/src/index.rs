@@ -240,6 +240,8 @@ mod tests {
     #[test]
     fn indexes_shared_entry_anchors_without_calling_them_duplicates() {
         let id = NodeId::from("help");
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let anchor = fixture.anchor(id.clone());
         let document = Document {
             heading: None,
             parser: None,
@@ -254,6 +256,7 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store: fixture.finish(),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
@@ -274,7 +277,7 @@ mod tests {
                         names: vec!["--help".to_owned()],
                         value_domain: None,
                     }),
-                    terms: vec![vec![Inline::anchor(id.clone())]],
+                    terms: vec![vec![anchor]],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
                         inline_term: false,
@@ -300,20 +303,23 @@ mod tests {
 
     #[test]
     fn resolves_exact_fragments_to_normalized_targets_without_guessing() {
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let heading_text = fixture.text("Mixed target");
+        let anchor = fixture.anchor_with_aliases("option", vec![FragmentAlias::from("--option")]);
         let mut section = Section {
             id: "mixed-target".into(),
             fragment_aliases: vec![FragmentAlias::from("Mixed.Target")],
-            heading: "Mixed target".into(),
+            heading: crate::Heading {
+                content: vec![heading_text],
+                source: None,
+            },
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: Vec::new(),
             source: None,
         };
         section.blocks.push(crate::Block::Paragraph {
-            children: vec![Inline::anchor_with_aliases(
-                "option",
-                vec![FragmentAlias::from("--option")],
-            )],
+            children: vec![anchor],
             layout: crate::LayoutHint::default(),
             source: None,
         });
@@ -331,6 +337,7 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            content_store: fixture.finish(),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),

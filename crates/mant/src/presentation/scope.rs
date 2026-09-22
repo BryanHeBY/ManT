@@ -101,6 +101,7 @@ mod tests {
                         address: address.clone(),
                         depth: 0,
                         source_context: local.source_context.clone(),
+                        content_projection: None,
                         render: local.render.clone(),
                         matches: vec![],
                     }],

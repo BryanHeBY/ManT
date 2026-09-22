@@ -47,19 +47,19 @@ fn main() {}
             .any(|inline| matches!(inline, Inline::Strong { .. }))
     );
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.test")
+        |inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::External { uri }) if uri == "https://example.test")
     ));
 
     assert!(matches!(
         &document.blocks[1],
         Block::Paragraph { children, .. }
             if children.iter().any(|inline| matches!(
-                inline,
-                Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "options"
+                link_target(&document, inline),
+                Some(mant_ir::LinkTarget::Section { id: target }) if target == "options"
             )) && children.iter().any(|inline| matches!(
-                inline,
-                Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "document-overview"
-            )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak))
+                link_target(&document, inline),
+                Some(mant_ir::LinkTarget::Section { id: target }) if target == "document-overview"
+            )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak { .. }))
     ));
 
     let options = &document.sections[0];
@@ -92,7 +92,7 @@ fn main() {}
             ..
         }
             if language == "rust"
-                && matches!(&children[0], Inline::Text { value } if value == "fn main() {}")
+                && inline_text(&document, &children[0]) == Some("fn main() {}")
                 && layout.indent_columns == 0
                 && layout.spacing_before_lines == 1
     ));

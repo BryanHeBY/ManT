@@ -8,10 +8,10 @@
 //! cell's responsibility; callers must retain the whole native/raw cell when
 //! this parser declines or cannot prove completion.
 
+use super::Inline;
 use libmandoc_rs::{
     Compression, IncludePolicy, InputFormat, MacroSet, NodeKind, ParseOptions, Parser,
 };
-use mant_ir::Inline;
 
 use super::{
     InlineBuilder, append_inline_node_with_next, lower_man_link, parse_roff_text_with_state,
@@ -299,7 +299,7 @@ fn inline_request(name: &str, dialect: MacroSet) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mant_ir::inline_plain_text as plain_text;
+    use crate::mandoc::inline::plain_text;
 
     #[test]
     fn rejects_session_dependent_or_structural_fragments_without_dropping_their_text() {

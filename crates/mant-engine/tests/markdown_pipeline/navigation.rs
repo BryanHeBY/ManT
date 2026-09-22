@@ -39,11 +39,11 @@ Root body.
     };
     let targets = children
         .iter()
-        .filter_map(|inline| match inline {
-            Inline::Link {
-                target: mant_ir::LinkTarget::Section { id: target },
-                ..
-            } => Some(target.as_str()),
+        .filter_map(|inline| match document.content().inline(inline).unwrap() {
+            mant_ir::InlineView::Link(link) => match link.target() {
+                mant_ir::LinkTarget::Section { id } => Some(id.as_str()),
+                _ => None,
+            },
             _ => None,
         })
         .collect::<Vec<_>>();

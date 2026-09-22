@@ -14,6 +14,11 @@ pub fn render_reference_inventory(inventory: &ReferenceInventory) -> String {
 }
 
 /// Decorate reference facts without changing their text, order or coordinates.
+///
+/// # Panics
+///
+/// Panics only when a caller constructs an invalid in-memory inventory whose
+/// records do not resolve in the required response-local content projection.
 #[must_use]
 pub fn render_reference_inventory_with(
     inventory: &ReferenceInventory,
@@ -46,17 +51,27 @@ pub fn render_reference_inventory_with(
             &format!("Reference page limited: {limit:?}"),
         ));
     }
+    let content = inventory
+        .content_projection
+        .as_ref()
+        .map(mant_ir::ContentProjection::content);
     for record in &inventory.records {
-        let target = target_parts(&record.target).concat();
-        let label = if record.label.is_empty() {
+        let content = content.expect("retained reference record has a content projection");
+        let occurrence = content
+            .occurrence(record.occurrence)
+            .expect("validated reference occurrence must resolve");
+        let target = target_parts(&occurrence.target).concat();
+        let label = content
+            .occurrence_plain_text(record.occurrence)
+            .expect("validated reference label must resolve");
+        let label = if label.is_empty() {
             "(empty label)"
         } else {
-            &record.label
+            &label
         };
         lines.push(format!(
-            "- {}{} → {}",
+            "- {} → {}",
             paint(TextRole::Reference, label),
-            if record.label_truncated { "…" } else { "" },
             paint(TextRole::Reference, &target)
         ));
         let position = format!("{:?}", record.origin);

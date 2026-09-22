@@ -5,27 +5,19 @@ use super::*;
 fn nested_code_links_preserve_emphasis_and_restore_the_following_style() {
     let nodes = [
         Inline::Strong {
-            children: vec![Inline::Code {
-                value: "bold-code".into(),
-            }],
+            children: vec![crate::test_content::code("bold-code")],
         },
-        Inline::Text {
-            value: " ordinary ".into(),
-        },
+        crate::test_content::text(" ordinary "),
         Inline::Emphasis {
-            children: vec![Inline::Link {
-                target: mant_ir::LinkTarget::External {
+            children: vec![crate::test_content::link(
+                mant_ir::LinkTarget::External {
                     uri: "https://example.test".into(),
                 },
-                title: None,
-                children: vec![Inline::Code {
-                    value: "linked-code".into(),
-                }],
-            }],
+                None,
+                vec![crate::test_content::code("linked-code")],
+            )],
         },
-        Inline::Text {
-            value: " after".into(),
-        },
+        crate::test_content::text(" after"),
     ];
     let lines = styled_inline_lines(&nodes, Style::default().fg(theme::TEXT), None);
     let spans = &lines[0].spans;
@@ -101,20 +93,19 @@ fn all_entry_roles_color_only_bound_source_text_not_markers_or_body_mentions() {
 
 #[test]
 fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() {
-    let mut content = bundle();
+    let source = "# Probe\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- [`--help`](other.md): description\n";
+    let mut content = mant_loader::load_markdown_text(source, None).unwrap();
     content.address = Some(DocumentAddress::Markdown {
         path: "probe".into(),
         origin: mant_ir::MarkdownOrigin::Documents,
     });
-    let source = "# Probe\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- [`--help`](other.md): description\n";
-    let parsed = mant_loader::load_markdown_text(source, None).unwrap();
     assert!(
-        parsed.document.as_ref().unwrap().diagnostics.is_empty(),
+        content.document.as_ref().unwrap().diagnostics.is_empty(),
         "{:?}",
-        parsed.document.as_ref().unwrap().diagnostics
+        content.document.as_ref().unwrap().diagnostics
     );
-    let mut blocks = parsed.document.unwrap().sections.remove(0).blocks;
-    let Block::List { items, .. } = &mut blocks[0] else {
+    let document = content.document.as_mut().unwrap();
+    let Block::List { items, .. } = &mut document.sections[0].blocks[0] else {
         panic!("list")
     };
     let item = &mut items[0];
@@ -133,7 +124,6 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
         layout,
         source,
     });
-    content.document.as_mut().unwrap().sections[0].blocks = blocks;
     assert!(mant_ir::validate_document(content.document.as_ref().unwrap()).is_empty());
     let view = DocumentView::new(&content);
     for width in [12, 40, 120] {
@@ -159,51 +149,35 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
                 .iter()
                 .all(|span| span.style.add_modifier.contains(Modifier::UNDERLINED))
         );
-        assert!(
-            rendered
-                .links
-                .iter()
-                .any(|link| matches!(&link.target, LinkTarget::Document { .. }))
-        );
+        assert!(rendered.links.iter().any(|link| matches!(
+            view.link_targets.get(&link.identity),
+            Some(LinkTarget::Document { .. })
+        )));
         assert_link_selection(&view, &rendered, &hit, width);
     }
 }
 
 #[test]
 fn inline_styles_preserve_the_renderer_neutral_ir_semantics() {
-    let lines = styled_inline_lines(
+    let (lines, targets) = styled_inline_lines_with_targets(
         &[
             Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "strong".to_owned(),
-                }],
+                children: vec![crate::test_content::text("strong".to_owned())],
             },
-            Inline::Text {
-                value: " ".to_owned(),
-            },
+            crate::test_content::text(" ".to_owned()),
             Inline::Emphasis {
-                children: vec![Inline::Text {
-                    value: "emphasis".to_owned(),
-                }],
+                children: vec![crate::test_content::text("emphasis".to_owned())],
             },
-            Inline::Text {
-                value: " ".to_owned(),
-            },
-            Inline::Code {
-                value: "--option".to_owned(),
-            },
-            Inline::Text {
-                value: " ".to_owned(),
-            },
-            Inline::Link {
-                target: mant_ir::LinkTarget::External {
+            crate::test_content::text(" ".to_owned()),
+            crate::test_content::code("--option".to_owned()),
+            crate::test_content::text(" ".to_owned()),
+            crate::test_content::link(
+                mant_ir::LinkTarget::External {
                     uri: "https://example.test".to_owned(),
                 },
-                title: None,
-                children: vec![Inline::Text {
-                    value: "link".to_owned(),
-                }],
-            },
+                None,
+                vec![crate::test_content::text("link".to_owned())],
+            ),
         ],
         Style::default().fg(theme::TEXT),
         None,
@@ -218,10 +192,10 @@ fn inline_styles_preserve_the_renderer_neutral_ir_semantics() {
     assert_eq!(spans[6].style.fg, Some(theme::BLUE));
     assert!(spans[6].style.add_modifier.contains(Modifier::UNDERLINED));
     assert_eq!(
-        lines[0].links[0].target,
-        LinkTarget::External(
+        logical_link_target(&lines[0], &targets),
+        Some(&LinkTarget::External(
             ExternalUri::parse("https://example.test").expect("valid external URI")
-        )
+        ))
     );
 }
 
@@ -264,13 +238,9 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
     let definition = |term: &str, description: &str, spacing_before_lines| DefinitionItem {
         source: None,
         entry: None,
-        terms: vec![vec![Inline::Text {
-            value: term.to_owned(),
-        }]],
+        terms: vec![vec![crate::test_content::text(term.to_owned())]],
         description: vec![Block::Paragraph {
-            children: vec![Inline::Text {
-                value: description.to_owned(),
-            }],
+            children: vec![crate::test_content::text(description.to_owned())],
             layout: LayoutHint::default(),
             source: None,
         }],

@@ -5,7 +5,7 @@ use super::{
     names::entry_names,
 };
 use mant_ir::geometry::block_source;
-use mant_ir::{Block, EntryKind, Inline, LinkTarget, ListItem};
+use mant_ir::{Block, ContentContext, EntryKind, Inline, InlineView, LinkTarget, ListItem};
 #[derive(Clone)]
 pub(super) struct EntrySignature {
     pub(super) inline_index: usize,
@@ -17,6 +17,7 @@ pub(super) struct EntrySignature {
 
 /// Validate the unchanged leading paragraph and record its name/form boundaries.
 pub(super) fn entry_signature(
+    content: ContentContext<'_>,
     item: &ListItem,
     role: EntryKind,
     explicitly_declared: bool,
@@ -36,7 +37,7 @@ pub(super) fn entry_signature(
     let mut form_breaks = Vec::new();
     let mut form_has_term = false;
     for (delimiter_inline, inline) in children.iter().enumerate() {
-        if let Some(value) = entry_term_text(inline) {
+        if let Some(value) = entry_term_text(content, inline) {
             form_has_term = true;
             leading_term.get_or_insert(value);
             let parsed = entry_names(value, role, explicitly_declared, attached)
@@ -48,8 +49,11 @@ pub(super) fn entry_signature(
             name_occurrences.extend(parsed.into_iter().map(|found| (delimiter_inline, found)));
             continue;
         }
-        match inline {
-            Inline::Text { value } => {
+        match content
+            .inline(inline)
+            .expect("Markdown entry content resolves through its active store")
+        {
+            InlineView::Text(value) => {
                 if let Some((delimiter_byte, _)) = delimiter_location(value) {
                     if names.is_empty() {
                         return Err(EntryRejection::new(
@@ -115,17 +119,26 @@ pub(super) fn entry_signature(
 }
 
 /// Linked and unlinked terms share exactly the same name/form grammar.
-pub(super) fn entry_term_text(inline: &Inline) -> Option<&str> {
-    match inline {
-        Inline::Code { value } => Some(value),
-        Inline::Link {
-            target: LinkTarget::Document { .. } | LinkTarget::Manual { .. },
-            children,
-            ..
-        } => match children.as_slice() {
-            [Inline::Code { value }] => Some(value),
-            _ => None,
-        },
+pub(super) fn entry_term_text<'a>(
+    content: ContentContext<'a>,
+    inline: &'a Inline,
+) -> Option<&'a str> {
+    match content.inline(inline).ok()? {
+        InlineView::Code(value) => Some(value),
+        InlineView::Link(link)
+            if matches!(
+                link.target(),
+                LinkTarget::Document { .. } | LinkTarget::Manual { .. }
+            ) =>
+        {
+            match link.children() {
+                [child] => match content.inline(child).ok()? {
+                    InlineView::Code(value) => Some(value),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
         _ => None,
     }
 }

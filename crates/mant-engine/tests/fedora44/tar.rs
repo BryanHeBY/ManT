@@ -6,9 +6,7 @@ use crate::common::{
 };
 use crate::fixtures::fedora44_manual;
 use mant_ir::SourceFormat;
-use mant_protocol::{
-    ExcerptSelection, OutlineDetail, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-};
+use mant_protocol::{ExcerptSelection, OutlineDetail, SearchCase, SearchQuery, SearchSyntax};
 use mant_query::{build_outline_with_detail, search_query};
 
 /// 9 sections, `os = "TAR"`, 219 semantic entries.
@@ -32,7 +30,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert_eq!(count_outline_entries(&outline.nodes), 219);
     assert!(find_outline_entry(&outline.nodes, "--acls").is_some());
 
-    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/tar");
+    common::assert_bounded_vertical_spacing(document, "fedora44/tar");
 }
 
 /// `--acls` option is addressable through a v0.12 outline and
@@ -77,7 +75,7 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
             pattern: "--acls".to_owned(),
             syntax: SearchSyntax::Literal,
             case: SearchCase::Sensitive,
-            scope: SearchScope::Visible,
+            scope: mant_protocol::SearchScope::Visible,
             word: false,
             context_lines: 1,
             limit: 100,
@@ -97,8 +95,11 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
         })
         .expect("--acls option match");
     assert!(option.outline.node.path().contains("/e"));
-    assert!(option.occurrences[0].markdown.start_line > 1);
-    assert!(option.occurrences[0].markdown.start_column > 0);
+    let markdown = option.occurrences[0]
+        .markdown
+        .expect("canonical Markdown coordinate");
+    assert!(markdown.start_line > 1);
+    assert!(markdown.start_column > 0);
     assert!(option.preview.contains("--acls"));
 
     let excerpt = mant_query::select_excerpt(

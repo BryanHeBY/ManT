@@ -1,7 +1,9 @@
 //! DTO-only, operation-local decoration. No query strings or document access.
 mod markdown;
-use crate::presentation::{InlinePresentation, TextPresentation, TextRole, visit_inline_text};
-use mant_ir::{EntryKind, Inline};
+use crate::presentation::{
+    InlinePresentation, TextPresentation, TextRole, visit_inline_display_text,
+};
+use mant_ir::{ContentContext, EntryKind, Inline};
 use mant_protocol::{
     EvidenceBasis, ExplanationEvidence, ExplanationOccurrence, ExplanationTextRoot,
 };
@@ -15,10 +17,11 @@ struct Span {
 }
 
 /// Keys identify borrowed returned roots, never spellings shared by owners.
-#[derive(Default)]
 pub(super) struct LocatedStyles<'a> {
     roots: BTreeMap<(u8, usize), Vec<Span>>,
-    names: crate::presentation::EntryStyleMap<'a>,
+    markdown_matches: BTreeMap<(u8, usize), Vec<Range<usize>>>,
+    names: Option<crate::presentation::EntryStyleMap<'a>>,
+    content: Option<ContentContext<'a>>,
     lifetime: PhantomData<&'a ExplanationEvidence>,
 }
 
@@ -30,14 +33,24 @@ fn key(root: ExplanationTextRoot<'_>) -> (u8, usize) {
 }
 
 impl<'a> LocatedStyles<'a> {
-    pub(super) fn new(evidence: &'a ExplanationEvidence) -> Self {
-        Self::with_pool(evidence, &[])
+    pub(super) fn new(
+        content: Option<ContentContext<'a>>,
+        evidence: &'a ExplanationEvidence,
+    ) -> Self {
+        Self::with_pool(content, evidence, &[])
     }
     pub(super) fn with_pool(
+        content: Option<ContentContext<'a>>,
         evidence: &'a ExplanationEvidence,
         pool: &'a [mant_protocol::ExplanationSupport],
     ) -> Self {
-        let mut map = Self::default();
+        let mut map = Self {
+            roots: BTreeMap::new(),
+            markdown_matches: BTreeMap::new(),
+            names: None,
+            content,
+            lifetime: PhantomData,
+        };
         let mut remaining = mant_protocol::MAX_EXPLANATION_POSITIONS;
         if let Some(entry) = &evidence.entry {
             for binding in entry
@@ -91,7 +104,9 @@ impl<'a> LocatedStyles<'a> {
                 map.occurrence(evidence, pool, occurrence, None, true, &mut remaining);
             }
         }
-        if let Some(content) = &evidence.content {
+        if let Some(content) = &evidence.content
+            && let Some(context) = map.content
+        {
             for preview in &evidence.previews {
                 let ranges = &preview.content_ranges;
                 if ranges.len() > remaining
@@ -101,7 +116,7 @@ impl<'a> LocatedStyles<'a> {
                 }
                 let resolved = ranges
                     .iter()
-                    .map(|r| Some((content.resolve_range(pool, r)?, r.char_range())))
+                    .map(|r| Some((content.resolve_range(context, pool, r)?, r.char_range())))
                     .collect::<Option<Vec<_>>>();
                 if let Some(resolved) = resolved {
                     remaining -= resolved.len();
@@ -123,20 +138,28 @@ impl<'a> LocatedStyles<'a> {
     }
 
     pub(super) fn for_support(
+        content: ContentContext<'a>,
         block: &'a mant_ir::Block,
         records: impl Iterator<
             Item = (
                 &'a ExplanationEvidence,
                 &'a [mant_protocol::ExplanationSupport],
+                ContentContext<'a>,
             ),
         >,
     ) -> Self {
         let mut map = Self {
-            names: crate::presentation::EntryStyleMap::for_blocks(std::slice::from_ref(block)),
-            ..Self::default()
+            roots: BTreeMap::new(),
+            markdown_matches: BTreeMap::new(),
+            names: Some(crate::presentation::EntryStyleMap::for_blocks(
+                content,
+                std::slice::from_ref(block),
+            )),
+            content: Some(content),
+            lifetime: PhantomData,
         };
-        for (evidence, pool) in records {
-            let other = Self::with_pool(evidence, pool);
+        for (evidence, pool, evidence_content) in records {
+            let other = Self::with_pool(Some(evidence_content), evidence, pool);
             for (root, spans) in other.roots {
                 map.roots.entry(root).or_default().extend(spans);
             }
@@ -175,6 +198,18 @@ impl<'a> LocatedStyles<'a> {
                 previous = position;
             }
         }
+        self.markdown_matches = self
+            .roots
+            .iter()
+            .filter_map(|(root, spans)| {
+                let ranges = spans
+                    .iter()
+                    .filter(|span| span.matched)
+                    .map(|span| span.chars.clone())
+                    .collect::<Vec<_>>();
+                (!ranges.is_empty()).then_some((*root, ranges))
+            })
+            .collect();
     }
     fn occurrence(
         &mut self,
@@ -195,7 +230,7 @@ impl<'a> LocatedStyles<'a> {
                 .iter()
                 .map(|r| {
                     Some((
-                        ExplanationTextRoot::Inline(r.resolve(&entry.forms)?),
+                        ExplanationTextRoot::Inline(r.resolve(self.content?, &entry.forms)?),
                         r.start_char as usize..r.end_char as usize,
                     ))
                 })
@@ -217,11 +252,12 @@ impl<'a> LocatedStyles<'a> {
         if let Some(content) = &evidence.content
             && occurrence.content.len() <= limit
             && occurrence.content.len() <= *remaining
+            && let Some(context) = self.content
         {
             let resolved = occurrence
                 .content
                 .iter()
-                .map(|r| Some((content.resolve_range(pool, r)?, r.char_range())))
+                .map(|r| Some((content.resolve_range(context, pool, r)?, r.char_range())))
                 .collect::<Option<Vec<_>>>();
             if let Some(resolved) = resolved {
                 *remaining -= resolved.len();
@@ -255,7 +291,14 @@ impl<'a> LocatedStyles<'a> {
             .map_or(&[][..], Vec::as_slice);
         let mut cursor = 0;
         let mut output = String::new();
-        visit_inline_text(nodes, self.names.ranges(nodes), |inline, _, text| {
+        let content = self
+            .content
+            .expect("retained explanation inline has a content projection");
+        let names = self
+            .names
+            .as_ref()
+            .map_or(&[][..], |names| names.ranges(nodes));
+        visit_inline_display_text(content, nodes, names, |inline, _, text, display| {
             pieces(
                 text,
                 &mut cursor,
@@ -265,10 +308,24 @@ impl<'a> LocatedStyles<'a> {
                     inline,
                     matched: false,
                 },
-                &mut |style, value| output.push_str(&decorate(style, value)),
+                &mut |style, value| {
+                    // Match ranges remain logical. A whole native projection
+                    // can replace its one atom without changing those ranges.
+                    let glyphs = if value.len() == text.len() && value.as_ptr() == text.as_ptr() {
+                        display.unwrap_or(value)
+                    } else {
+                        value
+                    };
+                    output.push_str(&decorate(style, glyphs));
+                },
             );
-        });
+        })
+        .expect("validated explanation projection must resolve while rendering");
         output
+    }
+
+    pub(super) const fn content(&self) -> Option<ContentContext<'a>> {
+        self.content
     }
 
     pub(super) fn text(

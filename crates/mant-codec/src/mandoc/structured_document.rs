@@ -14,11 +14,13 @@ mod blocks;
 mod content;
 mod evidence;
 mod index;
+mod store;
 
 use address::AddressPlan;
 use blocks::{lower_block, lower_section, push_lowered_block};
 use content::lower_diagnostics;
 use index::NativeLoweringIndex;
+use store::NativeContentMap;
 
 /// Run the private C03 entry from native execution through stable semantic IR.
 pub(crate) fn project_native_manual(
@@ -27,13 +29,16 @@ pub(crate) fn project_native_manual(
     format: InputFormat,
 ) -> Result<Document, NativeProjectionError> {
     let projection = project_native_prose(root, bundle, format)?;
-    lower_projection(&projection)
+    lower_projection(projection)
 }
 
-fn lower_projection(projection: &NativeProseProjection) -> Result<Document, NativeProjectionError> {
+fn lower_projection(
+    mut projection: NativeProseProjection,
+) -> Result<Document, NativeProjectionError> {
+    let index = NativeLoweringIndex::new(projection.document())?;
+    let addresses = AddressPlan::build(&projection)?;
+    let content = NativeContentMap::build(&mut projection, &addresses)?;
     let native = projection.document();
-    let index = NativeLoweringIndex::new(native)?;
-    let addresses = AddressPlan::build(projection)?;
 
     let mut root_blocks = Vec::new();
     let mut sections = Vec::new();
@@ -42,20 +47,31 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
         let block = &native.blocks()[block_index];
         if block.kind() == NativeBlockKind::Heading {
             sections.push(lower_section(
-                projection,
+                &projection,
                 &index,
                 block,
                 &addresses,
+                &content,
                 &mut evidence,
             )?);
         } else {
             push_lowered_block(
                 &mut root_blocks,
-                lower_block(projection, &index, &addresses, block, None, &mut evidence)?,
+                lower_block(
+                    &projection,
+                    &index,
+                    &addresses,
+                    &content,
+                    block,
+                    None,
+                    &mut evidence,
+                )?,
             );
         }
     }
+    let mut content_store = content.into_store();
     crate::definitions::identify_definitions_with_evidence(
+        &mut content_store,
         &mut root_blocks,
         &mut sections,
         addresses.reserved(),
@@ -71,6 +87,7 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
         }),
         sources: projection.sources().to_vec(),
         root_source: projection.root_source(),
+        content_store,
         meta: DocumentMeta {
             title: metadata.title().map(ToOwned::to_owned),
             manual_section: metadata.section().map(ToOwned::to_owned),
@@ -83,18 +100,16 @@ fn lower_projection(projection: &NativeProseProjection) -> Result<Document, Nati
         },
         heading: None,
         fragment_aliases: Vec::new(),
-        diagnostics: lower_diagnostics(projection),
+        diagnostics: lower_diagnostics(&projection),
         blocks: root_blocks,
         sections,
     };
     document
         .diagnostics
         .extend_from_slice(addresses.diagnostics());
-    document
-        .diagnostics
-        .extend(crate::definitions::manual_discovery_diagnostics(
-            &document.sections,
-        ));
+    let discovery =
+        crate::definitions::manual_discovery_diagnostics(document.content(), &document.sections);
+    document.diagnostics.extend(discovery);
     document.diagnostics.extend(validate_document(&document));
     Ok(document)
 }

@@ -3,29 +3,33 @@
 //! Explicit definition tags already supply an author-owned boundary. A plain
 //! paragraph needs stronger evidence before an indented successor can become
 //! its description: every part must be explainable as declaration syntax.
+#![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 
-use mant_ir::Inline;
+use mant_ir::{ContentContext, Inline, InlineView};
 
 use super::{commands, forms, named, options};
 use crate::definitions::context::DefinitionContext;
 use mant_ir::inline_plain_text as plain_text;
 
 pub(in crate::definitions) fn is_inferred_head(
+    content: ContentContext<'_>,
     inlines: &[Inline],
     context: DefinitionContext,
 ) -> bool {
     // Candidate syntax precedes final role: a complete flag declaration does
     // not stop being a candidate under a configuration/value heading.
-    let groups = forms::declaration_groups(inlines);
+    let groups = forms::declaration_groups(content, inlines);
     if !groups.is_empty()
         && groups.iter().enumerate().all(|(index, group)| {
-            is_option_head(group)
-                || (index > 0 && index + 1 == groups.len() && plain_text(group).trim() == "...")
+            is_option_head(content, group)
+                || (index > 0
+                    && index + 1 == groups.len()
+                    && plain_text(content, group).trim() == "...")
         })
     {
         return true;
     }
-    let text = plain_text(inlines);
+    let text = plain_text(content, inlines);
     if named::local_configuration_head(
         &text,
         matches!(
@@ -37,17 +41,17 @@ pub(in crate::definitions) fn is_inferred_head(
     }
     match context {
         DefinitionContext::EnvironmentVariables => named::environment_occurrences(&text).is_some(),
-        DefinitionContext::Commands => forms::declaration_groups(inlines)
+        DefinitionContext::Commands => forms::declaration_groups(content, inlines)
             .iter()
-            .all(|group| is_command_head(group)),
+            .all(|group| is_command_head(content, group)),
         DefinitionContext::ConfigurationKeys => {
             named::named_occurrences(&text, named::is_configuration_key).is_some()
-                && (commands::leading_styled_command_name(inlines).is_some()
+                && (commands::leading_styled_command_name(content, inlines).is_some()
                     || text.contains(['.', '=']))
         }
         DefinitionContext::Variables => {
             named::named_occurrences(&text, named::is_variable_term).is_some()
-                && commands::leading_styled_command_name(inlines).is_some()
+                && commands::leading_styled_command_name(content, inlines).is_some()
         }
         DefinitionContext::Generic | DefinitionContext::Parameters | DefinitionContext::Values => {
             false
@@ -55,22 +59,22 @@ pub(in crate::definitions) fn is_inferred_head(
     }
 }
 
-fn is_command_head(inlines: &[Inline]) -> bool {
-    let Some(name) = commands::leading_styled_command_name(inlines) else {
+fn is_command_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {
+    let Some(name) = commands::leading_styled_command_name(content, inlines) else {
         return false;
     };
     let mut literal = String::new();
-    append_syntax(inlines, &mut literal);
+    append_syntax(content, inlines, &mut literal);
     let Some(tail) = literal.trim_start().strip_prefix(&name) else {
         return false;
     };
     arguments(tail.split_whitespace())
 }
 
-fn is_option_head(inlines: &[Inline]) -> bool {
+fn is_option_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {
     let mut literal = String::new();
-    append_syntax(inlines, &mut literal);
-    if let Some([_, (name, start)]) = forms::paired_option_tokens(inlines) {
+    append_syntax(content, inlines, &mut literal);
+    if let Some([_, (name, start)]) = forms::paired_option_tokens(content, inlines) {
         return literal
             .get(start + name.len()..)
             .is_some_and(|tail| arguments(tail.split_whitespace()));
@@ -80,7 +84,7 @@ fn is_option_head(inlines: &[Inline]) -> bool {
         return false;
     };
     if matches!(first, "\0" | "-\0")
-        && plain_text(inlines)
+        && plain_text(content, inlines)
             .trim()
             .strip_prefix("-<")
             .and_then(|value| value.strip_suffix('>'))
@@ -185,23 +189,25 @@ fn arguments<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
 /// Keep literal text exact while marking explicitly styled arguments as
 /// opaque grammar tokens. This temporary acceptance string never enters IR,
 /// forms, source bindings or rendered text.
-fn append_syntax(inlines: &[Inline], output: &mut String) {
+fn append_syntax(content: ContentContext<'_>, inlines: &[Inline], output: &mut String) {
     for inline in inlines {
-        match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children } | Inline::Link { children, .. } => {
-                append_syntax(children, output);
+        match content.inline(inline).expect("definition content resolves") {
+            InlineView::Text(value) | InlineView::Code(value) => output.push_str(value),
+            InlineView::Strong(children) => {
+                append_syntax(content, children, output);
             }
-            Inline::Emphasis { children } => {
-                let value = plain_text(children);
+            InlineView::Link(link) => append_syntax(content, link.children(), output),
+            InlineView::Emphasis(children) => {
+                let value = plain_text(content, children);
                 if value.trim().is_empty() {
                     output.push_str(&value);
                 } else {
                     output.push('\0');
                 }
             }
-            Inline::LineBreak => output.push('\n'),
-            Inline::Anchor { .. } => {}
+            InlineView::LineBreak => output.push('\n'),
+            InlineView::Anchor(_) => {}
+            _ => unreachable!("all inline views are handled"),
         }
     }
 }

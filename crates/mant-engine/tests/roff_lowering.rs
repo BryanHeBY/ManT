@@ -2,7 +2,8 @@
 use std::{collections::HashSet, fmt::Write as _, fs, process};
 
 use mant_ir::{
-    Block, Inline, ListKind, ResolvedContent, SemanticIndex, SourceFormat, ValueDomain,
+    Block, ContentContext, Inline, InlineView, ListKind, ResolvedContent, SemanticIndex,
+    SourceFormat, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -64,64 +65,48 @@ fn anchor_ids(document: &mant_ir::Document) -> Vec<String> {
 }
 
 fn anchor_owner_lines(document: &mant_ir::Document) -> Vec<(String, u32)> {
-    struct AnchorCollector(Vec<(String, u32)>);
+    struct AnchorCollector<'a>(Vec<(String, u32)>, ContentContext<'a>);
 
-    impl<'ir> Visit<'ir> for AnchorCollector {
+    impl<'ir> Visit<'ir> for AnchorCollector<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor {
-                id,
-                owner_source: Some(source),
-                ..
-            } = inline
+            if let Ok(InlineView::Anchor(anchor)) = self.1.inline(inline)
+                && let Some(source) = anchor.owner_source()
             {
-                self.0.push((id.to_string(), source.line));
+                self.0.push((anchor.id().to_string(), source.line));
             }
             visit::walk_inline(self, inline);
         }
     }
 
-    let mut collector = AnchorCollector(Vec::new());
+    let mut collector = AnchorCollector(Vec::new(), document.content());
     collector.visit_document(document);
     collector.0
 }
 
 fn visible_document_text(document: &mant_ir::Document) -> String {
-    struct TextCollector(String);
+    struct TextCollector<'a>(String, ContentContext<'a>);
 
-    impl<'ir> Visit<'ir> for TextCollector {
+    impl<'ir> Visit<'ir> for TextCollector<'ir> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            match inline {
-                Inline::Text { value } | Inline::Code { value } => {
+            match self.1.inline(inline).unwrap() {
+                InlineView::Text(value) | InlineView::Code(value) => {
                     self.0.push_str(value);
                     self.0.push(' ');
                 }
-                Inline::LineBreak => self.0.push('\n'),
-                Inline::Strong { .. }
-                | Inline::Emphasis { .. }
-                | Inline::Link { .. }
-                | Inline::Anchor { .. } => {}
+                InlineView::LineBreak { .. } => self.0.push('\n'),
+                _ => {}
             }
             visit::walk_inline(self, inline);
         }
     }
 
-    let mut collector = TextCollector(String::new());
+    let mut collector = TextCollector(String::new(), document.content());
     collector.visit_document(document);
     collector.0
 }
 
-fn inline_text(children: &[Inline]) -> String {
-    children
-        .iter()
-        .map(|child| match child {
-            Inline::Text { value } | Inline::Code { value } => value.clone(),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => inline_text(children),
-            Inline::Anchor { .. } => String::new(),
-            Inline::LineBreak => "\n".to_owned(),
-        })
-        .collect()
+fn inline_text(content: ContentContext<'_>, children: &[Inline]) -> String {
+    content.plain_text(children).unwrap()
 }
 
 #[path = "roff_lowering/entries.rs"]

@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use mant_codec::encode::render_markdown;
 use mant_codec::parse_markdown;
-use mant_ir::{Block, Document, Inline, ListKind, ResolvedContent, Section};
+use mant_ir::{Block, ContentContext, Document, Inline, ListKind, ResolvedContent, Section};
 use mant_loader::{ManualPage, parse_manual_page};
 use mant_query::select_excerpt;
 use mant_render::render_excerpt_markdown;
@@ -142,44 +142,55 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
 
 fn projection_topology(document: &Document) -> ProjectionTopology {
     let mut topology = ProjectionTopology::default();
-    collect_blocks(&document.blocks, &[], &mut Vec::new(), &mut topology);
-    collect_sections(&document.sections, &[], &mut topology);
-    collect_entity_blocks(&document.blocks, &mut topology.entity_spellings);
-    collect_entity_sections(&document.sections, &mut topology.entity_spellings);
+    let content = document.content();
+    collect_blocks(
+        content,
+        &document.blocks,
+        &[],
+        &mut Vec::new(),
+        &mut topology,
+    );
+    collect_sections(content, &document.sections, &[], &mut topology);
+    collect_entity_blocks(content, &document.blocks, &mut topology.entity_spellings);
+    collect_entity_sections(content, &document.sections, &mut topology.entity_spellings);
     topology
 }
 
-fn collect_entity_sections(sections: &[Section], output: &mut Vec<String>) {
+fn collect_entity_sections(
+    content: ContentContext<'_>,
+    sections: &[Section],
+    output: &mut Vec<String>,
+) {
     for section in sections {
-        extend_entity_spellings(&section.heading.plain_text(), output);
-        collect_entity_blocks(&section.blocks, output);
-        collect_entity_sections(&section.children, output);
+        extend_entity_spellings(&section.heading.plain_text(content), output);
+        collect_entity_blocks(content, &section.blocks, output);
+        collect_entity_sections(content, &section.children, output);
     }
 }
 
-fn collect_entity_blocks(blocks: &[Block], output: &mut Vec<String>) {
+fn collect_entity_blocks(content: ContentContext<'_>, blocks: &[Block], output: &mut Vec<String>) {
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } => {
-                collect_entity_inlines(children, output);
+                collect_entity_inlines(content, children, output);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    collect_entity_blocks(&item.blocks, output);
+                    collect_entity_blocks(content, &item.blocks, output);
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &item.terms {
-                        collect_entity_inlines(term, output);
+                        collect_entity_inlines(content, term, output);
                     }
-                    collect_entity_blocks(&item.description, output);
+                    collect_entity_blocks(content, &item.description, output);
                 }
             }
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &row.cells {
-                        collect_entity_blocks(&cell.blocks, output);
+                        collect_entity_blocks(content, &cell.blocks, output);
                     }
                 }
             }
@@ -192,14 +203,21 @@ fn collect_entity_blocks(blocks: &[Block], output: &mut Vec<String>) {
     }
 }
 
-fn collect_entity_inlines(inlines: &[Inline], output: &mut Vec<String>) {
+fn collect_entity_inlines(
+    content: ContentContext<'_>,
+    inlines: &[Inline],
+    output: &mut Vec<String>,
+) {
     for inline in inlines {
         match inline {
-            Inline::Text { value } => extend_entity_spellings(value, output),
+            Inline::Text { content: value } => extend_entity_spellings(
+                content.resolve_text(*value).expect("valid profile text"),
+                output,
+            ),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect_entity_inlines(children, output),
-            Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {}
+            | Inline::Link { children, .. } => collect_entity_inlines(content, children, output),
+            Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
         }
     }
 }
@@ -247,16 +265,21 @@ fn commonmark_decodes_entity(spelling: &str) -> bool {
     visible != spelling
 }
 
-fn collect_sections(sections: &[Section], parent: &[usize], topology: &mut ProjectionTopology) {
+fn collect_sections(
+    content: ContentContext<'_>,
+    sections: &[Section],
+    parent: &[usize],
+    topology: &mut ProjectionTopology,
+) {
     let mut projected_index = 0;
     for section in sections {
         // An empty man(7) `.SH`/`.SS` is commonly emitted as a spacing
         // request. CommonMark has no addressable empty heading, and ManT's
         // Markdown parser deliberately ignores one. Treat the wrapper as
         // transparent while still checking every block and child below it.
-        if section.heading.plain_text().trim().is_empty() {
-            collect_blocks(&section.blocks, parent, &mut Vec::new(), topology);
-            collect_sections(&section.children, parent, topology);
+        if section.heading.plain_text(content).trim().is_empty() {
+            collect_blocks(content, &section.blocks, parent, &mut Vec::new(), topology);
+            collect_sections(content, &section.children, parent, topology);
             continue;
         }
         projected_index += 1;
@@ -265,10 +288,10 @@ fn collect_sections(sections: &[Section], parent: &[usize], topology: &mut Proje
         topology.sections.push(SectionTopology {
             path: path.clone(),
             depth: path.len() + 1,
-            title: projected_heading_title(&section.heading.plain_text()).to_owned(),
+            title: projected_heading_title(&section.heading.plain_text(content)).to_owned(),
         });
-        collect_blocks(&section.blocks, &path, &mut Vec::new(), topology);
-        collect_sections(&section.children, &path, topology);
+        collect_blocks(content, &section.blocks, &path, &mut Vec::new(), topology);
+        collect_sections(content, &section.children, &path, topology);
     }
 }
 
@@ -279,6 +302,7 @@ fn projected_heading_title(title: &str) -> &str {
 }
 
 fn collect_blocks(
+    content: ContentContext<'_>,
     blocks: &[Block],
     section: &[usize],
     owner_items: &mut Vec<usize>,
@@ -308,7 +332,7 @@ fn collect_blocks(
                 };
                 for (index, item) in items
                     .iter()
-                    .filter(|item| blocks_have_projection(&item.blocks))
+                    .filter(|item| blocks_have_projection(content, &item.blocks))
                     .enumerate()
                 {
                     topology.list_items.push(ListItemTopology {
@@ -317,7 +341,7 @@ fn collect_blocks(
                         kind,
                     });
                     owner_items.push(index + 1);
-                    collect_blocks(&item.blocks, section, owner_items, topology);
+                    collect_blocks(content, &item.blocks, section, owner_items, topology);
                     owner_items.pop();
                 }
             }
@@ -325,8 +349,10 @@ fn collect_blocks(
                 for (index, item) in items
                     .iter()
                     .filter(|item| {
-                        item.terms.iter().any(|term| has_visible_inline(term))
-                            || blocks_have_projection(&item.description)
+                        item.terms
+                            .iter()
+                            .any(|term| has_visible_inline(content, term))
+                            || blocks_have_projection(content, &item.description)
                     })
                     .enumerate()
                 {
@@ -336,7 +362,7 @@ fn collect_blocks(
                         kind: ProjectedListKind::Bullet,
                     });
                     owner_items.push(index + 1);
-                    collect_blocks(&item.description, section, owner_items, topology);
+                    collect_blocks(content, &item.description, section, owner_items, topology);
                     owner_items.pop();
                 }
             }
@@ -489,25 +515,29 @@ fn fences_by_section(fences: &[FenceTopology]) -> BTreeMap<Vec<usize>, Vec<(Opti
     grouped
 }
 
-fn blocks_have_projection(blocks: &[Block]) -> bool {
-    blocks.iter().any(block_has_projection)
+fn blocks_have_projection(content: ContentContext<'_>, blocks: &[Block]) -> bool {
+    blocks
+        .iter()
+        .any(|block| block_has_projection(content, block))
 }
 
-fn block_has_projection(block: &Block) -> bool {
+fn block_has_projection(content: ContentContext<'_>, block: &Block) -> bool {
     match block {
-        Block::Paragraph { children, .. } => has_visible_inline(children),
+        Block::Paragraph { children, .. } => has_visible_inline(content, children),
         Block::Preformatted { .. } | Block::ThematicBreak { .. } => true,
         Block::List { items, .. } => items
             .iter()
-            .any(|item| blocks_have_projection(&item.blocks)),
+            .any(|item| blocks_have_projection(content, &item.blocks)),
         Block::DefinitionList { items, .. } => items.iter().any(|item| {
-            item.terms.iter().any(|term| has_visible_inline(term))
-                || blocks_have_projection(&item.description)
+            item.terms
+                .iter()
+                .any(|term| has_visible_inline(content, term))
+                || blocks_have_projection(content, &item.description)
         }),
         Block::Table { rows, .. } => rows.iter().any(|row| {
             row.cells
                 .iter()
-                .any(|cell| blocks_have_projection(&cell.blocks))
+                .any(|cell| blocks_have_projection(content, &cell.blocks))
         }),
         Block::Equation { value, display, .. } => *display || !value.is_empty(),
         Block::Unsupported { text, .. } => !text.trim().is_empty(),
@@ -515,13 +545,17 @@ fn block_has_projection(block: &Block) -> bool {
     }
 }
 
-fn has_visible_inline(inlines: &[mant_ir::Inline]) -> bool {
+fn has_visible_inline(content: ContentContext<'_>, inlines: &[mant_ir::Inline]) -> bool {
     inlines.iter().any(|inline| match inline {
-        mant_ir::Inline::Text { value } | mant_ir::Inline::Code { value } => !value.is_empty(),
+        mant_ir::Inline::Text { content: value } | mant_ir::Inline::Code { content: value } => {
+            content
+                .resolve_text(*value)
+                .is_some_and(|text| !text.is_empty())
+        }
         mant_ir::Inline::Strong { children }
         | mant_ir::Inline::Emphasis { children }
-        | mant_ir::Inline::Link { children, .. } => has_visible_inline(children),
-        mant_ir::Inline::Anchor { .. } | mant_ir::Inline::LineBreak => false,
+        | mant_ir::Inline::Link { children, .. } => has_visible_inline(content, children),
+        mant_ir::Inline::Anchor { .. } | mant_ir::Inline::LineBreak { .. } => false,
     })
 }
 
@@ -531,7 +565,7 @@ fn check_section_excerpts(
     violations: &mut Vec<String>,
 ) -> Result<usize, String> {
     let mut sections = Vec::new();
-    flatten_sections(&document.sections, &[], &mut sections);
+    flatten_sections(document.content(), &document.sections, &[], &mut sections);
     let indexes = sample_indexes(sections.len());
     for index in &indexes {
         let (coordinates, section) = &sections[*index];
@@ -551,6 +585,7 @@ fn check_section_excerpts(
             heading: None,
             sources: document.sources.clone(),
             root_source: document.root_source,
+            content_store: document.content_store.clone(),
             meta: document.meta.clone(),
             parser: document.parser.clone(),
             fragment_aliases: Vec::new(),
@@ -570,6 +605,7 @@ fn check_section_excerpts(
 }
 
 fn flatten_sections<'a>(
+    content: ContentContext<'_>,
     sections: &'a [Section],
     parent: &[usize],
     output: &mut Vec<(Vec<usize>, &'a Section)>,
@@ -580,12 +616,12 @@ fn flatten_sections<'a>(
     for (index, section) in sections.iter().enumerate() {
         let mut path = parent.to_vec();
         path.push(index + 1);
-        if section.heading.plain_text().trim().is_empty() {
-            flatten_sections(&section.children, &path, output);
+        if section.heading.plain_text(content).trim().is_empty() {
+            flatten_sections(content, &section.children, &path, output);
             continue;
         }
         output.push((path.clone(), section));
-        flatten_sections(&section.children, &path, output);
+        flatten_sections(content, &section.children, &path, output);
     }
 }
 
@@ -640,7 +676,7 @@ mod tests {
         .document;
         document.sections[1].heading = mant_ir::Heading::default();
         let mut selected = Vec::new();
-        flatten_sections(&document.sections, &[], &mut selected);
+        flatten_sections(document.content(), &document.sections, &[], &mut selected);
         let coordinates: Vec<_> = selected.iter().map(|(path, _)| path.clone()).collect();
         assert_eq!(coordinates, [vec![1], vec![2, 1], vec![3]]);
         let query = ResolvedContent {

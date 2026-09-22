@@ -19,24 +19,22 @@ fn document(children: Vec<Inline>) -> ResolvedContent {
 }
 
 fn text(value: &str) -> Inline {
-    Inline::Text {
-        value: value.into(),
-    }
+    crate::test_content::text(value)
 }
 
 fn link(value: &str, id: &str) -> Inline {
-    Inline::Link {
-        target: mant_ir::LinkTarget::Section { id: id.into() },
-        title: None,
-        children: vec![text(value)],
-    }
+    crate::test_content::link(
+        mant_ir::LinkTarget::Section { id: id.into() },
+        None,
+        vec![text(value)],
+    )
 }
 
 #[test]
 fn partial_grapheme_links_project_after_the_complete_source_row() {
     for (prefix, suffix, glyph) in [("e", "\u{301}", "e\u{301}"), ("👩", "‍💻", "👩‍💻")]
     {
-        for children in [
+        for (case, children) in [
             vec![text(prefix), link(suffix, "destination"), text("Z")],
             vec![link(prefix, "destination"), text(suffix), text("Z")],
             vec![
@@ -44,15 +42,19 @@ fn partial_grapheme_links_project_after_the_complete_source_row() {
                 link(suffix, "destination"),
                 text("Z"),
             ],
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let view = DocumentView::new(&document(children));
+            let destination = LinkTarget::Section("destination".into());
             for width in [1, 2, 20] {
                 let rendered = view.render(width);
                 let found = &rendered.search(glyph)[0];
                 for column in found.start_column..found.end_column {
                     assert_eq!(
-                        rendered.link_target_at(found.row, column),
-                        Some(&LinkTarget::Section("destination".into()))
+                        view.link_target_at(&rendered, found.row, column),
+                        (case < 2).then_some(&destination)
                     );
                 }
                 let actual = buffer(&rendered.text.lines[found.row], width);
@@ -63,7 +65,10 @@ fn partial_grapheme_links_project_after_the_complete_source_row() {
                 };
                 assert_eq!(actual[(0, 0)].symbol(), expected);
                 let z = &rendered.search("Z")[0];
-                assert!(rendered.link_target_at(z.row, z.start_column).is_none());
+                assert!(
+                    view.link_target_at(&rendered, z.row, z.start_column)
+                        .is_none()
+                );
             }
         }
     }
@@ -71,13 +76,15 @@ fn partial_grapheme_links_project_after_the_complete_source_row() {
 
 #[test]
 fn conflicting_targets_on_one_glyph_are_selector_only_not_first_match() {
-    let manual = |value: &str, name: &str| Inline::Link {
-        target: mant_ir::LinkTarget::Manual {
-            name: name.into(),
-            manual_section: Some("1".into()),
-        },
-        title: None,
-        children: vec![text(value)],
+    let manual = |value: &str, name: &str| {
+        crate::test_content::link(
+            mant_ir::LinkTarget::Manual {
+                name: name.into(),
+                manual_section: Some("1".into()),
+            },
+            None,
+            vec![text(value)],
+        )
     };
     let view = DocumentView::new(&document(vec![
         manual("👩", "first"),
@@ -88,7 +95,7 @@ fn conflicting_targets_on_one_glyph_are_selector_only_not_first_match() {
     let rendered = view.render(20);
     let found = &rendered.search("👩‍💻")[0];
     for column in found.start_column..found.end_column {
-        assert!(rendered.link_target_at(found.row, column).is_none());
+        assert!(view.link_target_at(&rendered, found.row, column).is_none());
     }
     for reference in &view.references {
         assert!(view.reference_target(&reference.id).is_some());
@@ -114,10 +121,10 @@ fn tabs_expand_after_source_link_ranges_and_empty_links_remain_empty() {
     let found = &rendered.search("Z")[0];
     assert_eq!(found.start_column, 8);
     assert_eq!(
-        rendered.link_target_at(found.row, 8),
+        view.link_target_at(&rendered, found.row, 8),
         Some(&LinkTarget::Section("z".into()))
     );
-    assert!(rendered.link_target_at(found.row, 7).is_none());
+    assert!(view.link_target_at(&rendered, found.row, 7).is_none());
     assert_eq!(
         buffer(&rendered.text.lines[found.row], 20)[(8, 0)].symbol(),
         "Z"
@@ -149,10 +156,11 @@ fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
         layout: LayoutHint::default(),
         source: None,
     }];
-    let rendered = DocumentView::new(&query).render(20);
+    let view = DocumentView::new(&query);
+    let rendered = view.render(20);
     let z = &rendered.search("Z")[0];
     assert_eq!(
-        rendered.link_target_at(z.row, z.start_column),
+        view.link_target_at(&rendered, z.row, z.start_column),
         Some(&LinkTarget::Section("z".into()))
     );
     assert_eq!(
@@ -163,8 +171,7 @@ fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
     let glyph = &rendered.search("👩‍💻")[0];
     assert_eq!(glyph.row, z.row);
     assert!(
-        rendered
-            .link_target_at(glyph.row, glyph.start_column)
+        view.link_target_at(&rendered, glyph.row, glyph.start_column)
             .is_none()
     );
 }
@@ -180,16 +187,17 @@ fn buffer(line: &Line<'_>, width: u16) -> Buffer {
 fn joined_emoji_search_highlight_copy_and_link_use_real_glyph_cells() {
     let bundle = document(vec![
         text("界"),
-        Inline::Link {
-            target: mant_ir::LinkTarget::Section {
+        crate::test_content::link(
+            mant_ir::LinkTarget::Section {
                 id: "destination".into(),
             },
-            title: None,
-            children: vec![text("👩‍💻")],
-        },
+            None,
+            vec![text("👩‍💻")],
+        ),
         text("Z"),
     ]);
-    let rendered = DocumentView::new(&bundle).render(20);
+    let view = DocumentView::new(&bundle);
+    let rendered = view.render(20);
     let emoji = rendered.search("👩‍💻");
     assert_eq!(emoji.len(), 1);
     assert_eq!((emoji[0].start_column, emoji[0].end_column), (2, 4));
@@ -201,13 +209,13 @@ fn joined_emoji_search_highlight_copy_and_link_use_real_glyph_cells() {
     assert_eq!((z[0].start_column, z[0].end_column), (4, 5));
     for column in [2, 3] {
         assert_eq!(
-            rendered.link_target_at(row, column),
+            view.link_target_at(&rendered, row, column),
             Some(&LinkTarget::Section("destination".into()))
         );
         let selection = RenderedSelection::new(TextPosition { row, column });
         assert_eq!(rendered.selected_text(selection), "👩‍💻");
     }
-    assert!(rendered.link_target_at(row, 4).is_none());
+    assert!(view.link_target_at(&rendered, row, 4).is_none());
     let selected = rendered.viewport_text(
         row,
         1,
@@ -279,17 +287,18 @@ fn source_style_boundaries_do_not_split_graphemes_or_move_following_links() {
             children: vec![text("👩")],
         },
         text("‍💻"),
-        Inline::Link {
-            target: mant_ir::LinkTarget::Section { id: "z".into() },
-            title: None,
-            children: vec![text("Z")],
-        },
+        crate::test_content::link(
+            mant_ir::LinkTarget::Section { id: "z".into() },
+            None,
+            vec![text("Z")],
+        ),
     ]);
-    let rendered = DocumentView::new(&bundle).render(3);
+    let view = DocumentView::new(&bundle);
+    let rendered = view.render(3);
     let found = rendered.search("Z");
     assert_eq!((found[0].start_column, found[0].end_column), (2, 3));
     assert_eq!(
-        rendered.link_target_at(found[0].row, 2),
+        view.link_target_at(&rendered, found[0].row, 2),
         Some(&LinkTarget::Section("z".into()))
     );
     let actual = buffer(&rendered.text.lines[found[0].row], 3);

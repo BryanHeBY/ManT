@@ -6,6 +6,7 @@
 mod bindings;
 mod blocks;
 mod container;
+mod content;
 mod directives;
 mod entries;
 mod events;
@@ -202,13 +203,14 @@ fn parse_document_with_entries(
         mut declarations,
     } = prepared;
     let source = MarkdownSource::new(&display_source);
+    let mut content = content::MarkdownContent::new();
     let ParsedDocumentStructure {
         diagnostics,
         mut root_blocks,
         flat_sections,
         mut ids,
         document_title_id,
-    } = lower_document_structure(events, &source);
+    } = lower_document_structure(events, &source, &mut content);
     let mut sections = nest_sections(flat_sections);
     let extracted_title = extract_document_title(
         &mut root_blocks,
@@ -223,13 +225,26 @@ fn parse_document_with_entries(
     });
     normalize_markdown_layout(
         &MarkdownSource::new(source_text),
+        &mut content,
         &mut root_blocks,
         &mut sections,
     );
-    normalize_entry_lists(&mut root_blocks, &mut declarations, entry_diagnostics);
-    normalize_section_entries(&mut sections, &mut declarations, entry_diagnostics);
+    normalize_entry_lists(
+        &content,
+        &mut root_blocks,
+        &mut declarations,
+        entry_diagnostics,
+    );
+    normalize_section_entries(
+        &content,
+        &mut sections,
+        &mut declarations,
+        entry_diagnostics,
+    );
     declarations.report_unattached(entry_diagnostics);
+    let mut content_store = content.finish();
     let retained_targets = crate::definitions::identify_definitions(
+        &mut content_store,
         &mut root_blocks,
         &mut sections,
         // Link aliases are selectors, not physical anchors. Reserve only the
@@ -255,6 +270,7 @@ fn parse_document_with_entries(
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
+        content_store,
         meta: DocumentMeta::default(),
         heading,
         fragment_aliases: document_fragment_aliases,
@@ -283,12 +299,13 @@ fn markdown_parser() -> ParserInfo {
 }
 
 fn normalize_section_entries(
+    content: &content::MarkdownContent,
     sections: &mut [Section],
     declarations: &mut directives::SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for section in sections {
-        normalize_entry_lists(&mut section.blocks, declarations, diagnostics);
-        normalize_section_entries(&mut section.children, declarations, diagnostics);
+        normalize_entry_lists(content, &mut section.blocks, declarations, diagnostics);
+        normalize_section_entries(content, &mut section.children, declarations, diagnostics);
     }
 }

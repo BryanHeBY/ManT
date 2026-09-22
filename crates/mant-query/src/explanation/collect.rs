@@ -132,14 +132,24 @@ impl<'a> Scan<'a, '_> {
             self.next_order += 1;
             match block {
                 Block::List { items, .. } => {
-                    self.supports.record(block, &block_path, &self.owners);
+                    self.supports.record(
+                        self.content.expect("support scan belongs to a document"),
+                        block,
+                        &block_path,
+                        &self.owners,
+                    );
                     for (i, item) in items.iter().enumerate() {
                         let owner = self.enter_owner(EntryOwner::List(item), current);
                         self.blocks(&item.blocks, owner, section, &format!("{block_path}/i{i}"));
                     }
                 }
                 Block::DefinitionList { items, .. } => {
-                    self.supports.record(block, &block_path, &self.owners);
+                    self.supports.record(
+                        self.content.expect("support scan belongs to a document"),
+                        block,
+                        &block_path,
+                        &self.owners,
+                    );
                     for (i, item) in items.iter().enumerate() {
                         let owner = self.enter_owner(EntryOwner::Definition(item), current);
                         // Terms are already matched as complete forms; literal

@@ -11,10 +11,7 @@ use libmandoc_rs::structured::{
     ContentPoint, ContentPointKey, NativeBlock, NativeBlockKey, NativeLinkTarget,
     NativeTargetOrigin, PointBoundary,
 };
-use mant_ir::{
-    Diagnostic, DiagnosticImpact, DiagnosticLevel, FragmentAlias, Inline, LinkTarget, NodeId,
-    SourceSpan,
-};
+use mant_ir::{Diagnostic, DiagnosticImpact, DiagnosticLevel, FragmentAlias, Inline, NodeId};
 
 use super::{NativeProjectionError, NativeProseProjection, content::source_for};
 
@@ -38,17 +35,23 @@ impl SectionAddress {
 pub(super) struct AnchorPlacement {
     id: NodeId,
     aliases: Vec<FragmentAlias>,
-    owner_source: Option<SourceSpan>,
 }
 
 impl AnchorPlacement {
-    pub(super) fn inline(&self) -> Inline {
+    pub(super) fn inline(&self, point: mant_ir::ContentPointKey) -> Inline {
         Inline::Anchor {
+            point,
             id: self.id.clone(),
             fragment_aliases: self.aliases.clone(),
-            owner_source: self.owner_source,
         }
     }
+}
+
+#[derive(Debug)]
+pub(super) enum LinkAssignment {
+    Native,
+    Section(NodeId),
+    Dropped,
 }
 
 #[derive(Debug)]
@@ -79,7 +82,7 @@ pub(super) struct AddressPlan {
     sections: HashMap<NativeBlockKey, SectionAddress>,
     anchors: HashMap<ContentPointKey, AnchorPlacement>,
     anchors_by_owner: HashMap<libmandoc_rs::structured::OwnerKey, Vec<ContentPointKey>>,
-    links: Vec<Option<LinkTarget>>,
+    links: Vec<LinkAssignment>,
     reserved: HashSet<String>,
     diagnostics: Vec<Diagnostic>,
 }
@@ -92,13 +95,7 @@ impl AddressPlan {
         let headings = heading_rows(native)?;
         let mut used = HashSet::new();
         let sections = build_sections(native, &headings, &groups, &claims, &mut used)?;
-        let anchors = build_anchors(
-            projection,
-            groups,
-            &sections.consumed_points,
-            &claims,
-            &mut used,
-        );
+        let anchors = build_anchors(groups, &sections.consumed_points, &claims, &mut used);
         let links = build_links(projection, &sections.targets, &mut diagnostics)?;
         let mut reserved = claims.into_keys().collect::<HashSet<_>>();
         reserved.extend(
@@ -133,23 +130,33 @@ impl AddressPlan {
         self.anchors.get(&point)
     }
 
-    pub(super) fn owner_anchors(&self, owner: libmandoc_rs::structured::OwnerKey) -> Vec<Inline> {
+    pub(super) fn owner_anchors(
+        &self,
+        owner: libmandoc_rs::structured::OwnerKey,
+        content: &super::store::NativeContentMap,
+    ) -> Result<Vec<Inline>, NativeProjectionError> {
         self.anchors_by_owner
             .get(&owner)
             .into_iter()
             .flatten()
-            .filter_map(|point| self.anchors.get(point))
-            .map(AnchorPlacement::inline)
+            .map(|point| {
+                let anchor =
+                    self.anchors
+                        .get(point)
+                        .ok_or(NativeProjectionError::InvalidRelation(
+                            "owner anchor assignment is missing",
+                        ))?;
+                Ok(anchor.inline(content.point(*point)?))
+            })
             .collect()
     }
 
-    pub(super) fn link_target(
+    pub(super) fn link_assignment(
         &self,
         key: libmandoc_rs::structured::LinkOccurrenceKey,
-    ) -> Result<Option<&LinkTarget>, NativeProjectionError> {
+    ) -> Result<&LinkAssignment, NativeProjectionError> {
         self.links
             .get(key.get() as usize - 1)
-            .map(Option::as_ref)
             .ok_or(NativeProjectionError::InvalidRelation(
                 "content atom references an unknown link assignment",
             ))
@@ -305,13 +312,11 @@ fn section_aliases(
 }
 
 fn build_anchors(
-    projection: &NativeProseProjection,
     groups: AnchorGroups<'_>,
     consumed_points: &HashSet<ContentPointKey>,
     claims: &AliasClaims,
     used: &mut HashSet<String>,
 ) -> AnchorAssignments {
-    let native = projection.document();
     let mut anchors = HashMap::new();
     let mut by_owner = HashMap::<_, Vec<_>>::new();
     for (point_key, group) in groups {
@@ -324,9 +329,6 @@ fn build_anchors(
             |value| identity_base(value, "anchor", "anchor"),
         );
         let id = allocate_id(&base, used, claims, &BTreeSet::from([point_key]));
-        let owner_source = native
-            .owner(group.point.owner())
-            .and_then(|owner| source_for(projection, owner.provenance()));
         anchors.insert(
             point_key,
             AnchorPlacement {
@@ -336,7 +338,6 @@ fn build_anchors(
                     .into_iter()
                     .map(FragmentAlias::from)
                     .collect(),
-                owner_source,
             },
         );
         by_owner
@@ -351,7 +352,7 @@ fn build_links(
     projection: &NativeProseProjection,
     section_targets: &super::super::navigation::SectionTargets,
     diagnostics: &mut Vec<Diagnostic>,
-) -> Result<Vec<Option<LinkTarget>>, NativeProjectionError> {
+) -> Result<Vec<LinkAssignment>, NativeProjectionError> {
     let native = projection.document();
     let mut links = Vec::new();
     links
@@ -363,7 +364,7 @@ fn build_links(
                 if let Some(id) =
                     super::super::navigation::resolve_section_target(section_targets, phrase)
                 {
-                    Some(LinkTarget::Section { id: id.into() })
+                    LinkAssignment::Section(id.into())
                 } else {
                     diagnostics.push(Diagnostic {
                         level: DiagnosticLevel::Warning,
@@ -372,21 +373,13 @@ fn build_links(
                         message: format!("cannot resolve section reference: {phrase}"),
                         source: source_for(projection, link.provenance()),
                     });
-                    None
+                    LinkAssignment::Dropped
                 }
             }
-            NativeLinkTarget::External(uri) => Some(LinkTarget::External { uri: uri.clone() }),
-            NativeLinkTarget::Email(address) => Some(LinkTarget::Email {
-                address: address.clone(),
-            }),
-            NativeLinkTarget::Document(name) => Some(LinkTarget::Document {
-                name: name.clone(),
-                fragment: None,
-            }),
-            NativeLinkTarget::Manual { name, section } => Some(LinkTarget::Manual {
-                name: name.clone(),
-                manual_section: Some(section.clone()),
-            }),
+            NativeLinkTarget::External(_)
+            | NativeLinkTarget::Email(_)
+            | NativeLinkTarget::Document(_)
+            | NativeLinkTarget::Manual { .. } => LinkAssignment::Native,
         });
     }
     Ok(links)

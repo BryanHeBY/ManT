@@ -1,8 +1,8 @@
 //! Bounded, borrowed occurrences from authoritative inline content.
 //!
 //! This scan does not build a semantic index, project forms, infer entries or
-//! resolve destinations. A target appears once per real link node, regardless
-//! of duplicates, display filters or later navigation grouping.
+//! resolve destinations. A target appears once per logical link occurrence,
+//! even when its label spans several wrappers or display fragments.
 //!
 //! One source-order walker owns traversal and ephemeral paths. Scope entry
 //! points share a single work account with optional association and labels;

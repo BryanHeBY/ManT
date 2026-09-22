@@ -3,12 +3,13 @@
 mod tests;
 use super::{
     blocks::parse_block,
+    content::MarkdownContent,
     events::{EventCursor, SpannedEvent},
     headings::{FlatSection, SectionIds, heading_level, take_explicit_heading_id},
     inline::{inline_text, parse_inlines},
     source::MarkdownSource,
 };
-use mant_ir::{Block, Diagnostic, DiagnosticLevel, Heading, Section};
+use mant_ir::{Block, ContentRootKind, Diagnostic, DiagnosticLevel, Heading, Section};
 use pulldown_cmark::{Event, HeadingLevel, Tag, TagEnd};
 
 pub(super) struct ParsedDocumentStructure {
@@ -23,6 +24,7 @@ pub(super) struct ParsedDocumentStructure {
 pub(super) fn lower_document_structure(
     events: Vec<SpannedEvent<'_>>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
 ) -> ParsedDocumentStructure {
     let mut cursor = EventCursor::new(events);
     let mut diagnostics = Vec::new();
@@ -43,8 +45,10 @@ pub(super) fn lower_document_structure(
             let (mut children, end) = parse_inlines(
                 &mut cursor,
                 source,
+                content,
                 &mut diagnostics,
                 TagEnd::Heading(level),
+                ContentRootKind::Heading,
             );
             // `pulldown-cmark` treats every trailing brace group as heading
             // attributes and removes it before reporting whether it contains
@@ -53,8 +57,8 @@ pub(super) fn lower_document_structure(
             // API paths such as `/users/{id}` in the title.
             let explicit_id = explicit_id
                 .map(pulldown_cmark::CowStr::into_string)
-                .or_else(|| take_explicit_heading_id(&mut children));
-            let heading = inline_text(&children);
+                .or_else(|| take_explicit_heading_id(content, &mut children));
+            let heading = inline_text(content, &children);
             if heading.is_empty() {
                 diagnostics.push(Diagnostic {
                     impact: mant_ir::DiagnosticImpact::None,
@@ -94,7 +98,7 @@ pub(super) fn lower_document_structure(
             continue;
         }
 
-        let Some(block) = parse_block(&mut cursor, source, &mut diagnostics) else {
+        let Some(block) = parse_block(&mut cursor, source, content, &mut diagnostics) else {
             continue;
         };
         if let Some(current) = flat_sections.last_mut() {

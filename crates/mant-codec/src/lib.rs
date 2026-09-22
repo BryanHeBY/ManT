@@ -10,6 +10,8 @@ mod markdown;
 /// Source-coordinate mapping for parsed CommonMark inline events.
 pub mod markdown_mapping;
 mod producer_identity;
+#[cfg(test)]
+mod test_content;
 mod text_safety;
 mod tldr;
 

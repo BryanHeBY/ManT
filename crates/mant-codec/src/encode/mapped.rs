@@ -1,6 +1,8 @@
 //! Compose byte ownership with rendered text instead of recovering it from HTML.
-use mant_ir::{EntryFacts, EntryOwner};
+use mant_ir::{ContentRootKey, EntryFacts, EntryOwner};
 use std::{collections::HashMap, ops::Range};
+
+use super::source_map::RenderedRootRange;
 
 /// Keys identify borrowed facts only during one immutable render operation.
 /// They are never dereferenced, serialized, or cached beyond that operation.
@@ -10,6 +12,7 @@ pub(super) type OwnerKey = *const EntryFacts;
 pub(super) struct MappedText {
     pub(super) text: String,
     pub(super) owners: Vec<(OwnerKey, Range<usize>)>,
+    pub(super) roots: Vec<RenderedRootRange>,
 }
 
 impl From<String> for MappedText {
@@ -17,11 +20,38 @@ impl From<String> for MappedText {
         Self {
             text,
             owners: Vec::new(),
+            roots: Vec::new(),
         }
     }
 }
 
 impl MappedText {
+    /// Apply the same Unicode whitespace trim as the flattened table renderer,
+    /// keeping only byte ownership that remains visible after trimming.
+    pub(super) fn trim(mut self) -> Self {
+        let start = self.text.len() - self.text.trim_start().len();
+        let end = self.text.trim_end().len();
+        if start >= end {
+            return Self::default();
+        }
+        self.text = self.text[start..end].to_owned();
+        self.roots = self
+            .roots
+            .into_iter()
+            .filter_map(|mut root| {
+                root.markdown.start = root.markdown.start.max(start);
+                root.markdown.end = root.markdown.end.min(end);
+                if root.markdown.start >= root.markdown.end {
+                    return None;
+                }
+                root.markdown.start -= start;
+                root.markdown.end -= start;
+                Some(root)
+            })
+            .collect();
+        self
+    }
+
     pub(super) fn nonempty(self) -> Option<Self> {
         (!self.text.is_empty()).then_some(self)
     }
@@ -34,6 +64,11 @@ impl MappedText {
             range.end += offset;
         }
         self.owners.extend(other.owners);
+        for root in &mut other.roots {
+            root.markdown.start += offset;
+            root.markdown.end += offset;
+        }
+        self.roots.extend(other.roots);
     }
 
     pub(super) fn join(values: impl IntoIterator<Item = Self>, separator: &str) -> Self {
@@ -58,6 +93,14 @@ impl MappedText {
                 range.end += value.len();
             }
         }
+        for root in &mut self.roots {
+            if root.markdown.start >= offset {
+                root.markdown.start += value.len();
+            }
+            if root.markdown.end > offset {
+                root.markdown.end += value.len();
+            }
+        }
     }
 
     pub(super) fn with_owner(mut self, owner: EntryOwner<'_>, enabled: bool) -> Self {
@@ -67,6 +110,18 @@ impl MappedText {
         {
             self.owners
                 .push((std::ptr::from_ref(facts), 0..self.text.len()));
+        }
+        self
+    }
+
+    pub(super) fn with_root(mut self, root: Option<ContentRootKey>) -> Self {
+        if !self.text.is_empty()
+            && let Some(root) = root
+        {
+            self.roots.push(RenderedRootRange {
+                root,
+                markdown: 0..self.text.len(),
+            });
         }
         self
     }
@@ -94,7 +149,7 @@ impl MappedText {
             } else if !line.is_empty() {
                 output.push_str(&continuation);
             }
-            if !self.owners.is_empty() {
+            if !self.owners.is_empty() || !self.roots.is_empty() {
                 segments.push((offset, line.len(), output.len()));
             }
             output.push_str(line);
@@ -121,9 +176,18 @@ impl MappedText {
                 (range.start < range.end).then_some((owner, range))
             })
             .collect();
+        let roots = self
+            .roots
+            .into_iter()
+            .filter_map(|mut root| {
+                root.markdown = boundary(root.markdown.start)..boundary(root.markdown.end);
+                (root.markdown.start < root.markdown.end).then_some(root)
+            })
+            .collect();
         Some(Self {
             text: output,
             owners,
+            roots,
         })
     }
 }
@@ -139,6 +203,7 @@ mod tests {
         let rendered = MappedText {
             text: "α\r\n\r\n日本\r\nlast".into(),
             owners: vec![(key, 0..18), (key, 6..12)],
+            roots: Vec::new(),
         }
         .prefix("12. ")
         .unwrap();
@@ -159,6 +224,7 @@ mod tests {
                 MappedText {
                     text: "owned".into(),
                     owners: vec![(key, 0..5)],
+                    roots: Vec::new(),
                 },
                 "after".to_owned().into(),
             ],

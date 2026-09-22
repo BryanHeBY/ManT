@@ -126,6 +126,23 @@ fn scope_results_validate_spans_against_each_document_context() {
 }
 
 #[test]
+fn search_rejects_empty_hit_and_unknown_projection_source() {
+    let mut empty_hit: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    empty_hit["result"]["search"]["documents"][0]["matches"][0]["occurrences"] =
+        serde_json::json!([]);
+    empty_hit["result"]["search"]["documents"][0]["matches"][0]["occurrenceCount"] =
+        serde_json::json!(0);
+    assert!(serde_json::from_value::<ScopeQueryResponse>(empty_hit).is_err());
+
+    let mut unknown_source: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    unknown_source["result"]["search"]["documents"][0]["contentProjection"]["contentStore"]["atoms"]
+        [0]["provenance"] = serde_json::json!({
+        "kind":"authored", "span":{"source":2,"line":1,"column":1}
+    });
+    assert!(serde_json::from_value::<ScopeQueryResponse>(unknown_source).is_err());
+}
+
+#[test]
 fn classified_explanations_have_required_closed_shapes() {
     let expected: Value = serde_json::from_str(EXPLANATION).unwrap();
     for field in [
@@ -179,27 +196,40 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
     assert_eq!(query.label, "ls");
     let manual = query.document.as_ref().expect("manual document");
     assert_eq!(manual.source_context.sources[0].format, SourceFormat::Man);
-    assert_eq!(manual.sections[0].heading.plain_text(), "NAME");
-    assert_eq!(manual.sections[1].id, "options-1");
+    let document: mant_ir::Document = manual.clone().into();
+    assert_eq!(
+        document
+            .content()
+            .heading_plain_text(&document.sections[0].heading)
+            .expect("fixture heading resolves"),
+        "NAME"
+    );
+    assert_eq!(document.sections[1].id, "options-1");
     assert!(matches!(
-        &manual.sections[0].blocks[0],
+        &document.sections[0].blocks[0],
         Block::Paragraph { children, .. }
             if matches!(&children[0], Inline::Strong { .. })
     ));
-    let Block::Paragraph { children, .. } = &manual.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
         panic!("NAME starts with a paragraph");
     };
-    assert!(children.iter().any(
-        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.test/ls")
-    ));
-    assert!(children.iter().any(
-        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, .. } if address == "docs@example.test")
-    ));
-    assert!(children.iter().any(
-        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "options-1")
-    ));
+    assert!(children.iter().any(|inline| matches!(
+        document.content().link(inline),
+        Ok(Some(link))
+            if matches!(link.target(), mant_ir::LinkTarget::External { uri } if uri == "https://example.test/ls")
+    )));
+    assert!(children.iter().any(|inline| matches!(
+        document.content().link(inline),
+        Ok(Some(link))
+            if matches!(link.target(), mant_ir::LinkTarget::Email { address } if address == "docs@example.test")
+    )));
+    assert!(children.iter().any(|inline| matches!(
+        document.content().link(inline),
+        Ok(Some(link))
+            if matches!(link.target(), mant_ir::LinkTarget::Section { id } if id == "options-1")
+    )));
     assert!(matches!(
-        &manual.sections[1].blocks[0],
+        &document.sections[1].blocks[0],
         Block::Paragraph { children, .. }
             if matches!(&children[0], Inline::Anchor { id, .. } if id == "all-option")
     ));
@@ -316,7 +346,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
 #[test]
 fn native_search_defaults_and_closed_request_fields_are_enforced() {
     let search: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
+        r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
     )
     .expect("valid search request");
     assert_eq!(
@@ -356,6 +386,17 @@ fn native_search_defaults_and_closed_request_fields_are_enforced() {
     )
     .expect_err("unknown request field");
     assert!(error.to_string().contains("unknown field"));
+    let markdown_scope: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"acls","scope":"markdown"}}"#,
+    )
+    .expect("Markdown search scope is accepted");
+    assert!(matches!(
+        markdown_scope.view,
+        QueryView::Search {
+            scope: SearchScope::Markdown,
+            ..
+        }
+    ));
 
     let error = serde_json::from_str::<QueryRequest>(
         r#"{"input":{"kind":"document","selector":"ls"},"view":{"kind":"full"}}"#,

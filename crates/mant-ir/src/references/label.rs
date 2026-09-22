@@ -1,7 +1,9 @@
 //! Bounded original-link label projection shared by protocol and UI consumers.
 
 use super::{ReferenceScanStop, ReferenceWorkBudget};
-use crate::{ContentContext, Inline, InlineView};
+use crate::{
+    ContentAtomKind, ContentContext, Inline, InlineView, LinkLabelPart, LinkOccurrenceKey,
+};
 
 /// One plain visible label prefix. An empty original label remains empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,15 +21,77 @@ pub struct ReferenceLabel {
 /// # Errors
 /// Returns a latched scan limit before unbudgeted traversal or text inspection.
 pub fn reference_label(
+    content: ContentContext<'_>,
     nodes: &[Inline],
     depth: usize,
     budget: &mut ReferenceWorkBudget,
     max_bytes: usize,
 ) -> Result<ReferenceLabel, ReferenceScanStop> {
-    ContentContext::detached().reference_label(nodes, depth, budget, max_bytes)
+    content.reference_label(nodes, depth, budget, max_bytes)
+}
+
+/// Project the complete logical label of one link occurrence, even when its
+/// structural wrappers are split across roots or display fragments.
+///
+/// # Errors
+/// Returns an invalid-root or latched budget limit before unbounded work.
+pub fn reference_occurrence_label(
+    content: ContentContext<'_>,
+    key: LinkOccurrenceKey,
+    depth: usize,
+    budget: &mut ReferenceWorkBudget,
+    max_bytes: usize,
+) -> Result<ReferenceLabel, ReferenceScanStop> {
+    content.reference_occurrence_label(key, depth, budget, max_bytes)
 }
 
 impl<'store> ContentContext<'store> {
+    /// Bounded label read from the occurrence table, not one wrapper's children.
+    ///
+    /// # Errors
+    /// Returns an invalid-root or latched budget limit before unbounded work.
+    pub fn reference_occurrence_label(
+        self,
+        key: LinkOccurrenceKey,
+        depth: usize,
+        budget: &mut ReferenceWorkBudget,
+        max_bytes: usize,
+    ) -> Result<ReferenceLabel, ReferenceScanStop> {
+        let occurrence = self.occurrence(key).ok_or(ReferenceScanStop::InvalidRoot)?;
+        let mut label = ReferenceLabel {
+            text: String::new(),
+            truncated: false,
+        };
+        let limit = max_bytes.min(4096);
+        for part in &occurrence.label {
+            budget.consume(depth.saturating_add(1), 1, 0)?;
+            match part {
+                LinkLabelPart::Content { content } => {
+                    let value = self
+                        .resolve_text(*content)
+                        .ok_or(ReferenceScanStop::InvalidRoot)?;
+                    append_visible_text(value, depth.saturating_add(1), budget, limit, &mut label)?;
+                }
+                LinkLabelPart::HardBreak { atom } => {
+                    let record = self.atom(*atom).ok_or(ReferenceScanStop::InvalidRoot)?;
+                    if !matches!(record.kind, ContentAtomKind::HardBreak {}) {
+                        return Err(ReferenceScanStop::InvalidRoot);
+                    }
+                    budget.consume(depth.saturating_add(1), 0, 1)?;
+                    if label.text.len() == limit {
+                        label.truncated = true;
+                    } else {
+                        label.text.push('\n');
+                    }
+                }
+            }
+            if label.truncated {
+                break;
+            }
+        }
+        Ok(label)
+    }
+
     /// Project a link label through this content store under the caller's
     /// shared reference-work budget.
     ///
@@ -66,17 +130,7 @@ impl<'store> ContentContext<'store> {
                 .map_err(|_| ReferenceScanStop::InvalidRoot)?
             {
                 InlineView::Text(value) | InlineView::Code(value) => {
-                    let inspect = value
-                        .len()
-                        .min(limit.saturating_sub(label.text.len()).saturating_add(4));
-                    budget.consume(depth.saturating_add(1), 0, inspect)?;
-                    for character in value.chars() {
-                        if character.len_utf8() > limit.saturating_sub(label.text.len()) {
-                            label.truncated = true;
-                            return Ok(());
-                        }
-                        label.text.push(character);
-                    }
+                    append_visible_text(value, depth.saturating_add(1), budget, limit, label)?;
                 }
                 InlineView::LineBreak => {
                     budget.consume(depth.saturating_add(1), 0, 1)?;
@@ -114,25 +168,41 @@ impl<'store> ContentContext<'store> {
     }
 }
 
+fn append_visible_text(
+    value: &str,
+    depth: usize,
+    budget: &mut ReferenceWorkBudget,
+    limit: usize,
+    label: &mut ReferenceLabel,
+) -> Result<(), ReferenceScanStop> {
+    let inspect = value
+        .len()
+        .min(limit.saturating_sub(label.text.len()).saturating_add(4));
+    budget.consume(depth, 0, inspect)?;
+    for character in value.chars() {
+        if character.len_utf8() > limit.saturating_sub(label.text.len()) {
+            label.truncated = true;
+            break;
+        }
+        label.text.push(character);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ReferenceScanLimits;
     #[test]
     fn multibyte_label_prefix_is_bounded_without_reading_huge_suffix() {
+        let mut fixture = crate::test_support::ContentFixture::body();
+        let inline = fixture.text(format!("éé{}", "x".repeat(100_000)));
+        let store = fixture.finish();
         let mut budget = ReferenceWorkBudget::new(ReferenceScanLimits {
             bytes: 8,
             ..Default::default()
         });
-        let label = reference_label(
-            &[Inline::Text {
-                value: format!("éé{}", "x".repeat(100_000)),
-            }],
-            0,
-            &mut budget,
-            3,
-        )
-        .unwrap();
+        let label = reference_label(store.content(), &[inline], 0, &mut budget, 3).unwrap();
         assert_eq!(label.text, "é");
         assert!(label.truncated);
         assert!(budget.remaining_bytes() > 0);

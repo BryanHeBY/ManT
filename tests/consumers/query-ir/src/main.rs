@@ -1,16 +1,16 @@
 //! Standalone queries over authored IR, with no parser, loader, or report renderer.
 
 use mant_ir::{
-    Block, DefinitionItem, DefinitionLayout, Document, DocumentAddress, DocumentMeta,
-    EntryFacts, EntryForm, EntryKind, EntryNameBinding, EntryNameEvidence, Inline, LayoutHint,
-    LinkTarget, MarkdownOrigin, NameCase, ReferenceScope, ResolvedContent, SourceCoordinates,
-    SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    Block, DefinitionItem, DefinitionLayout, Document, DocumentAddress, DocumentMeta, EntryFacts,
+    EntryForm, EntryKind, EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, LinkTarget,
+    MarkdownOrigin, NameCase, ReferenceScope, ResolvedContent, SourceCoordinates, SourceFormat,
+    SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_protocol::{
     ContentSelector, DocumentEdge, DocumentEdgeKind, DocumentScope, DocumentSelector,
     DocumentTraversal, EntryProjection, ExcerptSelection, ExplanationOptions, ExplanationQuery,
     OutlineNode, ReferenceCount, ReferenceProjection, ReferenceProjectionMode,
-    ResolvedDocumentScope, ScopedDocument, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    ResolvedDocumentScope, ScopedDocument, SearchCase, SearchQuery, SearchSyntax,
 };
 use mant_query::{
     QueryScopeView, build_outline_projection, explain_query, explain_scope, project_references,
@@ -159,7 +159,6 @@ fn exercise_queries() -> Result<(), Box<dyn std::error::Error>> {
         pattern: "needle".into(),
         syntax: SearchSyntax::Literal,
         case: SearchCase::Sensitive,
-        scope: SearchScope::Visible,
         word: false,
         context_lines: 0,
         limit: 1,

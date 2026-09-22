@@ -52,7 +52,7 @@ fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_li
         assert_eq!(
             items
                 .iter()
-                .map(|item| inline_text(&item.terms[0]))
+                .map(|item| inline_text(split_macro.content(), &item.terms[0]))
                 .collect::<Vec<_>>(),
             ["--alpha", "--beta"]
         );
@@ -98,7 +98,7 @@ fn declaration_witnesses_keep_tq_groups_across_repeated_macro_expansions() {
                 .map(|item| item
                     .terms
                     .iter()
-                    .map(|term| inline_text(term))
+                    .map(|term| inline_text(repeated_tq.content(), term))
                     .collect::<Vec<_>>())
                 .collect::<Vec<_>>(),
             vec![

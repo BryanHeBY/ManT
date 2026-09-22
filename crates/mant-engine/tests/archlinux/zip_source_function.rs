@@ -10,12 +10,13 @@ use crate::{
 #[test]
 fn separates_multiple_operands_in_an_out_of_synopsis_function_pointer() {
     let document = archlinux_manual("zip_source_function");
+    let content = document.content();
     let description = common::section(document, "DESCRIPTION");
     let declarations = description
         .blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(content, children)),
             _ => None,
         })
         .collect::<Vec<_>>();

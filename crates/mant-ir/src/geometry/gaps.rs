@@ -4,7 +4,7 @@ use super::{
     table_requires_origin_preserving_stack,
 };
 use crate::visit::Visit;
-use crate::{Block, Inline, ListKind};
+use crate::{Block, ContentContext, Inline, InlineView, ListKind};
 
 /// Whether any resolved content boundary exceeds the presentation gap budget.
 /// Transparent containers and zero-width anchors do not reset the boundary;
@@ -12,36 +12,42 @@ use crate::{Block, Inline, ListKind};
 /// are independent flows; origin-preserving stacked cells share their parent flow.
 /// This reports loss without allocating rendered text or blank rows.
 #[must_use]
-pub fn has_bounded_gap(blocks: &[Block]) -> bool {
-    walk(blocks, &mut GapPlan::default(), 0, 0)
+pub fn has_bounded_gap(content: ContentContext<'_>, blocks: &[Block]) -> bool {
+    walk(content, blocks, &mut GapPlan::default(), 0, 0)
 }
 
-fn visible(nodes: &[Inline]) -> bool {
-    let mut visitor = VisibleText(false);
+fn visible(content: ContentContext<'_>, nodes: &[Inline]) -> bool {
+    let mut visitor = VisibleText {
+        content,
+        found: false,
+    };
     nodes.iter().any(|node| {
         visitor.visit_inline(node);
-        visitor.0
+        visitor.found
     })
 }
 
 // Style and semantic-name decoration cannot change whether a boundary has
 // original visible text. Reuse the IR wrapper traversal without requesting
 // presentation roles or allocating a rendered intermediate string.
-struct VisibleText(bool);
+struct VisibleText<'a> {
+    content: ContentContext<'a>,
+    found: bool,
+}
 
-impl<'ir> Visit<'ir> for VisibleText {
+impl<'ir> Visit<'ir> for VisibleText<'ir> {
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        if self.0 {
+        if self.found {
             return;
         }
-        match inline {
-            Inline::Text { value } | Inline::Code { value } => {
-                self.0 = !value.trim().is_empty();
+        match self.content.inline(inline) {
+            Ok(InlineView::Text(value) | InlineView::Code(value)) => {
+                self.found = !value.trim().is_empty();
             }
-            Inline::Strong { .. } | Inline::Emphasis { .. } | Inline::Link { .. } => {
+            Ok(InlineView::Strong(_) | InlineView::Emphasis(_) | InlineView::Link(_)) => {
                 crate::visit::walk_inline(self, inline);
             }
-            Inline::LineBreak | Inline::Anchor { .. } => {}
+            Ok(InlineView::LineBreak | InlineView::Anchor(_)) | Err(_) => {}
         }
     }
 }
@@ -54,7 +60,13 @@ fn add(gap: &mut GapPlan, rows: u16) -> bool {
 // Keep the exhaustive boundary traversal together: splitting by variant must
 // not silently replace the shared flow cursor at transparent containers.
 #[allow(clippy::too_many_lines)]
-fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool {
+fn walk(
+    content: ContentContext<'_>,
+    blocks: &[Block],
+    gap: &mut GapPlan,
+    depth: usize,
+    origin: i32,
+) -> bool {
     // Invalid external IR is rejected by normal validation. Keep this helper
     // bounded even when invoked independently on unchecked in-memory data.
     if depth > 256 {
@@ -109,6 +121,7 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                         }
                     }
                     if walk(
+                        content,
                         blocks,
                         gap,
                         depth + 1,
@@ -134,10 +147,11 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                     ) {
                         return true;
                     }
-                    if item.terms.iter().any(|term| visible(term)) {
+                    if item.terms.iter().any(|term| visible(content, term)) {
                         *gap = GapPlan::default();
                     }
                     if walk(
+                        content,
                         &item.description,
                         gap,
                         depth + 1,
@@ -152,9 +166,9 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                 let stack = table_requires_origin_preserving_stack(rows, origin);
                 for cell in rows.iter().flat_map(|row| &row.cells) {
                     let bounded = if stack {
-                        walk(&cell.blocks, gap, depth + 1, origin)
+                        walk(content, &cell.blocks, gap, depth + 1, origin)
                     } else {
-                        walk(&cell.blocks, &mut GapPlan::default(), depth + 1, 0)
+                        walk(content, &cell.blocks, &mut GapPlan::default(), depth + 1, 0)
                     };
                     if bounded {
                         return true;
@@ -165,12 +179,12 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                 }
             }
             Block::Preformatted { children, .. } => {
-                if super::has_literal_rows(children) {
+                if content.has_literal_rows(children).unwrap_or(false) {
                     *gap = GapPlan::default();
                 }
             }
             Block::Paragraph { children, .. } => {
-                if visible(children) {
+                if visible(content, children) {
                     *gap = GapPlan::default();
                 }
             }
@@ -188,6 +202,7 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::ContentFixture;
     use crate::{LayoutHint, ListItem, TableCell, TableRow};
 
     fn paragraph(indent: i32, gap: u16, children: Vec<Inline>) -> Block {
@@ -202,28 +217,48 @@ mod tests {
         }
     }
 
-    fn text() -> Vec<Inline> {
-        vec![Inline::Text {
-            value: "BODY".into(),
-        }]
+    fn text(fixture: &mut ContentFixture) -> Vec<Inline> {
+        vec![fixture.text("BODY")]
     }
 
     #[test]
     fn paragraph_gap_boundaries_depend_on_original_text_not_inline_decoration() {
+        let mut fixture = ContentFixture::body();
+        let empty = fixture.text(String::new());
+        let whitespace = fixture.code("\u{2003}\t");
+        let break_only = fixture.hard_break();
+        let anchor = fixture.anchor("target");
+        let nested_break = fixture.hard_break();
+        let space_link = fixture.link_text(
+            crate::LinkTarget::External {
+                uri: "https://example.test".into(),
+            },
+            None,
+            " ",
+            false,
+        );
+        let Inline::Link {
+            occurrence: space_occurrence,
+            children: space_children,
+        } = space_link
+        else {
+            unreachable!();
+        };
+        let visible_link = fixture.link_text(
+            crate::LinkTarget::External {
+                uri: "https://example.test".into(),
+            },
+            None,
+            "Cafe\u{301} 👩‍💻",
+            false,
+        );
+        let body = text(&mut fixture);
+        let store = fixture.finish();
+        let content = store.content();
         for (children, bounded) in [
-            (
-                vec![Inline::Text {
-                    value: String::new(),
-                }],
-                true,
-            ),
-            (
-                vec![Inline::Code {
-                    value: "\u{2003}\t".into(),
-                }],
-                true,
-            ),
-            (vec![Inline::LineBreak, Inline::anchor("target")], true),
+            (vec![empty], true),
+            (vec![whitespace], true),
+            (vec![break_only, anchor], true),
             (
                 vec![Inline::Strong {
                     children: Vec::new(),
@@ -232,53 +267,43 @@ mod tests {
             ),
             (
                 vec![Inline::Emphasis {
-                    children: vec![Inline::LineBreak],
+                    children: vec![nested_break],
                 }],
                 true,
             ),
             (
                 vec![Inline::Link {
-                    title: None,
-                    target: crate::LinkTarget::External {
-                        uri: "https://example.test".into(),
-                    },
+                    occurrence: space_occurrence,
                     children: vec![Inline::Strong {
-                        children: vec![Inline::Text { value: " ".into() }],
+                        children: space_children,
                     }],
                 }],
                 true,
             ),
             (
                 vec![Inline::Strong {
-                    children: vec![Inline::Link {
-                        title: None,
-                        target: crate::LinkTarget::External {
-                            uri: "https://example.test".into(),
-                        },
-                        children: vec![Inline::Emphasis {
-                            children: vec![Inline::Text {
-                                value: "Cafe\u{301} 👩‍💻".into(),
-                            }],
-                        }],
-                    }],
+                    children: vec![visible_link],
                 }],
                 false,
             ),
         ] {
             let description = format!("{children:?}");
             assert_eq!(
-                has_bounded_gap(&[
-                    Block::VerticalSpace {
-                        lines: 3000,
-                        source: None
-                    },
-                    paragraph(0, 0, children),
-                    Block::VerticalSpace {
-                        lines: 3000,
-                        source: None
-                    },
-                    paragraph(0, 0, text()),
-                ]),
+                has_bounded_gap(
+                    content,
+                    &[
+                        Block::VerticalSpace {
+                            lines: 3000,
+                            source: None
+                        },
+                        paragraph(0, 0, children),
+                        Block::VerticalSpace {
+                            lines: 3000,
+                            source: None
+                        },
+                        paragraph(0, 0, body.clone()),
+                    ]
+                ),
                 bounded,
                 "{description}"
             );
@@ -287,28 +312,24 @@ mod tests {
 
     #[test]
     fn a_literal_empty_row_resets_requests_but_a_target_does_not() {
+        let mut fixture = ContentFixture::body();
+        let empty_text = fixture.text(String::new());
+        let empty_code = fixture.code(String::new());
+        let nested_empty = fixture.text(String::new());
+        let anchor = fixture.anchor("target");
+        let body = text(&mut fixture);
+        let store = fixture.finish();
+        let content = store.content();
         for (children, bounded) in [
-            (
-                vec![Inline::Text {
-                    value: String::new(),
-                }],
-                false,
-            ),
-            (
-                vec![Inline::Code {
-                    value: String::new(),
-                }],
-                false,
-            ),
+            (vec![empty_text], false),
+            (vec![empty_code], false),
             (
                 vec![Inline::Emphasis {
-                    children: vec![Inline::Text {
-                        value: String::new(),
-                    }],
+                    children: vec![nested_empty],
                 }],
                 false,
             ),
-            (vec![Inline::anchor("target")], true),
+            (vec![anchor], true),
             (
                 vec![Inline::Strong {
                     children: Vec::new(),
@@ -318,23 +339,26 @@ mod tests {
             (Vec::new(), true),
         ] {
             assert_eq!(
-                has_bounded_gap(&[
-                    Block::VerticalSpace {
-                        lines: 3000,
-                        source: None
-                    },
-                    Block::Preformatted {
-                        children,
-                        language: None,
-                        layout: LayoutHint::default(),
-                        source: None
-                    },
-                    Block::VerticalSpace {
-                        lines: 3000,
-                        source: None
-                    },
-                    paragraph(0, 0, text()),
-                ]),
+                has_bounded_gap(
+                    content,
+                    &[
+                        Block::VerticalSpace {
+                            lines: 3000,
+                            source: None
+                        },
+                        Block::Preformatted {
+                            children,
+                            language: None,
+                            layout: LayoutHint::default(),
+                            source: None
+                        },
+                        Block::VerticalSpace {
+                            lines: 3000,
+                            source: None
+                        },
+                        paragraph(0, 0, body.clone()),
+                    ]
+                ),
                 bounded
             );
         }
@@ -360,13 +384,17 @@ mod tests {
 
     #[test]
     fn signed_stacked_tables_share_the_gap_budget_with_their_parent() {
+        let mut fixture = ContentFixture::body();
+        let body = text(&mut fixture);
+        let store = fixture.finish();
+        let content = store.content();
         for (origin, expected) in [(-2, true), (2, false)] {
             let table = Block::Table {
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
                         kind: crate::TableCellKind::Text,
-                        blocks: vec![paragraph(3, 3000, text())],
+                        blocks: vec![paragraph(3, 3000, body.clone())],
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
@@ -379,15 +407,22 @@ mod tests {
                 },
                 source: None,
             };
-            assert_eq!(has_bounded_gap(&[table]), expected);
+            assert_eq!(has_bounded_gap(content, &[table]), expected);
         }
     }
 
     #[test]
     fn stacked_marker_consumes_parent_gap_before_negative_child_gap() {
+        let mut fixture = ContentFixture::body();
+        let body = text(&mut fixture);
+        let store = fixture.finish();
+        let content = store.content();
         for (indent, expected) in [(-2, false), (2, true)] {
             assert_eq!(
-                has_bounded_gap(&[bullet(3000, vec![paragraph(indent, 3000, text())])]),
+                has_bounded_gap(
+                    content,
+                    &[bullet(3000, vec![paragraph(indent, 3000, body.clone())])]
+                ),
                 expected,
                 "child indent {indent}"
             );
@@ -396,18 +431,23 @@ mod tests {
 
     #[test]
     fn marker_consumes_zero_width_first_paragraph_gap_exactly_once() {
-        let content = vec![
-            paragraph(0, 3000, vec![Inline::anchor("empty")]),
+        let mut fixture = ContentFixture::body();
+        let anchor = fixture.anchor("empty");
+        let body = text(&mut fixture);
+        let store = fixture.finish();
+        let context = store.content();
+        let nodes = vec![
+            paragraph(0, 3000, vec![anchor]),
             Block::VerticalSpace {
                 lines: 2000,
                 source: None,
             },
-            paragraph(0, 0, text()),
+            paragraph(0, 0, body),
         ];
         // With no visible marker, these are one continuous boundary.
-        assert!(has_bounded_gap(&content));
+        assert!(has_bounded_gap(context, &nodes));
         // The bullet marker splits the two independent boundaries even when
         // its first paragraph contains only a zero-width target.
-        assert!(!has_bounded_gap(&[bullet(0, content)]));
+        assert!(!has_bounded_gap(context, &[bullet(0, nodes)]));
     }
 }

@@ -97,9 +97,13 @@ impl App {
             .or_insert_with(|| self.session.document.render(width));
         let document_row = self.session.content_scroll + usize::from(row - self.geometry.content.y);
         let document_column = usize::from(column - self.geometry.content.x);
-        let Some(target) = rendered
-            .link_target_at(document_row, document_column)
-            .cloned()
+        let Some(identity) = rendered.link_identity_at(document_row, document_column) else {
+            return;
+        };
+        let Some(target) = self
+            .session
+            .document
+            .activation_target_for_identity(identity)
         else {
             return;
         };
@@ -110,11 +114,11 @@ impl App {
         let Some(node) = self.session.document.navigation().get(self.selected) else {
             return;
         };
-        let Some(target) = self.session.document.reference_target(&node.id) else {
+        let Some(occurrence) = self.session.document.reference_occurrence(&node.id) else {
             self.toggle_selected();
             return;
         };
-        let Some(target) = self.session.document.activation_target(target) else {
+        let Some(target) = self.session.document.activation_target(occurrence) else {
             self.report_notice(
                 "This reference has no registered document context; its target was not opened"
                     .into(),

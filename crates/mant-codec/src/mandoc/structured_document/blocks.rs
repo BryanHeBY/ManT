@@ -10,6 +10,7 @@ use super::{
     content::{root_inlines, source_for},
     evidence::{evidence_role, item_term_roots, native_declaration_evidence},
     index::NativeLoweringIndex,
+    store::NativeContentMap,
 };
 
 pub(super) fn lower_section(
@@ -17,11 +18,13 @@ pub(super) fn lower_section(
     index: &NativeLoweringIndex,
     block: &NativeBlock,
     addresses: &AddressPlan,
+    content: &NativeContentMap,
     evidence: &mut NativeHeadEvidence,
 ) -> Result<Section, NativeProjectionError> {
     let heading_content = root_inlines(
         projection,
         addresses,
+        content,
         block.root().ok_or(NativeProjectionError::InvalidRelation(
             "heading block has no root",
         ))?,
@@ -32,7 +35,7 @@ pub(super) fn lower_section(
         let child = &projection.document().blocks()[child_index];
         push_lowered_block(
             &mut blocks,
-            lower_block(projection, index, addresses, child, None, evidence)?,
+            lower_block(projection, index, addresses, content, child, None, evidence)?,
         );
     }
     Ok(Section {
@@ -53,6 +56,7 @@ pub(super) fn lower_block(
     projection: &NativeProseProjection,
     index: &NativeLoweringIndex,
     addresses: &AddressPlan,
+    content: &NativeContentMap,
     block: &NativeBlock,
     owner: Option<libmandoc_rs::structured::OwnerKey>,
     evidence: &mut NativeHeadEvidence,
@@ -67,6 +71,7 @@ pub(super) fn lower_block(
             children: root_inlines(
                 projection,
                 addresses,
+                content,
                 block.root().ok_or(NativeProjectionError::InvalidRelation(
                     "paragraph block has no root",
                 ))?,
@@ -75,7 +80,7 @@ pub(super) fn lower_block(
             source: source_for(projection, block.provenance()),
         }),
         NativeBlockKind::List | NativeBlockKind::DefinitionList => {
-            lower_list(projection, index, addresses, block, evidence)
+            lower_list(projection, index, addresses, content, block, evidence)
         }
         kind => Err(NativeProjectionError::UnsupportedBlock(kind)),
     }
@@ -85,6 +90,7 @@ fn lower_list(
     projection: &NativeProseProjection,
     index: &NativeLoweringIndex,
     addresses: &AddressPlan,
+    content: &NativeContentMap,
     block: &NativeBlock,
     evidence: &mut NativeHeadEvidence,
 ) -> Result<Block, NativeProjectionError> {
@@ -110,6 +116,7 @@ fn lower_list(
                 projection,
                 index,
                 addresses,
+                content,
                 block,
                 &native.items()[item_index],
                 evidence,
@@ -138,6 +145,7 @@ fn lower_list(
             projection,
             index,
             addresses,
+            content,
             block,
             &native.items()[item_index],
             evidence,
@@ -156,6 +164,7 @@ fn lower_definition_item(
     projection: &NativeProseProjection,
     index: &NativeLoweringIndex,
     addresses: &AddressPlan,
+    content: &NativeContentMap,
     list_block: &NativeBlock,
     item: &NativeItem,
     evidence: &mut NativeHeadEvidence,
@@ -163,12 +172,14 @@ fn lower_definition_item(
     let native = projection.document();
     let source = source_for(projection, item.provenance());
     let mut terms = Vec::new();
-    for root in item_term_roots(native, item)? {
-        terms.push(root_inlines(projection, addresses, root)?);
+    for root in item_term_roots(native, content, item)? {
+        terms.push(root_inlines(projection, addresses, content, root)?);
     }
-    let description = item_blocks(projection, index, addresses, list_block, item, evidence)?;
+    let description = item_blocks(
+        projection, index, addresses, content, list_block, item, evidence,
+    )?;
     if terms.is_empty() && description.is_empty() {
-        let anchors = addresses.owner_anchors(item.owner());
+        let anchors = addresses.owner_anchors(item.owner(), content)?;
         if !anchors.is_empty() {
             terms.push(anchors);
         }
@@ -183,7 +194,10 @@ fn lower_definition_item(
     if let Some(role) = evidence_role(native, item) {
         evidence.record(&lowered, role);
     }
-    evidence.record_declaration(&lowered, native_declaration_evidence(projection, item)?);
+    evidence.record_declaration(
+        &lowered,
+        native_declaration_evidence(projection, content, item)?,
+    );
     Ok(lowered)
 }
 
@@ -191,14 +205,17 @@ fn lower_list_item(
     projection: &NativeProseProjection,
     index: &NativeLoweringIndex,
     addresses: &AddressPlan,
+    content: &NativeContentMap,
     list_block: &NativeBlock,
     item: &NativeItem,
     evidence: &mut NativeHeadEvidence,
 ) -> Result<ListItem, NativeProjectionError> {
     let source = source_for(projection, item.provenance());
-    let mut blocks = item_blocks(projection, index, addresses, list_block, item, evidence)?;
+    let mut blocks = item_blocks(
+        projection, index, addresses, content, list_block, item, evidence,
+    )?;
     if blocks.is_empty() {
-        let anchors = addresses.owner_anchors(item.owner());
+        let anchors = addresses.owner_anchors(item.owner(), content)?;
         if !anchors.is_empty() {
             blocks.push(Block::Paragraph {
                 children: anchors,
@@ -219,6 +236,7 @@ fn item_blocks(
     projection: &NativeProseProjection,
     index: &NativeLoweringIndex,
     addresses: &AddressPlan,
+    content: &NativeContentMap,
     list_block: &NativeBlock,
     item: &NativeItem,
     evidence: &mut NativeHeadEvidence,
@@ -235,6 +253,7 @@ fn item_blocks(
                 projection,
                 index,
                 addresses,
+                content,
                 child,
                 Some(item.owner()),
                 evidence,

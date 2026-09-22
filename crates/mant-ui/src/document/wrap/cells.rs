@@ -2,11 +2,12 @@
 use super::{
     Line, LineSurface, LogicalLine, Span, Style, WrappedLine, WrappedLink, WrappedSearchCell, theme,
 };
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct StyledCell {
     pub(super) source_index: usize,
     pub(super) character: char,
     pub(super) display_character: Option<char>,
+    pub(super) display_override: Option<String>,
     pub(super) grapheme_start: bool,
     pub(super) whitespace: bool,
     pub(super) width: usize,
@@ -42,13 +43,41 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
         }
         let style = span.map_or_else(Style::default, |span| span.style);
         let source_width = grapheme.columns();
-        let link_index = grapheme_link(line, source_index, grapheme.text().chars().count());
-        if grapheme.text() == "\t" {
+        let scalar_count = grapheme.text().chars().count();
+        let link_index = grapheme_link(line, source_index, scalar_count);
+        // A logical grapheme can contain several scalars (for example an em
+        // dash followed by a combining mark), each with its own native ASCII
+        // projection. Shape their complete displayed spelling as one terminal
+        // glyph while retaining one search cell per original scalar.
+        let first_projection = line
+            .glyph_projections
+            .partition_point(|projection| projection.scalar < source_index);
+        let projection = line
+            .glyph_projections
+            .get(first_projection)
+            .filter(|projection| projection.scalar < source_index.saturating_add(scalar_count))
+            .map(|_| {
+                let mut displayed = String::with_capacity(grapheme.text().len());
+                let mut projections = line.glyph_projections[first_projection..].iter().peekable();
+                for (offset, character) in grapheme.text().chars().enumerate() {
+                    if projections
+                        .peek()
+                        .is_some_and(|projection| projection.scalar == source_index + offset)
+                    {
+                        displayed.push_str(&projections.next().expect("peeked projection").glyphs);
+                    } else {
+                        displayed.push(character);
+                    }
+                }
+                displayed
+            });
+        if grapheme.text() == "\t" && projection.is_none() {
             let spaces = TAB_STOP - column % TAB_STOP;
             cells.extend((0..spaces).map(|_| StyledCell {
                 source_index,
                 character: ' ',
                 display_character: Some(' '),
+                display_override: None,
                 grapheme_start: true,
                 whitespace: true,
                 width: 1,
@@ -59,12 +88,18 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             source_index += 1;
             continue;
         }
-        let display_width = if grapheme.text().chars().any(char::is_control) {
+        let display_width = if let Some(glyphs) = projection.as_deref() {
+            mant_render::cells::graphemes(glyphs)
+                .map(|grapheme| grapheme.columns())
+                .sum()
+        } else if grapheme.text().chars().any(char::is_control) {
             1
         } else {
             source_width
         };
-        let whitespace = grapheme.text().chars().all(char::is_whitespace);
+        let whitespace = grapheme.text().chars().all(|character| {
+            character.is_whitespace() && !matches!(character, '\u{a0}' | '\u{202f}')
+        });
         for (index, character) in grapheme.text().chars().enumerate() {
             let character = if character.is_control() {
                 '\u{fffd}'
@@ -75,7 +110,8 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             cells.push(StyledCell {
                 source_index,
                 character,
-                display_character: Some(character),
+                display_character: projection.is_none().then_some(character),
+                display_override: (index == 0).then(|| projection.clone()).flatten(),
                 grapheme_start: index == 0,
                 whitespace,
                 width: cell_width,
@@ -89,8 +125,8 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
     cells
 }
 
-/// A terminal glyph is indivisible. A unique target covering any source scalar
-/// owns the whole glyph. Distinct targets sharing it are deliberately not
+/// A terminal glyph is indivisible. A unique occurrence covering any source
+/// scalar owns the whole glyph. Distinct occurrences sharing it are deliberately not
 /// directly clickable: document-reference selectors remain available,
 /// rather than silently choosing the first target in traversal order.
 fn grapheme_link(line: &LogicalLine, start: usize, scalars: usize) -> Option<usize> {
@@ -101,7 +137,7 @@ fn grapheme_link(line: &LogicalLine, start: usize, scalars: usize) -> Option<usi
         .filter(|(_, link)| link.start_scalar < start + scalars && link.end_scalar > start);
     let (index, first) = matches.next()?;
     matches
-        .all(|(_, link)| link.target == first.target)
+        .all(|(_, link)| link.identity == first.identity)
         .then_some(index)
 }
 
@@ -173,6 +209,9 @@ fn cells_to_line(
             if let Some(character) = cell.display_character {
                 value.push(character);
             }
+            if let Some(glyphs) = &cell.display_override {
+                value.push_str(glyphs);
+            }
         }
         spans.push(Span::styled(value, current_style));
     }
@@ -232,7 +271,7 @@ pub(super) fn wrapped_cells_to_line(
             }
             (Some((index, start, end)), next) => {
                 links.push(WrappedLink {
-                    target: line.links[index].target.clone(),
+                    identity: line.links[index].identity,
                     start_column: start,
                     end_column: end,
                 });
@@ -245,7 +284,7 @@ pub(super) fn wrapped_cells_to_line(
     }
     if let Some((index, start, end)) = active {
         links.push(WrappedLink {
-            target: line.links[index].target.clone(),
+            identity: line.links[index].identity,
             start_column: start,
             end_column: end,
         });

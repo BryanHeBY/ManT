@@ -1,8 +1,9 @@
 //! Versioned wire representation of normalized document IR.
 
 use mant_ir::{
-    Block, Diagnostic, Document as IrDocument, DocumentMeta, ParserInfo, Section, SourceKey,
-    SourceRecord, validate_source_table,
+    Block, ContentContext, ContentProjection, ContentStore, Diagnostic, Document as IrDocument,
+    DocumentMeta, Heading, ParserInfo, Section, SourceKey, SourceRecord, validate_source_table,
+    visit::{self, Visit},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -94,6 +95,8 @@ pub struct DocumentResponse {
     /// Source table and root identity, flattened as `sources`/`rootSource`.
     #[serde(flatten)]
     pub source_context: SourceContext,
+    /// Authoritative logical content referenced by all retained IR below.
+    pub content_store: ContentStore,
     /// Source-neutral document metadata.
     pub meta: DocumentMeta,
     /// Original visible heading; independent from bibliographic metadata.
@@ -123,6 +126,7 @@ struct DocumentResponseWire {
     pub producer: Producer,
     #[serde(flatten)]
     pub source_context: SourceContext,
+    pub content_store: ContentStore,
     pub meta: DocumentMeta,
     #[serde(default)]
     pub heading: Option<mant_ir::Heading>,
@@ -139,6 +143,30 @@ impl<'de> Deserialize<'de> for DocumentResponse {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let response = DocumentResponseWire::deserialize(deserializer)?;
         let document: IrDocument = response.clone().into();
+        mant_ir::validate_content_store(&document.content_store)
+            .map_err(serde::de::Error::custom)?;
+        validate_content_context(
+            document.content(),
+            &document.content_store,
+            document.heading.as_ref(),
+            &document.blocks,
+            &document.sections,
+        )
+        .map_err(serde::de::Error::custom)?;
+        // Complete documents, unlike excerpt/explanation projections, must
+        // account for every non-opportunity atom exactly once. Reuse the IR
+        // coverage rule without imposing it on partial response envelopes.
+        if let Some(finding) = mant_ir::validate_document(&document)
+            .into_iter()
+            .find(|finding| {
+                matches!(
+                    finding.code.as_deref(),
+                    Some("ir.invalid-content-coverage" | "ir.invalid-content-reference")
+                )
+            })
+        {
+            return Err(serde::de::Error::custom(finding.message));
+        }
         mant_ir::validate_document_sources(&document).map_err(serde::de::Error::custom)?;
         Ok(response)
     }
@@ -155,6 +183,228 @@ pub(crate) fn validate_optional_source_spans(
             .map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+pub(crate) fn validate_projection_sources(
+    source_context: Option<&SourceContext>,
+    projection: Option<&ContentProjection>,
+) -> Result<(), String> {
+    let Some(projection) = projection else {
+        return Ok(());
+    };
+    let document = IrDocument {
+        parser: None,
+        sources: source_context.map_or_else(Vec::new, |context| context.sources.clone()),
+        root_source: source_context.map_or(SourceKey::FIRST, |context| context.root_source),
+        content_store: projection.content_store.clone(),
+        meta: DocumentMeta::default(),
+        heading: None,
+        fragment_aliases: Vec::new(),
+        diagnostics: Vec::new(),
+        blocks: Vec::new(),
+        sections: Vec::new(),
+    };
+    if source_context.is_none() && mant_ir::document_has_source_spans(&document) {
+        return Err("source-qualified content projection requires a source context".to_owned());
+    }
+    match source_context {
+        Some(_) => mant_ir::validate_document_sources(&document).map_err(|error| error.to_string()),
+        None => Ok(()),
+    }
+}
+
+/// Require one response-local store whenever a response retains key-backed IR,
+/// then prove that every retained inline leaf resolves through that store.
+pub(crate) fn validate_projected_content<'a>(
+    projection: Option<&'a ContentProjection>,
+    heading: Option<&'a Heading>,
+    blocks: &'a [Block],
+    sections: &'a [Section],
+) -> Result<(), String> {
+    let retains_ir = heading.is_some() || !blocks.is_empty() || !sections.is_empty();
+    let Some(projection) = projection else {
+        return if retains_ir {
+            Err("retained document content requires a content projection".to_owned())
+        } else {
+            Ok(())
+        };
+    };
+
+    validate_content_context(
+        projection.content(),
+        &projection.content_store,
+        heading,
+        blocks,
+        sections,
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+fn validate_content_context<'a>(
+    content: ContentContext<'a>,
+    store: &'a ContentStore,
+    heading: Option<&'a Heading>,
+    blocks: &'a [Block],
+    sections: &'a [Section],
+) -> Result<(), String> {
+    // Explanation and excerpt envelopes may present the same authoritative
+    // atom in both a support and a selected view. Validate each inline
+    // container's exact ranges and wrappers, not global atom uniqueness.
+    struct ProjectionValidator<'store> {
+        content: ContentContext<'store>,
+        positions: mant_ir::InlinePositionIndex<'store>,
+        store: &'store ContentStore,
+        link: Option<mant_ir::LinkOccurrenceKey>,
+        strong_depth: usize,
+        emphasis_depth: usize,
+        linked_leaf_count: usize,
+        invalid: bool,
+    }
+    impl<'store> Visit<'store> for ProjectionValidator<'store> {
+        fn visit_heading(&mut self, heading: &'store mant_ir::Heading) {
+            self.invalid |= !self.positions.is_positioned(&heading.content);
+            visit::walk_heading(self, heading);
+        }
+
+        fn visit_block(&mut self, block: &'store mant_ir::Block) {
+            if let mant_ir::Block::Paragraph { children, .. }
+            | mant_ir::Block::Preformatted { children, .. } = block
+            {
+                self.invalid |= !self.positions.is_positioned(children);
+            }
+            visit::walk_block(self, block);
+        }
+
+        fn visit_definition_item(&mut self, item: &'store mant_ir::DefinitionItem) {
+            for term in &item.terms {
+                self.invalid |= !self.positions.is_positioned(term);
+            }
+            if item.entry.is_some()
+                && self
+                    .content
+                    .entry_forms(mant_ir::EntryOwner::Definition(item))
+                    .ok()
+                    .flatten()
+                    .is_none()
+            {
+                self.invalid = true;
+                return;
+            }
+            visit::walk_definition_item(self, item);
+        }
+
+        fn visit_list_item(&mut self, item: &'store mant_ir::ListItem) {
+            if item.entry.is_some()
+                && self
+                    .content
+                    .entry_forms(mant_ir::EntryOwner::List(item))
+                    .ok()
+                    .flatten()
+                    .is_none()
+            {
+                self.invalid = true;
+                return;
+            }
+            visit::walk_list_item(self, item);
+        }
+
+        fn visit_inline(&mut self, inline: &'store mant_ir::Inline) {
+            if self.content.inline(inline).is_err() {
+                self.invalid = true;
+                return;
+            }
+            match inline {
+                mant_ir::Inline::Text { content } | mant_ir::Inline::Code { content } => {
+                    if self.link.is_some() {
+                        self.linked_leaf_count = self.linked_leaf_count.saturating_add(1);
+                    }
+                    let Some(atom) = self.store.atom(content.atom) else {
+                        self.invalid = true;
+                        return;
+                    };
+                    self.invalid |= atom.link != self.link
+                        || atom.kind.text().is_none_or(|text| {
+                            content.bytes.start != 0 || content.bytes.end as usize != text.len()
+                        })
+                        || (self.strong_depth > 0 && !atom.style.strong)
+                        || (self.emphasis_depth > 0 && !atom.style.emphasis)
+                        || matches!(inline, mant_ir::Inline::Code { .. }) != atom.style.literal;
+                }
+                mant_ir::Inline::LineBreak { atom } => {
+                    if self.link.is_some() {
+                        self.linked_leaf_count = self.linked_leaf_count.saturating_add(1);
+                    }
+                    self.invalid |= self
+                        .store
+                        .atom(*atom)
+                        .is_none_or(|record| record.link != self.link);
+                }
+                mant_ir::Inline::Link {
+                    occurrence,
+                    children,
+                } => {
+                    self.invalid |= self.link.is_some();
+                    let outer = self.link.replace(*occurrence);
+                    let before = self.linked_leaf_count;
+                    for child in children {
+                        self.visit_inline(child);
+                    }
+                    if self.linked_leaf_count == before
+                        && self
+                            .store
+                            .link(*occurrence)
+                            .is_some_and(|link| !link.label.is_empty())
+                    {
+                        self.invalid = true;
+                    }
+                    self.link = outer;
+                }
+                mant_ir::Inline::Strong { children } => {
+                    self.strong_depth = self.strong_depth.saturating_add(1);
+                    for child in children {
+                        self.visit_inline(child);
+                    }
+                    self.strong_depth -= 1;
+                }
+                mant_ir::Inline::Emphasis { children } => {
+                    self.emphasis_depth = self.emphasis_depth.saturating_add(1);
+                    for child in children {
+                        self.visit_inline(child);
+                    }
+                    self.emphasis_depth -= 1;
+                }
+                mant_ir::Inline::Anchor { .. } => {}
+            }
+        }
+    }
+
+    let positions = content.inline_position_index().ok_or_else(|| {
+        "retained document content has invalid logical scalar positions".to_owned()
+    })?;
+    let mut validator = ProjectionValidator {
+        content,
+        positions,
+        store,
+        link: None,
+        strong_depth: 0,
+        emphasis_depth: 0,
+        linked_leaf_count: 0,
+        invalid: false,
+    };
+    if let Some(heading) = heading {
+        validator.visit_heading(heading);
+    }
+    for block in blocks {
+        validator.visit_block(block);
+    }
+    for section in sections {
+        validator.visit_section(section);
+    }
+    if validator.invalid {
+        Err("retained document content does not resolve in its content projection".to_owned())
+    } else {
+        Ok(())
+    }
 }
 
 impl Producer {
@@ -178,6 +428,7 @@ impl From<&IrDocument> for DocumentResponse {
             schema: DocumentSchema::V0Dot12,
             producer: Producer::for_document(document),
             source_context: SourceContext::from(document),
+            content_store: document.content_store.clone(),
             meta: document.meta.clone(),
             heading: document.heading.clone(),
             fragment_aliases: document.fragment_aliases.clone(),
@@ -197,6 +448,7 @@ impl From<DocumentResponse> for IrDocument {
             }),
             sources: document.source_context.sources,
             root_source: document.source_context.root_source,
+            content_store: document.content_store,
             meta: document.meta,
             heading: document.heading,
             fragment_aliases: document.fragment_aliases,

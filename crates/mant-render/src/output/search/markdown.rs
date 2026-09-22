@@ -13,9 +13,15 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
         escape_text(&label)
     )];
     blocks.push(format!(
-        "{} {} in the full Markdown document.",
+        "{} {} in the document.",
         search.total,
-        if search.total == 1 {
+        if search.content_projection.is_some() {
+            if search.total == 1 {
+                "logical match"
+            } else {
+                "logical matches"
+            }
+        } else if search.total == 1 {
             "matching line"
         } else {
             "matching lines"
@@ -34,7 +40,7 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
                 .next_offset
                 .map_or(String::new(), |offset| format!(" Next offset: `{offset}`."));
             blocks.push(format!(
-                "Showing matching lines {range_start}–{range_end}.{continuation}"
+                "Showing results {range_start}–{range_end}.{continuation}"
             ));
         }
     }
@@ -59,7 +65,17 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
                     .join(" → ")
             ),
             format!(
-                "- Markdown: {}",
+                "- {}: {}",
+                if found
+                    .occurrences
+                    .iter()
+                    .any(|occurrence| occurrence.markdown.is_some()
+                        || !occurrence.markdown_projections.is_empty())
+                {
+                    "Markdown"
+                } else {
+                    "Logical"
+                },
                 group_coordinates(std::slice::from_ref(found))
             ),
         ];

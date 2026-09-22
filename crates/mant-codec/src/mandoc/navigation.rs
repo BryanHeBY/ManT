@@ -14,7 +14,27 @@ use mant_ir::{
 
 pub(super) type SectionTargets = HashMap<String, Option<String>>;
 
+pub(super) fn promote_manual_navigation(
+    content: &super::content::LegacyContent,
+    root_blocks: &mut [Block],
+    sections: &mut [Section],
+) {
+    promote_manual_references(content, root_blocks);
+    for section in sections {
+        promote_manual_section(content, section);
+    }
+}
+
+fn promote_manual_section(content: &super::content::LegacyContent, section: &mut Section) {
+    promote_manual_reference_inlines(content, &mut section.heading.content);
+    promote_manual_references(content, &mut section.blocks);
+    for child in &mut section.children {
+        promote_manual_section(content, child);
+    }
+}
+
 pub(super) fn resolve_navigation(
+    content: &mut mant_ir::ContentStore,
     root_blocks: &mut [Block],
     sections: &mut [Section],
     authored_section_targets: &SectionTargets,
@@ -27,10 +47,15 @@ pub(super) fn resolve_navigation(
     // must neither create aliases nor make a distinct authored heading
     // ambiguous.
     let targets = authored_section_targets.clone();
-    resolve_blocks(root_blocks, &targets, retained_targets, diagnostics);
-    promote_manual_references(root_blocks);
+    resolve_blocks(
+        content,
+        root_blocks,
+        &targets,
+        retained_targets,
+        diagnostics,
+    );
     for section in sections {
-        resolve_section(section, &targets, retained_targets, diagnostics);
+        resolve_section(content, section, &targets, retained_targets, diagnostics);
     }
 }
 
@@ -138,47 +163,53 @@ pub(super) fn native_anchor_ids(root_blocks: &[Block], sections: &[Section]) -> 
 }
 
 fn resolve_section(
+    content: &mut mant_ir::ContentStore,
     section: &mut Section,
     targets: &SectionTargets,
     retained_targets: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     resolve_inlines(
+        content,
         &mut section.heading.content,
         targets,
         retained_targets,
         diagnostics,
     );
-    promote_manual_reference_inlines(&mut section.heading.content);
-    resolve_blocks(&mut section.blocks, targets, retained_targets, diagnostics);
-    promote_manual_references(&mut section.blocks);
+    resolve_blocks(
+        content,
+        &mut section.blocks,
+        targets,
+        retained_targets,
+        diagnostics,
+    );
     for child in &mut section.children {
-        resolve_section(child, targets, retained_targets, diagnostics);
+        resolve_section(content, child, targets, retained_targets, diagnostics);
     }
 }
 
-fn promote_manual_references(blocks: &mut [Block]) {
+fn promote_manual_references(content: &super::content::LegacyContent, blocks: &mut [Block]) {
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                promote_manual_reference_inlines(children);
+                promote_manual_reference_inlines(content, children);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    promote_manual_references(&mut item.blocks);
+                    promote_manual_references(content, &mut item.blocks);
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &mut item.terms {
-                        promote_manual_reference_inlines(term);
+                        promote_manual_reference_inlines(content, term);
                     }
-                    promote_manual_references(&mut item.description);
+                    promote_manual_references(content, &mut item.description);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
-                    promote_manual_references(&mut cell.blocks);
+                    promote_manual_references(content, &mut cell.blocks);
                 }
             }
             Block::Equation { .. }
@@ -189,7 +220,10 @@ fn promote_manual_references(blocks: &mut [Block]) {
     }
 }
 
-fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
+fn promote_manual_reference_inlines(
+    content: &super::content::LegacyContent,
+    nodes: &mut Vec<Inline>,
+) {
     let mut promoted = Vec::with_capacity(nodes.len());
     let mut source = std::mem::take(nodes).into_iter().peekable();
     while let Some(node) = source.next() {
@@ -200,12 +234,16 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
             promoted.push(node);
             continue;
         };
-        let name = mant_ir::inline_plain_text(children);
-        let Some(Inline::Text { value }) = source.peek() else {
+        let name = content.with_context(|context| mant_ir::inline_plain_text(context, children));
+        let Some(Inline::Text { content: suffix }) = source.peek() else {
             promoted.push(node);
             continue;
         };
-        let Some((section, remainder)) = manual_section_suffix(value) else {
+        let Some(value) = content.text(*suffix) else {
+            promoted.push(node);
+            continue;
+        };
+        let Some((section, remainder)) = manual_section_suffix(&value) else {
             promoted.push(node);
             continue;
         };
@@ -214,16 +252,33 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
             continue;
         }
 
-        source.next();
+        let Some(Inline::Text {
+            content: mut suffix,
+        }) = source.next()
+        else {
+            unreachable!("peeked manual suffix remains text")
+        };
+        let label_suffix = format!("({section})");
+        if !content.replace_text(&mut suffix, label_suffix) {
+            promoted.push(node);
+            promoted.push(Inline::Text { content: suffix });
+            continue;
+        }
+        let mut children = vec![node, Inline::Text { content: suffix }];
+        let target = LinkTarget::Manual {
+            name: name.clone(),
+            manual_section: Some(section.clone()),
+        };
+        let Some(occurrence) = content.attach_link(&children, target, None) else {
+            let node = children.remove(0);
+            let _ = content.replace_text(&mut suffix, value);
+            promoted.push(node);
+            promoted.push(Inline::Text { content: suffix });
+            continue;
+        };
         promoted.push(Inline::Link {
-            target: LinkTarget::Manual {
-                name: name.clone(),
-                manual_section: Some(section.clone()),
-            },
-            title: None,
-            children: vec![Inline::Text {
-                value: format!("{name}({section})"),
-            }],
+            occurrence,
+            children,
         });
         // Alternating-font macros can split the label and suffix across
         // libmandoc nodes. The roff decoder therefore cannot consume a legacy
@@ -232,9 +287,13 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
         // empty suffix here.
         let remainder = remainder.strip_prefix(" <>").unwrap_or(&remainder);
         if !remainder.is_empty() {
-            promoted.push(Inline::Text {
-                value: remainder.to_owned(),
-            });
+            promoted.extend(content.lower(
+                mant_ir::ContentRootKind::Body,
+                None,
+                vec![crate::mandoc::inline::DraftInline::Text {
+                    value: remainder.to_owned(),
+                }],
+            ));
         }
     }
     *nodes = promoted;
@@ -251,6 +310,7 @@ fn manual_section_suffix(value: &str) -> Option<(String, String)> {
 }
 
 fn resolve_blocks(
+    content: &mut mant_ir::ContentStore,
     blocks: &mut [Block],
     targets: &SectionTargets,
     explicit_targets: &HashSet<String>,
@@ -259,19 +319,26 @@ fn resolve_blocks(
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                resolve_inlines(children, targets, explicit_targets, diagnostics);
+                resolve_inlines(content, children, targets, explicit_targets, diagnostics);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    resolve_blocks(&mut item.blocks, targets, explicit_targets, diagnostics);
+                    resolve_blocks(
+                        content,
+                        &mut item.blocks,
+                        targets,
+                        explicit_targets,
+                        diagnostics,
+                    );
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &mut item.terms {
-                        resolve_inlines(term, targets, explicit_targets, diagnostics);
+                        resolve_inlines(content, term, targets, explicit_targets, diagnostics);
                     }
                     resolve_blocks(
+                        content,
                         &mut item.description,
                         targets,
                         explicit_targets,
@@ -282,7 +349,13 @@ fn resolve_blocks(
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &mut row.cells {
-                        resolve_blocks(&mut cell.blocks, targets, explicit_targets, diagnostics);
+                        resolve_blocks(
+                            content,
+                            &mut cell.blocks,
+                            targets,
+                            explicit_targets,
+                            diagnostics,
+                        );
                     }
                 }
             }
@@ -295,6 +368,7 @@ fn resolve_blocks(
 }
 
 fn resolve_inlines(
+    content: &mut mant_ir::ContentStore,
     nodes: &mut Vec<Inline>,
     targets: &SectionTargets,
     explicit_targets: &HashSet<String>,
@@ -304,25 +378,53 @@ fn resolve_inlines(
     for node in std::mem::take(nodes) {
         match node {
             Inline::Strong { mut children } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
+                resolve_inlines(
+                    content,
+                    &mut children,
+                    targets,
+                    explicit_targets,
+                    diagnostics,
+                );
                 resolved.push(Inline::Strong { children });
             }
             Inline::Emphasis { mut children } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
+                resolve_inlines(
+                    content,
+                    &mut children,
+                    targets,
+                    explicit_targets,
+                    diagnostics,
+                );
                 resolved.push(Inline::Emphasis { children });
             }
             Inline::Link {
-                target: LinkTarget::Section { id },
-                title,
+                occurrence,
                 mut children,
-            } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
+            } if matches!(
+                content.link(occurrence).map(|link| &link.target),
+                Some(LinkTarget::Section { .. })
+            ) =>
+            {
+                resolve_inlines(
+                    content,
+                    &mut children,
+                    targets,
+                    explicit_targets,
+                    diagnostics,
+                );
+                let Some(LinkTarget::Section { id }) =
+                    content.link(occurrence).map(|link| link.target.clone())
+                else {
+                    unreachable!("guard resolved section target")
+                };
                 if let Some(section_id) = resolve_section_target(targets, id.as_str()) {
-                    resolved.push(Inline::Link {
-                        target: LinkTarget::Section {
+                    if let Some(link) = content.link_mut(occurrence) {
+                        link.target = LinkTarget::Section {
                             id: section_id.into(),
-                        },
-                        title,
+                        };
+                    }
+                    resolved.push(Inline::Link {
+                        occurrence,
                         children,
                     });
                 } else {
@@ -333,30 +435,35 @@ fn resolve_inlines(
                         message: format!("cannot resolve section reference: {id}"),
                         source: None,
                     });
+                    let _ = content.detach_link(occurrence);
                     resolved.extend(children);
                 }
             }
             Inline::Link {
-                target,
-                title,
+                occurrence,
                 mut children,
             } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
+                resolve_inlines(
+                    content,
+                    &mut children,
+                    targets,
+                    explicit_targets,
+                    diagnostics,
+                );
                 resolved.push(Inline::Link {
-                    target,
-                    title,
+                    occurrence,
                     children,
                 });
             }
             Inline::Anchor {
+                point,
                 id,
                 fragment_aliases,
-                owner_source,
             } if !fragment_aliases.is_empty() || explicit_targets.contains(id.as_str()) => {
                 resolved.push(Inline::Anchor {
+                    point,
                     id,
                     fragment_aliases,
-                    owner_source,
                 });
             }
             Inline::Anchor { .. } => {}
@@ -468,6 +575,46 @@ mod tests {
 
     use super::{SectionTargets, promote_manual_reference_inlines, resolve_section_target};
 
+    #[derive(Clone, Copy)]
+    enum Style {
+        Strong,
+        Emphasis,
+    }
+
+    fn promote(style: Style, name: &str, suffix: &str) -> (mant_ir::ContentStore, Vec<Inline>) {
+        let content = crate::mandoc::content::LegacyContent::default();
+        let name = vec![crate::mandoc::inline::DraftInline::Text {
+            value: name.to_owned(),
+        }];
+        let name = match style {
+            Style::Strong => crate::mandoc::inline::DraftInline::Strong { children: name },
+            Style::Emphasis => crate::mandoc::inline::DraftInline::Emphasis { children: name },
+        };
+        let mut nodes = content.lower(
+            mant_ir::ContentRootKind::Body,
+            None,
+            vec![
+                name,
+                crate::mandoc::inline::DraftInline::Text {
+                    value: suffix.to_owned(),
+                },
+            ],
+        );
+        promote_manual_reference_inlines(&content, &mut nodes);
+        (content.finish(), nodes)
+    }
+
+    fn manual_target<'a>(
+        content: mant_ir::ContentContext<'a>,
+        inline: &'a Inline,
+    ) -> Option<&'a mant_ir::LinkTarget> {
+        content
+            .link(inline)
+            .ok()
+            .flatten()
+            .map(mant_ir::LinkView::target)
+    }
+
     #[test]
     fn resolves_one_parenthetically_qualified_section_title() {
         let targets: SectionTargets = HashMap::from([
@@ -518,125 +665,70 @@ mod tests {
 
     #[test]
     fn promotes_traditional_see_also_pairs_without_consuming_punctuation() {
-        let mut nodes = vec![
-            Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "printf".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: "(3), next".to_owned(),
-            },
-        ];
-
-        promote_manual_reference_inlines(&mut nodes);
+        let (store, nodes) = promote(Style::Strong, "printf", "(3), next");
+        let content = store.content();
 
         assert!(matches!(
-            &nodes[0],
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+            manual_target(content, &nodes[0]),
+            Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) })
                 if name == "printf" && manual_section == "3"
         ));
-        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+        assert!(
+            matches!(&nodes[1], Inline::Text { content: text } if content.resolve_text(*text) == Some(", next"))
+        );
     }
 
     #[test]
     fn promotes_manual_pairs_outside_see_also_sections() {
-        let mut nodes = vec![
-            Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "git-add".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: "(1)".to_owned(),
-            },
-        ];
-
-        promote_manual_reference_inlines(&mut nodes);
+        let (store, nodes) = promote(Style::Strong, "git-add", "(1)");
+        let content = store.content();
 
         assert!(matches!(
-            &nodes[0],
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, children, .. }
-                if name == "git-add"
-                    && manual_section == "1"
-                    && mant_ir::inline_plain_text(children) == "git-add(1)"
+            manual_target(content, &nodes[0]),
+            Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) })
+                if name == "git-add" && manual_section == "1"
         ));
+        assert_eq!(mant_ir::inline_plain_text(content, &nodes), "git-add(1)");
     }
 
     #[test]
     fn promotes_groff_mr_fallback_pairs_from_emphasis() {
-        let mut nodes = vec![
-            Inline::Emphasis {
-                children: vec![Inline::Text {
-                    value: "groff_man".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: "(7), next".to_owned(),
-            },
-        ];
-
-        promote_manual_reference_inlines(&mut nodes);
+        let (store, nodes) = promote(Style::Emphasis, "groff_man", "(7), next");
+        let content = store.content();
 
         assert!(matches!(
-            &nodes[0],
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+            manual_target(content, &nodes[0]),
+            Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) })
                 if name == "groff_man" && manual_section == "7"
         ));
-        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+        assert!(
+            matches!(&nodes[1], Inline::Text { content: text } if content.resolve_text(*text) == Some(", next"))
+        );
     }
 
     #[test]
     fn removes_empty_sphinx_destination_after_styled_reference() {
-        let mut nodes = vec![
-            Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "btrfs".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: "(5) <>, next".to_owned(),
-            },
-        ];
-
-        promote_manual_reference_inlines(&mut nodes);
+        let (store, nodes) = promote(Style::Strong, "btrfs", "(5) <>, next");
+        let content = store.content();
 
         assert!(matches!(
-            &nodes[0],
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+            manual_target(content, &nodes[0]),
+            Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) })
                 if name == "btrfs" && manual_section == "5"
         ));
-        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+        assert!(
+            matches!(&nodes[1], Inline::Text { content: text } if content.resolve_text(*text) == Some(", next"))
+        );
     }
 
     #[test]
     fn leaves_prose_and_malformed_sections_unchanged() {
         for suffix in [" documentation", "()", "(0)", "(section one)"] {
-            let mut nodes = vec![
-                Inline::Strong {
-                    children: vec![Inline::Text {
-                        value: "tool".to_owned(),
-                    }],
-                },
-                Inline::Text {
-                    value: suffix.to_owned(),
-                },
-            ];
-            promote_manual_reference_inlines(&mut nodes);
+            let (_, nodes) = promote(Style::Strong, "tool", suffix);
             assert!(matches!(nodes[0], Inline::Strong { .. }));
         }
 
-        let mut emphasized_prose = vec![
-            Inline::Emphasis {
-                children: vec![Inline::Text {
-                    value: "tool".to_owned(),
-                }],
-            },
-            Inline::Text {
-                value: " documentation".to_owned(),
-            },
-        ];
-        promote_manual_reference_inlines(&mut emphasized_prose);
+        let (_, emphasized_prose) = promote(Style::Emphasis, "tool", " documentation");
         assert!(matches!(emphasized_prose[0], Inline::Emphasis { .. }));
     }
 }

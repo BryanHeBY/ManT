@@ -1,9 +1,11 @@
 //! Lowers semantic inline nodes into styled text, anchors, and link targets.
 
+use super::model::GlyphProjection;
 use super::{
-    DocumentAddress, ExternalUri, Inline, LinkTarget, LogicalLinkRange, Modifier, Section, Span,
-    Style, StyledInlineLine, theme,
+    DocumentAddress, ExternalUri, HashMap, Inline, LinkTarget, LogicalLinkRange, Modifier, Section,
+    Span, Style, StyledInlineLine, theme,
 };
+use mant_ir::{ContentContext, InlineView, LinkOccurrenceKey};
 
 pub(super) fn tldr_style(role: mant_render::TldrRole) -> Style {
     use mant_render::TldrRole;
@@ -25,34 +27,45 @@ pub(super) fn tldr_style(role: mant_render::TldrRole) -> Style {
 /// Anchor ownership follows original hard lines, independently of styling or
 /// visual wrapping. Carry the row across nested wrappers instead of flattening
 /// targets into an unordered set at the start of the whole paragraph.
-pub(super) fn inline_anchor_rows(nodes: &[Inline]) -> Vec<(String, usize)> {
+pub(super) fn inline_anchor_rows<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
+) -> Vec<(String, usize)> {
     let mut ids = Vec::new();
-    collect_anchor_rows(nodes, &mut 0, &mut ids);
+    collect_anchor_rows(content, nodes, &mut 0, &mut ids)
+        .expect("validated document content must resolve while locating anchors");
     ids
 }
 
-fn collect_anchor_rows(nodes: &[Inline], row: &mut usize, ids: &mut Vec<(String, usize)>) {
+fn collect_anchor_rows<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
+    row: &mut usize,
+    ids: &mut Vec<(String, usize)>,
+) -> Result<(), mant_ir::ContentReadError> {
     for node in nodes {
-        match node {
-            Inline::Anchor {
-                id,
-                fragment_aliases,
-                ..
-            } => {
-                ids.push((id.to_string(), *row));
+        match content.inline(node)? {
+            InlineView::Anchor(anchor) => {
+                ids.push((anchor.id().to_string(), *row));
                 ids.extend(
-                    fragment_aliases
+                    anchor
+                        .fragment_aliases()
                         .iter()
                         .map(|alias| (alias.to_string(), *row)),
                 );
             }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect_anchor_rows(children, row, ids),
-            Inline::Text { value } | Inline::Code { value } => *row += value.matches('\n').count(),
-            Inline::LineBreak => *row += 1,
+            InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                collect_anchor_rows(content, children, row, ids)?;
+            }
+            InlineView::Link(link) => collect_anchor_rows(content, link.children(), row, ids)?,
+            InlineView::Text(value) | InlineView::Code(value) => {
+                *row += value.matches('\n').count();
+            }
+            InlineView::LineBreak => *row += 1,
+            _ => return Err(mant_ir::ContentReadError),
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -61,66 +74,86 @@ pub(super) fn styled_inline_lines(
     style: Style,
     current_address: Option<&DocumentAddress>,
 ) -> Vec<StyledInlineLine> {
-    styled_bound_inline_lines(nodes, style, current_address, &[])
+    styled_bound_inline_lines(
+        crate::test_content::content(),
+        nodes,
+        style,
+        current_address,
+        &[],
+    )
 }
 
 #[cfg(test)]
-pub(super) fn styled_bound_inline_lines(
-    nodes: &[Inline],
+pub(super) fn styled_bound_inline_lines<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
     names: &[mant_render::InlineNameRange],
 ) -> Vec<StyledInlineLine> {
-    styled_display_inline_lines(nodes, style, current_address, names, false)
+    styled_display_inline_lines(content, nodes, style, current_address, names, false)
 }
 
 #[cfg(test)]
-pub(super) fn styled_display_inline_lines(
-    nodes: &[Inline],
+pub(super) fn styled_display_inline_lines<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
     names: &[mant_render::InlineNameRange],
     code: bool,
 ) -> Vec<StyledInlineLine> {
     styled_reference_inline_lines(
+        content,
         nodes,
         style,
         current_address,
         names,
         code,
         &std::collections::HashMap::default(),
+        &mut HashMap::new(),
     )
 }
 
-pub(super) fn styled_reference_inline_lines(
-    nodes: &[Inline],
+#[allow(clippy::too_many_arguments)]
+pub(super) fn styled_reference_inline_lines<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
     names: &[mant_render::InlineNameRange],
     code: bool,
     origins: &super::references::ReferenceOrigins,
+    link_targets: &mut HashMap<super::LinkIdentity, LinkTarget>,
 ) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
-    append_inline(nodes, style, current_address, names, code, &mut lines);
-    if !origins.is_empty() {
-        reference_marks(nodes, origins, &mut lines, &mut 0, &mut 0);
-    }
+    append_inline(
+        content,
+        nodes,
+        style,
+        current_address,
+        names,
+        code,
+        link_targets,
+        &mut lines,
+    );
+    reference_marks(content, nodes, origins, &mut lines, &mut 0, &mut 0)
+        .expect("validated document content must resolve while marking references and anchors");
     lines
 }
 
-fn reference_marks(
-    nodes: &[Inline],
+fn reference_marks<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
     origins: &super::references::ReferenceOrigins,
     lines: &mut [StyledInlineLine],
     row: &mut usize,
     column: &mut usize,
-) {
+) -> Result<(), mant_ir::ContentReadError> {
     for node in nodes {
-        match node {
-            Inline::Link {
-                target, children, ..
-            } => {
-                if let Some(id) = origins.get(&std::ptr::from_ref(target).addr())
+        match content.inline(node)? {
+            InlineView::Link(link) => {
+                if let Some(id) = origins.get(&link.occurrence())
                     && let Some(line) = lines.get_mut(*row)
                 {
                     line.reference_marks.push(super::model::ReferenceMark {
@@ -128,16 +161,16 @@ fn reference_marks(
                         scalar_offset: *column,
                     });
                 }
-                reference_marks(children, origins, lines, row, column);
+                reference_marks(content, link.children(), origins, lines, row, column)?;
             }
-            Inline::Strong { children } | Inline::Emphasis { children } => {
-                reference_marks(children, origins, lines, row, column);
+            InlineView::Strong(children) | InlineView::Emphasis(children) => {
+                reference_marks(content, children, origins, lines, row, column)?;
             }
-            Inline::LineBreak => {
+            InlineView::LineBreak => {
                 *row += 1;
                 *column = 0;
             }
-            Inline::Text { value } | Inline::Code { value } => {
+            InlineView::Text(value) | InlineView::Code(value) => {
                 for (index, part) in value.split('\n').enumerate() {
                     if index > 0 {
                         *row += 1;
@@ -146,9 +179,24 @@ fn reference_marks(
                     *column += part.chars().count();
                 }
             }
-            Inline::Anchor { .. } => {}
+            InlineView::Anchor(anchor) => {
+                if let Some(line) = lines.get_mut(*row) {
+                    line.reference_marks.push(super::model::ReferenceMark {
+                        id: std::sync::Arc::from(anchor.id().as_str()),
+                        scalar_offset: *column,
+                    });
+                    for alias in anchor.fragment_aliases() {
+                        line.reference_marks.push(super::model::ReferenceMark {
+                            id: std::sync::Arc::from(alias.as_str()),
+                            scalar_offset: *column,
+                        });
+                    }
+                }
+            }
+            _ => return Err(mant_ir::ContentReadError),
         }
     }
+    Ok(())
 }
 
 pub(super) fn shifted_reference_marks(
@@ -187,6 +235,45 @@ pub(super) fn shifted_links(links: Vec<LogicalLinkRange>, scalars: usize) -> Vec
         .collect()
 }
 
+pub(super) fn shifted_glyph_projections(
+    mut projections: Vec<GlyphProjection>,
+    scalars: usize,
+) -> Vec<GlyphProjection> {
+    for projection in &mut projections {
+        projection.scalar += scalars;
+    }
+    projections
+}
+
+pub(super) fn projected_spans_width(spans: &[Span<'_>], projections: &[GlyphProjection]) -> usize {
+    let logical = spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    let mut display = String::with_capacity(logical.len());
+    let mut projections = projections.iter().peekable();
+    for (scalar, character) in logical.chars().enumerate() {
+        while projections
+            .peek()
+            .is_some_and(|projection| projection.scalar < scalar)
+        {
+            projections.next();
+        }
+        if projections
+            .peek()
+            .is_some_and(|projection| projection.scalar == scalar)
+        {
+            let projection = projections.next().expect("peeked projection");
+            display.push_str(&projection.glyphs);
+        } else {
+            display.push(character);
+        }
+    }
+    mant_render::cells::graphemes(&display)
+        .map(|grapheme| grapheme.columns())
+        .sum()
+}
+
 pub(super) fn count_sections(sections: &[Section]) -> usize {
     sections
         .iter()
@@ -194,15 +281,18 @@ pub(super) fn count_sections(sections: &[Section]) -> usize {
         .sum()
 }
 
-fn append_inline(
-    nodes: &[Inline],
+#[allow(clippy::too_many_arguments)]
+fn append_inline<'a>(
+    content: ContentContext<'a>,
+    nodes: &'a [Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
     names: &[mant_render::InlineNameRange],
     code: bool,
+    link_targets: &mut HashMap<super::LinkIdentity, LinkTarget>,
     lines: &mut Vec<StyledInlineLine>,
 ) {
-    mant_render::visit_inline_text(nodes, names, |source, target, text| {
+    mant_render::visit_inline_display_text(content, nodes, names, |source, link, text, display| {
         let first_line = lines.len() - 1;
         let first_scalar = spans_scalars(&lines[first_line].spans);
         if code {
@@ -210,17 +300,39 @@ fn append_inline(
             for span in crate::code::highlight(vec![Span::styled(text.to_owned(), style)]) {
                 append_text(
                     &span.content,
-                    source_style(span.style, source, target),
+                    source_style(span.style, source, link.map(|link| link.target)),
                     lines,
                 );
             }
         } else {
-            append_text(text, source_style(style, source, target), lines);
+            append_text(
+                text,
+                source_style(style, source, link.map(|link| link.target)),
+                lines,
+            );
         }
-        if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
-            record_link(lines, first_line, first_scalar, &target);
+        if let Some(display) = display
+            && display != text
+            && text.chars().count() == 1
+            && !text.contains('\n')
+        {
+            // Native projected atoms are one logical scalar. The original
+            // span stays untouched for matching, copy, and reference offsets.
+            lines[first_line].glyph_projections.push(GlyphProjection {
+                scalar: first_scalar,
+                glyphs: display.to_owned(),
+            });
         }
-    });
+        if let Some((link, target)) = link.and_then(|link| {
+            local_link_target(link.target, current_address).map(|target| (link, target))
+        }) {
+            link_targets
+                .entry(super::LinkIdentity::Content(link.occurrence))
+                .or_insert(target);
+            record_link(lines, first_line, first_scalar, link.occurrence);
+        }
+    })
+    .expect("validated document content must resolve while lowering inline text");
 }
 
 /// Layer source markup, then the more specific validated semantic name color.
@@ -301,7 +413,7 @@ fn record_link(
     lines: &mut [StyledInlineLine],
     first_line: usize,
     first_scalar: usize,
-    target: &LinkTarget,
+    occurrence: LinkOccurrenceKey,
 ) {
     let last_line = lines.len() - 1;
     for (line_index, line) in lines
@@ -318,7 +430,7 @@ fn record_link(
         let end_scalar = spans_scalars(&line.spans);
         if end_scalar > start_scalar {
             line.links.push(LogicalLinkRange {
-                target: target.clone(),
+                identity: super::LinkIdentity::Content(occurrence),
                 start_scalar,
                 end_scalar,
             });

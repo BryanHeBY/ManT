@@ -29,19 +29,20 @@ struct TerminalCase {
     selected: SelectedContract,
 }
 
-struct StrongText(bool);
+struct StrongText<'a>(bool, mant_ir::ContentContext<'a>);
 
-struct ExactTailInline(Option<Inline>);
+struct ExactTailInline<'a>(Option<Inline>, mant_ir::ContentContext<'a>);
 
-struct AuthoredSectionLink {
+struct AuthoredSectionLink<'a> {
     id: &'static str,
     found: bool,
+    content: mant_ir::ContentContext<'a>,
 }
 
-impl<'ir> Visit<'ir> for StrongText {
+impl<'ir> Visit<'ir> for StrongText<'ir> {
     fn visit_inline(&mut self, inline: &'ir Inline) {
         if let Inline::Strong { children } = inline
-            && super::inline_text(children) == "TAIL"
+            && super::inline_text(self.1, children) == "TAIL"
         {
             self.0 = true;
         }
@@ -49,9 +50,11 @@ impl<'ir> Visit<'ir> for StrongText {
     }
 }
 
-impl<'ir> Visit<'ir> for ExactTailInline {
+impl<'ir> Visit<'ir> for ExactTailInline<'ir> {
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        if self.0.is_none() && mant_ir::inline_plain_text(std::slice::from_ref(inline)) == "TAIL" {
+        if self.0.is_none()
+            && mant_ir::inline_plain_text(self.1, std::slice::from_ref(inline)) == "TAIL"
+        {
             self.0 = Some(inline.clone());
             return;
         }
@@ -59,15 +62,10 @@ impl<'ir> Visit<'ir> for ExactTailInline {
     }
 }
 
-impl<'ir> Visit<'ir> for AuthoredSectionLink {
+impl<'ir> Visit<'ir> for AuthoredSectionLink<'ir> {
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        if matches!(
-            inline,
-            Inline::Link {
-                target: LinkTarget::Section { id },
-                ..
-            } if id.as_str() == self.id
-        ) {
+        if matches!(self.content.inline(inline), Ok(mant_ir::InlineView::Link(link)) if matches!(link.target(), LinkTarget::Section { id } if id.as_str() == self.id))
+        {
             self.found = true;
         }
         visit::walk_inline(self, inline);

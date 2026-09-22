@@ -26,10 +26,29 @@ let document: Document = serde_json::from_value(serde_json::json!({
         "coordinates": { "kind": "decoded-utf8-bytes" }
     }],
     "rootSource": 1,
+    "contentStore": {
+        "owners": [{
+            "key": 1, "kind": "section", "roots": [1],
+            "provenance": { "kind": "unknown" }
+        }],
+        "roots": [{
+            "key": 1, "owner": 1, "kind": "heading", "atoms": [1], "points": [],
+            "provenance": { "kind": "unknown" }
+        }],
+        "atoms": [{
+            "key": 1, "root": 1, "owner": 1, "kind": "text", "text": "Usage",
+            "provenance": { "kind": "unknown" }
+        }],
+        "points": [],
+        "links": []
+    },
     "meta": {},
     "sections": [{
         "id": "usage",
-        "heading": { "content": [{ "type": "text", "value": "Usage" }] },
+        "heading": { "content": [{
+            "type": "text",
+            "content": { "atom": 1, "bytes": { "start": 0, "end": 5 } }
+        }] },
         "blocks": [],
         "children": []
     }]
@@ -67,11 +86,12 @@ Query errors stay separate from source acquisition and host delivery errors.
 
 ## Format boundary
 
-Markdown-scope search uses the canonical Markdown artifact and source mapping
-from `mant-codec`, with native features disabled. Its text and ranges refer to
-the same borrowed source snapshot. This format dependency does not enable
-native parsing or report rendering. Reference destination checks inspect
-typed logical addresses and already supplied content only; they perform no IO.
+Search matches the visible text or markup of the canonical Markdown artifact
+from `mant-codec` and pages matching line groups. The artifact is rendered
+from authoritative logical content; native terminal wraps are not search input.
+This format dependency does not enable native parsing or report rendering. Reference
+destination checks inspect typed logical addresses and already supplied
+content only; they perform no IO.
 
 See the [protocol manual](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-protocol.md)
 for process contracts and the [IR manual](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-ir.md)

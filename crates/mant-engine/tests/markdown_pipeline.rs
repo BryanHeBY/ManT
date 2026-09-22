@@ -1,11 +1,11 @@
 //! End-to-end Markdown contracts live above the parser/encoder boundary.
 use mant_codec::parse_markdown;
 use mant_ir::ResolvedContent;
-use mant_ir::{Block, DocumentAddress, EntryKind, Inline, MarkdownOrigin, NameCase};
+use mant_ir::{Block, DocumentAddress, EntryKind, MarkdownOrigin, NameCase};
 use mant_loader::load_markdown_text;
 use mant_protocol::{
     EntryProjection, ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference,
-    SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    SearchCase, SearchQuery, SearchSyntax,
 };
 use mant_query::{
     ProjectionError, build_outline_projection, build_outline_with_detail, search_query,
@@ -71,7 +71,7 @@ Gamma.
             pattern: "Gamma".to_owned(),
             syntax: SearchSyntax::Literal,
             case: SearchCase::Sensitive,
-            scope: SearchScope::Visible,
+            scope: mant_protocol::SearchScope::Visible,
             word: false,
             context_lines: 0,
             limit: 10,

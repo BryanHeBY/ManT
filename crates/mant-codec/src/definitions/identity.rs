@@ -1,12 +1,13 @@
 //! Definition identity policy; coordinated by the parent discovery passes.
+#![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use super::{
     context::DefinitionContext,
     syntax::{environment_variable_body, infer_identity, is_ordinal_marker},
 };
 use mant_ir::inline_plain_text as plain_text;
 use mant_ir::{
-    Block, DefinitionItem, EntryFacts, EntryKind, EntryOwner, Inline, ListItem, NameCase, Section,
-    ValueDomain,
+    Block, ContentContext, ContentStore, DefinitionItem, EntryFacts, EntryKind, EntryOwner, Inline,
+    InlineView, ListItem, NameCase, PointBoundary, Section, ValueDomain,
     visit::{self, Visit},
 };
 use sha2::{Digest, Sha256};
@@ -52,6 +53,7 @@ pub(super) struct IdentityPlan {
 }
 
 pub(super) fn identity_plan(
+    content: ContentContext<'_>,
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
@@ -59,7 +61,7 @@ pub(super) fn identity_plan(
     let inferred = item.entry.is_none();
     let (kind, case, names, occurrences, value_domain) = item.entry.as_ref().map_or_else(
         || {
-            let inferred = infer_identity(item, context, hint);
+            let inferred = infer_identity(content, item, context, hint);
             (
                 inferred.kind,
                 inferred.case,
@@ -73,7 +75,7 @@ pub(super) fn identity_plan(
                 identity.kind,
                 identity.case,
                 identity.names.clone(),
-                super::syntax::name_occurrences(item, identity.kind),
+                super::syntax::name_occurrences(content, item, identity.kind),
                 identity.value_domain.clone(),
             )
         },
@@ -81,7 +83,7 @@ pub(super) fn identity_plan(
     let name = names.first().cloned().unwrap_or_else(|| {
         item.terms
             .first()
-            .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
+            .map_or_else(|| "entry".to_owned(), |term| plain_text(content, term))
     });
     let preferred = format!("{}-{}", role_id_prefix(kind), role_name_slug(kind, &name));
     // Whole template declarations can lack exact names. Reuse the bounded
@@ -105,7 +107,7 @@ pub(super) fn identity_plan(
         && item
             .terms
             .iter()
-            .all(|term| is_ordinal_marker(plain_text(term).trim()));
+            .all(|term| is_ordinal_marker(plain_text(content, term).trim()));
     let semantic = hint != Some(super::NativeHeadRole::Presentation) && !presentation_ordinal;
     // A declaration group carries a stronger fact than adjacency: its final
     // member's body is useful reading context for every preceding member.
@@ -125,7 +127,7 @@ pub(super) fn identity_plan(
                 && item
                     .terms
                     .iter()
-                    .all(|term| super::syntax::is_inferred_head(term, head_context)));
+                    .all(|term| super::syntax::is_inferred_head(content, term, head_context)));
     IdentityPlan {
         semantic,
         group_head,
@@ -150,6 +152,7 @@ pub(super) fn list_identity_base(item: &ListItem) -> Option<String> {
 }
 
 pub(super) fn identify_list_item(
+    content: ContentContext<'_>,
     item: &mut ListItem,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
@@ -167,7 +170,13 @@ pub(super) fn identify_list_item(
     {
         preferred = format!(
             "{preferred}-{}",
-            semantic_fingerprint(EntryOwner::List(item), facts.kind, facts.case, &facts.names)
+            semantic_fingerprint(
+                content,
+                EntryOwner::List(item),
+                facts.kind,
+                facts.case,
+                &facts.names,
+            )
         );
     }
     let id = unique_id(&preferred, used, reserved);
@@ -178,6 +187,7 @@ pub(super) fn identify_list_item(
 }
 
 pub(super) fn identify_item(
+    content_store: &mut ContentStore,
     item: &mut DefinitionItem,
     plan: IdentityPlan,
     used: &mut HashSet<String>,
@@ -215,7 +225,7 @@ pub(super) fn identify_item(
             && !item
                 .terms
                 .iter()
-                .any(|term| !plain_text(term).trim().is_empty()))
+                .any(|term| !plain_text(content_store.content(), term).trim().is_empty()))
     {
         item.entry = None;
         return EntryKind::Term;
@@ -230,19 +240,32 @@ pub(super) fn identify_item(
     {
         preferred = format!(
             "{preferred}-{}",
-            semantic_fingerprint(EntryOwner::Definition(item), kind, case, &names)
+            semantic_fingerprint(
+                content_store.content(),
+                EntryOwner::Definition(item),
+                kind,
+                case,
+                &names,
+            )
         );
     }
     let id = unique_id(&preferred, used, reserved);
     if !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
+        && let Some(root) = inline_root(content_store, term)
     {
-        term.insert(0, Inline::anchor(id.clone()));
+        let point = content_store.append_generated_point(
+            root,
+            PointBoundary::BetweenAtoms { atom_boundary: 0 },
+            0,
+            item.source,
+        );
+        term.insert(0, Inline::anchor(point, id.clone()));
     }
     retained.insert(id.clone());
     let forms = native_declaration
         .as_ref()
-        .map(|declaration| super::binding::native_forms(item, declaration))
+        .map(|declaration| super::binding::native_forms(content_store.content(), item, declaration))
         .filter(|forms| !forms.is_empty())
         .unwrap_or_else(|| {
             (0..item.terms.len())
@@ -251,6 +274,7 @@ pub(super) fn identify_item(
         });
     item.entry = Some(EntryFacts {
         name_bindings: super::binding::native_name_bindings(
+            content_store.content(),
             item,
             &names,
             &occurrences,
@@ -268,13 +292,17 @@ pub(super) fn identify_item(
     kind
 }
 
-pub(super) fn has_semantic_spelling(item: &DefinitionItem, plan: &IdentityPlan) -> bool {
+pub(super) fn has_semantic_spelling(
+    content: ContentContext<'_>,
+    item: &DefinitionItem,
+    plan: &IdentityPlan,
+) -> bool {
     plan.semantic
         && (!plan.names.is_empty()
             || item
                 .terms
                 .iter()
-                .any(|term| !plain_text(term).trim().is_empty()))
+                .any(|term| !plain_text(content, term).trim().is_empty()))
 }
 
 fn role_name_slug(kind: EntryKind, name: &str) -> String {
@@ -359,23 +387,40 @@ fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
     }
 }
 
+fn inline_root(store: &ContentStore, nodes: &[Inline]) -> Option<mant_ir::ContentRootKey> {
+    nodes.iter().find_map(|inline| match inline {
+        Inline::Text { content } | Inline::Code { content } => {
+            store.atom(content.atom).map(|atom| atom.root)
+        }
+        Inline::LineBreak { atom } => store.atom(*atom).map(|atom| atom.root),
+        Inline::Anchor { point, .. } => store.point(*point).map(|point| point.root),
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => inline_root(store, children),
+    })
+}
+
 fn semantic_fingerprint(
+    content_context: ContentContext<'_>,
     item: EntryOwner<'_>,
     kind: EntryKind,
     case: NameCase,
     names: &[String],
 ) -> String {
-    struct VisibleFingerprint(Vec<u8>);
+    struct VisibleFingerprint<'a> {
+        bytes: Vec<u8>,
+        content: ContentContext<'a>,
+    }
 
-    impl VisibleFingerprint {
+    impl VisibleFingerprint<'_> {
         fn field(&mut self, value: &str) {
-            self.0
+            self.bytes
                 .extend_from_slice(&u64::try_from(value.len()).unwrap_or(u64::MAX).to_le_bytes());
-            self.0.extend_from_slice(value.as_bytes());
+            self.bytes.extend_from_slice(value.as_bytes());
         }
     }
 
-    impl<'ir> Visit<'ir> for VisibleFingerprint {
+    impl<'ir> Visit<'ir> for VisibleFingerprint<'_> {
         fn visit_block(&mut self, block: &'ir Block) {
             let marker = match block {
                 Block::Paragraph { .. } => "paragraph",
@@ -406,26 +451,34 @@ fn semantic_fingerprint(
         }
 
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            match inline {
-                Inline::Text { value } => {
+            match self
+                .content
+                .inline(inline)
+                .expect("definition content resolves")
+            {
+                InlineView::Text(value) => {
                     self.field("text");
                     self.field(value);
                 }
-                Inline::Code { value } => {
+                InlineView::Code(value) => {
                     self.field("code");
                     self.field(value);
                 }
-                Inline::Strong { .. } => self.field("strong"),
-                Inline::Emphasis { .. } => self.field("emphasis"),
-                Inline::Link { .. } => self.field("link"),
-                Inline::LineBreak => self.field("line-break"),
-                Inline::Anchor { .. } => return,
+                InlineView::Strong(_) => self.field("strong"),
+                InlineView::Emphasis(_) => self.field("emphasis"),
+                InlineView::Link(_) => self.field("link"),
+                InlineView::LineBreak => self.field("line-break"),
+                InlineView::Anchor(_) => return,
+                _ => unreachable!("all inline views are handled"),
             }
             visit::walk_inline(self, inline);
         }
     }
 
-    let mut content = VisibleFingerprint(Vec::new());
+    let mut content = VisibleFingerprint {
+        bytes: Vec::new(),
+        content: content_context,
+    };
     content.field(role_id_prefix(kind));
     content.field(match case {
         NameCase::Sensitive => "sensitive",
@@ -445,7 +498,7 @@ fn semantic_fingerprint(
     for block in item.blocks() {
         content.visit_block(block);
     }
-    let digest = Sha256::digest(content.0);
+    let digest = Sha256::digest(content.bytes);
     digest[..6]
         .iter()
         .fold(String::with_capacity(12), |mut fingerprint, byte| {

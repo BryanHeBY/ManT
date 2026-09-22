@@ -73,7 +73,7 @@ fn preserves_partial_layout_rule_cells_without_leaking_ignored_payload() {
     assert!(rule.blocks.is_empty(), "{rule:?}");
     assert_eq!(text.kind, mant_ir::TableCellKind::Text);
     assert!(
-        matches!(text.blocks.as_slice(), [Block::Paragraph { children, .. }] if inline_text(children) == "VISIBLE")
+        matches!(text.blocks.as_slice(), [Block::Paragraph { children, .. }] if inline_text(document.content(), children) == "VISIBLE")
     );
 
     let rendered = mant_render::render_query_text(&query);
@@ -101,13 +101,13 @@ fn large_tbl_rows_scale_without_changing_their_topology() {
         rows.first().and_then(|row| row.cells.first()),
         Some(mant_ir::TableCell { blocks, .. })
             if matches!(blocks.as_slice(), [Block::Paragraph { children, .. }]
-                if inline_text(children) == "left 0")
+                if inline_text(document.content(), children) == "left 0")
     ));
     assert!(matches!(
         rows.last().and_then(|row| row.cells.get(1)),
         Some(mant_ir::TableCell { blocks, .. })
             if matches!(blocks.as_slice(), [Block::Paragraph { children, .. }]
-                if inline_text(children) == format!("right {}", ROW_COUNT - 1))
+                if inline_text(document.content(), children) == format!("right {}", ROW_COUNT - 1))
     ));
 }
 
@@ -128,19 +128,21 @@ fn keeps_inline_equations_in_macro_arguments_and_filled_prose() {
     let [item] = items.as_slice() else {
         panic!("expected one equation definition");
     };
-    assert_eq!(inline_text(&item.terms[0]), "Dp dx _ 1 ... dx _ n");
+    assert_eq!(
+        inline_text(document.content(), &item.terms[0]),
+        "Dp dx _ 1 ... dx _ n"
+    );
     let [Block::Paragraph { children, .. }] = item.description.as_slice() else {
         panic!("expected one filled description: {:?}", item.description);
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "Draw a polygon with, for i = 1 , ... , n + 1, its vertex."
     );
-    assert!(
-        children
-            .iter()
-            .any(|child| matches!(child, Inline::Code { value } if value == "i = 1 , ... , n + 1"))
-    );
+    assert!(children.iter().any(|child| matches!(
+        document.content().inline(child),
+        Ok(InlineView::Code("i = 1 , ... , n + 1"))
+    )));
 }
 
 #[test]
@@ -168,8 +170,13 @@ fn normalizes_inline_equations_retained_as_tbl_cell_text() {
     else {
         panic!("expected right paragraph");
     };
-    assert!(matches!(left.as_slice(), [Inline::Code { value }] if value == "0"));
-    assert_eq!(inline_text(right), "for values in [ 0 , π / 2 ]");
+    assert!(
+        matches!(left.as_slice(), [inline] if matches!(document.content().inline(inline), Ok(InlineView::Code("0"))))
+    );
+    assert_eq!(
+        inline_text(document.content(), right),
+        "for values in [ 0 , π / 2 ]"
+    );
     assert!(
         right
             .iter()
@@ -190,7 +197,7 @@ fn preserves_tbl_rows_across_interleaved_comments_and_text_blocks() {
     let first_cells = rows
         .iter()
         .map(|row| match row.cells[0].blocks.as_slice() {
-            [Block::Paragraph { children, .. }] => inline_text(children),
+            [Block::Paragraph { children, .. }] => inline_text(document.content(), children),
             cells => panic!("expected one paragraph per table cell: {cells:?}"),
         })
         .collect::<Vec<_>>();
@@ -221,11 +228,15 @@ fn tbl_text_blocks_do_not_promote_physical_source_rows_to_hard_lines() {
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("{label}: expected cell paragraph: {:?}", rows[0].cells[0]);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert!(
             children
                 .iter()
-                .all(|inline| !matches!(inline, Inline::LineBreak)),
+                .all(|inline| !matches!(inline, Inline::LineBreak { .. })),
             "{label}: {children:?}"
         );
     }
@@ -252,7 +263,11 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("{label}: expected cell paragraph: {:?}", rows[0].cells[0]);
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         assert!(
             children
                 .iter()
@@ -262,12 +277,12 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
         if label == "font-state" {
             assert!(
                 children.iter().any(
-                    |inline| matches!(inline, Inline::Strong { children } if inline_text(children) == "A")
+                    |inline| matches!(inline, Inline::Strong { children } if inline_text(document.content(), children) == "A")
                 ),
                 "{label}: {children:?}"
             );
             assert!(
-                matches!(children.last(), Some(Inline::Text { value }) if value == " B"),
+                matches!(children.last(), Some(inline) if matches!(document.content().inline(inline), Ok(InlineView::Text(" B")))),
                 "{label}: equation styling changed the previous-font register: {children:?}"
             );
         }
@@ -286,17 +301,21 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected cell paragraph: {:?}", rows[0].cells[0]);
     };
-    assert_eq!(inline_text(children), " y", "{children:?}");
-    assert!(
-        children
-            .iter()
-            .all(|inline| !matches!(inline, Inline::LineBreak)),
+    assert_eq!(
+        inline_text(document.content(), children),
+        " y",
         "{children:?}"
     );
     assert!(
         children
             .iter()
-            .any(|inline| matches!(inline, Inline::Code { value } if value == "y")),
+            .all(|inline| !matches!(inline, Inline::LineBreak { .. })),
+        "{children:?}"
+    );
+    assert!(
+        children
+            .iter()
+            .any(|inline| matches!(document.content().inline(inline), Ok(InlineView::Code("y")))),
         "{children:?}"
     );
 }
@@ -320,11 +339,10 @@ fn tbl_equation_code_style_does_not_mutate_roff_font_registers() {
             panic!("{label}: unexpected cell: {cell:#?}");
         };
         if label == "equation" {
-            assert!(
-                children
-                    .iter()
-                    .any(|inline| matches!(inline, Inline::Code { value } if value == "y"))
-            );
+            assert!(children.iter().any(|inline| matches!(
+                document.content().inline(inline),
+                Ok(InlineView::Code("y"))
+            )));
         } else {
             assert!(
                 children
@@ -406,7 +424,10 @@ T{\n.Nm\nT}\tMT-Safe\n.TE\n",
     let [Block::Paragraph { children, .. }] = rows[1].cells[0].blocks.as_slice() else {
         panic!("expected native table cell");
     };
-    assert_eq!(inline_text(children), "table-text-block");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "table-text-block"
+    );
     assert!(matches!(children.as_slice(), [Inline::Strong { .. }]));
 }
 
@@ -437,9 +458,9 @@ fn tbl_text_blocks_recover_complete_man_font_requests() {
     else {
         panic!("expected a right table-cell paragraph");
     };
-    assert_eq!(inline_text(left), "'s1's2'");
+    assert_eq!(inline_text(document.content(), left), "'s1's2'");
     assert_eq!(
-        inline_text(right),
+        inline_text(document.content(), right),
         "s1 produces the same formatted output as s2."
     );
     assert!(
@@ -497,7 +518,7 @@ fn mixed_table_requests_never_replace_complete_native_cell_content() {
                 let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
                     panic!("table cell")
                 };
-                let text = inline_text(children);
+                let text = inline_text(document.content(), children);
                 assert!(
                     text.contains("TOKENA") && text.contains("TOKENB"),
                     "{source}: {text}"
@@ -557,7 +578,7 @@ fn table_text_blocks_recover_complete_inline_macro_semantics() {
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("expected table cell paragraph")
         };
-        let actual = inline_text(children);
+        let actual = inline_text(table.content(), children);
         assert_eq!(actual, expected, "{request}");
     }
 }
@@ -577,7 +598,11 @@ fn table_text_blocks_keep_native_request_operands_out_of_visible_content() {
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("expected table cell paragraph")
         };
-        assert_eq!(inline_text(children), "BODY", "{request}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            "BODY",
+            "{request}"
+        );
     }
 }
 
@@ -624,7 +649,11 @@ fn table_source_recovery_defers_formatter_boundaries_to_native_tbl_execution() {
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("{label}: expected table cell paragraph");
         };
-        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            expected,
+            "{label}: {children:?}"
+        );
         let rendered = mant_render::render_query_text(&ResolvedContent {
             label: label.into(),
             address: None,
@@ -660,17 +689,11 @@ fn native_table_requests_do_not_disable_safe_recovery_in_adjacent_cells() {
     else {
         panic!("expected recovered right cell: {right:#?}");
     };
-    assert_eq!(inline_text(left), "A B");
-    assert_eq!(inline_text(right), "printf(3)");
+    assert_eq!(inline_text(document.content(), left), "A B");
+    assert_eq!(inline_text(document.content(), right), "printf(3)");
     assert!(right.iter().any(|inline| matches!(
-        inline,
-        Inline::Link {
-            target: mant_ir::LinkTarget::Manual {
-                name,
-                manual_section,
-            },
-            ..
-        } if name == "printf" && manual_section.as_deref() == Some("3")
+        document.content().inline(inline),
+        Ok(InlineView::Link(link)) if matches!(link.target(), mant_ir::LinkTarget::Manual { name, manual_section } if name == "printf" && manual_section.as_deref() == Some("3"))
     )));
 }
 
@@ -710,7 +733,7 @@ fn empty_and_control_only_table_rows_preserve_execution_and_layout() {
     let [Block::Paragraph { children, .. }] = right.blocks.as_slice() else {
         panic!("expected right cell paragraph: {right:#?}");
     };
-    assert_eq!(inline_text(children), "B C");
+    assert_eq!(inline_text(document.content(), children), "B C");
 
     // tbl_term clears both backtracking flags before each cell. At row flush,
     // only a completely unoccupied bare `\z` may survive the final cell.
@@ -762,7 +785,7 @@ fn tbl_text_blocks_preserve_the_tiocpkt_control_key_spacing() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected one table paragraph");
     };
-    assert_eq!(inline_text(children), "^S/^Q.");
+    assert_eq!(inline_text(document.content(), children), "^S/^Q.");
 }
 
 #[test]
@@ -793,9 +816,9 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
     else {
         panic!("expected description cell");
     };
-    assert_eq!(inline_text(left), "sip addr[/mask]");
+    assert_eq!(inline_text(document.content(), left), "sip addr[/mask]");
     assert_eq!(
-        inline_text(right),
+        inline_text(document.content(), right),
         "bitwise and of the address with mask equals addr. addr can be an IPv4 or IPv6 address."
     );
     assert!(
@@ -841,7 +864,7 @@ fn lowers_every_mdoc_column_list_cell() {
         .cells
         .iter()
         .map(|cell| match cell.blocks.as_slice() {
-            [Block::Paragraph { children, .. }] => inline_text(children),
+            [Block::Paragraph { children, .. }] => inline_text(document.content(), children),
             blocks => panic!("expected one paragraph per cell, got {blocks:?}"),
         })
         .collect::<Vec<_>>();
@@ -870,7 +893,7 @@ fn native_tbl_diagnostics_do_not_invent_unparsed_source_cells() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected one native table-cell paragraph");
     };
-    assert_eq!(inline_text(children), "1");
+    assert_eq!(inline_text(document.content(), children), "1");
     assert!(
         !document.diagnostics.iter().any(|diagnostic| {
             diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell")

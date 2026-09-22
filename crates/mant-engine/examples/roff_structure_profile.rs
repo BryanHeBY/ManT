@@ -23,7 +23,7 @@ use libmandoc_rs::{
     Compression, DisplayKind, IncludePolicy, Node, NodeKind, NormalizedListKind, ParseOptions,
     Parser, SpecialCharacter, special_character,
 };
-use mant_ir::{Block, Document, Inline, LinkTarget, Section};
+use mant_ir::{Block, ContentContext, Document, Inline, LinkTarget, Section};
 use mant_loader::{ManualPage, parse_manual_page};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -845,9 +845,16 @@ fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
         ..IrStructure::default()
     };
     let mut topology = IrTopology::default();
-    collect_blocks(&document.blocks, false, &mut profile, &mut topology);
+    let content = document.content();
+    collect_blocks(
+        content,
+        &document.blocks,
+        false,
+        &mut profile,
+        &mut topology,
+    );
     for section in &document.sections {
-        collect_section(section, &mut profile, &mut topology);
+        collect_section(content, section, &mut profile, &mut topology);
     }
     topology.lists.sort_by_key(|list| list.source_line);
     topology.equations.sort_by_key(|equation| {
@@ -859,22 +866,29 @@ fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
     (profile, topology)
 }
 
-fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut IrTopology) {
+fn collect_section(
+    content: ContentContext<'_>,
+    section: &Section,
+    profile: &mut IrStructure,
+    topology: &mut IrTopology,
+) {
     collect_inlines(
+        content,
         &section.heading.content,
         section.source.map_or(0, |source| source.line),
         false,
         profile,
         topology,
     );
-    collect_blocks(&section.blocks, false, profile, topology);
+    collect_blocks(content, &section.blocks, false, profile, topology);
     for child in &section.children {
-        collect_section(child, profile, topology);
+        collect_section(content, child, profile, topology);
     }
 }
 
 #[allow(clippy::too_many_lines)]
 fn collect_blocks(
+    content: ContentContext<'_>,
     blocks: &[Block],
     inside_table: bool,
     profile: &mut IrStructure,
@@ -888,6 +902,7 @@ fn collect_blocks(
                 profile.paragraph_blocks += 1;
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
                 collect_inlines(
+                    content,
                     children,
                     source_line(block),
                     inside_table,
@@ -919,11 +934,12 @@ fn collect_blocks(
             } => {
                 profile.preformatted_blocks += 1;
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
-                if has_visible_inline(children) {
+                if has_visible_inline(content, children) {
                     profile.preformatted_lines += 1;
                 }
                 profile.preformatted_lines += line_break_count(children);
                 collect_inlines(
+                    content,
                     children,
                     source_line(block),
                     inside_table,
@@ -950,7 +966,7 @@ fn collect_blocks(
                     });
                 }
                 for item in items {
-                    collect_blocks(&item.blocks, inside_table, profile, topology);
+                    collect_blocks(content, &item.blocks, inside_table, profile, topology);
                 }
             }
             Block::DefinitionList {
@@ -973,9 +989,9 @@ fn collect_blocks(
                 }
                 for item in items {
                     for term in &item.terms {
-                        collect_inlines(term, 0, inside_table, profile, topology);
+                        collect_inlines(content, term, 0, inside_table, profile, topology);
                     }
-                    collect_blocks(&item.description, inside_table, profile, topology);
+                    collect_blocks(content, &item.description, inside_table, profile, topology);
                 }
             }
             Block::Table { rows, layout, .. } => {
@@ -1001,7 +1017,7 @@ fn collect_blocks(
                         .filter(|cell| cell.column_span > 1 || cell.row_span > 1)
                         .count();
                     for cell in &row.cells {
-                        collect_blocks(&cell.blocks, true, profile, topology);
+                        collect_blocks(content, &cell.blocks, true, profile, topology);
                     }
                 }
             }
@@ -1010,17 +1026,20 @@ fn collect_blocks(
     }
 }
 
-fn has_visible_inline(inlines: &[Inline]) -> bool {
+fn has_visible_inline(content: ContentContext<'_>, inlines: &[Inline]) -> bool {
     inlines.iter().any(|inline| match inline {
-        Inline::Text { value } | Inline::Code { value } => !value.is_empty(),
+        Inline::Text { content: value } | Inline::Code { content: value } => content
+            .resolve_text(*value)
+            .is_some_and(|text| !text.is_empty()),
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => has_visible_inline(children),
-        Inline::Anchor { .. } | Inline::LineBreak => false,
+        | Inline::Link { children, .. } => has_visible_inline(content, children),
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })
 }
 
 fn collect_inlines(
+    content: ContentContext<'_>,
     inlines: &[Inline],
     source_line: u32,
     inside_table: bool,
@@ -1030,22 +1049,42 @@ fn collect_inlines(
     for inline in inlines {
         match inline {
             Inline::Strong { children } | Inline::Emphasis { children } => {
-                collect_inlines(children, source_line, inside_table, profile, topology);
+                collect_inlines(
+                    content,
+                    children,
+                    source_line,
+                    inside_table,
+                    profile,
+                    topology,
+                );
             }
             Inline::Link {
-                target, children, ..
+                occurrence,
+                children,
+                ..
             } => {
-                match target {
+                match &content
+                    .occurrence(*occurrence)
+                    .expect("valid profile link")
+                    .target
+                {
                     LinkTarget::Manual { .. } => profile.manual_links += 1,
                     LinkTarget::External { .. } => profile.external_links += 1,
                     LinkTarget::Email { .. } => profile.email_links += 1,
                     LinkTarget::Section { .. } => profile.section_links += 1,
                     LinkTarget::Document { .. } => {}
                 }
-                collect_inlines(children, source_line, inside_table, profile, topology);
+                collect_inlines(
+                    content,
+                    children,
+                    source_line,
+                    inside_table,
+                    profile,
+                    topology,
+                );
             }
-            Inline::LineBreak => profile.hard_breaks += 1,
-            Inline::Code { value } => {
+            Inline::LineBreak { .. } => profile.hard_breaks += 1,
+            Inline::Code { content: value } => {
                 if inside_table {
                     profile.table_equation_candidates += 1;
                 } else {
@@ -1058,7 +1097,10 @@ fn collect_inlines(
                     } else {
                         EquationContext::Inline
                     },
-                    value: value.clone(),
+                    value: content
+                        .resolve_text(*value)
+                        .expect("valid profile code")
+                        .to_owned(),
                 });
             }
             Inline::Text { .. } | Inline::Anchor { .. } => {}
@@ -1073,7 +1115,7 @@ fn line_break_count(inlines: &[Inline]) -> usize {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => line_break_count(children),
-            Inline::LineBreak => 1,
+            Inline::LineBreak { .. } => 1,
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
         })
         .sum()
@@ -1568,6 +1610,21 @@ mod tests {
 
     #[test]
     fn section_heading_links_are_counted_and_loss_is_detected() {
+        fn without_links(nodes: Vec<super::Inline>) -> Vec<super::Inline> {
+            nodes
+                .into_iter()
+                .flat_map(|node| match node {
+                    super::Inline::Link { children, .. } => without_links(children),
+                    super::Inline::Strong { children } => vec![super::Inline::Strong {
+                        children: without_links(children),
+                    }],
+                    super::Inline::Emphasis { children } => vec![super::Inline::Emphasis {
+                        children: without_links(children),
+                    }],
+                    other => vec![other],
+                })
+                .collect()
+        }
         let (expected, expected_topology, mut document) = parsed_structure(concat!(
             ".Dd September 11, 2026\n.Dt AUDIT 1\n.Os\n",
             ".Sh NAME\n.Nm audit\n.Nd heading link probe\n",
@@ -1583,9 +1640,7 @@ mod tests {
 
         let heading = &mut document.sections[1].children[0].heading;
         // Preserve the words, but remove the typed link: topology must notice.
-        heading.content = vec![super::Inline::Text {
-            value: heading.plain_text(),
-        }];
+        heading.content = without_links(std::mem::take(&mut heading.content));
         let (mutated, topology) = super::ir_profile(&document);
         let violations =
             super::compare_structure(&expected, &mutated, &expected_topology, &topology);

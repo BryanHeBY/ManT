@@ -163,7 +163,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         formatter: crate::mandoc::formatter::FormatterState,
     ) -> Self {
         let mut formatter = formatter;
-        let mut state = BlockState::with_output(indent_columns, spacing_enabled, output);
+        let mut state = BlockState::with_output(
+            indent_columns,
+            spacing_enabled,
+            output,
+            context.content.clone(),
+        );
         state.inherit_vertical_space_debt(formatter.vertical_space_debt);
         state.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
         state.inherit_author_execution(
@@ -271,7 +276,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             && participates_in_inline_flow(node)
             && self.state.paragraph_is_empty()
         {
-            let tail = lower_inline_nodes(std::slice::from_ref(node), self.context.default_name);
+            let tail = self.context.content.lower(
+                mant_ir::ContentRootKind::Body,
+                source_span(node),
+                lower_inline_nodes(std::slice::from_ref(node), self.context.default_name),
+            );
             if append_to_last_inline_block(&mut self.state.output, &tail) {
                 return;
             }

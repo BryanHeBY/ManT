@@ -4,8 +4,11 @@ use super::DocumentBuilder;
 use mant_ir::geometry::padding;
 use mant_ir::{TableRow, TableRowKind};
 
-impl DocumentBuilder<'_> {
-    pub(super) fn table(&mut self, rows: &[TableRow], indent: i32) {
+impl<'a> DocumentBuilder<'a> {
+    pub(super) fn table<'b>(&mut self, rows: &'b [TableRow], indent: i32)
+    where
+        'a: 'b,
+    {
         if rows.is_empty() {
             return;
         }
@@ -28,8 +31,9 @@ impl DocumentBuilder<'_> {
                     })
                     .into_iter()
                     .map(|cell| {
-                        let mut builder = Self::new(String::new(), self.address.clone());
-                        builder.entry_styles = Arc::clone(&self.entry_styles);
+                        let mut builder =
+                            Self::new(String::new(), self.address.clone(), Some(self.content()));
+                        builder.entry_styles = self.entry_styles.as_ref().map(Arc::clone);
                         builder.reference_origins = Arc::clone(&self.reference_origins);
                         if let Some(cell) = cell {
                             match cell.kind {
@@ -44,7 +48,9 @@ impl DocumentBuilder<'_> {
                                 }
                             }
                         }
-                        let content = builder.finish().content;
+                        let built = builder.finish();
+                        self.link_targets.extend(built.link_targets);
+                        let content = built.content;
                         let mut rendered = LogicalTableCell::new(
                             content.lines,
                             cell.and_then(|cell| cell.alignment),
@@ -87,7 +93,10 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    fn stacked_table(&mut self, rows: &[TableRow], indent: i32) {
+    fn stacked_table<'b>(&mut self, rows: &'b [TableRow], indent: i32)
+    where
+        'a: 'b,
+    {
         for row in rows {
             match &row.kind {
                 TableRowKind::Data if row.cells.is_empty() => self.push(LogicalLine::empty()),

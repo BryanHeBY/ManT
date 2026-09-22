@@ -9,10 +9,11 @@ use crate::fixtures::debian_manual;
 #[test]
 fn preserves_literal_display_spacing_and_closing_delimiters() {
     let document = debian_manual("sh");
+    let content = document.content();
     assert_eq!(document.root_format(), Some(SourceFormat::Mdoc));
     assert!(source_path_ends_with(document, "debian/sh.1.gz"));
 
-    let functions = block_slice_text(&common::section(document, "Functions").blocks);
+    let functions = block_slice_text(content, &common::section(document, "Functions").blocks);
     assert!(functions.contains("name () command"));
     assert!(functions.contains("local [variable | -] ..."));
     assert!(functions.contains("return [exitstatus]"));
@@ -22,7 +23,7 @@ fn preserves_literal_display_spacing_and_closing_delimiters() {
     let redirections = common::section(document, "Redirections");
     assert!(redirections.blocks.iter().any(|block| {
         matches!(block, Block::Preformatted { children, .. }
-            if common::inline_text(children) == "[n] redir-op file")
+            if common::inline_text(content, children) == "[n] redir-op file")
     }));
 }
 
@@ -30,7 +31,7 @@ fn preserves_literal_display_spacing_and_closing_delimiters() {
 fn keeps_the_real_dash_page_spacing_and_anchors_normalized() {
     let document = debian_manual("sh");
     common::assert_anchor_ids_are_clean("debian/sh", document);
-    common::assert_bounded_vertical_spacing(&document.sections, "debian/sh");
+    common::assert_bounded_vertical_spacing(document, "debian/sh");
 }
 
 /// Nested `Ns`, stateful `Sm`, and visible `Pf` prefixes share one spacing
@@ -38,7 +39,10 @@ fn keeps_the_real_dash_page_spacing_and_anchors_normalized() {
 #[test]
 fn preserves_no_space_controls_and_prefix_macros() {
     let document = debian_manual("sh");
-    let builtins = block_slice_text(&common::section(document, "Builtins").blocks);
+    let builtins = block_slice_text(
+        document.content(),
+        &common::section(document, "Builtins").blocks,
+    );
 
     for expected in [
         "Bell Labs-derived getopt(1)",

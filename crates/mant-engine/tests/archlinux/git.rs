@@ -3,7 +3,7 @@ use super::semantic_read;
 
 use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_ir::{Block, EntryKind, Inline};
+use mant_ir::{Block, EntryKind, InlineView};
 use mant_protocol::EntryProjection;
 use mant_protocol::{ExcerptSelection, OutlineDetail};
 use mant_query::{build_outline, build_outline_projection, build_outline_with_detail};
@@ -14,6 +14,7 @@ use mant_query::{build_outline, build_outline_projection, build_outline_with_det
 #[test]
 fn keeps_nested_sections_examples_and_inline_grouping() {
     let document = archlinux_manual("git");
+    let content = document.content();
     common::assert_section_topology("archlinux/git", document, GIT_SECTIONS);
     assert_eq!(document.sections.len(), 24);
 
@@ -22,7 +23,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
         environment
             .children
             .iter()
-            .any(|child| child.heading.plain_text() == "Git Diffs")
+            .any(|child| child.heading.plain_text(content) == "Git Diffs")
     );
     assert!(!common::section(document, "GIT COMMANDS").blocks.is_empty());
 
@@ -38,16 +39,18 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
         .iter()
         .find_map(common::as_preformatted)
         .expect("Git synopsis display");
-    assert!(common::contains_emphasis(synopsis_pre, "git"));
+    assert!(common::contains_emphasis(content, synopsis_pre, "git"));
     assert!(common::count_line_breaks(synopsis_pre) > 3);
-    assert!(!common::inline_text(synopsis_pre).contains("\n\n"));
+    assert!(!common::inline_text(content, synopsis_pre).contains("\n\n"));
 
     common::assert_preformatted(
+        content,
         common::section(document, "OPTIONS"),
         "git --git-dir=a.git",
         8,
     );
     common::assert_preformatted(
+        content,
         common::section(document, "CONFIGURATION MECHANISM"),
         "[core]",
         4,
@@ -55,9 +58,9 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
     let git_diffs = environment
         .children
         .iter()
-        .find(|child| child.heading.plain_text() == "Git Diffs")
+        .find(|child| child.heading.plain_text(content) == "Git Diffs")
         .expect("Git Diffs subsection");
-    common::assert_preformatted(git_diffs, "path old-file", 8);
+    common::assert_preformatted(content, git_diffs, "path old-file", 8);
 
     let help = common::nested_definition_items(common::section(document, "OPTIONS"))
         .into_iter()
@@ -72,34 +75,32 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
         .iter()
         .find_map(|block| match block {
             Block::Paragraph { children, .. }
-                if common::inline_text(children).contains("Prints the synopsis") =>
+                if common::inline_text(content, children).contains("Prints the synopsis") =>
             {
                 Some(children)
             }
             _ => None,
         })
         .expect("grouped -h description");
-    assert!(common::contains_strong(option_summary, "--all"));
-    assert!(common::contains_strong(option_summary, "-a"));
-    assert!(common::inline_text(option_summary).contains("is given then all available"));
+    assert!(common::contains_strong(content, option_summary, "--all"));
+    assert!(common::contains_strong(content, option_summary, "-a"));
+    assert!(common::inline_text(content, option_summary).contains("is given then all available"));
     assert_git_option_descriptions_follow_terms(document);
 
     let ancillary = common::section(document, "Ancillary Commands");
-    let ancillary_text = common::block_slice_text(&ancillary.blocks);
+    let ancillary_text = common::block_slice_text(content, &ancillary.blocks);
     assert!(ancillary_text.contains("git-config(1)"));
     assert!(ancillary_text.contains("git-fast-export(1)"));
     let mut linked_git_add = false;
     for block in common::document_blocks(document) {
         common::visit_block_inlines(block, &mut |inline| {
             linked_git_add |= matches!(
-                inline,
-                Inline::Link {
-                    target: mant_ir::LinkTarget::Manual {
+                content.inline(inline),
+                Ok(InlineView::Link(link))
+                    if matches!(link.target(), mant_ir::LinkTarget::Manual {
                         name,
                         manual_section: Some(manual_section),
-                    },
-                    ..
-                } if name == "git-add" && manual_section == "1"
+                    } if name == "git-add" && manual_section == "1")
             );
         });
     }
@@ -160,7 +161,12 @@ fn supports_outline_discovery_and_targeted_excerpts() {
     };
     assert_eq!(outline.path(), "16.4");
     assert_eq!(outline.ancestors[0].title, "ENVIRONMENT VARIABLES");
-    assert!(common::block_slice_text(&section.blocks).contains("GIT_EXTERNAL_DIFF"));
+    let content = excerpt
+        .content_projection
+        .as_ref()
+        .expect("document excerpt content projection")
+        .content();
+    assert!(common::block_slice_text(content, &section.blocks).contains("GIT_EXTERNAL_DIFF"));
 }
 
 #[test]

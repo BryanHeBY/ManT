@@ -192,8 +192,9 @@ fn scoped_search_projection(found: &ScopedSearchDocument, query: &SearchQuery) -
     QuerySearch {
         schema: SearchSchema::V0Dot12,
         label,
-        source_context: None,
+        source_context: found.source_context.clone(),
         meta,
+        content_projection: found.content_projection.clone(),
         query: query.clone(),
         render: found.render.clone(),
         total: returned,

@@ -103,21 +103,22 @@ fn help_classes_qualifiers_and_tail_examples_share_one_owner() {
 #[test]
 fn keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
     let document = archlinux_manual("gcc");
+    let content = document.content();
     common::assert_section_topology("archlinux/gcc", document, GCC_SECTIONS);
 
     let options = common::section(document, "OPTIONS");
     assert_eq!(options.children.len(), 20);
-    assert_eq!(options.children[0].heading.plain_text(), "Option Summary");
     assert_eq!(
-        options.children[1].heading.plain_text(),
+        options.children[0].heading.plain_text(content),
+        "Option Summary"
+    );
+    assert_eq!(
+        options.children[1].heading.plain_text(content),
         "Options Controlling the Kind of Output"
     );
-    assert!(
-        options
-            .children
-            .iter()
-            .any(|child| child.heading.plain_text() == "Options to Request or Suppress Warnings")
-    );
+    assert!(options.children.iter().any(
+        |child| child.heading.plain_text(content) == "Options to Request or Suppress Warnings"
+    ));
 
     common::assert_gcc_synopsis_layout(document);
 
@@ -129,18 +130,18 @@ fn keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
     assert!(displays.len() > 250);
     let class_example = displays
         .iter()
-        .find(|children| common::inline_text(children).contains("struct A { int a; };"))
+        .find(|children| common::inline_text(content, children).contains("struct A { int a; };"))
         .expect("GCC class hierarchy example");
-    assert!(common::inline_text(class_example).contains("struct C : B, A { };"));
+    assert!(common::inline_text(content, class_example).contains("struct C : B, A { };"));
     assert!(displays.iter().all(|children| {
-        let text = common::inline_text(children);
+        let text = common::inline_text(content, children);
         text.trim() != "CW" && text.trim() != "R"
     }));
 
     let phantom_paragraphs = blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(common::inline_text(children)),
+            Block::Paragraph { children, .. } => Some(common::inline_text(content, children)),
             _ => None,
         })
         .filter(|text| matches!(text.trim(), "0" | "4"))
@@ -156,7 +157,7 @@ fn keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
         .find(|item| {
             item.terms
                 .iter()
-                .any(|term| common::inline_text(term).contains("-Wsuggest-final-methods"))
+                .any(|term| common::inline_text(content, term).contains("-Wsuggest-final-methods"))
         })
         .expect("GCC -Wsuggest-final-methods option");
     assert_eq!(

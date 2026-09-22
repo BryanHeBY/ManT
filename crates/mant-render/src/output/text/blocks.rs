@@ -2,9 +2,7 @@
 //! Decorators must preserve visible content and boundary whitespace.
 use super::flow::Flow;
 use super::indent_lines;
-use crate::presentation::{
-    EntryStyleMap, TextPresentation, TextRole, visit_inline_text, visit_inline_text_with,
-};
+use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_display_text};
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_ir::{
     Block, ContentContext, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell,
@@ -13,9 +11,7 @@ use mant_ir::{
 mod lists;
 
 pub(super) struct BlockRenderer<'a> {
-    // Response-local explanation/excerpt DTOs do not carry ContentProjection
-    // yet. Full documents always supply their authoritative context.
-    pub(super) content: Option<ContentContext<'a>>,
+    pub(super) content: ContentContext<'a>,
     pub(super) names: Option<EntryStyleMap<'a>>,
     pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
     pub(super) locations: Option<&'a super::super::styles::LocatedStyles<'a>>,
@@ -35,47 +31,31 @@ impl<'a> BlockRenderer<'a> {
             .names
             .as_ref()
             .map_or(&[][..], |map| map.ranges(children));
-        let mut emit = |inline, _, value| {
+        let mut emit = |inline, _, value, display: Option<&str>| {
             text.push_str(&(self.decorate)(
                 TextPresentation {
                     role,
                     inline,
                     matched: false,
                 },
-                value,
+                display.unwrap_or(value),
             ));
         };
-        if let Some(content) = self.content {
-            visit_inline_text_with(content, children, names, &mut emit)
-                .expect("validated document content must resolve while rendering");
-        } else {
-            // Transitional compatibility for DTO fragments until their
-            // response envelope carries the required ContentProjection.
-            visit_inline_text(children, names, &mut emit);
-        }
+        visit_inline_display_text(self.content, children, names, &mut emit)
+            .expect("validated retained content must resolve while rendering");
         text
     }
 
     fn has_literal_rows(&self, children: &'a [Inline]) -> bool {
-        self.content.map_or_else(
-            || mant_ir::geometry::has_literal_rows(children),
-            |content| {
-                content
-                    .has_literal_rows(children)
-                    .expect("validated document content must resolve while measuring rows")
-            },
-        )
+        self.content
+            .has_literal_rows(children)
+            .expect("validated retained content must resolve while measuring rows")
     }
 
     fn definition_run_in_width(&self, terms: &'a [Vec<Inline>]) -> Option<usize> {
-        self.content.map_or_else(
-            || mant_ir::geometry::definition_run_in_width(terms),
-            |content| {
-                content
-                    .definition_run_in_width(terms)
-                    .expect("validated document content must resolve while measuring terms")
-            },
-        )
+        self.content
+            .definition_run_in_width(terms)
+            .expect("validated retained content must resolve while measuring terms")
     }
 
     pub(super) fn sections_flow(&self, sections: &'a [Section], depth: usize) -> Flow {
@@ -320,9 +300,7 @@ mod tests {
             for origin in [0, 3] {
                 let block = Block::Preformatted {
                     language: None,
-                    children: vec![Inline::Text {
-                        value: value.into(),
-                    }],
+                    children: vec![crate::test_content::text(value)],
                     layout: LayoutHint::default(),
                     source: None,
                 };
@@ -480,7 +458,7 @@ mod tests {
 
     fn paragraph(text: &str, indent: i32) -> Block {
         Block::Paragraph {
-            children: vec![Inline::Text { value: text.into() }],
+            children: vec![crate::test_content::text(text)],
             layout: LayoutHint {
                 indent_columns: indent,
                 ..Default::default()
@@ -494,10 +472,8 @@ mod tests {
         let renderer = super::super::plain_renderer();
         let block = Block::Paragraph {
             children: vec![
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "BODY".into(),
-                },
+                crate::test_content::line_break(),
+                crate::test_content::text("BODY"),
             ],
             layout: LayoutHint::default(),
             source: None,
@@ -515,11 +491,9 @@ mod tests {
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
                         children: vec![
-                            Inline::Text { value: "A".into() },
-                            Inline::LineBreak,
-                            Inline::Text {
-                                value: "B C".into(),
-                            },
+                            crate::test_content::text("A"),
+                            crate::test_content::line_break(),
+                            crate::test_content::text("B C"),
                         ],
                         layout: LayoutHint::default(),
                         source: None,
@@ -541,19 +515,15 @@ mod tests {
         for (children, expected) in [
             (
                 vec![
-                    Inline::LineBreak,
-                    Inline::Text {
-                        value: "BODY".into(),
-                    },
+                    crate::test_content::line_break(),
+                    crate::test_content::text("BODY"),
                 ],
                 "\nBODY",
             ),
             (
                 vec![
-                    Inline::Text {
-                        value: "BODY".into(),
-                    },
-                    Inline::LineBreak,
+                    crate::test_content::text("BODY"),
+                    crate::test_content::line_break(),
                 ],
                 "BODY",
             ),
@@ -603,17 +573,13 @@ mod tests {
         };
         let surrounding = [
             Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "BEFORE".into(),
-                }],
+                children: vec![crate::test_content::text("BEFORE")],
                 layout: LayoutHint::default(),
                 source: None,
             },
             table,
             Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "AFTER".into(),
-                }],
+                children: vec![crate::test_content::text("AFTER")],
                 layout: LayoutHint::default(),
                 source: None,
             },
@@ -670,7 +636,10 @@ mod tests {
             layout.spacing_before_lines = 3000;
         }
         let blocks = [paragraph("BEFORE", 0), container];
-        assert!(mant_ir::geometry::has_bounded_gap(&blocks));
+        assert!(mant_ir::geometry::has_bounded_gap(
+            crate::test_content::content(),
+            &blocks
+        ));
         assert_eq!(
             renderer.render_blocks(&blocks, 0),
             format!("BEFORE{}AFTER", "\n".repeat(4097))
@@ -689,9 +658,7 @@ mod tests {
                         declaration_groups: vec![],
                         compact: false,
                         items: vec![DefinitionItem {
-                            terms: vec![vec![Inline::Text {
-                                value: "TERM".into(),
-                            }]],
+                            terms: vec![vec![crate::test_content::text("TERM")]],
                             description: vec![paragraph("BODY", -2)],
                             source: None,
                             entry: None,
@@ -746,11 +713,7 @@ mod tests {
             compact: true,
             items: vec![DefinitionItem {
                 terms: ["-a", "--all"]
-                    .map(|value| {
-                        vec![Inline::Text {
-                            value: value.into(),
-                        }]
-                    })
+                    .map(|value| vec![crate::test_content::text(value)])
                     .into(),
                 description: vec![paragraph("FIRST\nCONTINUATION", 0)],
                 source: None,
@@ -785,10 +748,8 @@ mod tests {
                 source: None,
                 entry: None,
                 terms: vec![
-                    vec![Inline::anchor_at("target", None)],
-                    vec![Inline::Text {
-                        value: "TERM".into(),
-                    }],
+                    vec![crate::test_content::anchor("target")],
+                    vec![crate::test_content::text("TERM")],
                 ],
                 description: vec![paragraph("BODY", 0)],
                 layout: mant_ir::DefinitionLayout {

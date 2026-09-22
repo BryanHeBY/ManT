@@ -41,16 +41,14 @@ fn hierarchy_bundle() -> ResolvedContent {
     let mut owner = document.sections[0].clone();
     owner.id = "owner".into();
     owner.heading = mant_ir::Heading {
-        content: vec![Inline::Link {
-            target: mant_ir::LinkTarget::Document {
+        content: vec![crate::test_content::link(
+            mant_ir::LinkTarget::Document {
                 name: TARGET_PARTS.concat(),
                 fragment: None,
             },
-            title: None,
-            children: vec![Inline::Text {
-                value: TITLE_PARTS.concat(),
-            }],
-        }],
+            None,
+            vec![crate::test_content::text(TITLE_PARTS.concat())],
+        )],
         source: None,
     };
     owner.blocks.clear();
@@ -58,7 +56,7 @@ fn hierarchy_bundle() -> ResolvedContent {
         .map(|index| Section {
             id: format!("child-{index}").into(),
             fragment_aliases: Vec::new(),
-            heading: format!("CHILD {index}").into(),
+            heading: crate::test_content::heading(format!("CHILD {index}")),
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: Vec::new(),
@@ -68,7 +66,7 @@ fn hierarchy_bundle() -> ResolvedContent {
     let next = Section {
         id: "next".into(),
         fragment_aliases: Vec::new(),
-        heading: "NEXT".into(),
+        heading: crate::test_content::heading("NEXT"),
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),

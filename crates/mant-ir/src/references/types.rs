@@ -1,7 +1,7 @@
 //! Stable scan limits, coverage and borrowed occurrence contracts.
 use crate::{
-    ContentLocationRef, EntryOwner, EntryOwnerLocationRef, Inline, LinkTarget, MAX_CONTENT_DEPTH,
-    SourceSpan,
+    ContentContext, ContentLocationRef, EntryOwner, EntryOwnerLocationRef, Inline,
+    LinkOccurrenceKey, LinkTarget, MAX_CONTENT_DEPTH, SourceSpan,
 };
 
 /// Default work units across traversal and optional label/form inspection.
@@ -88,11 +88,16 @@ pub struct ReferenceOwnerRef<'ir, 'path> {
 /// `EntryOwner::forms` or treating the attached facts as validated relationships.
 #[derive(Debug, Clone, Copy)]
 pub struct LinkOccurrenceRef<'ir, 'path> {
+    /// Authoritative occurrence identity shared by all structural fragments.
+    pub key: LinkOccurrenceKey,
+    /// Content store resolving the occurrence and its fragments.
+    pub content: ContentContext<'ir>,
     /// The actual `Inline::Link` node; never a reconstructed form copy.
     pub link: &'ir Inline,
     /// Original typed destination, including any original fragment.
     pub target: &'ir LinkTarget,
-    /// Original visible label children, including empty labels and styling.
+    /// Children of the first structural fragment. The complete logical label
+    /// is retained in the occurrence table behind [`Self::key`].
     pub label: &'ir [Inline],
     /// Precise snapshot-local node position.
     pub location: ContentLocationRef<'path>,

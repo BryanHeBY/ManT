@@ -53,8 +53,10 @@ fn display_pp_keeps_independent_space_and_post_gap_target() {
             .find_map(|block| match block {
                 Block::Preformatted { children, .. }
                     if children.iter().any(|inline| {
-                        matches!(inline,
-                        Inline::Text { value } if value == "BETA")
+                        matches!(
+                            document.content().inline(inline),
+                            Ok(mant_ir::InlineView::Text("BETA"))
+                        )
                     }) =>
                 {
                     Some(children)
@@ -62,9 +64,14 @@ fn display_pp_keeps_independent_space_and_post_gap_target() {
                 _ => None,
             })
             .unwrap();
-        assert!(beta.iter().any(|inline| matches!(inline,
-            Inline::Anchor { fragment_aliases, owner_source: Some(_), .. }
-            if fragment_aliases.iter().any(|alias| alias.as_str() == "Paragraph.Target")
+        assert!(beta.iter().any(|inline| matches!(
+            document.content().inline(inline),
+            Ok(mant_ir::InlineView::Anchor(anchor))
+                if anchor.owner_source().is_some()
+                    && anchor
+                        .fragment_aliases()
+                        .iter()
+                        .any(|alias| alias.as_str() == "Paragraph.Target")
         )));
         let initial = self::query(&format!(".Bd -{mode} -compact\n.Pp\nINITIAL\n.Ed"));
         assert_rows(&initial, "TEST", "INITIAL", 1);
@@ -117,7 +124,11 @@ fn invisible_native_siblings_are_not_confused_with_transparent_controls() {
                 };
                 let query = query(&body);
                 assert_rows(&query, "TEST", "BODY", blanks);
-                assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+                let diagnostics = mant_ir::validate_document(query.document.as_ref().unwrap());
+                assert!(
+                    diagnostics.is_empty(),
+                    "mode={mode:?} prefix={prefix:?} nested={nested}: {diagnostics:?}"
+                );
             }
         }
         // Entering a wrapper is not an earlier sibling of its own first

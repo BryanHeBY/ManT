@@ -1,6 +1,18 @@
 //! Existing regressions grouped by navigation behavior; expected values remain independent.
 use super::*;
 
+fn link_target<'a>(
+    document: &'a mant_ir::Document,
+    inline: &'a Inline,
+) -> Option<&'a mant_ir::LinkTarget> {
+    document
+        .content()
+        .link(inline)
+        .ok()
+        .flatten()
+        .map(mant_ir::LinkView::target)
+}
+
 #[test]
 fn lowers_man_sections_fonts_definitions_and_literal_blocks() {
     let path = temporary_source(
@@ -26,7 +38,7 @@ fn lowers_man_sections_fonts_definitions_and_literal_blocks() {
         document
             .sections
             .iter()
-            .map(|section| section.heading.plain_text())
+            .map(|section| section.heading.plain_text(document.content()))
             .collect::<Vec<_>>(),
         vec!["NAME", "OPTIONS"]
     );
@@ -70,7 +82,9 @@ fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
 
     assert_eq!(document.root_format(), Some(SourceFormat::Mdoc));
     assert_eq!(
-        document.sections[0].children[0].heading.plain_text(),
+        document.sections[0].children[0]
+            .heading
+            .plain_text(document.content()),
         "Details"
     );
     let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
@@ -83,14 +97,14 @@ fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
     );
     assert!(
         children.iter().any(
-            |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Manual { name, .. }, .. } if name == "man")
+            |inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Manual { name, .. }) if name == "man")
         )
     );
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.test/docs")
+        |inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::External { uri }) if uri == "https://example.test/docs")
     ));
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, .. } if address == "docs@example.test")
+        |inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Email { address }) if address == "docs@example.test")
     ));
 }
 
@@ -438,7 +452,10 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
             .collect::<Vec<_>>(),
         ["custom-section"]
     );
-    assert_eq!(document.sections[0].heading.plain_text(), "HEADING");
+    assert_eq!(
+        document.sections[0].heading.plain_text(document.content()),
+        "HEADING"
+    );
     assert_eq!(document.sections[0].children[0].id.as_str(), "subheading");
     assert_eq!(
         document.sections[0].children[0]
@@ -449,7 +466,9 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
         ["custom-subsection"]
     );
     assert_eq!(
-        document.sections[0].children[0].heading.plain_text(),
+        document.sections[0].children[0]
+            .heading
+            .plain_text(document.content()),
         "SUBHEADING"
     );
     assert!(anchor_ids(&document).is_empty());
@@ -496,9 +515,7 @@ See\n.Sx NAME\n.Sh NAME\n.Nm root-section-reference\n.Nd root reference\n",
     .expect("lower a root-level mdoc section reference");
     assert!(mdoc.blocks.iter().any(|block| {
         matches!(block, Block::Paragraph { children, .. } if children.iter().any(|inline| {
-            matches!(inline, Inline::Link {
-                target: mant_ir::LinkTarget::Section { id }, ..
-            } if id == "name")
+            matches!(link_target(&mdoc, inline), Some(mant_ir::LinkTarget::Section { id }) if id == "name")
         }))
     }));
     assert!(mdoc.diagnostics.iter().all(|diagnostic| {
@@ -513,12 +530,7 @@ See\n.Sx NAME\n.Sh NAME\n.Nm root-section-reference\n.Nd root reference\n",
     .expect("lower a root-level traditional manual reference");
     assert!(man.blocks.iter().any(|block| {
         matches!(block, Block::Paragraph { children, .. } if children.iter().any(|inline| {
-            matches!(inline, Inline::Link {
-                target: mant_ir::LinkTarget::Manual {
-                    name,
-                    manual_section: Some(section),
-                }, ..
-            } if name == "printf" && section == "3")
+            matches!(link_target(&man, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(section) }) if name == "printf" && section == "3")
         }))
     }));
 }
@@ -550,7 +562,7 @@ fn preserves_targets_moved_to_paragraph_breaks_inside_no_fill_displays() {
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(before), "first line");
+    assert_eq!(inline_text(document.content(), before), "first line");
     assert!(
         !before
             .iter()
@@ -559,13 +571,13 @@ fn preserves_targets_moved_to_paragraph_breaks_inside_no_fill_displays() {
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline,
-                Inline::Anchor { id, owner_source: Some(source), .. }
-                if id == "hp-0-0" && source.line == 7))
+            .filter(|inline| matches!(document.content().inline(inline),
+                Ok(InlineView::Anchor(anchor))
+                if anchor.id().as_str() == "hp-0-0" && anchor.owner_source().is_some_and(|source| source.line == 7)))
             .count(),
         1
     );
-    assert!(inline_text(children).contains("prompt hp(0,0)"));
+    assert!(inline_text(document.content(), children).contains("prompt hp(0,0)"));
 }
 
 #[test]
@@ -579,20 +591,14 @@ fn retains_unlabelled_mdoc_link_targets_before_trailing_punctuation() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one external-link paragraph");
     };
-    assert_eq!(inline_text(children), "https://example.test/books.");
-    assert!(matches!(
-        children.as_slice(),
-        [
-            Inline::Link {
-                target: mant_ir::LinkTarget::External { uri },
-                children: link_children,
-                ..
-            },
-            Inline::Text { value },
-        ] if uri == "https://example.test/books"
-            && inline_text(link_children) == "https://example.test/books"
-            && value == "."
-    ));
+    assert_eq!(
+        inline_text(document.content(), children),
+        "https://example.test/books."
+    );
+    assert!(matches!(children.as_slice(), [link, punctuation]
+        if matches!(link_target(&document, link), Some(mant_ir::LinkTarget::External { uri }) if uri == "https://example.test/books")
+            && document.content().plain_text(std::slice::from_ref(link)).unwrap() == "https://example.test/books"
+            && matches!(document.content().inline(punctuation), Ok(InlineView::Text(".")))));
 }
 
 #[test]
@@ -644,20 +650,16 @@ fn recognizes_legacy_sphinx_manual_links_in_roff_inputs() {
         })
         .expect("commands paragraph");
     assert_eq!(
-        inline_text(paragraph),
+        inline_text(document.content(), paragraph),
         "See btrfs-subvolume(8) and btrfs(5) for details."
     );
     let references = paragraph
         .iter()
-        .filter_map(|inline| match inline {
-            Inline::Link {
-                target:
-                    mant_ir::LinkTarget::Manual {
-                        name,
-                        manual_section: Some(manual_section),
-                    },
-                ..
-            } => Some((name.as_str(), manual_section.as_str())),
+        .filter_map(|inline| match link_target(&document, inline) {
+            Some(mant_ir::LinkTarget::Manual {
+                name,
+                manual_section: Some(manual_section),
+            }) => Some((name.as_str(), manual_section.as_str())),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -671,13 +673,13 @@ fn recognizes_legacy_sphinx_manual_links_in_roff_inputs() {
             _ => None,
         })
         .expect("literal display");
-    assert_eq!(inline_text(literal), "btrfs-subvolume(8) <>");
+    assert_eq!(
+        inline_text(document.content(), literal),
+        "btrfs-subvolume(8) <>"
+    );
     assert!(!literal.iter().any(|inline| matches!(
-        inline,
-        Inline::Link {
-            target: mant_ir::LinkTarget::Manual { .. },
-            ..
-        }
+        link_target(&document, inline),
+        Some(mant_ir::LinkTarget::Manual { .. })
     )));
 }
 
@@ -738,12 +740,9 @@ fn resolves_mdoc_section_references_and_explicit_targets() {
         panic!("expected navigation paragraph");
     };
     assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link {
-            target: mant_ir::LinkTarget::Section { id },
-            children,
-            ..
-        } if id == "details" && inline_text(children) == "DETAILS"
+        document.content().link(inline),
+        Ok(Some(link)) if matches!(link.target(), mant_ir::LinkTarget::Section { id } if id == "details")
+            && inline_text(document.content(), link.children()) == "DETAILS"
     )));
     assert!(children.iter().any(|inline| matches!(
         inline,
@@ -843,7 +842,10 @@ gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
     let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
         panic!("expected semantic table cell paragraph");
     };
-    assert_eq!(inline_text(children), "renders gremlin (1) diagrams;");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "renders gremlin (1) diagrams;"
+    );
     assert!(
         !children
             .iter()
@@ -853,7 +855,7 @@ gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
         panic!("expected styled semantic table cell paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "populates groff registers using perl (1);"
     );
     assert!(
@@ -875,10 +877,13 @@ fn preserves_printable_roff_content_outside_formal_sections() {
     };
 
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         " .SH NAME manweb - browse generated documentation"
     );
-    assert_eq!(document.sections[0].heading.plain_text(), "SYNOPSIS");
+    assert_eq!(
+        document.sections[0].heading.plain_text(document.content()),
+        "SYNOPSIS"
+    );
 }
 
 #[test]
@@ -899,30 +904,18 @@ fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
     let see_also = document
         .sections
         .iter()
-        .find(|section| section.heading.plain_text() == "SEE ALSO")
+        .find(|section| section.heading.plain_text(document.content()) == "SEE ALSO")
         .expect("SEE ALSO");
     let Block::Paragraph { children, .. } = &see_also.blocks[0] else {
         panic!("references are a paragraph");
     };
-    assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
-            if name == "printf" && manual_section == "3"
-    )));
-    assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
-            if name == "man" && manual_section == "1"
-    )));
+    assert!(children.iter().any(|inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }) if name == "printf" && manual_section == "3")));
+    assert!(children.iter().any(|inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }) if name == "man" && manual_section == "1")));
 
     let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
         panic!("description is a paragraph");
     };
-    assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
-            if name == "printf" && manual_section == "3"
-    )));
+    assert!(children.iter().any(|inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }) if name == "printf" && manual_section == "3")));
 }
 
 #[test]
@@ -956,25 +949,17 @@ fn lowers_modern_groff_manual_uri_and_mail_macros() {
         _ => None,
     }) {
         for inline in children {
-            match inline {
-                Inline::Link {
-                    target:
-                        mant_ir::LinkTarget::Manual {
-                            name,
-                            manual_section: Some(manual_section),
-                        },
-                    ..
-                } if name == "git-add" && manual_section == "1" => manual = true,
-                Inline::Link {
-                    target: mant_ir::LinkTarget::External { uri },
-                    ..
-                } if uri == "https://example.test/docs" => {
+            match link_target(&document, inline) {
+                Some(mant_ir::LinkTarget::Manual {
+                    name,
+                    manual_section: Some(manual_section),
+                }) if name == "git-add" && manual_section == "1" => manual = true,
+                Some(mant_ir::LinkTarget::External { uri })
+                    if uri == "https://example.test/docs" =>
+                {
                     web = true;
                 }
-                Inline::Link {
-                    target: mant_ir::LinkTarget::Email { address },
-                    ..
-                } if address == "docs@example.test" => {
+                Some(mant_ir::LinkTarget::Email { address }) if address == "docs@example.test" => {
                     mail = true;
                 }
                 _ => {}
@@ -984,7 +969,8 @@ fn lowers_modern_groff_manual_uri_and_mail_macros() {
 
     assert!(manual && web && mail);
     assert!(section.blocks.iter().any(|block| match block {
-        Block::Paragraph { children, .. } => inline_text(children).contains("git-add(1),"),
+        Block::Paragraph { children, .. } =>
+            inline_text(document.content(), children).contains("git-add(1),"),
         _ => false,
     }));
     let linked_paragraphs = section
@@ -994,18 +980,15 @@ fn lowers_modern_groff_manual_uri_and_mail_macros() {
             Block::Paragraph { children, .. }
                 if children.iter().any(|inline| {
                     matches!(
-                        inline,
-                        Inline::Link {
-                            target: mant_ir::LinkTarget::External { .. },
-                            ..
-                        } | Inline::Link {
-                            target: mant_ir::LinkTarget::Email { .. },
-                            ..
-                        }
+                        link_target(&document, inline),
+                        Some(
+                            mant_ir::LinkTarget::External { .. }
+                                | mant_ir::LinkTarget::Email { .. }
+                        )
                     )
                 }) =>
             {
-                Some(inline_text(children))
+                Some(inline_text(document.content(), children))
             }
             _ => None,
         })
@@ -1040,13 +1023,9 @@ fn resolves_a_unique_parenthetically_qualified_mdoc_section_reference() {
         panic!("expected navigation paragraph");
     };
     assert!(children.iter().any(|inline| matches!(
-        inline,
-        Inline::Link {
-            target: mant_ir::LinkTarget::Section { id },
-            children,
-            ..
-        } if id == "white-space-splitting-field-splitting"
-            && inline_text(children) == "White Space Splitting"
+        document.content().link(inline),
+        Ok(Some(link)) if matches!(link.target(), mant_ir::LinkTarget::Section { id } if id == "white-space-splitting-field-splitting")
+            && inline_text(document.content(), link.children()) == "White Space Splitting"
     )));
     assert!(
         document.diagnostics.iter().all(|diagnostic| {
@@ -1068,13 +1047,10 @@ fn degrades_unresolved_mdoc_section_references_to_text() {
     let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
         panic!("expected reference paragraph");
     };
-    assert_eq!(inline_text(children), "MISSING");
+    assert_eq!(inline_text(document.content(), children), "MISSING");
     assert!(children.iter().all(|inline| !matches!(
-        inline,
-        Inline::Link {
-            target: mant_ir::LinkTarget::Section { .. },
-            ..
-        }
+        link_target(&document, inline),
+        Some(mant_ir::LinkTarget::Section { .. })
     )));
     assert!(
         document.diagnostics.iter().any(|diagnostic| {

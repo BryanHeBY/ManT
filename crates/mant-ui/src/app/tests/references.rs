@@ -6,19 +6,18 @@ use std::sync::Arc;
 fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
-        children: vec![Inline::Link {
-            target: mant_ir::LinkTarget::Manual {
+        children: vec![crate::test_content::link(
+            mant_ir::LinkTarget::Manual {
                 name: "printf".into(),
                 manual_section: None,
             },
-            title: None,
-            children: vec![Inline::Text {
-                value: "printf".into(),
-            }],
-        }],
+            None,
+            vec![crate::test_content::text("printf")],
+        )],
         layout: LayoutHint::default(),
         source: None,
     }];
+    crate::test_content::sync_document(bundle.document.as_mut().expect("document"));
     let mut app = App::new(&bundle);
     let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
@@ -185,16 +184,14 @@ fn direct_and_picker_copy_keep_encoded_native_topics_distinct_from_sections() {
 fn malformed_reference_copy_reports_failure_without_repairing_the_address() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
-        children: vec![Inline::Link {
-            target: mant_ir::LinkTarget::Manual {
+        children: vec![crate::test_content::link(
+            mant_ir::LinkTarget::Manual {
                 name: "bad\nname".into(),
                 manual_section: None,
             },
-            title: None,
-            children: vec![Inline::Text {
-                value: "BAD".into(),
-            }],
-        }],
+            None,
+            vec![crate::test_content::text("BAD")],
+        )],
         layout: LayoutHint::default(),
         source: None,
     }];

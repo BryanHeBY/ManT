@@ -7,7 +7,7 @@ use crate::{
         collect_root_entries, collect_sections,
     },
 };
-use mant_ir::{DOCUMENT_ROOT_ID, OutlinePath};
+use mant_ir::{ContentProjection, ContentProjectionBuilder, DOCUMENT_ROOT_ID, OutlinePath};
 use mant_protocol::{
     ContentSelector, ExcerptSchema, ExcerptSelection, MAX_NODE_SELECTORS, OutlineNodeReference,
     OutlineReference, OutlineTrail, QueryExcerpt,
@@ -29,6 +29,7 @@ pub(super) fn selector_matches(selector: &ContentSelector, path: &OutlinePath, i
 /// # Errors
 ///
 /// Returns an error when no content exists or any selector is empty or unknown.
+#[allow(clippy::too_many_lines)]
 pub fn select_excerpt(
     query: &ResolvedContent,
     selectors: &[ContentSelector],
@@ -102,8 +103,8 @@ pub fn select_excerpt(
         });
     }
     if let (true, Some(document)) = (document_root_selected, query.document.as_ref()) {
-        // Heading and blocks intentionally remain owned response copies until
-        // the protocol ContentProjection cutover can remap them atomically.
+        // Response topology remains owned here; `project_selections` remaps all
+        // retained keys into one closed response-local store before return.
         selections.push(ExcerptSelection::DocumentRoot {
             outline: OutlineTrail {
                 ancestors: Vec::new(),
@@ -118,6 +119,13 @@ pub fn select_excerpt(
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
+
+    let content_projection = match document {
+        Some(document) if selections.iter().any(selection_has_document_content) => {
+            Some(project_selections(document, &mut selections)?)
+        }
+        Some(_) | None => None,
+    };
 
     Ok(QueryExcerpt {
         display_title: query
@@ -136,8 +144,72 @@ pub fn select_excerpt(
         diagnostics: document
             .map(|document| document.diagnostics.clone())
             .unwrap_or_default(),
+        content_projection,
         selections,
     })
+}
+
+fn selection_has_document_content(selection: &ExcerptSelection) -> bool {
+    !matches!(selection, ExcerptSelection::Tldr { .. })
+}
+
+fn project_selections(
+    document: &mant_ir::Document,
+    selections: &mut [ExcerptSelection],
+) -> Result<ContentProjection, ProjectionError> {
+    let mut builder = ContentProjectionBuilder::new(&document.content_store);
+    for selection in selections.iter() {
+        match selection {
+            ExcerptSelection::Tldr { .. } => {}
+            ExcerptSelection::DocumentRoot {
+                heading, blocks, ..
+            } => {
+                if let Some(heading) = heading {
+                    builder
+                        .include_heading(heading)
+                        .map_err(|_| ProjectionError::ContentProjection)?;
+                }
+                builder
+                    .include_blocks(blocks)
+                    .map_err(|_| ProjectionError::ContentProjection)?;
+            }
+            ExcerptSelection::DocumentSection { section, .. } => {
+                builder
+                    .include_section(section)
+                    .map_err(|_| ProjectionError::ContentProjection)?;
+            }
+            ExcerptSelection::DocumentEntry { entry, .. } => builder
+                .include_blocks(std::slice::from_ref(entry))
+                .map_err(|_| ProjectionError::ContentProjection)?,
+        }
+    }
+    let (projection, remap) = builder
+        .finish()
+        .map_err(|_| ProjectionError::ContentProjection)?;
+    for selection in selections {
+        match selection {
+            ExcerptSelection::Tldr { .. } => {}
+            ExcerptSelection::DocumentRoot {
+                heading, blocks, ..
+            } => {
+                if let Some(heading) = heading {
+                    remap
+                        .remap_heading(heading)
+                        .map_err(|_| ProjectionError::ContentProjection)?;
+                }
+                remap
+                    .remap_blocks(blocks)
+                    .map_err(|_| ProjectionError::ContentProjection)?;
+            }
+            ExcerptSelection::DocumentSection { section, .. } => remap
+                .remap_section(section)
+                .map_err(|_| ProjectionError::ContentProjection)?,
+            ExcerptSelection::DocumentEntry { entry, .. } => remap
+                .remap_blocks(std::slice::from_mut(entry))
+                .map_err(|_| ProjectionError::ContentProjection)?,
+        }
+    }
+    Ok(projection)
 }
 
 fn resolve_excerpt_candidates<'a>(

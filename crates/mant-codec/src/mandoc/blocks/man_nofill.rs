@@ -1,10 +1,11 @@
 //! Man no-fill words retain executed empty rows, not formatter operands.
 use super::{
-    FontState, Inline, Node, NodeKind, ends_with_line_continuation, first_part_children,
+    FontState, Node, NodeKind, ends_with_line_continuation, first_part_children,
     lower_inline_nodes_with_font_state, lower_no_fill_line_with_font_state,
     participates_in_inline_flow, source_span, targets,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
+use crate::mandoc::inline::DraftInline as Inline;
 
 struct LoweredNoFillLine {
     nodes: Vec<Inline>,

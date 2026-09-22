@@ -56,18 +56,31 @@ pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
 }
 
 /// Render selected nodes using explicit presentation-only options.
+///
+/// # Panics
+///
+/// Panics only when a caller constructs an invalid in-memory response that
+/// retains document IR without its required content projection.
 #[must_use]
 pub fn render_excerpt_markdown_with_options(
     excerpt: &QueryExcerpt,
     mut options: MarkdownFragmentOptions,
 ) -> String {
+    let content = excerpt
+        .content_projection
+        .as_ref()
+        .map(mant_ir::ContentProjection::content);
     let heading_links = excerpt.selections.iter().any(|selection| match selection {
-        ExcerptSelection::DocumentRoot { heading, .. } => {
-            heading.as_ref().is_some_and(heading_has_local_link)
-        }
-        ExcerptSelection::DocumentSection { section, .. } => {
-            section_headings_have_local_links(std::slice::from_ref(section))
-        }
+        ExcerptSelection::DocumentRoot { heading, .. } => heading.as_ref().is_some_and(|heading| {
+            heading_has_local_link(
+                content.expect("retained excerpt heading has a content projection"),
+                heading,
+            )
+        }),
+        ExcerptSelection::DocumentSection { section, .. } => section_headings_have_local_links(
+            content.expect("retained excerpt section has a content projection"),
+            std::slice::from_ref(section),
+        ),
         ExcerptSelection::DocumentEntry { .. } | ExcerptSelection::Tldr { .. } => false,
     });
     if heading_links {
@@ -94,19 +107,30 @@ pub fn render_excerpt_markdown_with_options(
             ExcerptSelection::DocumentRoot {
                 heading, blocks, ..
             } => {
+                let content = content.expect("retained excerpt has a content projection");
                 if let Some(heading) = heading {
                     if options.preserve_anchors {
                         output.push(html_anchor(DOCUMENT_ROOT_ID));
                     }
-                    output.push(render_heading(2, heading, options));
+                    output.push(render_heading(content, 2, heading, options));
                 }
-                output.extend(render_blocks(blocks, options));
+                output.extend(render_blocks(content, blocks, options));
             }
             ExcerptSelection::DocumentSection { section, .. } => {
-                render_sections(&mut output, std::slice::from_ref(section), 2, options);
+                render_sections(
+                    content.expect("retained excerpt has a content projection"),
+                    &mut output,
+                    std::slice::from_ref(section),
+                    2,
+                    options,
+                );
             }
             ExcerptSelection::DocumentEntry { entry, .. } => {
-                output.extend(render_blocks(std::slice::from_ref(entry), options));
+                output.extend(render_blocks(
+                    content.expect("retained excerpt has a content projection"),
+                    std::slice::from_ref(entry),
+                    options,
+                ));
             }
         }
     }

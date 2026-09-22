@@ -362,7 +362,7 @@ pub(super) fn definition_item(
     mut geometry: crate::mandoc::layout::DefinitionGeometry,
     flow: DefinitionFlow,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> DefinitionItem {
+) -> PendingDefinitionItem {
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
@@ -387,7 +387,10 @@ pub(super) fn definition_item(
         geometry.gap = 0;
     }
     if let Some(id) = definition_head_anchor(node) {
-        term.insert(0, Inline::anchor_at(id, source_span(node)));
+        term.insert(
+            0,
+            crate::mandoc::inline::DraftInline::anchor_at(id, source_span(node)),
+        );
     }
     let terms = split_definition_terms(term);
     if flow.head.generated_cells().is_some() {
@@ -425,36 +428,116 @@ pub(super) fn definition_item(
     if flow.shares_pending_term_row
         && let Some(consumption) = pending_head.consumption
     {
-        consume_initial_formatter_row(&mut description, consumption);
+        context.content.with_context(|content| {
+            consume_initial_formatter_row(content, &mut description, consumption);
+        });
     }
     if flow.shares_pending_term_row
         && let Some(rows) = pending_head.leading_rows
     {
         retain_pending_head_rows(&mut description, rows);
     }
-    let mut item = DefinitionItem {
+    PendingDefinitionItem {
         source: source_span(node),
-        entry: None,
         layout,
         terms,
         description,
-    };
-    // A source coordinate identifies authored text, not one executed macro
-    // invocation: expansion can produce the same coordinate and head several
-    // times. Carry the native node identity through IR-only normalization and
-    // strip it once semantic declaration grouping has consumed the witness.
-    crate::definitions::mark_native_definition_owner(&mut item, std::ptr::from_ref(node) as usize);
-    context
-        .native_heads
-        .borrow_mut()
-        .groups
-        .record(&item, std::ptr::from_ref(node) as usize);
-    if context.macro_set == libmandoc_rs::MacroSet::Mdoc
-        && let Some(role) = super::evidence::leading_role(head)
-    {
-        context.native_heads.borrow_mut().record(&item, role);
+        native_key: std::ptr::from_ref(node) as usize,
+        role: (context.macro_set == libmandoc_rs::MacroSet::Mdoc)
+            .then(|| super::evidence::leading_role(head))
+            .flatten(),
     }
-    item
+}
+
+pub(in crate::mandoc::blocks::lists) struct PendingDefinitionItem {
+    pub(super) source: Option<mant_ir::SourceSpan>,
+    pub(super) layout: mant_ir::DefinitionLayout,
+    pub(super) terms: Vec<Vec<crate::mandoc::inline::DraftInline>>,
+    pub(super) description: Vec<Block>,
+    pub(super) native_key: usize,
+    pub(super) role: Option<crate::definitions::NativeHeadRole>,
+}
+
+impl PendingDefinitionItem {
+    pub(super) fn attach_targets(
+        &mut self,
+        targets: impl IntoIterator<Item = String>,
+        source: Option<mant_ir::SourceSpan>,
+    ) {
+        // mdoc_validate.c post_tg moves a single NODE_ID onto the chosen
+        // head/body owner. The pending head can already contain that same
+        // target, so conserve one anchor before committing either stream.
+        let mut seen = std::collections::HashSet::new();
+        let anchors = targets
+            .into_iter()
+            .filter(|id| {
+                seen.insert(id.clone())
+                    && !self
+                        .terms
+                        .iter()
+                        .any(|term| draft_contains_anchor(term, id))
+                    && !targets::contains_anchor(&self.description, id)
+            })
+            .map(|id| crate::mandoc::inline::DraftInline::anchor_at(id, source))
+            .collect::<Vec<_>>();
+        if anchors.is_empty() {
+            return;
+        }
+        if let Some(term) = self.terms.first_mut() {
+            term.splice(0..0, anchors);
+        } else {
+            self.terms.push(anchors);
+            self.layout.inline_term = true;
+        }
+    }
+
+    pub(super) fn commit(self, context: &LoweringContext<'_>) -> DefinitionItem {
+        let mut item = DefinitionItem {
+            source: self.source,
+            entry: None,
+            layout: self.layout,
+            terms: self
+                .terms
+                .into_iter()
+                .map(|term| {
+                    context
+                        .content
+                        .lower(mant_ir::ContentRootKind::Term, self.source, term)
+                })
+                .collect(),
+            description: self.description,
+        };
+        if !item.terms.is_empty() {
+            // Source coordinates can repeat under expansion. Carry a
+            // parse-local owner through semantic preparation and remove it
+            // before exporting public IR.
+            let owner_point = context
+                .content
+                .point(mant_ir::ContentRootKind::Term, self.source);
+            crate::definitions::mark_native_definition_owner(
+                &mut item,
+                self.native_key,
+                owner_point,
+            );
+        }
+        let mut evidence = context.native_heads.borrow_mut();
+        evidence.groups.record(&item, self.native_key);
+        if let Some(role) = self.role {
+            evidence.record(&item, role);
+        }
+        item
+    }
+}
+
+fn draft_contains_anchor(nodes: &[crate::mandoc::inline::DraftInline], target: &str) -> bool {
+    use crate::mandoc::inline::DraftInline;
+    nodes.iter().any(|node| match node {
+        DraftInline::Anchor { id, .. } => id == target,
+        DraftInline::Strong { children }
+        | DraftInline::Emphasis { children }
+        | DraftInline::Link { children, .. } => draft_contains_anchor(children, target),
+        DraftInline::Text { .. } | DraftInline::Code { .. } | DraftInline::LineBreak => false,
+    })
 }
 
 fn lower_definition_head(
@@ -464,7 +547,7 @@ fn lower_definition_head(
     flow: DefinitionFlow,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> (
-    Vec<Inline>,
+    Vec<crate::mandoc::inline::DraftInline>,
     Option<crate::mandoc::inline::PreservedInlineState>,
     bool,
     bool,
@@ -493,12 +576,13 @@ fn lower_definition_head(
     let mut definition_field_exited = false;
     let mut definition_body_gap_consumed = false;
     for group in groups {
-        let (lowered, field_exited, body_gap_consumed) = context.lower_inline_with_author_break(
-            group,
-            flow.spacing_enabled,
-            formatter,
-            flow.head.author_break_effect(),
-        );
+        let (lowered, field_exited, body_gap_consumed) = context
+            .lower_inline_draft_with_author_break(
+                group,
+                flow.spacing_enabled,
+                formatter,
+                flow.head.author_break_effect(),
+            );
         term_builder.append(lowered);
         definition_field_exited |= field_exited;
         definition_body_gap_consumed |= body_gap_consumed;
@@ -522,7 +606,11 @@ fn latest_source_line(node: &Node) -> Option<u32> {
 /// Anchor-only paragraphs are position metadata and do not end the search;
 /// ordinary content does.  Explicit vertical requests remain after the
 /// occupied row has been consumed.
-fn consume_initial_formatter_row(blocks: &mut Vec<Block>, consumption: PendingHeadConsumption) {
+fn consume_initial_formatter_row(
+    content: mant_ir::ContentContext<'_>,
+    blocks: &mut Vec<Block>,
+    consumption: PendingHeadConsumption,
+) {
     let PendingHeadConsumption::OccupiedUntil(boundary_line) = consumption;
     let mut index = 0;
     while index < blocks.len() {
@@ -537,20 +625,23 @@ fn consume_initial_formatter_row(blocks: &mut Vec<Block>, consumption: PendingHe
                 };
                 let generated_gap_break = children[first_content..]
                     .iter()
-                    .position(|child| matches!(child, Inline::LineBreak))
+                    .position(|child| matches!(child, Inline::LineBreak { .. }))
                     .filter(|break_offset| {
                         children[first_content..first_content + break_offset]
                             .iter()
                             .all(|child| {
-                                matches!(child, Inline::Text { value } if value.chars().all(char::is_whitespace))
+                                matches!(child, Inline::Text { content: text } if content.resolve_text(*text).is_some_and(|value| value.chars().all(char::is_whitespace)))
                             })
                     });
                 if let Some(break_offset) = generated_gap_break {
                     children.drain(first_content..=first_content + break_offset);
-                } else if matches!(&children[first_content], Inline::LineBreak) {
+                } else if matches!(&children[first_content], Inline::LineBreak { .. }) {
                     children.remove(first_content);
-                } else if matches!(&children[first_content], Inline::Text { value } if value.is_empty())
-                    && matches!(children.get(first_content + 1), Some(Inline::LineBreak))
+                } else if matches!(&children[first_content], Inline::Text { content: text } if content.resolve_text(*text).is_some_and(str::is_empty))
+                    && matches!(
+                        children.get(first_content + 1),
+                        Some(Inline::LineBreak { .. })
+                    )
                 {
                     children.drain(first_content..=first_content + 1);
                 }
@@ -655,12 +746,16 @@ fn maximum_node_line(node: &Node) -> u32 {
 /// position it separates equivalent term spellings rather than starting a
 /// new description paragraph. The IR already models such aliases as several
 /// terms on one definition item, so preserve that structure explicitly.
-pub(super) fn split_definition_terms(term: Vec<Inline>) -> Vec<Vec<Inline>> {
+pub(super) fn split_definition_terms(
+    term: Vec<crate::mandoc::inline::DraftInline>,
+) -> Vec<Vec<crate::mandoc::inline::DraftInline>> {
+    use crate::mandoc::inline::DraftInline;
+
     let mut terms = Vec::new();
     let mut current = Vec::new();
     for node in term {
-        if node == Inline::LineBreak {
-            if mant_ir::has_printable_character(&current) {
+        if matches!(node, DraftInline::LineBreak) {
+            if crate::mandoc::inline::draft::has_printable_character(&current) {
                 terms.push(std::mem::take(&mut current));
             } else {
                 // An executed but invisible author word (`\&`, or a
@@ -668,9 +763,10 @@ pub(super) fn split_definition_terms(term: Vec<Inline>) -> Vec<Vec<Inline>> {
                 // Keep that row attached to the next visible spelling rather
                 // than manufacturing an empty semantic alternative that
                 // renderers are required to ignore.
-                current
-                    .retain(|inline| !matches!(inline, Inline::Text { value } if value.is_empty()));
-                current.push(Inline::LineBreak);
+                current.retain(
+                    |inline| !matches!(inline, DraftInline::Text { value } if value.is_empty()),
+                );
+                current.push(node);
             }
         } else {
             current.push(node);

@@ -187,7 +187,7 @@ fn render_table_columns(
                     }
                     spans.extend(row.line.spans.clone());
                     links.extend(row.links.iter().map(|link| WrappedLink {
-                        target: link.target.clone(),
+                        identity: link.identity,
                         start_column: column_offset + left_padding + link.start_column,
                         end_column: column_offset + left_padding + link.end_column,
                     }));

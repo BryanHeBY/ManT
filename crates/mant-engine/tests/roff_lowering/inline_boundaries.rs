@@ -24,7 +24,7 @@ pub(super) fn assert_flow(body: &str, expected: &str) {
         },
         other => panic!("{other:?}"),
     };
-    assert_eq!(inline_text(inlines), expected, "{body}");
+    assert_eq!(inline_text(document.content(), inlines), expected, "{body}");
     assert!(
         unindent(&mant_render::render_query_text(&query)).contains(expected),
         "{body}"
@@ -187,7 +187,7 @@ fn invisible_targets_preserve_pending_joins_and_source_ownership() {
     };
     assert_eq!(source.unwrap().line, 8);
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::Emphasis { children } if inline_text(children) == "y")
+        |inline| matches!(inline, Inline::Emphasis { children } if inline_text(document.content(), children) == "y")
     ));
 }
 
@@ -213,8 +213,8 @@ fn real_breaks_reset_joins_but_source_continuations_do_not() {
     else {
         panic!("paragraph boundary lost")
     };
-    assert_eq!(inline_text(first), "x'");
-    assert_eq!(inline_text(second), "y");
+    assert_eq!(inline_text(document.content(), first), "x'");
+    assert_eq!(inline_text(document.content(), second), "y");
 }
 
 #[test]
@@ -228,10 +228,13 @@ fn preserves_complete_mdoc_include_directives() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one include paragraph");
     };
-    assert_eq!(inline_text(children), "#include <fido.h>");
+    assert_eq!(
+        inline_text(document.content(), children),
+        "#include <fido.h>"
+    );
     assert!(matches!(
         children.as_slice(),
-        [Inline::Code { value }] if value == "#include <fido.h>"
+        [inline] if matches!(document.content().inline(inline), Ok(InlineView::Code("#include <fido.h>")))
     ));
 }
 
@@ -248,7 +251,7 @@ fn retains_punctuation_after_implicit_mdoc_enclosures() {
         panic!("expected one paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "When disabled (all features remain readable); continue safely."
     );
 }
@@ -295,12 +298,12 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
         panic!("expected one prose function paragraph");
     };
     assert_eq!(
-        inline_text(declaration),
+        inline_text(document.content(), declaration),
         "int audit_open(const char *path, int flags)"
     );
     assert!(declaration.iter().any(|inline| matches!(
         inline,
-        Inline::Strong { children } if inline_text(children) == "audit_open"
+        Inline::Strong { children } if inline_text(document.content(), children) == "audit_open"
     )));
     assert!(anchor_ids(&document).iter().any(|id| id == "audit-open"));
 
@@ -308,7 +311,7 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
         panic!("expected one enclosure paragraph");
     };
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "<angle> [bracket] “double” (parenthesized) \"quoted\" ‘single’ {braced} \
          [optional] <<generic>> [[custom]]"
     );
@@ -335,7 +338,7 @@ fn preserves_the_complete_libbsd_library_identity() {
     };
 
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "Utility functions from BSD systems (libbsd, -lbsd)"
     );
 }
@@ -353,7 +356,7 @@ fn joins_the_final_mdoc_bibliography_authors() {
     };
 
     assert_eq!(
-        inline_text(children),
+        inline_text(document.content(), children),
         "Bentley, J.L. and McIlroy, M.D. Engineering a Sort Function."
     );
 }
@@ -374,7 +377,7 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
         panic!("expected one NAME paragraph");
     };
     assert_eq!(
-        inline_text(name),
+        inline_text(document.content(), name),
         "function-punctuation — test generated punctuation"
     );
 
@@ -382,7 +385,7 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
         .blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(document.content(), children)),
             Block::VerticalSpace { lines: 1, .. } => None,
             block => panic!("expected synopsis paragraph or CVS gap, got {block:?}"),
         })
@@ -413,7 +416,7 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
         panic!("expected one DESCRIPTION paragraph");
     };
     assert_eq!(
-        inline_text(description),
+        inline_text(document.content(), description),
         "The prose_call(int value) function."
     );
 }
@@ -434,7 +437,7 @@ fn preserves_mdoc_synopsis_declaration_units() {
         .blocks
         .iter()
         .filter_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::Paragraph { children, .. } => Some(inline_text(document.content(), children)),
             Block::VerticalSpace { lines: 1, .. } => None,
             block => panic!("expected synopsis declaration or CVS gap, got {block:?}"),
         })

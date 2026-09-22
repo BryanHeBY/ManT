@@ -10,6 +10,7 @@ mod page;
 mod plan;
 mod positions;
 mod preview;
+mod projection;
 mod relations;
 mod scoped;
 mod support;

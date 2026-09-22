@@ -356,7 +356,17 @@ fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() 
     ] {
         let mut query = load_markdown_text(PAGE, Some("ris\u{1b}c.md".to_owned()))
             .expect("Markdown query with hostile label");
-        query.document.as_mut().expect("parsed document").heading = Some("ris\u{1b}c".into());
+        let document = query.document.as_mut().expect("parsed document");
+        let heading = document.heading.as_mut().expect("heading");
+        let mant_ir::Inline::Text { content } = &mut heading.content[0] else {
+            panic!("plain fixture heading");
+        };
+        let atom = &mut document.content_store.atoms[(content.atom.get() - 1) as usize];
+        let mant_ir::ContentAtomKind::Text { text, .. } = &mut atom.kind else {
+            panic!("text fixture atom");
+        };
+        *text = "ris\u{1b}c".to_owned();
+        content.bytes.end = u32::try_from(text.len()).unwrap();
         let result = project_query_view(query, &view).expect("query projection");
         let redirected = render_query_result(
             &result,

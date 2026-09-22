@@ -1,4 +1,5 @@
 //! Plan source-backed tbl cells and replay tbl's bounded lexical execution.
+use crate::mandoc::inline::DraftInline;
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
     inline::{
@@ -61,7 +62,7 @@ pub(super) struct CellPosition<'a> {
 
 #[must_use]
 struct CellCandidate {
-    inlines: Vec<Inline>,
+    inlines: Vec<DraftInline>,
     formatter: crate::mandoc::formatter::FormatterState,
     diagnostics: Vec<mant_ir::Diagnostic>,
 }
@@ -118,7 +119,9 @@ impl CellCandidate {
     ) -> Vec<Inline> {
         *formatter = self.formatter;
         context.diagnostics.borrow_mut().extend(self.diagnostics);
-        self.inlines
+        context
+            .content
+            .lower(mant_ir::ContentRootKind::Cell, None, self.inlines)
     }
 }
 
@@ -277,7 +280,7 @@ fn lower_raw_table_text_block(
     source: &str,
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Inline> {
+) -> Vec<DraftInline> {
     // `tbl_cdata()` appends every admitted physical input line to one cell
     // string, separated by exactly one ASCII blank. Native requests are
     // consumed before that point and contribute no cell word. Replaying the
@@ -304,8 +307,10 @@ fn lower_raw_table_text_block(
     let mut builder = InlineBuilder::with_spacing(formatter.spacing);
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
     if !operand_source.is_empty() {
-        let lowered = context.lower_text(&operand_source, formatter);
-        builder.begin_word_projection(mant_ir::has_printable_character(&lowered));
+        let lowered = context.lower_text_draft(&operand_source, formatter);
+        builder.begin_word_projection(crate::mandoc::inline::draft::has_printable_character(
+            &lowered,
+        ));
         builder.append_filled(lowered, FilledBoundary::Word);
     }
     formatter.spacing = builder.spacing_enabled();
@@ -350,8 +355,6 @@ fn table_cell_content_line<'a>(context: &LoweringContext<'_>, line: &'a str) -> 
 
 #[cfg(test)]
 mod tests {
-    use crate::mandoc::inline::plain_text;
-
     #[test]
     fn native_table_witness_preserves_internal_whitespace() {
         assert!(super::table_text_agrees(" A B ", "A B"));
@@ -404,7 +407,12 @@ mod tests {
                 &mut state,
             );
             assert_eq!(
-                plain_text(&result.expect("decoded cell")),
+                context
+                    .content
+                    .with_context(|content| mant_ir::inline_plain_text(
+                        content,
+                        &result.expect("decoded cell")
+                    )),
                 expected_text,
                 "{source}"
             );
@@ -461,7 +469,12 @@ mod tests {
                 &mut crate::mandoc::formatter::FormatterState::default(),
             );
             assert_eq!(
-                plain_text(&inlines.expect("complete fallback payload")),
+                context
+                    .content
+                    .with_context(|content| mant_ir::inline_plain_text(
+                        content,
+                        &inlines.expect("complete fallback payload")
+                    )),
                 expected
             );
         }
@@ -500,7 +513,12 @@ mod tests {
                     &mut crate::mandoc::formatter::FormatterState::default(),
                 );
                 assert_eq!(
-                    plain_text(&inlines.expect("raw operand fallback")),
+                    context
+                        .content
+                        .with_context(|content| mant_ir::inline_plain_text(
+                            content,
+                            &inlines.expect("raw operand fallback")
+                        )),
                     expected,
                     "source={source:?} native={native:?}"
                 );

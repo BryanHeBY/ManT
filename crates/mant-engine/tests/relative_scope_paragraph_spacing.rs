@@ -1,23 +1,27 @@
 //! A transparent RS keeps paragraph predecessor evidence across IR ownership.
 
-use mant_ir::{Block, Inline, LayoutHint};
+use mant_ir::{Block, ContentContext, InlineView, LayoutHint};
 use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
-fn paragraph_layout<'a>(blocks: &'a [Block], text: &str) -> Option<&'a LayoutHint> {
+fn paragraph_layout<'a>(
+    content: ContentContext<'_>,
+    blocks: &'a [Block],
+    text: &str,
+) -> Option<&'a LayoutHint> {
     for block in blocks {
         match block {
             Block::Paragraph {
                 children, layout, ..
             } if children
                 .iter()
-                .any(|inline| matches!(inline, Inline::Text { value } if value.contains(text))) =>
+                .any(|inline| matches!(content.inline(inline), Ok(InlineView::Text(value)) if value.contains(text))) =>
             {
                 return Some(layout);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    if let Some(layout) = paragraph_layout(&item.blocks, text) {
+                    if let Some(layout) = paragraph_layout(content, &item.blocks, text) {
                         return Some(layout);
                     }
                 }
@@ -39,13 +43,13 @@ fn check(source: &str, expected: &[(&str, u16)]) {
         assert_eq!(items.len(), 1);
         for &(token, _) in expected {
             assert!(
-                paragraph_layout(&items[0].blocks, token).is_some(),
+                paragraph_layout(document.content(), &items[0].blocks, token).is_some(),
                 "continuation escaped its item: {document:#?}"
             );
         }
     }
     for &(token, gap) in expected {
-        let layout = paragraph_layout(&document.sections[0].blocks, token)
+        let layout = paragraph_layout(document.content(), &document.sections[0].blocks, token)
             .unwrap_or_else(|| panic!("missing {token}: {document:#?}"));
         assert_eq!(layout.spacing_before_lines, gap, "{source}\n{text}");
         let rows: Vec<_> = text.lines().collect();
@@ -103,7 +107,7 @@ fn a_first_paragraph_in_a_first_relative_scope_does_not_invent_a_predecessor() {
     let query = load_roff_bytes(source.as_bytes()).unwrap();
     let document = query.document.as_ref().unwrap();
     assert_eq!(
-        paragraph_layout(&document.sections[0].blocks, "SECOND")
+        paragraph_layout(document.content(), &document.sections[0].blocks, "SECOND")
             .unwrap()
             .spacing_before_lines,
         0

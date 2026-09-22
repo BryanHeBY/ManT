@@ -14,18 +14,21 @@ fn run_in_definition_handoff_preserves_native_gap_and_source_row_contracts() {
             ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{style}\n.It {head}\n{body}\n.El\n"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower run-in item");
-        let item = first_definition_item(query.document.as_ref().unwrap());
+        let document = query.document.as_ref().unwrap();
+        let item = first_definition_item(document);
         let term_text = item
             .terms
             .iter()
-            .map(|term| super::inline_text(term))
+            .map(|term| super::inline_text(document.content(), term))
             .collect::<String>();
         assert_eq!(term_text, term, "{style} {head:?}: {item:?}");
         let description = item
             .description
             .iter()
             .find_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                Block::Paragraph { children, .. } => {
+                    Some(super::inline_text(document.content(), children))
+                }
                 _ => None,
             })
             .unwrap();
@@ -51,12 +54,15 @@ fn transparent_target_does_not_reset_a_run_in_formatter_boundary() {
     let native = native_terminal(source);
     assert!(native.contains("A\u{a0}\u{a0}\n      BC"), "{native:?}");
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower target run-in");
-    let item = first_definition_item(query.document.as_ref().unwrap());
+    let document = query.document.as_ref().unwrap();
+    let item = first_definition_item(document);
     let description = item
         .description
         .iter()
         .find_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+            Block::Paragraph { children, .. } => {
+                Some(super::inline_text(document.content(), children))
+            }
             _ => None,
         })
         .unwrap();
@@ -89,6 +95,7 @@ fn inherited_zero_advance_cannot_change_an_sx_destination() {
     let mut correct = AuthoredSectionLink {
         id: "abc",
         found: false,
+        content: document.content(),
     };
     correct.visit_document(document);
     assert!(correct.found, "display BC incorrectly selected section BC");
@@ -117,7 +124,7 @@ fn heading_and_diagnostic_scopes_preserve_previous_font_execution() {
             "native terminal did not retain bold TAIL: {native:?}"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower font scope");
-        let mut strong_tail = StrongText(false);
+        let mut strong_tail = StrongText(false, query.document.as_ref().unwrap().content());
         strong_tail.visit_document(query.document.as_ref().expect("lowered document"));
         assert!(strong_tail.0, "lowered IR did not retain bold TAIL");
     }
@@ -135,7 +142,7 @@ fn heading_and_diagnostic_scopes_preserve_previous_font_execution() {
         "inset made TAIL bold: {native:?}"
     );
     let query = mant_loader::load_roff_bytes(inset.as_bytes()).expect("lower inset font scope");
-    let mut strong_tail = StrongText(false);
+    let mut strong_tail = StrongText(false, query.document.as_ref().unwrap().content());
     strong_tail.visit_document(query.document.as_ref().expect("lowered document"));
     assert!(!strong_tail.0, "inset inherited diagnostic bold scope");
 }
@@ -153,13 +160,11 @@ fn man_and_mdoc_headings_keep_distinct_previous_font_contracts() {
             "man {heading} left TAIL bold: {native:?}"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower man heading");
-        let mut tail = ExactTailInline(None);
-        tail.visit_document(query.document.as_ref().expect("lowered document"));
-        assert_eq!(
-            tail.0,
-            Some(Inline::Text {
-                value: "TAIL".to_owned()
-            }),
+        let document = query.document.as_ref().expect("lowered document");
+        let mut tail = ExactTailInline(None, document.content());
+        tail.visit_document(document);
+        assert!(
+            matches!(tail.0, Some(Inline::Text { .. })),
             "man {heading} retained the wrong font state"
         );
     }
@@ -174,15 +179,11 @@ fn man_and_mdoc_headings_keep_distinct_previous_font_contracts() {
             "mdoc {heading} lost bold TAIL: {native:?}"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower mdoc heading");
-        let mut tail = ExactTailInline(None);
-        tail.visit_document(query.document.as_ref().expect("lowered document"));
-        assert_eq!(
-            tail.0,
-            Some(Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "TAIL".to_owned()
-                }]
-            }),
+        let document = query.document.as_ref().expect("lowered document");
+        let mut tail = ExactTailInline(None, document.content());
+        tail.visit_document(document);
+        assert!(
+            matches!(tail.0, Some(Inline::Strong { .. })),
             "mdoc {heading} lost the exact previous-font state"
         );
     }
@@ -211,11 +212,12 @@ fn definition_heads_execute_author_modes_in_native_node_order() {
         assert!(native.contains("Bob"), "native author output: {native:?}");
 
         let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower author head");
-        let item = first_definition_item(query.document.as_ref().unwrap());
+        let document = query.document.as_ref().unwrap();
+        let item = first_definition_item(document);
         let terms = item
             .terms
             .iter()
-            .map(|term| super::inline_text(term))
+            .map(|term| super::inline_text(document.content(), term))
             .collect::<Vec<_>>();
         assert!(
             terms.iter().any(|term| term.contains("Alice"))

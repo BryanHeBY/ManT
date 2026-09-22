@@ -8,7 +8,7 @@ use std::{
 };
 
 use flate2::{Compression, write::GzEncoder};
-use mant_ir::{Inline, visit::Visit};
+use mant_ir::{ContentContext, Inline, InlineView, visit::Visit};
 
 use super::{MAX_MANUAL_BYTES, ManualBudget, load_manual_source_with_budget};
 use crate::{ManualErrorKind, parse_manual_source};
@@ -90,13 +90,15 @@ impl Drop for Fixture {
     }
 }
 
-#[derive(Default)]
-struct VisibleText(String);
+struct VisibleText<'store> {
+    text: String,
+    content: ContentContext<'store>,
+}
 
-impl<'ir> Visit<'ir> for VisibleText {
+impl<'ir> Visit<'ir> for VisibleText<'ir> {
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        match inline {
-            Inline::Text { value } | Inline::Code { value } => self.0.push_str(value),
+        match self.content.inline(inline).unwrap() {
+            InlineView::Text(value) | InlineView::Code(value) => self.text.push_str(value),
             _ => mant_ir::visit::walk_inline(self, inline),
         }
     }
@@ -111,10 +113,13 @@ fn accepts_all_members(encoding: Encoding) {
     fixture.write(&encoded);
     let document = parse_manual_source(&fixture.path).expect("decode every member before parsing");
     assert_eq!(document.meta.title.as_deref(), Some("COMPRESSED"));
-    let mut visible = VisibleText::default();
+    let mut visible = VisibleText {
+        text: String::new(),
+        content: document.content(),
+    };
     visible.visit_document(&document);
-    assert!(visible.0.contains("TOKENA"));
-    assert!(visible.0.contains("TOKENB"));
+    assert!(visible.text.contains("TOKENA"));
+    assert!(visible.text.contains("TOKENB"));
     assert_eq!(document.sections.len(), 2);
 }
 

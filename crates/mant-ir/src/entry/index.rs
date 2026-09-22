@@ -160,10 +160,10 @@ fn collect_section_entries(
 }
 
 #[cfg(test)]
-fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
+fn entries_in_blocks(content: ContentContext<'_>, blocks: &[Block]) -> Vec<SemanticEntry> {
     let mut entries = Vec::new();
     super::walk::visit_child_entries(blocks, &mut |item| {
-        if let Some(entry) = entry_from_owner(item) {
+        if let Some(entry) = entry_from_owner(content, item) {
             entries.push(entry);
         }
     });
@@ -171,14 +171,18 @@ fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
 }
 
 #[cfg(test)]
-pub(super) fn entry_from_definition(item: &crate::DefinitionItem) -> Option<SemanticEntry> {
-    entry_from_owner(EntryOwner::Definition(item))
+pub(super) fn entry_from_definition(
+    content: ContentContext<'_>,
+    item: &crate::DefinitionItem,
+) -> Option<SemanticEntry> {
+    entry_from_owner(content, EntryOwner::Definition(item))
 }
 
 #[cfg(test)]
-fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
-    let mut entry = SemanticEntry::from_owner_shallow(item)?;
-    entry.children = entries_in_blocks(item.blocks());
+fn entry_from_owner(content: ContentContext<'_>, item: EntryOwner<'_>) -> Option<SemanticEntry> {
+    let mut entry = SemanticEntry::from_owner_shallow_with_content(item, content)
+        .expect("test entry content resolves")?;
+    entry.children = entries_in_blocks(content, item.blocks());
     Some(entry)
 }
 
@@ -232,21 +236,6 @@ fn entries_with_locations(
 }
 
 impl SemanticEntry {
-    /// Project this owner's metadata only, without copying content or indexing descendants.
-    ///
-    /// Document-wide alias-of validity is a separate operation; consumers must
-    /// consult [`crate::entry_relation_issues`] before exposing that relation.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal legacy backend rejects directly owned inline
-    /// content.
-    #[must_use]
-    pub fn from_owner_shallow(item: EntryOwner<'_>) -> Option<Self> {
-        Self::from_owner_shallow_with_content(item, ContentContext::detached())
-            .expect("legacy inline text is self-contained")
-    }
-
     /// Project one owner's metadata through its authoritative content store.
     ///
     /// Document-wide alias-of validity remains a separate operation.

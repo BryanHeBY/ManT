@@ -43,6 +43,7 @@ pub fn search_scope(
             address: scoped.address.clone(),
             depth: scoped.depth,
             source_context: local.source_context,
+            content_projection: local.content_projection,
             render: local.render,
             matches: hits,
         });

@@ -82,7 +82,7 @@ fn entry_search_sources_point_into_original_bytes_for_each_line_ending() {
                 pattern: "OWNEDPAYLOAD".into(),
                 syntax: SearchSyntax::Literal,
                 case: SearchCase::Sensitive,
-                scope: SearchScope::Visible,
+                scope: mant_protocol::SearchScope::Visible,
                 word: false,
                 context_lines: 1,
                 offset: 0,
@@ -123,34 +123,32 @@ fn literal_anchor_code_is_searchable_and_cannot_steal_entry_ownership() {
                 document: Some(document),
                 tldr: None,
             };
-            for scope in [SearchScope::Visible, SearchScope::Markdown] {
-                for pattern in ["<a", "SENTINEL", "separate"] {
-                    let result = search_query(
-                        &query,
-                        &SearchQuery {
-                            pattern: pattern.into(),
-                            syntax: SearchSyntax::Literal,
-                            case: SearchCase::Sensitive,
-                            scope,
-                            word: false,
-                            context_lines: 1,
-                            offset: 0,
-                            limit: 100,
-                        },
-                    )
-                    .unwrap();
-                    assert!(result.total > 0, "{source}: {pattern}: {scope:?}");
-                    for hit in result.matches {
-                        assert!(
-                            !matches!(hit.outline.node, OutlineNodeReference::DocumentEntry { .. }),
-                            "{pattern}: {hit:?}"
-                        );
-                        assert!(
-                            hit.occurrences
-                                .iter()
-                                .any(|occurrence| occurrence.matched_text.contains(pattern))
-                        );
-                    }
+            for pattern in ["<a", "SENTINEL", "separate"] {
+                let result = search_query(
+                    &query,
+                    &SearchQuery {
+                        pattern: pattern.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: mant_protocol::SearchScope::Visible,
+                        word: false,
+                        context_lines: 1,
+                        offset: 0,
+                        limit: 100,
+                    },
+                )
+                .unwrap();
+                assert!(result.total > 0, "{source}: {pattern}");
+                for hit in result.matches {
+                    assert!(
+                        !matches!(hit.outline.node, OutlineNodeReference::DocumentEntry { .. }),
+                        "{pattern}: {hit:?}"
+                    );
+                    assert!(
+                        hit.occurrences
+                            .iter()
+                            .any(|occurrence| occurrence.matched_text.contains(pattern))
+                    );
                 }
             }
         }

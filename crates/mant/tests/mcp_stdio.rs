@@ -359,7 +359,6 @@ fn request_compatibility_and_page_tools(input: &mut impl Write) {
             "word": "true",
             "contextLines": "1",
             "maxMatches": "1",
-            "scope": "markdown",
             "offset": "1"
         }),
     );
@@ -440,7 +439,7 @@ fn assert_tool_catalog(tools: &[Value]) {
         }
         if tool["name"] == "mant_search" {
             assert!(tool["inputSchema"]["properties"]["maxMatches"].is_object());
-            assert!(tool["inputSchema"]["properties"]["scope"].is_object());
+            assert!(tool["inputSchema"]["properties"].get("scope").is_some());
             assert!(tool["inputSchema"]["properties"]["offset"].is_object());
             assert!(tool["inputSchema"]["properties"].get("limit").is_none());
         }

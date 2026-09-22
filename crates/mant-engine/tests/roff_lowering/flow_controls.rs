@@ -3,7 +3,7 @@
 // A literal display can contain separate literal runs and executed spacing
 // requests. Verify their complete row stream rather than requiring one block
 // (which would erase the distinction needed for bounded request accounting).
-fn literal_flow(blocks: &[mant_ir::Block]) -> String {
+fn literal_flow(content: mant_ir::ContentContext<'_>, blocks: &[mant_ir::Block]) -> String {
     let mut output = String::new();
     let mut occupied = false;
     let mut gap = 0usize;
@@ -18,7 +18,7 @@ fn literal_flow(blocks: &[mant_ir::Block]) -> String {
                     output.push('\n');
                 }
                 output.push_str(&"\n".repeat(gap));
-                output.push_str(&super::inline_text(children));
+                output.push_str(&super::inline_text(content, children));
                 gap = 0;
                 occupied = true;
             }
@@ -31,13 +31,12 @@ fn literal_flow(blocks: &[mant_ir::Block]) -> String {
 
 fn assert_markdown_literal_rows(query: &mant_ir::ResolvedContent, expected: &str) {
     use mant_ir::visit::{Visit, walk_block};
-    #[derive(Default)]
-    struct LiteralRows(Vec<String>);
-    impl<'a> Visit<'a> for LiteralRows {
+    struct LiteralRows<'a>(Vec<String>, mant_ir::ContentContext<'a>);
+    impl<'a> Visit<'a> for LiteralRows<'a> {
         fn visit_block(&mut self, block: &'a mant_ir::Block) {
             if let mant_ir::Block::Preformatted { children, .. } = block {
                 self.0.extend(
-                    super::inline_text(children)
+                    super::inline_text(self.1, children)
                         .split('\n')
                         .filter(|line| !line.is_empty())
                         .map(str::to_owned),
@@ -48,8 +47,9 @@ fn assert_markdown_literal_rows(query: &mant_ir::ResolvedContent, expected: &str
     }
     let markdown = mant_codec::encode::render_markdown(query);
     let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
-    let mut rows = LiteralRows::default();
-    rows.visit_document(reloaded.document.as_ref().unwrap());
+    let document = reloaded.document.as_ref().unwrap();
+    let mut rows = LiteralRows(Vec::new(), document.content());
+    rows.visit_document(document);
     // Markdown owns fence separators: rereading may normalize inter-fence
     // gaps, but it must retain every visible literal row in its exact order.
     assert_eq!(
@@ -452,7 +452,7 @@ fn literal_display_controls_preserve_physical_rows_and_continuation() {
             let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let document = query.document.as_ref().unwrap();
             assert_eq!(
-                literal_flow(&document.sections[0].blocks),
+                literal_flow(document.content(), &document.sections[0].blocks),
                 expected,
                 "{source}"
             );
@@ -480,7 +480,10 @@ fn literal_continuations_cross_styling_containers_without_phantom_rows() {
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_eq!(
-            literal_flow(&query.document.as_ref().unwrap().sections[0].blocks),
+            literal_flow(
+                query.document.as_ref().unwrap().content(),
+                &query.document.as_ref().unwrap().sections[0].blocks
+            ),
             "FIRSTSECONDTHIRD",
             "{body}"
         );
@@ -511,7 +514,10 @@ fn styled_literal_breaks_and_eof_keep_exact_content_boundaries() {
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_eq!(
-            literal_flow(&query.document.as_ref().unwrap().sections[0].blocks),
+            literal_flow(
+                query.document.as_ref().unwrap().content(),
+                &query.document.as_ref().unwrap().sections[0].blocks
+            ),
             expected,
             "{body}"
         );
@@ -566,7 +572,8 @@ fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
                         ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
                     );
                     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-                    let flow = literal_flow(&query.document.as_ref().unwrap().sections[0].blocks);
+                    let document = query.document.as_ref().unwrap();
+                    let flow = literal_flow(document.content(), &document.sections[0].blocks);
                     assert_eq!(flow, expected, "{body}");
                     assert_eq!(
                         flow.matches('\n').count(),

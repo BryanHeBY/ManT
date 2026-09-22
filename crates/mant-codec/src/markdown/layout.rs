@@ -4,14 +4,15 @@
 //! leave blank-line presentation to HTML/CSS. `ManT` has no CSS layer, so this
 //! pass makes those semantics explicit before any renderer sees the document.
 
-use mant_ir::{Block, Inline, Section};
+use mant_ir::{Block, Section};
 
-use super::source::MarkdownSource;
+use super::{content::MarkdownContent, source::MarkdownSource};
 use mant_ir::geometry::{block_layout_mut, block_source};
 
 /// Apply source-derived block spacing to the normalized document.
 pub(super) fn normalize_markdown_layout(
     source: &MarkdownSource<'_>,
+    _content: &mut MarkdownContent,
     root_blocks: &mut Vec<Block>,
     sections: &mut [Section],
 ) {
@@ -56,9 +57,6 @@ fn normalize_blocks(source: &MarkdownSource<'_>, blocks: &mut Vec<Block>) {
 
 fn normalize_nested_blocks(source: &MarkdownSource<'_>, block: &mut Block) {
     match block {
-        Block::Preformatted { children, .. } => {
-            trim_code_framing_newline(children);
-        }
         Block::List { items, .. } => {
             for item in items {
                 normalize_blocks(source, &mut item.blocks);
@@ -74,32 +72,11 @@ fn normalize_nested_blocks(source: &MarkdownSource<'_>, block: &mut Block) {
                 normalize_blocks(source, &mut cell.blocks);
             }
         }
-        Block::Paragraph { .. }
+        Block::Preformatted { .. }
+        | Block::Paragraph { .. }
         | Block::Equation { .. }
         | Block::VerticalSpace { .. }
         | Block::ThematicBreak { .. }
         | Block::Unsupported { .. } => {}
-    }
-}
-
-/// pulldown-cmark includes the newline before a closing fence in its text
-/// event. It delimits source syntax and must not become an empty painted row.
-fn trim_code_framing_newline(children: &mut Vec<Inline>) {
-    let Some(last) = children.last_mut() else {
-        return;
-    };
-    match last {
-        Inline::Text { value } | Inline::Code { value } => {
-            if value.ends_with('\n') {
-                value.pop();
-            }
-        }
-        Inline::LineBreak => {
-            children.pop();
-        }
-        Inline::Strong { .. }
-        | Inline::Emphasis { .. }
-        | Inline::Link { .. }
-        | Inline::Anchor { .. } => {}
     }
 }

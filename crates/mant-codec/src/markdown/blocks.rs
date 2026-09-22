@@ -3,12 +3,14 @@
 use std::ops::Range;
 
 use mant_ir::{
-    Block, Diagnostic, Inline, LayoutHint, ListItem, ListKind, TableAlignment, TableCell, TableRow,
+    Block, ContentRootKind, Diagnostic, LayoutHint, ListItem, ListKind, TableAlignment, TableCell,
+    TableRow,
 };
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, Tag, TagEnd};
 
 use super::{
     EventCursor,
+    content::MarkdownContent,
     inline::{parse_inline_run, parse_inlines, starts_inline_run},
     source::MarkdownSource,
 };
@@ -16,6 +18,7 @@ use super::{
 pub(super) fn parse_blocks_until(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     diagnostics: &mut Vec<Diagnostic>,
     end: TagEnd,
 ) -> (Vec<Block>, usize) {
@@ -32,7 +35,7 @@ pub(super) fn parse_blocks_until(
             && starts_inline_run(event)
         {
             let start = range.start;
-            let (children, inline_end) = parse_inline_run(cursor, source, diagnostics);
+            let (children, inline_end) = parse_inline_run(cursor, source, content, diagnostics);
             blocks.push(Block::Paragraph {
                 children,
                 layout: LayoutHint::default(),
@@ -40,7 +43,7 @@ pub(super) fn parse_blocks_until(
             });
             continue;
         }
-        let Some(block) = parse_block(cursor, source, diagnostics) else {
+        let Some(block) = parse_block(cursor, source, content, diagnostics) else {
             if cursor.peek().is_none() {
                 break;
             }
@@ -54,20 +57,30 @@ pub(super) fn parse_blocks_until(
 pub(super) fn parse_block(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<Block> {
     let (event, range) = cursor.next()?;
     match event {
         Event::Start(Tag::Paragraph) => {
             let start = range.start;
-            let (children, end) = parse_inlines(cursor, source, diagnostics, TagEnd::Paragraph);
+            let (children, end) = parse_inlines(
+                cursor,
+                source,
+                content,
+                diagnostics,
+                TagEnd::Paragraph,
+                ContentRootKind::Body,
+            );
             Some(Block::Paragraph {
                 children,
                 layout: LayoutHint::default(),
                 source: Some(source.span(&(start..end))),
             })
         }
-        Event::Start(Tag::CodeBlock(kind)) => Some(parse_code_block(cursor, source, kind, range)),
+        Event::Start(Tag::CodeBlock(kind)) => {
+            Some(parse_code_block(cursor, source, content, kind, range))
+        }
         Event::Start(Tag::List(start)) => {
             if cursor.subtree_contains_task_marker() {
                 let whole = cursor.consume_balanced(range);
@@ -77,13 +90,18 @@ pub(super) fn parse_block(
                 let whole = cursor.consume_balanced(range);
                 return Some(source.unsupported_block("deeply nested list", whole, diagnostics));
             }
-            let list = parse_list(cursor, source, diagnostics, start, range);
+            let list = parse_list(cursor, source, content, diagnostics, start, range);
             cursor.ascend();
             Some(list)
         }
-        Event::Start(Tag::Table(alignments)) => {
-            Some(parse_table(cursor, source, diagnostics, &alignments, range))
-        }
+        Event::Start(Tag::Table(alignments)) => Some(parse_table(
+            cursor,
+            source,
+            content,
+            diagnostics,
+            &alignments,
+            range,
+        )),
         Event::Rule => Some(Block::ThematicBreak {
             source: Some(source.span(&range)),
         }),
@@ -92,13 +110,15 @@ pub(super) fn parse_block(
             let whole = cursor.consume_balanced(range);
             Some(source.unsupported_block(name, whole, diagnostics))
         }
-        Event::Text(value) | Event::Code(value) => Some(Block::Paragraph {
-            children: vec![Inline::Text {
-                value: value.into_string(),
-            }],
-            layout: LayoutHint::default(),
-            source: Some(source.span(&range)),
-        }),
+        Event::Text(value) | Event::Code(value) => {
+            let span = source.span(&range);
+            let mut root = content.root(ContentRootKind::Body, Some(span));
+            Some(Block::Paragraph {
+                children: vec![root.text(value.into_string(), Some(span))],
+                layout: LayoutHint::default(),
+                source: Some(span),
+            })
+        }
         Event::Html(_)
         | Event::InlineHtml(_)
         | Event::InlineMath(_)
@@ -114,6 +134,7 @@ pub(super) fn parse_block(
 fn parse_code_block(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     kind: CodeBlockKind<'_>,
     start_range: Range<usize>,
 ) -> Block {
@@ -136,17 +157,23 @@ fn parse_code_block(
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned),
     };
+    if value.ends_with('\n') {
+        value.pop();
+    }
+    let span = source.span(&(start_range.start..end));
+    let mut root = content.root(ContentRootKind::FixedBody, Some(span));
     Block::Preformatted {
-        children: vec![Inline::Text { value }],
+        children: vec![root.text(value, Some(span))],
         language,
         layout: LayoutHint::default(),
-        source: Some(source.span(&(start_range.start..end))),
+        source: Some(span),
     }
 }
 
 fn parse_list(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     diagnostics: &mut Vec<Diagnostic>,
     start: Option<u64>,
     start_range: Range<usize>,
@@ -160,7 +187,7 @@ fn parse_list(
             Event::Start(Tag::Item) => {
                 compact &= !cursor.item_has_direct_paragraph();
                 let (blocks, item_end) =
-                    parse_blocks_until(cursor, source, diagnostics, TagEnd::Item);
+                    parse_blocks_until(cursor, source, content, diagnostics, TagEnd::Item);
                 end = item_end;
                 items.push(ListItem {
                     layout: mant_ir::ListItemLayout::default(),
@@ -203,6 +230,7 @@ fn parse_list(
 fn parse_table(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     diagnostics: &mut Vec<Diagnostic>,
     alignments: &[Alignment],
     start_range: Range<usize>,
@@ -213,14 +241,26 @@ fn parse_table(
         end = range.end;
         match event {
             Event::Start(Tag::TableHead) => {
-                let (row, row_end) =
-                    parse_table_row(cursor, source, diagnostics, alignments, TagEnd::TableHead);
+                let (row, row_end) = parse_table_row(
+                    cursor,
+                    source,
+                    content,
+                    diagnostics,
+                    alignments,
+                    TagEnd::TableHead,
+                );
                 end = row_end;
                 rows.push(row);
             }
             Event::Start(Tag::TableRow) => {
-                let (row, row_end) =
-                    parse_table_row(cursor, source, diagnostics, alignments, TagEnd::TableRow);
+                let (row, row_end) = parse_table_row(
+                    cursor,
+                    source,
+                    content,
+                    diagnostics,
+                    alignments,
+                    TagEnd::TableRow,
+                );
                 end = row_end;
                 rows.push(row);
             }
@@ -238,6 +278,7 @@ fn parse_table(
 fn parse_table_row(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    content: &mut MarkdownContent,
     diagnostics: &mut Vec<Diagnostic>,
     alignments: &[Alignment],
     end_tag: TagEnd,
@@ -249,8 +290,14 @@ fn parse_table_row(
         match event {
             Event::Start(Tag::TableCell) => {
                 let start = range.start;
-                let (children, cell_end) =
-                    parse_inlines(cursor, source, diagnostics, TagEnd::TableCell);
+                let (children, cell_end) = parse_inlines(
+                    cursor,
+                    source,
+                    content,
+                    diagnostics,
+                    TagEnd::TableCell,
+                    ContentRootKind::Cell,
+                );
                 end = cell_end;
                 let blocks = if children.is_empty() {
                     Vec::new()

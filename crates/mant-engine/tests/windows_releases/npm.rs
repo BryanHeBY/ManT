@@ -6,6 +6,7 @@ use crate::fixtures::windows_release_manual;
 #[test]
 fn keeps_the_nested_npm_manual_and_windows_build_requirements() {
     let document = windows_release_manual("npm");
+    let content = document.content();
     assert_eq!(document.meta.title.as_deref(), Some("NPM"));
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("June 2026"));
@@ -19,12 +20,12 @@ fn keeps_the_nested_npm_manual_and_windows_build_requirements() {
         assert!(
             sections
                 .iter()
-                .any(|section| section.heading.plain_text() == title),
+                .any(|section| section.heading.plain_text(content) == title),
             "missing reviewed npm section {title}",
         );
     }
 
-    let dependencies = block_slice_text(&common::section(document, "Dependencies").blocks);
+    let dependencies = block_slice_text(content, &common::section(document, "Dependencies").blocks);
     assert!(dependencies.contains(r"using the \fBgit\fR"));
     assert!(dependencies.contains("On Windows, Python and Microsoft Visual Studio C++ are needed"));
 }
@@ -39,5 +40,5 @@ fn preserves_authored_literal_font_spellings_without_decoding_them_twice() {
     assert!(rendered.contains(r"\fBpackage.json\fR"));
     assert!(!rendered.contains(r"\[rs]"));
     assert!(!rendered.contains(['\u{1d}', '\u{1e}', '\u{1f}']));
-    common::assert_bounded_vertical_spacing(&document.sections, "windows-releases/npm");
+    common::assert_bounded_vertical_spacing(document, "windows-releases/npm");
 }

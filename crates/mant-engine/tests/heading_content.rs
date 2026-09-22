@@ -2,7 +2,8 @@
 use mant_codec::encode::render_markdown;
 use mant_codec::parse_markdown;
 use mant_ir::{
-    Document, Inline, LinkTarget,
+    ContentOwnerKey, ContentOwnerKind, ContentRootKey, ContentRootKind, ContentStoreBuilder,
+    ContentStyle, Document, Heading, Inline, LinkTarget, Provenance,
     visit::{self, Visit},
 };
 use mant_loader::{load_markdown_text, load_roff_bytes};
@@ -10,19 +11,65 @@ use mant_query::search_query;
 use mant_render::render_query_text;
 
 fn links(document: &Document) -> Vec<LinkTarget> {
-    #[derive(Default)]
-    struct Links(Vec<LinkTarget>);
-    impl<'a> Visit<'a> for Links {
+    struct Links<'a> {
+        targets: Vec<LinkTarget>,
+        content: mant_ir::ContentContext<'a>,
+    }
+    impl<'a> Visit<'a> for Links<'a> {
         fn visit_inline(&mut self, inline: &'a Inline) {
-            if let Inline::Link { target, .. } = inline {
-                self.0.push(target.clone());
+            if let Some(link) = self.content.link(inline).unwrap() {
+                self.targets.push(link.target().clone());
             }
             visit::walk_inline(self, inline);
         }
     }
-    let mut collector = Links::default();
+    let mut collector = Links {
+        targets: Vec::new(),
+        content: document.content(),
+    };
     collector.visit_document(document);
-    collector.0
+    collector.targets
+}
+
+fn test_heading(builder: &mut ContentStoreBuilder, text: &str) -> Heading {
+    let owner = builder.push_owner(ContentOwnerKind::Section, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Heading, Provenance::Unknown);
+    let content = builder.push_text(
+        root,
+        text.to_owned(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    Heading {
+        content: vec![Inline::Text { content }],
+        source: None,
+    }
+}
+
+fn test_link(
+    builder: &mut ContentStoreBuilder,
+    owner: ContentOwnerKey,
+    root: ContentRootKey,
+    target: LinkTarget,
+    text: &str,
+) -> Inline {
+    let occurrence = builder.push_link(owner, target, None, Provenance::Unknown);
+    let content = builder.push_text(
+        root,
+        text.to_owned(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(occurrence),
+        Provenance::Unknown,
+    );
+    Inline::Link {
+        occurrence,
+        children: vec![Inline::Text { content }],
+    }
 }
 
 #[test]
@@ -37,7 +84,7 @@ fn atx_and_setext_headings_preserve_links_styles_and_source_once() {
         assert_eq!(document.display_title().as_deref(), Some("Catalog"));
         assert!(document.heading.as_ref().unwrap().source.is_some());
         assert_eq!(
-            document.sections[0].heading.plain_text(),
+            document.sections[0].heading.plain_text(document.content()),
             "Get-Item and code"
         );
         assert!(document.sections[0].heading.source.is_some());
@@ -115,7 +162,7 @@ fn native_section_references_survive_heading_lowering_without_fake_document_head
     assert!(document.heading.is_none());
     assert_eq!(document.meta.title.as_deref(), Some("PROBE"));
     let heading = &document.sections[1].children[0].heading;
-    assert_eq!(heading.plain_text(), "printf(3)");
+    assert_eq!(heading.plain_text(document.content()), "printf(3)");
     assert!(
         matches!(&links(document)[0], LinkTarget::Manual { name, manual_section: Some(section) } if name == "printf" && section == "3")
     );
@@ -192,8 +239,8 @@ fn heading_targets_do_not_change_ids_or_infer_entries() {
         .document;
     assert_eq!(one.sections[0].id, two.sections[0].id);
     assert_eq!(
-        one.sections[0].heading.plain_text(),
-        two.sections[0].heading.plain_text()
+        one.sections[0].heading.plain_text(one.content()),
+        two.sections[0].heading.plain_text(two.content())
     );
     let empty = parse_markdown("# Catalog\n\n## [](empty.md)\n", None)
         .unwrap()
@@ -227,18 +274,40 @@ fn setext_heading_breaks_preserve_inline_structure_in_markdown() {
 #[test]
 fn deep_multiline_headings_keep_hierarchy_and_links_in_portable_markdown() {
     let mut query = load_markdown_text("# Catalog\n\n## Parent\n\n### Child\n", None).unwrap();
-    let child = &mut query.document.as_mut().unwrap().sections[0].children[0];
-    let link = |name: &str| Inline::Link {
-        target: LinkTarget::Document {
-            name: name.to_owned(),
+    let mut builder = ContentStoreBuilder::new();
+    let catalog = test_heading(&mut builder, "Catalog");
+    let parent = test_heading(&mut builder, "Parent");
+    let owner = builder.push_owner(ContentOwnerKind::Section, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::Heading, Provenance::Unknown);
+    let first = test_link(
+        &mut builder,
+        owner,
+        root,
+        LinkTarget::Document {
+            name: "First".into(),
             fragment: None,
         },
-        title: None,
-        children: vec![Inline::Text {
-            value: name.to_owned(),
-        }],
+        "First",
+    );
+    let break_atom = builder.push_hard_break(root, None, Provenance::Unknown);
+    let second = test_link(
+        &mut builder,
+        owner,
+        root,
+        LinkTarget::Document {
+            name: "Second".into(),
+            fragment: None,
+        },
+        "Second",
+    );
+    let document = query.document.as_mut().unwrap();
+    document.heading = Some(catalog);
+    document.sections[0].heading = parent;
+    document.sections[0].children[0].heading = Heading {
+        content: vec![first, Inline::LineBreak { atom: break_atom }, second],
+        source: None,
     };
-    child.heading.content = vec![link("First"), Inline::LineBreak, link("Second")];
+    document.content_store = builder.finish();
     let markdown = render_markdown(&query);
     assert!(
         markdown.contains("### [First](First.md) [Second](Second.md)"),
@@ -247,7 +316,9 @@ fn deep_multiline_headings_keep_hierarchy_and_links_in_portable_markdown() {
     let reparsed = parse_markdown(&markdown, None).unwrap().document;
     assert_eq!(reparsed.sections[0].children.len(), 1);
     assert_eq!(
-        reparsed.sections[0].children[0].heading.plain_text(),
+        reparsed.sections[0].children[0]
+            .heading
+            .plain_text(reparsed.content()),
         "First Second"
     );
     assert_eq!(links(&reparsed), links(query.document.as_ref().unwrap()));
@@ -326,26 +397,49 @@ fn root_anchor_precedes_the_real_heading_and_never_moves_after_tldr() {
 #[test]
 fn heading_links_to_inline_anchors_preserve_both_destination_and_occurrence() {
     let mut query = load_markdown_text("# Catalog\n\n## Local\n", None).unwrap();
-    let section = &mut query.document.as_mut().unwrap().sections[0];
-    section.heading.content = vec![Inline::Link {
-        target: LinkTarget::Section {
+    let mut builder = ContentStoreBuilder::new();
+    let catalog = test_heading(&mut builder, "Catalog");
+    let heading_owner = builder.push_owner(ContentOwnerKind::Section, Provenance::Unknown);
+    let heading_root =
+        builder.push_root(heading_owner, ContentRootKind::Heading, Provenance::Unknown);
+    let spot = test_link(
+        &mut builder,
+        heading_owner,
+        heading_root,
+        LinkTarget::Section {
             id: "inline-target".into(),
         },
-        title: None,
-        children: vec![Inline::Text {
-            value: "Spot".into(),
-        }],
-    }];
+        "Spot",
+    );
+    let body_owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+    let body_root = builder.push_root(body_owner, ContentRootKind::Body, Provenance::Unknown);
+    let point = builder.push_point(
+        body_root,
+        mant_ir::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+        0,
+        Provenance::Unknown,
+    );
+    let body = builder.push_text(
+        body_root,
+        "Body.".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let document = query.document.as_mut().unwrap();
+    document.heading = Some(catalog);
+    document.content_store = builder.finish();
+    let section = &mut document.sections[0];
+    section.heading = Heading {
+        content: vec![spot],
+        source: None,
+    };
     section.blocks.push(mant_ir::Block::Paragraph {
         children: vec![
-            Inline::Anchor {
-                id: "inline-target".into(),
-                fragment_aliases: vec![],
-                owner_source: None,
-            },
-            Inline::Text {
-                value: "Body.".into(),
-            },
+            Inline::anchor(point, "inline-target"),
+            Inline::Text { content: body },
         ],
         layout: mant_ir::LayoutHint::default(),
         source: None,

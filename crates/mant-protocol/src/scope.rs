@@ -193,7 +193,7 @@ pub enum ScopeQueryView {
         /// Case-matching policy.
         #[serde(default)]
         case: SearchCase,
-        /// Semantic representation searched.
+        /// Search visible text or generated Markdown bytes.
         #[serde(default)]
         scope: SearchScope,
         /// Require Unicode-aware word boundaries.
@@ -355,7 +355,7 @@ pub struct ScopeReferenceLimit {
     pub retention_limit: Option<crate::ReferencePageLimit>,
 }
 
-/// One document's search hits inside a globally paginated scope result.
+/// One document's logical hits inside a globally paginated scope result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScopedSearchDocument {
@@ -366,6 +366,9 @@ pub struct ScopedSearchDocument {
     /// Source table resolving authored hit coordinates, when present.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_context: Option<SourceContext>,
+    /// Closed response-local store resolving every retained logical root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_projection: Option<mant_ir::ContentProjection>,
     /// Canonical Markdown coordinate space for this document's hits.
     pub render: SearchRender,
     /// Matching line groups retained from the globally paginated result set.
@@ -383,6 +386,8 @@ struct ScopedSearchDocumentWire {
     pub address: DocumentAddress,
     pub depth: u16,
     pub source_context: Option<SourceContext>,
+    #[serde(default)]
+    pub content_projection: Option<mant_ir::ContentProjection>,
     pub render: SearchRender,
     pub matches: Vec<SearchHit>,
 }
@@ -395,11 +400,18 @@ impl<'de> Deserialize<'de> for ScopedSearchDocument {
             value.matches.iter().filter_map(|hit| hit.node_source),
         )
         .map_err(serde::de::Error::custom)?;
+        crate::document::validate_projection_sources(
+            value.source_context.as_ref(),
+            value.content_projection.as_ref(),
+        )
+        .map_err(serde::de::Error::custom)?;
+        crate::search::validate_search_content(value.content_projection.as_ref(), &value.matches)
+            .map_err(serde::de::Error::custom)?;
         Ok(value)
     }
 }
 
-/// Globally paginated search over a resolved document scope.
+/// Globally paginated logical-root search over a resolved document scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScopeSearch {
@@ -426,6 +438,9 @@ pub struct ScopeSearch {
 pub struct ScopedExplanation {
     /// Declaration context pool for evidence with this document index.
     pub supports: Vec<crate::ExplanationSupport>,
+    /// Closed document-local content store shared by supports and global evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_projection: Option<mant_ir::ContentProjection>,
     /// Stable logical document identity.
     pub address: DocumentAddress,
     /// Distance retained from the resolved scope.
@@ -462,6 +477,8 @@ pub struct ScopedExplanation {
 )]
 struct ScopedExplanationWire {
     pub supports: Vec<crate::ExplanationSupport>,
+    #[serde(default)]
+    pub content_projection: Option<mant_ir::ContentProjection>,
     pub address: DocumentAddress,
     pub depth: u16,
     pub label: String,
@@ -480,6 +497,7 @@ impl<'de> Deserialize<'de> for ScopedExplanation {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = ScopedExplanationWire::deserialize(deserializer)?;
         crate::explanation::validate_explanation_sources(
+            value.content_projection.as_ref(),
             value.source_context.as_ref(),
             &value.diagnostics,
             &value.supports,
@@ -603,6 +621,7 @@ impl<'de> Deserialize<'de> for ScopeExplanation {
             .map_err(serde::de::Error::custom)?;
         for (index, document) in value.documents.iter().enumerate() {
             crate::explanation::validate_explanation_sources(
+                document.content_projection.as_ref(),
                 document.source_context.as_ref(),
                 &document.diagnostics,
                 &document.supports,

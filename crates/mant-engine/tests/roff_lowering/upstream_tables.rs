@@ -39,7 +39,11 @@ fn escaped_literal_backslash_cells_are_not_decoded_a_second_time() {
         let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
             panic!("literal cell")
         };
-        assert_eq!(inline_text(children), r"\&", "{payload}");
+        assert_eq!(
+            inline_text(document.content(), children),
+            r"\&",
+            "{payload}"
+        );
     }
 }
 
@@ -109,7 +113,7 @@ fn table_rule_cells_never_resurrect_suppressed_source_payload() {
             let [Block::Paragraph { children, .. }] = cell.blocks.as_slice() else {
                 panic!("paragraph")
             };
-            assert_eq!(inline_text(children), expected);
+            assert_eq!(inline_text(document.content(), children), expected);
         }
     }
     let document = man(".TS\nl.\n\\&_\n.TE");
@@ -119,7 +123,7 @@ fn table_rule_cells_never_resurrect_suppressed_source_payload() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("paragraph")
     };
-    assert_eq!(inline_text(children), "_");
+    assert_eq!(inline_text(document.content(), children), "_");
 }
 
 #[test]

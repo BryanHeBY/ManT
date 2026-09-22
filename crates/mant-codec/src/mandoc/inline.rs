@@ -1,9 +1,12 @@
 //! Lowers typed roff events and semantic mdoc macros into inline IR nodes.
 
 use libmandoc_rs::{Node, NodeKind};
-use mant_ir::Inline;
+pub(in crate::mandoc) mod draft;
+pub(in crate::mandoc) use draft::DraftInline;
+use draft::DraftInline as Inline;
 
-pub(crate) use mant_ir::{inline_plain_text as plain_text, terms_fit_inline};
+pub(in crate::mandoc) use draft::plain_text;
+pub(in crate::mandoc) use draft::terms_fit_inline;
 
 mod flow;
 mod font;
@@ -531,7 +534,7 @@ fn text_node(value: &str) -> Vec<Inline> {
     }]
 }
 
-fn needs_boundary_space(left: Option<char>, right: Option<char>) -> bool {
+pub(in crate::mandoc) fn needs_boundary_space(left: Option<char>, right: Option<char>) -> bool {
     matches!((left, right), (Some(left), Some(right)) if !left.is_whitespace() && !right.is_whitespace())
 }
 
@@ -619,10 +622,10 @@ mod tests {
         }
     }
 
+    use super::Inline;
     use super::{
         FilledBoundary, Font, InlineBuilder, parse_roff_text, parse_roff_text_with_font, plain_text,
     };
-    use mant_ir::Inline;
 
     #[test]
     fn inline_builder_tracks_nested_visible_boundaries_incrementally() {

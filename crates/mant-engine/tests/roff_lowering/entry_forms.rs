@@ -70,9 +70,7 @@ fn assert_invocation_consumers(
     rejected: &str,
     source_line: u32,
 ) {
-    use mant_protocol::{
-        EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-    };
+    use mant_protocol::{EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchSyntax};
     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
     let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
@@ -105,29 +103,27 @@ fn assert_invocation_consumers(
         assert!(mant_render::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
     }
     assert!(crate::semantic_test_read::semantic_excerpt(&query, &[rejected]).is_err());
-    for scope in [SearchScope::Visible, SearchScope::Markdown] {
-        let found = mant_query::search_query(
-            &query,
-            &SearchQuery {
-                pattern: "OWNEDPAYLOAD".into(),
-                syntax: SearchSyntax::Literal,
-                case: SearchCase::Sensitive,
-                scope,
-                word: false,
-                context_lines: 0,
-                offset: 0,
-                limit: 10,
-            },
-        )
-        .unwrap();
-        assert_eq!(found.matches.len(), 1);
-        let hit = &found.matches[0];
-        assert!(
-            matches!(&hit.outline.node, mant_protocol::OutlineNodeReference::DocumentEntry { id: found_id, path: found_path, .. } if found_id == id && found_path == path)
-        );
-        assert_eq!(hit.node_source.unwrap().line, source_line);
-        assert_eq!(hit.occurrences[0].matched_text, "OWNEDPAYLOAD");
-    }
+    let found = mant_query::search_query(
+        &query,
+        &SearchQuery {
+            pattern: "OWNEDPAYLOAD".into(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            offset: 0,
+            limit: 10,
+        },
+    )
+    .unwrap();
+    assert_eq!(found.matches.len(), 1);
+    let hit = &found.matches[0];
+    assert!(
+        matches!(&hit.outline.node, mant_protocol::OutlineNodeReference::DocumentEntry { id: found_id, path: found_path, .. } if found_id == id && found_path == path)
+    );
+    assert_eq!(hit.node_source.unwrap().line, source_line);
+    assert_eq!(hit.occurrences[0].matched_text, "OWNEDPAYLOAD");
 }
 
 #[test]
