@@ -279,9 +279,10 @@ enum Inline {
 
 `Text` and `Code` no longer own `String`; `Link` does not copy its target or
 title; `Anchor` does not copy an owner span; and `LineBreak` names a
-`HardBreak`. Each inline-bearing block, term, heading, or cell names one
-`ContentRoot`; its inline leaves cover that root's Text/Whitespace/HardBreak
-atoms exactly once and in order. `BreakOpportunity` sits in root order without
+`HardBreak`. An inline-bearing block, term, heading, or cell may join separately
+emitted `ContentRoot`s; each root's inline leaves retain its own
+Text/Whitespace/HardBreak scalar order. In a complete document, those atoms
+occur exactly once in the topology. `BreakOpportunity` sits in root order without
 an inline leaf, and points are referenced by anchors or empty-object locations.
 Wrapper paths remain structural `ContentLocation`s, while their leaves resolve
 to the same atom keys used by entry facts, fixed placements, links, search, and
@@ -292,9 +293,22 @@ second text tree or any string-based remapping. Codec may perform one bounded
 dense key remap while converting native navigation evidence into public
 occurrences, points, and IDs; all atom annotations, label parts, wrappers, and
 relations participate in that same atomic map.
+An independent empty root carrying a zero-width point has no cross-root
+placement edge today. Validation checks the point's root-local boundary and
+container membership, but cannot prove its relative position before or after
+another root in the same container from wire data alone. Producers preserve
+that order during lowering; strict validation of externally rewritten order
+requires an explicit placement relation in a later model revision.
 Logical matching and copy always use `text`. The profile-specific
 `display_override`, when present, is a bounded glyph projection mapped back to
-the same logical atom; it is never searched or treated as a second body.
+the same single-scalar logical atom; it is never searched or treated as a second
+body. Safe inline projections may contain spaces or several printable glyphs.
+Native ASCII overstrike, control, or empty projections are omitted from the
+structured store while the logical scalar remains; this safety downgrade does
+not change the independent native terminal renderer's historical byte output.
+The terminal UI's drag-selection copy is a separate visual-cell operation: it
+copies the displayed profile glyphs and visual row breaks, while logical copy
+and indexed search never promote a soft visual wrap to `HardBreak`.
 
 Logical connection facts survive the C builder in source-neutral atoms. A
 separator consumed by native line wrapping becomes exactly one whitespace atom;
@@ -591,7 +605,10 @@ empty cell is revealable through `p3` without fabricated text. A repeated
 header may place the same occurrence again without increasing its logical
 count; two separately authored identical links have distinct occurrence keys.
 
-Consumer paths are frozen as follows:
+Consumer paths are frozen as follows. The protocol-search row is a future
+logical-coordinate contract: current `mant.search/v0.12` retains `scope` and
+canonical rendered-line-group pagination. Adopting logical-root search requires
+a separate, explicitly versioned migration.
 
 | Consumer | Required path |
 | --- | --- |
@@ -762,9 +779,13 @@ logical occurrence -> its owner, typed target/evidence, and all placements
 Viewport offsets are not serialized. A hidden right-hand placement is still in
 the result and resolves identically after horizontal movement or resize.
 
+The search contract below describes that separately versioned migration, not
+the current `mant.search/v0.12` wire. Current v0.12 keeps `scope` and
+canonical rendered-line-group pagination.
+
 Public explanation and name-binding ranges remain owner/form-relative Unicode
-scalar ranges derived from checked `ContentRef` bytes. Public
-`mant.search/v0.12` now matches logical roots and identifies each hit by root
+scalar ranges derived from checked `ContentRef` bytes. The future search
+contract matches logical roots and identifies each hit by root
 plus UTF-8 byte/scalar range. Its `markdownProjections` array carries any
 canonical Markdown v1 byte/line ranges recorded by the encoder's source map;
 it is a display projection, not match authority. A repeated table header can
@@ -773,7 +794,7 @@ same logical hit plus the runtime display map and must not synthesize spaces
 from physical `join_before` flags. Logical, Markdown-projection, and terminal
 coordinate domains stay distinct.
 
-The v0.12 `SearchQuery` removes `scope`; the old `scope: visible|markdown`
+That future-version `SearchQuery` removes `scope`; the current `scope: visible|markdown`
 field is rejected by real Serde decoding. Literal/regex, case, and word options
 apply to logical root sequences, pagination counts logical hits, and context is
 derived from logical blocks/HardBreak boundaries before optional Markdown or
@@ -855,8 +876,10 @@ and occurrence key. It retains each reached root atomically with its complete
 atom/point order; a reached link retains its complete ordered label and expands
 closure to every referenced root; an anchor retains its point/root/owner; and a
 fixed/table block retains every cell relation, view, line, placement, and
-decoration. Owner/root/link/fixed edges expand to a fixed point before one
-atomic dense remap updates both store and response fields. A partial link,
+decoration. A reached owner retains only selected roots; it does not pull in
+unrelated sibling roots merely because they shared an original owner. The
+root/link/fixed edges expand to a fixed point before one atomic dense remap
+updates both store and response fields. A partial link,
 partial root, dangling point, or copied fallback body is invalid.
 
 Projection keys are local to exactly one response envelope. Their numeric

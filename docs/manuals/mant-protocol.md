@@ -79,7 +79,7 @@ query the manual database, read tldr data, or start the TUI.
 | `mant.scope-request/v0.12` | Bounded document-set search or explanation | Scope request `schema` |
 | `mant.scope-query/v0.12` | Resolved graph and grouped projection | Scope response `schema` |
 | `mant.catalog/v0.12` | Local Markdown and manual-page discovery | Catalog response `schema` |
-| `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
+| `mant.markdown/v1` | Canonical Markdown presentation coordinates | Search `render.schema` |
 | `mant.doctor/v1` | Read-only local installation diagnostics | Doctor report `schema` |
 
 The native query family follows ManT's pre-stable minor release line:
@@ -473,7 +473,6 @@ Search view fields are:
 | `pattern` | Non-empty string, at most 4,096 Unicode scalar values | Required |
 | `syntax` | `literal`, `regex` | `literal` |
 | `case` | `insensitive`, `sensitive`, `smart` | `insensitive` |
-| `scope` | `visible`, `markdown` | `visible` |
 | `word` | Boolean | `false` |
 | `contextLines` | Integer from 0 through 100 | `0` |
 | `limit` | Integer from 1 through 10,000 | `100` |
@@ -584,7 +583,7 @@ Retrieve a section and one option by selectors returned from an outline:
 }
 ```
 
-Search a Markdown document:
+Search a Markdown document's canonical visible render:
 
 ```json
 {
@@ -599,7 +598,6 @@ Search a Markdown document:
     "pattern": "MCP",
     "syntax": "literal",
     "case": "smart",
-    "scope": "visible",
     "word": true,
     "contextLines": 1,
     "limit": 20,
@@ -681,7 +679,7 @@ Example:
 }
 ```
 
-The response uses `mant.scope-query/v0.12`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, and `matches`; it deliberately has no local pagination fields or nested `mant.search/v0.12` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
+The response uses `mant.scope-query/v0.12`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, a canonical Markdown `render` descriptor, and `matches`; the current rendered search path omits the optional `contentProjection`. Groups deliberately have no local pagination fields or nested `mant.search/v0.12` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes hit pagination, not document traversal. Limit and offset apply globally, not once per document.
 
 ```json
 {
@@ -694,7 +692,7 @@ The response uses `mant.scope-query/v0.12`. Its `scope` field contains the reque
   "result": {
     "kind": "search",
     "search": {
-      "query": { "pattern": "index", "syntax": "literal", "case": "insensitive", "scope": "visible", "word": false, "contextLines": 0, "limit": 20, "offset": 0 },
+      "query": { "pattern": "index", "syntax": "literal", "case": "insensitive", "word": false, "contextLines": 0, "limit": 20, "offset": 0 },
       "total": 0,
       "returned": 0,
       "offset": 0,
@@ -721,9 +719,12 @@ If no readable initial source remains, execution fails rather than manufacturing
 a successful empty scope.
 
 Each document group in a scope search likewise carries its own optional
-`sourceContext`. Tldr-only reports without authored spans omit it; any returned
-authored span requires it. Span keys are resolved only against that document
-record; equal numeric keys in two documents never identify the same source.
+`sourceContext`; any returned authored span requires it. TLDR-only search is
+valid and reports canonical Markdown ranges without manufacturing a logical
+root or authored source. An explanation report for tldr-only content may omit
+`sourceContext` when it has no authored spans. Span keys resolve only against
+their document record; equal numeric keys in two documents never identify the
+same source.
 
 One global result offset, limit and payload-copy budget apply after ordering
 by evidence class, document BFS position and original IR position. Ordinals
@@ -828,6 +829,7 @@ to the reusable in-memory IR.
 | `schema` | Exact `mant.document/v0.12` marker |
 | `producer` | ManT version and parser engine |
 | `sources`, `rootSource` | Dense source table and the key of the document root source |
+| `contentStore` | Authoritative owner/root/atom/point/link records referenced by the document tree |
 | `meta` | Normalized title, section, date, volume, OS, architecture, names, and alias target |
 | `fragmentAliases` | Optional exact fragments resolving to `document-overview` |
 | `diagnostics` | Optional recoverable parser findings |
@@ -873,7 +875,7 @@ canonical machine-facing half-open UTF-8 range with zero-based `start` and
 
 Section depth comes from the tree, not a stored heading-level integer.
 
-Document and section headings carry authoritative `heading.content` inlines rather than a plain section `title`. Optional `Document.heading` preserves an extracted Markdown H1; native bibliographic titles remain in `meta.title`. Outline/excerpt `displayTitle` is a derived plain label, not a second IR fact. A document-root excerpt includes its optional heading and root blocks, so a title-only document remains readable. The unreleased v0.12 shape rejects obsolete section `title` fields instead of silently dropping links.
+Document and section headings carry authoritative `heading.content` inlines rather than a plain section `title`. Optional `Document.heading` preserves an extracted Markdown H1; native bibliographic titles remain in `meta.title`. Outline/excerpt `displayTitle` is a derived plain label, not a second IR fact. A document-root excerpt includes its optional heading and root blocks, so a title-only document remains readable. The unreleased v0.12 shape rejects obsolete section `title` fields instead of silently dropping links. Inline text and destinations resolve through `contentStore`, not through independently copied node values.
 Section and explicit anchor IDs share one namespace within a document.
 
 ### Block Variants
@@ -948,15 +950,16 @@ Facts use structured `kind`: `{"kind":"parameter","parameterKind":"option"}`
 the names are equivalent. Only explicit `aliasGroups` and `aliasOf` record
 those relationships. Consumers must not rebuild visible content from names.
 
-Definition-owner example:
+Definition-owner fragment (the enclosing document must supply the referenced
+`contentStore`):
 
 ```json
 {
   "type": "definition-list",
   "items": [
     {
-      "terms": [[{"type":"code","value":"--exclude PATTERN"}]],
-      "description": [{"type":"paragraph","children":[{"type":"text","value":"Skip matching paths."}]}],
+      "terms": [[{"type":"code","content":{"atom":1,"bytes":{"start":0,"end":17}}}]],
+      "description": [{"type":"paragraph","children":[{"type":"text","content":{"atom":2,"bytes":{"start":0,"end":20}}}]}],
       "layout": {"inlineTerm":true,"spacingBeforeLines":0},
       "entry": {
         "id":"option-exclude",
@@ -971,14 +974,14 @@ Definition-owner example:
 }
 ```
 
-Ordinary-list-owner example:
+Ordinary-list-owner fragment (with its own enclosing `contentStore`):
 
 ```json
 {
   "type":"list",
   "kind":{"kind":"ordered","start":3},
   "items":[{
-    "blocks":[{"type":"paragraph","children":[{"type":"code","value":"--exclude PATTERN"},{"type":"text","value":": Skip matching paths."}]}],
+    "blocks":[{"type":"paragraph","children":[{"type":"code","content":{"atom":1,"bytes":{"start":0,"end":17}}},{"type":"text","content":{"atom":2,"bytes":{"start":0,"end":22}}}]}],
     "entry":{
       "id":"option-exclude",
       "kind":{"kind":"parameter","parameterKind":"option"},
@@ -1012,15 +1015,34 @@ Inline nodes are tagged by `type`:
 
 | `type` | Fields | Consumer behavior |
 | --- | --- | --- |
-| `text` | `value` | Render literal text |
+| `text` | `content` | Resolve a checked UTF-8 slice of one logical atom |
 | `strong` | `children` | Strong emphasis |
 | `emphasis` | `children` | Emphasis |
-| `code` | `value` | Inline or preformatted code fragment |
-| `link` | `target`, optional `title`, `children` | Typed destination described below |
-| `anchor` | `id`, optional `fragmentAliases` | Zero-width normalized destination plus exact source fragments |
-| `line-break` | None | Explicit hard break |
+| `code` | `content` | Resolve a checked literal slice of one logical atom |
+| `link` | `occurrence`, `children` | Resolve one typed logical link occurrence |
+| `anchor` | `point`, `id`, optional `fragmentAliases` | Resolve a zero-width point and normalized destination |
+| `line-break` | `atom` | Resolve one logical hard-break atom |
 
-Every `link.target` is tagged by `kind`: `external { uri }`,
+`content` has an `atom` key and half-open UTF-8 `bytes` within that atom's
+logical text. Keys are nonzero, dense, one-based, and valid only inside their
+own `ContentStore`; equal numbers in different responses do not identify the
+same content. The store has ordered `owners`, `roots`, `atoms`, `points`, and
+`links`. An owner groups structural content; a root is one independent logical
+sequence. Atoms retain text or whitespace, hard breaks, zero-width break
+opportunities, style, optional semantic role/link membership, and authored or
+generated provenance. A display override can change a glyph but cannot change
+the authoritative logical text. Visual wraps are not new atoms.
+
+A `link.occurrence` selects one store `links` record containing the typed
+`target`, optional non-visible `title`, complete ordered logical `label`, and
+destination provenance. Several visible link wrappers can share that one
+occurrence across a style or structural boundary. A link label can include
+content slices and hard-break atoms, including parts in different roots; a
+renderer must not infer the destination from the displayed children. The
+anchor `point` selects an exact zero-width boundary in a root, independently
+of the public normalized `id` and any exact fragment aliases.
+
+Every resolved link occurrence's `target` is tagged by `kind`: `external { uri }`,
 `email { address }`, `document { name, fragment? }`,
 `manual { name, manualSection? }`, or `section { id }`. Visible child content must
 be preserved even when a consumer cannot activate a link. A section target is
@@ -1234,10 +1256,12 @@ An illustrative response is:
 ### Independent Reference Inventory
 
 An outline's `references` inventory is separate from its readable `nodes`.
-Only actual `Inline::Link` occurrences in original content count: headings,
-paragraphs, unannotated items, definition terms, displays and table cells all
-participate. Derived entry forms or `documentTargets` never add occurrences.
-Repeated links stay repeated; distinct-target counting includes target type
+Only actual logical `LinkOccurrenceKey` values referenced by original
+`Inline::Link` nodes count: headings, paragraphs, unannotated items,
+definition terms, displays and table cells all participate. Multiple wrappers
+for one logical link count once; independently authored repeated links retain
+distinct keys. Derived entry forms or `documentTargets` never add occurrences.
+Distinct-target counting includes target type
 and fragment. `ValueDomain::EntrySet` is a separate scope relationship, not a
 visible link. Neither inventory nor semantic annotations rewrite body content.
 
@@ -1255,6 +1279,12 @@ bounded deduplication set filled. `page.limited` describes retained output,
 not source coverage. `nextOffset` is supplied only when progress to a further
 occurrence is established; a scan limit does not promise a reachable next page.
 
+The response-local `contentProjection` is a closed resolver store, not the
+filtered reference page: retaining one link may also retain unselected atoms
+and links in its logical root. Only `records` participate in page and target
+counts or the requested `targetTypes` filter. Consumers must not enumerate
+`contentProjection.contentStore.links` as additional search results.
+
 The default scan permits 250,000 work units, depth 256 and 8 MiB of inspected
 text. In-process limits cannot exceed 1,000,000 units or 32 MiB. Distinct-target
 retention stops at 4,096 keys or 1 MiB of key text. Labels retain at most 4 KiB
@@ -1263,9 +1293,11 @@ of UTF-8; positions at most 8 KiB. Returned record retention defaults to
 including optional form associations and local-target validation. Summary
 does not collect all labels/positions or build a cloned semantic-form index.
 
-Each record has `origin` (checked final-IR `ContentLocation`), optional original
-`owner`, bounded `label`, `labelTruncated`, original typed `target`, atomic form
-`association`, and staged `resolution`. `sourceRead` is an exact selector for
+Each record has a response-local `occurrence`, `origin` (checked final-IR
+`ContentLocation`), optional original `owner`, bounded `labelPreview` and
+`labelPreviewTruncated`, atomic form `association`, and staged `resolution`.
+The complete typed target and label are resolved through `contentProjection`;
+the preview is not a second content authority. `sourceRead` is an exact selector for
 the containing readable local subtree, not an occurrence selector or remote
 read. Source positions are not byte offsets, text matches, terminal cells or
 cross-call revision tokens. They remain stable across filtering, pagination,
@@ -1326,6 +1358,203 @@ Complete reference inventory example (registered as `documents/linked`):
     "kind": "all"
   },
   "references": {
+    "contentProjection": {
+      "contentStore": {
+        "owners": [
+          {
+            "key": 1,
+            "kind": "content",
+            "roots": [
+              1
+            ],
+            "provenance": {
+              "kind": "unknown"
+            }
+          }
+        ],
+        "roots": [
+          {
+            "key": 1,
+            "owner": 1,
+            "kind": "body",
+            "atoms": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "points": [],
+            "provenance": {
+              "kind": "unknown"
+            }
+          }
+        ],
+        "atoms": [
+          {
+            "key": 1,
+            "root": 1,
+            "owner": 1,
+            "kind": "text",
+            "text": "tool",
+            "style": {
+              "literal": true
+            },
+            "link": 1,
+            "provenance": {
+              "kind": "authored",
+              "span": {
+                "source": 1,
+                "byteRange": {
+                  "start": 81,
+                  "end": 87
+                },
+                "line": 6,
+                "column": 4,
+                "endLine": 6,
+                "endColumn": 10
+              }
+            }
+          },
+          {
+            "key": 2,
+            "root": 1,
+            "owner": 1,
+            "kind": "text",
+            "text": ": See ",
+            "provenance": {
+              "kind": "authored",
+              "span": {
+                "source": 1,
+                "byteRange": {
+                  "start": 103,
+                  "end": 109
+                },
+                "line": 6,
+                "column": 26,
+                "endLine": 6,
+                "endColumn": 32
+              }
+            }
+          },
+          {
+            "key": 3,
+            "root": 1,
+            "owner": 1,
+            "kind": "text",
+            "text": "details",
+            "link": 2,
+            "provenance": {
+              "kind": "authored",
+              "span": {
+                "source": 1,
+                "byteRange": {
+                  "start": 110,
+                  "end": 117
+                },
+                "line": 6,
+                "column": 33,
+                "endLine": 6,
+                "endColumn": 40
+              }
+            }
+          },
+          {
+            "key": 4,
+            "root": 1,
+            "owner": 1,
+            "kind": "text",
+            "text": ".",
+            "provenance": {
+              "kind": "authored",
+              "span": {
+                "source": 1,
+                "byteRange": {
+                  "start": 133,
+                  "end": 134
+                },
+                "line": 6,
+                "column": 56,
+                "endLine": 6,
+                "endColumn": 57
+              }
+            }
+          }
+        ],
+        "points": [],
+        "links": [
+          {
+            "key": 1,
+            "owner": 1,
+            "target": {
+              "kind": "document",
+              "name": "other",
+              "fragment": "part"
+            },
+            "label": [
+              {
+                "kind": "content",
+                "content": {
+                  "atom": 1,
+                  "bytes": {
+                    "start": 0,
+                    "end": 4
+                  }
+                }
+              }
+            ],
+            "provenance": {
+              "kind": "authored",
+              "span": {
+                "source": 1,
+                "byteRange": {
+                  "start": 80,
+                  "end": 103
+                },
+                "line": 6,
+                "column": 3,
+                "endLine": 6,
+                "endColumn": 26
+              }
+            }
+          },
+          {
+            "key": 2,
+            "owner": 1,
+            "target": {
+              "kind": "document",
+              "name": "other",
+              "fragment": "part"
+            },
+            "label": [
+              {
+                "kind": "content",
+                "content": {
+                  "atom": 3,
+                  "bytes": {
+                    "start": 0,
+                    "end": 7
+                  }
+                }
+              }
+            ],
+            "provenance": {
+              "kind": "authored",
+              "span": {
+                "source": 1,
+                "byteRange": {
+                  "start": 109,
+                  "end": 133
+                },
+                "line": 6,
+                "column": 32,
+                "endLine": 6,
+                "endColumn": 56
+              }
+            }
+          }
+        ]
+      }
+    },
     "policy": {
       "mode": "all",
       "targetTypes": [
@@ -1359,6 +1588,7 @@ Complete reference inventory example (registered as `documents/linked`):
     },
     "records": [
       {
+        "occurrence": 1,
         "origin": {
           "kind": "content",
           "sections": [
@@ -1402,13 +1632,8 @@ Complete reference inventory example (registered as `documents/linked`):
           ],
           "itemIndex": 0
         },
-        "label": "tool",
-        "labelTruncated": false,
-        "target": {
-          "kind": "document",
-          "name": "other",
-          "fragment": "part"
-        },
+        "labelPreview": "tool",
+        "labelPreviewTruncated": false,
         "association": {
           "kind": "valid",
           "owner": {
@@ -1443,6 +1668,7 @@ Complete reference inventory example (registered as `documents/linked`):
         }
       },
       {
+        "occurrence": 2,
         "origin": {
           "kind": "content",
           "sections": [
@@ -1486,13 +1712,8 @@ Complete reference inventory example (registered as `documents/linked`):
           ],
           "itemIndex": 0
         },
-        "label": "details",
-        "labelTruncated": false,
-        "target": {
-          "kind": "document",
-          "name": "other",
-          "fragment": "part"
-        },
+        "labelPreview": "details",
+        "labelPreviewTruncated": false,
         "association": {
           "kind": "valid",
           "owner": {
@@ -1536,7 +1757,20 @@ Complete reference inventory example (registered as `documents/linked`):
     }
   },
   "sourceContext": {
-    "sources": [{"key": 1, "identity": {"kind": "path", "name": "linked.md"}, "format": "markdown", "decodedByteLength": 135, "coordinates": {"kind": "decoded-utf8-bytes"}}],
+    "sources": [
+      {
+        "key": 1,
+        "identity": {
+          "kind": "path",
+          "name": "linked.md"
+        },
+        "format": "markdown",
+        "decodedByteLength": 135,
+        "coordinates": {
+          "kind": "decoded-utf8-bytes"
+        }
+      }
+    ],
     "rootSource": 1
   },
   "meta": {},
@@ -1635,7 +1869,12 @@ sections:
 | `semanticsComplete` | Same document-wide completeness signal as outline; omitted when true |
 | `producer`, `sourceContext`, `meta` | Optional producer, dense source table/root key, and metadata |
 | `diagnostics` | Relevant recoverable findings |
+| `contentProjection` | Closed response-local store for retained document selections; absent when none need content |
 | `selections` | Selected content in source order |
+
+The projection contains a `contentStore` and remaps every retained inline key
+into that response-local store. It is not a second editable document. A key in
+an excerpt cannot be used to read the original document or another response.
 
 Selection kinds are:
 
@@ -1706,6 +1945,7 @@ results. There is no strict-explain mode.
 | `schema`, `producer`, `query` | Contract identity, implementation version and normalized literal/options |
 | `label`, `address` | Source label and optional logical document namespace |
 | `sourceContext` | Optional dense source table/root key resolving every returned span |
+| `contentProjection` | Closed response-local store shared by retained supports and evidence when they contain document inlines |
 | `outcome` | `evidence` or `no-evidence`, evaluated before result pagination |
 | `total`, `returned`, `nextOffset` | Matching owner count, current page size and optional continuation |
 | `truncation` | Separate `candidates`, `relations`, `content` flags; counts are lower bounds when candidate/relation traversal stops |
@@ -1894,8 +2134,11 @@ examples, expands real environment values or requests additional authority.
 
 ## Search Projection
 
-`mant.search/v0.12` searches one canonical full CommonMark render and returns
-both structural locations and rendered coordinates.
+`mant.search/v0.12` defaults to visible-text search in the canonical CommonMark
+render. `scope: "markdown"` searches the generated CommonMark bytes, including
+markup. A TLDR quick reference remains searchable even when no full document
+exists. The render comes from logical IR; terminal visual wraps are never
+search input. All scopes retain the same matching-line-group pagination.
 
 ### Result Envelope
 
@@ -1903,20 +2146,37 @@ both structural locations and rendered coordinates.
 | --- | --- |
 | `schema` | `mant.search/v0.12` |
 | `label`, `sourceContext`, `meta` | Source identity table/root key and metadata |
+| `contentProjection` | Optional closed response-local store for a logical-coordinate projection; omitted by the current rendered search path |
 | `query` | Fully normalized search settings |
-| `render` | Coordinate-space descriptor |
-| `total` | All matching rendered-line groups before pagination |
-| `returned` | Number of line groups in this page |
-| `offset` | Echoed line-group pagination offset |
-| `truncated` | Whether more matching line groups remain |
+| `render` | Canonical Markdown presentation-coordinate descriptor |
+| `total` | All matching rendered line groups before pagination |
+| `returned` | Number of hits in this page |
+| `offset` | Echoed result pagination offset |
+| `truncated` | Whether more hits remain |
 | `nextOffset` | Next deterministic offset when truncated |
-| `matches` | Rendered-line groups containing exact occurrences |
+| `matches` | Rendered line groups in canonical order |
 
 `query` always echoes all defaults, even when the request omitted them.
 A no-match search is successful and returns `total = 0` with an empty
 `matches` array.
 
-### Coordinate Model
+### Logical and Presentation Coordinates
+
+Each current search hit is a canonical rendered line group. It may contain
+multiple exact occurrences, retaining at most 256 ranges while
+`occurrenceCount` preserves the full count. `matchedText` and `markdown` refer
+to that render, with `lineRanges` describing its anchor-free presentation.
+Pagination groups matches by rendered line span and owning node; a native
+terminal wrap does not change that render or its result cursor. Regex `^` and
+`$` apply to canonical rendered line boundaries, not terminal wraps.
+
+The wire format also admits an exact logical-coordinate occurrence with a
+`root` in `contentProjection.contentStore` and a half-open `logical` byte and
+Unicode-scalar range. Its optional `markdownProjections` are presentation-only
+placements of that same logical occurrence. This alternative is validated on
+decode but is not emitted by the current search producer; it does not alter
+the v0.12 rendered-line pagination contract. Neither Markdown coordinates nor
+logical root keys are `SourceSpan` positions in an original input file.
 
 The render descriptor is currently:
 
@@ -1931,55 +2191,32 @@ The render descriptor is currently:
 }
 ```
 
-`lineCount` is document-dependent. Match `markdown.startByte` and `endByte`
-form a half-open UTF-8 byte range in that exact canonical Markdown. For a
-visible character normalized from Markdown syntax, this is the smallest known
-covering source span: it can include a backslash escape, code-span padding, or
-the spaces that encode a hard line break.
+`lineCount` is document-dependent. Each Markdown projection's `startByte` and
+`endByte` form a half-open UTF-8 range in that exact canonical render. Its
 `startLine`, `startColumn`, `endLine`, and `endColumn` are one-based human
-coordinates. Columns count Unicode scalar values rather than UTF-8 bytes.
+coordinates; columns count Unicode scalar values. Escapes or styling may make
+one logical match occupy several displayed pieces. Search also accepts a
+generated-Markdown `scope` selector. The current producer emits render-only
+occurrences carrying `markdown` and `lineRanges`, whether or not TLDR content
+is present. Regex compilation has a
+fixed project resource budget in addition to the pattern-length bound; an
+expression whose compiled program exceeds that budget is rejected before
+document matching.
 
-`scope = "visible"` changes what can match, but coordinates still point into
-the canonical Markdown. `scope = "markdown"` searches the generated source,
-including markup and escapes; it is not a superset of visible matches. For
-example, the visible identifier `NAME_PID` can be emitted as `*NAME*\_PID`.
-Search `visible` for the identifier and `markdown` for the actual source
-spelling. Styling boundaries and escapes can interrupt a source-level match.
-Regex `^` and `$` anchors apply at every rendered line boundary in either
-scope. Regex compilation has a fixed project resource budget in addition to
-the pattern-length bound; an expression whose compiled program exceeds that
-budget is rejected before document matching.
-
-Matches on the same rendered line and in the same outline node form one
-pagination unit. This keeps a regular expression with several matches on one
-line from duplicating its preview or context. Each line group includes:
+Each hit includes:
 
 - a one-based global `ordinal` that is not reset by pagination;
 - an `outline` trail ending at the nearest reusable node accepted by excerpt
   selection;
-- an `occurrenceCount` plus up to 256 exact `occurrences`; when a highly
-  repetitive line exceeds that bound, `occurrencesTruncated` is true;
-- each retained occurrence contains presented `matchedText`, its canonical
-  Markdown covering range, and one or more `lineRanges` within the anchor-free
-  Markdown lines used by text presentations; each half-open UTF-8 byte range
-  is clamped to the presented line after trailing presentation-only whitespace
-  is removed and can contain several fragments when an internal anchor was
-  removed;
+- a bounded group of render-only occurrences with Markdown ranges;
 - an optional original `nodeSource` span for the owning outline node;
 - a human-readable `preview`;
 - optional full Markdown context lines.
 
-Text presentations additionally merge overlapping or touching context windows
-inside one outline node and list all retained columns for a matching line once.
-Visible-scope text reports columns in the displayed, markup-free line so its
-coordinates can be checked directly; Markdown-scope text reports canonical
-Markdown columns. Structured results always retain canonical Markdown
-coordinates and report when exact occurrence details were bounded.
-Matches wholly inside internal source-map anchors, and visible-scope matches
-wholly on a synthetic block separator with no canonical Markdown bytes, are
-omitted. A Markdown-scope match that overlaps an anchor retains its canonical
-covering range while `matchedText` and `lineRanges` expose only the
-anchor-free presented fragments.
+Text presentations may merge overlapping context windows and group displayed
+rows for readability, but do not change hit counts or offsets. Color decorators
+preserve visible bytes; source document content remains authoritative, not an
+inserted terminal wrap or Markdown escape.
 
 The trail has the same `ancestors` and typed terminal `node` shape used by
 excerpt selections. The node union uses the same `tldr`, `document-root`,
@@ -2074,7 +2311,7 @@ tools. Outputs intentionally remain text-first:
 | `mant_outline` | `document` | `entries`, default `summary`; `references`, default summary of document/manual links; `root`, `startChar`, `maxChars` | Content hierarchy and independent reference inventory |
 | `mant_read` | `document`, 1–16 `selectors` | `startChar`, `maxChars` | CommonMark excerpts |
 | `mant_explain` | 1–16 `documents`, `entry` | `followLinks`, `maxDepth`, `maxDocuments`, `maxResults`, `offset`, `contentBytes`, `startChar`, `maxChars` | CommonMark class-first evidence with source-qualified read targets |
-| `mant_search` | 1–16 `documents`, `pattern` | `followLinks`, `maxDepth`, `maxDocuments`, `syntax`, `case`, `scope`, `word`, `contextLines`, `maxMatches`, `offset`, `startChar`, `maxChars` | Grep-like visible-text or generated-CommonMark matches grouped by document |
+| `mant_search` | 1–16 `documents`, `pattern` | `followLinks`, `maxDepth`, `maxDocuments`, `syntax`, `case`, `word`, `contextLines`, `maxMatches`, `offset`, `startChar`, `maxChars` | Canonical rendered-line matches grouped by document |
 
 Every tool is annotated read-only, non-destructive, and closed-world.
 `mant_find` accepts literal or regex matching, explicit case policy, and a
@@ -2127,16 +2364,17 @@ be an independently complete Markdown construct or grapheme cluster.
 
 Semantic query bounds remain separate from text paging. `mant_find`
 materializes at most `maxResults` matching catalog rows, default 50;
-`mant_search` materializes at most `maxMatches` matching line groups, default
+`mant_search` materializes at most `maxMatches` hits, default
 20. `maxResults` accepts 1 through 10,000; `maxMatches` accepts 1 through
-100 because each search group retains preview, occurrence, and context data.
+100 because each hit retains preview, occurrence, and context data.
 Their compact bodies report returned and total match counts, while `totalChars`
 describes only the canonical body produced under the requested semantic bound.
 Rows or matches excluded by `maxResults` or `maxMatches` cannot be reached by
 advancing `startChar`; increase the semantic bound or narrow the query first.
-The independent `offset` skips matching catalog rows or global matching-line
-groups before materialization. A compact search status names
-`totalMatchingLineGroups` and, when more remain, returns `nextOffset`; callers
+The independent `offset` skips matching catalog rows or global search hits
+before materialization. The compact search status names its count
+`totalMatchingLineGroups` for compatibility; every search scope counts rendered
+line groups. When more remain it returns `nextOffset`. Callers
 rerun the same non-page query with that value. Character paging is applied
 afterward and continues only with `nextChar` as `startChar`.
 
@@ -2328,22 +2566,21 @@ A structure-aware search tool call is:
       "pattern": "--acls",
       "syntax": "literal",
       "case": "insensitive",
-      "scope": "visible",
       "contextLines": 1
     }
   }
 }
 ```
 
-Search defaults to visible document text; `scope:"markdown"` instead searches
-the generated CommonMark coordinate text. It permits zero through five context
-lines. `maxMatches` selects 1 through 100 matching line groups for the
-canonical result and defaults to 20. `offset` skips that many groups globally
-across the ordered document scope. `mant_read` and
+Search uses the canonical visible render generated from authoritative logical
+document content; terminal wraps are not search input. It permits zero through
+five context lines. `maxMatches` selects 1 through 100 matching rendered line
+groups for the canonical result and defaults to 20. `offset` skips that many
+groups globally across the ordered document scope. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
-Occurrences on one rendered line share a result and list their columns once;
-overlapping context windows owned by the same exact outline node are merged.
-Regex `^` and `$` match visible line boundaries and the same Unicode/UTF-8
+Occurrences on one rendered line share a pagination result; the text
+presentation can merge overlapping context windows.
+Regex `^` and `$` match canonical rendered line boundaries, and the same Unicode/UTF-8
 validation applies before a document is loaded. Result offsets and character
 paging are deliberately separate: use `nextOffset` to materialize another
 result page, then `nextChar` to continue the current page's presentation.
@@ -2367,8 +2604,11 @@ schema.
    response discriminator.
 9. Use typed outline paths and IDs only within their current source document;
    aliases belong to explain, not read or outline-root selection.
-10. For search, interpret offsets against `mant.markdown/v1`, not the original
-    roff or Markdown input.
+10. For search, interpret hit offsets in canonical rendered-line-group order.
+    Use each occurrence's `markdown` and `lineRanges` for presentation; do not
+    confuse them with original roff/Markdown source spans. If a future producer
+    supplies an exact logical range, resolve it only through its accompanying
+    response-local `contentProjection`.
 
 For long-lived agent integration, use `mant --mcp`, perform standard MCP
 initialization, consume the generated input schemas from `tools/list`, discover

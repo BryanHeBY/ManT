@@ -34,7 +34,8 @@ come from `LinkTarget::to_uri`, not a renderer's human-readable label.
 | Field | Meaning |
 | --- | --- |
 | `parser` | Producer name and version, when known |
-| `source` | Source format and original path |
+| `sources`, `rootSource` | Dense authored-source table and document root key |
+| `contentStore` | Single authoritative logical content and relation store |
 | `meta` | Native bibliographic title, manual metadata, names, and alias target |
 | `heading` | Optional original visible document heading with full inline content |
 | `fragmentAliases` | Exact source fragments resolving to the normalized document root |
@@ -44,7 +45,10 @@ come from `LinkTarget::to_uri`, not a renderer's human-readable label.
 
 `DocumentMeta.manual_section` is a native manual category such as `1` or `3p`. A `Section` is a heading-backed content node. The two concepts are intentionally distinct.
 
-`SourceFormat` is one of `man`, `mdoc`, or `markdown`. Embedded and cached tldr pages are stored beside the main document in `ResolvedContent`, not disguised as document sections.
+`SourceFormat` is one of `man`, `mdoc`, or `markdown`. Every authored span
+selects a source key in the same document table, so an include does not acquire
+the root file's identity. Embedded and cached tldr pages are stored beside the
+main document in `ResolvedContent`, not disguised as document sections.
 
 ## Sections
 
@@ -136,15 +140,33 @@ The inline union contains:
 
 | Variant | Semantics |
 | --- | --- |
-| `text` | Plain visible text |
+| `text` | Checked slice of a logical text atom |
 | `strong` | Strong importance or source bold semantics |
 | `emphasis` | Emphasis or source italic semantics |
-| `code` | Literal inline text |
-| `link` | Visible children plus a typed destination |
-| `anchor` | Zero-width document-local destination |
-| `line-break` | Explicit break inside one flow |
+| `code` | Checked literal slice of a logical atom |
+| `link` | Visible children plus a logical occurrence key |
+| `anchor` | Zero-width point plus document-local destination |
+| `line-break` | Explicit hard-break atom inside one flow |
 
-Links use a closed `LinkTarget` union rather than stringly typed URLs:
+Text and code nodes contain `ContentRef { atom, bytes }`, not copied strings.
+`ContentStore` owns dense document-local owners, roots, atoms, zero-width
+points, and link occurrences. A root is one ordered logical sequence; visual
+wrapping never creates a new atom or occurrence. Atoms retain logical text,
+style, optional semantic role, link membership, and provenance. A display
+override affects glyph presentation but not searching or copying. A hard
+break contributes one logical newline; a break opportunity contributes no
+text. A `ContentContext` borrowed from the document validates and resolves
+these keys while the document remains alive.
+
+The link occurrence record owns its typed target, optional advisory title,
+full ordered logical label, and destination provenance. Several `Inline::Link`
+wrappers can share it when one link crosses styles, fragments, or roots.
+Likewise an anchor's point locates the exact zero-width position independently
+of its public ID and fragment aliases. Consumers use the same context to
+resolve original logical objects; neither a displayed fragment nor a public
+ID is a replacement for a store key.
+
+Resolved links use a closed `LinkTarget` union rather than stringly typed URLs:
 
 | Kind | Fields | Navigation class |
 | --- | --- | --- |
@@ -359,9 +381,17 @@ prose.
 
 ## Source Coordinates
 
-`SourceSpan` uses one-based lines and columns for diagnostics. When a parser can provide exact offsets, `byte_range` is a half-open range over UTF-8 bytes in the original input and is the canonical machine-facing coordinate.
+`SourceSpan` selects one `SourceKey` and uses one-based lines and columns for
+diagnostics. When a parser can provide exact offsets, `byte_range` is a
+half-open range in that source record's decoded or native-normalized byte
+coordinate space, not an offset into a temporary decompression file or another
+included source.
 
-Native libmandoc nodes generally provide line and column positions but not exact byte ranges. Markdown lowering preserves byte ranges. Rendered search coordinates belong to the independent `mant.markdown/v1` projection and must not be confused with input spans.
+Native libmandoc nodes generally provide line and column positions but not
+exact byte ranges. Markdown lowering preserves byte ranges. Search matches
+use root-relative logical UTF-8 and Unicode-scalar ranges in a response-local
+content projection; optional `mant.markdown/v1` ranges are presentation
+placements. Neither is an original input `SourceSpan`.
 
 ## Content positions and reference traversal
 
@@ -369,7 +399,14 @@ Native libmandoc nodes generally provide line and column positions but not exact
 
 Every transition is checked against the actual container and bounds. `EntryOwnerLocationRef::map_slice` maps a valid owner-local `EntryContentSlice` to the original document position; its optional UTF-8 leaf range is validated but does not become a node identity. Invalid and oversized paths return no target, never a label-based guess. Source bytes, IR leaf bytes, projected Unicode scalars and terminal cells remain separate coordinate domains.
 
-For original inline text, `project_content_slice` converts the same checked owner-local slice to a `RootTextRange` of Unicode scalars. `inline_scalar_len` counts an authored hard break as one scalar and wrappers or anchors as zero additional positions. These shared IR operations do not infer names, apply styles, or include renderer-generated padding; query response coordinates are mapped separately into the returned payload.
+For original inline text, `project_content_slice` takes the document's
+`ContentContext` and converts the same checked owner-local slice to a
+`RootTextRange` of Unicode scalars. `inline_scalar_len` also requires that
+context; it counts a hard break as one scalar and wrappers or anchors as zero
+additional positions. These shared IR operations do not infer names, apply
+styles, or include renderer-generated padding. Query responses remap retained
+keys into their own closed `ContentProjection`, so a result key cannot be
+reused against the original document or a different result.
 
 `scan_reference_scope` visits the selected document, overview, section, block or item under `ReferenceScanLimits`. The callback borrows the original target, label, position and nearest content/attached-semantic owner. It receives one shared `ReferenceWorkBudget` for optional work such as `reference_form_associations`; exhausted work stays exhausted even at the final occurrence. Default scanning is capped at 250,000 steps, depth 256 and 8 MiB of inspected target/form/label bytes; hard ceilings are 1,000,000 steps and 32 MiB. Summary traversal need not inspect or copy labels. Retained positions have an independent 8 KiB encoded-size limit. Callers must separately bound their retained records and labels.
 
@@ -387,7 +424,11 @@ Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, a requi
 
 ## Validation
 
-`validate_document` checks invariants after parsing or deserialization, including document-local identity validity, uniqueness, link targets, and structural consistency. Custom producers should validate before handing a document to indexes or frontends.
+`validate_document` checks invariants after parsing or deserialization,
+including dense store keys, content references, owner/root/link relations,
+authored source membership, document-local identity validity, uniqueness,
+link targets, and structural consistency. Custom producers should validate
+before handing a document to indexes or frontends.
 
 `DocumentIndex` is an immutable content-navigation index over a validated
 document. `SemanticIndex` independently projects semantic definitions for

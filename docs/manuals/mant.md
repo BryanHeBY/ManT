@@ -980,33 +980,29 @@ neither is available. Display fallbacks do not create aliases or new entries.
 ## Search {#search-section}
 
 <!-- mant:entries role=option case=sensitive -->
-- `--search PATTERN`, `--grep PATTERN`: Search visible text and report reusable nodes plus Markdown coordinates. Both spellings select the same search operation. <!-- mant:entry {"aliasGroups":[["--search","--grep"]]} -->
+- `--search PATTERN`, `--grep PATTERN`: Search document text and report reusable nodes plus exact match ranges. Both spellings select the same search operation. <!-- mant:entry {"aliasGroups":[["--search","--grep"]]} -->
 - `--regex`: Interpret the pattern as a regular expression.
 - `--case POLICY`: Use `insensitive`, `sensitive`, or `smart` case handling.
 - `--word`: Require Unicode-aware word boundaries.
-- `--scope SCOPE`: Search `visible` text or generated `markdown`.
-- `--context LINES`: Include surrounding Markdown lines.
-- `--limit COUNT`: Limit returned search lines, catalog rows, or explanation owners. Explanation defaults to 50 owners and accepts 1–256; search/catalog limits remain independent.
-- `--offset COUNT`: Skip search lines, catalog rows, or explanation evidence for deterministic pagination. Explain uses one global cursor after evidence classification: direct entries, explicitly related entries, other-entry mentions, then ordinary mentions. Within each class it preserves document BFS order and original IR order; returned `nextOffset` continues that ordered result. Search instead remains document-BFS-first. MCP character paging is independent.
+- `--scope SCOPE`: Search `visible` text (the default) or generated `markdown` bytes, including markup.
+- `--context LINES`: Include surrounding rendered lines.
+- `--limit COUNT`: Limit returned matching line groups, catalog rows, or explanation owners. Explanation defaults to 50 owners and accepts 1–256; search/catalog limits remain independent.
+- `--offset COUNT`: Skip matching line groups, catalog rows, or explanation evidence for deterministic pagination. Explain uses one global cursor after evidence classification: direct entries, explicitly related entries, other-entry mentions, then ordinary mentions. Within each class it preserves document BFS order and original IR order; returned `nextOffset` continues that ordered result. Search follows canonical render order. MCP character paging is independent.
 
-`markdown` searches the generated source, not a superset of visible text:
-styling and escapes may interrupt an otherwise contiguous visible identifier.
-Use `visible` to find names such as `NAME_PID` across those boundaries.
-
-Search defaults to a case-insensitive literal over visible text, returns at
-most 100 matching lines, and includes no context lines. Context cannot exceed
-100 lines on either side of a match. Multiple occurrences on the same rendered
-line form one pagination result. `smart` case becomes
-case-sensitive when the pattern contains uppercase text. In regex mode, `^`
-and `$` match the beginning and end of each rendered line. Regex patterns must
-preserve Unicode mode and UTF-8 character boundaries; byte-oriented forms that
-disable Unicode, such as `(?-u:.)`, are rejected before document matching.
-Structured results always retain generated Markdown coordinates. Plain-text
-visible searches show columns in the displayed text instead, while
-Markdown-scope text searches show canonical Markdown columns; line numbers are
-shared by both presentations. Reproduce the exact addressable
-`mant.markdown/v1` coordinate text with
-`mant SELECTOR --format markdown --preserve-anchors`.
+Search defaults to a case-insensitive visible literal, returns at most 100
+matching line groups, and includes no context lines. Visible and Markdown
+scopes both search the generated CommonMark render, including TLDR-only input
+without inventing an authored source or logical root. Canonical rendering uses
+logical IR, so native terminal wraps do not split search matches.
+Context cannot exceed 100 lines on either side of a match. Distinct
+occurrences on one rendered line share one pagination result. `smart`
+case becomes case-sensitive when the pattern contains uppercase text. In regex
+mode, `^` and `$` match the beginning and end of each searched line.
+Regex patterns must preserve Unicode mode and UTF-8 character boundaries;
+byte-oriented forms that disable Unicode, such as `(?-u:.)`, are rejected
+before document matching. Results carry exact generated-Markdown ranges and
+anchor-free line fragments. Terminal wrapping changes neither coordinate basis
+nor paging.
 
 Use the `=` form when a value begins with a hyphen:
 

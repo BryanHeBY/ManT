@@ -20,7 +20,7 @@ for package in "${PACKAGES[@]}"; do
   dependencies=()
   case "$package" in
     mant-protocol) dependencies=(mant-ir) ;;
-    mant-codec) dependencies=(libmandoc-rs mant-ir) ;;
+    mant-codec) dependencies=(libmandoc-rs mant-ir mant-protocol mant-query) ;;
     mant-loader) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec) ;;
     # Query/render use codec without native features, so no libmandoc patch applies.
     mant-query) dependencies=(mant-ir mant-protocol mant-codec) ;;
