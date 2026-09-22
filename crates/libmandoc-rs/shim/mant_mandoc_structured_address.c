@@ -422,7 +422,7 @@ mant_structured_address_enter_node(struct structured_session *session,
 	target = node_target(node);
 	if (target == NULL)
 		return;
-	origin = tag_is_manual(target) ? MANT_TARGET_ORIGIN_AUTHORED :
+	origin = mant_tag_is_manual(target) ? MANT_TARGET_ORIGIN_AUTHORED :
 	    MANT_TARGET_ORIGIN_GENERATED;
 	owner = context != NULL && context->item != 0 ? context->owner :
 	    session->current_owner != 0 ? session->current_owner :

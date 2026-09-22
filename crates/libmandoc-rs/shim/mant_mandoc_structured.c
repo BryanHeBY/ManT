@@ -431,6 +431,7 @@ collect_logical(struct structured_session *session,
 	node = collector_node(session, event);
 	heading = heading_context(node);
 	authored = event->node != NULL &&
+	    (event->node->flags & NODE_NOSRC) == 0 &&
 	    (event->reason == TERM_COLLECT_TEXT ||
 	    event->reason == TERM_COLLECT_ESCAPE);
 	provenance = mant_structured_append_provenance(session, node, authored);
@@ -484,7 +485,14 @@ collect_logical(struct structured_session *session,
 		    canonical->child->next == NULL ? NULL :
 		    canonical->child->next->next;
 
-		if (!(canonical->tok == MAN_MR && event->node == third))
+		/* mdoc_html.c::mdoc_mt_pre gives each address its own link;
+		 * term.c::term_word inserts auto-space before each child, outside
+		 * that address's label.  The authored child remains the identity
+		 * across any buffer consumption or terminal wrap. */
+		if (!(canonical->tok == MDOC_Mt &&
+		    (event->node == NULL ||
+		    event->reason == TERM_COLLECT_AUTO_SPACE)) &&
+		    !(canonical->tok == MAN_MR && event->node == third))
 			token->link = mant_structured_ensure_link(session, node,
 			    session->current_owner);
 		if (session->status != MANT_STRUCTURED_OK)

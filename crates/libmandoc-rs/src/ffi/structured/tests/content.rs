@@ -555,6 +555,74 @@ fn each_connection_has_its_exact_logical_boundary() {
 }
 
 #[test]
+fn adjacent_ascii_glyph_projections_keep_atomic_scalar_alignment() {
+    // Pinned term.c::encode1() emits each logical scalar before the ASCII
+    // projection writes. The exact input was first run through the fixed
+    // reference as `-T ascii`: its body displays `left----right`.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "adjacent-projections.1",
+            b".TH PROJECTION 1\n.SH TEST\nleft\\[em]\\[em]right\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude_profile(
+        "adjacent-projections.1",
+        &bundle,
+        InputFormat::Man,
+        PROFILE_ASCII,
+        78,
+        &Limits::default(),
+    )
+    .expect("adjacent glyph projections retain a valid structured result");
+    let projected = document
+        .content_atoms
+        .iter()
+        .filter(|atom| atom.text.contains('\u{2014}'))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        projected.len(),
+        2,
+        "each displayed glyph has one logical atom"
+    );
+    assert!(
+        projected
+            .iter()
+            .all(|atom| atom.text == "\u{2014}" && atom.display_override.as_deref() == Some("--"))
+    );
+}
+
+#[test]
+fn ascii_overstrike_projection_degrades_to_the_safe_logical_scalar() {
+    // The exact input was run through the fixed `-T ascii -Owidth=78`
+    // reference: `\[ct]` emits `2f 08 63` (`/\bc`). Pinned
+    // term_ascii.c::ascii_uc2str and term.c::encode project these bytes
+    // without changing the native renderer's output. The structured store
+    // cannot carry the backspace as an inline display override.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert("cent.1", b".TH X 1\n.SH NAME\nX \\[ct] Y\n".to_vec())
+        .unwrap();
+    let document = render_prelude_profile(
+        "cent.1",
+        &bundle,
+        InputFormat::Man,
+        PROFILE_ASCII,
+        78,
+        &Limits::default(),
+    )
+    .expect("unsafe device projection cannot invalidate a legal manual");
+    let cent = document
+        .content_atoms
+        .iter()
+        .find(|atom| atom.text == "¢")
+        .expect("cent sign remains one logical scalar");
+    assert_eq!(cent.display_override, None);
+    assert!(document.content_atoms.iter().any(|atom| atom.text == "X"));
+    assert!(document.content_atoms.iter().any(|atom| atom.text == "Y"));
+}
+
+#[test]
 fn ascii_projection_tracks_surviving_overwritten_slots() {
     // Oracle: registered C02b ASCII/78 `\(em\h'-1m'X` prints `-X`.
     // Pinned `term.c::encode1/buffer_write` first writes both em-dash

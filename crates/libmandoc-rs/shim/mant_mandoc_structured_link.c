@@ -87,14 +87,17 @@ uint32_t
 mant_structured_ensure_link(struct structured_session *session,
     const struct roff_node *node, uint32_t owner)
 {
-	const struct roff_node *canonical, *first, *second;
+	const struct roff_node *canonical, *identity, *first, *second;
 	struct mant_structured_link_view *links, *link = NULL;
 	uint32_t kind, provenance;
 
 	canonical = mant_structured_link_node(node);
 	if (canonical == NULL)
 		return 0;
-	if (canonical == session->last_link_node)
+	/* mdoc_html.c::mdoc_mt_pre emits one mailto anchor per text child,
+	 * whereas all other supported macros own one occurrence per macro. */
+	identity = canonical->tok == MDOC_Mt ? node : canonical;
+	if (identity == session->last_link_node)
 		return session->last_link;
 	first = second = NULL;
 	switch (canonical->tok) {
@@ -104,15 +107,15 @@ mant_structured_ensure_link(struct structured_session *session,
 		break;
 	case MDOC_Mt:
 		kind = MANT_LINK_EMAIL;
-		first = canonical->child;
-		if (first != NULL && first->next != NULL &&
-		    (first->next->flags & NODE_DELIMC) == 0)
+		if (node->parent != canonical || node->type != ROFFT_TEXT)
 			goto unsupported;
+		first = node;
 		break;
 	case MDOC_Xr:
-		kind = MANT_LINK_MANUAL;
 		first = canonical->child;
 		second = first == NULL ? NULL : first->next;
+		/* mdoc_term.c::termp_xr_pre accepts the name alone. */
+		kind = second == NULL ? MANT_LINK_DOCUMENT : MANT_LINK_MANUAL;
 		break;
 	case MDOC_Sx:
 		kind = MANT_LINK_SECTION;
@@ -127,18 +130,21 @@ mant_structured_ensure_link(struct structured_session *session,
 		first = canonical->head == NULL ? NULL : canonical->head->child;
 		break;
 	case MAN_MR:
-		kind = MANT_LINK_MANUAL;
 		first = canonical->child;
 		second = first == NULL ? NULL : first->next;
+		/* man_term.c::pre_MR prints name() without a section. */
+		kind = second == NULL ? MANT_LINK_DOCUMENT : MANT_LINK_MANUAL;
 		break;
 	default:
 		goto unsupported;
 	}
-	if (first == NULL || (kind == MANT_LINK_MANUAL && second == NULL))
+	if (first == NULL)
 		goto unsupported;
-	/* The occurrence belongs to its authored destination operand.  Label
-	 * atoms retain their independent provenance and must not replace it. */
-	provenance = mant_structured_append_provenance(session, first, 1);
+	/* The occurrence belongs to its destination operand.  Label
+	 * atoms retain their independent provenance and must not replace it.
+	 * mdoc_validate.c::post_defaults marks a synthesized .Mt ~ NODE_NOSRC. */
+	provenance = mant_structured_append_provenance(session, first,
+	    (first->flags & NODE_NOSRC) == 0);
 	if (provenance == 0)
 		return 0;
 	if (!mant_structured_charge(session, &session->relation_edges, 2,
@@ -169,7 +175,7 @@ mant_structured_ensure_link(struct structured_session *session,
 			goto unsupported;
 	}
 	session->result->link_count++;
-	session->last_link_node = canonical;
+	session->last_link_node = identity;
 	session->last_link = link->key;
 	return link->key;
 

@@ -568,6 +568,31 @@ mant_structured_finish_term_roots(struct structured_session *session)
 	return 1;
 }
 
+/* term_ascii.c::ascii_uc2str() can return terminal overstrikes (for example
+ * cent as "/\bc"), tabs, or other device controls.  The native reference
+ * renderer still writes those bytes, but a structured display override must
+ * remain one safe inline glyph string sharing the logical atom's coordinates.
+ * Dropping only the projection preserves that logical scalar and its links. */
+static int
+safe_display_projection(const uint8_t *display, size_t length)
+{
+	size_t i;
+
+	if (display == NULL || length == 0 ||
+	    !mant_structured_valid_utf8(display, length))
+		return 0;
+	for (i = 0; i < length; i++) {
+		if (display[i] < 0x20 || display[i] == 0x7f ||
+		    (i + 1 < length && display[i] == 0xc2 &&
+		    display[i + 1] >= 0x80 && display[i + 1] <= 0x9f) ||
+		    (i + 2 < length && display[i] == 0xe2 &&
+		    display[i + 1] == 0x80 &&
+		    (display[i + 2] == 0xa8 || display[i + 2] == 0xa9)))
+			return 0;
+	}
+	return 1;
+}
+
 int
 mant_structured_append_atom(struct structured_session *session, uint32_t root,
     uint32_t provenance, uint32_t kind, uint32_t style, uint32_t role,
@@ -594,6 +619,11 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 		    MANT_STRUCTURED_STAGE_RENDER, 15, UINT64_MAX, UINT32_MAX);
 		return 0;
 	}
+	if (display_length != 0 && (scalar_delta != 1 ||
+	    !safe_display_projection(display, display_length))) {
+		display = NULL;
+		display_length = 0;
+	}
 	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_RENDER))
@@ -605,7 +635,11 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 	    display_length, session->limits->max_content_bytes, 10,
 	    MANT_STRUCTURED_STAGE_RENDER)))
 		return 0;
-	if (length != 0 && session->force_atom_split == 0 &&
+	/* term.c::encode1() emits one logical scalar before its profile-specific
+	 * projection writes.  Keep each projected glyph in its own atom so a
+	 * consumer can map the whole logical scalar to its displayed bytes; merging
+	 * adjacent overrides would erase the internal alignment. */
+	if (length != 0 && display_length == 0 && session->force_atom_split == 0 &&
 	    session->result->content_atom_count != 0) {
 		atom = session->result->content_atoms +
 		    session->result->content_atom_count - 1;
@@ -659,56 +693,6 @@ mant_structured_append_atom(struct structured_session *session, uint32_t root,
 			memcpy((uint8_t *)atom->text.ptr + atom->text.len,
 			    bytes, length);
 			atom->text.len = required;
-			if (display_length != 0) {
-				if (atom->display_override.len >
-				    UINT64_MAX - display_length) {
-					mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
-					    MANT_STRUCTURED_STAGE_RENDER, 10,
-					    UINT64_MAX,
-					    session->limits->max_content_bytes);
-					return 0;
-				}
-				required = atom->display_override.len + display_length;
-				if (required > session->current_display_capacity) {
-					new_capacity = session->current_display_capacity == 0 ?
-					    8 : session->current_display_capacity;
-					while (new_capacity < required) {
-						if (new_capacity > UINT64_MAX / 2) {
-							new_capacity = required;
-							break;
-						}
-						new_capacity *= 2;
-					}
-					added = new_capacity -
-					    session->current_display_capacity;
-					if (new_capacity > SIZE_MAX) {
-						mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
-						    MANT_STRUCTURED_STAGE_RENDER, 9,
-						    new_capacity, SIZE_MAX);
-						return 0;
-					}
-					if (!mant_structured_charge(session, &session->allocated_bytes, added,
-					    session->limits->max_builder_allocated_bytes, 9,
-					    MANT_STRUCTURED_STAGE_RENDER))
-						return 0;
-					grown_text = mant_structured_injected_allocation_failure() ? NULL :
-					    realloc((void *)atom->display_override.ptr,
-					    (size_t)new_capacity);
-					if (grown_text == NULL) {
-						mant_structured_set_failure(session,
-						    MANT_STRUCTURED_BUILDER_ALLOC,
-						    MANT_STRUCTURED_STAGE_RENDER, 0,
-						    new_capacity,
-						    session->limits->max_builder_allocated_bytes);
-						return 0;
-					}
-					atom->display_override.ptr = grown_text;
-					session->current_display_capacity = new_capacity;
-				}
-				memcpy((uint8_t *)atom->display_override.ptr +
-				    atom->display_override.len, display, display_length);
-				atom->display_override.len = required;
-			}
 			session->root_atoms[root - 1].scalar_count += scalar_delta;
 			return 1;
 		}

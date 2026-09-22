@@ -247,7 +247,7 @@ tag_exists(const char *tag)
  * NODE_ID when TAG_MANUAL won priority in tag_put().
  */
 int
-tag_is_manual(const char *tag)
+mant_tag_is_manual(const char *tag)
 {
 	struct tag_entry *entry;
 
