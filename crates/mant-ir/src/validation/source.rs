@@ -2,8 +2,8 @@
 
 use super::document::invariant_at;
 use crate::{
-    Block, CoverageScope, Diagnostic, Document, Inline, SourceCoordinates, SourceIdentity,
-    SourceKey, SourceRelationError, SourceSpan, ValueDomain,
+    Block, CoverageScope, Diagnostic, Document, DocumentBodyRef, Inline, SourceCoordinates,
+    SourceIdentity, SourceKey, SourceRelationError, SourceSpan, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -19,54 +19,41 @@ use crate::{
 /// relation in the document references an unknown or incompatible source.
 pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelationError> {
     validate_source_table(&document.sources, document.root_source)?;
+    let DocumentBodyRef::Flow(flow) = document.body();
+    let store = flow.content_store;
 
     for diagnostic in &document.diagnostics {
         if let Some(span) = diagnostic.source {
             validate_relation_span(document, span)?;
         }
-        if let Some(CoverageScope::Source { key }) = diagnostic.coverage_scope
-            && document.source_record(key).is_none()
-        {
-            return Err(relation(format!(
-                "diagnostic coverage scope references unknown source {}",
-                key.get()
-            )));
+        match diagnostic.coverage_scope {
+            Some(CoverageScope::Source { key }) if document.source_record(key).is_none() => {
+                return Err(relation(format!(
+                    "diagnostic coverage scope references unknown source {}",
+                    key.get()
+                )));
+            }
+            Some(
+                CoverageScope::Section { .. }
+                | CoverageScope::Owner { .. }
+                | CoverageScope::Region { .. },
+            ) => {
+                return Err(relation(
+                    "native mark coverage scope cannot be attached to a Flow document",
+                ));
+            }
+            Some(CoverageScope::Document | CoverageScope::Source { .. }) | None => {}
         }
     }
-    for provenance in document
-        .content_store
+    for provenance in store
         .owners
         .iter()
         .map(|record| record.provenance)
-        .chain(
-            document
-                .content_store
-                .roots
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(
-            document
-                .content_store
-                .atoms
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(
-            document
-                .content_store
-                .points
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(
-            document
-                .content_store
-                .links
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(document.content_store.fixed_views.iter().flat_map(|view| {
+        .chain(store.roots.iter().map(|record| record.provenance))
+        .chain(store.atoms.iter().map(|record| record.provenance))
+        .chain(store.points.iter().map(|record| record.provenance))
+        .chain(store.links.iter().map(|record| record.provenance))
+        .chain(store.fixed_views.iter().flat_map(|view| {
             std::iter::once(view.provenance).chain(
                 view.lines
                     .iter()
@@ -95,6 +82,8 @@ pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelati
 /// Return whether any document diagnostic or content node retains a source span.
 #[must_use]
 pub fn document_has_source_spans(document: &Document) -> bool {
+    let DocumentBodyRef::Flow(flow) = document.body();
+    let store = flow.content_store;
     if document
         .diagnostics
         .iter()
@@ -102,40 +91,15 @@ pub fn document_has_source_spans(document: &Document) -> bool {
     {
         return true;
     }
-    if document
-        .content_store
+    if store
         .owners
         .iter()
         .map(|record| record.provenance)
-        .chain(
-            document
-                .content_store
-                .roots
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(
-            document
-                .content_store
-                .atoms
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(
-            document
-                .content_store
-                .points
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(
-            document
-                .content_store
-                .links
-                .iter()
-                .map(|record| record.provenance),
-        )
-        .chain(document.content_store.fixed_views.iter().flat_map(|view| {
+        .chain(store.roots.iter().map(|record| record.provenance))
+        .chain(store.atoms.iter().map(|record| record.provenance))
+        .chain(store.points.iter().map(|record| record.provenance))
+        .chain(store.links.iter().map(|record| record.provenance))
+        .chain(store.fixed_views.iter().flat_map(|view| {
             std::iter::once(view.provenance).chain(
                 view.lines
                     .iter()
@@ -382,12 +346,14 @@ impl<'ir> Visit<'ir> for SourceRelationCollector<'_> {
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
         if let Inline::Anchor { point, .. } = inline {
-            let source = self.document.content_store.point(*point).and_then(|point| {
-                match point.provenance {
+            let DocumentBodyRef::Flow(flow) = self.document.body();
+            let store = flow.content_store;
+            let source = store
+                .point(*point)
+                .and_then(|point| match point.provenance {
                     crate::Provenance::Authored { span } => Some(span),
                     crate::Provenance::Generated { .. } | crate::Provenance::Unknown => None,
-                }
-            });
+                });
             self.span(source);
         }
         visit::walk_inline(self, inline);

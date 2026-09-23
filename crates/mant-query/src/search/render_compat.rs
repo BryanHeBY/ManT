@@ -15,10 +15,24 @@ use super::owners::{Owner, OwnerIndex};
 use super::plan::{empty_match_error, matcher_error, non_utf8_pattern_error};
 use crate::ResolvedContent;
 use mant_codec::encode::render_addressable_markdown;
+use mant_ir::DocumentBodyRef;
 
 const MAX_OCCURRENCES_PER_MATCH: usize = 256;
 
 pub(super) fn search_with_matcher(
+    query: &ResolvedContent,
+    request: &SearchQuery,
+    matcher: &grep_regex::RegexMatcher,
+) -> Result<QuerySearch, SearchError> {
+    // The compatibility search below is defined for Flow's canonical
+    // Markdown. A future Fixed arm must select its explicit visible/artifact
+    // reader here; it must never fall through to an empty Flow export.
+    match query.document.as_ref().map(mant_ir::Document::body) {
+        Some(DocumentBodyRef::Flow(_)) | None => search_flow_with_matcher(query, request, matcher),
+    }
+}
+
+fn search_flow_with_matcher(
     query: &ResolvedContent,
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,

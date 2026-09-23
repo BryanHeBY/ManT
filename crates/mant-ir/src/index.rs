@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    ContentContext, DOCUMENT_ROOT_ID, DefinitionItem, Document, FragmentAlias, Inline, InlineView,
-    NodeId, Section,
+    ContentContext, DOCUMENT_ROOT_ID, DefinitionItem, Document, DocumentBodyRef, FragmentAlias,
+    Inline, InlineView, NodeId, Section,
     visit::{self, Visit},
 };
 
@@ -73,13 +73,17 @@ impl DocumentIndex {
             index: Self::default(),
             section_stack: Vec::new(),
         };
-        builder.visit_document(document);
-        if (document.heading.is_some()
-            || !document.blocks.is_empty()
-            || !document.fragment_aliases.is_empty())
-            && !builder.index.nodes.contains_key(DOCUMENT_ROOT_ID)
-        {
-            builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
+        match document.body() {
+            DocumentBodyRef::Flow(flow) => {
+                builder.visit_document(document);
+                if (flow.heading.is_some()
+                    || !flow.blocks.is_empty()
+                    || !document.fragment_aliases.is_empty())
+                    && !builder.index.nodes.contains_key(DOCUMENT_ROOT_ID)
+                {
+                    builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
+                }
+            }
         }
         for alias in &document.fragment_aliases {
             builder.register_fragment(alias.clone(), &NodeId::from(DOCUMENT_ROOT_ID), true);

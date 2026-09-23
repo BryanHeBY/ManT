@@ -206,6 +206,29 @@ fn source_scoped_coverage_closes_against_the_document_source_table() {
 }
 
 #[test]
+fn native_mark_coverage_scopes_cannot_cross_the_flow_document_wire() {
+    for kind in ["section", "owner", "region"] {
+        let mut invalid = document_value();
+        invalid["diagnostics"] = json!([{
+            "level":"unsupported",
+            "impact":"semantic-coverage",
+            "message":"native mark unavailable",
+            "coverageScope":{"kind":kind,"key":1}
+        }]);
+        assert_document_rejected(invalid);
+    }
+
+    let mut valid = document_value();
+    valid["diagnostics"] = json!([{
+        "level":"unsupported",
+        "impact":"semantic-coverage",
+        "message":"document-wide gap",
+        "coverageScope":{"kind":"document"}
+    }]);
+    assert!(serde_json::from_value::<Document>(valid).is_ok());
+}
+
+#[test]
 fn table_cell_source_is_independent_and_checked_at_the_wire_boundary() {
     let mut document = document_value();
     document["blocks"] = json!([{

@@ -1,7 +1,8 @@
 //! Reusable traversal over normalized document IR.
 
 use crate::{
-    Block, DefinitionItem, Document, Heading, Inline, ListItem, Section, TableCell, TableRow,
+    Block, DefinitionItem, Document, DocumentBodyMut, DocumentBodyRef, Heading, Inline, ListItem,
+    Section, TableCell, TableRow,
 };
 
 /// Read-only depth-first traversal with overridable hooks.
@@ -46,12 +47,16 @@ pub fn walk_document<'ir, V>(visitor: &mut V, document: &'ir Document)
 where
     V: Visit<'ir> + ?Sized,
 {
-    if let Some(heading) = &document.heading {
-        visitor.visit_heading(heading);
-    }
-    walk_blocks(visitor, &document.blocks);
-    for section in &document.sections {
-        visitor.visit_section(section);
+    match document.body() {
+        DocumentBodyRef::Flow(flow) => {
+            if let Some(heading) = flow.heading {
+                visitor.visit_heading(heading);
+            }
+            walk_blocks(visitor, flow.blocks);
+            for section in flow.sections {
+                visitor.visit_section(section);
+            }
+        }
     }
 }
 
@@ -202,12 +207,16 @@ pub fn walk_document_mut<V>(visitor: &mut V, document: &mut Document)
 where
     V: VisitMut + ?Sized,
 {
-    if let Some(heading) = &mut document.heading {
-        visitor.visit_heading_mut(heading);
-    }
-    walk_blocks_mut(visitor, &mut document.blocks);
-    for section in &mut document.sections {
-        visitor.visit_section_mut(section);
+    match document.body_mut() {
+        DocumentBodyMut::Flow(flow) => {
+            if let Some(heading) = flow.heading {
+                visitor.visit_heading_mut(heading);
+            }
+            walk_blocks_mut(visitor, flow.blocks);
+            for section in flow.sections {
+                visitor.visit_section_mut(section);
+            }
+        }
     }
 }
 

@@ -20,6 +20,48 @@ pub use source::{
     SourceRelationError, SourceSpan, TextRange, TextSize,
 };
 
+/// Borrowed primary body arm. The currently shipped document is Flow-only;
+/// callers must match this enum so adding Fixed requires an explicit decision
+/// at each reading boundary rather than treating it as an empty Flow tree.
+#[derive(Debug, Clone, Copy)]
+pub enum DocumentBodyRef<'a> {
+    /// The existing source-neutral logical content tree.
+    Flow(FlowBodyRef<'a>),
+}
+
+/// Borrowed fields that together form the one existing Flow body.
+#[derive(Debug, Clone, Copy)]
+pub struct FlowBodyRef<'a> {
+    /// One authoritative logical content store.
+    pub content_store: &'a crate::ContentStore,
+    /// Optional original visible document heading.
+    pub heading: &'a Option<Heading>,
+    /// Content before the first section.
+    pub blocks: &'a [Block],
+    /// Top-level semantic sections.
+    pub sections: &'a [Section],
+}
+
+/// Mutable borrowed primary body arm, used only while constructing Flow IR.
+#[derive(Debug)]
+pub enum DocumentBodyMut<'a> {
+    /// Mutable access to the existing Flow body fields.
+    Flow(FlowBodyMut<'a>),
+}
+
+/// Mutable borrowing of the current Flow body without a second owned model.
+#[derive(Debug)]
+pub struct FlowBodyMut<'a> {
+    /// One authoritative logical content store.
+    pub content_store: &'a mut crate::ContentStore,
+    /// Optional original visible document heading.
+    pub heading: &'a mut Option<Heading>,
+    /// Content before the first section.
+    pub blocks: &'a mut Vec<Block>,
+    /// Top-level semantic sections.
+    pub sections: &'a mut Vec<Section>,
+}
+
 /// A normalized document ready for interactive or textual rendering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -52,6 +94,28 @@ pub struct Document {
 }
 
 impl Document {
+    /// Borrow the primary body through an exhaustive arm match.
+    #[must_use]
+    pub fn body(&self) -> DocumentBodyRef<'_> {
+        DocumentBodyRef::Flow(FlowBodyRef {
+            content_store: &self.content_store,
+            heading: &self.heading,
+            blocks: &self.blocks,
+            sections: &self.sections,
+        })
+    }
+
+    /// Mutably borrow the primary body through an exhaustive arm match.
+    #[must_use]
+    pub fn body_mut(&mut self) -> DocumentBodyMut<'_> {
+        DocumentBodyMut::Flow(FlowBodyMut {
+            content_store: &mut self.content_store,
+            heading: &mut self.heading,
+            blocks: &mut self.blocks,
+            sections: &mut self.sections,
+        })
+    }
+
     /// Resolve a document-local source key.
     #[must_use]
     pub fn source_record(&self, key: SourceKey) -> Option<&SourceRecord> {

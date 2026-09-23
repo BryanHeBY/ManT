@@ -2,7 +2,7 @@
 
 use super::{blocks, document_label, flow};
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole};
-use mant_ir::{Block, ResolvedContent, TldrCommandPart, TldrDocument, TldrOrigin};
+use mant_ir::{Block, DocumentBodyRef, ResolvedContent, TldrCommandPart, TldrDocument, TldrOrigin};
 
 pub(in crate::output) fn render_located_blocks<'a>(
     blocks: &'a [Block],
@@ -72,8 +72,8 @@ fn render_query_body_with(
                 &document_label(&query.label, section),
             )
         },
-        |document| {
-            document.heading.as_ref().map_or_else(
+        |document| match document.body() {
+            DocumentBodyRef::Flow(flow) => flow.heading.as_ref().map_or_else(
                 || {
                     decorate(
                         TextRole::Document.into(),
@@ -89,7 +89,7 @@ fn render_query_body_with(
                     }
                     .inline_text(&heading.content, TextRole::Document)
                 },
-            )
+            ),
         },
     );
     let mut output = flow::Flow::text(title);
@@ -98,19 +98,23 @@ fn render_query_body_with(
         output.push_text(render_tldr_text(tldr));
     }
     if let Some(document) = &query.document {
-        let renderer = blocks::BlockRenderer {
-            content: document.content(),
-            names: styled.then(|| EntryStyleMap::for_document(document)),
-            decorate,
-            locations: None,
-        };
-        let mut content = renderer.block_flow(&document.blocks, 0);
-        content.extend(renderer.sections_flow(&document.sections, 0));
-        if !content.is_empty() {
-            // Page furniture has one explicit presentation separator. All
-            // source-owned section/block gaps remain in the same flow.
-            output.gap(1);
-            output.extend(content);
+        match document.body() {
+            DocumentBodyRef::Flow(flow) => {
+                let renderer = blocks::BlockRenderer {
+                    content: document.content(),
+                    names: styled.then(|| EntryStyleMap::for_document(document)),
+                    decorate,
+                    locations: None,
+                };
+                let mut content = renderer.block_flow(flow.blocks, 0);
+                content.extend(renderer.sections_flow(flow.sections, 0));
+                if !content.is_empty() {
+                    // Page furniture has one explicit presentation separator.
+                    // Source-owned section/block gaps remain in this flow.
+                    output.gap(1);
+                    output.extend(content);
+                }
+            }
         }
     }
     output.finish(false)

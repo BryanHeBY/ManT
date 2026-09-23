@@ -8,8 +8,8 @@ use std::{error::Error, fmt};
 
 use crate::{
     ContentLocationRef, ContentPointKey, ContentProjection, ContentStore, Document,
-    EntryContentSlice, EntryOwner, FragmentAlias, Heading, Inline, LinkOccurrenceKey, LinkTarget,
-    NodeId, RootTextRange, SourceSpan,
+    DocumentBodyRef, EntryContentSlice, EntryOwner, FragmentAlias, Heading, Inline,
+    LinkOccurrenceKey, LinkTarget, NodeId, RootTextRange, SourceSpan,
 };
 
 /// One store-resolved inline node.
@@ -173,7 +173,9 @@ impl ContentBackend for Document {
     }
 
     fn store(&self) -> Option<&ContentStore> {
-        Some(&self.content_store)
+        match self.body() {
+            DocumentBodyRef::Flow(flow) => Some(flow.content_store),
+        }
     }
 }
 

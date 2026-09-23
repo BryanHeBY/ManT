@@ -2,7 +2,7 @@
 use super::{
     ContentBlockStep, ContentInlineRoot, ContentLocation, ContentLocationRef, MAX_CONTENT_DEPTH,
 };
-use crate::{Block, Document, Inline, Section};
+use crate::{Block, Document, DocumentBodyRef, Inline, Section};
 
 impl ContentLocation {
     /// Resolve the checked inline container or singleton node in this snapshot.
@@ -39,9 +39,10 @@ pub(crate) fn resolve_location<'a>(
     if !location.within_limits() {
         return None;
     }
+    let DocumentBodyRef::Flow(flow) = document.body();
     let (nodes, path) = match location {
         ContentLocationRef::DocumentHeading { path } => {
-            (document.heading.as_ref()?.content.as_slice(), path)
+            (flow.heading.as_ref()?.content.as_slice(), path)
         }
         ContentLocationRef::SectionHeading { sections, path } => (
             resolve_content_section(document, sections)?
@@ -70,7 +71,8 @@ pub fn resolve_content_section<'a>(document: &'a Document, path: &[u32]) -> Opti
     if path.is_empty() || path.len() > MAX_CONTENT_DEPTH {
         return None;
     }
-    let mut children = document.sections.as_slice();
+    let DocumentBodyRef::Flow(flow) = document.body();
+    let mut children = flow.sections;
     let mut selected = None;
     for index in path {
         let section = children.get(*index as usize)?;
@@ -82,7 +84,8 @@ pub fn resolve_content_section<'a>(document: &'a Document, path: &[u32]) -> Opti
 
 pub(crate) fn content_blocks<'a>(document: &'a Document, sections: &[u32]) -> Option<&'a [Block]> {
     if sections.is_empty() {
-        Some(&document.blocks)
+        let DocumentBodyRef::Flow(flow) = document.body();
+        Some(flow.blocks)
     } else {
         Some(&resolve_content_section(document, sections)?.blocks)
     }

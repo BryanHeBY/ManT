@@ -7,8 +7,9 @@ use super::{
     source::validate_source_span,
 };
 use crate::{
-    Block, CoverageScope, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentIndex,
-    DocumentReference, IndexedRole, Inline, LinkTarget, NodeId, Section, SourceSpan, ValueDomain,
+    Block, CoverageScope, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentBodyRef,
+    DocumentIndex, DocumentReference, IndexedRole, Inline, LinkTarget, NodeId, Section, SourceSpan,
+    ValueDomain,
     visit::{self, Visit},
 };
 
@@ -27,6 +28,9 @@ pub(super) fn validate_with_index(
     index: &DocumentIndex,
     relations: &[crate::EntryRelationIssue],
 ) -> Vec<Diagnostic> {
+    // This exhaustive match is the body admission boundary. Adding Fixed
+    // requires a native-surface validator; it cannot inherit Flow's empty walk.
+    let DocumentBodyRef::Flow(flow) = document.body();
     let mut diagnostics = Vec::new();
 
     for source in document
@@ -37,16 +41,25 @@ pub(super) fn validate_with_index(
         validate_source_span(&mut diagnostics, source);
     }
     for diagnostic in &document.diagnostics {
-        if let Some(CoverageScope::Source { key }) = diagnostic.coverage_scope
-            && document.source_record(key).is_none()
-        {
-            diagnostics.push(invariant(
-                "ir.invalid-coverage-source",
-                format!(
-                    "diagnostic coverage scope references unknown source {}",
-                    key.get()
-                ),
-            ));
+        match diagnostic.coverage_scope {
+            Some(CoverageScope::Source { key }) if document.source_record(key).is_none() => {
+                diagnostics.push(invariant(
+                    "ir.invalid-coverage-source",
+                    format!(
+                        "diagnostic coverage scope references unknown source {}",
+                        key.get()
+                    ),
+                ));
+            }
+            Some(
+                CoverageScope::Section { .. }
+                | CoverageScope::Owner { .. }
+                | CoverageScope::Region { .. },
+            ) => diagnostics.push(invariant(
+                "ir.invalid-coverage-scope",
+                "native mark coverage scope cannot be attached to a Flow document".to_owned(),
+            )),
+            Some(CoverageScope::Document | CoverageScope::Source { .. }) | None => {}
         }
     }
 
@@ -123,16 +136,16 @@ pub(super) fn validate_with_index(
         positions: document.content().inline_position_index(),
         section_targets: Vec::new(),
         diagnostics: Vec::new(),
-        seen_atoms: vec![0; document.content_store.atoms.len()],
-        seen_fixed_views: vec![0; document.content_store.fixed_views.len()],
-        seen_table_points: vec![0; document.content_store.points.len()],
+        seen_atoms: vec![0; flow.content_store.atoms.len()],
+        seen_fixed_views: vec![0; flow.content_store.fixed_views.len()],
+        seen_table_points: vec![0; flow.content_store.points.len()],
         strong_depth: 0,
         emphasis_depth: 0,
         active_link: None,
         linked_leaf_count: 0,
     };
     collector.visit_document(document);
-    for atom in &document.content_store.atoms {
+    for atom in &flow.content_store.atoms {
         let seen = usize::try_from(atom.key.get() - 1)
             .ok()
             .and_then(|index| collector.seen_atoms.get(index))
@@ -183,6 +196,8 @@ fn is_semantic_completeness_diagnostic(code: &str) -> bool {
     matches!(
         code,
         "ir.empty-identity"
+            | "ir.invalid-coverage-source"
+            | "ir.invalid-coverage-scope"
             | "ir.invalid-declaration-group"
             | "ir.invalid-entry-content"
             | "ir.invalid-entry-name-binding"
@@ -1485,6 +1500,62 @@ mod tests {
                 .any(|code| code == "ir.invalid-source-position")
         );
         assert!(codes.iter().any(|code| code == "ir.reverse-source-range"));
+    }
+
+    #[test]
+    fn in_memory_flow_document_rejects_native_mark_coverage_scopes() {
+        for scope in [
+            CoverageScope::Section {
+                key: std::num::NonZeroU32::MIN,
+            },
+            CoverageScope::Owner {
+                key: std::num::NonZeroU32::MIN,
+            },
+            CoverageScope::Region {
+                key: std::num::NonZeroU32::MIN,
+            },
+        ] {
+            let mut document = document(Vec::new(), Vec::new());
+            document.diagnostics.push(Diagnostic {
+                impact: crate::DiagnosticImpact::None,
+                level: DiagnosticLevel::Unsupported,
+                code: Some("annotated.coverage.owner.unverified".to_owned()),
+                message: "native mark unavailable".to_owned(),
+                source: None,
+                coverage_scope: Some(scope),
+            });
+            let findings = validate_document(&document);
+            assert!(findings.iter().any(|finding| {
+                finding.code.as_deref() == Some("ir.invalid-coverage-scope")
+                    && finding.impact == crate::DiagnosticImpact::SemanticCoverage
+            }));
+            let mut merged = document.diagnostics;
+            merged.extend(findings);
+            assert!(!crate::semantics_complete(&merged));
+        }
+    }
+
+    #[test]
+    fn invalid_source_coverage_scope_cannot_leave_in_memory_semantics_complete() {
+        let mut document = document(Vec::new(), Vec::new());
+        document.diagnostics.push(Diagnostic {
+            impact: crate::DiagnosticImpact::None,
+            level: DiagnosticLevel::Unsupported,
+            code: None,
+            message: "source binding unavailable".to_owned(),
+            source: None,
+            coverage_scope: Some(CoverageScope::Source {
+                key: SourceKey::new(2).unwrap(),
+            }),
+        });
+        let findings = validate_document(&document);
+        assert!(findings.iter().any(|finding| {
+            finding.code.as_deref() == Some("ir.invalid-coverage-source")
+                && finding.impact == crate::DiagnosticImpact::SemanticCoverage
+        }));
+        let mut merged = document.diagnostics;
+        merged.extend(findings);
+        assert!(!crate::semantics_complete(&merged));
     }
 
     #[test]
