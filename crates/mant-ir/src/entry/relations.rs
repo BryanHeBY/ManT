@@ -62,6 +62,7 @@ impl EntryRelationIssue {
             code: Some(code.into()),
             message: format!("entry '{}': {message}", self.owner),
             source: None,
+            coverage_scope: None,
         }
     }
 }

@@ -2,8 +2,8 @@
 
 use super::document::invariant_at;
 use crate::{
-    Block, Diagnostic, Document, Inline, SourceCoordinates, SourceIdentity, SourceKey,
-    SourceRelationError, SourceSpan, ValueDomain,
+    Block, CoverageScope, Diagnostic, Document, Inline, SourceCoordinates, SourceIdentity,
+    SourceKey, SourceRelationError, SourceSpan, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -23,6 +23,14 @@ pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelati
     for diagnostic in &document.diagnostics {
         if let Some(span) = diagnostic.source {
             validate_relation_span(document, span)?;
+        }
+        if let Some(CoverageScope::Source { key }) = diagnostic.coverage_scope
+            && document.source_record(key).is_none()
+        {
+            return Err(relation(format!(
+                "diagnostic coverage scope references unknown source {}",
+                key.get()
+            )));
         }
     }
     for provenance in document

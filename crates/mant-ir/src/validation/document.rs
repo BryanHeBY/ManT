@@ -7,8 +7,8 @@ use super::{
     source::validate_source_span,
 };
 use crate::{
-    Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentIndex, DocumentReference,
-    IndexedRole, Inline, LinkTarget, NodeId, Section, SourceSpan, ValueDomain,
+    Block, CoverageScope, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentIndex,
+    DocumentReference, IndexedRole, Inline, LinkTarget, NodeId, Section, SourceSpan, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -35,6 +35,19 @@ pub(super) fn validate_with_index(
         .filter_map(|diagnostic| diagnostic.source)
     {
         validate_source_span(&mut diagnostics, source);
+    }
+    for diagnostic in &document.diagnostics {
+        if let Some(CoverageScope::Source { key }) = diagnostic.coverage_scope
+            && document.source_record(key).is_none()
+        {
+            diagnostics.push(invariant(
+                "ir.invalid-coverage-source",
+                format!(
+                    "diagnostic coverage scope references unknown source {}",
+                    key.get()
+                ),
+            ));
+        }
     }
 
     for (id, node) in index.iter() {
@@ -216,6 +229,7 @@ fn invariant(code: &str, message: String) -> Diagnostic {
         code: Some(code.to_owned()),
         message,
         source: None,
+        coverage_scope: None,
     }
 }
 
@@ -226,6 +240,7 @@ pub(super) fn invariant_at(code: &str, message: String, source: SourceSpan) -> D
         code: Some(code.to_owned()),
         message,
         source: Some(source),
+        coverage_scope: None,
     }
 }
 
@@ -1457,6 +1472,7 @@ mod tests {
             code: Some("producer.finding".to_owned()),
             message: "producer finding".to_owned(),
             source: Some(source),
+            coverage_scope: None,
         });
 
         let codes = validate_document(&document)

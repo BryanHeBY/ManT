@@ -89,6 +89,7 @@ pub fn parse_plain_manual_report(
                 code: Some("manual.control-characters".to_owned()),
                 message: format!("masked {masked_controls} terminal-unsafe control character(s)"),
                 source: None,
+                coverage_scope: None,
             },
         );
     }

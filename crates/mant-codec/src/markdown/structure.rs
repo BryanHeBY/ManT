@@ -66,6 +66,7 @@ pub(super) fn lower_document_structure(
                     code: Some("markdown.empty-heading".to_owned()),
                     message: "preserved a Markdown heading without visible text".to_owned(),
                     source: Some(source.span(&(range.start..end))),
+                    coverage_scope: None,
                 });
             }
             let is_document_title = !saw_heading && level == HeadingLevel::H1;

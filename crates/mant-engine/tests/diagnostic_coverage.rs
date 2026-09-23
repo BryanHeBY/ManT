@@ -21,6 +21,7 @@ fn custom_coverage_failure_disables_annotations_without_changing_plain_markdown(
                 code: Some("another-parser.coverage".into()),
                 message: "a semantic declaration was rejected".into(),
                 source: None,
+                coverage_scope: None,
             });
         let exported = render_markdown_with_options(
             &content,

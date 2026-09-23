@@ -355,6 +355,7 @@ pub(super) fn lower_diagnostics(projection: &NativeProseProjection) -> Vec<Diagn
             source: diagnostic
                 .span()
                 .and_then(|span| projection.spans().get(span.get() as usize - 1).copied()),
+            coverage_scope: None,
         })
         .collect()
 }

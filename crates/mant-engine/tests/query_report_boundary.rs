@@ -156,6 +156,7 @@ fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
             code: Some("markdown.unsupported-html".to_owned()),
             message: "author warning".to_owned(),
             source: None,
+            coverage_scope: None,
         });
     }
     assert!(
@@ -175,6 +176,7 @@ fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
             code: Some("markdown.semantic-entry-list".to_owned()),
             message: "rejected declaration".to_owned(),
             source: None,
+            coverage_scope: None,
         });
     assert!(
         !build_outline(&markdown_query)
@@ -193,6 +195,7 @@ fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
             code: Some("markdown.semantic-entry.invalid-entry-name".to_owned()),
             message: "rejected entry".to_owned(),
             source: None,
+            coverage_scope: None,
         });
     assert!(
         !build_outline(&markdown_query)
@@ -212,6 +215,7 @@ fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
             code: Some("ir.invalid-semantic-document-reference".to_owned()),
             message: "invalid producer relationship".to_owned(),
             source: None,
+            coverage_scope: None,
         });
     assert!(
         !build_outline(&ir_query)

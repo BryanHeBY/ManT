@@ -327,6 +327,7 @@ pub(super) fn semantic_diagnostic(
         code: Some("markdown.semantic-entry-list".to_owned()),
         message,
         source: Some(source),
+        coverage_scope: None,
     });
 }
 
@@ -341,5 +342,6 @@ pub(super) fn domain_diagnostic(
         code: Some("markdown.semantic-value-domain".to_owned()),
         message,
         source: Some(source),
+        coverage_scope: None,
     });
 }

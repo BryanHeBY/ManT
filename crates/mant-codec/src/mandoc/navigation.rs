@@ -437,6 +437,7 @@ fn resolve_inlines(
                         code: Some("unresolved-section-reference".to_owned()),
                         message: format!("cannot resolve section reference: {id}"),
                         source: None,
+                        coverage_scope: None,
                     });
                     let _ = content.detach_link(occurrence);
                     resolved.extend(children);

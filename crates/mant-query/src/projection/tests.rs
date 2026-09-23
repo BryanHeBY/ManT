@@ -614,6 +614,7 @@ fn custom_producer_impact_reaches_outline_and_excerpt_without_known_codes() {
                 code: Some("custom-producer.rejected-binding".into()),
                 message: "producer coverage".into(),
                 source: None,
+                coverage_scope: None,
             });
         let complete = impact == mant_ir::DiagnosticImpact::None;
         assert_eq!(

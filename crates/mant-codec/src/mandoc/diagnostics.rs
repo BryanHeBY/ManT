@@ -36,6 +36,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
                 end_line: None,
                 end_column: None,
             }),
+            coverage_scope: None,
         })
         .collect()
 }
@@ -53,6 +54,7 @@ impl LoweringContext<'_> {
                 "structural macro '{macro_name}' contains parts without a complete lowering policy"
             ),
             source: source_span(node),
+            coverage_scope: None,
         });
     }
 
@@ -79,6 +81,7 @@ impl LoweringContext<'_> {
                 end_line: None,
                 end_column: None,
             }),
+            coverage_scope: None,
         });
     }
 

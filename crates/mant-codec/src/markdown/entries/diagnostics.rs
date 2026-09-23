@@ -81,6 +81,7 @@ impl EntryRejection {
                 self.reason.message()
             ),
             source: Some(self.source.unwrap_or(fallback)),
+            coverage_scope: None,
         });
     }
 }

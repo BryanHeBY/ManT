@@ -188,6 +188,24 @@ fn document_deserialization_enforces_dense_rooted_source_relations() {
 }
 
 #[test]
+fn source_scoped_coverage_closes_against_the_document_source_table() {
+    let mut valid = document_value();
+    valid["diagnostics"] = json!([{
+        "level":"unsupported",
+        "impact":"semantic-coverage",
+        "code":"annotated.coverage.source.unverified",
+        "message":"source binding unavailable",
+        "source":span(1),
+        "coverageScope":{"kind":"source","key":2}
+    }]);
+    let parsed: Document = serde_json::from_value(valid.clone()).unwrap();
+    assert!(validate_document_sources(&parsed).is_ok());
+    let mut invalid = valid;
+    invalid["diagnostics"][0]["coverageScope"]["key"] = json!(3);
+    assert_document_rejected(invalid);
+}
+
+#[test]
 fn table_cell_source_is_independent_and_checked_at_the_wire_boundary() {
     let mut document = document_value();
     document["blocks"] = json!([{

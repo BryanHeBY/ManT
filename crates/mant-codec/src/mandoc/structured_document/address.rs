@@ -238,6 +238,7 @@ fn invalid_alias_diagnostic(
             "source-authored fragment alias '{target}' contains whitespace or control characters"
         ),
         source: source_for(projection, provenance),
+        coverage_scope: None,
     }
 }
 
@@ -372,6 +373,7 @@ fn build_links(
                         code: Some("unresolved-section-reference".to_owned()),
                         message: format!("cannot resolve section reference: {phrase}"),
                         source: source_for(projection, link.provenance()),
+                        coverage_scope: None,
                     });
                     LinkAssignment::Dropped
                 }
