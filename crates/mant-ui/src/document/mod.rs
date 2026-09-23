@@ -131,7 +131,8 @@ pub struct DocumentView {
 /// Exact terminal rows and anchor positions for one content width.
 #[derive(Debug, Clone)]
 pub struct RenderedDocument {
-    /// Fully styled terminal rows.
+    /// Styled terminal rows after viewport projection; fixed source rows
+    /// remain authoritative in `DocumentView` for complete visual copying.
     pub text: Text<'static>,
     /// Number of visual terminal rows before virtual viewport padding.
     pub row_count: usize,

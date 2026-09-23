@@ -37,16 +37,19 @@ fn narrow_view_reduces_only_presentation_indent_and_keeps_link_search_copy_cells
             .additional_fragments
             .last()
             .map_or((hit.row, hit.end_column), |f| (f.row, f.end_column));
-        let selected = rendered.selected_text(crate::document::RenderedSelection {
-            anchor: crate::document::TextPosition {
-                row: hit.row,
-                column: hit.start_column,
+        let selected = view.selected_text(
+            &rendered,
+            crate::document::RenderedSelection {
+                anchor: crate::document::TextPosition {
+                    row: hit.row,
+                    column: hit.start_column,
+                },
+                focus: crate::document::TextPosition {
+                    row: end_row,
+                    column: end_column - 1,
+                },
             },
-            focus: crate::document::TextPosition {
-                row: end_row,
-                column: end_column - 1,
-            },
-        });
+        );
         // Selection is explicitly visual-cell copying: continuation padding
         // and visual newlines are retained, not claimed to be source export.
         assert_eq!(
@@ -322,16 +325,19 @@ fn profile_glyphs_keep_logical_search_and_link_cells_across_wrapping() {
         span.content.contains("--") && span.style.add_modifier.contains(Modifier::UNDERLINED)
     }));
     assert_eq!(
-        rendered.selected_text(crate::document::RenderedSelection {
-            anchor: crate::document::TextPosition {
-                row: dash_hit.row,
-                column: dash_hit.start_column,
-            },
-            focus: crate::document::TextPosition {
-                row: dash_hit.row,
-                column: dash_hit.end_column - 1,
-            },
-        }),
+        view.selected_text(
+            &rendered,
+            crate::document::RenderedSelection {
+                anchor: crate::document::TextPosition {
+                    row: dash_hit.row,
+                    column: dash_hit.start_column,
+                },
+                focus: crate::document::TextPosition {
+                    row: dash_hit.row,
+                    column: dash_hit.end_column - 1,
+                },
+            }
+        ),
         "--",
         "visual-cell selection copies the displayed profile glyphs"
     );
@@ -399,16 +405,19 @@ fn projected_scalars_in_one_combining_grapheme_keep_one_visual_hit_region() {
             );
         }
         assert_eq!(
-            rendered.selected_text(crate::document::RenderedSelection {
-                anchor: crate::document::TextPosition {
-                    row: hit.row,
-                    column: hit.start_column,
-                },
-                focus: crate::document::TextPosition {
-                    row: hit.row,
-                    column: hit.end_column - 1,
-                },
-            }),
+            view.selected_text(
+                &rendered,
+                crate::document::RenderedSelection {
+                    anchor: crate::document::TextPosition {
+                        row: hit.row,
+                        column: hit.start_column,
+                    },
+                    focus: crate::document::TextPosition {
+                        row: hit.row,
+                        column: hit.end_column - 1,
+                    },
+                }
+            ),
             "--<?>",
             "visual selection copies the complete projected grapheme"
         );

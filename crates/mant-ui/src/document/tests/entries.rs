@@ -324,7 +324,7 @@ fn assert_link_selection(
             .all(|s| s.style.add_modifier.contains(Modifier::UNDERLINED))
     );
     assert_eq!(
-        rendered.selected_text(selection).replace('\n', ""),
+        view.selected_text(rendered, selection).replace('\n', ""),
         "--help"
     );
     assert_eq!(view.render(width).text, rendered.text);

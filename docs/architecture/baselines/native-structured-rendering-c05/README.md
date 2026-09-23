@@ -128,5 +128,8 @@ Independent N/F/S C05 review of `aa211f73..97cb0840` found native fixed-view,
 resource-budget, and consumer gaps. The subsequent resource repairs enforce
 the dedicated table/row/cell limits, release active fixed-use sidecars on
 failure, and include their peak capacity in the sidecar probe. The remaining
-findings are tracked as C05 follow-up work; this checkpoint is not an S1
-approval.
+findings are tracked as C05 follow-up work. The fixed-row copy repair now
+reads the complete unclipped physical source row through `DocumentView` when a visual
+selection crosses horizontally clipped rows, without caching a second full
+fixed body in `RenderedDocument`; viewport columns are translated only for
+the selected endpoint rows. This checkpoint is not an S1 approval.

@@ -81,15 +81,63 @@ fn fixed_surface_uses_real_buffer_for_horizontal_reveal_search_and_link_hit() {
         column,
     });
     assert_eq!(
-        rendered.selected_text(RenderedSelection {
-            anchor: selection.anchor,
-            focus: TextPosition {
-                row: found.row,
-                column: column + 3,
-            },
-        }),
+        app.session.document.selected_text(
+            rendered,
+            RenderedSelection {
+                anchor: selection.anchor,
+                focus: TextPosition {
+                    row: found.row,
+                    column: column + 3,
+                },
+            }
+        ),
         "LINK"
     );
+}
+
+#[test]
+fn multirow_fixed_selection_copies_complete_intermediate_physical_rows() {
+    use mant_ir::{Decoration, DecorationKey, DecorationKind, FixedLine, FixedLineKey, Provenance};
+
+    let mut bundle = fixed_bundle();
+    let store = &mut bundle.document.as_mut().unwrap().content_store;
+    store.fixed_views[0].lines.push(FixedLine {
+        key: FixedLineKey::new(3).unwrap(),
+        terminal_columns: 37,
+        placements: Vec::new(),
+        decorations: vec![Decoration {
+            key: DecorationKey::new(4).unwrap(),
+            text: "─".repeat(37),
+            start_column: 0,
+            width_columns: 37,
+            kind: DecorationKind::Rule,
+            provenance: Provenance::Generated { trigger: None },
+        }],
+    });
+    mant_ir::validate_content_store(store).unwrap();
+    let view = crate::document::DocumentView::new(&bundle);
+    let rendered = view.render_with_horizontal_offset(4, 31);
+    let rows = (0..rendered.row_count)
+        .filter(|row| rendered.is_fixed_row(*row))
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 3);
+    let copied = view.selected_text(
+        &rendered,
+        RenderedSelection {
+            anchor: TextPosition {
+                row: rows[0],
+                column: 1,
+            },
+            focus: TextPosition {
+                row: rows[2],
+                column: 2,
+            },
+        },
+    );
+    let lines = copied.lines().collect::<Vec<_>>();
+    assert_eq!(lines[0], "LINK│");
+    assert_eq!(lines[1], format!("{}LINK│", " ".repeat(32)));
+    assert_eq!(lines[2], "─".repeat(34));
 }
 
 #[test]

@@ -440,7 +440,7 @@ impl App {
             self.report_notice("The document is not ready to copy".to_owned());
             return;
         };
-        let text = rendered.selected_text(selection);
+        let text = self.session.document.selected_text(rendered, selection);
         if text.is_empty() {
             self.report_notice("The selected cells contain no text".to_owned());
         } else if text.len() > crate::MAX_COPY_BYTES {

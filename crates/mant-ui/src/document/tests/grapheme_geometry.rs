@@ -107,7 +107,7 @@ fn conflicting_targets_on_one_glyph_are_selector_only_not_first_match() {
         row: found.row,
         column: 1,
     });
-    assert_eq!(rendered.selected_text(selected), "👩‍💻");
+    assert_eq!(view.selected_text(&rendered, selected), "👩‍💻");
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn joined_emoji_search_highlight_copy_and_link_use_real_glyph_cells() {
             Some(&LinkTarget::Section("destination".into()))
         );
         let selection = RenderedSelection::new(TextPosition { row, column });
-        assert_eq!(rendered.selected_text(selection), "👩‍💻");
+        assert_eq!(view.selected_text(&rendered, selection), "👩‍💻");
     }
     assert!(view.link_target_at(&rendered, row, 4).is_none());
     let selected = rendered.viewport_text(
@@ -239,7 +239,8 @@ fn wrapping_and_one_column_replacement_never_split_a_cluster() {
     for glyph in ["👩‍💻", "🇺🇳", "✈️", "e\u{301}", "界"] {
         let bundle = document(vec![text(&format!("{glyph}Z"))]);
         for width in [1, 2, 3, 20] {
-            let rendered = DocumentView::new(&bundle).render(width);
+            let view = DocumentView::new(&bundle);
+            let rendered = view.render(width);
             let found = rendered.search(glyph);
             assert_eq!(found.len(), 1, "{glyph}, width={width}");
             assert!(found[0].additional_fragments.is_empty());
@@ -261,10 +262,13 @@ fn wrapping_and_one_column_replacement_never_split_a_cluster() {
             // the visible replacement in a viewport too narrow for the glyph.
             if glyph_width > usize::from(width) {
                 assert_eq!(
-                    rendered.selected_text(RenderedSelection::new(TextPosition {
-                        row: found[0].row,
-                        column: 0,
-                    })),
+                    view.selected_text(
+                        &rendered,
+                        RenderedSelection::new(TextPosition {
+                            row: found[0].row,
+                            column: 0,
+                        })
+                    ),
                     "�"
                 );
             }

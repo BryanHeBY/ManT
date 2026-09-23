@@ -2,10 +2,10 @@
 
 use ratatui::text::{Line, Span, Text};
 
-use super::RenderedDocument;
+use super::{DocumentView, RenderedDocument};
 use crate::theme;
 
-/// One terminal-cell position in the fully rendered document.
+/// One viewport-local terminal cell with a document-global row coordinate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct TextPosition {
     pub(crate) row: usize,
@@ -54,14 +54,19 @@ impl RenderedSelection {
     }
 }
 
-impl RenderedDocument {
-    /// Extract the selected visual cells as terminal-safe plain text.
-    pub(crate) fn selected_text(&self, selection: RenderedSelection) -> String {
+impl DocumentView {
+    /// Extract complete fixed-row geometry for a visual selection without
+    /// copying a second body into the width-dependent rendered cache.
+    pub(crate) fn selected_text(
+        &self,
+        rendered: &RenderedDocument,
+        selection: RenderedSelection,
+    ) -> String {
         let (start, end) = selection.normalized();
-        let Some(lines) = self
+        let Some(lines) = rendered
             .text
             .lines
-            .get(start.row..=end.row.min(self.row_count.saturating_sub(1)))
+            .get(start.row..=end.row.min(rendered.row_count.saturating_sub(1)))
         else {
             return String::new();
         };
@@ -70,7 +75,7 @@ impl RenderedDocument {
             .enumerate()
             .filter_map(|(offset, line)| {
                 let row = start.row + offset;
-                let surface = self.surfaces.get(row).copied()?;
+                let surface = rendered.surfaces.get(row).copied()?;
                 if matches!(
                     surface,
                     super::LineSurface::TldrTop
@@ -90,8 +95,31 @@ impl RenderedDocument {
                 } else {
                     (start_column, end_column)
                 };
+                let (spans, start_column, end_column) = if surface == super::LineSurface::Fixed {
+                    let logical_row = rendered
+                        .logical_rows
+                        .partition_point(|first| *first <= row)
+                        .saturating_sub(1);
+                    let source = self.lines.get(logical_row)?;
+                    if source.surface != super::LineSurface::Fixed {
+                        return None;
+                    }
+                    let start_column = if row == start.row {
+                        start_column.saturating_add(rendered.horizontal_offset)
+                    } else {
+                        0
+                    };
+                    let end_column = if row == end.row {
+                        end_column.saturating_add(rendered.horizontal_offset)
+                    } else {
+                        usize::MAX
+                    };
+                    (source.spans.as_slice(), start_column, end_column)
+                } else {
+                    (line.spans.as_slice(), start_column, end_column)
+                };
                 Some(
-                    line_fragment(line, start_column, end_column)
+                    span_fragment(spans, start_column, end_column)
                         .trim_end_matches(' ')
                         .to_owned(),
                 )
@@ -99,7 +127,9 @@ impl RenderedDocument {
             .collect::<Vec<_>>()
             .join("\n")
     }
+}
 
+impl RenderedDocument {
     pub(crate) fn highlight_selection(
         &self,
         text: &mut Text<'static>,
@@ -119,11 +149,16 @@ impl RenderedDocument {
     }
 }
 
+#[cfg(test)]
 fn line_fragment(line: &Line<'_>, start_column: usize, end_column: usize) -> String {
+    span_fragment(&line.spans, start_column, end_column)
+}
+
+fn span_fragment(spans: &[Span<'_>], start_column: usize, end_column: usize) -> String {
     let mut output = String::new();
     let mut column: usize = 0;
     let mut previous_selected = false;
-    for span in &line.spans {
+    for span in spans {
         for grapheme in mant_render::cells::graphemes(&span.content) {
             let width = grapheme.columns();
             let next_column = column.saturating_add(width);
