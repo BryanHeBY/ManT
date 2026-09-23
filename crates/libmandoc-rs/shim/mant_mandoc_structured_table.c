@@ -10,6 +10,7 @@
 
 #include "mant_mandoc_structured_address.h"
 #include "mant_mandoc_structured_builder.h"
+#include "mant_mandoc_structured_fixed.h"
 #include "mant_mandoc_structured_structure.h"
 #include "mant_mandoc_structured_table.h"
 
@@ -145,6 +146,7 @@ mant_structured_table_enter(struct structured_session *session,
 	struct mant_structured_table_cell_view *cells, *cell;
 	uint32_t provenance, owner, root, point, row_key, column_span;
 	uint32_t covered_until;
+	int fixed;
 
 	if (span == NULL) {
 		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
@@ -154,10 +156,28 @@ mant_structured_table_enter(struct structured_session *session,
 	provenance = mant_structured_append_provenance(session, node, 1);
 	if (provenance == 0)
 		return 0;
-	if (span->prev == NULL)
+	if (span->prev == NULL) {
 		session->active_table = append_table(session, node, provenance);
+		if (session->active_table != 0) {
+			fixed = mant_structured_fixed_table_required(session, span);
+			if (fixed < 0)
+				return 0;
+			if (fixed != 0) {
+				uint32_t block = session->result->tables[
+				    session->active_table - 1].block;
+				uint32_t owner = session->result->blocks[block - 1].owner;
+
+				if (mant_structured_fixed_open_table(session,
+				    session->active_table, block, owner,
+				    provenance) == 0)
+					return 0;
+			}
+		}
+	}
 	if (session->active_table == 0)
 		return 0;
+	session->active_fixed_view = session->result->tables[
+	    session->active_table - 1].fixed_view;
 	rows = mant_structured_grow_array(session, session->result->table_rows,
 	    session->result->table_row_count, &session->result->table_row_capacity,
 	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*rows),
@@ -316,10 +336,16 @@ void
 mant_structured_table_leave(struct structured_session *session,
     const struct roff_node *node)
 {
+	if (session->active_fixed_line != 0)
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0,
+		    session->active_fixed_line, 0);
 	session->active_table_cell = 0;
 	session->active_table_row = 0;
 	session->current_root = 0;
 	session->current_owner = 0;
-	if (node->span->next == NULL)
+	if (node->span->next == NULL) {
 		session->active_table = 0;
+		session->active_fixed_view = 0;
+	}
 }

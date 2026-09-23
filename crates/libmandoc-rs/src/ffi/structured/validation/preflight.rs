@@ -2,11 +2,11 @@
 
 use super::super::{
     BytesView, Limits, NativeStructuredError, OwnedAnchor, OwnedBlock, OwnedContentAtom,
-    OwnedContentPoint, OwnedContentRef, OwnedContentRoot, OwnedDiagnostic, OwnedForm,
-    OwnedHeadingEvidence, OwnedItem, OwnedLink, OwnedLinkLabelPart, OwnedList, OwnedNameHint,
-    OwnedOwner, OwnedProvenance, OwnedSource, OwnedSpan, OwnedTable, OwnedTableCell, OwnedTableRow,
-    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, ResultView, STATUS_BUDGET, StructuredSlices,
-    relation_error,
+    OwnedContentPoint, OwnedContentRef, OwnedContentRoot, OwnedDecoration, OwnedDiagnostic,
+    OwnedFixedLine, OwnedFixedView, OwnedForm, OwnedHeadingEvidence, OwnedItem, OwnedLink,
+    OwnedLinkLabelPart, OwnedList, OwnedNameHint, OwnedOwner, OwnedPlacement, OwnedProvenance,
+    OwnedSource, OwnedSpan, OwnedTable, OwnedTableCell, OwnedTableRow, PROVENANCE_AUTHORED,
+    PROVENANCE_GENERATED, ResultView, STATUS_BUDGET, StructuredSlices, relation_error,
 };
 
 #[allow(clippy::too_many_lines)] // Mirrors every frozen result table and transfer counter.
@@ -127,6 +127,16 @@ pub(in super::super) fn transfer_preflight(
     for cell in slices.table_cells {
         add_edges(&mut edges, 3 + usize::from(cell.point != 0))?;
     }
+    for view in slices.fixed_views {
+        add_edges(&mut edges, 3 + usize::from(view.table != 0))?;
+    }
+    add_edges(&mut edges, slices.fixed_lines.len())?;
+    for _ in slices.placements {
+        add_edges(&mut edges, 2)?;
+    }
+    for _ in slices.decorations {
+        add_edges(&mut edges, 2)?;
+    }
     for form in slices.forms {
         add_edges(&mut edges, 2)?; // owner, provenance
         add_edges(&mut edges, form.ref_count as usize)?;
@@ -213,6 +223,22 @@ pub(in super::super) fn transfer_preflight(
         &mut bytes,
         slices.table_cells,
     )?;
+    add_transfer_table_bytes::<OwnedFixedView, crate::structured::NativeFixedView, _>(
+        &mut bytes,
+        slices.fixed_views,
+    )?;
+    add_transfer_table_bytes::<OwnedFixedLine, crate::structured::NativeFixedLine, _>(
+        &mut bytes,
+        slices.fixed_lines,
+    )?;
+    add_transfer_table_bytes::<OwnedPlacement, crate::structured::NativePlacement, _>(
+        &mut bytes,
+        slices.placements,
+    )?;
+    add_transfer_table_bytes::<OwnedDecoration, crate::structured::NativeDecoration, _>(
+        &mut bytes,
+        slices.decorations,
+    )?;
     add_transfer_table_bytes::<OwnedForm, crate::structured::NativeForm, _>(
         &mut bytes,
         slices.forms,
@@ -253,6 +279,11 @@ pub(in super::super) fn transfer_preflight(
         bytes = bytes
             .checked_add(validate_utf8_view(atom.text)?)
             .and_then(|value| value.checked_add(display_bytes))
+            .ok_or_else(relation_error)?;
+    }
+    for decoration in slices.decorations {
+        bytes = bytes
+            .checked_add(validate_utf8_view(decoration.text)?)
             .ok_or_else(relation_error)?;
     }
     for link in slices.links {

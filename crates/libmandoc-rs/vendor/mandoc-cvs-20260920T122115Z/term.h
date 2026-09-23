@@ -96,7 +96,8 @@ enum term_collector_reason {
 	TERM_COLLECT_FINAL,
 	TERM_COLLECT_MARGIN,
 	TERM_COLLECT_HEADER,
-	TERM_COLLECT_FOOTER
+	TERM_COLLECT_FOOTER,
+	TERM_COLLECT_TABLE_LINE
 };
 
 struct term_collector_event {

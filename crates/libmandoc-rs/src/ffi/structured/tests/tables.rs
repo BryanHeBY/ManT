@@ -36,6 +36,89 @@ fn simple_table_retains_data_and_empty_cell_roots() {
 }
 
 #[test]
+fn boxed_table_reuses_cell_atoms_in_native_fixed_geometry() {
+    // Exact UTF-8/78 input was run through the fixed CVS reference first.
+    // tbl_term.c::term_tbl emits native frame rows and cell placements;
+    // tbl_word contributes logical content only once per authored cell.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "box.1",
+            b".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\nleft;right\nempty;\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude("box.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("boxed native table has checked fixed geometry");
+    assert_eq!(document.tables.len(), 1);
+    assert!(document.tables[0].fixed_view.is_some());
+    assert_eq!(document.table_cells.len(), 4);
+    assert_eq!(
+        document
+            .content_atoms
+            .iter()
+            .filter(|atom| atom.text == "left")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn fixed_table_corruption_is_rejected_before_owned_transfer() {
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "box.1",
+            b".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\nleft;right\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let limits = Limits::default();
+    let storage = InputStorage::new("box.1", &bundle, InputFormat::Man, &limits).unwrap();
+    let (status, pointer, failure) = raw_render(&storage.view(78, PROFILE_UTF8), &limits);
+    assert_eq!(status, STATUS_OK, "{failure:?}");
+    let handle = ResultHandle(NonNull::new(pointer).unwrap());
+    let mut view = ResultView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_view(handle.0.as_ptr(), &raw mut view) },
+        STATUS_OK
+    );
+    let fixed = unsafe {
+        std::slice::from_raw_parts_mut(
+            view.fixed_views.ptr.cast::<FixedView>().cast_mut(),
+            view.fixed_views.count as usize,
+        )
+    };
+    let placements = unsafe {
+        std::slice::from_raw_parts_mut(
+            view.placements.ptr.cast::<PlacementView>().cast_mut(),
+            view.placements.count as usize,
+        )
+    };
+    assert_eq!(fixed.len(), 1);
+    assert!(!placements.is_empty());
+    let mut failure = FailureView::default();
+    let original_table = fixed[0].table;
+    fixed[0].table = 0;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+    fixed[0].table = original_table;
+    let original_end = placements[0].byte_end;
+    placements[0].byte_end = u32::MAX;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+    placements[0].byte_end = original_end;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_OK
+    );
+}
+
+#[test]
 fn tbl_style_and_rule_rows_keep_separate_semantics() {
     // This exact source was run through the fixed CVS UTF-8/78 renderer.
     // tbl_term.c::tbl_word enters font scope for data cells; tbl_hrule and

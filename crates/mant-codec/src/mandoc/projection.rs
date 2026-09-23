@@ -164,6 +164,10 @@ impl NativeProseProjection {
         self.document.take_content_tables()
     }
 
+    pub(crate) fn take_fixed_tables(&mut self) -> libmandoc_rs::structured::StructuredFixedTables {
+        self.document.take_fixed_tables()
+    }
+
     pub(crate) fn sources(&self) -> &[SourceRecord] {
         &self.sources
     }

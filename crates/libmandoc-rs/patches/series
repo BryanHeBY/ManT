@@ -31,3 +31,4 @@
 0031-bind-manual-target-source.patch
 0032-observe-tbl-cell-scope.patch
 0033-observe-direct-tbl-geometry.patch
+0034-identify-direct-tbl-lines.patch

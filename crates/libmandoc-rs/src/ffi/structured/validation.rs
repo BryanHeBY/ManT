@@ -1,8 +1,10 @@
 //! ABI ranges, keys, and ordered relation validation.
 
+mod fixed;
 mod preflight;
 mod table;
 
+use fixed::validate_fixed;
 pub(super) use preflight::transfer_preflight;
 use preflight::validate_utf8_view;
 use table::validate_tables;
@@ -90,12 +92,7 @@ pub(super) fn validate_structured_relations(
     view: &ResultView,
     slices: &StructuredSlices<'_>,
 ) -> Result<(), NativeStructuredError> {
-    if !slices.fixed_views.is_empty()
-        || !slices.fixed_lines.is_empty()
-        || !slices.placements.is_empty()
-        || !slices.decorations.is_empty()
-        || !slices.relations.is_empty()
-    {
+    if !slices.relations.is_empty() {
         return Err(relation_error());
     }
 
@@ -544,7 +541,11 @@ pub(super) fn validate_structured_relations(
             BLOCK_LIST | BLOCK_DEFINITION_LIST => {
                 block.root == 0 && block.table == 0 && block.fixed_view == 0
             }
-            BLOCK_TABLE => block.root == 0 && block.table != 0 && block.fixed_view == 0,
+            BLOCK_TABLE => {
+                block.root == 0
+                    && block.table != 0
+                    && block.fixed_view as usize <= slices.fixed_views.len()
+            }
             _ => false,
         };
         if block.key != dense_key(index)?
@@ -710,6 +711,7 @@ pub(super) fn validate_structured_relations(
         return Err(relation_error());
     }
     validate_tables(slices)?;
+    validate_fixed(slices, &atom_scalar_starts)?;
     let mut term_root_evidence = Vec::new();
     term_root_evidence
         .try_reserve_exact(slices.content_roots.len())

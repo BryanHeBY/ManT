@@ -237,6 +237,8 @@ fn selected_native_sources(
         owned.push(crate_dir.join("shim/mant_mandoc_structured_marker.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_structure.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_table.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_structured_fixed.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_structured_fixed_validate.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_result.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_abi.c"));
     }

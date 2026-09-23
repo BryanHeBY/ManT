@@ -1,6 +1,7 @@
 /* Validation, borrowed views, and destruction for structured results. */
 #include "mant_mandoc_structured_internal.h"
 #include "mant_mandoc_structured_session.h"
+#include "mant_mandoc_structured_fixed_validate.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -655,7 +656,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    block->parent >= block->key || block->ordinal > i ||
 		    block->provenance == 0 ||
 		    block->provenance > result->provenance_count ||
-		    block->fixed_view != 0 || block->reserved != 0 ||
+		    block->fixed_view > result->fixed_view_count ||
+		    block->reserved != 0 ||
 		    (block->kind == MANT_BLOCK_HEADING ?
 		    root == NULL || root->kind != MANT_ROOT_HEADING :
 		    block->kind == MANT_BLOCK_PARAGRAPH ?
@@ -665,6 +667,9 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    root != NULL || block->table != 0 :
 		    block->kind == MANT_BLOCK_TABLE ?
 		    root != NULL || block->table == 0 : 1) ||
+		    (block->kind != MANT_BLOCK_TABLE &&
+		    block->kind != MANT_BLOCK_FIXED_DISPLAY &&
+		    block->fixed_view != 0) ||
 		    (block->kind != MANT_BLOCK_TABLE && block->table != 0) ||
 		    (root != NULL && root->owner != block->owner))
 			return 0;
@@ -742,7 +747,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		return 0;
 	for (i = 0; i < result->table_count; i++) {
 		table = result->tables + i;
-		if (table->key != i + 1 || table->fixed_view != 0 ||
+		if (table->key != i + 1 ||
+		    table->fixed_view > result->fixed_view_count ||
 		    table->provenance == 0 ||
 		    table->provenance > result->provenance_count ||
 		    table->reserved != 0)
@@ -814,6 +820,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		next_column = table_cell->column + table_cell->column_span;
 	}
 	if (table_cell_owner_count != result->table_cell_count)
+		return 0;
+	if (!mant_structured_fixed_result_valid(result))
 		return 0;
 	table_index = 0;
 	for (i = 0; i < result->table_row_count; i++) {

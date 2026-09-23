@@ -18,7 +18,7 @@ pub(super) fn validate_tables(slices: &StructuredSlices<'_>) -> Result<(), Nativ
             .and_then(|key| slices.blocks.get(key as usize));
         if table.key != dense_key(index)?
             || block.is_none_or(|block| block.kind != BLOCK_TABLE || block.table != table.key)
-            || table.fixed_view != 0
+            || table.fixed_view as usize > slices.fixed_views.len()
             || !valid_required_key(table.provenance, slices.provenances.len())
             || table.reserved != 0
             || table_blocks

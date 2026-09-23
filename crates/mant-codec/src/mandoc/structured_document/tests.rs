@@ -33,6 +33,196 @@ fn native_tbl_cells_lower_into_one_shared_content_store() {
 }
 
 #[test]
+fn boxed_tbl_uses_native_physical_rows_and_shared_cell_atoms() {
+    // Exact input was checked with fixed CVS -T utf8 -O width=78 before
+    // this assertion. tbl_term.c::term_tbl draws the frame while tbl_word
+    // contributes the authored cell text to the same logical atom store.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "box.1",
+            b".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\nleft;right\nempty;\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("box.1", &bundle, InputFormat::Man)
+        .expect("boxed table lowers to the final private IR consumer");
+    let Block::Table {
+        fixed_view: Some(key),
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("boxed table has native fixed geometry")
+    };
+    let lines = document
+        .content_store
+        .fixed_view(*key)
+        .unwrap()
+        .physical_lines(document.content())
+        .expect("valid fixed geometry materializes");
+    assert_eq!(
+        lines,
+        [
+            "     ┌───────────────┐",
+            "     │ left    right │",
+            "     │ empty         │",
+            "     └───────────────┘",
+        ]
+    );
+    assert_eq!(
+        document
+            .content_store
+            .atoms
+            .iter()
+            .filter(|atom| atom.kind.text() == Some("left"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn native_tbl_span_rule_and_alignment_follow_fixed_cvs_geometry() {
+    // Each exact source was checked with fixed CVS -T utf8 -O width=78.
+    // tbl_term.c::term_tbl handles colspan, horizontal rules, and native
+    // alignment; the IR stores these physical rows separately from cells.
+    let cases: [(&str, &str, &[&str]); 3] = [
+        (
+            "box-span.1",
+            ".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl s l.\nwide;tail\n.TE\n",
+            &[
+                "     ┌──────────────┐",
+                "     │ wide    tail │",
+                "     └──────────────┘",
+            ],
+        ),
+        (
+            "box-rule.1",
+            ".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\na;b\n_\nc;d\n.TE\n",
+            &[
+                "     ┌───────┐",
+                "     │ a   b │",
+                "     ├───────┤",
+                "     │ c   d │",
+                "     └───────┘",
+            ],
+        ),
+        (
+            "box-align.1",
+            ".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nr c.\nleft;center\n.TE\n",
+            &[
+                "     ┌───────────────┐",
+                "     │ left   center │",
+                "     └───────────────┘",
+            ],
+        ),
+    ];
+    for (name, source, expected) in cases {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = project_native_manual(name, &bundle, InputFormat::Man)
+            .expect("native table lowers with checked physical geometry");
+        let Block::Table {
+            fixed_view: Some(key),
+            ..
+        } = &document.sections[0].blocks[0]
+        else {
+            panic!("{name}: table has native fixed geometry")
+        };
+        let lines = document
+            .content_store
+            .fixed_view(*key)
+            .unwrap()
+            .physical_lines(document.content())
+            .unwrap();
+        assert_eq!(lines, expected, "{name}");
+    }
+}
+
+#[test]
+fn native_boxed_tbl_reaches_real_narrow_horizontal_buffer() {
+    use mant_ir::ResolvedContent;
+    use mant_ui::DocumentView;
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+
+    // Exact source and full-width table rows were checked with fixed CVS
+    // UTF-8/78. C09b's fixed-row viewport clips these native columns rather
+    // than reflowing them when the terminal narrows.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "box.1",
+            b".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\nleft;right\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("box.1", &bundle, InputFormat::Man).unwrap();
+    let resolved = ResolvedContent {
+        label: "T(1)".to_owned(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    let view = DocumentView::new(&resolved);
+    assert!(view.max_fixed_columns() > 12);
+    let narrow = view.render_with_horizontal_offset(12, 0);
+    let row = narrow
+        .text
+        .lines
+        .iter()
+        .position(|line| line.to_string().contains("left"))
+        .unwrap();
+    let area = Rect::new(0, 0, 12, 1);
+    let mut buffer = Buffer::empty(area);
+    Paragraph::new(narrow.text.lines[row].clone()).render(area, &mut buffer);
+    assert_eq!(buffer[(5, 0)].symbol(), "│");
+    assert_eq!(buffer[(7, 0)].symbol(), "l");
+
+    let scrolled = view.render_with_horizontal_offset(12, 9);
+    let mut shifted = Buffer::empty(area);
+    Paragraph::new(scrolled.text.lines[row].clone()).render(area, &mut shifted);
+    assert_eq!(shifted[(0, 0)].symbol(), "f");
+    assert_eq!(shifted[(11, 0)].symbol(), "│");
+}
+
+#[test]
+fn native_boxed_tbl_keeps_styled_cell_content() {
+    // Exact input was checked with fixed CVS UTF-8/78. tbl_term.c::tbl_word
+    // keeps the font scope while terminal overstrike is only presentation.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "style.1",
+            b".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\n\\fBbold\\fP;plain\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("style.1", &bundle, InputFormat::Man)
+        .expect("styled table remains a valid fixed view");
+    let Block::Table {
+        fixed_view: Some(key),
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("styled table has native fixed geometry")
+    };
+    let lines = document
+        .content_store
+        .fixed_view(*key)
+        .unwrap()
+        .physical_lines(document.content())
+        .unwrap();
+    assert!(lines.iter().any(|line| line.contains("bold   plain")));
+    assert!(
+        document
+            .content_store
+            .atoms
+            .iter()
+            .any(|atom| atom.kind.text() == Some("bold") && atom.style.strong)
+    );
+}
+
+#[test]
 fn native_tbl_layout_rule_omits_ignored_data_text() {
     // Exact source checked with fixed CVS UTF-8/78. tbl_term.c::tbl_data
     // renders its layout `_`/`=` rule before consulting the row data.

@@ -22,6 +22,7 @@
 #include "mant_mandoc_structured_buffer.h"
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_structured_link.h"
+#include "mant_mandoc_structured_fixed.h"
 #include "mant_mandoc_structured_structure.h"
 #include "mant_mandoc_structured_table.h"
 #include "mant_mandoc_output.h"
@@ -129,6 +130,34 @@ semantic_role(const struct roff_node *node)
 	return 0;
 }
 
+static int
+append_token_atom(struct structured_session *session,
+    const struct structured_token *token, uint32_t kind,
+    const uint8_t *bytes, size_t length, const uint8_t *display,
+    size_t display_length, int breakable)
+{
+	const struct mant_structured_content_atom_view *record;
+	uint32_t before_atom, before_length, before_scalar, atom, start;
+
+	before_atom = session->result->content_atom_count;
+	before_length = before_atom == 0 ? 0 :
+	    session->result->content_atoms[before_atom - 1].text.len;
+	before_scalar = session->root_atoms[token->root - 1].scalar_count;
+	if (!mant_structured_append_atom(session, token->root, token->provenance,
+	    kind, token->style, token->role, token->link, bytes, length,
+	    display, display_length, breakable))
+		return 0;
+	if (token->fixed_use_count == 0)
+		return 1;
+	atom = session->result->content_atom_count;
+	record = session->result->content_atoms + atom - 1;
+	start = atom == before_atom ? before_length : 0;
+	mant_structured_fixed_commit(session, token, atom, start,
+	    (uint32_t)record->text.len, before_scalar,
+	    (uint32_t)session->root_atoms[token->root - 1].scalar_count);
+	return session->status == MANT_STRUCTURED_OK;
+}
+
 static void
 commit_token(struct structured_session *session, uint32_t key)
 {
@@ -172,8 +201,7 @@ commit_token(struct structured_session *session, uint32_t key)
 		bytes[0] = '-';
 		mant_structured_address_before_atom(session, token->root,
 		    token->sequence);
-		if (!mant_structured_append_atom(session, token->root, token->provenance,
-		    MANT_ATOM_TEXT, token->style, token->role, token->link,
+		if (!append_token_atom(session, token, MANT_ATOM_TEXT,
 		    bytes, 1, NULL, 0, 0))
 			return;
 		mant_structured_append_atom(session, token->root, token->provenance,
@@ -187,8 +215,7 @@ commit_token(struct structured_session *session, uint32_t key)
 
 		mant_structured_address_before_atom(session, token->root,
 		    token->sequence);
-		mant_structured_append_atom(session, token->root, token->provenance,
-		    MANT_ATOM_WHITESPACE, token->style, token->role, token->link,
+		append_token_atom(session, token, MANT_ATOM_WHITESPACE,
 		    nbsp, sizeof(nbsp),
 		    session->result->profile == MANT_PROFILE_ASCII ? ascii_space :
 		    NULL,
@@ -217,8 +244,7 @@ commit_token(struct structured_session *session, uint32_t key)
 		if (projection_survived[index])
 			projection_bytes[display_length++] = projection_bytes[index];
 	mant_structured_address_before_atom(session, token->root, token->sequence);
-	mant_structured_append_atom(session, token->root, token->provenance, kind,
-	    token->style, token->role, token->link, bytes, length,
+	append_token_atom(session, token, kind, bytes, length,
 	    display_length == 0 ? NULL : projection_bytes,
 	    display_length, breakable);
 }
@@ -242,6 +268,7 @@ retire_token(struct structured_session *session, uint32_t key)
 		session->projection_live_bytes = 0;
 	free(token->projection_bytes);
 	free(token->projection_survived);
+	free(token->fixed_uses);
 	token->projection_bytes = NULL;
 	token->projection_survived = NULL;
 	token->projection_capacity = 0;
@@ -732,6 +759,29 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 		clear_pending_token(session);
 		return;
 	}
+	if (event->op == TERM_COLLECT_FIELD_PLACE) {
+		struct structured_slot *slot;
+		struct structured_token *token;
+
+		if (session->active_fixed_view == 0)
+			return;
+		if (event->column >= session->column_count ||
+		    event->pos >= session->columns[event->column].capacity) {
+			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, event->pos,
+			    event->column);
+			return;
+		}
+		slot = session->columns[event->column].slots + event->pos;
+		token = slot->token == 0 ? NULL :
+		    session->tokens + slot->token - 1;
+		mant_structured_fixed_field(session, p, event, token, slot->token);
+		return;
+	}
+	if (event->op == TERM_COLLECT_DRAW) {
+		mant_structured_fixed_draw(session, p, event);
+		return;
+	}
 	if (event->op == TERM_COLLECT_BUFFER_TRUNCATE ||
 	    event->op == TERM_COLLECT_BUFFER_CONSUME ||
 	    event->op == TERM_COLLECT_BUFFER_RESET) {
@@ -779,6 +829,9 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 		return;
 	}
 	if (event->op != TERM_COLLECT_ENDLINE)
+		return;
+	mant_structured_fixed_endline(session, p, event);
+	if (session->status != MANT_STRUCTURED_OK)
 		return;
 	if (session->pending_break_root != 0) {
 		uint32_t link = session->pending_break_link;

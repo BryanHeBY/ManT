@@ -10,12 +10,14 @@ use std::num::NonZeroU32;
 
 mod content;
 mod document;
+mod fixed;
 mod options;
 mod source;
 mod table;
 
 pub use content::*;
 pub use document::*;
+pub use fixed::*;
 pub use options::*;
 pub use source::*;
 pub use table::*;
@@ -59,6 +61,7 @@ key_type!(NativeTableKey);
 key_type!(NativeTableRowKey);
 key_type!(NativeTableCellKey);
 key_type!(NativeFixedViewKey);
+key_type!(NativeFixedLineKey);
 key_type!(NativeFormKey);
 key_type!(NativeNameHintKey);
 

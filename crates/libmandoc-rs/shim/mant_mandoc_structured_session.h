@@ -121,6 +121,9 @@ struct structured_session {
 	uint32_t active_table_row;
 	uint32_t active_table_cell;
 	uint32_t table_cell_start;
+	uint32_t active_fixed_view;
+	uint32_t active_fixed_line;
+	uint64_t fixed_column_total;
 	uint32_t section_owner;
 	uint32_t section_heading_block;
 	uint32_t top_level_block_count;

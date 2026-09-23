@@ -32,10 +32,11 @@ use raw::{
 };
 use transfer::{
     OwnedAnchor, OwnedBlock, OwnedContentAtom, OwnedContentPoint, OwnedContentRef,
-    OwnedContentRoot, OwnedDiagnostic, OwnedForm, OwnedHeadingEvidence, OwnedItem, OwnedLink,
-    OwnedLinkLabelPart, OwnedList, OwnedMetadata, OwnedNameHint, OwnedOwner, OwnedProvenance,
-    OwnedSource, OwnedSpan, OwnedStructuredDocument, OwnedTable, OwnedTableCell, OwnedTableRow,
-    ResultHandle, StructuredSlices, copy_structured_document,
+    OwnedContentRoot, OwnedDecoration, OwnedDiagnostic, OwnedFixedLine, OwnedFixedView, OwnedForm,
+    OwnedHeadingEvidence, OwnedItem, OwnedLink, OwnedLinkLabelPart, OwnedList, OwnedMetadata,
+    OwnedNameHint, OwnedOwner, OwnedPlacement, OwnedProvenance, OwnedSource, OwnedSpan,
+    OwnedStructuredDocument, OwnedTable, OwnedTableCell, OwnedTableRow, ResultHandle,
+    StructuredSlices, copy_structured_document,
 };
 use validation::{
     checked_slice, transfer_preflight, validate_metadata, validate_structured_relations,

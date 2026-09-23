@@ -384,7 +384,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 33 ordered patches in `patches/series`. The following group contains
+the 34 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -469,6 +469,8 @@ The remaining patches implement the synchronous embedding boundary:
   leaving generated table borders and padding outside cell ownership.
 - `0033-observe-direct-tbl-geometry.patch` reports direct border glyphs and
   physical line ends from `tbl_term.c` without changing terminal output.
+- `0034-identify-direct-tbl-lines.patch` distinguishes table line ends from
+  a prose flush at the same native table node.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

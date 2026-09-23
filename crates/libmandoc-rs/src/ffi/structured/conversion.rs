@@ -20,14 +20,16 @@ pub(super) fn semantic_document(
         ContentOwner, ContentOwnerKind, ContentPoint, ContentPointKey, ContentRef, ContentRoot,
         ContentRootKey, ContentRootKind, HeadingEvidence, HeadingEvidenceKey, LineColumn,
         LineColumns, LinkLabelPart, LinkOccurrence, LinkOccurrenceKey, NativeBlock, NativeBlockKey,
-        NativeBlockKind, NativeDiagnostic, NativeFixedViewKey, NativeForm, NativeFormKey,
-        NativeItem, NativeItemKey, NativeLinkTarget, NativeList, NativeListKey, NativeListKind,
-        NativeNameHint, NativeNameHintKey, NativeRole, NativeTable, NativeTableAlignment,
-        NativeTableCell, NativeTableCellKey, NativeTableCellKind, NativeTableKey, NativeTableRow,
-        NativeTableRowKey, NativeTableRowKind, NativeTargetOrigin, OwnerKey, PointBoundary,
-        Provenance, ProvenanceKey, SourceCoordinates, SourceIdentity, SourceKey, SourceRecord,
-        SourceSpan, SpanKey, StructuredDiagnosticCode, StructuredDiagnosticLevel,
-        StructuredDocument, StructuredMetadata, StructuredProfile, StructuredStyle,
+        NativeBlockKind, NativeCellMapKind, NativeDecoration, NativeDecorationKind,
+        NativeDiagnostic, NativeFixedLine, NativeFixedLineKey, NativeFixedView, NativeFixedViewKey,
+        NativeForm, NativeFormKey, NativeItem, NativeItemKey, NativeLinkTarget, NativeList,
+        NativeListKey, NativeListKind, NativeNameHint, NativeNameHintKey, NativePlacement,
+        NativePlacementTarget, NativeRole, NativeTable, NativeTableAlignment, NativeTableCell,
+        NativeTableCellKey, NativeTableCellKind, NativeTableKey, NativeTableRow, NativeTableRowKey,
+        NativeTableRowKind, NativeTargetOrigin, OwnerKey, PointBoundary, Provenance, ProvenanceKey,
+        SourceCoordinates, SourceIdentity, SourceKey, SourceRecord, SourceSpan, SpanKey,
+        StructuredDiagnosticCode, StructuredDiagnosticLevel, StructuredDocument,
+        StructuredMetadata, StructuredProfile, StructuredStyle,
     };
 
     let OwnedStructuredDocument {
@@ -53,6 +55,10 @@ pub(super) fn semantic_document(
         tables,
         table_rows,
         table_cells,
+        fixed_views,
+        fixed_lines,
+        placements,
+        decorations,
         forms,
         name_hints,
         diagnostics,
@@ -655,6 +661,108 @@ pub(super) fn semantic_document(
         });
     }
 
+    let mut typed_fixed_views = Vec::new();
+    typed_fixed_views
+        .try_reserve_exact(fixed_views.len())
+        .map_err(semantic_allocation)?;
+    for view in fixed_views {
+        typed_fixed_views.push(NativeFixedView {
+            key: NativeFixedViewKey::new(view.key)
+                .ok_or_else(|| semantic_invalid("native fixed view key is absent"))?,
+            owner: OwnerKey::new(view.owner)
+                .ok_or_else(|| semantic_invalid("native fixed view owner is absent"))?,
+            block: NativeBlockKey::new(view.block)
+                .ok_or_else(|| semantic_invalid("native fixed view block is absent"))?,
+            table: view
+                .table
+                .map(|key| {
+                    NativeTableKey::new(key)
+                        .ok_or_else(|| semantic_invalid("native fixed view table is absent"))
+                })
+                .transpose()?,
+            provenance: ProvenanceKey::new(view.provenance)
+                .ok_or_else(|| semantic_invalid("native fixed view provenance is absent"))?,
+        });
+    }
+    let mut typed_fixed_lines = Vec::new();
+    typed_fixed_lines
+        .try_reserve_exact(fixed_lines.len())
+        .map_err(semantic_allocation)?;
+    for line in fixed_lines {
+        typed_fixed_lines.push(NativeFixedLine {
+            key: NativeFixedLineKey::new(line.key)
+                .ok_or_else(|| semantic_invalid("native fixed line key is absent"))?,
+            view: NativeFixedViewKey::new(line.view)
+                .ok_or_else(|| semantic_invalid("native fixed line view is absent"))?,
+            ordinal: line.ordinal,
+            terminal_columns: line.terminal_columns,
+        });
+    }
+    let mut typed_placements = Vec::new();
+    typed_placements
+        .try_reserve_exact(placements.len())
+        .map_err(semantic_allocation)?;
+    for placement in placements {
+        let target = match placement.target_kind {
+            1 => NativePlacementTarget::Content {
+                atom: ContentAtomKey::new(
+                    placement
+                        .atom
+                        .ok_or_else(|| semantic_invalid("native placement atom is absent"))?,
+                )
+                .ok_or_else(|| semantic_invalid("native placement atom key is absent"))?,
+                byte_start: placement.bytes.start,
+                byte_end: placement.bytes.end,
+            },
+            2 => NativePlacementTarget::Point(
+                ContentPointKey::new(
+                    placement
+                        .point
+                        .ok_or_else(|| semantic_invalid("native placement point is absent"))?,
+                )
+                .ok_or_else(|| semantic_invalid("native placement point key is absent"))?,
+            ),
+            _ => return Err(semantic_invalid("native placement target is unknown")),
+        };
+        let map = match placement.cell_map_kind {
+            1 => NativeCellMapKind::Affine {
+                columns_per_scalar: u8::try_from(placement.cell_map_value)
+                    .map_err(|_| semantic_invalid("native affine map width is invalid"))?,
+            },
+            2 => NativeCellMapKind::GraphemeCluster,
+            3 => NativeCellMapKind::Overlay,
+            _ => return Err(semantic_invalid("native cell map is unknown")),
+        };
+        typed_placements.push(NativePlacement {
+            line: NativeFixedLineKey::new(placement.line)
+                .ok_or_else(|| semantic_invalid("native placement line is absent"))?,
+            target,
+            scalar_range: placement.scalars,
+            column_range: placement.columns,
+            map,
+        });
+    }
+    let mut typed_decorations = Vec::new();
+    typed_decorations
+        .try_reserve_exact(decorations.len())
+        .map_err(semantic_allocation)?;
+    for decoration in decorations {
+        typed_decorations.push(NativeDecoration {
+            line: NativeFixedLineKey::new(decoration.line)
+                .ok_or_else(|| semantic_invalid("native decoration line is absent"))?,
+            text: decoration.text,
+            column_range: decoration.columns,
+            kind: match decoration.kind {
+                1 => NativeDecorationKind::Border,
+                2 => NativeDecorationKind::Rule,
+                3 => NativeDecorationKind::Padding,
+                _ => return Err(semantic_invalid("native decoration kind is unknown")),
+            },
+            provenance: ProvenanceKey::new(decoration.provenance)
+                .ok_or_else(|| semantic_invalid("native decoration provenance is absent"))?,
+        });
+    }
+
     let mut typed_diagnostics = Vec::new();
     typed_diagnostics
         .try_reserve_exact(diagnostics.len())
@@ -712,6 +820,10 @@ pub(super) fn semantic_document(
         tables: typed_tables,
         table_rows: typed_table_rows,
         table_cells: typed_table_cells,
+        fixed_views: typed_fixed_views,
+        fixed_lines: typed_fixed_lines,
+        placements: typed_placements,
+        decorations: typed_decorations,
         forms: typed_forms,
         name_hints: typed_name_hints,
         diagnostics: typed_diagnostics,

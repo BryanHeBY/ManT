@@ -1,5 +1,7 @@
 //! One dense transfer from native structured content into the public store.
 
+mod fixed;
+
 use libmandoc_rs::structured::{
     ContentAtomKey as NativeAtomKey, ContentAtomKind as NativeAtomKind,
     ContentOwnerKind as NativeOwnerKind, ContentPointKey as NativePointKey,
@@ -9,8 +11,8 @@ use libmandoc_rs::structured::{
 };
 use mant_ir::{
     ContentAtomKey, ContentOwnerKind, ContentPointKey, ContentRole, ContentRootKey,
-    ContentRootKind, ContentStore, ContentStoreBuilder, ContentStyle, LinkOccurrenceKey,
-    LinkTarget, PointBoundary, Provenance, validate_content_store,
+    ContentRootKind, ContentStore, ContentStoreBuilder, ContentStyle, FixedViewKey,
+    LinkOccurrenceKey, LinkTarget, PointBoundary, Provenance, validate_content_store,
 };
 
 use super::{
@@ -28,6 +30,7 @@ pub(super) struct NativeContentMap {
     points: Vec<ContentPointKey>,
     native_points: Vec<NativePointKey>,
     links: Vec<Option<LinkOccurrenceKey>>,
+    fixed_views: Vec<FixedViewKey>,
 }
 
 impl NativeContentMap {
@@ -37,6 +40,7 @@ impl NativeContentMap {
         addresses: &AddressPlan,
     ) -> Result<Self, NativeProjectionError> {
         let provenances = projection.provenances().to_vec();
+        let fixed_tables = projection.take_fixed_tables();
         let tables = projection.take_content_tables();
         let (owners, roots, atoms, points, links) = tables.into_parts();
         let mut builder = ContentStoreBuilder::new();
@@ -211,7 +215,15 @@ impl NativeContentMap {
             ));
         }
 
-        let store = builder.finish();
+        let mut store = builder.finish();
+        let fixed_views = fixed::transfer_fixed(
+            &mut store,
+            fixed_tables,
+            &owner_keys,
+            &atom_keys,
+            &point_keys,
+            &provenances,
+        )?;
         validate_content_store(&store).map_err(|_| {
             NativeProjectionError::InvalidRelation("native content store transfer is invalid")
         })?;
@@ -224,6 +236,7 @@ impl NativeContentMap {
             points: point_keys,
             native_points: native_point_keys,
             links: link_keys,
+            fixed_views,
         })
     }
 
@@ -301,6 +314,17 @@ impl NativeContentMap {
             &self.links,
             key.get(),
             "native link has no public occurrence key",
+        )
+    }
+
+    pub(super) fn fixed_view(
+        &self,
+        key: libmandoc_rs::structured::NativeFixedViewKey,
+    ) -> Result<FixedViewKey, NativeProjectionError> {
+        mapped(
+            &self.fixed_views,
+            key.get(),
+            "native fixed view has no public key",
         )
     }
 

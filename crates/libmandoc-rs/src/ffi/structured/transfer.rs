@@ -203,6 +203,45 @@ pub(crate) struct OwnedTableCell {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedFixedView {
+    pub(crate) key: u32,
+    pub(crate) owner: u32,
+    pub(crate) block: u32,
+    pub(crate) table: Option<u32>,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedFixedLine {
+    pub(crate) key: u32,
+    pub(crate) view: u32,
+    pub(crate) ordinal: u32,
+    pub(crate) terminal_columns: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedPlacement {
+    pub(crate) line: u32,
+    pub(crate) target_kind: u32,
+    pub(crate) atom: Option<u32>,
+    pub(crate) bytes: std::ops::Range<u32>,
+    pub(crate) point: Option<u32>,
+    pub(crate) scalars: std::ops::Range<u32>,
+    pub(crate) columns: std::ops::Range<u32>,
+    pub(crate) cell_map_kind: u32,
+    pub(crate) cell_map_value: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedDecoration {
+    pub(crate) line: u32,
+    pub(crate) kind: u32,
+    pub(crate) text: String,
+    pub(crate) columns: std::ops::Range<u32>,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OwnedForm {
     pub(crate) key: u32,
     pub(crate) owner: u32,
@@ -268,6 +307,10 @@ pub(crate) struct OwnedStructuredDocument {
     pub(crate) tables: Vec<OwnedTable>,
     pub(crate) table_rows: Vec<OwnedTableRow>,
     pub(crate) table_cells: Vec<OwnedTableCell>,
+    pub(crate) fixed_views: Vec<OwnedFixedView>,
+    pub(crate) fixed_lines: Vec<OwnedFixedLine>,
+    pub(crate) placements: Vec<OwnedPlacement>,
+    pub(crate) decorations: Vec<OwnedDecoration>,
     pub(crate) forms: Vec<OwnedForm>,
     pub(crate) name_hints: Vec<OwnedNameHint>,
     pub(crate) diagnostics: Vec<OwnedDiagnostic>,
@@ -363,6 +406,10 @@ pub(super) fn copy_structured_document(
     let mut owned_tables = Vec::new();
     let mut owned_table_rows = Vec::new();
     let mut owned_table_cells = Vec::new();
+    let mut owned_fixed_views = Vec::new();
+    let mut owned_fixed_lines = Vec::new();
+    let mut owned_placements = Vec::new();
+    let mut owned_decorations = Vec::new();
     let mut owned_forms = Vec::new();
     let mut owned_name_hints = Vec::new();
     let mut owned_diagnostics = Vec::new();
@@ -419,6 +466,18 @@ pub(super) fn copy_structured_document(
         .map_err(alloc_error)?;
     owned_table_cells
         .try_reserve_exact(slices.table_cells.len())
+        .map_err(alloc_error)?;
+    owned_fixed_views
+        .try_reserve_exact(slices.fixed_views.len())
+        .map_err(alloc_error)?;
+    owned_fixed_lines
+        .try_reserve_exact(slices.fixed_lines.len())
+        .map_err(alloc_error)?;
+    owned_placements
+        .try_reserve_exact(slices.placements.len())
+        .map_err(alloc_error)?;
+    owned_decorations
+        .try_reserve_exact(slices.decorations.len())
         .map_err(alloc_error)?;
     owned_forms
         .try_reserve_exact(slices.forms.len())
@@ -636,6 +695,45 @@ pub(super) fn copy_structured_document(
             provenance: cell.provenance,
         });
     }
+    for fixed in slices.fixed_views {
+        owned_fixed_views.push(OwnedFixedView {
+            key: fixed.key,
+            owner: fixed.owner,
+            block: fixed.block,
+            table: (fixed.table != 0).then_some(fixed.table),
+            provenance: fixed.provenance,
+        });
+    }
+    for line in slices.fixed_lines {
+        owned_fixed_lines.push(OwnedFixedLine {
+            key: line.key,
+            view: line.view,
+            ordinal: line.ordinal,
+            terminal_columns: line.total_columns,
+        });
+    }
+    for placement in slices.placements {
+        owned_placements.push(OwnedPlacement {
+            line: placement.line,
+            target_kind: placement.target_kind,
+            atom: (placement.atom != 0).then_some(placement.atom),
+            bytes: placement.byte_start..placement.byte_end,
+            point: (placement.point != 0).then_some(placement.point),
+            scalars: placement.scalar_start..placement.scalar_end,
+            columns: placement.column_start..placement.column_end,
+            cell_map_kind: placement.cell_map_kind,
+            cell_map_value: placement.cell_map_value,
+        });
+    }
+    for decoration in slices.decorations {
+        owned_decorations.push(OwnedDecoration {
+            line: decoration.line,
+            kind: decoration.kind,
+            text: copy_string(decoration.text)?,
+            columns: decoration.column_start..decoration.column_end,
+            provenance: decoration.provenance,
+        });
+    }
     for form in slices.forms {
         owned_forms.push(OwnedForm {
             key: form.key,
@@ -703,6 +801,10 @@ pub(super) fn copy_structured_document(
         tables: owned_tables,
         table_rows: owned_table_rows,
         table_cells: owned_table_cells,
+        fixed_views: owned_fixed_views,
+        fixed_lines: owned_fixed_lines,
+        placements: owned_placements,
+        decorations: owned_decorations,
         forms: owned_forms,
         name_hints: owned_name_hints,
         diagnostics: owned_diagnostics,

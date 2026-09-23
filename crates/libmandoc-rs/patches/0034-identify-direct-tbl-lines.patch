@@ -1,0 +1,29 @@
+Subject: identify directly emitted table lines in observer events
+Upstream-Status: Local embedding (not submitted)
+
+The direct tbl endline event must remain distinct from a preceding prose
+flush in the same ROFFT_TBL node.  This changes only observer metadata.
+
+--- a/term.c
++++ b/term.c
+@@ -136,7 +136,7 @@ void
+ term_collect_endline(struct termp *p)
+ {
+	collect_emit(p, TERM_COLLECT_ENDLINE, TERM_COLLECT_ENTER,
+-	    TERM_COLLECT_FINAL, 0, 0, p->viscol, 0, 0,
++	    TERM_COLLECT_TABLE_LINE, 0, 0, p->viscol, 0, 0,
+	    TERMFONT_NONE);
+ }
+
+--- a/term.h
++++ b/term.h
+@@ -96,7 +96,8 @@ enum term_collector_reason {
+ 	TERM_COLLECT_FINAL,
+ 	TERM_COLLECT_MARGIN,
+ 	TERM_COLLECT_HEADER,
+-	TERM_COLLECT_FOOTER
++	TERM_COLLECT_FOOTER,
++	TERM_COLLECT_TABLE_LINE
+ };
+
+ struct term_collector_event {

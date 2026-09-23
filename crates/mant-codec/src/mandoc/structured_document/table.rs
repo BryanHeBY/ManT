@@ -78,7 +78,10 @@ pub(super) fn lower_table(
     }
     Ok(Block::Table {
         rows,
-        fixed_view: None,
+        fixed_view: table
+            .fixed_view()
+            .map(|key| content.fixed_view(key))
+            .transpose()?,
         layout: LayoutHint::default(),
         source: source_for(projection, table.provenance()),
     })

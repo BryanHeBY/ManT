@@ -4,10 +4,10 @@ use super::{
     AnchorEvidence, AnchorEvidenceKey, ContentAtom, ContentAtomKey, ContentAtomKind, ContentOwner,
     ContentPoint, ContentPointKey, ContentRef, ContentRoot, ContentRootKey, HeadingEvidence,
     HeadingEvidenceKey, LinkLabelPart, LinkOccurrence, LinkOccurrenceKey, NativeBlock,
-    NativeBlockKey, NativeForm, NativeFormKey, NativeItem, NativeItemKey, NativeList,
-    NativeListKey, NativeNameHint, NativeNameHintKey, NativeTable, NativeTableCell, NativeTableRow,
-    OwnerKey, Provenance, ProvenanceKey, SourceFormat, SourceKey, SourceRecord, SourceSpan,
-    SpanKey, StructuredProfile,
+    NativeBlockKey, NativeDecoration, NativeFixedLine, NativeFixedView, NativeForm, NativeFormKey,
+    NativeItem, NativeItemKey, NativeList, NativeListKey, NativeNameHint, NativeNameHintKey,
+    NativePlacement, NativeTable, NativeTableCell, NativeTableRow, OwnerKey, Provenance,
+    ProvenanceKey, SourceFormat, SourceKey, SourceRecord, SourceSpan, SpanKey, StructuredProfile,
 };
 use std::num::NonZeroU32;
 
@@ -157,6 +157,10 @@ pub struct StructuredDocument {
     pub(crate) tables: Vec<NativeTable>,
     pub(crate) table_rows: Vec<NativeTableRow>,
     pub(crate) table_cells: Vec<NativeTableCell>,
+    pub(crate) fixed_views: Vec<NativeFixedView>,
+    pub(crate) fixed_lines: Vec<NativeFixedLine>,
+    pub(crate) placements: Vec<NativePlacement>,
+    pub(crate) decorations: Vec<NativeDecoration>,
     pub(crate) forms: Vec<NativeForm>,
     pub(crate) name_hints: Vec<NativeNameHint>,
     pub(crate) diagnostics: Vec<NativeDiagnostic>,
@@ -174,6 +178,29 @@ pub struct StructuredContentTables {
     atoms: Vec<ContentAtom>,
     points: Vec<ContentPoint>,
     links: Vec<LinkOccurrence>,
+}
+
+/// Owned physical records that continue to refer to the one content store.
+#[derive(Debug)]
+pub struct StructuredFixedTables {
+    views: Vec<NativeFixedView>,
+    lines: Vec<NativeFixedLine>,
+    placements: Vec<NativePlacement>,
+    decorations: Vec<NativeDecoration>,
+}
+
+impl StructuredFixedTables {
+    #[must_use]
+    pub fn into_parts(
+        self,
+    ) -> (
+        Vec<NativeFixedView>,
+        Vec<NativeFixedLine>,
+        Vec<NativePlacement>,
+        Vec<NativeDecoration>,
+    ) {
+        (self.views, self.lines, self.placements, self.decorations)
+    }
 }
 
 /// Dense native content tables in owner/root/atom/point/link order.
@@ -194,6 +221,15 @@ impl StructuredContentTables {
 }
 
 impl StructuredDocument {
+    #[must_use]
+    pub fn take_fixed_tables(&mut self) -> StructuredFixedTables {
+        StructuredFixedTables {
+            views: std::mem::take(&mut self.fixed_views),
+            lines: std::mem::take(&mut self.fixed_lines),
+            placements: std::mem::take(&mut self.placements),
+            decorations: std::mem::take(&mut self.decorations),
+        }
+    }
     /// Move the native content-store records out after relation planning.
     ///
     /// This deliberately leaves all structural and evidence tables in place.
@@ -297,6 +333,22 @@ impl StructuredDocument {
     #[must_use]
     pub fn table_cells(&self) -> &[NativeTableCell] {
         &self.table_cells
+    }
+    #[must_use]
+    pub fn fixed_views(&self) -> &[NativeFixedView] {
+        &self.fixed_views
+    }
+    #[must_use]
+    pub fn fixed_lines(&self) -> &[NativeFixedLine] {
+        &self.fixed_lines
+    }
+    #[must_use]
+    pub fn placements(&self) -> &[NativePlacement] {
+        &self.placements
+    }
+    #[must_use]
+    pub fn decorations(&self) -> &[NativeDecoration] {
+        &self.decorations
     }
     #[must_use]
     pub fn forms(&self) -> &[NativeForm] {

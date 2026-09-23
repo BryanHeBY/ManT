@@ -6,6 +6,13 @@
 
 #define MANT_TOKEN_PROJECTION_INLINE 8U
 
+struct structured_fixed_use {
+	uint32_t line;
+	uint32_t start;
+	uint32_t end;
+	uint8_t overlay;
+};
+
 struct structured_token {
 	const struct roff_node *node;
 	uint64_t sequence;
@@ -24,6 +31,9 @@ struct structured_token {
 	uint8_t *projection_survived;
 	uint8_t projection_inline[MANT_TOKEN_PROJECTION_INLINE];
 	uint8_t projection_survived_inline[MANT_TOKEN_PROJECTION_INLINE];
+	struct structured_fixed_use *fixed_uses;
+	uint32_t fixed_use_count;
+	uint32_t fixed_use_capacity;
 	uint8_t survived;
 	uint8_t committed;
 	uint8_t active;
