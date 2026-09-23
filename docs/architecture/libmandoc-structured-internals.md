@@ -204,6 +204,10 @@ pass their exact decoded byte length to lowering, and v1 single-source query
 gold coordinates bind explicitly to root `SourceKey` 1 while rejecting other
 keys.
 
+The 2026-09-23 C04 follow-up separately replayed the current 31-patch series
+from the locked archive with zero vendor differences. This is not a rerun of
+the historical release-profile gate, ASan, or TSan checks above.
+
 ## Deliberately retained large modules
 
 - `src/ffi/structured/validation.rs` keeps ordered range, key, and

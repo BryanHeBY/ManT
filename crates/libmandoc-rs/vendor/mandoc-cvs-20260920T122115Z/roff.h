@@ -523,6 +523,7 @@ struct	roff_node {
 	union mdoc_data	 *norm;    /* Normalized arguments. */
 	char		 *string;  /* TEXT */
 	char		 *tag;     /* For less(1) :t and HTML id=. */
+	const struct roff_node *mant_manual_target_source; /* Authored .Tg request. */
 	struct tbl_span	 *span;    /* TBL */
 	struct eqn_box	 *eqn;     /* EQN */
 	int		  line;    /* Input file line number. */

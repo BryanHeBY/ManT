@@ -184,6 +184,27 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 		}
 		cursor++;
 		escape = mandoc_escape(&cursor, &sequence, &size);
+		/* Pinned html.c::print_encode() handles font changes, another
+		 * SKIPCHAR, and malformed escapes before consuming a pending skip.
+		 * In particular, \z\fBX skips X, not the font escape. */
+		switch (escape) {
+		case ESCAPE_FONT:
+		case ESCAPE_FONTPREV:
+		case ESCAPE_FONTBOLD:
+		case ESCAPE_FONTITALIC:
+		case ESCAPE_FONTBI:
+		case ESCAPE_FONTROMAN:
+		case ESCAPE_FONTCR:
+		case ESCAPE_FONTCB:
+		case ESCAPE_FONTCI:
+		case ESCAPE_ERROR:
+			continue;
+		case ESCAPE_SKIPCHAR:
+			skip = 1;
+			continue;
+		default:
+			break;
+		}
 		if (skip) {
 			skip = 0;
 			continue;
@@ -206,9 +227,6 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 			if (size != 0)
 				scalar = (unsigned char)sequence[size - 1];
 			break;
-		case ESCAPE_SKIPCHAR:
-			skip = 1;
-			continue;
 		case ESCAPE_DEVICE:
 			/* term.c::term_word emits the selected terminal device, not
 			 * html.c's separate `html` href spelling. */
@@ -220,17 +238,7 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 				memcpy(output + used, device, count);
 			used += count;
 			continue;
-		case ESCAPE_FONT:
-		case ESCAPE_FONTPREV:
-		case ESCAPE_FONTBOLD:
-		case ESCAPE_FONTITALIC:
-		case ESCAPE_FONTBI:
-		case ESCAPE_FONTROMAN:
-		case ESCAPE_FONTCR:
-		case ESCAPE_FONTCB:
-		case ESCAPE_FONTCI:
 		case ESCAPE_IGNORE:
-		case ESCAPE_ERROR:
 		case ESCAPE_UNSUPP:
 		case ESCAPE_BREAK:
 		case ESCAPE_NOSPACE:

@@ -215,6 +215,70 @@ fn surviving_tg_carriers_keep_their_zero_width_targets() {
 }
 
 #[test]
+fn tg_self_target_moving_back_keeps_its_declaration_source() {
+    // Both exact inputs were checked with the fixed CVS tree reference.
+    // Pinned post_tg() first tags Tg itself; tag.c::tag_move_id() then moves
+    // placement to the preceding Pp or It body without moving the request.
+    for (name, source) in [
+        (
+            "back-to-paragraph.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Pp\none\n.Tg Here\ntwo\n"
+                .as_slice(),
+        ),
+        (
+            "back-to-item.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -bullet\n.It\none\n.Tg Here\ntwo\n.El\n"
+                .as_slice(),
+        ),
+    ] {
+        let document = fixture(name, source, InputFormat::Mdoc);
+        let targets = document
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.target == "Here")
+            .collect::<Vec<_>>();
+        assert_eq!(targets.len(), 1, "{document:#?}");
+        let anchor = targets[0];
+        let OwnedProvenance::Authored { span } =
+            document.provenances[anchor.provenance as usize - 1]
+        else {
+            panic!("Here must retain authored Tg provenance: {document:#?}");
+        };
+        assert_eq!(document.spans[span as usize - 1].line_columns.unwrap().0, 8);
+        assert_ne!(anchor.point, 0, "{document:#?}");
+    }
+}
+
+#[test]
+fn repeated_manual_targets_keep_each_request_source() {
+    // The exact source was checked with fixed CVS -T tree. Both Pp nodes
+    // retain ID=Same, but their authored requests are distinct Tg nodes.
+    let document = fixture(
+        "repeated-manual-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Tg Same\n.Pp\none\n.Tg Same\n.Pp\ntwo\n",
+        InputFormat::Mdoc,
+    );
+    let mut lines = document
+        .anchors
+        .iter()
+        .filter(|anchor| anchor.target == "Same")
+        .map(|anchor| {
+            let OwnedProvenance::Authored { span } =
+                document.provenances[anchor.provenance as usize - 1]
+            else {
+                panic!("manual target must retain Tg provenance: {document:#?}");
+            };
+            document.spans[span as usize - 1]
+                .line_columns
+                .expect("Tg source line is known")
+                .0
+        })
+        .collect::<Vec<_>>();
+    lines.sort_unstable();
+    assert_eq!(lines, [5, 8], "{document:#?}");
+}
+
+#[test]
 fn one_link_occurrence_spans_roots_and_retains_hard_break_parts() {
     // Oracle: pinned `man_term.c::pre_UR/post_UR` keeps one UR block across
     // PP; pinned `roff_term.c::roff_term_pre_br` invokes `term_newln()`.
@@ -357,6 +421,40 @@ fn escaped_link_destinations_use_upstream_scalar_decoding() {
     )
     .unwrap();
     assert_eq!(ascii.links[0].target_a, "https://example.test/ascii");
+}
+
+#[test]
+fn link_target_skip_escapes_follow_html_execution_order() {
+    // Each exact input was run with the fixed CVS HTML reference first.
+    // Pinned html.c::print_encode() processes font, repeated SKIPCHAR, and
+    // malformed escapes before consuming the next printable character.
+    for (name, target, expected) in [
+        (
+            "skip-font.1",
+            "https://a.test/\\z\\fBX\\fPY",
+            "https://a.test/Y",
+        ),
+        (
+            "skip-repeat.1",
+            "https://a.test/\\z\\zXY",
+            "https://a.test/Y",
+        ),
+        (
+            "unicode.1",
+            "https://a.test/\\[u03B1]Y",
+            "https://a.test/αY",
+        ),
+        (
+            "skip-unicode.1",
+            "https://a.test/\\z\\fB\\[u03B1]Y",
+            "https://a.test/Y",
+        ),
+    ] {
+        let source = format!(".TH TEST 1\n.SH DESCRIPTION\n.UR {target}\nlabel\n.UE\n");
+        let document = fixture(name, source.as_bytes(), InputFormat::Man);
+        assert_eq!(document.links.len(), 1, "{document:#?}");
+        assert_eq!(document.links[0].target_a, expected, "{document:#?}");
+    }
 }
 
 #[test]

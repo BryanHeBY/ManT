@@ -384,7 +384,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 30 ordered patches in `patches/series`. The following group contains
+the 31 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -463,6 +463,8 @@ The remaining patches implement the synchronous embedding boundary:
   an absent observer leaves the pinned formatter path unchanged.
 - `0030-expose-manual-tag-origin.patch` exposes whether the retained owner of
   an exact native target came from `.Tg`, while the parser tag table is alive.
+- `0031-bind-manual-target-source.patch` retains the authored `.Tg` request
+  on its final target carrier, including backward movement.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

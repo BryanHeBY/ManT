@@ -1246,7 +1246,7 @@ post_tg(POST_ARGS)
 		nn = n;
 		break;
 	}
-	tag_put(nt->string, TAG_MANUAL, nn);
+	mant_tag_put_manual(nt->string, nn, n);
 	if (nn != n)
 		n->flags |= NODE_NOPRT;
 }

@@ -31,6 +31,10 @@
 void		 tag_alloc(void);
 int		 tag_exists(const char *);
 int		 mant_tag_is_manual(const char *);
+void		 mant_tag_put_manual(const char *, struct roff_node *,
+		     const struct roff_node *);
+const struct roff_node *mant_tag_manual_source(const char *,
+		     const struct roff_node *);
 void		 tag_put(const char *, int, struct roff_node *);
 void		 tag_postprocess(struct roff_man *, struct roff_node *);
 void		 tag_free(void);

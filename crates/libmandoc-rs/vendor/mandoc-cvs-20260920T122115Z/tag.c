@@ -257,6 +257,28 @@ mant_tag_is_manual(const char *tag)
 	return entry != NULL && entry->prio == TAG_MANUAL;
 }
 
+/* Preserve the .Tg request on its selected carrier.  tag_move_id() can
+ * later move both the target and this source pointer backwards. */
+void
+mant_tag_put_manual(const char *tag, struct roff_node *carrier,
+    const struct roff_node *source)
+{
+	int already_tagged;
+
+	already_tagged = (carrier->flags & NODE_ID) != 0;
+	tag_put(tag, TAG_MANUAL, carrier);
+	if (!already_tagged && (carrier->flags & NODE_ID) != 0 &&
+	    mant_tag_is_manual(carrier->tag))
+		carrier->mant_manual_target_source = source;
+}
+
+const struct roff_node *
+mant_tag_manual_source(const char *tag, const struct roff_node *carrier)
+{
+	return carrier != NULL && mant_tag_is_manual(tag) ?
+	    carrier->mant_manual_target_source : NULL;
+}
+
 /*
  * For in-line elements, move the link target
  * to the enclosing paragraph when appropriate.
@@ -298,6 +320,9 @@ tag_move_id(struct roff_node *n)
 				    n->child->string : n->tag);
 				np->flags |= NODE_ID;
 				n->flags &= ~NODE_ID;
+				np->mant_manual_target_source =
+				    n->mant_manual_target_source;
+				n->mant_manual_target_source = NULL;
 			}
 			return;
 		case MDOC_Sh:

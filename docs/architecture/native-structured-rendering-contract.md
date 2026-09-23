@@ -361,6 +361,9 @@ destinations remain equal, resolve as ambiguous, and produce the existing
 diagnostic rather than being rewritten. Remaining ID collisions receive stable
 document-order suffixes. Anchor provenance identifies the target request or
 generated trigger and may differ from the landing point and owner provenance.
+For `.Tg`, the parser node retains the request-to-carrier binding through
+`tag_move_id()`; the collector does not infer declaration source from final AST
+adjacency.
 
 A link occurrence owns its typed target and ordered label parts. All its
 labelled atoms carry the same link key. One occurrence may span several
@@ -370,10 +373,11 @@ inside one native link macro; every structural
 table occurrence rather than wrapper nodes. A zero-width break opportunity is
 omitted, while an intervening `HardBreak` is an explicit label part; neither
 creates a new occurrence. Link-label copy and reference labels concatenate
-content parts and the hard-break `\n` in order. Protocol and UI search always
-matches each root's logical sequence; it never searches or concatenates the
-occurrence label across roots. A root-local hit may be associated with the
-occurrence whose annotated atoms it intersects. Placements derive occurrence
+content parts and the hard-break `\n` in order. In the future versioned
+logical-search contract, Protocol and UI search match each root's logical
+sequence; they never search or concatenate the occurrence label across roots.
+A root-local hit may be associated with the occurrence whose annotated atoms
+it intersects. Placements derive occurrence
 identity through their target ref; they never store a second occurrence key.
 Two separately authored links always
 get different keys even when source position, target, and label are equal;

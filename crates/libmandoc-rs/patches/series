@@ -28,3 +28,4 @@
 0028-bind-structured-source-diagnostics.patch
 0029-observe-terminal-structure.patch
 0030-expose-manual-tag-origin.patch
+0031-bind-manual-target-source.patch
