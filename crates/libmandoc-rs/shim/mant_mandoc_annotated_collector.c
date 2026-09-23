@@ -1099,6 +1099,7 @@ observe_table_cell_position(struct mant_annotated_collector *collector,
     const struct term_collector_event *event)
 {
 	struct mant_annotated_mark *mark;
+	struct annotated_point_state *state;
 	uint32_t key;
 
 	if (collector->table_node == NULL || !collector->table_prepared ||
@@ -1111,10 +1112,21 @@ observe_table_cell_position(struct mant_annotated_collector *collector,
 	if (key == 0)
 		return; /* Native rule or span column, not a text cell. */
 	mark = collector->marks + key - 1;
-	if (mark->table_position_present != 0) {
+	state = collector->points + key - 1;
+	if (mark->table_position_present != 0 || state->state != 0) {
 		fail_relation(collector, key, 0);
 		return;
 	}
+	/* tbl_term.c::term_tbl reports every native text column on its first
+	 * physical line, even when tbl_data() emitted no word.  The current
+	 * display cursor is a real device boundary; the table offset remains
+	 * a separate BU hint and is never reinterpreted as a display column. */
+	if (!mant_annotated_display_checkpoint(collector->display,
+	    collector->advance_count, &state->checkpoint)) {
+		fail_relation(collector, key, 0);
+		return;
+	}
+	state->state = 2;
 	mark->table_position_present = 1;
 	mark->table_offset = event->pos;
 }
@@ -1904,8 +1916,7 @@ mant_annotated_collector_finish_points(struct mant_annotated_collector *collecto
 		state = collector->points + index;
 		if (state->state == 0) {
 			if (mark->kind == MANT_ANNOTATED_MARK_ANCHOR ||
-			    (mark->kind == MANT_ANNOTATED_MARK_REGION &&
-			    mark->region_kind != MANT_ANNOTATED_REGION_TABLE_CELL)) {
+			    mark->kind == MANT_ANNOTATED_MARK_REGION) {
 				fail_relation(collector, mark->key, 0);
 				return 0;
 			}

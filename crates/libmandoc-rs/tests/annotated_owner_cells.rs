@@ -2,7 +2,9 @@
 
 //! R01 native owner boundaries; these are not final IR ranges.
 
-use libmandoc_rs::annotated::{AnnotatedDocument, AnnotatedRenderer, AnnotatedTextJoin};
+use libmandoc_rs::annotated::{
+    AnnotatedDisplayPoint, AnnotatedDocument, AnnotatedRenderer, AnnotatedTextJoin,
+};
 use libmandoc_rs::{InputFormat, SourceBundle};
 
 fn render(source: &[u8]) -> AnnotatedDocument {
@@ -203,6 +205,21 @@ fn table_text_and_empty_cells_keep_independent_native_owners() {
         );
         assert_eq!(cell.owner, cell.parent);
         assert_eq!(cell.line, 0); // Row source known; exact cell column is not.
+        assert!(matches!(
+            cell.point,
+            Some(AnnotatedDisplayPoint::RowColumn { row, column })
+                if row > 0 && column <= page.rows[usize::try_from(row - 1).unwrap()].column_count
+        ));
+    }
+    // Pinned tbl_term.c::term_tbl visits both native columns on the first
+    // physical line of each span, including cells for which tbl_data() emits
+    // no word.  The exact input above also ran with pinned CVS -Tutf8.
+    for pair in cells.as_chunks::<2>().0 {
+        let row = |cell: &&libmandoc_rs::annotated::AnnotatedMark| match cell.point.unwrap() {
+            AnnotatedDisplayPoint::RowColumn { row, .. } => row,
+            AnnotatedDisplayPoint::DocumentEnd { .. } => panic!("table row was lost"),
+        };
+        assert_eq!(row(&pair[0]), row(&pair[1]));
     }
     assert!(run_contains(&page, "a", cells[0].key));
     assert!(run_contains(&page, "b", cells[1].key));
@@ -223,6 +240,27 @@ fn table_text_and_empty_cells_keep_independent_native_owners() {
             && !cells.iter().any(|cell| cell.key == run.label.owner)
             && page.text[start..end].contains("after")
     }));
+}
+
+#[test]
+fn wholly_empty_table_cell_has_a_final_blank_row_point() {
+    // Exact input ran with pinned CVS -Tutf8 -O width=78: tbl_term.c::
+    // term_tbl emits an endline even though tbl_data()/tbl_word emit no text.
+    let page = render(b".TH X 1\n.SH D\n.TS\ntab(;);\nl l.\n;\n.TE\n");
+    let cells: Vec<_> = page
+        .marks
+        .iter()
+        .filter(|mark| mark.kind == 5 && mark.region_kind == 9)
+        .collect();
+    assert_eq!(cells.len(), 2);
+    let Some(AnnotatedDisplayPoint::RowColumn { row, column }) = cells[0].point else {
+        panic!("first empty cell lost its native row");
+    };
+    assert_eq!(cells[1].point, cells[0].point);
+    let body_row = &page.rows[usize::try_from(row - 1).unwrap()];
+    assert_eq!(column, 0);
+    assert_eq!(body_row.column_count, 0);
+    assert_eq!(body_row.run_count, 0);
 }
 
 #[test]
