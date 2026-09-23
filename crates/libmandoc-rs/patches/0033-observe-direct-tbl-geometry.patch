@@ -1,0 +1,78 @@
+Subject: observe direct tbl drawing and physical line ends
+Upstream-Status: Local embedding (not submitted)
+
+tbl_term.c writes frame glyphs and some line ends directly through the
+terminal callbacks.  Report these operations before the original call so a
+structured fixed view can use the same native geometry without changing the
+formatter's execution or output.
+
+--- a/tbl_term.c
++++ b/tbl_term.c
+@@ -578,6 +578,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 			}
+ 			tbl_direct_border(tp, fc, enw);
+ 		}
++		term_collect_endline(tp);
+ 		(*tp->endline)(tp);
+ 	} while (more);
+ 
+@@ -753,6 +754,7 @@ tbl_hrule(struct termp *tp, const struct tbl_span *spp,
+ 		    (spp == NULL || spn == NULL ||
+ 		     spn->layout->last->pos != TBL_CELL_DOWN ?
+ 		     BLEFT * hw : 0), enw);
++		term_collect_endline(tp);
+ 		(*tp->endline)(tp);
+ 	}
+ }
+@@ -875,6 +877,7 @@ tbl_direct_border(struct termp *tp, int c, size_t len)
+ 	enw2 = (*tp->getwidth)(tp, ' ') / 2;
+ 	target = tp->viscol + len;
+ 	while (tp->viscol + enw2 < target) {
++		term_collect_draw(tp, c, sz);
+ 		(*tp->letter)(tp, c);
+ 		tp->viscol += sz;
+ 	}
+--- a/term.c
++++ b/term.c
+@@ -124,6 +124,22 @@ term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
+ 	(*p->collector)(p, p->collector_arg, &ev);
+ }
+ 
++void
++term_collect_draw(struct termp *p, int value, size_t width)
++{
++	collect_emit(p, TERM_COLLECT_DRAW, TERM_COLLECT_ENTER,
++	    TERM_COLLECT_FIELD, p->viscol, p->viscol + width, width,
++	    value, 0, TERMFONT_NONE);
++}
++
++void
++term_collect_endline(struct termp *p)
++{
++	collect_emit(p, TERM_COLLECT_ENDLINE, TERM_COLLECT_ENTER,
++	    TERM_COLLECT_FINAL, 0, 0, p->viscol, 0, 0,
++	    TERMFONT_NONE);
++}
++
+ static void
+ buffer_write(struct termp *p, size_t pos, int value,
+ 		enum term_collector_reason reason, enum termfont font)
+--- a/term.h
++++ b/term.h
+@@ -68,6 +68,7 @@ enum term_collector_op {
+ 	TERM_COLLECT_FIELD_SKIP,
+ 	TERM_COLLECT_FIELD_PLACE,
+ 	TERM_COLLECT_DIRECT,
++	TERM_COLLECT_DRAW,
+ 	TERM_COLLECT_ENDLINE
+ };
+ 
+@@ -223,6 +224,8 @@ void		  term_collect_node(struct termp *, const struct roff_node *,
+ 			enum term_collector_phase);
+ void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
+ 			enum term_collector_phase);
++void		  term_collect_draw(struct termp *, int, size_t);
++void		  term_collect_endline(struct termp *);
+ 
+ void		  term_setwidth(struct termp *, const char *);
+ int		  term_hspan(const struct termp *, const struct roffsu *);

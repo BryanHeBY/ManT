@@ -578,6 +578,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 			}
 			tbl_direct_border(tp, fc, enw);
 		}
+		term_collect_endline(tp);
 		(*tp->endline)(tp);
 	} while (more);
 
@@ -753,6 +754,7 @@ tbl_hrule(struct termp *tp, const struct tbl_span *spp,
 		    (spp == NULL || spn == NULL ||
 		     spn->layout->last->pos != TBL_CELL_DOWN ?
 		     BLEFT * hw : 0), enw);
+		term_collect_endline(tp);
 		(*tp->endline)(tp);
 	}
 }
@@ -875,6 +877,7 @@ tbl_direct_border(struct termp *tp, int c, size_t len)
 	enw2 = (*tp->getwidth)(tp, ' ') / 2;
 	target = tp->viscol + len;
 	while (tp->viscol + enw2 < target) {
+		term_collect_draw(tp, c, sz);
 		(*tp->letter)(tp, c);
 		tp->viscol += sz;
 	}

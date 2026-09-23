@@ -68,6 +68,7 @@ enum term_collector_op {
 	TERM_COLLECT_FIELD_SKIP,
 	TERM_COLLECT_FIELD_PLACE,
 	TERM_COLLECT_DIRECT,
+	TERM_COLLECT_DRAW,
 	TERM_COLLECT_ENDLINE
 };
 
@@ -223,6 +224,8 @@ void		  term_collect_node(struct termp *, const struct roff_node *,
 			enum term_collector_phase);
 void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
 			enum term_collector_phase);
+void		  term_collect_draw(struct termp *, int, size_t);
+void		  term_collect_endline(struct termp *);
 
 void		  term_setwidth(struct termp *, const char *);
 int		  term_hspan(const struct termp *, const struct roffsu *);

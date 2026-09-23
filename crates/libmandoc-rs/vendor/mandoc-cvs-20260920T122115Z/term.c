@@ -124,6 +124,22 @@ term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
 	(*p->collector)(p, p->collector_arg, &ev);
 }
 
+void
+term_collect_draw(struct termp *p, int value, size_t width)
+{
+	collect_emit(p, TERM_COLLECT_DRAW, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_FIELD, p->viscol, p->viscol + width, width,
+	    value, 0, TERMFONT_NONE);
+}
+
+void
+term_collect_endline(struct termp *p)
+{
+	collect_emit(p, TERM_COLLECT_ENDLINE, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_FINAL, 0, 0, p->viscol, 0, 0,
+	    TERMFONT_NONE);
+}
+
 static void
 buffer_write(struct termp *p, size_t pos, int value,
 		enum term_collector_reason reason, enum termfont font)

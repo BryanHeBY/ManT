@@ -384,7 +384,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 32 ordered patches in `patches/series`. The following group contains
+the 33 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -467,6 +467,8 @@ The remaining patches implement the synchronous embedding boundary:
   on its final target carrier, including backward movement.
 - `0032-observe-tbl-cell-scope.patch` marks authored `tbl_word` content while
   leaving generated table borders and padding outside cell ownership.
+- `0033-observe-direct-tbl-geometry.patch` reports direct border glyphs and
+  physical line ends from `tbl_term.c` without changing terminal output.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local
