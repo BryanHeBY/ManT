@@ -478,6 +478,8 @@ The remaining patches implement the synchronous embedding boundary:
 - `0037-label-terminal-device-writes.patch` labels the actual terminal letter,
   advance-space and endline writes for the private annotated sink; it leaves
   formatter byte order, width and raw renderer output unchanged.
+- `0038-observe-vspace-body-drain.patch` marks when `term_vspace()` has
+  drained buffered body content, before the footer's own separator/output.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

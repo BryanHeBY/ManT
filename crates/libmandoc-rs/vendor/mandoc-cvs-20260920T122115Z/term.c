@@ -677,6 +677,8 @@ term_vspace(struct termp *p)
 {
 
 	term_newln(p);
+	collect_emit(p, TERM_COLLECT_VSPACE_DRAIN, TERM_COLLECT_ENTER,
+	    TERM_COLLECT_FINAL, 0, 0, 0, 0, 0, TERMFONT_NONE);
 	if (0 < p->skipvsp)
 		p->skipvsp--;
 	else {

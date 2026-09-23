@@ -386,8 +386,9 @@ surface. Public parser/AST and raw Renderer remain independent capabilities.
 
 Patch ownership at P1: 0020 supplies raw output capture; 0029 and 0032–0036
 supply current observation/region boundaries; 0030–0031 supply target
-origin/source. R01's 0037 labels actual device writes for the annotated sink.
-R01 does not prune the 37-patch series. Potential 0017/0024–0026/0033–0036
+origin/source. R01's 0037 labels actual device writes; 0038 marks the
+body drain within the footer callback for the annotated sink. R01 does not
+prune the 38-patch series. Potential 0017/0024–0026/0033–0036
 removals belong to the later R09–R10 consumer-led removal ledger, with
 parser/render/security capabilities checked before any deletion.
 

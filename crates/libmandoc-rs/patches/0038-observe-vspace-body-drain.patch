@@ -1,0 +1,33 @@
+Subject: observe body drain before footer vertical space
+Upstream-Status: Local embedding (not submitted)
+
+term_end() enters the footer callback before print_man_foot() and
+print_mdoc_foot() call term_vspace().  That call may flush still-buffered body
+content before emitting the footer separator.  Emit a read-only boundary
+immediately after term_newln() has drained the body, including when skipvsp
+suppresses the following blank line.  An annotated sink can then retain the
+body flush and filter only the real footer.  Formatter bytes are unchanged.
+
+--- a/term.c
++++ b/term.c
+@@ -677,6 +677,8 @@ term_vspace(struct termp *p)
+ {
+ 
+ 	term_newln(p);
++	collect_emit(p, TERM_COLLECT_VSPACE_DRAIN, TERM_COLLECT_ENTER,
++	    TERM_COLLECT_FINAL, 0, 0, 0, 0, 0, TERMFONT_NONE);
+ 	if (0 < p->skipvsp)
+ 		p->skipvsp--;
+ 	else {
+--- a/term.h
++++ b/term.h
+@@ -70,7 +70,8 @@ enum term_collector_op {
+ 	TERM_COLLECT_FIELD_PLACE,
+ 	TERM_COLLECT_DIRECT,
+ 	TERM_COLLECT_DRAW,
+-	TERM_COLLECT_ENDLINE
++	TERM_COLLECT_ENDLINE,
++	TERM_COLLECT_VSPACE_DRAIN
+ };
+ 
+ enum term_collector_phase {

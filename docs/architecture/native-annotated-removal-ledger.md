@@ -26,7 +26,7 @@ remaining consumer. No grep-only deletion of native safety behavior is valid.
 | IR Flow content store and Markdown/TLDR | K; Fixed has one exclusive safe surface | Markdown tests and true Serde negative tests |
 | UI fixed/NoWrap/selection and protocol semantics | A to final run ranges, preserve shared UI/query | viewport, click, copy, search, wire consumers |
 
-## Current 37-patch series
+## Current 38-patch series
 
 | Patch | Target | Required consumer or condition |
 | --- | --- | --- |
@@ -67,6 +67,7 @@ remaining consumer. No grep-only deletion of native safety behavior is valid.
 | 0035 empty cell positions | K/A | retain bounded region point, not old placement table |
 | 0036 table-ready boundary | A/D | remove old scope gate only when new post-flush relation is proven |
 | 0037 device-write operation labels | A | terminal letter/advance/endline evidence for the annotated sink; raw renderer bytes unchanged |
+| 0038 footer body-drain boundary | A | distinguish delayed body flush from footer decoration without forcing a flush |
 
 Module ownership after migration: session is sole native invocation owner;
 source owns authorization and source table; buffer owns active tokens, pending,
