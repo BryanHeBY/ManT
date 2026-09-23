@@ -11,6 +11,7 @@ use crate::annotated::{
     AnnotatedRun, AnnotatedSelectionPart, AnnotatedSource, AnnotatedSpan, AnnotatedTextJoin,
     AnnotationCheckState, AnnotationCoverage, AnnotationCoverageCheck, AnnotationCoverageIssue,
     AnnotationDimension, AnnotationIssueReason, AnnotationProducer, AnnotationScope,
+    AnnotationSourcePosition,
 };
 use crate::{InputFormat, SourceBundle};
 use std::ptr::NonNull;
@@ -430,59 +431,118 @@ fn coverage_reason(value: u32) -> Result<AnnotationIssueReason, AnnotatedError> 
     }
 }
 
+fn coverage_issue_location(
+    issue: &CoverageIssueView,
+    marks: &[AnnotatedMark],
+    sources: &[AnnotatedSource],
+) -> Result<(AnnotationScope, Option<AnnotationSourcePosition>), AnnotatedError> {
+    let scope = match issue.scope {
+        1 if issue.scope_key == 0 => AnnotationScope::Document,
+        2..=4 => {
+            let mark = issue
+                .scope_key
+                .checked_sub(1)
+                .and_then(|index| marks.get(index as usize))
+                .ok_or_else(invalid_result)?;
+            // Scope tags are 2/3/4; native heading/owner/region kinds are 1/2/5.
+            let expected = match issue.scope {
+                2 => 1,
+                3 => 2,
+                _ => 5,
+            };
+            if mark.key != issue.scope_key || mark.kind != expected {
+                return Err(invalid_result());
+            }
+            match issue.scope {
+                2 => AnnotationScope::Section(issue.scope_key),
+                3 => AnnotationScope::Owner(issue.scope_key),
+                _ => AnnotationScope::Region(issue.scope_key),
+            }
+        }
+        5 if issue.scope_key != 0 && (issue.scope_key as usize) <= sources.len() => {
+            AnnotationScope::Source(issue.scope_key)
+        }
+        _ => return Err(invalid_result()),
+    };
+    let source = if issue.source == 0 && issue.line == 0 && issue.column == 0 {
+        None
+    } else if issue.source != 0
+        && (issue.source as usize) <= sources.len()
+        && issue.line != 0
+        && issue.column != 0
+    {
+        Some(AnnotationSourcePosition {
+            source: issue.source,
+            line: issue.line,
+            column: issue.column,
+        })
+    } else {
+        return Err(invalid_result());
+    };
+    if let (AnnotationScope::Source(scope_key), Some(position)) = (scope, source)
+        && scope_key != position.source
+    {
+        return Err(invalid_result());
+    }
+    Ok((scope, source))
+}
+
 fn transfer_coverage(
     checks: &[CoverageCheckView],
     issues: &[CoverageIssueView],
+    marks: &[AnnotatedMark],
+    sources: &[AnnotatedSource],
 ) -> Result<AnnotationCoverage, AnnotatedError> {
-    const STATES: [[u32; 8]; 3] = [
-        [3, 3, 2, 3, 3, 3, 3, 3],
-        [2, 2, 4, 2, 2, 4, 2, 2],
-        [2, 2, 2, 2, 2, 4, 4, 4],
-    ];
-    if checks.len() != 24 || issues.len() != 7 {
+    if checks.len() != 24 {
         return Err(invalid_result());
     }
+    let mut states = [[None; 8]; 3];
     let mut owned_checks = reserve(checks.len())?;
-    for (index, check) in checks.iter().enumerate() {
-        let producer = index / 8;
-        let dimension = index % 8;
-        if check.producer != u32::try_from(producer + 1).map_err(|_| invalid_result())?
-            || check.dimension != u32::try_from(dimension + 1).map_err(|_| invalid_result())?
-            || check.state != STATES[producer][dimension]
-            || check.reserved != 0
+    for check in checks {
+        let producer = coverage_producer(check.producer)?;
+        let dimension = coverage_dimension(check.dimension)?;
+        let state = coverage_state(check.state)?;
+        if check.reserved != 0
+            || (producer == AnnotationProducer::Native && state == AnnotationCheckState::Pending)
         {
+            return Err(invalid_result());
+        }
+        let slot = &mut states[check.producer as usize - 1][check.dimension as usize - 1];
+        if slot.replace(state).is_some() {
             return Err(invalid_result());
         }
         owned_checks.push(AnnotationCoverageCheck {
-            producer: coverage_producer(check.producer)?,
-            dimension: coverage_dimension(check.dimension)?,
-            state: coverage_state(check.state)?,
+            producer,
+            dimension,
+            state,
         });
     }
     let mut owned_issues = reserve(issues.len())?;
-    let mut seen = [false; 9];
+    let mut seen = [[false; 8]; 3];
     for issue in issues {
-        if issue.producer != AnnotationProducer::Native as u32
-            || issue.dimension == AnnotationDimension::Declaration as u32
-            || issue.scope != 1
-            || issue.scope_key != 0
-            || issue.source != 0
-            || issue.line != 0
-            || issue.column != 0
+        let producer = coverage_producer(issue.producer)?;
+        let dimension = coverage_dimension(issue.dimension)?;
+        let reason = coverage_reason(issue.reason)?;
+        if states[issue.producer as usize - 1][issue.dimension as usize - 1]
+            != Some(AnnotationCheckState::Unverified)
         {
             return Err(invalid_result());
         }
-        let dimension = coverage_dimension(issue.dimension)?;
-        seen[issue.dimension as usize] = true;
+        let (scope, source) = coverage_issue_location(issue, marks, sources)?;
+        seen[issue.producer as usize - 1][issue.dimension as usize - 1] = true;
         owned_issues.push(AnnotationCoverageIssue {
-            producer: AnnotationProducer::Native,
+            producer,
             dimension,
-            reason: coverage_reason(issue.reason)?,
-            scope: AnnotationScope::Document,
-            source: None,
+            reason,
+            scope,
+            source,
         });
     }
-    if (1..=8).any(|dimension| dimension != 3 && !seen[dimension]) {
+    if states.iter().zip(seen).any(|(row, seen_row)| {
+        row.iter().zip(seen_row).any(|(state, seen_issue)| {
+            state.is_none() || (*state == Some(AnnotationCheckState::Unverified)) != seen_issue
+        })
+    }) {
         return Err(invalid_result());
     }
     Ok(AnnotationCoverage {
@@ -490,6 +550,9 @@ fn transfer_coverage(
         issues: owned_issues,
     })
 }
+
+#[cfg(test)]
+mod coverage_tests;
 
 pub(crate) fn render_annotated(
     root: &str,
@@ -998,7 +1061,7 @@ fn transfer(
             },
         });
     }
-    let coverage = transfer_coverage(coverage_check_views, coverage_issue_views)?;
+    let coverage = transfer_coverage(coverage_check_views, coverage_issue_views, &marks, &sources)?;
     let mut owned_rows = reserve(rows.len())?;
     for (index, row) in rows.iter().enumerate() {
         if row.key != u32::try_from(index + 1).map_err(|_| invalid_result())? || row.break_after > 1

@@ -1,6 +1,8 @@
 #![cfg(feature = "annotated")]
 
 //! R01 coverage is explicit and conservative, not a whole-page completion bit.
+//! The independent native evidence census is a later unit; this fixture must
+//! not treat the current document-wide fallback count as a protocol invariant.
 
 use libmandoc_rs::annotated::{
     AnnotatedRenderer, AnnotationCheckState, AnnotationDimension, AnnotationIssueReason,
@@ -22,7 +24,6 @@ fn native_coverage_records_document_wide_unverified_dimensions() {
         .unwrap();
     let coverage = &page.coverage;
     assert_eq!(coverage.checks.len(), 24);
-    assert_eq!(coverage.issues.len(), 7);
     assert!(
         coverage
             .checks
@@ -48,18 +49,12 @@ fn native_coverage_records_document_wide_unverified_dimensions() {
         issue.dimension == AnnotationDimension::Section
             && issue.reason == AnnotationIssueReason::Unverified
     }));
-    for dimension in [
-        AnnotationDimension::Section,
-        AnnotationDimension::OwnerBoundary,
-        AnnotationDimension::Link,
-        AnnotationDimension::Anchor,
-        AnnotationDimension::Relation,
-        AnnotationDimension::Source,
-        AnnotationDimension::Join,
-    ] {
-        assert!(coverage.issues.iter().any(|issue| {
-            issue.producer == AnnotationProducer::Native && issue.dimension == dimension
-        }));
+    for check in &coverage.checks {
+        let has_issue = coverage
+            .issues
+            .iter()
+            .any(|issue| issue.producer == check.producer && issue.dimension == check.dimension);
+        assert_eq!(has_issue, check.state == AnnotationCheckState::Unverified);
     }
     assert!(
         coverage

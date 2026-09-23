@@ -38,6 +38,61 @@ static const uint32_t states[3][8] = {
 	  MANT_ANNOTATED_COVERAGE_PENDING }
 };
 
+/* This table is only the conservative R01 producer default.  The independent
+ * evidence census is a later unit; validation below already accepts its
+ * evidence-derived states and variable issue count without claiming Checked. */
+
+static int
+valid_scope(const struct mant_annotated_result *result,
+    const struct mant_annotated_coverage_issue *issue)
+{
+	const struct mant_annotated_mark *mark;
+	uint32_t kind;
+
+	if (issue->scope == MANT_ANNOTATED_COVERAGE_DOCUMENT)
+		return issue->scope_key == 0;
+	if (issue->scope == MANT_ANNOTATED_COVERAGE_SOURCE_SCOPE)
+		return issue->scope_key != 0 &&
+		    issue->scope_key <= result->common->source_count;
+	if (issue->scope_key == 0 || issue->scope_key > result->mark_count ||
+	    result->marks == NULL)
+		return 0;
+	mark = result->marks + issue->scope_key - 1;
+	if (mark->key != issue->scope_key)
+		return 0;
+	switch (issue->scope) {
+	case MANT_ANNOTATED_COVERAGE_SECTION_SCOPE:
+		kind = MANT_ANNOTATED_MARK_HEADING;
+		break;
+	case MANT_ANNOTATED_COVERAGE_OWNER_SCOPE:
+		kind = MANT_ANNOTATED_MARK_OWNER;
+		break;
+	case MANT_ANNOTATED_COVERAGE_REGION_SCOPE:
+		kind = MANT_ANNOTATED_MARK_REGION;
+		break;
+	default:
+		return 0;
+	}
+	return mark->kind == kind;
+}
+
+static int
+valid_source(const struct mant_annotated_result *result,
+    const struct mant_annotated_coverage_issue *issue)
+{
+	if (issue->source == 0)
+		return issue->line == 0 && issue->column == 0;
+	if (issue->source > result->common->source_count ||
+	    issue->line == 0 || issue->column == 0)
+		return 0;
+	if (issue->scope == MANT_ANNOTATED_COVERAGE_SOURCE_SCOPE &&
+	    issue->source != issue->scope_key)
+		return 0;
+	return mant_structured_source_position_in_maps(
+	    result->common->source_maps, result->common->source_map_count,
+	    issue->source, issue->line, issue->column - 1);
+}
+
 static int
 append_issue(struct structured_session *session,
     struct mant_annotated_result *result, uint32_t dimension,
@@ -76,42 +131,59 @@ mant_annotated_coverage_is_valid(const struct mant_annotated_result *result)
 {
 	const struct mant_annotated_coverage_check *check;
 	const struct mant_annotated_coverage_issue *issue;
-	uint32_t seen[9] = {0};
+	uint8_t seen_checks[3][8] = {{0}};
+	uint8_t seen_issues[3][8] = {{0}};
+	uint32_t observed_states[3][8] = {{0}};
 	uint32_t producer, dimension, index;
 
 	if (result == NULL || result->common == NULL ||
 	    (result->coverage_issue_count != 0) !=
 	    (result->coverage_issues != NULL) ||
-	    result->coverage_issue_count != 7)
+	    result->coverage_issue_count > result->coverage_issue_capacity)
 		return 0;
-	for (producer = 0; producer < 3; producer++)
-		for (dimension = 0; dimension < 8; dimension++) {
-			check = &result->coverage_checks[producer * 8 + dimension];
-			if (check->producer != producer + 1 ||
-			    check->dimension != dimension + 1 ||
-			    check->state != states[producer][dimension] ||
-			    check->reserved != 0)
-				return 0;
-		}
+	for (index = 0; index < 24; index++) {
+		check = result->coverage_checks + index;
+		if (check->producer < MANT_ANNOTATED_COVERAGE_NATIVE ||
+		    check->producer > MANT_ANNOTATED_COVERAGE_VALIDATOR ||
+		    check->dimension < MANT_ANNOTATED_COVERAGE_SECTION ||
+		    check->dimension > MANT_ANNOTATED_COVERAGE_JOIN ||
+		    check->state < MANT_ANNOTATED_COVERAGE_CHECKED ||
+		    check->state > MANT_ANNOTATED_COVERAGE_PENDING ||
+		    (check->producer == MANT_ANNOTATED_COVERAGE_NATIVE &&
+		    check->state == MANT_ANNOTATED_COVERAGE_PENDING) ||
+		    check->reserved != 0)
+			return 0;
+		producer = check->producer - 1;
+		dimension = check->dimension - 1;
+		if (seen_checks[producer][dimension] != 0)
+			return 0;
+		seen_checks[producer][dimension] = 1;
+		observed_states[producer][dimension] = check->state;
+	}
 	for (index = 0; index < result->coverage_issue_count; index++) {
 		issue = result->coverage_issues + index;
-		if (issue->producer != MANT_ANNOTATED_COVERAGE_NATIVE ||
+		if (issue->producer < MANT_ANNOTATED_COVERAGE_NATIVE ||
+		    issue->producer > MANT_ANNOTATED_COVERAGE_VALIDATOR ||
 		    issue->dimension < MANT_ANNOTATED_COVERAGE_SECTION ||
 		    issue->dimension > MANT_ANNOTATED_COVERAGE_JOIN ||
-		    issue->dimension == MANT_ANNOTATED_COVERAGE_DECLARATION ||
 		    issue->reason < MANT_ANNOTATED_COVERAGE_NOT_OBSERVED ||
 		    issue->reason > MANT_ANNOTATED_COVERAGE_AMBIGUOUS_SURVIVAL ||
-		    issue->scope != MANT_ANNOTATED_COVERAGE_DOCUMENT ||
-		    issue->scope_key != 0 || issue->source != 0 ||
-		    issue->line != 0 || issue->column != 0)
+		    !valid_scope(result, issue) || !valid_source(result, issue))
 			return 0;
-		seen[issue->dimension] = 1;
+		producer = issue->producer - 1;
+		dimension = issue->dimension - 1;
+		if (observed_states[producer][dimension] !=
+		    MANT_ANNOTATED_COVERAGE_UNVERIFIED)
+			return 0;
+		seen_issues[producer][dimension] = 1;
 	}
-	for (dimension = MANT_ANNOTATED_COVERAGE_SECTION;
-	    dimension <= MANT_ANNOTATED_COVERAGE_JOIN; dimension++)
-		if (dimension != MANT_ANNOTATED_COVERAGE_DECLARATION &&
-		    seen[dimension] == 0)
-			return 0;
+	for (producer = 0; producer < 3; producer++)
+		for (dimension = 0; dimension < 8; dimension++)
+			if (seen_checks[producer][dimension] == 0 ||
+			    (observed_states[producer][dimension] ==
+			    MANT_ANNOTATED_COVERAGE_UNVERIFIED) !=
+			    (seen_issues[producer][dimension] != 0))
+				return 0;
 	return 1;
 }
 
@@ -126,6 +198,10 @@ mant_annotated_coverage_build(struct structured_session *session,
 	if (session == NULL || result == NULL ||
 	    session->status != MANT_STRUCTURED_OK ||
 	    (result->mark_count != 0 && result->marks == NULL))
+		return 0;
+	if (!mant_structured_charge(session, &session->builder_operations,
+	    24, session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_CHECK))
 		return 0;
 	for (producer = 0; producer < 3; producer++)
 		for (dimension = 0; dimension < 8; dimension++) {

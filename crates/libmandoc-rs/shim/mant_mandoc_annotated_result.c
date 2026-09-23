@@ -680,7 +680,9 @@ mant_annotated_result_view(const struct mant_annotated_result *result,
 	    common->diagnostic_count, struct mant_structured_diagnostic_view);
 	view->marks = VIEW_SLICE(result->marks, result->mark_count,
 	    struct mant_annotated_mark);
-	view->coverage_checks = VIEW_SLICE(result->coverage_checks, 24,
+	view->coverage_checks = VIEW_SLICE(result->coverage_checks,
+	    sizeof(result->coverage_checks) /
+	    sizeof(result->coverage_checks[0]),
 	    struct mant_annotated_coverage_check);
 	view->coverage_issues = VIEW_SLICE(result->coverage_issues,
 	    result->coverage_issue_count,

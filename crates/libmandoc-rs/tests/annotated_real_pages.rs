@@ -53,6 +53,16 @@ fn four_representative_pages_have_checked_native_surfaces() {
         assert_eq!(page.sources.len(), 1, "{name}");
         assert!(!page.rows.is_empty(), "{name}");
         assert!(!page.runs.is_empty(), "{name}");
-        assert_eq!(page.coverage.issues.len(), 7, "{name}");
+        assert_eq!(page.coverage.checks.len(), 24, "{name}");
+        for check in &page.coverage.checks {
+            let has_issue = page.coverage.issues.iter().any(|issue| {
+                issue.producer == check.producer && issue.dimension == check.dimension
+            });
+            assert_eq!(
+                has_issue,
+                check.state == libmandoc_rs::annotated::AnnotationCheckState::Unverified,
+                "{name}"
+            );
+        }
     }
 }
