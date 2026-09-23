@@ -77,6 +77,11 @@ struct structured_session {
 	struct mant_annotated_collector *annotated_collector;
 	struct mant_annotated_display *annotated_display;
 	uint8_t annotated_mode;
+	/* Presence only, from the post-validation/post-tag final AST walk.
+	 * A candidate does not prove that the terminal produced a mark. */
+	uint8_t annotated_section_candidate;
+	uint8_t annotated_link_candidate;
+	uint8_t annotated_anchor_candidate;
 	uint32_t *source_keys;
 	struct structured_source_map *source_maps;
 	uint32_t current_input;

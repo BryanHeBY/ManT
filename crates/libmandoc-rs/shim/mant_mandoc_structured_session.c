@@ -70,6 +70,38 @@ check_nesting_depth(struct structured_session *session,
 			    session->limits->max_nesting_depth);
 			return 0;
 		}
+		if (session->annotated_mode) {
+			/* read.c::mparse_result() has already validated the tree and
+			 * run tag_postprocess().  Reuse this bounded depth walk instead
+			 * of retaining a second AST or walking it once more.  A terminal
+			 * skip may leave a candidate with no surviving mark; that is a
+			 * coverage gap, never proof of absence. */
+			if (!mant_structured_charge(session,
+			    &session->builder_operations, 1,
+			    session->limits->max_builder_operations, 8,
+			    MANT_STRUCTURED_STAGE_PARSE))
+				return 0;
+			if (node->type == ROFFT_BLOCK &&
+			    (node->tok == MAN_SH || node->tok == MAN_SS ||
+			    node->tok == MDOC_Sh || node->tok == MDOC_Ss))
+				session->annotated_section_candidate = 1;
+			if ((node->type == ROFFT_BLOCK ||
+			    node->type == ROFFT_ELEM) &&
+			    (node->tok == MAN_UR || node->tok == MAN_MT ||
+			    node->tok == MAN_MR || node->tok == MDOC_Lk ||
+			    node->tok == MDOC_Xr || node->tok == MDOC_Sx ||
+			    node->tok == MDOC_Mt || node->tok == MDOC_In ||
+			    node->tok == MDOC_Fd || node->tok == MDOC__U ||
+			    node->tok == MDOC__R))
+				/* mdoc_html.c::mdoc_in_pre/mdoc_fd_pre and
+				 * mdoc_rs_pre() also emit TAG_A instances.  They are
+				 * not yet native LinkMarks, so absence of observed marks
+				 * cannot prove this dimension inapplicable. */
+				session->annotated_link_candidate = 1;
+			if ((node->flags & NODE_ID) != 0 && node->tag != NULL &&
+			    node->tag[0] != '\0')
+				session->annotated_anchor_candidate = 1;
+		}
 		if (node->child != NULL) {
 			node = node->child;
 			depth++;

@@ -38,9 +38,9 @@ static const uint32_t states[3][8] = {
 	  MANT_ANNOTATED_COVERAGE_PENDING }
 };
 
-/* This table is only the conservative R01 producer default.  The independent
- * evidence census is a later unit; validation below already accepts its
- * evidence-derived states and variable issue count without claiming Checked. */
+/* The final-AST presence census can prove a dimension inapplicable, but a
+ * candidate and an observed mark do not by themselves prove full extraction.
+ * Validation accepts future scoped issues without claiming Checked here. */
 
 static int
 valid_scope(const struct mant_annotated_result *result,
@@ -244,6 +244,20 @@ mant_annotated_coverage_build(struct structured_session *session,
 	    dimension <= MANT_ANNOTATED_COVERAGE_ANCHOR; dimension++) {
 		if (dimension == MANT_ANNOTATED_COVERAGE_DECLARATION)
 			continue;
+		/* Absence is proved only when both the final parsed tree and the
+		 * post-device mark set contain no instance.  A parser candidate
+		 * without a mark remains a document-wide NotObserved gap. */
+		if (((dimension == MANT_ANNOTATED_COVERAGE_SECTION &&
+		    !session->annotated_section_candidate) ||
+		    (dimension == MANT_ANNOTATED_COVERAGE_LINK &&
+		    !session->annotated_link_candidate) ||
+		    (dimension == MANT_ANNOTATED_COVERAGE_ANCHOR &&
+		    !session->annotated_anchor_candidate)) &&
+		    seen[dimension] == 0) {
+			result->coverage_checks[dimension - 1].state =
+			    MANT_ANNOTATED_COVERAGE_NOT_APPLICABLE;
+			continue;
+		}
 		if (!append_issue(session, result, dimension,
 		    seen[dimension] != 0 ?
 		    MANT_ANNOTATED_COVERAGE_REASON_UNVERIFIED :
