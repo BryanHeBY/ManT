@@ -191,6 +191,7 @@ fn missing_destinations_preserve_valid_native_output_without_inventing_links() {
     let keys = links(&mt);
     assert_eq!(keys.len(), 1);
     assert_eq!(labels(&mt, keys[0]), "~");
+    assert_eq!(mt.marks[usize::try_from(keys[0] - 1).unwrap()].source, 0);
     assert_eq!(
         mt.marks[usize::try_from(keys[0] - 1).unwrap()]
             .link_target
@@ -199,6 +200,33 @@ fn missing_destinations_preserve_valid_native_output_without_inventing_links() {
             .primary,
         "~"
     );
+}
+
+#[test]
+fn mt_operands_are_distinct_link_occurrences_without_shared_separator() {
+    // Exact input first checked with pinned CVS -Ttree/-Tutf8/-Thtml.
+    // mdoc_html.c::mdoc_mt_pre opens one mailto anchor per direct TEXT
+    // operand; the space between them and following delimiter are outside.
+    let page = render(
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Mt a@example.test b@example.test .\n",
+        InputFormat::Mdoc,
+    );
+    let keys = links(&page);
+    assert_eq!(keys.len(), 2);
+    let first = &page.marks[usize::try_from(keys[0] - 1).unwrap()];
+    let second = &page.marks[usize::try_from(keys[1] - 1).unwrap()];
+    assert_eq!(first.source, second.source);
+    assert_eq!(first.line, second.line);
+    assert!(first.column < second.column);
+    for (key, expected) in keys.into_iter().zip(["a@example.test", "b@example.test"]) {
+        assert_eq!(labels(&page, key), expected);
+        let target = page.marks[usize::try_from(key - 1).unwrap()]
+            .link_target
+            .as_ref()
+            .unwrap();
+        assert_eq!(target.kind, 2);
+        assert_eq!(target.primary, expected);
+    }
 }
 
 #[test]

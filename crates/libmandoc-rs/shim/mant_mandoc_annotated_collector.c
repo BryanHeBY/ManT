@@ -242,6 +242,14 @@ visible_link(const struct mant_annotated_collector *collector,
 
 	if (macro == NULL || collector->active_link == 0)
 		return 0;
+	/* mdoc_html.c::mdoc_mt_pre opens a separate anchor for every text
+	 * operand.  The terminal's automatic space before each operand is
+	 * outside both adjacent anchors, even though term_word_node() reports
+	 * that space with the operand as its current node. */
+	if (macro->type == ROFFT_TEXT && macro->parent != NULL &&
+	    macro->parent->tok == MDOC_Mt)
+		return reason != TERM_COLLECT_AUTO_SPACE &&
+		    within_node(node, macro) ? collector->active_link : 0;
 	/* term.c::term_word() inserts an AUTO_SPACE before the first operand.
 	 * man_html.c::man_MR_pre and mdoc_html.c::mdoc_xr_pre open the anchor
 	 * after that separator.  Their terminal pre handlers keep NOSPACE
@@ -298,7 +306,8 @@ visible_link(const struct mant_annotated_collector *collector,
 static uint32_t
 add_mark(struct mant_annotated_collector *collector,
     const struct roff_node *node, const struct roff_node *origin,
-    uint32_t kind, uint32_t parent, uint32_t region_kind)
+    uint32_t kind, uint32_t parent, uint32_t region_kind,
+    const struct roff_node *link_operand)
 {
 	struct mant_annotated_mark *marks, *mark;
 	const struct roff_node *first, *second;
@@ -359,9 +368,9 @@ add_mark(struct mant_annotated_collector *collector,
 			return 0;
 		mark->name_length = name_length;
 	} else if (kind == MANT_ANNOTATED_MARK_LINK) {
-		/* The source node is still the macro; destination text is copied
-		 * while the parsed tree is alive, using the same decoder as the
-		 * existing structured link path. */
+		/* The macro identifies the kind; .Mt uses each operand as its
+		 * authored origin.  Copy the destination while the parsed tree is
+		 * alive, using the existing structured link decoder. */
 		first = second = NULL;
 		switch (node->tok) {
 		case MAN_UR:
@@ -388,13 +397,16 @@ add_mark(struct mant_annotated_collector *collector,
 				goto unsupported_target;
 			break;
 		case MDOC_Mt:
-			/* mdoc_html.c::mdoc_mt_pre creates one HTML anchor per
-			 * operand.  A multi-operand macro cannot be one destination;
-			 * leave it explicitly unresolved until per-child marks exist. */
-			if (node->child == NULL || node->child->next != NULL)
-				break;
+			/* Each child is one native link instance, not one address
+			 * shared by the enclosing .Mt macro.  The parser and HTML
+			 * formatter both require direct text children here. */
+			if (link_operand == NULL || link_operand->parent != node ||
+			    link_operand->type != ROFFT_TEXT) {
+				fail_relation(collector, mark->key, 0);
+				return 0;
+			}
 			mark->target_kind = MANT_LINK_EMAIL;
-			first = node->child;
+			first = link_operand;
 			break;
 		default:
 			break;
@@ -483,7 +495,7 @@ push_node(struct mant_annotated_collector *collector,
 		parent = node->tok == MAN_SS || node->tok == MDOC_Ss ?
 		    collector->last_top_heading : 0;
 		key = add_mark(collector, node, node,
-		    MANT_ANNOTATED_MARK_HEADING, parent, 0);
+		    MANT_ANNOTATED_MARK_HEADING, parent, 0, NULL);
 		if (key == 0)
 			return 0;
 		collector->active_heading = key;
@@ -495,7 +507,7 @@ push_node(struct mant_annotated_collector *collector,
 	    node->tok == MAN_TQ ||
 	    node->tok == MDOC_It)) {
 		key = add_mark(collector, node, node,
-		    MANT_ANNOTATED_MARK_OWNER, collector->active_owner, 0);
+		    MANT_ANNOTATED_MARK_OWNER, collector->active_owner, 0, NULL);
 		if (key == 0)
 			return 0;
 		collector->active_owner = key;
@@ -505,7 +517,7 @@ push_node(struct mant_annotated_collector *collector,
 		    MANT_ANNOTATED_REGION_LIST : MANT_ANNOTATED_REGION_LITERAL;
 		key = add_mark(collector, node, node,
 		    MANT_ANNOTATED_MARK_REGION, collector->active_owner,
-		    region_kind);
+		    region_kind, NULL);
 		if (key == 0)
 			return 0;
 		collector->active_owner = key;
@@ -520,7 +532,7 @@ push_node(struct mant_annotated_collector *collector,
 		    MANT_ANNOTATED_REGION_EQUATION;
 		key = add_mark(collector, node, node,
 		    MANT_ANNOTATED_MARK_REGION, collector->active_owner,
-		    region_kind);
+		    region_kind, NULL);
 		if (key == 0)
 			return 0;
 		collector->active_owner = key;
@@ -557,7 +569,7 @@ push_node(struct mant_annotated_collector *collector,
 			return 0;
 		}
 		key = add_mark(collector, node, node,
-		    MANT_ANNOTATED_MARK_REGION, parent, region_kind);
+		    MANT_ANNOTATED_MARK_REGION, parent, region_kind, NULL);
 		if (key == 0)
 			return 0;
 		/* add_mark() may reallocate the array, so reselect parent. */
@@ -572,17 +584,27 @@ push_node(struct mant_annotated_collector *collector,
 	if ((node->type == ROFFT_BLOCK || node->type == ROFFT_ELEM) &&
 	    (node->tok == MAN_UR || node->tok == MAN_MT ||
 	    node->tok == MAN_MR || node->tok == MDOC_Lk ||
-	    node->tok == MDOC_Xr || node->tok == MDOC_Sx ||
-	    node->tok == MDOC_Mt) &&
+	    node->tok == MDOC_Xr || node->tok == MDOC_Sx) &&
 	    /* man_html.c::man_UR_pre has no anchor without a head operand;
 	     * mdoc_html.c's Lk/Xr/Sx handlers emit no visible link without a
 	     * child.  .MR differs: its generated () still forms an anchor. */
-	    (node->tok == MAN_MR || node->tok == MDOC_Mt ||
+	    (node->tok == MAN_MR ||
 	    ((node->tok == MAN_UR || node->tok == MAN_MT) ?
 	    node->head != NULL && node->head->child != NULL :
 	    node->child != NULL))) {
 		key = add_mark(collector, node, node,
-		    MANT_ANNOTATED_MARK_LINK, collector->active_link, 0);
+		    MANT_ANNOTATED_MARK_LINK, collector->active_link, 0, NULL);
+		if (key == 0)
+			return 0;
+		collector->active_link = key;
+		collector->active_link_node = node;
+	} else if (node->type == ROFFT_TEXT && node->parent != NULL &&
+	    node->parent->tok == MDOC_Mt) {
+		/* mdoc_html.c::mdoc_mt_pre gives each direct operand its own
+		 * mailto anchor.  The occurrence belongs to the exact operand;
+		 * post_defaults() marks a generated ~ as NODE_NOSRC. */
+		key = add_mark(collector, node->parent, node,
+		    MANT_ANNOTATED_MARK_LINK, collector->active_link, 0, node);
 		if (key == 0)
 			return 0;
 		collector->active_link = key;
@@ -595,7 +617,7 @@ push_node(struct mant_annotated_collector *collector,
 		    node->mant_manual_target_source;
 		if (add_mark(collector, node, origin,
 		    MANT_ANNOTATED_MARK_ANCHOR,
-		    collector->active_owner, 0) == 0)
+		    collector->active_owner, 0, NULL) == 0)
 			return 0;
 	}
 	return 1;
@@ -684,7 +706,7 @@ prepare_table_span(struct mant_annotated_collector *collector,
 			key = add_mark(collector, node, NULL,
 			    MANT_ANNOTATED_MARK_REGION,
 			    collector->active_owner,
-			    MANT_ANNOTATED_REGION_TABLE_CELL);
+			    MANT_ANNOTATED_REGION_TABLE_CELL, NULL);
 			if (key == 0)
 				return 0;
 			mark = collector->marks + key - 1;
