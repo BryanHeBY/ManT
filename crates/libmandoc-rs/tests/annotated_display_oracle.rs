@@ -2,6 +2,7 @@
 
 use libmandoc_rs::annotated::{AnnotatedDocument, AnnotatedRenderer};
 use libmandoc_rs::{InputFormat, SourceBundle};
+use std::process::Command;
 
 fn surface(page: &AnnotatedDocument) -> String {
     let mut visible = String::new();
@@ -73,4 +74,77 @@ fn mdoc_footer_filter_keeps_body_drain() {
         InputFormat::Mdoc,
     );
     assert_eq!(surface(&page), "\nDESCRIPTION\n     body\n");
+}
+
+#[test]
+fn annotated_stdio_child_render() {
+    if std::env::var_os("LIBMANDOC_RS_ANNOTATED_STDIO_CHILD").is_none() {
+        return;
+    }
+    // The exact input was checked with fixed CVS -Tutf8 -O width=78 before
+    // asserting that the annotated sink retains it in memory, not stdout.
+    let page = render(
+        b".TH STDIO 1\n.SH NAME\nANNOTATED-NATIVE-MUST-NOT-LEAK\n",
+        InputFormat::Man,
+    );
+    assert!(surface(&page).contains("ANNOTATED-NATIVE-MUST-NOT-LEAK"));
+}
+
+#[test]
+fn annotated_rendering_does_not_write_to_process_stdout() {
+    let output = Command::new(std::env::current_exe().expect("current test executable"))
+        .args(["--exact", "annotated_stdio_child_render", "--nocapture"])
+        .env("LIBMANDOC_RS_ANNOTATED_STDIO_CHILD", "1")
+        .output()
+        .expect("run isolated annotated renderer child");
+    assert!(output.status.success(), "child failed: {output:?}");
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("ANNOTATED-NATIVE-MUST-NOT-LEAK"),
+        "annotated native renderer leaked document content to stdout"
+    );
+}
+
+#[test]
+fn budget_failure_returns_no_page_and_next_call_recovers() {
+    // The exact input was checked with fixed CVS -Tutf8 -O width=78. This
+    // checks the adapter's per-call failure cleanup, not a formatter rule.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert("t.1", b".TH T 1\n.SH D\nbody\n".to_vec())
+        .unwrap();
+    let limited = AnnotatedRenderer::default()
+        .with_max_builder_operations(1)
+        .unwrap();
+    assert!(
+        limited
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .is_err()
+    );
+    let page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle, InputFormat::Man)
+        .unwrap();
+    assert_eq!(surface(&page), "D\n     body\n");
+}
+
+#[test]
+fn independent_threads_keep_annotated_sessions_isolated() {
+    // Both exact inputs were checked with fixed CVS -Tutf8 -O width=78.
+    // The per-call sink/TLS state must never mix their body rows.
+    std::thread::scope(|scope| {
+        let jobs = [
+            (b".TH A 1\n.SH D\nalpha\n".as_slice(), "alpha", "beta"),
+            (b".TH B 1\n.SH D\nbeta\n".as_slice(), "beta", "alpha"),
+        ];
+        let handles = jobs.map(|(input, own, other)| {
+            scope.spawn(move || {
+                let page = render(input, InputFormat::Man);
+                let visible = surface(&page);
+                assert!(visible.contains(own));
+                assert!(!visible.contains(other));
+            })
+        });
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    });
 }
