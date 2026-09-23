@@ -11,6 +11,7 @@ use super::{
     evidence::{evidence_role, item_term_roots, native_declaration_evidence},
     index::NativeLoweringIndex,
     store::NativeContentMap,
+    table::lower_table,
 };
 
 pub(super) fn lower_section(
@@ -82,6 +83,7 @@ pub(super) fn lower_block(
         NativeBlockKind::List | NativeBlockKind::DefinitionList => {
             lower_list(projection, index, addresses, content, block, evidence)
         }
+        NativeBlockKind::Table => lower_table(projection, index, addresses, content, block),
         kind => Err(NativeProjectionError::UnsupportedBlock(kind)),
     }
 }

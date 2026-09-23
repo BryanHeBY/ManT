@@ -7,6 +7,9 @@ pub(super) struct NativeLoweringIndex {
     pub(super) blocks_by_owner: Vec<Vec<usize>>,
     pub(super) list_by_block: Vec<Option<usize>>,
     pub(super) items_by_list: Vec<Vec<usize>>,
+    pub(super) table_by_block: Vec<Option<usize>>,
+    pub(super) rows_by_table: Vec<Vec<usize>>,
+    pub(super) cells_by_row: Vec<Vec<usize>>,
 }
 
 impl NativeLoweringIndex {
@@ -62,11 +65,53 @@ impl NativeLoweringIndex {
                 index,
             )?;
         }
+        let mut table_by_block = Vec::new();
+        table_by_block
+            .try_reserve_exact(native.blocks().len())
+            .map_err(|_| NativeProjectionError::InvalidRelation("table index allocation"))?;
+        table_by_block.resize(native.blocks().len(), None);
+        for (index, table) in native.tables().iter().enumerate() {
+            let slot = table_by_block
+                .get_mut(table.block().get() as usize - 1)
+                .ok_or(NativeProjectionError::InvalidRelation(
+                    "table block is outside the lowering index",
+                ))?;
+            if slot.replace(index).is_some() {
+                return Err(NativeProjectionError::InvalidRelation(
+                    "table block is duplicated in the lowering index",
+                ));
+            }
+        }
+        let mut rows_by_table = empty_index_buckets(native.tables().len())?;
+        for (index, row) in native.table_rows().iter().enumerate() {
+            push_index(
+                rows_by_table
+                    .get_mut(row.table().get() as usize - 1)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "table row is outside the lowering index",
+                    ))?,
+                index,
+            )?;
+        }
+        let mut cells_by_row = empty_index_buckets(native.table_rows().len())?;
+        for (index, cell) in native.table_cells().iter().enumerate() {
+            push_index(
+                cells_by_row.get_mut(cell.row().get() as usize - 1).ok_or(
+                    NativeProjectionError::InvalidRelation(
+                        "table cell is outside the lowering index",
+                    ),
+                )?,
+                index,
+            )?;
+        }
         Ok(Self {
             block_children,
             blocks_by_owner,
             list_by_block,
             items_by_list,
+            table_by_block,
+            rows_by_table,
+            cells_by_row,
         })
     }
 

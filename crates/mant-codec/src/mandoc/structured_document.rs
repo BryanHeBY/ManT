@@ -15,6 +15,7 @@ mod content;
 mod evidence;
 mod index;
 mod store;
+mod table;
 
 use address::AddressPlan;
 use blocks::{lower_block, lower_section, push_lowered_block};

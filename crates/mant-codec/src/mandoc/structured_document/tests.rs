@@ -5,6 +5,58 @@ use mant_protocol::{EntryProjection, EvidenceBasis, ExplanationOptions, Explanat
 mod addresses;
 
 #[test]
+fn native_tbl_cells_lower_into_one_shared_content_store() {
+    // This exact UTF-8/78 input was checked against the fixed CVS reference.
+    // tbl_term.c::tbl_word emits authored text once per data cell; the native
+    // collector retains an empty cell without manufacturing a visible atom.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "table.1",
+            b".TH T 1\n.SH DATA\n.TS\ntab(;);\nl l.\nleft;right\nempty;\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("table.1", &bundle, InputFormat::Man)
+        .expect("native table lowers to the final private IR consumer");
+    let Block::Table {
+        rows, fixed_view, ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("first section block is a table")
+    };
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].cells.len(), 2);
+    assert_eq!(rows[1].cells.len(), 2);
+    assert!(rows[1].cells[1].blocks.is_empty());
+    assert!(fixed_view.is_none());
+    assert!(mant_ir::validate_content_store(&document.content_store).is_ok());
+}
+
+#[test]
+fn native_tbl_layout_rule_omits_ignored_data_text() {
+    // Exact source checked with fixed CVS UTF-8/78. tbl_term.c::tbl_data
+    // renders its layout `_`/`=` rule before consulting the row data.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "layout-rule.1",
+            b".TH T 1\n.SH DATA\n.TS\ntab(;);\nl l\n_ =.\na;b\nx;y\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("layout-rule.1", &bundle, InputFormat::Man)
+        .expect("layout rule lowers without manufacturing data text");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("table block")
+    };
+    assert!(matches!(
+        rows[1].kind,
+        mant_ir::TableRowKind::LayoutRule { .. }
+    ));
+    assert!(rows[1].cells.is_empty());
+    assert!(mant_ir::validate_content_store(&document.content_store).is_ok());
+}
+
+#[test]
 fn ascii_overstrike_drops_only_the_unsafe_display_override() {
     // The exact `.TH X 1`, `.SH NAME`, `X \[ct] Y` input was first run
     // through the fixed ASCII/78 reference; term_ascii.c::ascii_uc2str

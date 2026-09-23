@@ -224,6 +224,7 @@ fn validate_owners(
                 | ContentOwnerKind::Paragraph
                 | ContentOwnerKind::ListItem
                 | ContentOwnerKind::DefinitionItem
+                | ContentOwnerKind::TableCell
         ) {
             return Err(NativeProjectionError::UnsupportedOwner(owner.kind()));
         }
@@ -243,7 +244,10 @@ fn project_roots(
     for root in document.content_roots() {
         if !matches!(
             root.kind(),
-            ContentRootKind::Heading | ContentRootKind::Term | ContentRootKind::Body
+            ContentRootKind::Heading
+                | ContentRootKind::Term
+                | ContentRootKind::Body
+                | ContentRootKind::Cell
         ) {
             return Err(NativeProjectionError::UnsupportedRoot(root.kind()));
         }
@@ -368,6 +372,7 @@ fn project_blocks(
                 | NativeBlockKind::Paragraph
                 | NativeBlockKind::List
                 | NativeBlockKind::DefinitionList
+                | NativeBlockKind::Table
         ) {
             return Err(NativeProjectionError::UnsupportedBlock(block.kind()));
         }
@@ -395,7 +400,7 @@ fn project_blocks(
             *used = true;
         } else if !matches!(
             block.kind(),
-            NativeBlockKind::List | NativeBlockKind::DefinitionList
+            NativeBlockKind::List | NativeBlockKind::DefinitionList | NativeBlockKind::Table
         ) {
             return Err(NativeProjectionError::InvalidRelation(
                 "prose block has no content root",
@@ -410,6 +415,38 @@ fn project_blocks(
             root,
             provenance: block.provenance(),
         });
+    }
+    for cell in document.table_cells() {
+        let point = cell
+            .point()
+            .and_then(|key| document.content_point(key))
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "table cell has no content point",
+            ))?;
+        let root = point.root();
+        let root_index =
+            one_based_index(root.get(), "table cell root key does not fit this platform")?;
+        let projected_root =
+            roots
+                .get(root_index)
+                .ok_or(NativeProjectionError::InvalidRelation(
+                    "table cell references an unknown content root",
+                ))?;
+        let used = used_roots
+            .get_mut(root_index)
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "table cell root state is missing",
+            ))?;
+        if projected_root.key != root
+            || projected_root.owner != cell.owner()
+            || root_kind(document, root) != Some(ContentRootKind::Cell)
+            || *used
+        {
+            return Err(NativeProjectionError::InvalidRelation(
+                "table cell root ownership is not unique",
+            ));
+        }
+        *used = true;
     }
     if roots
         .iter()
