@@ -36,9 +36,47 @@ count_direct_part(struct structured_session *session,
 	return 1;
 }
 
+static uint32_t
+native_join(const struct mant_annotated_run_endpoint *endpoints,
+    uint32_t previous_run, uint32_t current_run, uint32_t mark_key,
+    uint32_t mark_kind, uint64_t *spaces)
+{
+	const struct mant_annotated_run_endpoint *prior =
+	    endpoints + previous_run - 1;
+	const struct mant_annotated_run_endpoint *current =
+	    endpoints + current_run - 1;
+
+	*spaces = 0;
+	/* Link label scope across embedded structural macros still requires its
+	 * own pinned HTML audit.  Never certify adjacency of that selection from
+	 * formatter ownership alone; direct owner/region facts remain usable. */
+	if (mark_kind == MANT_ANNOTATED_MARK_LINK)
+		return MANT_ANNOTATED_JOIN_UNKNOWN;
+	if (prior->last_origin == 0 || current->first_origin == 0 ||
+	    current->first_edge.predecessor_origin != prior->last_origin)
+		return MANT_ANNOTATED_JOIN_UNKNOWN;
+	switch (current->first_edge.join) {
+	case MANT_DISPLAY_JOIN_DIRECT:
+		return MANT_ANNOTATED_JOIN_DIRECT_CONTACT;
+	case MANT_DISPLAY_JOIN_HARD:
+		return MANT_ANNOTATED_JOIN_HARD_BOUNDARY;
+	case MANT_DISPLAY_JOIN_SEPARATOR:
+		if ((mark_kind == MANT_ANNOTATED_MARK_LINK ?
+		    current->first_edge.separator_link :
+		    current->first_edge.separator_owner) != mark_key)
+			return MANT_ANNOTATED_JOIN_UNKNOWN;
+		*spaces = current->first_edge.separator_spaces;
+		return *spaces == 0 ? MANT_ANNOTATED_JOIN_UNKNOWN :
+		    MANT_ANNOTATED_JOIN_AUTHORED_SEPARATOR;
+	default:
+		return MANT_ANNOTATED_JOIN_UNKNOWN;
+	}
+}
+
 static void
 write_direct_part(struct mant_annotated_result *result, uint32_t key,
-    const struct mant_annotated_display_run *run)
+    const struct mant_annotated_display_run *run,
+    const struct mant_annotated_run_endpoint *endpoints)
 {
 	struct mant_annotated_mark *mark;
 	struct mant_annotated_selection_part *part;
@@ -49,8 +87,11 @@ write_direct_part(struct mant_annotated_result *result, uint32_t key,
 	part = result->selection_parts + mark->selection_first +
 	    mark->selection_count;
 	part->run = run->key;
-	part->join_before = mark->selection_count == 0 ?
-	    MANT_ANNOTATED_JOIN_NONE : MANT_ANNOTATED_JOIN_UNKNOWN;
+	part->join_before = MANT_ANNOTATED_JOIN_NONE;
+	if (mark->selection_count != 0)
+		part->join_before = native_join(endpoints,
+		    (part - 1)->run, run->key, mark->key, mark->kind,
+		    &part->join_text_len);
 	part->start_byte = 0;
 	part->end_byte = run->byte_count;
 	mark->selection_count++;
@@ -66,7 +107,9 @@ mant_annotated_build_selection_parts(struct structured_session *session,
     const struct mant_annotated_display_view *display)
 {
 	const struct mant_annotated_display_run *run;
-	uint64_t edges = 0, maximum, work;
+	const struct mant_annotated_run_endpoint *endpoints;
+	uint64_t edges = 0, maximum, work, join_bytes = 0;
+	uint32_t endpoint_count;
 	uint32_t index, first = 0;
 
 	if (session == NULL || result == NULL || display == NULL ||
@@ -77,6 +120,15 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 		if (session != NULL)
 			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
+		return 0;
+	}
+	endpoints = mant_annotated_display_endpoints(result->display,
+	    &endpoint_count);
+	if (endpoint_count != display->run_count ||
+	    (endpoint_count != 0 && endpoints == NULL)) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_CHECK, 0, endpoint_count,
+		    display->run_count);
 		return 0;
 	}
 	work = (uint64_t)display->run_count * 2 + result->mark_count;
@@ -113,9 +165,41 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 	}
 	for (index = 0; index < display->run_count; index++) {
 		run = display->runs + index;
-		write_direct_part(result, run->label.owner, run);
-		write_direct_part(result, run->label.link, run);
+		write_direct_part(result, run->label.owner, run, endpoints);
+		write_direct_part(result, run->label.link, run, endpoints);
 	}
+	for (index = 0; index < result->selection_part_count; index++) {
+		struct mant_annotated_selection_part *part =
+		    result->selection_parts + index;
+		if (join_bytes > UINT32_MAX ||
+		    part->join_text_len > UINT32_MAX - join_bytes ||
+		    part->join_text_len > session->limits->max_content_bytes -
+		    join_bytes) {
+			mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
+			    MANT_STRUCTURED_STAGE_CHECK, 10,
+			    part->join_text_len > UINT64_MAX - join_bytes ?
+			    UINT64_MAX : join_bytes + part->join_text_len,
+			    session->limits->max_content_bytes < UINT32_MAX ?
+			    session->limits->max_content_bytes : UINT32_MAX);
+			return 0;
+		}
+		if (part->join_text_len != 0)
+			part->join_text_start = join_bytes;
+		join_bytes += part->join_text_len;
+	}
+	if (join_bytes != 0) {
+		if (!mant_structured_charge(session,
+		    &session->builder_operations, join_bytes,
+		    session->limits->max_builder_operations, 8,
+		    MANT_STRUCTURED_STAGE_CHECK))
+			return 0;
+		result->join_text = mant_structured_allocate(session,
+		    join_bytes, 1, MANT_STRUCTURED_STAGE_CHECK);
+		if (result->join_text == NULL)
+			return 0;
+		memset(result->join_text, ' ', (size_t)join_bytes);
+	}
+	result->join_text_count = join_bytes;
 	return 1;
 }
 
@@ -359,6 +443,17 @@ valid_marks(const struct mant_annotated_result *result)
 }
 
 static int
+all_layout_spaces(const uint8_t *bytes, uint64_t length)
+{
+	uint64_t index;
+
+	for (index = 0; index < length; index++)
+		if (bytes[index] != ' ')
+			return 0;
+	return 1;
+}
+
+static int
 valid_display(const struct mant_annotated_result *result)
 {
 	struct mant_annotated_display_view display;
@@ -403,7 +498,13 @@ valid_display(const struct mant_annotated_result *result)
 			    result->marks[run->label.link - 1].kind !=
 			    MANT_ANNOTATED_MARK_LINK)) ||
 			    (run->label.role != MANT_ANNOTATED_BODY &&
-			    run->label.role != MANT_ANNOTATED_DIRECT_DRAW) ||
+			    run->label.role != MANT_ANNOTATED_DIRECT_DRAW &&
+			    run->label.role != MANT_ANNOTATED_LAYOUT) ||
+			    (run->label.role == MANT_ANNOTATED_LAYOUT &&
+			    (run->label.owner != 0 || run->label.link != 0 ||
+			    run->label.source != 0 || run->label.style != 0 ||
+			    !all_layout_spaces(display.bytes + next_byte,
+			    run->byte_count))) ||
 			    !mant_structured_valid_utf8(display.bytes + next_byte,
 			    run->byte_count))
 				return 0;
@@ -419,13 +520,21 @@ valid_selection_parts(const struct mant_annotated_result *result)
 	struct mant_annotated_display_view display;
 	const struct mant_annotated_selection_part *part;
 	const struct mant_annotated_display_run *run;
+	const struct mant_annotated_run_endpoint *endpoints;
 	const struct mant_annotated_mark *mark;
-	uint64_t expected = 0;
-	uint32_t first = 0, previous, i, j;
+	uint64_t expected = 0, payload = 0, spaces;
+	uint32_t first = 0, previous, i, j, endpoint_count;
 
 	if (!mant_annotated_display_finish(result->display, &display) ||
 	    (result->selection_part_count != 0) !=
-	    (result->selection_parts != NULL))
+	    (result->selection_parts != NULL) ||
+	    (result->join_text_count != 0) != (result->join_text != NULL) ||
+	    result->join_text_count > UINT32_MAX)
+		return 0;
+	endpoints = mant_annotated_display_endpoints(result->display,
+	    &endpoint_count);
+	if (endpoint_count != display.run_count ||
+	    (endpoint_count != 0 && endpoints == NULL))
 		return 0;
 	for (i = 0; i < display.run_count; i++) {
 		run = display.runs + i;
@@ -444,11 +553,28 @@ valid_selection_parts(const struct mant_annotated_result *result)
 			part = result->selection_parts + first + j;
 			if (part->run <= previous ||
 			    part->run > display.run_count ||
-			    part->start_byte != 0 ||
-			    part->join_before != (j == 0 ?
-			    MANT_ANNOTATED_JOIN_NONE :
-			    MANT_ANNOTATED_JOIN_UNKNOWN))
+			    part->start_byte != 0)
 				return 0;
+			spaces = 0;
+			if (part->join_before != (j == 0 ?
+			    MANT_ANNOTATED_JOIN_NONE : native_join(endpoints,
+			    previous, part->run, mark->key, mark->kind,
+			    &spaces)) ||
+			    part->join_text_len != spaces)
+				return 0;
+			if (spaces == 0) {
+				if (part->join_text_start != 0)
+					return 0;
+			} else {
+				uint64_t byte;
+				if (part->join_text_start != payload ||
+				    spaces > result->join_text_count - payload)
+					return 0;
+				for (byte = 0; byte < spaces; byte++)
+					if (result->join_text[payload + byte] != ' ')
+						return 0;
+				payload += spaces;
+			}
 			run = display.runs + part->run - 1;
 			if (part->end_byte != run->byte_count ||
 			    (mark->kind == MANT_ANNOTATED_MARK_LINK ?
@@ -464,7 +590,8 @@ valid_selection_parts(const struct mant_annotated_result *result)
 	}
 	/* Strict per-mark ordering prevents duplicates; the total equals all
 	 * direct run labels, so no marked final run can be omitted. */
-	return first == result->selection_part_count;
+	return first == result->selection_part_count &&
+	    payload == result->join_text_count;
 }
 
 int
@@ -479,7 +606,7 @@ mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 5;
+	return 6;
 }
 
 uint32_t
@@ -535,6 +662,8 @@ mant_annotated_result_view(const struct mant_annotated_result *result,
 	view->selection_parts = VIEW_SLICE(result->selection_parts,
 	    result->selection_part_count,
 	    struct mant_annotated_selection_part);
+	view->join_text = VIEW_SLICE(result->join_text,
+	    result->join_text_count, uint8_t);
 	if (!mant_annotated_display_finish(result->display, &view->display))
 		return MANT_STRUCTURED_RELATION;
 	return MANT_STRUCTURED_OK;
@@ -548,6 +677,7 @@ mant_annotated_result_free(struct mant_annotated_result *result)
 	mant_annotated_display_free(result->display);
 	mant_annotated_marks_free(result->marks, result->mark_count);
 	free(result->selection_parts);
+	free(result->join_text);
 	free(result->coverage_issues);
 	mant_structured_result_free(result->common);
 	result->magic = 0;
@@ -596,6 +726,8 @@ size_t mant_annotated_alignof_selection_part(void)
 { return _Alignof(struct mant_annotated_selection_part); }
 size_t mant_annotated_offsetof_selection_part_end_byte(void)
 { return offsetof(struct mant_annotated_selection_part, end_byte); }
+size_t mant_annotated_offsetof_selection_part_join_text_start(void)
+{ return offsetof(struct mant_annotated_selection_part, join_text_start); }
 size_t mant_annotated_sizeof_coverage_check(void)
 { return sizeof(struct mant_annotated_coverage_check); }
 size_t mant_annotated_alignof_coverage_check(void)
@@ -610,3 +742,5 @@ size_t mant_annotated_offsetof_result_view_coverage_issues(void)
 { return offsetof(struct mant_annotated_result_view, coverage_issues); }
 size_t mant_annotated_offsetof_result_view_selection_parts(void)
 { return offsetof(struct mant_annotated_result_view, selection_parts); }
+size_t mant_annotated_offsetof_result_view_join_text(void)
+{ return offsetof(struct mant_annotated_result_view, join_text); }

@@ -99,6 +99,8 @@ struct SelectionPartView {
     join_before: u32,
     start_byte: u64,
     end_byte: u64,
+    join_text_start: u64,
+    join_text_len: u64,
 }
 
 #[repr(C)]
@@ -154,6 +156,7 @@ struct ResultView {
     coverage_issues: SliceView,
     display: DisplayView,
     selection_parts: SliceView,
+    join_text: SliceView,
 }
 
 unsafe extern "C" {
@@ -191,6 +194,7 @@ unsafe extern "C" {
     fn mant_annotated_sizeof_selection_part() -> usize;
     fn mant_annotated_alignof_selection_part() -> usize;
     fn mant_annotated_offsetof_selection_part_end_byte() -> usize;
+    fn mant_annotated_offsetof_selection_part_join_text_start() -> usize;
     fn mant_annotated_sizeof_coverage_check() -> usize;
     fn mant_annotated_alignof_coverage_check() -> usize;
     fn mant_annotated_sizeof_coverage_issue() -> usize;
@@ -198,6 +202,7 @@ unsafe extern "C" {
     fn mant_annotated_offsetof_result_view_coverage_checks() -> usize;
     fn mant_annotated_offsetof_result_view_coverage_issues() -> usize;
     fn mant_annotated_offsetof_result_view_selection_parts() -> usize;
+    fn mant_annotated_offsetof_result_view_join_text() -> usize;
 }
 
 fn invalid_result() -> AnnotatedError {
@@ -247,7 +252,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 5
+        mant_annotated_abi_version() == 6
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -275,6 +280,8 @@ fn check_abi() -> bool {
             && mant_annotated_alignof_selection_part() == std::mem::align_of::<SelectionPartView>()
             && mant_annotated_offsetof_selection_part_end_byte()
                 == std::mem::offset_of!(SelectionPartView, end_byte)
+            && mant_annotated_offsetof_selection_part_join_text_start()
+                == std::mem::offset_of!(SelectionPartView, join_text_start)
             && mant_annotated_sizeof_coverage_check() == std::mem::size_of::<CoverageCheckView>()
             && mant_annotated_alignof_coverage_check() == std::mem::align_of::<CoverageCheckView>()
             && mant_annotated_sizeof_coverage_issue() == std::mem::size_of::<CoverageIssueView>()
@@ -285,6 +292,8 @@ fn check_abi() -> bool {
                 == std::mem::offset_of!(ResultView, coverage_issues)
             && mant_annotated_offsetof_result_view_selection_parts()
                 == std::mem::offset_of!(ResultView, selection_parts)
+            && mant_annotated_offsetof_result_view_join_text()
+                == std::mem::offset_of!(ResultView, join_text)
     }
 }
 
@@ -555,6 +564,7 @@ fn transfer(
         view.selection_parts,
         limits.max_transfer_edges,
     )?;
+    let join_text_view = checked_slice::<u8>(handle, view.join_text, limits.max_content_bytes)?;
     let coverage_check_views =
         checked_slice::<CoverageCheckView>(handle, view.coverage_checks, 24)?;
     let coverage_issue_views = checked_slice::<CoverageIssueView>(
@@ -677,6 +687,7 @@ fn transfer(
     charge(std::mem::size_of::<AnnotatedDocument>() as u64)?;
     charge(std::mem::size_of::<AnnotatedMetadata>() as u64)?;
     charge(text_bytes.len() as u64)?;
+    charge(join_text_view.len() as u64)?;
     // Temporary one-byte-per-run census prevents missing or duplicate
     // direct owner/link selections from masquerading as a complete transfer.
     charge(runs.len() as u64)?;
@@ -986,9 +997,17 @@ fn transfer(
             || run.label.source as usize > sources.len()
             || run.label.owner as usize > marks.len()
             || run.label.link as usize > marks.len()
-            || (run.label.role != 1 && run.label.role != 4)
+            || (run.label.role != 1 && run.label.role != 4 && run.label.role != 5)
             || !text_view.is_char_boundary(start_usize)
             || !text_view.is_char_boundary(end_usize)
+            || (run.label.role == 5
+                && (run.label.owner != 0
+                    || run.label.link != 0
+                    || run.label.source != 0
+                    || run.label.style != 0
+                    || !text_view[start_usize..end_usize]
+                        .bytes()
+                        .all(|byte| byte == b' ')))
         {
             return Err(invalid_result());
         }
@@ -1011,6 +1030,7 @@ fn transfer(
     let mut selected = reserve::<u8>(runs.len())?;
     selected.resize(runs.len(), 0);
     let mut next_part = 0_usize;
+    let mut next_join_text = 0_usize;
     for mark in &marks {
         let first = usize::try_from(mark.selection_first).map_err(|_| invalid_result())?;
         let count = usize::try_from(mark.selection_count).map_err(|_| invalid_result())?;
@@ -1035,9 +1055,31 @@ fn transfer(
             };
             let join_before = match (index, part.join_before) {
                 (0, 0) => AnnotatedTextJoin::None,
+                (1.., 1) => AnnotatedTextJoin::DirectContact,
+                (1.., 2) => AnnotatedTextJoin::AuthoredSeparator,
+                (1.., 3) => AnnotatedTextJoin::HardBoundary,
                 (1.., 4) => AnnotatedTextJoin::Unknown,
                 _ => return Err(invalid_result()),
             };
+            if join_before == AnnotatedTextJoin::AuthoredSeparator {
+                let join_start =
+                    usize::try_from(part.join_text_start).map_err(|_| invalid_result())?;
+                let join_len = usize::try_from(part.join_text_len).map_err(|_| invalid_result())?;
+                let join_end = join_start
+                    .checked_add(join_len)
+                    .ok_or_else(invalid_result)?;
+                if join_len == 0
+                    || join_start != next_join_text
+                    || join_text_view
+                        .get(join_start..join_end)
+                        .is_none_or(|bytes| bytes.iter().any(|byte| *byte != b' '))
+                {
+                    return Err(invalid_result());
+                }
+                next_join_text = join_end;
+            } else if part.join_text_start != 0 || part.join_text_len != 0 {
+                return Err(invalid_result());
+            }
             let start = run
                 .byte_start
                 .checked_add(part.start_byte)
@@ -1065,12 +1107,14 @@ fn transfer(
                 start_byte: part.start_byte,
                 end_byte: part.end_byte,
                 join_before,
+                join_text_start: part.join_text_start,
+                join_text_len: part.join_text_len,
             });
             previous_run = part.run;
         }
         next_part = end;
     }
-    if next_part != selection_part_views.len() {
+    if next_part != selection_part_views.len() || next_join_text != join_text_view.len() {
         return Err(invalid_result());
     }
     for (index, run) in owned_runs.iter().enumerate() {
@@ -1083,6 +1127,13 @@ fn transfer(
     text.try_reserve_exact(text_view.len())
         .map_err(|_| transfer_alloc())?;
     text.push_str(text_view);
+    let mut join_text = String::new();
+    join_text
+        .try_reserve_exact(join_text_view.len())
+        .map_err(|_| transfer_alloc())?;
+    // Every byte was checked against ASCII space while validating the exact
+    // authored-separator partition above.
+    join_text.push_str(std::str::from_utf8(join_text_view).map_err(|_| invalid_result())?);
     Ok(AnnotatedDocument {
         root_source: view.root_source,
         profile: view.profile,
@@ -1097,6 +1148,7 @@ fn transfer(
         runs: owned_runs,
         marks,
         selection_parts,
+        join_text,
         coverage,
     })
 }

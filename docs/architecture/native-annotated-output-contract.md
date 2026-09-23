@@ -42,7 +42,7 @@ as metadata where the native tree will be unavailable after return.
 | `RowKey`, `RunKey` | result-local final display keys | minted after font folding, overprint, run coalescing and decoration filtering; empty surface still has a document-end point |
 | `DisplayRow.breakAfter` | whether native emitted a newline after this row | preserves EOF without newline and trailing blank rows; only the last row may be `false` |
 | `OutputSlice` | `(RunKey, [start_byte,end_byte))` in final UTF-8 run | both ends are UTF-8 boundaries; zero width uses an explicit boundary point |
-| `TextSelection` | ordered output slices plus per-adjacency `TextJoin` | joins state authored separation, direct contact or hard/unknown boundary; not layout |
+| `TextSelection` | ordered output slices plus per-adjacency `TextJoin` | joins state exact consumed separator bytes, direct contact or hard/unknown boundary; not layout |
 | `HeadingMark` | native section key, parent, level hint, title selection | parent is root or earlier section; no derived depth stored as a competing source |
 | `OwnerMark` | native candidate key, parent, head/body and role | not itself a classified `EntryKind`; direct body and subtree reading differ |
 | `LinkMark` | occurrence key, target, label selection, source | one macro instance can have multiple surviving slices; equal targets do not merge occurrences |
@@ -53,9 +53,20 @@ All offsets name their units: source bytes, output UTF-8 bytes, Unicode
 scalars, graphemes and terminal columns are distinct. `SourceTable` records
 authorized logical paths only; generated/unknown provenance is explicit. A
 `direct-contact` join inserts no byte, including a proven native soft wrap
-between physical rows; the row keys carry that layout fact. An authored
-separator joins with exactly its retained text, while hard/unknown never
-licenses a cross-slice content match. Physical adjacency alone proves none
+between physical rows; the row keys carry that layout fact. An
+`authored-separator` join carries the exact native-consumed separator bytes
+in its bounded `text` payload (for R01, one or more ASCII spaces). A separator
+already visible inside a selected slice is not repeated in the join. Thus
+one and three spaces swallowed by `term_flushln()` at WRAP remain distinct
+even when the final surface rows are identical. Hard/unknown never licenses
+a cross-slice content match. A formatter-generated `AUTO_SPACE` or a reused
+blank without a surviving authored write cannot become an authored separator.
+Native indentation may produce blank runs between connected slices; only
+runs carrying the explicit native `layout` role may be skipped by Fixed
+selection validation, not merely unowned or source-unknown spaces. The
+layout-only gap check uses one per-surface prefix index, not a rescan for
+each section, owner or link.
+Physical adjacency alone proves none
 of these states. A
 wrong key/range is invalid result, never a semantic downgrade. The native
 handle owns borrowed views; checked transfer produces one owned result, then
@@ -323,7 +334,7 @@ values refer to separate miniature snapshots, not to the `Demo` artifact:
 
 ```json
 {"pattern":"foobar","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0}
-{"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"foobar","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.fixed/v1","format":"fixed-visible","scope":"full","lineBase":1,"columnBase":1,"lineCount":2},"contentProjection":{"fragments":[{"key":1,"text":"foo","source":{"row":1,"run":7,"startByte":5,"endByte":8}},{"key":2,"text":"bar","source":{"row":2,"run":8,"startByte":0,"endByte":3}}],"units":[{"key":1,"fragments":[1,2],"joins":["direct-contact"]}]},"total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[],"matches":[{"ordinal":1,"matchedText":"foobar","location":{"kind":"visible-fixed","unit":1,"startByte":0,"endByte":6},"displaySlices":[{"fragment":1,"startByte":0,"endByte":3},{"fragment":2,"startByte":0,"endByte":3}],"preview":"foobar","context":[]}]}
+{"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"foobar","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.fixed/v1","format":"fixed-visible","scope":"full","lineBase":1,"columnBase":1,"lineCount":2},"contentProjection":{"fragments":[{"key":1,"text":"foo","source":{"row":1,"run":7,"startByte":5,"endByte":8}},{"key":2,"text":"bar","source":{"row":2,"run":8,"startByte":0,"endByte":3}}],"units":[{"key":1,"fragments":[1,2],"joins":[{"kind":"direct-contact"}]}]},"total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[],"matches":[{"ordinal":1,"matchedText":"foobar","location":{"kind":"visible-fixed","unit":1,"startByte":0,"endByte":6},"displaySlices":[{"fragment":1,"startByte":0,"endByte":3},{"fragment":2,"startByte":0,"endByte":3}],"preview":"foobar","context":[]}]}
 {"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"^```","scope":"markdown","syntax":"regex","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.markdown/v1","format":"markdown","scope":"full","lineBase":1,"columnBase":1,"lineCount":3},"total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[],"matches":[{"ordinal":1,"matchedText":"```","location":{"kind":"markdown-artifact","startByte":0,"endByte":3,"startLine":1,"startColumn":1,"endLine":1,"endColumn":4},"displaySlices":[],"preview":"```","context":[]}]}
 {"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"absent","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.fixed/v1","format":"fixed-visible","scope":"full","lineBase":1,"columnBase":1,"lineCount":2},"total":0,"returned":0,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":false,"coverageDetailsOmitted":1,"diagnostics":[{"level":"unsupported","impact":"semantic-coverage","code":"annotated.coverage.summary","message":"coverage detail omitted","coverageScope":{"kind":"document"}}],"matches":[]}
 ```

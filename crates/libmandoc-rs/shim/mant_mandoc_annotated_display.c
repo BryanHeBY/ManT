@@ -7,6 +7,7 @@
 
 struct display_component {
 	struct mant_annotated_display_label label;
+	struct mant_annotated_display_edge edge;
 	uint32_t next;
 	uint8_t bytes[4];
 	uint8_t length;
@@ -29,17 +30,20 @@ struct mant_annotated_display {
 	void *work_charge_arg;
 	struct mant_annotated_display_row *rows;
 	struct mant_annotated_display_run *runs;
+	struct mant_annotated_run_endpoint *endpoints;
 	struct display_slot *slots;
 	struct display_component *components;
 	uint8_t *bytes;
-	size_t row_capacity, run_capacity, slot_capacity;
+	size_t row_capacity, run_capacity, endpoint_capacity, slot_capacity;
 	size_t component_capacity, byte_capacity;
 	uint32_t row_count, run_count, component_count, free_component;
 	uint32_t cursor, maxcol;
 	uint64_t byte_count, input_bytes, work;
 	uint64_t allocated_bytes, peak_allocated_bytes;
 	uint8_t pending[4], pending_length, pending_need;
+	struct mant_annotated_display_edge pending_edge;
 	uint8_t row_touched, finished;
+	uint8_t tracking_mode;
 	struct mant_annotated_display_label pending_label;
 	enum mant_annotated_display_status status;
 	uint32_t limit_kind;
@@ -170,7 +174,8 @@ ensure_slot(struct mant_annotated_display *display, uint32_t column)
 static uint32_t
 component_new(struct mant_annotated_display *display,
     const uint8_t *bytes, uint8_t length,
-    struct mant_annotated_display_label label)
+    struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge)
 {
 	struct display_component *component;
 	uint32_t key;
@@ -192,6 +197,7 @@ component_new(struct mant_annotated_display *display,
 	}
 	component = display->components + key - 1;
 	component->label = label;
+	component->edge = edge;
 	component->next = 0;
 	component->length = length;
 	memcpy(component->bytes, bytes, length);
@@ -229,9 +235,10 @@ erase_glyph(struct mant_annotated_display *display, uint32_t start)
 static int
 append_component(struct mant_annotated_display *display,
     uint32_t *head, uint32_t *tail, const uint8_t *bytes,
-    uint8_t length, struct mant_annotated_display_label label)
+    uint8_t length, struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge)
 {
-	uint32_t key = component_new(display, bytes, length, label);
+	uint32_t key = component_new(display, bytes, length, label, edge);
 	if (key == 0)
 		return 0;
 	if (*tail != 0)
@@ -245,14 +252,17 @@ append_component(struct mant_annotated_display *display,
 static int
 write_scalar(struct mant_annotated_display *display, uint32_t scalar,
     const uint8_t *bytes, uint8_t length,
-    struct mant_annotated_display_label label);
+    struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge);
 
 static int
 append_piece(struct mant_annotated_display *display, const uint8_t *bytes,
     uint8_t length, uint32_t column, uint32_t width,
-    struct mant_annotated_display_label label, uint32_t row_first)
+    struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge, uint32_t row_first)
 {
 	struct mant_annotated_display_run *run;
+	struct mant_annotated_run_endpoint *endpoint;
 	uint64_t offset = display->byte_count;
 
 	if (length > display->limits.max_result_bytes - offset)
@@ -265,14 +275,26 @@ append_piece(struct mant_annotated_display *display, const uint8_t *bytes,
 		return 0;
 	if (display->run_count > row_first) {
 		run = display->runs + display->run_count - 1;
+		endpoint = display->endpoints + display->run_count - 1;
 		if (same_label(run->label, label) &&
 		    run->column + run->width == column &&
 		    run->byte_start + run->byte_count == offset &&
-		    run->width <= UINT32_MAX - width) {
+		    run->width <= UINT32_MAX - width &&
+		    (display->tracking_mode != 2 ||
+		    (label.glyph_origin != 0 &&
+		    ((edge.same_origin_continuation != 0 &&
+		    label.glyph_origin == endpoint->last_origin) ||
+		    (edge.join == MANT_DISPLAY_JOIN_DIRECT &&
+		    edge.separator_spaces == 0 &&
+		    edge.predecessor_origin == endpoint->last_origin))) ||
+		    (label.glyph_origin == 0 && endpoint->last_origin == 0 &&
+		    edge.predecessor_origin == 0 && edge.join == 0 &&
+		    edge.separator_spaces == 0))) {
 			memcpy(display->bytes + offset, bytes, length);
 			display->byte_count += length;
 			run->byte_count += length;
 			run->width += width;
+			endpoint->last_origin = label.glyph_origin;
 			return 1;
 		}
 	}
@@ -283,9 +305,17 @@ append_piece(struct mant_annotated_display *display, const uint8_t *bytes,
 	    &display->run_capacity, (size_t)display->run_count + 1,
 	    display->limits.max_runs, sizeof(*display->runs), 28))
 		return 0;
+	if (!reserve(display, (void **)&display->endpoints,
+	    &display->endpoint_capacity, (size_t)display->run_count + 1,
+	    display->limits.max_runs, sizeof(*display->endpoints), 28))
+		return 0;
 	run = display->runs + display->run_count;
+	endpoint = display->endpoints + display->run_count;
 	memset(run, 0, sizeof(*run));
+	memset(endpoint, 0, sizeof(*endpoint));
 	run->key = ++display->run_count;
+	endpoint->first_origin = endpoint->last_origin = label.glyph_origin;
+	endpoint->first_edge = edge;
 	run->column = column;
 	run->width = width;
 	run->byte_start = offset;
@@ -308,7 +338,7 @@ append_chain(struct mant_annotated_display *display, uint32_t head,
 	while (head != 0) {
 		part = display->components + head - 1;
 		if (!append_piece(display, part->bytes, part->length,
-		    column, width, part->label, row_first))
+		    column, width, part->label, part->edge, row_first))
 			return 0;
 		column += width;
 		width = 0;
@@ -338,7 +368,8 @@ finish_row(struct mant_annotated_display *display, int break_after)
 	    &display->row_capacity, (size_t)display->row_count + 1,
 	    display->limits.max_rows, sizeof(*display->rows), 21))
 		return 0;
-	gap.role = MANT_ANNOTATED_BODY;
+	/* A hole in the final cell grid was never emitted by term_field(). */
+	gap.role = MANT_ANNOTATED_LAYOUT;
 	for (column = 0; column <= last; column++) {
 		struct display_slot *slot = display->slots + column;
 		if (slot->zero_head != 0 &&
@@ -352,7 +383,8 @@ finish_row(struct mant_annotated_display *display, int break_after)
 				return 0;
 			column += slot->width - 1;
 		} else if (slot->start_plus_one == 0 &&
-		    !append_piece(display, &space, 1, column, 1, gap, first))
+		    !append_piece(display, &space, 1, column, 1, gap,
+		    (struct mant_annotated_display_edge){0}, first))
 			return 0;
 	}
 	row = display->rows + display->row_count;
@@ -375,7 +407,8 @@ finish_row(struct mant_annotated_display *display, int break_after)
 static int
 write_scalar(struct mant_annotated_display *display, uint32_t scalar,
     const uint8_t *bytes, uint8_t length,
-    struct mant_annotated_display_label label)
+    struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge)
 {
 	struct display_slot *slot;
 	struct display_component *old;
@@ -405,12 +438,12 @@ write_scalar(struct mant_annotated_display *display, uint32_t scalar,
 			start = display->slots[display->cursor - 1].start_plus_one - 1;
 			slot = display->slots + start;
 			if (!append_component(display, &slot->head,
-			    &slot->tail, bytes, length, label))
+			    &slot->tail, bytes, length, label, edge))
 				return 0;
 		} else {
 			slot = display->slots + display->cursor;
 			if (!append_component(display, &slot->zero_head,
-			    &slot->zero_tail, bytes, length, label))
+			    &slot->zero_tail, bytes, length, label, edge))
 				return 0;
 		}
 		display->row_touched = 1;
@@ -471,7 +504,7 @@ write_scalar(struct mant_annotated_display *display, uint32_t scalar,
 		label.style |= MANT_ANNOTATED_STYLE_BOLD;
 	if (fold_underline)
 		label.style |= MANT_ANNOTATED_STYLE_UNDERLINE;
-	key = component_new(display, bytes, length, label);
+	key = component_new(display, bytes, length, label, edge);
 	if (key == 0)
 		return 0;
 	slot = display->slots + start;
@@ -524,9 +557,10 @@ mant_annotated_display_set_work_charge(struct mant_annotated_display *display,
 	return 1;
 }
 
-int
-mant_annotated_display_write(struct mant_annotated_display *display,
-    const void *data, size_t length, struct mant_annotated_display_label label)
+static int
+write_bytes(struct mant_annotated_display *display,
+    const void *data, size_t length, struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge, uint8_t mode)
 {
 	const uint8_t *bytes = data;
 	uint32_t scalar;
@@ -537,10 +571,22 @@ mant_annotated_display_write(struct mant_annotated_display *display,
 	    display->finished)
 		return 0;
 	if ((data == NULL && length != 0) || label.role < MANT_ANNOTATED_BODY ||
-	    label.role > MANT_ANNOTATED_DIRECT_DRAW ||
+	    label.role > MANT_ANNOTATED_LAYOUT ||
+	    (label.role == MANT_ANNOTATED_LAYOUT &&
+	    (label.owner != 0 || label.link != 0 || label.source != 0 ||
+	    label.glyph_origin != 0 || label.style != 0 || label.flags != 0)) ||
 	    (label.flags & ~MANT_ANNOTATED_FONT_STROKE) != 0 ||
-	    label.reserved != 0)
+	    label.reserved != 0 || edge.reserved != 0 ||
+	    edge.same_origin_continuation > 1 ||
+	    edge.join > MANT_DISPLAY_JOIN_HARD ||
+	    (edge.join != MANT_DISPLAY_JOIN_SEPARATOR &&
+	    (edge.separator_spaces != 0 || edge.separator_owner != 0 ||
+	    edge.separator_link != 0)) ||
+	    (edge.join == MANT_DISPLAY_JOIN_SEPARATOR &&
+	    edge.separator_spaces == 0) ||
+	    (display->tracking_mode != 0 && display->tracking_mode != mode))
 		return fail(display, MANT_ANNOTATED_DISPLAY_INVALID);
+	display->tracking_mode = mode;
 	if (length > display->limits.max_input_bytes - display->input_bytes)
 		return budget(display, 10,
 		    length > UINT64_MAX - display->input_bytes ? UINT64_MAX :
@@ -559,7 +605,8 @@ mant_annotated_display_write(struct mant_annotated_display *display,
 		byte = bytes[index];
 		if (display->pending_need == 0) {
 			if (byte < 0x80) {
-				if (!write_scalar(display, byte, &byte, 1, label))
+				if (!write_scalar(display, byte, &byte, 1,
+				    label, edge))
 					return 0;
 				continue;
 			}
@@ -574,10 +621,22 @@ mant_annotated_display_write(struct mant_annotated_display *display,
 			display->pending[0] = byte;
 			display->pending_length = 1;
 			display->pending_label = label;
+			display->pending_edge = edge;
 			continue;
 		}
 		if ((byte & 0xc0) != 0x80 ||
-		    !same_input_label(label, display->pending_label))
+		    !same_input_label(label, display->pending_label) ||
+		    edge.predecessor_origin !=
+		    display->pending_edge.predecessor_origin ||
+		    edge.separator_spaces !=
+		    display->pending_edge.separator_spaces ||
+		    edge.separator_owner !=
+		    display->pending_edge.separator_owner ||
+		    edge.separator_link !=
+		    display->pending_edge.separator_link ||
+		    edge.same_origin_continuation !=
+		    display->pending_edge.same_origin_continuation ||
+		    edge.join != display->pending_edge.join)
 			return fail(display, MANT_ANNOTATED_DISPLAY_INVALID);
 		display->pending[display->pending_length++] = byte;
 		if (display->pending_length != display->pending_need)
@@ -594,11 +653,37 @@ mant_annotated_display_write(struct mant_annotated_display *display,
 		    (scalar >= 0xd800 && scalar <= 0xdfff))
 			return fail(display, MANT_ANNOTATED_DISPLAY_INVALID);
 		if (!write_scalar(display, scalar, display->pending,
-		    display->pending_need, display->pending_label))
+		    display->pending_need, display->pending_label,
+		    display->pending_edge))
 			return 0;
 		display->pending_need = display->pending_length = 0;
 	}
 	return 1;
+}
+
+int
+mant_annotated_display_write(struct mant_annotated_display *display,
+    const void *data, size_t length, struct mant_annotated_display_label label)
+{
+	return write_bytes(display, data, length, label,
+	    (struct mant_annotated_display_edge){0}, 1);
+}
+
+int
+mant_annotated_display_write_join(struct mant_annotated_display *display,
+    const void *data, size_t length, struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge)
+{
+	return write_bytes(display, data, length, label, edge, 2);
+}
+
+const struct mant_annotated_run_endpoint *
+mant_annotated_display_endpoints(const struct mant_annotated_display *display,
+    uint32_t *count)
+{
+	if (count != NULL)
+		*count = display == NULL ? 0 : display->run_count;
+	return display == NULL ? NULL : display->endpoints;
 }
 
 int
@@ -666,6 +751,7 @@ mant_annotated_display_free(struct mant_annotated_display *display)
 		return;
 	free(display->rows);
 	free(display->runs);
+	free(display->endpoints);
 	free(display->slots);
 	free(display->components);
 	free(display->bytes);

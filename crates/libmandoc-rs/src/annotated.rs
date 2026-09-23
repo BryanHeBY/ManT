@@ -80,16 +80,20 @@ pub struct AnnotatedSelectionPart {
     pub start_byte: u64,
     pub end_byte: u64,
     pub join_before: AnnotatedTextJoin,
+    /// Byte range in `AnnotatedDocument::join_text` for an authored separator.
+    /// Other join kinds have a zero start and length.
+    pub join_text_start: u64,
+    pub join_text_len: u64,
 }
 
 /// Known native relationship to the previous part of the same selection.
-///
-/// R01 records `Unknown` between distinct parts until native execution
-/// evidence establishes a more precise relationship.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AnnotatedTextJoin {
     None = 0,
+    DirectContact = 1,
+    AuthoredSeparator = 2,
+    HardBoundary = 3,
     Unknown = 4,
 }
 
@@ -123,7 +127,6 @@ pub struct AnnotatedMark {
     pub native_table_position: Option<(u32, u64)>,
     pub name: Option<String>,
     /// Decoded destination, when this native mark represents one link target.
-    /// A multi-address `.Mt` remains unresolved rather than inventing one.
     pub link_target: Option<AnnotatedLinkTarget>,
 }
 
@@ -228,6 +231,8 @@ pub struct AnnotatedDocument {
     pub marks: Vec<AnnotatedMark>,
     /// Final, surviving direct owner/link selections, grouped by mark key.
     pub selection_parts: Vec<AnnotatedSelectionPart>,
+    /// Shared exact authored-separator bytes for selection joins.
+    pub join_text: String,
     pub coverage: AnnotationCoverage,
 }
 

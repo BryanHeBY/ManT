@@ -25,12 +25,20 @@ struct annotated_slot {
 	int value;
 	uint8_t flags;
 	uint8_t occupied;
+	uint8_t authored_space;
+	uint8_t layout_space;
 };
 
 struct annotated_column {
 	struct annotated_slot *slots;
 	uint32_t capacity;
 	uint32_t live;
+	uint64_t last_output_origin;
+	uint64_t pending_spaces;
+	uint32_t separator_owner;
+	uint32_t separator_link;
+	struct mant_annotated_display_edge last_origin_edge;
+	uint32_t pending_join;
 };
 
 struct annotated_frame {
@@ -80,10 +88,13 @@ struct mant_annotated_collector {
 	uint64_t slot_bytes;
 	struct mant_annotated_collector_metrics metrics;
 	struct mant_annotated_display_label letter_label;
+	struct mant_annotated_display_edge letter_edge;
 	struct mant_annotated_display_label skipped[256];
 	uint16_t skipped_cells;
 	uint16_t advance_count;
 	uint32_t advance_role;
+	uint32_t skipped_column;
+	uint32_t letter_column;
 	uint8_t letter_pending;
 	uint8_t in_header;
 	uint8_t in_footer;
@@ -96,6 +107,95 @@ fail_relation(struct mant_annotated_collector *collector, uint64_t observed,
 {
 	mant_structured_set_failure(collector->session, MANT_STRUCTURED_RELATION,
 	    MANT_STRUCTURED_STAGE_RENDER, 0, observed, allowed);
+}
+
+static void
+join_unknown(struct annotated_column *column)
+{
+	column->pending_join = MANT_DISPLAY_JOIN_UNKNOWN;
+	column->pending_spaces = 0;
+	column->separator_owner = column->separator_link = 0;
+}
+
+static void
+join_hard(struct annotated_column *column)
+{
+	column->pending_join = MANT_DISPLAY_JOIN_HARD;
+	column->pending_spaces = 0;
+	column->separator_owner = column->separator_link = 0;
+}
+
+static struct mant_annotated_display_edge
+origin_edge(const struct annotated_column *column, uint64_t origin)
+{
+	struct mant_annotated_display_edge edge = {0};
+
+	if (origin == 0 || column->last_output_origin == 0)
+		return edge;
+	if (origin == column->last_output_origin &&
+	    column->pending_join == MANT_DISPLAY_JOIN_DIRECT) {
+		edge = column->last_origin_edge;
+		edge.same_origin_continuation = 1;
+		return edge;
+	}
+	edge.predecessor_origin = column->last_output_origin;
+	edge.join = column->pending_join;
+	edge.separator_spaces = column->pending_spaces;
+	edge.separator_owner = column->separator_owner;
+	edge.separator_link = column->separator_link;
+	return edge;
+}
+
+static void
+commit_origin(struct annotated_column *column, uint64_t origin,
+    struct mant_annotated_display_edge edge)
+{
+	if (origin == 0) {
+		join_unknown(column);
+		return;
+	}
+	if (column->last_output_origin != origin ||
+	    column->pending_join != MANT_DISPLAY_JOIN_DIRECT)
+		column->last_origin_edge = edge;
+	column->last_output_origin = origin;
+	column->pending_join = MANT_DISPLAY_JOIN_DIRECT;
+	column->pending_spaces = 0;
+	column->separator_owner = column->separator_link = 0;
+}
+
+static int
+join_wrap_space(struct mant_annotated_collector *collector,
+    struct annotated_column *column, const struct annotated_slot *slot)
+{
+	if (column->pending_join == MANT_DISPLAY_JOIN_HARD ||
+	    column->pending_join == MANT_DISPLAY_JOIN_UNKNOWN)
+		return 1;
+	/* term_word() inserts AUTO_SPACE before the next word.  Even when
+	 * bufferc() reuses a blank slot, only a surviving TEXT write can prove
+	 * that a consumed WRAP space was authored. */
+	if (!slot->authored_space) {
+		join_unknown(column);
+		return 1;
+	}
+	if (column->pending_spaces == collector->session->limits->max_content_bytes) {
+		mant_structured_set_failure(collector->session,
+		    MANT_STRUCTURED_BUDGET, MANT_STRUCTURED_STAGE_RENDER, 10,
+		    column->pending_spaces == UINT64_MAX ? UINT64_MAX :
+		    column->pending_spaces + 1,
+		    collector->session->limits->max_content_bytes);
+		return 0;
+	}
+	if (column->pending_spaces == 0) {
+		column->separator_owner = slot->owner;
+		column->separator_link = slot->link;
+	} else if (column->separator_owner != slot->owner ||
+	    column->separator_link != slot->link) {
+		join_unknown(column);
+		return 1;
+	}
+	column->pending_join = MANT_DISPLAY_JOIN_SEPARATOR;
+	column->pending_spaces++;
+	return 1;
 }
 
 static int
@@ -893,7 +993,8 @@ mant_annotated_collector_account_display(
 static int
 write_display(struct mant_annotated_collector *collector,
     const void *bytes, size_t length,
-    struct mant_annotated_display_label label)
+    struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge)
 {
 	struct structured_session *session = collector->session;
 	enum mant_annotated_display_status status;
@@ -903,8 +1004,8 @@ write_display(struct mant_annotated_collector *collector,
 
 	if (session->status != MANT_STRUCTURED_OK)
 		return 0;
-	written = mant_annotated_display_write(collector->display, bytes,
-	    length, label);
+	written = mant_annotated_display_write_join(collector->display, bytes,
+	    length, label, edge);
 	if (!mant_annotated_collector_account_display(collector))
 		return 0;
 	if (written)
@@ -932,6 +1033,8 @@ static int
 flush_advances(struct mant_annotated_collector *collector, int proven_gap)
 {
 	struct mant_annotated_display_label label = {0};
+	struct mant_annotated_display_edge edge = {0};
+	struct annotated_column *column = NULL;
 	static const uint8_t space = ' ';
 	uint16_t index, leading;
 	int can_map;
@@ -942,22 +1045,37 @@ flush_advances(struct mant_annotated_collector *collector, int proven_gap)
 	}
 	can_map = proven_gap && collector->advance_count < 256 &&
 	    collector->skipped_cells <= collector->advance_count;
+	if (collector->skipped_column < collector->column_capacity)
+		column = collector->columns + collector->skipped_column;
 	leading = can_map ? collector->advance_count -
 	    collector->skipped_cells : collector->advance_count;
 	for (index = 0; index < collector->advance_count; index++) {
 		label.role = collector->advance_role;
 		if (can_map && index >= leading)
 			label = collector->skipped[index - leading];
+		else if (can_map && label.role == MANT_ANNOTATED_BODY)
+			label.role = MANT_ANNOTATED_LAYOUT;
+		if (column != NULL && label.glyph_origin != 0)
+			edge = origin_edge(column, label.glyph_origin);
+		else
+			memset(&edge, 0, sizeof(edge));
 		if ((label.role == MANT_ANNOTATED_BODY ||
 		    label.role == MANT_ANNOTATED_DIRECT_DRAW) &&
 		    label.glyph_origin == 0)
 			collector->metrics.unverified_placements++;
-		if (!write_display(collector, &space, 1, label))
+		if (!write_display(collector, &space, 1, label, edge))
 			return 0;
+		if (column != NULL && label.glyph_origin != 0)
+			commit_origin(column, label.glyph_origin, edge);
+		else if (column != NULL && can_map && index >= leading)
+			join_unknown(column);
 		memset(&label, 0, sizeof(label));
 	}
+	if (!can_map && collector->skipped_cells != 0 && column != NULL)
+		join_unknown(column);
 	collector->advance_count = collector->skipped_cells = 0;
 	collector->advance_role = 0;
+	collector->skipped_column = 0;
 	return 1;
 }
 
@@ -971,8 +1089,13 @@ record_field_skip(struct mant_annotated_collector *collector,
 	size_t width, cells;
 	uint16_t index;
 
-	if (event->visual == 0)
+	if (event->visual == 0) {
+		if (event->value == '\n' &&
+		    event->column < collector->column_capacity)
+			join_hard(collector->columns + event->column);
 		return;
+	}
+	collector->skipped_column = event->column;
 	if (collector->skipped_cells > 256)
 		return;
 	width = (*p->getwidth)(p, ' ');
@@ -991,6 +1114,9 @@ record_field_skip(struct mant_annotated_collector *collector,
 				label.link = slot->link;
 				label.source = slot->source;
 				label.glyph_origin = slot->origin;
+				if (slot->layout_space && label.role ==
+				    MANT_ANNOTATED_BODY)
+					label.role = MANT_ANNOTATED_LAYOUT;
 			}
 		}
 	}
@@ -1029,6 +1155,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			pop_node(collector, event->node);
 		return;
 	case TERM_COLLECT_TABLE_CELL:
+		if (event->column < collector->column_capacity)
+			join_hard(collector->columns + event->column);
 		observe_table_cell(collector, event);
 		return;
 	case TERM_COLLECT_TABLE_CELL_POSITION:
@@ -1046,6 +1174,13 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		/* term_vspace() flushes the prior body in term_newln() first. */
 		if (collector->in_footer)
 			collector->footer_drained = 1;
+		if (event->column < collector->column_capacity)
+			join_hard(collector->columns + event->column);
+		return;
+	case TERM_COLLECT_ENDLINE:
+		if (event->reason != TERM_COLLECT_WRAP &&
+		    event->column < collector->column_capacity)
+			join_hard(collector->columns + event->column);
 		return;
 	case TERM_COLLECT_LOGICAL:
 		if (collector->next_origin == UINT64_MAX) {
@@ -1122,7 +1257,29 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		slot->flags = event->reason == TERM_COLLECT_FONT ?
 		    MANT_ANNOTATED_FONT_STROKE : 0;
 		slot->value = event->value;
+		slot->authored_space = event->reason == TERM_COLLECT_TEXT &&
+		    event->value == ' ' && collector->pending_source != 0;
+		slot->layout_space = event->value == ' ' &&
+		    (event->reason == TERM_COLLECT_HORIZ ||
+		    event->reason == TERM_COLLECT_FIELD);
 		slot->occupied = 1;
+		return;
+	case TERM_COLLECT_BUFFER_CURSOR:
+		/* bufferc() may advance across an existing blank without writing.
+		 * A later logical origin cannot inherit the blank's provenance. */
+		if (event->end == event->pos + 1 &&
+		    event->column < collector->column_capacity) {
+			column = collector->columns + event->column;
+			if (event->pos < column->capacity) {
+				slot = column->slots + event->pos;
+				if (slot->occupied && slot->value == ' ' &&
+				    (slot->origin != collector->pending_origin ||
+				    event->reason != TERM_COLLECT_TEXT)) {
+					slot->authored_space = 0;
+					slot->layout_space = 0;
+				}
+			}
+		}
 		return;
 	case TERM_COLLECT_FIELD_PLACE:
 		if (!flush_advances(collector, 1))
@@ -1150,6 +1307,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_label.link = slot->link;
 		collector->letter_label.source = slot->source;
 		collector->letter_label.flags = slot->flags;
+		collector->letter_edge = origin_edge(column, slot->origin);
+		collector->letter_column = event->column;
 		collector->letter_pending = 1;
 		collector->metrics.field_placements++;
 		return;
@@ -1164,6 +1323,9 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		memset(&collector->letter_label, 0,
 		    sizeof(collector->letter_label));
 		collector->letter_label.role = current_role(collector);
+		column = column_at(collector, event->column);
+		if (column == NULL)
+			return;
 		collector->letter_label.glyph_origin =
 		    event->reason == TERM_COLLECT_HORIZ ||
 		    event->reason == TERM_COLLECT_FIELD ? 0 :
@@ -1177,6 +1339,9 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			collector->letter_label.source =
 			    collector->pending_source;
 		}
+		collector->letter_edge = origin_edge(column,
+		    collector->letter_label.glyph_origin);
+		collector->letter_column = event->column;
 		collector->letter_pending = 1;
 		return;
 	case TERM_COLLECT_DRAW:
@@ -1193,6 +1358,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_label.link = visible_link(collector,
 		    event->node, event->reason);
 		collector->letter_label.source = source_key(event->node);
+		collector->letter_edge = (struct mant_annotated_display_edge){0};
+		collector->letter_column = event->column;
 		collector->letter_pending = 1;
 		collector->metrics.direct_draws++;
 		return;
@@ -1217,6 +1384,19 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			if (!charge_mutations(collector, end - index) ||
 			    !charge_work(collector, end - index))
 				return;
+			if (event->op == TERM_COLLECT_BUFFER_CONSUME &&
+			    event->reason == TERM_COLLECT_WRAP) {
+				for (size_t cell = index; cell < end; cell++) {
+					slot = column->slots + cell;
+					if (slot->occupied && slot->value == ' ' &&
+					    slot->origin != 0) {
+						if (!join_wrap_space(collector, column,
+						    slot))
+							return;
+					} else
+						join_unknown(column);
+				}
+			}
 			discard_range(collector, column, index, end);
 		}
 		if (event->op == TERM_COLLECT_BUFFER_RESET)
@@ -1244,13 +1424,22 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 {
 	struct mant_annotated_collector *collector = argument;
 	struct mant_annotated_display_label label = {0};
+	struct mant_annotated_display_edge edge = {0};
+	struct annotated_column *column;
 	enum mant_mandoc_output_operation operation;
+	int written;
 
 	if (collector == NULL ||
 	    collector->session->status != MANT_STRUCTURED_OK)
 		return 0;
 	operation = mant_mandoc_output_current_operation();
 	label.role = current_role(collector);
+	/* With no FIELD_SKIP, term_field()'s advance is its own vbl
+	 * indentation (or endline margin spacing), never buffer text. */
+	if (operation == MANT_OUTPUT_ADVANCE &&
+	    collector->skipped_cells == 0 &&
+	    label.role == MANT_ANNOTATED_BODY)
+		label.role = MANT_ANNOTATED_LAYOUT;
 	if (operation == MANT_OUTPUT_ADVANCE &&
 	    collector->skipped_cells != 0 &&
 	    label.role == MANT_ANNOTATED_BODY) {
@@ -1277,6 +1466,7 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 			return 0;
 		}
 		label = collector->letter_label;
+		edge = collector->letter_edge;
 		collector->letter_pending = 0;
 		if ((label.role == MANT_ANNOTATED_BODY ||
 		    label.role == MANT_ANNOTATED_DIRECT_DRAW) &&
@@ -1287,7 +1477,17 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 		fail_relation(collector, operation, MANT_OUTPUT_ENDLINE);
 		return 0;
 	}
-	return write_display(collector, bytes, length, label);
+	written = write_display(collector, bytes, length, label, edge);
+	if (!written || operation != MANT_OUTPUT_LETTER ||
+	    collector->letter_column >= collector->column_capacity ||
+	    (label.role != MANT_ANNOTATED_BODY &&
+	    label.role != MANT_ANNOTATED_DIRECT_DRAW) ||
+	    (length == 1 && bytes != NULL &&
+	    ((const uint8_t *)bytes)[0] == '\b'))
+		return written;
+	column = collector->columns + collector->letter_column;
+	commit_origin(column, label.glyph_origin, edge);
+	return written;
 }
 
 void

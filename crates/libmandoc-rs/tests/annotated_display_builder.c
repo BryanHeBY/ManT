@@ -119,6 +119,9 @@ test_wide_overwrite_and_utf8_boundary(void)
 	assert(mant_annotated_display_finish(display, &view));
 	assert(view.row_count == 1 && view.rows[0].column_count == 2);
 	assert(view.byte_count == 2 && memcmp(view.bytes, " X", 2) == 0);
+	assert(view.run_count == 2 &&
+	    view.runs[0].label.role == MANT_ANNOTATED_LAYOUT &&
+	    view.runs[1].label.role == MANT_ANNOTATED_BODY);
 	mant_annotated_display_free(display);
 
 	/* Fixed CVS `\fB界\fP` emits 界\b界.  A proven synthetic

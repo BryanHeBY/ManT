@@ -2,13 +2,18 @@
 
 //! R01 native owner boundaries; these are not final IR ranges.
 
-use libmandoc_rs::annotated::{AnnotatedDocument, AnnotatedRenderer};
+use libmandoc_rs::annotated::{AnnotatedDocument, AnnotatedRenderer, AnnotatedTextJoin};
 use libmandoc_rs::{InputFormat, SourceBundle};
 
 fn render(source: &[u8]) -> AnnotatedDocument {
+    render_at_width(source, 78)
+}
+
+fn render_at_width(source: &[u8], width: u32) -> AnnotatedDocument {
     let mut bundle = SourceBundle::new();
     bundle.insert("x.1", source.to_vec()).unwrap();
-    AnnotatedRenderer::default()
+    AnnotatedRenderer::new(width)
+        .unwrap()
         .render_bundle("x.1", &bundle, InputFormat::Man)
         .unwrap()
 }
@@ -33,6 +38,94 @@ fn selected_text(page: &AnnotatedDocument, key: u32) -> String {
         text.push_str(&page.text[start..end]);
     }
     text
+}
+
+fn selection_joins(page: &AnnotatedDocument, key: u32) -> Vec<(AnnotatedTextJoin, String)> {
+    let mark = &page.marks[usize::try_from(key - 1).unwrap()];
+    let first = usize::try_from(mark.selection_first).unwrap();
+    let count = usize::try_from(mark.selection_count).unwrap();
+    page.selection_parts[first..first + count]
+        .iter()
+        .map(|part| {
+            let start = usize::try_from(part.join_text_start).unwrap();
+            let end = usize::try_from(part.join_text_start + part.join_text_len).unwrap();
+            (part.join_before, page.join_text[start..end].to_owned())
+        })
+        .collect()
+}
+
+#[test]
+fn soft_wrap_keeps_the_exact_consumed_separator_count() {
+    // Both exact inputs first ran on pinned CVS -Tutf8/-Ttree at width 20.
+    // term.c::term_flushln consumes one or three authored ASCII spaces at
+    // WRAP, producing identical device rows; the join retains their count.
+    for (middle, expected) in [(" ", " "), ("   ", "   ")] {
+        let input = format!(".TH T 1\n.SH D\n.UR https://x.test\nalpha beta{middle}gamma\n.UE\n");
+        let page = render_at_width(input.as_bytes(), 20);
+        let heading = page.marks.iter().find(|mark| mark.kind == 1).unwrap();
+        let joins = selection_joins(&page, heading.body_region);
+        assert!(
+            page.runs.iter().any(|run| run.label.role == 5),
+            "wrapped row must retain proven native indentation"
+        );
+        assert!(
+            joins.iter().any(|(join, text)| {
+                *join == AnnotatedTextJoin::AuthoredSeparator && text == expected
+            }),
+            "expected {expected:?} in {joins:?}"
+        );
+    }
+}
+
+#[test]
+fn generated_wrap_space_is_not_an_authored_separator() {
+    // Exact input first ran on pinned CVS -Tutf8 at width 20.  In
+    // term.c::term_word(), the inter-node blank is AUTO_SPACE; term_flushln()
+    // later consumes it at WRAP, but there is no authored separator to keep.
+    let page = render_at_width(b".TH T 1\n.SH D\n.B 123456789012345\n.I abcdefghij\n", 20);
+    let heading = page.marks.iter().find(|mark| mark.kind == 1).unwrap();
+    let joins = selection_joins(&page, heading.body_region);
+    assert!(
+        !joins
+            .iter()
+            .any(|(join, _)| *join == AnnotatedTextJoin::AuthoredSeparator),
+        "generated separator became authored in {joins:?}"
+    );
+}
+
+#[test]
+fn native_box_border_does_not_allocate_a_run_per_drawn_character() {
+    // Exact table first ran on pinned CVS -Tutf8.  tbl_term.c::
+    // tbl_direct_border() draws the horizontal rule character by character;
+    // those zero-origin decorations can still share one final run.
+    let page = render(b".TH X 1\n.SH D\n.TS\nbox;\nl.\nhello\n.TE\n");
+    assert!(page.runs.iter().any(|run| {
+        let start = usize::try_from(run.byte_start).unwrap();
+        let end = usize::try_from(run.byte_start + run.byte_count).unwrap();
+        page.text[start..end].contains("────")
+    }));
+}
+
+#[test]
+fn no_fill_newline_is_hard_but_escaped_style_continuation_can_contact() {
+    // Exact inputs first ran on pinned CVS -Tutf8/-Ttree.  The ordinary
+    // NODE_LINE triggers term_newln(); term.c::ESCAPE_NOSPACE from \c
+    // suppresses a break, while B/I leave distinct final style runs.
+    let hard = render(b".TH T 1\n.SH D\n.nf\nalpha  beta\ngamma\n.fi\n");
+    let heading = hard.marks.iter().find(|mark| mark.kind == 1).unwrap();
+    assert!(
+        selection_joins(&hard, heading.body_region)
+            .iter()
+            .any(|(join, _)| *join == AnnotatedTextJoin::HardBoundary)
+    );
+
+    let contact = render(b".TH T 1\n.SH D\n.UR https://x.test\n.B alpha\\c\n.I beta\n.UE\n");
+    let heading = contact.marks.iter().find(|mark| mark.kind == 1).unwrap();
+    assert!(
+        selection_joins(&contact, heading.body_region)
+            .iter()
+            .any(|(join, _)| *join == AnnotatedTextJoin::DirectContact)
+    );
 }
 
 #[test]

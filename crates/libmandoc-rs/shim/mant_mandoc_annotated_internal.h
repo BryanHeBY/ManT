@@ -16,6 +16,8 @@ struct mant_annotated_result {
 	uint32_t mark_count;
 	struct mant_annotated_selection_part *selection_parts;
 	uint32_t selection_part_count;
+	uint8_t *join_text;
+	uint64_t join_text_count;
 	/* Producer × dimension table, including explicit downstream pending/N/A. */
 	struct mant_annotated_coverage_check coverage_checks[24];
 	struct mant_annotated_coverage_issue *coverage_issues;

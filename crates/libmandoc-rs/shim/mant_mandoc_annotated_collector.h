@@ -33,8 +33,7 @@ enum mant_annotated_region_kind {
 	MANT_ANNOTATED_REGION_TABLE_CELL = 9
 };
 
-/* Selection joins are deliberately unresolved in the first native transfer.
- * No physical row/column adjacency is treated as logical text evidence. */
+/* No physical row/column adjacency is treated as logical text evidence. */
 enum mant_annotated_text_join {
 	MANT_ANNOTATED_JOIN_NONE = 0,
 	MANT_ANNOTATED_JOIN_DIRECT_CONTACT = 1,
@@ -48,6 +47,8 @@ struct mant_annotated_selection_part {
 	uint32_t join_before;
 	uint64_t start_byte;
 	uint64_t end_byte;
+	uint64_t join_text_start;
+	uint64_t join_text_len;
 };
 
 #define MANT_ANNOTATED_MARK_AUTHORED (1U << 0)

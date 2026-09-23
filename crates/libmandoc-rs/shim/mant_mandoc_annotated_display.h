@@ -11,7 +11,9 @@ enum mant_annotated_display_role {
 	MANT_ANNOTATED_BODY = 1,
 	MANT_ANNOTATED_HEADER = 2,
 	MANT_ANNOTATED_FOOTER = 3,
-	MANT_ANNOTATED_DIRECT_DRAW = 4
+	MANT_ANNOTATED_DIRECT_DRAW = 4,
+	/* Device advance proven to be layout, not an authored glyph. */
+	MANT_ANNOTATED_LAYOUT = 5
 };
 
 enum mant_annotated_display_status {
@@ -37,6 +39,32 @@ struct mant_annotated_display_label {
 	uint64_t glyph_origin;
 	uint32_t flags;
 	uint32_t reserved;
+};
+
+/* Private execution evidence, never inferred from final columns.  A zero
+ * predecessor means the relationship to an earlier survivor is unproved. */
+enum mant_annotated_display_join {
+	MANT_DISPLAY_JOIN_UNKNOWN = 0,
+	MANT_DISPLAY_JOIN_DIRECT = 1,
+	MANT_DISPLAY_JOIN_SEPARATOR = 2,
+	MANT_DISPLAY_JOIN_HARD = 3
+};
+
+struct mant_annotated_display_edge {
+	uint64_t predecessor_origin;
+	uint64_t separator_spaces;
+	uint32_t join;
+	uint32_t separator_owner;
+	uint32_t separator_link;
+	uint32_t same_origin_continuation;
+	uint32_t reserved;
+};
+
+/* One private endpoint per final run; borrowed until display_free(). */
+struct mant_annotated_run_endpoint {
+	uint64_t first_origin;
+	uint64_t last_origin;
+	struct mant_annotated_display_edge first_edge;
 };
 
 struct mant_annotated_display_limits {
@@ -92,6 +120,11 @@ int mant_annotated_display_set_work_charge(struct mant_annotated_display *,
 	mant_annotated_display_work_charge, void *);
 int mant_annotated_display_write(struct mant_annotated_display *,
 	const void *, size_t, struct mant_annotated_display_label);
+int mant_annotated_display_write_join(struct mant_annotated_display *,
+	const void *, size_t, struct mant_annotated_display_label,
+	struct mant_annotated_display_edge);
+const struct mant_annotated_run_endpoint *mant_annotated_display_endpoints(
+	const struct mant_annotated_display *, uint32_t *);
 int mant_annotated_display_finish(struct mant_annotated_display *,
 	struct mant_annotated_display_view *);
 enum mant_annotated_display_status mant_annotated_display_status(

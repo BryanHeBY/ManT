@@ -17,6 +17,7 @@ use crate::{LinkTarget, SourceKey, SourceSpan};
 // terminal columns into cells.
 const MAX_FIXED_ROW_COLUMNS: u32 = 1_048_576;
 const MAX_FIXED_TOTAL_COLUMNS: u64 = 32 * 1024 * 1024;
+const MAX_FIXED_TOTAL_JOIN_BYTES: u64 = 32 * 1024 * 1024;
 
 /// A final display surface, independent of any viewport width.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
@@ -103,6 +104,8 @@ pub enum DisplayRole {
     Body,
     /// Native direct drawing, such as table rules.
     DirectDraw,
+    /// Native-confirmed terminal advance used only for layout spacing.
+    Layout,
 }
 
 /// One UTF-8 run in the sole text arena.
@@ -138,13 +141,20 @@ pub struct OutputSlice {
 }
 
 /// Evidence for whether adjacent slices form one searchable logical text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    content = "text",
+    rename_all = "kebab-case",
+    deny_unknown_fields
+)]
 pub enum TextJoin {
     /// No byte lies between the slices, including a proven soft wrap.
     DirectContact,
-    /// An authored separator is already retained in one of the slices.
-    AuthoredSeparator,
+    /// Exact native-consumed authored separator between the slices.
+    ///
+    /// A separator already visible inside a slice is not repeated here.
+    AuthoredSeparator(String),
     /// A native structural boundary forbids a cross-slice match.
     HardBoundary,
     /// Adjacency exists but cannot license a cross-slice match.
@@ -429,6 +439,16 @@ impl DisplaySurface {
             {
                 return Err(FixedBodyError("invalid display run byte coverage"));
             }
+            if run.label.role == DisplayRole::Layout
+                && (run.label.owner.is_some()
+                    || run.label.link.is_some()
+                    || run.label.source.is_some()
+                    || run.label.style.bold
+                    || run.label.style.underline
+                    || !self.text[start..end].bytes().all(|byte| byte == b' '))
+            {
+                return Err(FixedBodyError("invalid native layout run"));
+            }
             byte_end = end;
         }
         if byte_end != self.text.len() {
@@ -448,7 +468,23 @@ impl DisplaySurface {
         })
     }
 
-    fn validate_selection(&self, selection: &TextSelection) -> Result<(), FixedBodyError> {
+    fn non_layout_prefix(&self) -> Vec<u64> {
+        let mut prefix = Vec::with_capacity(self.runs.len() + 1);
+        prefix.push(0);
+        for run in &self.runs {
+            prefix.push(
+                prefix.last().copied().unwrap_or(0)
+                    + u64::from(run.label.role != DisplayRole::Layout),
+            );
+        }
+        prefix
+    }
+
+    fn validate_selection_with_prefix(
+        &self,
+        selection: &TextSelection,
+        non_layout_prefix: &[u64],
+    ) -> Result<(), FixedBodyError> {
         if selection.joins.len() != selection.parts.len().saturating_sub(1) {
             return Err(FixedBodyError("display selection joins are not pairwise"));
         }
@@ -472,13 +508,24 @@ impl DisplaySurface {
                     "display selection is unordered or overlapping",
                 ));
             }
-            if let Some(prior) = previous
-                && selection.joins[index - 1] == TextJoin::DirectContact
-            {
+            if let Some(prior) = previous {
+                let join = &selection.joins[index - 1];
+                if let TextJoin::AuthoredSeparator(separator) = join
+                    && (separator.is_empty() || !separator.bytes().all(|byte| byte == b' '))
+                {
+                    return Err(FixedBodyError("invalid authored display separator"));
+                }
+                if !matches!(
+                    join,
+                    TextJoin::DirectContact | TextJoin::AuthoredSeparator(_)
+                ) {
+                    previous = Some(*part);
+                    continue;
+                }
                 if part.run == prior.run {
-                    if part.start_byte != prior.end_byte {
+                    if *join != TextJoin::DirectContact || part.start_byte != prior.end_byte {
                         return Err(FixedBodyError(
-                            "direct-contact selection skips bytes in one run",
+                            "display join skips or repeats bytes in one run",
                         ));
                     }
                 } else {
@@ -487,31 +534,34 @@ impl DisplaySurface {
                     let prior_text = self
                         .run_text(prior.run)
                         .ok_or(FixedBodyError("display selection references missing run"))?;
-                    let adjacent_runs = prior.run.get().checked_add(1) == Some(part.run.get());
+                    // term_flushln() consumes a WRAP separator before
+                    // term_field() emits the next row's indentation.  Those
+                    // layout-only runs may sit between two native-connected
+                    // selected runs, but visible authored runs may not.
+                    let layout_only_gap = non_layout_prefix[prior.run.get() as usize]
+                        == non_layout_prefix[(part.run.get() - 1) as usize];
                     let adjacent_rows = prior_run.row == current_run.row
                         || prior_run.row.get().checked_add(1) == Some(current_run.row.get());
-                    let prior_end = prior_run.column.checked_add(prior_run.width);
-                    let adjacent_columns = if prior_run.row == current_run.row {
-                        prior_end == Some(current_run.column)
-                    } else {
-                        let prior_row = &self.rows[(prior_run.row.get() - 1) as usize];
-                        prior_end == Some(prior_row.column_count) && current_run.column == 0
-                    };
-                    if !adjacent_runs
+                    // Native join evidence, not terminal column geometry,
+                    // determines whether a soft wrap or indentation carries
+                    // logical text. Still forbid skipping a visible run/row.
+                    if !layout_only_gap
                         || !adjacent_rows
-                        || !adjacent_columns
                         || prior.end_byte != prior_text.len() as u64
                         || part.start_byte != 0
                     {
-                        return Err(FixedBodyError(
-                            "direct-contact selection skips visible output",
-                        ));
+                        return Err(FixedBodyError("display join skips visible output"));
                     }
                 }
             }
             previous = Some(*part);
         }
         Ok(())
+    }
+
+    #[cfg(test)]
+    fn validate_selection(&self, selection: &TextSelection) -> Result<(), FixedBodyError> {
+        self.validate_selection_with_prefix(selection, &self.non_layout_prefix())
     }
 
     fn validate_point(&self, point: DisplayPoint) -> Result<(), FixedBodyError> {
@@ -544,18 +594,35 @@ impl FixedBody {
     /// Returns the first malformed source-neutral relationship.
     pub fn validate(&self) -> Result<(), FixedBodyError> {
         self.surface.validate()?;
+        let non_layout_prefix = self.surface.non_layout_prefix();
+        let mut join_bytes = 0_u64;
+        let mut validate_selection = |selection: &TextSelection| {
+            self.surface
+                .validate_selection_with_prefix(selection, &non_layout_prefix)?;
+            for join in &selection.joins {
+                if let TextJoin::AuthoredSeparator(separator) = join {
+                    join_bytes = join_bytes
+                        .checked_add(separator.len() as u64)
+                        .ok_or(FixedBodyError("display join byte count overflows"))?;
+                    if join_bytes > MAX_FIXED_TOTAL_JOIN_BYTES {
+                        return Err(FixedBodyError("display join byte budget exceeded"));
+                    }
+                }
+            }
+            Ok::<(), FixedBodyError>(())
+        };
         for (index, heading) in self.headings.iter().enumerate() {
             dense_key(heading.key, index)?;
             earlier(heading.parent, heading.key)?;
-            self.surface.validate_selection(&heading.title)?;
-            self.surface.validate_selection(&heading.direct_body)?;
+            validate_selection(&heading.title)?;
+            validate_selection(&heading.direct_body)?;
         }
         for (index, owner) in self.owners.iter().enumerate() {
             dense_key(owner.key, index)?;
             earlier(owner.parent, owner.key)?;
             reference(owner.section, self.headings.len())?;
-            self.surface.validate_selection(&owner.head)?;
-            self.surface.validate_selection(&owner.direct_body)?;
+            validate_selection(&owner.head)?;
+            validate_selection(&owner.direct_body)?;
             if selections_overlap(&owner.head, &owner.direct_body) {
                 return Err(FixedBodyError("owner head and direct body overlap"));
             }
@@ -580,7 +647,7 @@ impl FixedBody {
         for (index, link) in self.links.iter().enumerate() {
             dense_key(link.key, index)?;
             validate_link_target(&link.target)?;
-            self.surface.validate_selection(&link.label)?;
+            validate_selection(&link.label)?;
             for part in &link.label.parts {
                 let run_index = (part.run.get() - 1) as usize;
                 let run = &self.surface.runs[run_index];
@@ -600,7 +667,7 @@ impl FixedBody {
             dense_key(region.key, index)?;
             earlier(region.parent, region.key)?;
             reference(region.owner, self.owners.len())?;
-            self.surface.validate_selection(&region.selection)?;
+            validate_selection(&region.selection)?;
             if let Some(point) = region.empty_point {
                 self.surface.validate_point(point)?;
             }
@@ -881,7 +948,10 @@ mod hardening_tests {
     }
 
     #[test]
-    fn direct_contact_across_rows_must_not_skip_column_padding() {
+    fn native_join_evidence_is_independent_of_row_indentation() {
+        // Exact soft-wrap input was first run with pinned CVS -Tutf8/-Ttree.
+        // term.c::term_flushln consumes the separator at WRAP, while the
+        // next visible row can still begin after native indentation.
         let mut body = body_with_run("ab", 1);
         body.surface.runs[0].byte_count = 1;
         body.surface.runs.push(DisplayRun {
@@ -918,12 +988,154 @@ mod hardening_tests {
             joins: vec![TextJoin::DirectContact],
         };
         body.surface.validate().unwrap();
-        assert!(body.surface.validate_selection(&selection).is_err());
+        body.surface.validate_selection(&selection).unwrap();
         body.surface.rows[0].column_count = 1;
         body.surface.validate_selection(&selection).unwrap();
         body.surface.runs[1].column = 1;
         body.surface.rows[1].column_count = 2;
-        assert!(body.surface.validate_selection(&selection).is_err());
+        body.surface.validate_selection(&selection).unwrap();
+        let separated = TextSelection {
+            joins: vec![TextJoin::AuthoredSeparator("   ".to_owned())],
+            ..selection
+        };
+        body.surface.validate_selection(&separated).unwrap();
+        let serialized = serde_json::to_value(&separated).unwrap();
+        assert_eq!(serialized["joins"][0]["kind"], "authored-separator");
+        assert_eq!(serialized["joins"][0]["text"], "   ");
+        assert_eq!(
+            serde_json::from_value::<TextSelection>(serialized).unwrap(),
+            separated
+        );
+        let mut stale_wire = serde_json::to_value(&separated).unwrap();
+        stale_wire["joins"][0] = serde_json::json!("authored-separator");
+        assert!(serde_json::from_value::<TextSelection>(stale_wire).is_err());
+        let mut unknown_field = serde_json::to_value(&separated).unwrap();
+        unknown_field["joins"][0]["invented"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<TextSelection>(unknown_field).is_err());
+        for bad in ["", "x", " \t"] {
+            let invalid = TextSelection {
+                joins: vec![TextJoin::AuthoredSeparator(bad.to_owned())],
+                ..separated.clone()
+            };
+            assert!(body.surface.validate_selection(&invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn native_join_may_cross_only_unowned_layout_runs() {
+        // Exact soft-wrap shape first checked with pinned CVS -Tutf8.
+        // term.c::term_flushln consumes WRAP spaces before term_field()
+        // emits layout indentation on the following physical row.
+        let mut body = body_with_run("a b", 1);
+        let template = body.surface.runs[0].clone();
+        body.surface.runs = vec![
+            template.clone(),
+            DisplayRun {
+                key: key(2),
+                row: key(2),
+                column: 0,
+                width: 1,
+                byte_start: 1,
+                byte_count: 1,
+                ..template.clone()
+            },
+            DisplayRun {
+                key: key(3),
+                row: key(2),
+                column: 1,
+                width: 1,
+                byte_start: 2,
+                byte_count: 1,
+                ..template
+            },
+        ];
+        body.surface.runs[0].byte_count = 1;
+        body.surface.rows[0].break_after = true;
+        body.surface.rows.push(DisplayRow {
+            key: key(2),
+            first_run: key(2),
+            run_count: 2,
+            column_count: 2,
+            break_after: false,
+        });
+        let selected = TextSelection {
+            parts: vec![
+                OutputSlice {
+                    run: key(1),
+                    start_byte: 0,
+                    end_byte: 1,
+                },
+                OutputSlice {
+                    run: key(3),
+                    start_byte: 0,
+                    end_byte: 1,
+                },
+            ],
+            joins: vec![TextJoin::AuthoredSeparator(" ".to_owned())],
+        };
+        body.surface.validate().unwrap();
+        assert!(body.surface.validate_selection(&selected).is_err());
+        body.surface.runs[1].label.role = DisplayRole::Layout;
+        body.surface.validate_selection(&selected).unwrap();
+        body.surface.runs[1].label.owner = Some(key(1));
+        assert!(body.surface.validate().is_err());
+    }
+
+    #[test]
+    fn repeated_selection_gap_checks_share_one_surface_index() {
+        // Many marks may select the same two runs. Validation must account
+        // for each intermediate native layout run once, not once per mark.
+        const COUNT: u32 = 2_048;
+        let mut body = body_with_run("a", 1);
+        let template = body.surface.runs[0].clone();
+        body.surface.text = format!("a{}b", " ".repeat(COUNT as usize));
+        body.surface.rows[0].column_count = COUNT + 2;
+        body.surface.rows[0].run_count = COUNT + 2;
+        body.surface.runs = (0..COUNT + 2)
+            .map(|index| {
+                let mut run = DisplayRun {
+                    key: key(index + 1),
+                    column: index,
+                    width: 1,
+                    byte_start: u64::from(index),
+                    byte_count: 1,
+                    ..template.clone()
+                };
+                if index > 0 && index <= COUNT {
+                    run.label.role = DisplayRole::Layout;
+                }
+                run
+            })
+            .collect();
+        let title = TextSelection {
+            parts: vec![
+                OutputSlice {
+                    run: key(1),
+                    start_byte: 0,
+                    end_byte: 1,
+                },
+                OutputSlice {
+                    run: key(COUNT + 2),
+                    start_byte: 0,
+                    end_byte: 1,
+                },
+            ],
+            joins: vec![TextJoin::DirectContact],
+        };
+        body.headings = (1..=COUNT)
+            .map(|index| HeadingMark {
+                key: key(index),
+                parent: None,
+                level_hint: 1,
+                title: title.clone(),
+                direct_body: TextSelection {
+                    parts: vec![],
+                    joins: vec![],
+                },
+                source: None,
+            })
+            .collect();
+        body.validate().unwrap();
     }
 
     #[test]

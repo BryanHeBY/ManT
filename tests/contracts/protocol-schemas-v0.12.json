@@ -14658,6 +14658,11 @@
             "description": "Native direct drawing, such as table rules.",
             "type": "string",
             "const": "direct-draw"
+          },
+          {
+            "description": "Native-confirmed terminal advance used only for layout spacing.",
+            "type": "string",
+            "const": "layout"
           }
         ]
       },
@@ -17253,23 +17258,63 @@
         "oneOf": [
           {
             "description": "No byte lies between the slices, including a proven soft wrap.",
-            "type": "string",
-            "const": "direct-contact"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "direct-contact"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
-            "description": "An authored separator is already retained in one of the slices.",
-            "type": "string",
-            "const": "authored-separator"
+            "description": "Exact native-consumed authored separator between the slices.\n\nA separator already visible inside a slice is not repeated here.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored-separator"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
           },
           {
             "description": "A native structural boundary forbids a cross-slice match.",
-            "type": "string",
-            "const": "hard-boundary"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-boundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Adjacency exists but cannot license a cross-slice match.",
-            "type": "string",
-            "const": "unknown"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           }
         ]
       },
