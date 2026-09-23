@@ -40,11 +40,13 @@ fn four_representative_pages_have_checked_native_surfaces() {
             .render_bundle(name, &bundle, InputFormat::Man)
             .unwrap_or_else(|error| panic!("{name}: {error:?}"));
         eprintln!(
-            "{name}: input={input_bytes} surface={} rows={} runs={} marks={} elapsed_ms={}",
+            "{name}: input={input_bytes} surface={} rows={} runs={} marks={} parts={} join_bytes={} elapsed_ms={}",
             page.text.len(),
             page.rows.len(),
             page.runs.len(),
             page.marks.len(),
+            page.selection_parts.len(),
+            page.join_text.len(),
             started.elapsed().as_millis()
         );
         assert!(!page.text.is_empty(), "{name}");
