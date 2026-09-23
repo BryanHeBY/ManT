@@ -14624,7 +14624,7 @@
             ]
           },
           {
-            "description": "Native terminal-column boundary in an actual final body row. It remains valid in a blank cell or gap with no run to borrow.",
+            "description": "Native terminal-column boundary in an actual final body row.  It\nremains valid in a blank cell or gap with no run to borrow.",
             "type": "object",
             "properties": {
               "column": {
@@ -15946,7 +15946,7 @@
             "minimum": 1
           },
           "label": {
-            "description": "Surviving clickable label slices.",
+            "description": "Surviving visible label slices; no-href instances are not clickable.",
             "$ref": "#/$defs/TextSelection"
           },
           "source": {
@@ -15961,8 +15961,15 @@
             ]
           },
           "target": {
-            "description": "Typed destination decoded while the native source is still available.",
-            "$ref": "#/$defs/LinkTarget"
+            "description": "Typed destination decoded while the native source is still available.\n`None` preserves a real link macro instance that rendered without href.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LinkTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

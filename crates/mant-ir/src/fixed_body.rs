@@ -255,17 +255,73 @@ pub struct OwnerMark {
 }
 
 /// One native link macro instance, independent of its visible slice count.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LinkMark {
     /// Dense one-based occurrence key.
     pub key: NonZeroU32,
     /// Typed destination decoded while the native source is still available.
-    pub target: LinkTarget,
-    /// Surviving clickable label slices.
+    /// `None` preserves a real link macro instance that rendered without href.
+    #[schemars(with = "RequiredNullableLinkTarget")]
+    pub target: Option<LinkTarget>,
+    /// Surviving visible label slices; no-href instances are not clickable.
     pub label: TextSelection,
     /// Authored macro location when known.
     pub source: Option<SourceSpan>,
+}
+
+// An omitted `target` is not the same as a native macro with no href.  Keep
+// explicit JSON null for the latter while preserving `Option<LinkTarget>` in
+// the typed IR.  A non-Option wire field makes Serde reject missing target.
+#[derive(JsonSchema)]
+#[schemars(transparent)]
+struct RequiredNullableLinkTarget(Option<LinkTarget>);
+
+impl<'de> Deserialize<'de> for RequiredNullableLinkTarget {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = RequiredNullableLinkTarget;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an explicit link target or null")
+            }
+
+            fn visit_newtype_struct<D: serde::Deserializer<'de>>(
+                self,
+                deserializer: D,
+            ) -> Result<Self::Value, D::Error> {
+                Option::<LinkTarget>::deserialize(deserializer).map(RequiredNullableLinkTarget)
+            }
+        }
+
+        // Serde's missing-field adapter supplies `None` to deserialize_option,
+        // so use the newtype entry point: it rejects an omitted field while
+        // preserving explicit JSON null as a real no-href occurrence.
+        deserializer.deserialize_newtype_struct("RequiredNullableLinkTarget", Visitor)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LinkMarkWire {
+    key: NonZeroU32,
+    target: RequiredNullableLinkTarget,
+    label: TextSelection,
+    source: Option<SourceSpan>,
+}
+
+impl<'de> Deserialize<'de> for LinkMark {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = LinkMarkWire::deserialize(deserializer)?;
+        Ok(Self {
+            key: wire.key,
+            target: wire.target.0,
+            label: wire.label,
+            source: wire.source,
+        })
+    }
 }
 
 /// One authored native anchor at its final, zero-width display position.
@@ -663,7 +719,9 @@ impl FixedBody {
         let mut link_covered_bytes = vec![0u64; self.surface.runs.len()];
         for (index, link) in self.links.iter().enumerate() {
             dense_key(link.key, index)?;
-            validate_link_target(&link.target)?;
+            if let Some(target) = &link.target {
+                validate_link_target(target)?;
+            }
             validate_selection(&link.label)?;
             for part in &link.label.parts {
                 let run_index = (part.run.get() - 1) as usize;
@@ -897,9 +955,9 @@ mod hardening_tests {
         let mut body = body_with_run("abc", 3);
         body.links.push(LinkMark {
             key: key(1),
-            target: LinkTarget::External {
+            target: Some(LinkTarget::External {
                 uri: "https://example.test".to_owned(),
-            },
+            }),
             label: selection(&[(0, 1), (2, 3)], vec![TextJoin::DirectContact]),
             source: None,
         });
@@ -1161,9 +1219,9 @@ mod hardening_tests {
         body.surface.runs[0].label.link = Some(key(1));
         body.links.push(LinkMark {
             key: key(1),
-            target: LinkTarget::External {
+            target: Some(LinkTarget::External {
                 uri: "https://example.test".to_owned(),
-            },
+            }),
             label: TextSelection {
                 parts: Vec::new(),
                 joins: Vec::new(),
@@ -1219,13 +1277,40 @@ mod hardening_tests {
     }
 
     #[test]
+    fn a_native_link_instance_may_have_no_href() {
+        // The exact `.TH X 1\n.SH D\n.MR\n` input was run with the pinned
+        // CVS -Thtml reference. man_html.c::man_MR_pre prints <a class="Xr">
+        // containing "()" without href, not an absent macro instance.
+        let mut body = body_with_run("()", 2);
+        body.links.push(LinkMark {
+            key: key(1),
+            target: None,
+            label: selection(&[(0, 2)], Vec::new()),
+            source: None,
+        });
+        body.surface.runs[0].label.link = Some(key(1));
+        body.validate().unwrap();
+        let wire = serde_json::to_value(&body).unwrap();
+        assert!(wire["links"][0]["target"].is_null());
+        let decoded: FixedBody = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(decoded.links[0].target, None);
+        decoded.validate().unwrap();
+        let mut missing = wire;
+        missing["links"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("target");
+        assert!(serde_json::from_value::<FixedBody>(missing).is_err());
+    }
+
+    #[test]
     fn fixed_links_obey_the_shared_target_grammar() {
         let mut body = body_with_run("a", 1);
         body.links.push(LinkMark {
             key: key(1),
-            target: LinkTarget::External {
+            target: Some(LinkTarget::External {
                 uri: "https://example.test".to_owned(),
-            },
+            }),
             label: selection(&[(0, 1)], Vec::new()),
             source: None,
         });
@@ -1250,7 +1335,7 @@ mod hardening_tests {
                 id: "Mixed.Target".into(),
             },
         ] {
-            body.links[0].target = invalid;
+            body.links[0].target = Some(invalid);
             assert!(body.validate().is_err());
             assert!(
                 serde_json::from_value::<FixedBody>(serde_json::to_value(&body).unwrap()).is_err()

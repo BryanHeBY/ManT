@@ -93,9 +93,9 @@ fn sample_body() -> FixedBody {
         }],
         links: vec![LinkMark {
             key: key(1),
-            target: LinkTarget::External {
+            target: Some(LinkTarget::External {
                 uri: "https://example.test".to_owned(),
-            },
+            }),
             label: TextSelection {
                 parts: vec![
                     OutputSlice {

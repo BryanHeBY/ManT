@@ -45,7 +45,7 @@ as metadata where the native tree will be unavailable after return.
 | `TextSelection` | ordered output slices plus per-adjacency `TextJoin` | joins state exact consumed separator bytes, direct contact or hard/unknown boundary; not layout |
 | `HeadingMark` | native section key, parent, level hint, title selection | parent is root or earlier section; no derived depth stored as a competing source |
 | `OwnerMark` | native candidate key, parent, head/body and role | not itself a classified `EntryKind`; direct body and subtree reading differ |
-| `LinkMark` | occurrence key, target, label selection, source | one macro instance can have multiple surviving slices; equal targets do not merge occurrences |
+| `LinkMark` | occurrence key, optional destination, label selection, source | one macro instance can have multiple surviving slices; equal destinations do not merge occurrences |
 | `AnchorMark` | native declaration, source and final zero-width point | authored `.Tg` source differs from migrated display location |
 | `RegionMark` | table/cell/other native identity and final selection/point | a cell need not own a physical row or another text copy |
 
@@ -56,8 +56,11 @@ link occurrence remains one native macro instance, but its clickable label
 ends when pinned HTML execution closes the phrase (paragraph/list/table
 boundary or fill-mode change), even if terminal traversal continues inside
 the same macro body. A later nested link may open independently; returning
-to the outer AST frame never reopens its closed label. The target and mark
-remain even when the final label is empty.
+to the outer AST frame never reopens its closed label. The mark and its
+decoded destination, if any, remain even when the final label is empty. A
+native `.MR` with no operands still renders an `Xr` link instance with `()`
+but no `href` (`man_html.c::man_MR_pre`); its Fixed `LinkMark.target` is
+`null`, not a forged URI or an omitted occurrence.
 
 A `direct-contact` join inserts no byte, including a proven native soft wrap
 between physical rows; the row keys carry that layout fact. An

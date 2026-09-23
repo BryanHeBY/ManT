@@ -940,9 +940,9 @@ mod tests {
             owners: Vec::new(),
             links: vec![crate::LinkMark {
                 key: std::num::NonZeroU32::new(1).unwrap(),
-                target: LinkTarget::External {
+                target: Some(LinkTarget::External {
                     uri: "https://unsafe host".to_owned(),
-                },
+                }),
                 label: crate::TextSelection {
                     parts: Vec::new(),
                     joins: Vec::new(),
