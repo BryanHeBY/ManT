@@ -51,5 +51,6 @@ fn four_representative_pages_have_checked_native_surfaces() {
         assert_eq!(page.sources.len(), 1, "{name}");
         assert!(!page.rows.is_empty(), "{name}");
         assert!(!page.runs.is_empty(), "{name}");
+        assert_eq!(page.coverage.issues.len(), 7, "{name}");
     }
 }

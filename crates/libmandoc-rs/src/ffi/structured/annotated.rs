@@ -8,7 +8,9 @@ use super::{
 use crate::annotated::{
     AnnotatedDiagnostic, AnnotatedDocument, AnnotatedError, AnnotatedLabel, AnnotatedMark,
     AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow, AnnotatedRun, AnnotatedSource,
-    AnnotatedSpan,
+    AnnotatedSpan, AnnotationCheckState, AnnotationCoverage, AnnotationCoverageCheck,
+    AnnotationCoverageIssue, AnnotationDimension, AnnotationIssueReason, AnnotationProducer,
+    AnnotationScope,
 };
 use crate::{InputFormat, SourceBundle};
 use std::ptr::NonNull;
@@ -83,6 +85,28 @@ struct MarkView {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+struct CoverageCheckView {
+    producer: u32,
+    dimension: u32,
+    state: u32,
+    reserved: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct CoverageIssueView {
+    producer: u32,
+    dimension: u32,
+    reason: u32,
+    scope: u32,
+    scope_key: u32,
+    source: u32,
+    line: u32,
+    column: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 struct DisplayView {
     bytes: *const u8,
     byte_count: u64,
@@ -108,9 +132,9 @@ struct ResultView {
     provenances: SliceView,
     diagnostics: SliceView,
     marks: SliceView,
+    coverage_checks: SliceView,
+    coverage_issues: SliceView,
     display: DisplayView,
-    coverage_checked: u64,
-    coverage_unverified: u64,
 }
 
 unsafe extern "C" {
@@ -142,6 +166,12 @@ unsafe extern "C" {
     fn mant_annotated_sizeof_mark() -> usize;
     fn mant_annotated_alignof_mark() -> usize;
     fn mant_annotated_offsetof_mark_name() -> usize;
+    fn mant_annotated_sizeof_coverage_check() -> usize;
+    fn mant_annotated_alignof_coverage_check() -> usize;
+    fn mant_annotated_sizeof_coverage_issue() -> usize;
+    fn mant_annotated_alignof_coverage_issue() -> usize;
+    fn mant_annotated_offsetof_result_view_coverage_checks() -> usize;
+    fn mant_annotated_offsetof_result_view_coverage_issues() -> usize;
 }
 
 fn invalid_result() -> AnnotatedError {
@@ -191,7 +221,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 1
+        mant_annotated_abi_version() == 2
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -210,6 +240,14 @@ fn check_abi() -> bool {
             && mant_annotated_sizeof_mark() == std::mem::size_of::<MarkView>()
             && mant_annotated_alignof_mark() == std::mem::align_of::<MarkView>()
             && mant_annotated_offsetof_mark_name() == std::mem::offset_of!(MarkView, name)
+            && mant_annotated_sizeof_coverage_check() == std::mem::size_of::<CoverageCheckView>()
+            && mant_annotated_alignof_coverage_check() == std::mem::align_of::<CoverageCheckView>()
+            && mant_annotated_sizeof_coverage_issue() == std::mem::size_of::<CoverageIssueView>()
+            && mant_annotated_alignof_coverage_issue() == std::mem::align_of::<CoverageIssueView>()
+            && mant_annotated_offsetof_result_view_coverage_checks()
+                == std::mem::offset_of!(ResultView, coverage_checks)
+            && mant_annotated_offsetof_result_view_coverage_issues()
+                == std::mem::offset_of!(ResultView, coverage_issues)
     }
 }
 
@@ -296,6 +334,110 @@ fn reserve<T>(count: usize) -> Result<Vec<T>, AnnotatedError> {
     Ok(result)
 }
 
+fn coverage_producer(value: u32) -> Result<AnnotationProducer, AnnotatedError> {
+    match value {
+        1 => Ok(AnnotationProducer::Native),
+        2 => Ok(AnnotationProducer::Codec),
+        3 => Ok(AnnotationProducer::Validator),
+        _ => Err(invalid_result()),
+    }
+}
+
+fn coverage_dimension(value: u32) -> Result<AnnotationDimension, AnnotatedError> {
+    match value {
+        1 => Ok(AnnotationDimension::Section),
+        2 => Ok(AnnotationDimension::OwnerBoundary),
+        3 => Ok(AnnotationDimension::Declaration),
+        4 => Ok(AnnotationDimension::Link),
+        5 => Ok(AnnotationDimension::Anchor),
+        6 => Ok(AnnotationDimension::Relation),
+        7 => Ok(AnnotationDimension::Source),
+        8 => Ok(AnnotationDimension::Join),
+        _ => Err(invalid_result()),
+    }
+}
+
+fn coverage_state(value: u32) -> Result<AnnotationCheckState, AnnotatedError> {
+    match value {
+        1 => Ok(AnnotationCheckState::Checked),
+        2 => Ok(AnnotationCheckState::NotApplicable),
+        3 => Ok(AnnotationCheckState::Unverified),
+        4 => Ok(AnnotationCheckState::Pending),
+        _ => Err(invalid_result()),
+    }
+}
+
+fn coverage_reason(value: u32) -> Result<AnnotationIssueReason, AnnotatedError> {
+    match value {
+        1 => Ok(AnnotationIssueReason::NotObserved),
+        2 => Ok(AnnotationIssueReason::Unverified),
+        3 => Ok(AnnotationIssueReason::Rejected),
+        4 => Ok(AnnotationIssueReason::AmbiguousSurvival),
+        _ => Err(invalid_result()),
+    }
+}
+
+fn transfer_coverage(
+    checks: &[CoverageCheckView],
+    issues: &[CoverageIssueView],
+) -> Result<AnnotationCoverage, AnnotatedError> {
+    const STATES: [[u32; 8]; 3] = [
+        [3, 3, 2, 3, 3, 3, 3, 3],
+        [2, 2, 4, 2, 2, 4, 2, 2],
+        [2, 2, 2, 2, 2, 4, 4, 4],
+    ];
+    if checks.len() != 24 || issues.len() != 7 {
+        return Err(invalid_result());
+    }
+    let mut owned_checks = reserve(checks.len())?;
+    for (index, check) in checks.iter().enumerate() {
+        let producer = index / 8;
+        let dimension = index % 8;
+        if check.producer != u32::try_from(producer + 1).map_err(|_| invalid_result())?
+            || check.dimension != u32::try_from(dimension + 1).map_err(|_| invalid_result())?
+            || check.state != STATES[producer][dimension]
+            || check.reserved != 0
+        {
+            return Err(invalid_result());
+        }
+        owned_checks.push(AnnotationCoverageCheck {
+            producer: coverage_producer(check.producer)?,
+            dimension: coverage_dimension(check.dimension)?,
+            state: coverage_state(check.state)?,
+        });
+    }
+    let mut owned_issues = reserve(issues.len())?;
+    let mut seen = [false; 9];
+    for issue in issues {
+        if issue.producer != AnnotationProducer::Native as u32
+            || issue.dimension == AnnotationDimension::Declaration as u32
+            || issue.scope != 1
+            || issue.scope_key != 0
+            || issue.source != 0
+            || issue.line != 0
+            || issue.column != 0
+        {
+            return Err(invalid_result());
+        }
+        let dimension = coverage_dimension(issue.dimension)?;
+        seen[issue.dimension as usize] = true;
+        owned_issues.push(AnnotationCoverageIssue {
+            producer: AnnotationProducer::Native,
+            dimension,
+            reason: coverage_reason(issue.reason)?,
+            scope: AnnotationScope::Document,
+            source: None,
+        });
+    }
+    if (1..=8).any(|dimension| dimension != 3 && !seen[dimension]) {
+        return Err(invalid_result());
+    }
+    Ok(AnnotationCoverage {
+        checks: owned_checks,
+        issues: owned_issues,
+    })
+}
+
 pub(crate) fn render_annotated(
     root: &str,
     bundle: &SourceBundle,
@@ -345,7 +487,6 @@ pub(crate) fn render_annotated(
         || view.root_source != 1
         || view.width != width
         || view.profile != super::PROFILE_UTF8
-        || view.coverage_checked & view.coverage_unverified != 0
     {
         return Err(invalid_result());
     }
@@ -365,6 +506,13 @@ fn transfer(
     let diagnostic_views =
         checked_slice::<DiagnosticView>(handle, view.diagnostics, limits.max_diagnostics)?;
     let mark_views = checked_slice::<MarkView>(handle, view.marks, limits.max_transfer_objects)?;
+    let coverage_check_views =
+        checked_slice::<CoverageCheckView>(handle, view.coverage_checks, 24)?;
+    let coverage_issue_views = checked_slice::<CoverageIssueView>(
+        handle,
+        view.coverage_issues,
+        limits.max_transfer_objects,
+    )?;
     let row_views = checked_bytes(
         handle,
         view.display.rows.cast::<u8>(),
@@ -413,6 +561,8 @@ fn transfer(
         provenance_views.len(),
         diagnostic_views.len(),
         mark_views.len(),
+        coverage_check_views.len(),
+        coverage_issue_views.len(),
         rows.len(),
         runs.len(),
     ]
@@ -453,6 +603,14 @@ fn transfer(
             std::mem::size_of::<AnnotatedDiagnostic>(),
         ),
         (mark_views.len(), std::mem::size_of::<AnnotatedMark>()),
+        (
+            coverage_check_views.len(),
+            std::mem::size_of::<AnnotationCoverageCheck>(),
+        ),
+        (
+            coverage_issue_views.len(),
+            std::mem::size_of::<AnnotationCoverageIssue>(),
+        ),
         (rows.len(), std::mem::size_of::<AnnotatedRow>()),
         (runs.len(), std::mem::size_of::<AnnotatedRun>()),
     ] {
@@ -659,6 +817,7 @@ fn transfer(
             },
         });
     }
+    let coverage = transfer_coverage(coverage_check_views, coverage_issue_views)?;
     let mut owned_rows = reserve(rows.len())?;
     for (index, row) in rows.iter().enumerate() {
         if row.key != u32::try_from(index + 1).map_err(|_| invalid_result())? || row.break_after > 1
@@ -724,7 +883,6 @@ fn transfer(
         rows: owned_rows,
         runs: owned_runs,
         marks,
-        coverage_checked: view.coverage_checked,
-        coverage_unverified: view.coverage_unverified,
+        coverage,
     })
 }

@@ -266,13 +266,13 @@ mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 {
 	return result != NULL && result->magic == MANT_ANNOTATED_MAGIC &&
 	    valid_common(result->common) && valid_marks(result) &&
-	    valid_display(result);
+	    mant_annotated_coverage_is_valid(result) && valid_display(result);
 }
 
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 1;
+	return 2;
 }
 
 uint32_t
@@ -320,10 +320,13 @@ mant_annotated_result_view(const struct mant_annotated_result *result,
 	    common->diagnostic_count, struct mant_structured_diagnostic_view);
 	view->marks = VIEW_SLICE(result->marks, result->mark_count,
 	    struct mant_annotated_mark);
+	view->coverage_checks = VIEW_SLICE(result->coverage_checks, 24,
+	    struct mant_annotated_coverage_check);
+	view->coverage_issues = VIEW_SLICE(result->coverage_issues,
+	    result->coverage_issue_count,
+	    struct mant_annotated_coverage_issue);
 	if (!mant_annotated_display_finish(result->display, &view->display))
 		return MANT_STRUCTURED_RELATION;
-	view->coverage_checked = result->coverage_checked;
-	view->coverage_unverified = result->coverage_unverified;
 	return MANT_STRUCTURED_OK;
 }
 
@@ -334,6 +337,7 @@ mant_annotated_result_free(struct mant_annotated_result *result)
 		return;
 	mant_annotated_display_free(result->display);
 	mant_annotated_marks_free(result->marks, result->mark_count);
+	free(result->coverage_issues);
 	mant_structured_result_free(result->common);
 	result->magic = 0;
 	free(result);
@@ -369,3 +373,15 @@ size_t mant_annotated_alignof_mark(void)
 { return _Alignof(struct mant_annotated_mark); }
 size_t mant_annotated_offsetof_mark_name(void)
 { return offsetof(struct mant_annotated_mark, name); }
+size_t mant_annotated_sizeof_coverage_check(void)
+{ return sizeof(struct mant_annotated_coverage_check); }
+size_t mant_annotated_alignof_coverage_check(void)
+{ return _Alignof(struct mant_annotated_coverage_check); }
+size_t mant_annotated_sizeof_coverage_issue(void)
+{ return sizeof(struct mant_annotated_coverage_issue); }
+size_t mant_annotated_alignof_coverage_issue(void)
+{ return _Alignof(struct mant_annotated_coverage_issue); }
+size_t mant_annotated_offsetof_result_view_coverage_checks(void)
+{ return offsetof(struct mant_annotated_result_view, coverage_checks); }
+size_t mant_annotated_offsetof_result_view_coverage_issues(void)
+{ return offsetof(struct mant_annotated_result_view, coverage_issues); }

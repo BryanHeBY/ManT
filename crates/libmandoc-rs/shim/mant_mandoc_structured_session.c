@@ -521,13 +521,11 @@ native_cleanup:
 			result->source_map_count = input->sources.count;
 			session.source_maps = NULL;
 			if (annotated_mode) {
-				/* Basic display transport is checked; semantic marks remain
-				 * explicitly unverified until their native ranges exist. */
-				annotated->coverage_unverified = UINT64_C(0xff);
 				mant_annotated_collector_take_marks(
 				    session.annotated_collector,
 				    &annotated->marks, &annotated->mark_count);
-				if (!mant_annotated_result_is_valid(annotated))
+				if (!mant_annotated_coverage_build(&session, annotated) ||
+				    !mant_annotated_result_is_valid(annotated))
 					mant_structured_set_failure(&session,
 					    MANT_STRUCTURED_RELATION,
 					    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);

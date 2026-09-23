@@ -14,10 +14,16 @@ struct mant_annotated_result {
 	struct mant_annotated_display *display;
 	struct mant_annotated_mark *marks;
 	uint32_t mark_count;
-	uint64_t coverage_checked;
-	uint64_t coverage_unverified;
+	/* Producer × dimension table, including explicit downstream pending/N/A. */
+	struct mant_annotated_coverage_check coverage_checks[24];
+	struct mant_annotated_coverage_issue *coverage_issues;
+	uint32_t coverage_issue_count;
+	uint32_t coverage_issue_capacity;
 };
 
 int mant_annotated_result_is_valid(const struct mant_annotated_result *);
+int mant_annotated_coverage_build(struct structured_session *,
+    struct mant_annotated_result *);
+int mant_annotated_coverage_is_valid(const struct mant_annotated_result *);
 
 #endif

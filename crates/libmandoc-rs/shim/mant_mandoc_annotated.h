@@ -8,6 +8,63 @@
 
 struct mant_annotated_result;
 
+enum mant_annotated_coverage_producer {
+	MANT_ANNOTATED_COVERAGE_NATIVE = 1,
+	MANT_ANNOTATED_COVERAGE_CODEC = 2,
+	MANT_ANNOTATED_COVERAGE_VALIDATOR = 3
+};
+
+enum mant_annotated_coverage_dimension {
+	MANT_ANNOTATED_COVERAGE_SECTION = 1,
+	MANT_ANNOTATED_COVERAGE_OWNER_BOUNDARY = 2,
+	MANT_ANNOTATED_COVERAGE_DECLARATION = 3,
+	MANT_ANNOTATED_COVERAGE_LINK = 4,
+	MANT_ANNOTATED_COVERAGE_ANCHOR = 5,
+	MANT_ANNOTATED_COVERAGE_RELATION = 6,
+	MANT_ANNOTATED_COVERAGE_SOURCE = 7,
+	MANT_ANNOTATED_COVERAGE_JOIN = 8
+};
+
+enum mant_annotated_coverage_state {
+	MANT_ANNOTATED_COVERAGE_CHECKED = 1,
+	MANT_ANNOTATED_COVERAGE_NOT_APPLICABLE = 2,
+	MANT_ANNOTATED_COVERAGE_UNVERIFIED = 3,
+	MANT_ANNOTATED_COVERAGE_PENDING = 4
+};
+
+enum mant_annotated_coverage_reason {
+	MANT_ANNOTATED_COVERAGE_NOT_OBSERVED = 1,
+	MANT_ANNOTATED_COVERAGE_REASON_UNVERIFIED = 2,
+	MANT_ANNOTATED_COVERAGE_REJECTED = 3,
+	MANT_ANNOTATED_COVERAGE_AMBIGUOUS_SURVIVAL = 4
+};
+
+enum mant_annotated_coverage_scope {
+	MANT_ANNOTATED_COVERAGE_DOCUMENT = 1,
+	MANT_ANNOTATED_COVERAGE_SECTION_SCOPE = 2,
+	MANT_ANNOTATED_COVERAGE_OWNER_SCOPE = 3,
+	MANT_ANNOTATED_COVERAGE_REGION_SCOPE = 4,
+	MANT_ANNOTATED_COVERAGE_SOURCE_SCOPE = 5
+};
+
+struct mant_annotated_coverage_check {
+	uint32_t producer;
+	uint32_t dimension;
+	uint32_t state;
+	uint32_t reserved;
+};
+
+struct mant_annotated_coverage_issue {
+	uint32_t producer;
+	uint32_t dimension;
+	uint32_t reason;
+	uint32_t scope;
+	uint32_t scope_key;
+	uint32_t source;
+	uint32_t line;
+	uint32_t column;
+};
+
 struct mant_annotated_result_view {
 	uint32_t root_source;
 	uint32_t profile;
@@ -19,9 +76,9 @@ struct mant_annotated_result_view {
 	struct mant_slice_view provenances;
 	struct mant_slice_view diagnostics;
 	struct mant_slice_view marks;
+	struct mant_slice_view coverage_checks;
+	struct mant_slice_view coverage_issues;
 	struct mant_annotated_display_view display;
-	uint64_t coverage_checked;
-	uint64_t coverage_unverified;
 };
 
 uint32_t mant_annotated_abi_version(void);
@@ -50,5 +107,11 @@ size_t mant_annotated_offsetof_display_label_glyph_origin(void);
 size_t mant_annotated_sizeof_mark(void);
 size_t mant_annotated_alignof_mark(void);
 size_t mant_annotated_offsetof_mark_name(void);
+size_t mant_annotated_sizeof_coverage_check(void);
+size_t mant_annotated_alignof_coverage_check(void);
+size_t mant_annotated_sizeof_coverage_issue(void);
+size_t mant_annotated_alignof_coverage_issue(void);
+size_t mant_annotated_offsetof_result_view_coverage_checks(void);
+size_t mant_annotated_offsetof_result_view_coverage_issues(void);
 
 #endif

@@ -97,6 +97,83 @@ pub struct AnnotatedMark {
     pub name: Option<String>,
 }
 
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnotationProducer {
+    Native = 1,
+    Codec = 2,
+    Validator = 3,
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnotationDimension {
+    Section = 1,
+    OwnerBoundary = 2,
+    Declaration = 3,
+    Link = 4,
+    Anchor = 5,
+    Relation = 6,
+    Source = 7,
+    Join = 8,
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnotationCheckState {
+    Checked = 1,
+    NotApplicable = 2,
+    Unverified = 3,
+    Pending = 4,
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnotationIssueReason {
+    NotObserved = 1,
+    Unverified = 2,
+    Rejected = 3,
+    AmbiguousSurvival = 4,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnotationScope {
+    Document,
+    Section(u32),
+    Owner(u32),
+    Region(u32),
+    Source(u32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnnotationSourcePosition {
+    pub source: u32,
+    pub line: u32,
+    pub column: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnnotationCoverageCheck {
+    pub producer: AnnotationProducer,
+    pub dimension: AnnotationDimension,
+    pub state: AnnotationCheckState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnnotationCoverageIssue {
+    pub producer: AnnotationProducer,
+    pub dimension: AnnotationDimension,
+    pub reason: AnnotationIssueReason,
+    pub scope: AnnotationScope,
+    pub source: Option<AnnotationSourcePosition>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnnotationCoverage {
+    pub checks: Vec<AnnotationCoverageCheck>,
+    pub issues: Vec<AnnotationCoverageIssue>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnotatedDocument {
     pub root_source: u32,
@@ -112,8 +189,7 @@ pub struct AnnotatedDocument {
     pub rows: Vec<AnnotatedRow>,
     pub runs: Vec<AnnotatedRun>,
     pub marks: Vec<AnnotatedMark>,
-    pub coverage_checked: u64,
-    pub coverage_unverified: u64,
+    pub coverage: AnnotationCoverage,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
