@@ -26,7 +26,8 @@ impl<'a> ProjectionAdmission<'a> {
     }
 
     /// Preflight a detached value and its projected store closure before the
-    /// source body is cloned. Failed trials leave both budgets unchanged.
+    /// source body is cloned. Failed trials refund response bytes and selected
+    /// objects, but retain already consumed projection work.
     pub(super) fn reserve(
         &mut self,
         budget: &mut Budget,

@@ -39,11 +39,10 @@ enum Selection {
     Link(LinkOccurrenceKey),
 }
 
-/// State needed to undo one speculative projection admission.
+/// Selection state needed to undo one speculative projection admission.
+/// Work already performed is deliberately not refundable.
 #[derive(Debug)]
 pub struct ContentProjectionCheckpoint {
-    steps: usize,
-    snapshot_work: usize,
     generation: usize,
     snapshot_generation: Option<usize>,
 }
@@ -101,8 +100,6 @@ impl<'a> ContentProjectionBuilder<'a> {
         }
         self.trial_active = true;
         Ok(ContentProjectionCheckpoint {
-            steps: self.steps,
-            snapshot_work: self.snapshot_work,
             generation: self.generation,
             snapshot_generation: self.snapshot_generation,
         })
@@ -114,7 +111,8 @@ impl<'a> ContentProjectionBuilder<'a> {
         self.trial_active = false;
     }
 
-    /// Restore selected objects, closure queue and work counters after failure.
+    /// Restore selected objects and closure state after failure. Traversal and
+    /// snapshot work remain charged even when the result is discarded.
     #[allow(clippy::needless_pass_by_value)] // Consumes the single-use trial token.
     pub fn rollback(&mut self, checkpoint: ContentProjectionCheckpoint) {
         for selection in self.trial_selections.drain(..).rev() {
@@ -132,8 +130,6 @@ impl<'a> ContentProjectionBuilder<'a> {
             }
         }
         self.queue.clear();
-        self.steps = checkpoint.steps;
-        self.snapshot_work = checkpoint.snapshot_work;
         self.generation = checkpoint.generation;
         self.snapshot_generation = checkpoint.snapshot_generation;
         self.trial_active = false;
@@ -278,6 +274,14 @@ impl<'a> ContentProjectionBuilder<'a> {
             self.step()?;
             match edge {
                 Edge::Root(key) => {
+                    let edge_work = {
+                        let root = self
+                            .source
+                            .root(key)
+                            .ok_or(ContentProjectionError("projection root key is invalid"))?;
+                        root.atoms.len().saturating_add(root.points.len())
+                    };
+                    self.charge_snapshot_work(edge_work)?;
                     let root = self
                         .source
                         .root(key)
@@ -291,6 +295,13 @@ impl<'a> ContentProjectionBuilder<'a> {
                     }
                 }
                 Edge::Link(key) => {
+                    let edge_work = self
+                        .source
+                        .link(key)
+                        .ok_or(ContentProjectionError("projection link key is invalid"))?
+                        .label
+                        .len();
+                    self.charge_snapshot_work(edge_work)?;
                     let link = self
                         .source
                         .link(key)
@@ -307,6 +318,17 @@ impl<'a> ContentProjectionBuilder<'a> {
             }
         }
 
+        let source_objects = self
+            .source
+            .owners
+            .len()
+            .saturating_add(self.source.roots.len())
+            .saturating_add(self.source.atoms.len())
+            .saturating_add(self.source.points.len())
+            .saturating_add(self.source.links.len());
+        // Each scan is charged before it runs, including a trial that is
+        // rejected by an object, edge, or byte limit below.
+        self.charge_snapshot_work(source_objects)?;
         let object_count = count(&self.owners)
             .saturating_add(count(&self.roots))
             .saturating_add(count(&self.atoms))
@@ -318,6 +340,15 @@ impl<'a> ContentProjectionBuilder<'a> {
             ));
         }
 
+        self.charge_snapshot_work(source_objects)?;
+        let owner_root_edges = self
+            .source
+            .owners
+            .iter()
+            .filter(|record| selected(&self.owners, record.key.get()))
+            .map(|record| record.roots.len())
+            .fold(0_usize, usize::saturating_add);
+        self.charge_snapshot_work(owner_root_edges)?;
         let retained_edges = self
             .source
             .owners
@@ -350,6 +381,7 @@ impl<'a> ContentProjectionBuilder<'a> {
                 "content projection exceeds the edge limit",
             ));
         }
+        self.charge_snapshot_work(source_objects)?;
         let retained_bytes = self
             .source
             .atoms
@@ -387,28 +419,18 @@ impl<'a> ContentProjectionBuilder<'a> {
                 "content projection exceeds the retained-byte limit",
             ));
         }
-        let source_objects = self
-            .source
-            .owners
-            .len()
-            .saturating_add(self.source.roots.len())
-            .saturating_add(self.source.atoms.len())
-            .saturating_add(self.source.points.len())
-            .saturating_add(self.source.links.len());
+        // Snapshot clones these bytes, validation scans them, and admission
+        // serializes the candidate. Charge that unavoidable linear work even
+        // when a later response-byte check discards the candidate.
+        let byte_work = (retained_bytes.saturating_add(63) / 64).saturating_mul(3);
+        self.charge_snapshot_work(byte_work)?;
         let remap_steps = object_count
             .saturating_add(retained_edges)
             .saturating_mul(2)
             .saturating_add(source_objects);
-        if self
-            .steps
-            .saturating_add(self.snapshot_work)
-            .saturating_add(remap_steps)
-            > MAX_PROJECTION_STEPS
-        {
-            return Err(ContentProjectionError(
-                "content projection exceeds the step limit",
-            ));
-        }
+        // Reserve the full remap/validation work before allocating anything.
+        // A malformed source can fail later, but cannot reuse that computation.
+        self.charge_snapshot_work(remap_steps)?;
 
         let remap = ContentKeyRemap {
             owners: dense_map(&self.owners, ContentOwnerKey::new)?,
@@ -517,7 +539,6 @@ impl<'a> ContentProjectionBuilder<'a> {
         crate::validate_content_store(&content_store)
             .map_err(|_| ContentProjectionError("constructed projection is not closed"))?;
         self.snapshot_generation = Some(self.generation);
-        self.snapshot_work = self.snapshot_work.saturating_add(remap_steps);
         Ok((ContentProjection { content_store }, remap))
     }
 
@@ -606,11 +627,26 @@ impl<'a> ContentProjectionBuilder<'a> {
 
     fn step(&mut self) -> Result<(), ContentProjectionError> {
         self.steps = self.steps.saturating_add(1);
-        if self.steps > MAX_PROJECTION_STEPS {
+        if self.steps.saturating_add(self.snapshot_work) > MAX_PROJECTION_STEPS {
             return Err(ContentProjectionError(
                 "content projection exceeds the step limit",
             ));
         }
+        Ok(())
+    }
+
+    fn charge_snapshot_work(&mut self, work: usize) -> Result<(), ContentProjectionError> {
+        if self
+            .steps
+            .saturating_add(self.snapshot_work)
+            .saturating_add(work)
+            > MAX_PROJECTION_STEPS
+        {
+            return Err(ContentProjectionError(
+                "content projection exceeds the step limit",
+            ));
+        }
+        self.snapshot_work = self.snapshot_work.saturating_add(work);
         Ok(())
     }
 }
@@ -931,7 +967,7 @@ mod tests {
         );
         assert!(projection.snapshot_work > admitted_work);
         projection.rollback(checkpoint);
-        assert_eq!(projection.snapshot_work, admitted_work);
+        assert!(projection.snapshot_work > admitted_work);
         assert!(projection.can_reuse_snapshot());
         let (projected, _) = projection.snapshot().unwrap();
         assert_eq!(projected.content_store.roots.len(), 1);
@@ -945,5 +981,165 @@ mod tests {
         projection.commit(checkpoint);
         assert!(projection.can_reuse_snapshot());
         assert!(projection.snapshot_work > admitted_work);
+    }
+
+    #[test]
+    fn rolled_back_snapshots_do_not_restore_the_work_budget() {
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let mut selected = None;
+        for _ in 0..20_000 {
+            let content = builder.push_text(
+                root,
+                "x".to_owned(),
+                None,
+                ContentStyle::default(),
+                None,
+                None,
+                Provenance::Unknown,
+            );
+            selected.get_or_insert(content);
+        }
+        let source = builder.finish();
+        let mut projection = ContentProjectionBuilder::new(&source);
+        let inline = Inline::Text {
+            content: selected.unwrap(),
+        };
+        let mut completed = 0;
+        for _ in 0..200 {
+            let checkpoint = projection.checkpoint().unwrap();
+            let result = projection
+                .include_inlines(std::slice::from_ref(&inline))
+                .and_then(|()| projection.snapshot().map(|_| ()));
+            projection.rollback(checkpoint);
+            if result.is_err() {
+                break;
+            }
+            completed += 1;
+        }
+        assert!(completed > 0);
+        assert!(
+            completed < 200,
+            "rolled-back work must reach the step limit"
+        );
+        assert!(projection.snapshot_work > 0);
+        assert!(projection.roots.iter().all(|selected| !selected));
+        assert!(projection.atoms.iter().all(|selected| !selected));
+    }
+
+    #[test]
+    fn rolled_back_large_atom_snapshots_charge_byte_work() {
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let content = builder.push_text(
+            root,
+            "x".repeat(8 * 1024 * 1024),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        let source = builder.finish();
+        let mut projection = ContentProjectionBuilder::new(&source);
+        let inline = Inline::Text { content };
+        let mut completed = 0;
+        for _ in 0..200 {
+            let checkpoint = projection.checkpoint().unwrap();
+            let result = projection
+                .include_inlines(std::slice::from_ref(&inline))
+                .and_then(|()| projection.snapshot().map(|_| ()));
+            projection.rollback(checkpoint);
+            if result.is_err() {
+                break;
+            }
+            completed += 1;
+        }
+        assert!(completed > 0 && completed < 200);
+        assert!(projection.snapshot_work >= MAX_PROJECTION_STEPS / 2);
+    }
+
+    #[test]
+    fn failed_remap_and_failed_closure_keep_their_work_charged() {
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let content = builder.push_text(
+            root,
+            "x".to_owned(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        let mut source = builder.finish();
+        source.atoms[0].owner = ContentOwnerKey::new(999).unwrap();
+        let mut projection = ContentProjectionBuilder::new(&source);
+        let checkpoint = projection.checkpoint().unwrap();
+        projection
+            .include_inlines(&[Inline::Text { content }])
+            .unwrap();
+        assert!(projection.snapshot().is_err());
+        let attempted_work = projection.snapshot_work;
+        assert!(attempted_work > 0);
+        projection.rollback(checkpoint);
+        assert_eq!(projection.snapshot_work, attempted_work);
+        assert!(projection.atoms.iter().all(|selected| !selected));
+
+        projection.steps = MAX_PROJECTION_STEPS - projection.snapshot_work;
+        let checkpoint = projection.checkpoint().unwrap();
+        assert!(
+            projection
+                .include_inlines(&[Inline::Text { content }])
+                .is_err()
+        );
+        let attempted_steps = projection.steps;
+        projection.rollback(checkpoint);
+        assert_eq!(projection.steps, attempted_steps);
+        assert!(
+            projection
+                .include_inlines(&[Inline::Text { content }])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn malformed_owner_root_edges_are_charged_before_scanning() {
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let content = builder.push_text(
+            root,
+            "x".into(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        let mut source = builder.finish();
+        source.owners[0]
+            .roots
+            .extend(std::iter::repeat_n(root, 200_000));
+        let mut projection = ContentProjectionBuilder::new(&source);
+        let inline = Inline::Text { content };
+        let checkpoint = projection.checkpoint().unwrap();
+        projection
+            .include_inlines(std::slice::from_ref(&inline))
+            .unwrap();
+        assert!(projection.snapshot().is_err());
+        let charged = projection.snapshot_work;
+        assert!(charged >= 200_000);
+        projection.rollback(checkpoint);
+        let checkpoint = projection.checkpoint().unwrap();
+        projection
+            .include_inlines(std::slice::from_ref(&inline))
+            .unwrap();
+        assert!(projection.snapshot().is_err());
+        assert!(projection.snapshot_work > charged);
+        projection.rollback(checkpoint);
     }
 }

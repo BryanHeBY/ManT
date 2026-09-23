@@ -364,7 +364,8 @@ generated trigger and may differ from the landing point and owner provenance.
 
 A link occurrence owns its typed target and ordered label parts. All its
 labelled atoms carry the same link key. One occurrence may span several
-structural roots or wrapper fragments owned by the same owner; every structural
+structural roots or wrapper fragments, including roots with different owners
+inside one native link macro; every structural
 `Inline::Link` fragment carries the same occurrence key, and scanners count the
 table occurrence rather than wrapper nodes. A zero-width break opportunity is
 omitted, while an intervening `HardBreak` is an explicit label part; neither
@@ -794,13 +795,14 @@ same logical hit plus the runtime display map and must not synthesize spaces
 from physical `join_before` flags. Logical, Markdown-projection, and terminal
 coordinate domains stay distinct.
 
-That future-version `SearchQuery` removes `scope`; the current `scope: visible|markdown`
-field is rejected by real Serde decoding. Literal/regex, case, and word options
-apply to logical root sequences, pagination counts logical hits, and context is
-derived from logical blocks/HardBreak boundaries before optional Markdown or
-display projection. Searching generated CommonMark markup is no longer part of
-the document-search protocol; a future representation-inspection API would be
-a separate contract.
+That future-version `SearchQuery` removes `scope`; only its separately versioned
+decoder rejects the current `scope: visible|markdown` field. The v0.12 decoder
+continues to accept it. In the future version, literal/regex, case, and word
+options apply to logical root sequences, pagination counts logical hits, and
+context is derived from logical blocks/HardBreak boundaries before optional
+Markdown or display projection. Searching generated CommonMark markup is no
+longer part of that future document-search protocol; a representation-inspection
+API would be a separate contract.
 
 ### Unpublished v0.12 rewrite policy
 
@@ -830,8 +832,14 @@ The final field/discriminator changes to implement in C09a are frozen here:
 | fixed view | closed lines containing checked `placements` and `decorations`; placement target is tagged `content` or `point` and carries scalar/terminal mapping |
 | content reference | closed object with result-local `atom` key and half-open UTF-8 atom byte range |
 | logical location | retain typed heading/section/content paths; add checked point and fixed-line roots without embedding viewport state |
-| search query | remove `scope`; preserve pattern/syntax/case/word/context/limit/offset with logical-hit semantics and reject the old field |
-| search hit | replace Markdown-only authority with required logical root and UTF-8 byte/scalar range; add `markdownProjections` as a possibly empty array of canonical Markdown v1 coordinates |
+
+The change from rendered to logical search is excluded from this in-place v0.12
+rewrite. Its separately versioned future migration removes `SearchQuery.scope`,
+retains the other query options with logical-hit pagination, and requires each
+hit's logical root and UTF-8 byte/scalar range plus possibly empty canonical
+Markdown v1 `markdownProjections`. Current `mant.search/v0.12` retains the
+`scope` field, rendered-line-group pagination, and canonical Markdown
+coordinates as hit authority.
 
 All new tagged unions use explicit kebab-case discriminators and all structural
 objects use `deny_unknown_fields`. Old singular-source documents, copied inline
@@ -855,7 +863,8 @@ root, and the old singular `source` field. Persistent caches include a format
 fingerprint and invalidate the old shape.
 
 Protocol responses that retain any `Inline`, entry form, heading, block, link,
-point, or logical search range without embedding the complete `Document` carry
+point, or (in the future search version) logical search range without embedding
+the complete `Document` carry
 one bounded response-local projection:
 
 ```rust
@@ -871,10 +880,11 @@ any reachable fixed views, lines, placements, and decorations. Native-only
 anchor and heading evidence never crosses the codec boundary. A public
 `Inline::Anchor` makes its point reachable.
 
-Projection closure starts from every returned structure, form, logical range,
-and occurrence key. It retains each reached root atomically with its complete
-atom/point order; a reached link retains its complete ordered label and expands
-closure to every referenced root; an anchor retains its point/root/owner; and a
+Projection closure starts from every returned structure, form, occurrence key,
+and future-version logical search range. It retains each reached root atomically
+with its complete atom/point order; a reached link retains its complete ordered
+label and expands closure to every referenced root; an anchor retains its
+point/root/owner; and a
 fixed/table block retains every cell relation, view, line, placement, and
 decoration. A reached owner retains only selected roots; it does not pull in
 unrelated sibling roots merely because they shared an original owner. The
@@ -890,10 +900,12 @@ while every leaf ref and occurrence key resolves only through that record's
 projection.
 
 Full-document responses use `Document.contentStore` directly and do not add a
-second projection. Standalone search always carries a projection covering all
-returned logical hits; scope search carries one projection per returned
-document record. Search never emits a root key that only an omitted document
-could resolve.
+second projection. In the separately versioned logical-search contract,
+standalone search carries a projection covering all returned logical hits;
+scope search carries one projection per returned document record. That version
+never emits a root key that only an omitted document could resolve. Current
+v0.12 search instead reports canonical rendered coordinates and its optional
+projection is not logical-hit authority.
 
 Outline/reference records carry a response-local occurrence key instead of a
 copied authoritative target or label. The target and complete label resolve
@@ -1240,19 +1252,26 @@ zero within each parent and define public vector order. For a block with
 the parent is a block with the same owner and the ordinal is dense among its
 children. `ContentOwner.blocks` contains those top-level keys. A block's
 optional root/table/fixed fields obey its kind and all inactive fields are
-zero. A fixed view belongs directly to exactly one block or table; a table-owned view
-reaches its block through the table. Every in-atom point
+zero. A fixed view belongs directly to exactly one block or table; a
+table-owned view reaches its block through the table. Every in-atom point
 names a Text/Whitespace atom in the same root and a UTF-8 byte boundary.
-`content_atom.link` must refer to a link whose owner matches. Every heading
-block has exactly one heading evidence record naming that block and owner. A
+`content_atom.link` must refer to a known link occurrence; the link's owner is
+the macro instance's starting owner, while each atom retains the owner of its
+own root. A formatter owner transition inside `.UR` does not create a second
+occurrence. A detached wire result can verify that the owner exists and that
+every label part resolves to the same link key, but cannot independently prove
+the parser-time starting-owner claim without the original macro tree. Every
+heading block has exactly one heading evidence record naming that block and owner. A
 present authored phrase is nonempty; an absent phrase has a zero
 `authored_phrase_present` byte and a null/zero byte view. Label parts are
 strictly increasing by `ContentAtomKey`, whose dense atom-table order is the
 global retained native execution order across roots; every linked
 Text/Whitespace atom occurs exactly once as a full-range
 content part, and every linked logical HardBreak occurs exactly once as a
-zero-endpoint hard-break part. Each part atom carries that occurrence key and
-owner, no part atom appears in another occurrence, and automatic visual wraps
+zero-endpoint hard-break part. Each part atom carries that occurrence key;
+no part atom appears in another occurrence. Same-root visible gaps in an
+occurrence are valid only when occupied by a fully enclosed nested link
+occurrence; unrelated visible content remains invalid. Automatic visual wraps
 produce no atom or part. Text, Whitespace, and HardBreak may carry a nonzero
 link; BreakOpportunity must carry zero. Every anchor names a point with the
 same owner, a nonempty target, a known origin, and valid provenance; several
