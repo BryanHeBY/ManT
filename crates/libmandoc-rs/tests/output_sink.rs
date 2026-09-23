@@ -21,6 +21,7 @@ unsafe extern "C" {
     fn mant_mandoc_output_end();
     fn mant_mandoc_output_data(output: *const c_void) -> *const u8;
     fn mant_mandoc_output_length(output: *const c_void) -> usize;
+    fn mant_mandoc_output_attempted_length(output: *const c_void) -> usize;
     fn mant_mandoc_output_status(output: *const c_void) -> i32;
     fn mant_mandoc_output_free(output: *mut c_void);
 }
@@ -84,6 +85,7 @@ fn borrowed_sink_is_bounded_and_owns_no_duplicate_raw_buffer() {
     assert!(unsafe { mant_mandoc_output_data(output) }.is_null());
     unsafe { mant_mandoc_output_write(b"cd".as_ptr().cast(), 2) };
     assert_eq!(unsafe { mant_mandoc_output_status(output) }, 1);
+    assert_eq!(unsafe { mant_mandoc_output_attempted_length(output) }, 4);
     assert_eq!(received, b"ab");
     unsafe { mant_mandoc_output_end() };
     unsafe { mant_mandoc_output_free(output) };

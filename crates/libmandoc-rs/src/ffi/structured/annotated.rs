@@ -1,0 +1,730 @@
+//! Handle-bound transfer of the post-device annotated surface.
+
+use super::super::guard::NativeSessionGuard;
+use super::raw::{DiagnosticView, MetadataView, ProvenanceView, SourceView, SpanView};
+use super::{
+    FailureView, InputStorage, STATUS_OK, STATUS_REENTRANT, STATUS_RELATION, SliceView, raw_limits,
+};
+use crate::annotated::{
+    AnnotatedDiagnostic, AnnotatedDocument, AnnotatedError, AnnotatedLabel, AnnotatedMark,
+    AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow, AnnotatedRun, AnnotatedSource,
+    AnnotatedSpan,
+};
+use crate::{InputFormat, SourceBundle};
+use std::ptr::NonNull;
+
+#[repr(C)]
+struct ResultHandleRaw {
+    _private: [u8; 0],
+}
+
+struct Handle(NonNull<ResultHandleRaw>);
+
+impl Drop for Handle {
+    fn drop(&mut self) {
+        unsafe { mant_annotated_result_free(self.0.as_ptr()) };
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct LabelView {
+    owner: u32,
+    link: u32,
+    source: u32,
+    style: u32,
+    role: u32,
+    glyph_origin: u64,
+    flags: u32,
+    reserved: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct RowView {
+    key: u32,
+    first_run: u32,
+    run_count: u32,
+    column_count: u32,
+    break_after: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct RunView {
+    key: u32,
+    column: u32,
+    width: u32,
+    reserved: u32,
+    byte_start: u64,
+    byte_count: u64,
+    label: LabelView,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct MarkView {
+    key: u32,
+    kind: u32,
+    parent: u32,
+    owner: u32,
+    source: u32,
+    line: u32,
+    column: u32,
+    token: u32,
+    region_kind: u32,
+    title_region: u32,
+    body_region: u32,
+    flags: u32,
+    reserved: u32,
+    name: *const u8,
+    name_length: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct DisplayView {
+    bytes: *const u8,
+    byte_count: u64,
+    rows: *const RowView,
+    row_count: u32,
+    runs: *const RunView,
+    run_count: u32,
+    input_bytes: u64,
+    work: u64,
+    peak_allocated_bytes: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct ResultView {
+    root_source: u32,
+    profile: u32,
+    width: u32,
+    reserved: u32,
+    metadata: MetadataView,
+    sources: SliceView,
+    spans: SliceView,
+    provenances: SliceView,
+    diagnostics: SliceView,
+    marks: SliceView,
+    display: DisplayView,
+    coverage_checked: u64,
+    coverage_unverified: u64,
+}
+
+unsafe extern "C" {
+    fn mant_annotated_abi_version() -> u32;
+    fn mant_annotated_render(
+        input: *const super::raw::InputView,
+        limits: *const super::raw::Limits,
+        result: *mut *mut ResultHandleRaw,
+        failure: *mut FailureView,
+    ) -> u32;
+    fn mant_annotated_result_check(
+        result: *const ResultHandleRaw,
+        failure: *mut FailureView,
+    ) -> u32;
+    fn mant_annotated_result_view(result: *const ResultHandleRaw, view: *mut ResultView) -> u32;
+    fn mant_annotated_result_free(result: *mut ResultHandleRaw);
+    fn mant_annotated_sizeof_result_view() -> usize;
+    fn mant_annotated_alignof_result_view() -> usize;
+    fn mant_annotated_offsetof_result_view_display() -> usize;
+    fn mant_annotated_sizeof_display_row() -> usize;
+    fn mant_annotated_alignof_display_row() -> usize;
+    fn mant_annotated_offsetof_display_row_break_after() -> usize;
+    fn mant_annotated_sizeof_display_run() -> usize;
+    fn mant_annotated_alignof_display_run() -> usize;
+    fn mant_annotated_offsetof_display_run_label() -> usize;
+    fn mant_annotated_sizeof_display_label() -> usize;
+    fn mant_annotated_alignof_display_label() -> usize;
+    fn mant_annotated_offsetof_display_label_glyph_origin() -> usize;
+    fn mant_annotated_sizeof_mark() -> usize;
+    fn mant_annotated_alignof_mark() -> usize;
+    fn mant_annotated_offsetof_mark_name() -> usize;
+}
+
+fn invalid_result() -> AnnotatedError {
+    AnnotatedError {
+        status: STATUS_RELATION,
+        stage: 6,
+        limit_kind: 0,
+        observed: 0,
+        allowed: 0,
+    }
+}
+
+fn transfer_alloc() -> AnnotatedError {
+    AnnotatedError {
+        status: super::STATUS_BUILDER_ALLOC,
+        stage: 6,
+        limit_kind: 0,
+        observed: 0,
+        allowed: 0,
+    }
+}
+
+fn transfer_budget(kind: u32, observed: u64, allowed: u64) -> AnnotatedError {
+    AnnotatedError {
+        status: super::STATUS_BUDGET,
+        stage: 6,
+        limit_kind: kind,
+        observed,
+        allowed,
+    }
+}
+
+fn from_native(error: &super::NativeStructuredError) -> AnnotatedError {
+    AnnotatedError {
+        status: error.status,
+        stage: error.stage,
+        limit_kind: error.limit_kind,
+        observed: error.observed,
+        allowed: error.allowed,
+    }
+}
+
+fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
+    super::session::error_from_failure(status, failure)
+        .map_or_else(|_| invalid_result(), |error| from_native(&error))
+}
+
+fn check_abi() -> bool {
+    unsafe {
+        mant_annotated_abi_version() == 1
+            && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
+            && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
+            && mant_annotated_offsetof_result_view_display()
+                == std::mem::offset_of!(ResultView, display)
+            && mant_annotated_sizeof_display_row() == std::mem::size_of::<RowView>()
+            && mant_annotated_alignof_display_row() == std::mem::align_of::<RowView>()
+            && mant_annotated_offsetof_display_row_break_after()
+                == std::mem::offset_of!(RowView, break_after)
+            && mant_annotated_sizeof_display_run() == std::mem::size_of::<RunView>()
+            && mant_annotated_alignof_display_run() == std::mem::align_of::<RunView>()
+            && mant_annotated_offsetof_display_run_label() == std::mem::offset_of!(RunView, label)
+            && mant_annotated_sizeof_display_label() == std::mem::size_of::<LabelView>()
+            && mant_annotated_alignof_display_label() == std::mem::align_of::<LabelView>()
+            && mant_annotated_offsetof_display_label_glyph_origin()
+                == std::mem::offset_of!(LabelView, glyph_origin)
+            && mant_annotated_sizeof_mark() == std::mem::size_of::<MarkView>()
+            && mant_annotated_alignof_mark() == std::mem::align_of::<MarkView>()
+            && mant_annotated_offsetof_mark_name() == std::mem::offset_of!(MarkView, name)
+    }
+}
+
+fn checked_slice<T>(
+    _handle: &Handle,
+    slice: SliceView,
+    maximum: u64,
+) -> Result<&[T], AnnotatedError> {
+    if slice.stride as usize != std::mem::size_of::<T>()
+        || u64::from(slice.count) > maximum
+        || (slice.count == 0) != slice.ptr.is_null()
+    {
+        return Err(invalid_result());
+    }
+    if slice.count == 0 {
+        return Ok(&[]);
+    }
+    let pointer = slice.ptr.cast::<T>();
+    let bytes = (slice.count as usize)
+        .checked_mul(std::mem::size_of::<T>())
+        .ok_or_else(invalid_result)?;
+    if !(pointer as usize).is_multiple_of(std::mem::align_of::<T>()) || bytes > isize::MAX as usize
+    {
+        return Err(invalid_result());
+    }
+    Ok(unsafe { std::slice::from_raw_parts(pointer, slice.count as usize) })
+}
+
+fn checked_bytes(
+    _handle: &Handle,
+    pointer: *const u8,
+    length: u64,
+    maximum: u64,
+) -> Result<&[u8], AnnotatedError> {
+    if length > maximum || (length == 0) != pointer.is_null() {
+        return Err(invalid_result());
+    }
+    if length == 0 {
+        return Ok(&[]);
+    }
+    let length = usize::try_from(length).map_err(|_| invalid_result())?;
+    if length > isize::MAX as usize {
+        return Err(invalid_result());
+    }
+    Ok(unsafe { std::slice::from_raw_parts(pointer, length) })
+}
+
+fn copy_string(
+    handle: &Handle,
+    view: super::BytesView,
+    max: u64,
+) -> Result<String, AnnotatedError> {
+    let bytes = checked_bytes(handle, view.ptr, view.len, max)?;
+    let text = std::str::from_utf8(bytes).map_err(|_| invalid_result())?;
+    let mut owned = String::new();
+    owned
+        .try_reserve(text.len())
+        .map_err(|_| transfer_alloc())?;
+    owned.push_str(text);
+    Ok(owned)
+}
+
+fn copy_optional(
+    handle: &Handle,
+    metadata: MetadataView,
+    bit: u32,
+    view: super::BytesView,
+    max: u64,
+) -> Result<Option<String>, AnnotatedError> {
+    if metadata.presence_flags & bit == 0 {
+        if !view.ptr.is_null() || view.len != 0 {
+            return Err(invalid_result());
+        }
+        return Ok(None);
+    }
+    Ok(Some(copy_string(handle, view, max)?))
+}
+
+fn reserve<T>(count: usize) -> Result<Vec<T>, AnnotatedError> {
+    let mut result = Vec::new();
+    result
+        .try_reserve_exact(count)
+        .map_err(|_| transfer_alloc())?;
+    Ok(result)
+}
+
+pub(crate) fn render_annotated(
+    root: &str,
+    bundle: &SourceBundle,
+    format: InputFormat,
+    width: u32,
+    options: &crate::structured::StructuredLimits,
+) -> Result<AnnotatedDocument, AnnotatedError> {
+    let _guard = NativeSessionGuard::enter().map_err(|_| AnnotatedError {
+        status: STATUS_REENTRANT,
+        stage: 1,
+        limit_kind: 0,
+        observed: 0,
+        allowed: 0,
+    })?;
+    if !check_abi() {
+        return Err(invalid_result());
+    }
+    let limits = raw_limits(options);
+    let storage =
+        InputStorage::new(root, bundle, format, &limits).map_err(|error| from_native(&error))?;
+    let input = storage.view(width, super::PROFILE_UTF8);
+    let mut pointer = std::ptr::null_mut();
+    let mut failure = FailureView::default();
+    let status = unsafe {
+        mant_annotated_render(
+            &raw const input,
+            &raw const limits,
+            &raw mut pointer,
+            &raw mut failure,
+        )
+    };
+    if status != STATUS_OK {
+        if !pointer.is_null() {
+            unsafe { mant_annotated_result_free(pointer) };
+        }
+        return Err(checked_failure(status, failure));
+    }
+    let handle = Handle(NonNull::new(pointer).ok_or_else(invalid_result)?);
+    let mut failure = FailureView::default();
+    let status = unsafe { mant_annotated_result_check(handle.0.as_ptr(), &raw mut failure) };
+    if status != STATUS_OK {
+        return Err(checked_failure(status, failure));
+    }
+    let mut view = ResultView::default();
+    if unsafe { mant_annotated_result_view(handle.0.as_ptr(), &raw mut view) } != STATUS_OK
+        || view.reserved != 0
+        || view.root_source != 1
+        || view.width != width
+        || view.profile != super::PROFILE_UTF8
+        || view.coverage_checked & view.coverage_unverified != 0
+    {
+        return Err(invalid_result());
+    }
+    transfer(&handle, &view, &limits)
+}
+
+#[allow(clippy::too_many_lines)] // Mirrors the checked one-copy wire transfer.
+fn transfer(
+    handle: &Handle,
+    view: &ResultView,
+    limits: &super::raw::Limits,
+) -> Result<AnnotatedDocument, AnnotatedError> {
+    let source_views = checked_slice::<SourceView>(handle, view.sources, limits.max_sources)?;
+    let span_views = checked_slice::<SpanView>(handle, view.spans, limits.max_content_points)?;
+    let provenance_views =
+        checked_slice::<ProvenanceView>(handle, view.provenances, limits.max_content_points)?;
+    let diagnostic_views =
+        checked_slice::<DiagnosticView>(handle, view.diagnostics, limits.max_diagnostics)?;
+    let mark_views = checked_slice::<MarkView>(handle, view.marks, limits.max_transfer_objects)?;
+    let row_views = checked_bytes(
+        handle,
+        view.display.rows.cast::<u8>(),
+        u64::from(view.display.row_count) * std::mem::size_of::<RowView>() as u64,
+        limits.max_transfer_bytes,
+    )?;
+    let run_views = checked_bytes(
+        handle,
+        view.display.runs.cast::<u8>(),
+        u64::from(view.display.run_count) * std::mem::size_of::<RunView>() as u64,
+        limits.max_transfer_bytes,
+    )?;
+    if !row_views
+        .len()
+        .is_multiple_of(std::mem::size_of::<RowView>())
+        || !run_views
+            .len()
+            .is_multiple_of(std::mem::size_of::<RunView>())
+        || !(view.display.rows as usize).is_multiple_of(std::mem::align_of::<RowView>())
+        || !(view.display.runs as usize).is_multiple_of(std::mem::align_of::<RunView>())
+        || u64::from(view.display.row_count) > limits.max_fixed_lines
+        || u64::from(view.display.run_count) > limits.max_annotation_runs
+    {
+        return Err(invalid_result());
+    }
+    let rows = if view.display.row_count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(view.display.rows, view.display.row_count as usize) }
+    };
+    let runs = if view.display.run_count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(view.display.runs, view.display.run_count as usize) }
+    };
+    let text_bytes = checked_bytes(
+        handle,
+        view.display.bytes,
+        view.display.byte_count,
+        limits.max_content_bytes,
+    )?;
+    let text_view = std::str::from_utf8(text_bytes).map_err(|_| invalid_result())?;
+    let object_count = [
+        source_views.len(),
+        span_views.len(),
+        provenance_views.len(),
+        diagnostic_views.len(),
+        mark_views.len(),
+        rows.len(),
+        runs.len(),
+    ]
+    .into_iter()
+    .try_fold(2_u64, |sum, count| {
+        sum.checked_add(count as u64).ok_or_else(invalid_result)
+    })?;
+    if object_count > limits.max_transfer_objects {
+        return Err(transfer_budget(
+            32,
+            object_count,
+            limits.max_transfer_objects,
+        ));
+    }
+    let mut transfer_bytes = 0_u64;
+    let mut charge = |amount: u64| -> Result<(), AnnotatedError> {
+        transfer_bytes = transfer_bytes
+            .checked_add(amount)
+            .ok_or_else(invalid_result)?;
+        if transfer_bytes > limits.max_transfer_bytes {
+            return Err(transfer_budget(
+                34,
+                transfer_bytes,
+                limits.max_transfer_bytes,
+            ));
+        }
+        Ok(())
+    };
+    for (count, item_size) in [
+        (source_views.len(), std::mem::size_of::<AnnotatedSource>()),
+        (span_views.len(), std::mem::size_of::<AnnotatedSpan>()),
+        (
+            provenance_views.len(),
+            std::mem::size_of::<AnnotatedProvenance>(),
+        ),
+        (
+            diagnostic_views.len(),
+            std::mem::size_of::<AnnotatedDiagnostic>(),
+        ),
+        (mark_views.len(), std::mem::size_of::<AnnotatedMark>()),
+        (rows.len(), std::mem::size_of::<AnnotatedRow>()),
+        (runs.len(), std::mem::size_of::<AnnotatedRun>()),
+    ] {
+        charge(
+            (count as u64)
+                .checked_mul(item_size as u64)
+                .ok_or_else(invalid_result)?,
+        )?;
+    }
+    charge(std::mem::size_of::<AnnotatedDocument>() as u64)?;
+    charge(std::mem::size_of::<AnnotatedMetadata>() as u64)?;
+    charge(text_bytes.len() as u64)?;
+    for field in [
+        view.metadata.title,
+        view.metadata.section,
+        view.metadata.volume,
+        view.metadata.operating_system,
+        view.metadata.architecture,
+        view.metadata.name,
+        view.metadata.date,
+        view.metadata.alias_target,
+    ] {
+        charge(field.len)?;
+    }
+    for source in source_views {
+        charge(source.logical_name.len)?;
+    }
+    for diagnostic in diagnostic_views {
+        charge(diagnostic.message.len)?;
+    }
+    for mark in mark_views {
+        charge(mark.name_length)?;
+    }
+    let metadata = view.metadata;
+    if metadata.reserved != 0 || metadata.reserved_bytes != [0; 3] || metadata.has_body > 1 {
+        return Err(invalid_result());
+    }
+    let metadata = AnnotatedMetadata {
+        macroset: metadata.macroset,
+        title: copy_optional(
+            handle,
+            metadata,
+            1,
+            metadata.title,
+            limits.max_content_bytes,
+        )?,
+        section: copy_optional(
+            handle,
+            metadata,
+            2,
+            metadata.section,
+            limits.max_content_bytes,
+        )?,
+        volume: copy_optional(
+            handle,
+            metadata,
+            4,
+            metadata.volume,
+            limits.max_content_bytes,
+        )?,
+        operating_system: copy_optional(
+            handle,
+            metadata,
+            8,
+            metadata.operating_system,
+            limits.max_content_bytes,
+        )?,
+        architecture: copy_optional(
+            handle,
+            metadata,
+            16,
+            metadata.architecture,
+            limits.max_content_bytes,
+        )?,
+        name: copy_optional(
+            handle,
+            metadata,
+            32,
+            metadata.name,
+            limits.max_content_bytes,
+        )?,
+        date: copy_optional(
+            handle,
+            metadata,
+            64,
+            metadata.date,
+            limits.max_content_bytes,
+        )?,
+        alias_target: copy_optional(
+            handle,
+            metadata,
+            128,
+            metadata.alias_target,
+            limits.max_content_bytes,
+        )?,
+        has_body: metadata.has_body != 0,
+    };
+    let mut sources = reserve(source_views.len())?;
+    for (index, source) in source_views.iter().enumerate() {
+        if source.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
+            || source.reserved != 0
+            || source.reserved_bytes != [0; 7]
+            || source.hash_present > 1
+        {
+            return Err(invalid_result());
+        }
+        sources.push(AnnotatedSource {
+            key: source.key,
+            identity_kind: source.identity_kind,
+            format: source.format,
+            coordinate_kind: source.coordinate_kind,
+            logical_name: copy_string(handle, source.logical_name, limits.max_source_path_bytes)?,
+            decoded_length: source.decoded_length,
+            hash: (source.hash_present != 0).then_some(source.hash),
+        });
+    }
+    let mut spans = reserve(span_views.len())?;
+    for span in span_views {
+        if span.reserved != 0
+            || span.reserved_bytes != [0; 2]
+            || span.source == 0
+            || span.source as usize > sources.len()
+            || span.byte_range_present != 0
+        {
+            return Err(invalid_result());
+        }
+        spans.push(AnnotatedSpan {
+            source: span.source,
+            line_column: (span.line_column_present != 0).then_some((
+                span.line_start,
+                span.column_start,
+                span.line_end,
+                span.column_end,
+            )),
+        });
+    }
+    let mut provenances = reserve(provenance_views.len())?;
+    for provenance in provenance_views {
+        if provenance.reserved != 0
+            || !(1..=3).contains(&provenance.kind)
+            || provenance.authored_span as usize > spans.len()
+            || provenance.generated_trigger_span as usize > spans.len()
+        {
+            return Err(invalid_result());
+        }
+        provenances.push(AnnotatedProvenance {
+            kind: provenance.kind,
+            authored_span: provenance.authored_span,
+            generated_trigger_span: provenance.generated_trigger_span,
+        });
+    }
+    let mut diagnostics = reserve(diagnostic_views.len())?;
+    for diagnostic in diagnostic_views {
+        if diagnostic.reserved != 0
+            || diagnostic.owner != 0
+            || diagnostic.span as usize > spans.len()
+        {
+            return Err(invalid_result());
+        }
+        diagnostics.push(AnnotatedDiagnostic {
+            level: diagnostic.level,
+            code: diagnostic.code,
+            message: copy_string(handle, diagnostic.message, limits.max_content_bytes)?,
+            span: diagnostic.span,
+        });
+    }
+    let mut marks = reserve(mark_views.len())?;
+    for (index, mark) in mark_views.iter().enumerate() {
+        if mark.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
+            || mark.parent >= mark.key
+            || mark.owner >= mark.key
+            || mark.source as usize > sources.len()
+            || mark.reserved != 0
+        {
+            return Err(invalid_result());
+        }
+        marks.push(AnnotatedMark {
+            key: mark.key,
+            kind: mark.kind,
+            parent: mark.parent,
+            owner: mark.owner,
+            source: mark.source,
+            line: mark.line,
+            column: mark.column,
+            token: mark.token,
+            region_kind: mark.region_kind,
+            title_region: mark.title_region,
+            body_region: mark.body_region,
+            flags: mark.flags,
+            name: if mark.kind == 4 {
+                Some(copy_string(
+                    handle,
+                    super::BytesView {
+                        ptr: mark.name,
+                        len: mark.name_length,
+                    },
+                    limits.max_content_bytes,
+                )?)
+            } else {
+                if !mark.name.is_null() || mark.name_length != 0 {
+                    return Err(invalid_result());
+                }
+                None
+            },
+        });
+    }
+    let mut owned_rows = reserve(rows.len())?;
+    for (index, row) in rows.iter().enumerate() {
+        if row.key != u32::try_from(index + 1).map_err(|_| invalid_result())? || row.break_after > 1
+        {
+            return Err(invalid_result());
+        }
+        owned_rows.push(AnnotatedRow {
+            key: row.key,
+            first_run: row.first_run,
+            run_count: row.run_count,
+            column_count: row.column_count,
+            break_after: row.break_after != 0,
+        });
+    }
+    let mut owned_runs = reserve(runs.len())?;
+    for (index, run) in runs.iter().enumerate() {
+        let end = run
+            .byte_start
+            .checked_add(run.byte_count)
+            .ok_or_else(invalid_result)?;
+        let start_usize = usize::try_from(run.byte_start).map_err(|_| invalid_result())?;
+        let end_usize = usize::try_from(end).map_err(|_| invalid_result())?;
+        if run.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
+            || run.reserved != 0
+            || run.label.reserved != 0
+            || run.label.glyph_origin != 0
+            || run.label.flags != 0
+            || end > view.display.byte_count
+            || !text_view.is_char_boundary(start_usize)
+            || !text_view.is_char_boundary(end_usize)
+        {
+            return Err(invalid_result());
+        }
+        owned_runs.push(AnnotatedRun {
+            key: run.key,
+            column: run.column,
+            width: run.width,
+            byte_start: run.byte_start,
+            byte_count: run.byte_count,
+            label: AnnotatedLabel {
+                owner: run.label.owner,
+                link: run.label.link,
+                source: run.label.source,
+                style: run.label.style,
+                role: run.label.role,
+            },
+        });
+    }
+    let mut text = String::new();
+    text.try_reserve_exact(text_view.len())
+        .map_err(|_| transfer_alloc())?;
+    text.push_str(text_view);
+    Ok(AnnotatedDocument {
+        root_source: view.root_source,
+        profile: view.profile,
+        width: view.width,
+        metadata,
+        sources,
+        spans,
+        provenances,
+        diagnostics,
+        text,
+        rows: owned_rows,
+        runs: owned_runs,
+        marks,
+        coverage_checked: view.coverage_checked,
+        coverage_unverified: view.coverage_unverified,
+    })
+}

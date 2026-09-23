@@ -4,6 +4,8 @@
 #[cfg(test)]
 mod build_config;
 
+#[cfg(feature = "annotated")]
+pub mod annotated;
 mod ast;
 mod compression;
 mod diagnostics;
@@ -18,6 +20,8 @@ mod special_character;
 #[cfg(feature = "structured")]
 #[doc(hidden)]
 pub mod structured;
+#[cfg(all(feature = "annotated", not(feature = "structured")))]
+mod structured;
 mod transport;
 
 pub use ast::{

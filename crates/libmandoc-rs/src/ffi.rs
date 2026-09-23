@@ -5,8 +5,10 @@ mod raw;
 #[cfg(feature = "render")]
 mod render;
 mod session;
-#[cfg(feature = "structured")]
+#[cfg(any(feature = "structured", feature = "annotated"))]
 mod structured;
+#[cfg(feature = "annotated")]
+pub(crate) use structured::annotated::render_annotated;
 #[cfg(feature = "structured")]
 pub(crate) use structured::render_structured;
 #[cfg(windows)]

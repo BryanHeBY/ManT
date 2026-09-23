@@ -5,6 +5,15 @@
 //! consumer.  In particular, none of the numeric C ABI discriminants cross
 //! this boundary.
 #![allow(missing_docs)]
+#![cfg_attr(not(feature = "structured"), allow(dead_code, unused_imports))]
+#![cfg_attr(
+    not(feature = "structured"),
+    allow(
+        clippy::unused_self,
+        clippy::struct_field_names,
+        clippy::large_types_passed_by_value
+    )
+)]
 
 use std::num::NonZeroU32;
 
@@ -65,5 +74,5 @@ key_type!(NativeFixedLineKey);
 key_type!(NativeFormKey);
 key_type!(NativeNameHintKey);
 
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 mod tests;

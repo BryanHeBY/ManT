@@ -1,6 +1,8 @@
 //! Checked ownership transfer for the versioned structured-rendering ABI.
 #![allow(dead_code)]
 
+#[cfg(feature = "annotated")]
+pub(crate) mod annotated;
 mod conversion;
 mod input;
 mod raw;
@@ -42,7 +44,7 @@ use validation::{
     checked_slice, transfer_preflight, validate_metadata, validate_structured_relations,
 };
 
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 use raw::{
     ProbeMetrics, RESOLVE_DENIED, RESOLVE_INVALID, RESOLVE_NOT_FOUND, RESOLVE_PANIC,
     mant_structured_discriminant_fingerprint, mant_structured_probe,
@@ -50,10 +52,11 @@ use raw::{
     mant_structured_view_size,
 };
 
+#[cfg(feature = "structured")]
 pub(crate) use session::render_structured;
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 use session::{probe_structured, probe_structured_profile, render_prelude, render_prelude_profile};
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 use transfer::copy_string;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,5 +88,5 @@ fn alloc_error(_: std::collections::TryReserveError) -> NativeStructuredError {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 mod tests;

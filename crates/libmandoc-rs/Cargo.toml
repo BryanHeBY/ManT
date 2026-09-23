@@ -35,6 +35,7 @@ all-features = true
 default = []
 render = ["dep:unicode-width"]
 structured = ["dep:unicode-width"]
+annotated = ["dep:unicode-width"]
 serde = ["dep:serde"]
 
 [dependencies]

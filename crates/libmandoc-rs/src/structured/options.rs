@@ -1,6 +1,8 @@
 //! Structured-rendering profiles, limits, errors, and entry points.
 
+#[cfg(feature = "structured")]
 use super::StructuredDocument;
+#[cfg(feature = "structured")]
 use crate::{InputFormat, SourceBundle};
 use std::{error::Error, fmt};
 
@@ -301,6 +303,7 @@ impl StructuredRenderer {
         self
     }
 
+    #[cfg(feature = "structured")]
     pub fn render_bundle(
         &self,
         root: &str,
@@ -311,6 +314,7 @@ impl StructuredRenderer {
     }
 }
 
+#[cfg(feature = "structured")]
 pub fn render_bundle(
     root: &str,
     bundle: &SourceBundle,

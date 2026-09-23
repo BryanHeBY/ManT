@@ -37,6 +37,7 @@ void mant_mandoc_output_end(void);
 const unsigned char *mant_mandoc_output_data(
     const struct mant_mandoc_output *);
 size_t mant_mandoc_output_length(const struct mant_mandoc_output *);
+size_t mant_mandoc_output_attempted_length(const struct mant_mandoc_output *);
 int mant_mandoc_output_status(const struct mant_mandoc_output *);
 void mant_mandoc_output_free(struct mant_mandoc_output *);
 

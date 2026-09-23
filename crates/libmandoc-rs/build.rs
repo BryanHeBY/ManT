@@ -95,7 +95,9 @@ fn main() {
     let deny_native_warnings = env::var_os("LIBMANDOC_RS_DENY_WARNINGS").is_some();
     let render = env::var_os("CARGO_FEATURE_RENDER").is_some();
     let structured = env::var_os("CARGO_FEATURE_STRUCTURED").is_some();
-    let terminal = render || structured;
+    let annotated = env::var_os("CARGO_FEATURE_ANNOTATED").is_some();
+    let shared_structured_native = structured || annotated;
+    let terminal = render || shared_structured_native;
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
 
     assert!(
@@ -177,13 +179,13 @@ fn main() {
     if render {
         build.define("MANT_MANDOC_RENDER", None);
     }
-    if structured {
+    if shared_structured_native {
         build.define("MANT_MANDOC_STRUCTURED", None);
     }
     let selection = NativeSelection(
         (u8::from(terminal) * NativeSelection::TERMINAL)
             | (u8::from(render) * NativeSelection::RENDER)
-            | (u8::from(structured) * NativeSelection::STRUCTURED)
+            | (u8::from(shared_structured_native) * NativeSelection::STRUCTURED)
             | (u8::from(memory_only) * NativeSelection::MEMORY_ONLY),
     );
     let (upstream_sources, owned_sources) =
@@ -227,6 +229,9 @@ fn selected_native_sources(
         owned.push(crate_dir.join("shim/mant_mandoc_output.c"));
     }
     if selection.has(NativeSelection::STRUCTURED) {
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_collector.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_display.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_result.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_address.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_builder.c"));

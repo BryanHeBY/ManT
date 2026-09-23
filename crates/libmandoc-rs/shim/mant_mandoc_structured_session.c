@@ -22,6 +22,8 @@
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_structured_link.h"
 #include "mant_mandoc_output.h"
+#include "mant_mandoc_annotated_internal.h"
+#include "mant_mandoc_annotated_collector.h"
 
 MANT_THREAD_LOCAL struct structured_session *active_session;
 MANT_THREAD_LOCAL int structured_active;
@@ -189,10 +191,27 @@ supported_tree(const struct roff_node *node)
 	return 1;
 }
 
-uint32_t
-mant_structured_render(const struct mant_structured_input_view *input,
+static size_t
+annotated_glyph_width(void *unused, uint32_t scalar)
+{
+	(void)unused;
+	return mant_mandoc_utf8_width((int)scalar);
+}
+
+static int
+annotated_charge_work(void *argument, uint64_t amount)
+{
+	struct structured_session *session = argument;
+	return mant_structured_charge(session, &session->builder_operations,
+	    amount, session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER);
+}
+
+static uint32_t
+render_session(const struct mant_structured_input_view *input,
     const struct mant_structured_limits *limits,
     struct mant_structured_result **out_result,
+    struct mant_annotated_result **out_annotated,
     struct mant_structured_failure_view *failure)
 {
 	struct structured_session session;
@@ -203,13 +222,20 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	struct manoutput output_options;
 	struct mant_mandoc_output *output;
 	struct termp *renderer;
+	struct mant_annotated_result *annotated;
+	struct mant_annotated_display_limits display_limits;
+	struct mant_annotated_display_view display_view;
 	uint64_t source_map_bytes;
 	uint32_t status;
 	int options, message_state_saved, mchars_ready, output_active;
+	int annotated_mode = out_annotated != NULL;
 
-	if (out_result == NULL || failure == NULL)
+	if ((out_result == NULL && out_annotated == NULL) || failure == NULL)
 		return MANT_STRUCTURED_INVALID_INPUT;
-	*out_result = NULL;
+	if (out_result != NULL)
+		*out_result = NULL;
+	if (out_annotated != NULL)
+		*out_annotated = NULL;
 	mant_structured_clear_failure(failure);
 	if (structured_active) {
 		failure->status = MANT_STRUCTURED_REENTRANT;
@@ -222,8 +248,10 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	session.input = input;
 	session.limits = limits;
 	session.probe = structured_probe;
+	session.annotated_mode = annotated_mode;
 	session.status = MANT_STRUCTURED_OK;
 	result = NULL;
+	annotated = NULL;
 	parser = NULL;
 	output = NULL;
 	renderer = NULL;
@@ -293,7 +321,8 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	}
 	if (!check_nesting_depth(&session, meta->first))
 		goto native_cleanup;
-	if (session.probe == NULL && !supported_tree(meta->first)) {
+	if (!annotated_mode && session.probe == NULL &&
+	    !supported_tree(meta->first)) {
 		mant_structured_set_failure(&session, MANT_STRUCTURED_UNSUPPORTED,
 		    MANT_STRUCTURED_STAGE_RENDER, 0, 1, 0);
 		goto native_cleanup;
@@ -303,8 +332,66 @@ mant_structured_render(const struct mant_structured_input_view *input,
 	result->width = input->width;
 	if (!mant_structured_copy_metadata(&session, meta))
 		goto native_cleanup;
+	if (annotated_mode) {
+		annotated = mant_structured_allocate(&session,
+		    sizeof(*annotated), 1, MANT_STRUCTURED_STAGE_RENDER);
+		if (annotated == NULL)
+			goto native_cleanup;
+		annotated->magic = MANT_ANNOTATED_MAGIC;
+		annotated->common = result;
+		memset(&display_limits, 0, sizeof(display_limits));
+		display_limits.max_input_bytes = limits->max_content_bytes;
+		display_limits.max_result_bytes = limits->max_content_bytes;
+		display_limits.max_allocated_bytes =
+		    limits->max_builder_allocated_bytes - session.allocated_bytes;
+		display_limits.max_work = limits->max_builder_operations;
+		display_limits.max_rows = limits->max_fixed_lines > UINT32_MAX ?
+		    UINT32_MAX : (uint32_t)limits->max_fixed_lines;
+		display_limits.max_runs = limits->max_annotation_runs > UINT32_MAX ?
+		    UINT32_MAX : (uint32_t)limits->max_annotation_runs;
+		display_limits.max_row_columns =
+		    limits->max_content_bytes >= UINT32_MAX ? UINT32_MAX - 1 :
+		    limits->max_content_bytes < 2 ? 2 :
+		    (uint32_t)limits->max_content_bytes;
+		annotated->display = mant_annotated_display_new(&display_limits,
+		    annotated_glyph_width, NULL);
+		if (annotated->display == NULL) {
+			mant_structured_set_failure(&session,
+			    MANT_STRUCTURED_BUILDER_ALLOC,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, 0,
+			    display_limits.max_allocated_bytes);
+			goto native_cleanup;
+		}
+		session.annotated_display = annotated->display;
+		if (!mant_structured_charge(&session, &session.allocated_bytes,
+		    mant_annotated_display_allocated_bytes(annotated->display),
+		    limits->max_builder_allocated_bytes, 9,
+		    MANT_STRUCTURED_STAGE_RENDER))
+			goto native_cleanup;
+		if (!mant_annotated_display_set_work_charge(
+		    annotated->display, annotated_charge_work, &session)) {
+			mant_structured_set_failure(&session,
+			    MANT_STRUCTURED_RELATION,
+			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+			goto native_cleanup;
+		}
+		session.annotated_collector = mant_annotated_collector_new(&session,
+		    annotated->display);
+		if (session.annotated_collector == NULL) {
+			if (session.status == MANT_STRUCTURED_OK)
+				mant_structured_set_failure(&session,
+				    MANT_STRUCTURED_BUILDER_ALLOC,
+				    MANT_STRUCTURED_STAGE_RENDER, 0, 0,
+				    limits->max_builder_allocated_bytes);
+			goto native_cleanup;
+		}
+	}
 	if (result->metadata.has_body) {
-		output = mant_mandoc_output_alloc(
+		output = annotated_mode ? mant_mandoc_output_alloc_sink(
+		    limits->max_content_bytes > SIZE_MAX ? SIZE_MAX :
+		    (size_t)limits->max_content_bytes,
+		    mant_annotated_collector_sink, session.annotated_collector) :
+		    mant_mandoc_output_alloc(
 		    limits->max_content_bytes > SIZE_MAX ? SIZE_MAX :
 		    (size_t)limits->max_content_bytes);
 		if (output == NULL || !mant_mandoc_output_begin(output)) {
@@ -323,7 +410,13 @@ mant_structured_render(const struct mant_structured_input_view *input,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 			goto native_cleanup;
 		}
-		term_setcollector(renderer, mant_structured_observe_terminal, &session);
+		if (annotated_mode)
+			term_setcollector(renderer,
+			    mant_annotated_collector_observe,
+			    session.annotated_collector);
+		else
+			term_setcollector(renderer, mant_structured_observe_terminal,
+			    &session);
 		if (meta->macroset == MACROSET_MDOC)
 			terminal_mdoc(renderer, meta);
 		else
@@ -334,17 +427,55 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		mant_mandoc_output_end();
 		output_active = 0;
 		if (mant_mandoc_output_status(output) != 0 &&
-		    session.status == MANT_STRUCTURED_OK)
-			mant_structured_set_failure(&session, MANT_STRUCTURED_BUDGET,
-			    MANT_STRUCTURED_STAGE_RENDER, 10,
-			    mant_mandoc_output_length(output),
-			    limits->max_content_bytes);
+		    session.status == MANT_STRUCTURED_OK) {
+			int output_status = mant_mandoc_output_status(output);
+			uint64_t attempted =
+			    mant_mandoc_output_attempted_length(output);
+			if (output_status == 1 &&
+			    attempted > limits->max_content_bytes)
+				mant_structured_set_failure(&session,
+				    MANT_STRUCTURED_BUDGET,
+				    MANT_STRUCTURED_STAGE_RENDER, 10,
+				    attempted, limits->max_content_bytes);
+			else
+				mant_structured_set_failure(&session,
+				    output_status == 2 ?
+				    MANT_STRUCTURED_BUILDER_ALLOC :
+				    MANT_STRUCTURED_RELATION,
+				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+		}
 		if (session.probe != NULL)
 			session.probe->rendered_bytes =
 			    mant_mandoc_output_length(output);
 		mant_mandoc_output_free(output);
 		output = NULL;
-		if (session.status == MANT_STRUCTURED_OK) {
+		if (session.status == MANT_STRUCTURED_OK && annotated_mode) {
+			int display_finished = mant_annotated_display_finish(
+			    annotated->display, &display_view);
+			if (!mant_annotated_collector_account_display(
+			    session.annotated_collector))
+				goto native_cleanup;
+			if (!display_finished) {
+				uint32_t kind = 0;
+				uint64_t observed = 0, allowed = 0;
+				enum mant_annotated_display_status display_status =
+				    mant_annotated_display_status(annotated->display);
+				mant_annotated_display_failure(annotated->display,
+				    &kind, &observed, &allowed);
+				if (display_status == MANT_ANNOTATED_DISPLAY_BUDGET &&
+				    kind != 0 && observed > allowed)
+					mant_structured_set_failure(&session,
+					    MANT_STRUCTURED_BUDGET,
+					    MANT_STRUCTURED_STAGE_FINALIZE, kind,
+					    observed, allowed);
+				else
+					mant_structured_set_failure(&session,
+					    display_status == MANT_ANNOTATED_DISPLAY_ALLOC ?
+					    MANT_STRUCTURED_BUILDER_ALLOC :
+					    MANT_STRUCTURED_RELATION,
+					    MANT_STRUCTURED_STAGE_FINALIZE, 0, 0, 0);
+			}
+		} else if (session.status == MANT_STRUCTURED_OK) {
 			if (!mant_structured_buffer_is_settled(&session))
 				mant_structured_set_failure(&session,
 				    MANT_STRUCTURED_RELATION,
@@ -354,11 +485,13 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		}
 		if (session.status != MANT_STRUCTURED_OK)
 			goto native_cleanup;
-		mant_structured_address_finish(&session);
-		if (session.status != MANT_STRUCTURED_OK)
-			goto native_cleanup;
-		if (!mant_structured_finalize_links(&session))
-			goto native_cleanup;
+		if (!annotated_mode) {
+			mant_structured_address_finish(&session);
+			if (session.status != MANT_STRUCTURED_OK)
+				goto native_cleanup;
+			if (!mant_structured_finalize_links(&session))
+				goto native_cleanup;
+		}
 	}
 	result->magic = MANT_STRUCTURED_MAGIC;
 
@@ -387,7 +520,20 @@ native_cleanup:
 			result->source_maps = session.source_maps;
 			result->source_map_count = input->sources.count;
 			session.source_maps = NULL;
-			if (!mant_structured_result_is_valid(result, &session))
+			if (annotated_mode) {
+				/* Basic display transport is checked; semantic marks remain
+				 * explicitly unverified until their native ranges exist. */
+				annotated->coverage_unverified = UINT64_C(0xff);
+				mant_annotated_collector_take_marks(
+				    session.annotated_collector,
+				    &annotated->marks, &annotated->mark_count);
+				if (!mant_annotated_result_is_valid(annotated))
+					mant_structured_set_failure(&session,
+					    MANT_STRUCTURED_RELATION,
+					    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
+				else
+					annotated->checked = 1;
+			} else if (!mant_structured_result_is_valid(result, &session))
 				mant_structured_set_failure(&session, MANT_STRUCTURED_RELATION,
 				    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
 			else
@@ -402,8 +548,14 @@ cleanup:
 	mant_structured_buffer_release(&session, result);
 	status = session.status;
 	if (status == MANT_STRUCTURED_OK) {
-		*out_result = result;
-		result = NULL;
+		if (annotated_mode) {
+			*out_annotated = annotated;
+			annotated = NULL;
+			result = NULL;
+		} else {
+			*out_result = result;
+			result = NULL;
+		}
 	} else {
 		failure->status = status;
 		failure->stage = session.stage;
@@ -424,10 +576,33 @@ cleanup:
 	free(session.list_states);
 	free(session.link_identities);
 	mant_structured_address_release(&session);
+	mant_annotated_collector_free(session.annotated_collector);
+	if (annotated != NULL) {
+		mant_annotated_result_free(annotated);
+		result = NULL;
+	}
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;
 	structured_active = 0;
 	return status;
+}
+
+uint32_t
+mant_structured_render(const struct mant_structured_input_view *input,
+    const struct mant_structured_limits *limits,
+    struct mant_structured_result **out_result,
+    struct mant_structured_failure_view *failure)
+{
+	return render_session(input, limits, out_result, NULL, failure);
+}
+
+uint32_t
+mant_annotated_render(const struct mant_structured_input_view *input,
+    const struct mant_structured_limits *limits,
+    struct mant_annotated_result **out_result,
+    struct mant_structured_failure_view *failure)
+{
+	return render_session(input, limits, NULL, out_result, failure);
 }
 
 uint32_t

@@ -8,6 +8,8 @@ struct roff_node;
 struct structured_token;
 struct structured_column;
 struct structured_anchor_state;
+struct mant_annotated_collector;
+struct mant_annotated_display;
 struct structured_link_identity {
 	const struct roff_node *node;
 	uint32_t key;
@@ -72,6 +74,9 @@ struct structured_session {
 	const struct mant_structured_limits *limits;
 	struct mant_structured_probe_metrics *probe;
 	struct mant_structured_result *result;
+	struct mant_annotated_collector *annotated_collector;
+	struct mant_annotated_display *annotated_display;
+	uint8_t annotated_mode;
 	uint32_t *source_keys;
 	struct structured_source_map *source_maps;
 	uint32_t current_input;

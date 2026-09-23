@@ -14,6 +14,7 @@ struct mant_mandoc_output {
 	size_t		 length;
 	size_t		 capacity;
 	size_t		 limit;
+	size_t		 attempted_length;
 	mant_mandoc_output_sink sink;
 	void		*sink_arg;
 	enum mant_mandoc_output_operation operation;
@@ -75,7 +76,13 @@ mant_mandoc_output_write(const void *data, size_t length)
 		output->status = 3;
 		return;
 	}
-	if (data == NULL || length > output->limit - output->length) {
+	if (data == NULL) {
+		output->status = 3;
+		return;
+	}
+	if (length > output->limit - output->length) {
+		output->attempted_length = length > SIZE_MAX - output->length ?
+		    SIZE_MAX : output->length + length;
 		output->status = 1;
 		return;
 	}
@@ -206,6 +213,12 @@ size_t
 mant_mandoc_output_length(const struct mant_mandoc_output *output)
 {
 	return output == NULL ? 0 : output->length;
+}
+
+size_t
+mant_mandoc_output_attempted_length(const struct mant_mandoc_output *output)
+{
+	return output == NULL ? 0 : output->attempted_length;
 }
 
 int

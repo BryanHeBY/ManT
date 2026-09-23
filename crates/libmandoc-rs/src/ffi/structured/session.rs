@@ -10,7 +10,7 @@ use super::{
     mant_structured_result_free, mant_structured_result_view, raw_limits, relation_error,
     semantic_document, semantic_error,
 };
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 use super::{ProbeMetrics, mant_structured_probe};
 use crate::{InputFormat, SourceBundle};
 use std::ptr::NonNull;
@@ -82,7 +82,7 @@ pub(super) fn render_prelude_profile(
     copy_structured_document(&handle, &view, limits)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 pub(super) fn probe_structured(
     root: &str,
     bundle: &SourceBundle,
@@ -93,7 +93,7 @@ pub(super) fn probe_structured(
     probe_structured_profile(root, bundle, format, width, PROFILE_UTF8, limits)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "structured"))]
 pub(super) fn probe_structured_profile(
     root: &str,
     bundle: &SourceBundle,
