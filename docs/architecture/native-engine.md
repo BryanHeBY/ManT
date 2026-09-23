@@ -1,5 +1,10 @@
 # ManT native engine and crate boundaries
 
+Status (2026-09-23): this describes the currently shipping AST-lowered roff
+pipeline until the annotated-output production switch. The P1 migration
+target is the [native annotated-output contract](native-annotated-output-contract.md);
+the two descriptions must not be combined into a third display path.
+
 ManT is one native documentation engine with three presentation boundaries:
 an interactive TUI, deterministic command-line projections, and a read-only
 MCP server. Native man/mdoc pages and Markdown enter the same renderer-neutral

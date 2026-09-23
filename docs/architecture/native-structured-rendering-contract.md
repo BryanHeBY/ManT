@@ -1,9 +1,11 @@
 # Native structured-rendering contract (C01)
 
-Status: frozen admission contract for C02, recorded on 2026-09-20. This
-document defines the minimum relationships that the native producer, FFI,
-ManT IR, and consumers must preserve. It does not claim that the structured
-renderer is implemented.
+Status: historical C01–C05 contract, superseded as an implementation target
+by the [native annotated-output P0 contract](native-annotated-output-contract.md)
+on 2026-09-23. This document remains evidence for the private structured
+path and its previous decisions; its logical-tree display-admission rules
+are not requirements for R01–R03. The current production path has not yet
+switched to annotated output.
 
 The behavior-preserving internal module split is tracked separately in the
 [libmandoc structured-rendering internals](libmandoc-structured-internals.md)

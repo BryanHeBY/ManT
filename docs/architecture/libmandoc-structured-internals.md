@@ -1,7 +1,11 @@
 # libmandoc structured-rendering internals
 
-Status: refactor completed on `dev`; baseline frozen at `bcd6661d` on
-2026-09-21 and native split completed at `eb502316`.
+Status: historical structured-path module map. The refactor completed on
+`dev`; baseline was frozen at `bcd6661d` on 2026-09-21 and the native split
+completed at `eb502316`. The active P1 target is the
+[native annotated-output P0 contract](native-annotated-output-contract.md).
+This map is still accurate for the old files until their staged migration,
+but does not prescribe the new display authority or final module layout.
 
 This document is the module and ownership map for the behavior-preserving
 `libmandoc-rs` structured-rendering split.  It supplements the frozen
