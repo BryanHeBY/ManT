@@ -15,6 +15,7 @@
 #include "mant_mandoc_structured_structure.h"
 
 struct structured_anchor_state {
+	const struct roff_node *carrier;
 	uint64_t threshold;
 	uint32_t owner;
 	uint32_t root;
@@ -374,11 +375,186 @@ node_is_heading(const struct roff_node *node)
 	    (node->tok == MAN_SH || node->tok == MDOC_Sh);
 }
 
+static int
+node_has_target(const struct roff_node *node, const char *target)
+{
+	const char *actual;
+
+	actual = node != NULL && (node->flags & NODE_ID) != 0 ?
+	    node_target(node) : NULL;
+	return actual != NULL && strcmp(actual, target) == 0;
+}
+
+/*
+ * The pinned mdoc_validate.c:post_tg() selects the next macro before later
+ * validation may delete it.  NODE_NOPRT on Tg therefore only describes a
+ * transfer attempt, not proof that its destination survived validation.
+ */
+static const struct roff_node *
+tg_selected_carrier(const struct roff_node *node)
+{
+	const struct roff_node *next, *list;
+
+	for (next = node; next != NULL; next = next->parent)
+		if (next->type != ROFFT_HEAD && next->type != ROFFT_BODY &&
+		    next->type != ROFFT_TAIL && next->next != NULL) {
+			next = next->next;
+			break;
+		}
+	if (next == NULL)
+		return NULL;
+	switch (next->tok) {
+	case MDOC_Sh:
+	case MDOC_Ss:
+	case MDOC_Fo:
+		return next->head;
+	case MDOC_It:
+		for (list = next->parent; list != NULL &&
+		    list->tok != MDOC_Bl; list = list->parent)
+			;
+		if (list == NULL || list->norm == NULL)
+			return NULL;
+		switch (list->norm->Bl.type) {
+		case LIST_column:
+			return next;
+		case LIST_diag:
+		case LIST_hang:
+		case LIST_inset:
+		case LIST_ohang:
+		case LIST_tag:
+			return next->head;
+		case LIST_bullet:
+		case LIST_dash:
+		case LIST_enum:
+		case LIST_hyphen:
+		case LIST_item:
+			return next->body;
+		default:
+			return NULL;
+		}
+	case MDOC_Bd:
+	case MDOC_Bl:
+	case MDOC_D1:
+	case MDOC_Dl:
+		return next->body;
+	case MDOC_Pp:
+	case MDOC_Cm:
+	case MDOC_Dv:
+	case MDOC_Em:
+	case MDOC_Er:
+	case MDOC_Ev:
+	case MDOC_Fl:
+	case MDOC_Fn:
+	case MDOC_Ic:
+	case MDOC_Li:
+	case MDOC_Ms:
+	case MDOC_No:
+	case MDOC_Sy:
+		return next;
+	default:
+		return NULL;
+	}
+}
+
+/*
+ * Pinned tag.c:tag_move_id() may move an inline target backwards to a
+ * paragraph or list item.  That carrier is visited before its Tg source, so
+ * it has already emitted the single anchor when we reach this function.
+ */
+static int
+tg_target_survived(const struct roff_node *node, const char *target,
+    const struct roff_node **already_visited)
+{
+	const struct roff_node *carrier, *previous, *list;
+
+	*already_visited = NULL;
+	carrier = tg_selected_carrier(node);
+	if (node_has_target(carrier, target))
+		return 1;
+	if (carrier == NULL ||
+	    (carrier->type != ROFFT_ELEM && carrier->tok != MDOC_Fo))
+		return 0;
+	for (previous = carrier; previous != NULL;) {
+		previous = previous->prev != NULL ? previous->prev :
+		    previous->parent;
+		if (previous == NULL)
+			return 0;
+		switch (previous->tok) {
+		case MDOC_It:
+			list = previous->parent == NULL ? NULL :
+			    previous->parent->parent;
+			if (list == NULL || list->norm == NULL)
+				return 0;
+			switch (list->norm->Bl.type) {
+			case LIST_column:
+				previous = previous->parent;
+				break;
+			case LIST_diag:
+			case LIST_hang:
+			case LIST_inset:
+			case LIST_ohang:
+			case LIST_tag:
+				previous = previous->parent->head;
+				break;
+			default:
+				break;
+			}
+			/* FALLTHROUGH */
+		case MDOC_Pp:
+			if (node_has_target(previous, target)) {
+				*already_visited = previous;
+				return 1;
+			}
+			return 0;
+		case MDOC_Sh:
+		case MDOC_Ss:
+		case MDOC_Bd:
+		case MDOC_Bl:
+		case MDOC_D1:
+		case MDOC_Dl:
+		case MDOC_Rs:
+			return 0;
+		default:
+			break;
+		}
+	}
+	return 0;
+}
+
+static int
+reattribute_moved_anchor(struct structured_session *session,
+    const struct roff_node *carrier, const char *target,
+    uint32_t provenance)
+{
+	struct mant_structured_anchor_view *anchor;
+	uint32_t key;
+
+	for (key = session->result->anchor_count; key != 0; key--) {
+		if (!mant_structured_charge(session, &session->builder_operations, 1,
+		    session->limits->max_builder_operations, 8,
+		    MANT_STRUCTURED_STAGE_RENDER))
+			return 0;
+		if (session->anchor_states[key - 1].carrier != carrier)
+			continue;
+		anchor = session->result->anchors + key - 1;
+		if (anchor->origin != MANT_TARGET_ORIGIN_AUTHORED ||
+		    anchor->target.len != strlen(target) ||
+		    memcmp(anchor->target.ptr, target, anchor->target.len) != 0)
+			break;
+		anchor->provenance = provenance;
+		return 1;
+	}
+	mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+	    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
+	return 0;
+}
+
 void
 mant_structured_address_enter_node(struct structured_session *session,
     const struct roff_node *node)
 {
 	struct structured_node_context *context;
+	const struct roff_node *already_visited;
 	const char *target;
 	uint32_t key, owner, origin, provenance, root, scope_list;
 	int leading;
@@ -389,6 +565,20 @@ mant_structured_address_enter_node(struct structured_session *session,
 	if (node->tok == MDOC_Tg) {
 		target = node->child == NULL || node->child->type != ROFFT_TEXT ?
 		    NULL : node->child->string;
+		if (target == NULL || target[0] == '\0')
+			return;
+		if ((node->flags & NODE_NOPRT) != 0) {
+			if (!tg_target_survived(node, target, &already_visited))
+				return;
+			if (already_visited != NULL) {
+				provenance = mant_structured_append_provenance(session,
+				    node, 1);
+				if (provenance != 0)
+					reattribute_moved_anchor(session,
+					    already_visited, target, provenance);
+				return;
+			}
+		}
 		provenance = mant_structured_append_provenance(session, node, 1);
 		scope_list = context != NULL && context->list != 0 &&
 		    context->item == 0 ? context->list : 0;
@@ -440,6 +630,7 @@ mant_structured_address_enter_node(struct structured_session *session,
 	}
 	if (key == 0)
 		return;
+	session->anchor_states[key - 1].carrier = node;
 	bind_anchor(session, key, owner, root, leading);
 	if ((node->tok == MDOC_Pp || node_is_heading(node)) && owner != 0)
 		drain_unowned_to_owner(session, owner, 0, 1);

@@ -6,6 +6,71 @@ use mant_ir::{
 use std::ops::ControlFlow;
 
 #[test]
+fn nested_native_links_remain_two_resolvable_ir_occurrences() {
+    // Exact input was run through the fixed reference first. Pinned
+    // `man_term.c::pre_UR/post_UR` keeps the parent instance around the
+    // nested `pre_MR` instance and its separate punctuation suffix.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "nested.1",
+            b".TH TEST 1\n.SH DESCRIPTION\n.UR https://outer.test\nbefore\n.MR printf 3 ,\nafter\n.UE\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("nested.1", &bundle, InputFormat::Man)
+        .expect("nested links lower to IR");
+    let mut targets = Vec::new();
+    let report = mant_ir::scan_references(
+        &document,
+        mant_ir::ReferenceScanLimits::default(),
+        |occurrence| {
+            let position = occurrence.location.to_owned().expect("bounded location");
+            assert!(std::ptr::eq(
+                position.resolve_link(&document).expect("original link"),
+                occurrence.link,
+            ));
+            targets.push(occurrence.target.clone());
+            ControlFlow::Continue(())
+        },
+    );
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(report.occurrences, 2, "{targets:#?}");
+    assert!(targets.contains(&mant_ir::LinkTarget::External {
+        uri: "https://outer.test".to_owned(),
+    }));
+    assert!(targets.contains(&mant_ir::LinkTarget::Manual {
+        name: "printf".to_owned(),
+        manual_section: Some("3".to_owned()),
+    }));
+}
+
+#[test]
+fn native_link_across_definition_owner_keeps_one_ir_reference() {
+    // These exact TP/IP inputs were checked with the fixed reference.
+    // `man_term.c::pre_UR/post_UR` encloses formatter owner changes.
+    for item in [
+        b".TP\nterm\nbody\n".as_slice(),
+        b".IP label\nbody\n".as_slice(),
+    ] {
+        let mut source =
+            b".TH TEST 1\n.SH DESCRIPTION\n.UR https://example.test\nbefore\n".to_vec();
+        source.extend_from_slice(item);
+        source.extend_from_slice(b".UE\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert("cross-owner.1", source).unwrap();
+        let document = project_native_manual("cross-owner.1", &bundle, InputFormat::Man)
+            .expect("cross-owner link lowers to IR");
+        let report =
+            mant_ir::scan_references(&document, mant_ir::ReferenceScanLimits::default(), |_| {
+                ControlFlow::Continue(())
+            });
+        assert!(report.complete(), "{report:?}");
+        assert_eq!(report.occurrences, 1, "{document:#?}");
+    }
+}
+
+#[test]
 fn one_native_link_remains_one_final_ir_occurrence_across_style_and_wrap() {
     // This exact source was run through the pinned reference first.
     // `man_term.c::pre_UR/post_UR` keeps the UR body inside one link while

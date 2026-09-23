@@ -6,9 +6,7 @@ use libmandoc_rs::structured::{
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{Provenance, SourceIdentity, SourceKey};
 
-use super::{
-    NativeInlineLeaf, NativeProseProjection, only_break_opportunities, project_native_prose,
-};
+use super::{NativeInlineLeaf, NativeProseProjection, project_native_prose};
 
 fn bundle(entries: &[(&str, &[u8])]) -> SourceBundle {
     let mut bundle = SourceBundle::new();
@@ -16,18 +14,6 @@ fn bundle(entries: &[(&str, &[u8])]) -> SourceBundle {
         bundle.insert(*name, source.to_vec()).unwrap();
     }
     bundle
-}
-
-#[test]
-fn only_zero_width_breaks_may_interrupt_one_link_fragment() {
-    let break_opportunity = ContentAtomKind::BreakOpportunity;
-    let visible = ContentAtomKind::Text {
-        text: "visible".to_owned(),
-        display_override: None,
-    };
-
-    assert!(only_break_opportunities([&break_opportunity]));
-    assert!(!only_break_opportunities([&break_opportunity, &visible]));
 }
 
 #[test]

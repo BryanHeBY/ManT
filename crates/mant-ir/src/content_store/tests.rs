@@ -71,6 +71,129 @@ fn attaching_settled_atoms_is_atomic_and_accepts_only_zero_width_gaps() {
 }
 
 #[test]
+fn nested_link_parts_may_cross_owner() {
+    let mut builder = ContentStoreBuilder::new();
+    let (first_owner, first_root) = owner_and_root(&mut builder);
+    let outer = builder.push_link(
+        first_owner,
+        LinkTarget::External {
+            uri: "https://outer.test".into(),
+        },
+        None,
+        Provenance::Unknown,
+    );
+    let _before = builder.push_text(
+        first_root,
+        "before".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(outer),
+        Provenance::Unknown,
+    );
+    let inner = builder.push_link(
+        first_owner,
+        LinkTarget::Document {
+            name: "inner".into(),
+            fragment: None,
+        },
+        None,
+        Provenance::Unknown,
+    );
+    let _middle = builder.push_text(
+        first_root,
+        "middle".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(inner),
+        Provenance::Unknown,
+    );
+    let _after = builder.push_text(
+        first_root,
+        "after".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(outer),
+        Provenance::Unknown,
+    );
+    let second_owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+    let second_root = builder.push_root(second_owner, ContentRootKind::Body, Provenance::Unknown);
+    let _continued = builder.push_text(
+        second_root,
+        "continued".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(outer),
+        Provenance::Unknown,
+    );
+    validate_content_store(builder.content_store()).unwrap();
+}
+
+#[test]
+fn unrelated_visible_gaps_still_fail() {
+    let mut invalid = ContentStoreBuilder::new();
+    let (owner, root) = owner_and_root(&mut invalid);
+    let link = invalid.push_link(
+        owner,
+        LinkTarget::Document {
+            name: "gap".into(),
+            fragment: None,
+        },
+        None,
+        Provenance::Unknown,
+    );
+    for (text, occurrence) in [
+        ("first", Some(link)),
+        ("unrelated", None),
+        ("last", Some(link)),
+    ] {
+        let _ = invalid.push_text(
+            root,
+            text.into(),
+            None,
+            ContentStyle::default(),
+            None,
+            occurrence,
+            Provenance::Unknown,
+        );
+    }
+    assert!(validate_content_store(invalid.content_store()).is_err());
+
+    let mut interleaved = ContentStoreBuilder::new();
+    let (owner, first_root) = owner_and_root(&mut interleaved);
+    let second_root = interleaved.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let link = interleaved.push_link(
+        owner,
+        LinkTarget::Document {
+            name: "interleaved".into(),
+            fragment: None,
+        },
+        None,
+        Provenance::Unknown,
+    );
+    for (root, value, occurrence) in [
+        (first_root, "first", Some(link)),
+        (first_root, "unrelated", None),
+        (second_root, "middle", Some(link)),
+        (first_root, "last", Some(link)),
+    ] {
+        let _ = interleaved.push_text(
+            root,
+            value.into(),
+            None,
+            ContentStyle::default(),
+            None,
+            occurrence,
+            Provenance::Unknown,
+        );
+    }
+    assert!(validate_content_store(interleaved.content_store()).is_err());
+}
+
+#[test]
 fn detaching_a_link_prevalidates_every_atom_and_keeps_dense_identity() {
     let mut builder = ContentStoreBuilder::new();
     let (owner, root) = owner_and_root(&mut builder);

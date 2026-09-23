@@ -8,6 +8,10 @@ struct roff_node;
 struct structured_token;
 struct structured_column;
 struct structured_anchor_state;
+struct structured_link_identity {
+	const struct roff_node *node;
+	uint32_t key;
+};
 
 enum structured_content_part {
 	STRUCTURED_PART_FLOW,
@@ -144,8 +148,9 @@ struct structured_session {
 	uint8_t last_provenance_authored;
 	uint64_t current_atom_capacity;
 	uint64_t current_display_capacity;
-	const struct roff_node *last_link_node;
-	uint32_t last_link;
+	struct structured_link_identity *link_identities;
+	uint32_t link_identity_capacity;
+	uint32_t link_identity_count;
 };
 
 int mant_structured_injected_allocation_failure(void);

@@ -20,6 +20,7 @@
 #include "mant_mandoc_structured_address.h"
 #include "mant_mandoc_structured_buffer.h"
 #include "mant_mandoc_structured_builder.h"
+#include "mant_mandoc_structured_link.h"
 #include "mant_mandoc_output.h"
 
 MANT_THREAD_LOCAL struct structured_session *active_session;
@@ -354,6 +355,8 @@ mant_structured_render(const struct mant_structured_input_view *input,
 		mant_structured_address_finish(&session);
 		if (session.status != MANT_STRUCTURED_OK)
 			goto native_cleanup;
+		if (!mant_structured_finalize_links(&session))
+			goto native_cleanup;
 	}
 	result->magic = MANT_STRUCTURED_MAGIC;
 
@@ -417,6 +420,7 @@ cleanup:
 	free(session.root_atoms);
 	free(session.block_child_counts);
 	free(session.list_states);
+	free(session.link_identities);
 	mant_structured_address_release(&session);
 	mant_structured_result_free(result);
 	structured_fail_after = UINT64_MAX;

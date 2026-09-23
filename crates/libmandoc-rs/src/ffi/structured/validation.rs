@@ -483,7 +483,6 @@ pub(super) fn validate_structured_relations(
                 _ => false,
             };
             if atom.link != link.key
-                || atom.owner != link.owner
                 || part.atom <= previous_atom
                 || part.reserved != 0
                 || !part_valid

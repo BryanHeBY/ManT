@@ -85,6 +85,136 @@ fn zero_width_targets_use_points_and_leave_legacy_item_fields_zero() {
 }
 
 #[test]
+fn deleted_paragraph_does_not_leave_or_reassign_its_tg_target() {
+    // Each exact input was run through the fixed reference before these
+    // assertions. Pinned mdoc_validate.c::post_tg first tags Pp, then
+    // post_section deletes a terminal Pp; tag.c::tag_postprocess only sees
+    // the surviving NOPRT Tg, so End is not a native target.
+    let terminal = fixture(
+        "terminal-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbody\n.Tg End\n.Pp\n",
+        InputFormat::Mdoc,
+    );
+    assert!(!terminal.anchors.iter().any(|anchor| anchor.target == "End"));
+
+    let next_section = fixture(
+        "next-section-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbody\n.Tg End\n.Pp\n.Sh NEXT\nnext\n",
+        InputFormat::Mdoc,
+    );
+    assert!(
+        !next_section
+            .anchors
+            .iter()
+            .any(|anchor| anchor.target == "End")
+    );
+    assert!(
+        next_section
+            .anchors
+            .iter()
+            .any(|anchor| anchor.target == "NEXT")
+    );
+
+    let reused = fixture(
+        "reused-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbody\n.Tg End\n.Pp\n.Sh NEXT\n.Tg End\nnext\n",
+        InputFormat::Mdoc,
+    );
+    let matching = reused
+        .anchors
+        .iter()
+        .filter(|anchor| anchor.target == "End")
+        .collect::<Vec<_>>();
+    assert_eq!(matching.len(), 1, "{reused:#?}");
+    let OwnedProvenance::Authored { span } =
+        reused.provenances[matching[0].provenance as usize - 1]
+    else {
+        panic!("surviving target must retain its authored provenance");
+    };
+    assert_eq!(reused.spans[span as usize - 1].line_columns.unwrap().0, 9);
+}
+
+#[test]
+fn surviving_tg_carriers_keep_their_zero_width_targets() {
+    // These exact inputs were run through the fixed reference. Pinned
+    // mdoc_validate.c::post_tg selects Pp or Sh head, while tag.c::tag_move_id
+    // can move an inline target backwards to a preceding Pp.
+    let live_paragraph = fixture(
+        "live-paragraph-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Tg Live\n.Pp\nbody\n",
+        InputFormat::Mdoc,
+    );
+    assert_eq!(
+        live_paragraph
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.target == "Live")
+            .count(),
+        1
+    );
+
+    let next_heading = fixture(
+        "next-heading-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbody\n.Tg Next.Target\n.Sh NEXT\nnext\n",
+        InputFormat::Mdoc,
+    );
+    assert_eq!(
+        next_heading
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.target == "Next.Target")
+            .count(),
+        1
+    );
+
+    let standalone = fixture(
+        "standalone-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbody\n.Tg End\n",
+        InputFormat::Mdoc,
+    );
+    assert_eq!(
+        standalone
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.target == "End")
+            .count(),
+        1
+    );
+
+    let moved = fixture(
+        "moved-inline-target.1",
+        b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Pp\n.Tg Moved\n.Cm cmd\nafter\n",
+        InputFormat::Mdoc,
+    );
+    assert_eq!(
+        moved
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.target == "Moved")
+            .count(),
+        1,
+        "{moved:#?}"
+    );
+    let anchor = moved
+        .anchors
+        .iter()
+        .find(|anchor| anchor.target == "Moved")
+        .unwrap();
+    let OwnedProvenance::Authored { span } = &moved.provenances[anchor.provenance as usize - 1]
+    else {
+        panic!("moved target must retain its authored Tg source: {moved:#?}");
+    };
+    assert_eq!(
+        moved.spans[*span as usize - 1]
+            .line_columns
+            .expect("Tg source line is known")
+            .0,
+        7,
+        "tag.c::tag_move_id moves the landing point, not the Tg source"
+    );
+}
+
+#[test]
 fn one_link_occurrence_spans_roots_and_retains_hard_break_parts() {
     // Oracle: pinned `man_term.c::pre_UR/post_UR` keeps one UR block across
     // PP; pinned `roff_term.c::roff_term_pre_br` invokes `term_newln()`.
@@ -143,6 +273,190 @@ fn sectionless_xr_and_mr_keep_document_targets() {
     assert_eq!(mr.links[0].target_kind, 3);
     assert_eq!(mr.links[0].target_a, "printf");
     assert_eq!(mr.links[0].target_b, None);
+}
+
+#[test]
+fn man_mr_generated_parentheses_remain_in_the_link_without_a_suffix() {
+    // These exact 18-column sources were checked with the fixed reference.
+    // Pinned `man_term.c::pre_MR` emits `(` and `)` with no source node;
+    // only a real third child is a suffix outside the MR link.
+    for (source, expected) in [
+        (
+            b".TH TEST 1\n.SH REFERENCES\n.MR printf 3\n".as_slice(),
+            "printf(3)",
+        ),
+        (
+            b".TH TEST 1\n.SH REFERENCES\n.MR printf 3 \"\"\n".as_slice(),
+            "printf(3)",
+        ),
+        (
+            b".TH TEST 1\n.SH REFERENCES\n.MR printf 3 ,\n".as_slice(),
+            "printf(3)",
+        ),
+        (
+            b".TH TEST 1\n.SH\n.MR printf 3\nbody\n".as_slice(),
+            "printf(3)",
+        ),
+    ] {
+        let document = fixture("mr.1", source, InputFormat::Man);
+        assert_eq!(document.links.len(), 1, "{document:#?}");
+        let link = &document.links[0];
+        let label = document.link_label_parts[link.first_label_part as usize - 1
+            ..link.first_label_part as usize - 1 + link.label_part_count as usize]
+            .iter()
+            .map(|part| document.content_atoms[part.atom as usize - 1].text.as_str())
+            .collect::<String>();
+        assert_eq!(label, expected, "{document:#?}");
+    }
+}
+
+#[test]
+fn escaped_link_destinations_use_upstream_scalar_decoding() {
+    // These exact 18-column inputs were run with the fixed reference.
+    // `term.c::term_word` and `html.c::print_encode` decode `\-` before
+    // presenting the destination; the authored operand remains provenance.
+    let mr = fixture(
+        "mr-escape.1",
+        b".TH TEST 1\n.SH REFERENCES\n.MR git\\-config 1 ,\n",
+        InputFormat::Man,
+    );
+    assert_eq!(mr.links.len(), 1, "{mr:#?}");
+    assert_eq!(mr.links[0].target_a, "git-config");
+    let ur = fixture(
+        "ur-escape.1",
+        b".TH TEST 1\n.SH REFERENCES\n.UR https://example.test/a\\-b\nlabel\n.UE\n",
+        InputFormat::Man,
+    );
+    assert_eq!(ur.links.len(), 1, "{ur:#?}");
+    assert_eq!(ur.links[0].target_a, "https://example.test/a-b");
+    // Pinned `term.c::term_word` expands the selected UTF-8 terminal device
+    // in this exact source; the fixed 18-column reference prints `/utf8`.
+    let device = fixture(
+        "device-escape.1",
+        b".TH TEST 1\n.SH REFERENCES\n.UR https://example.test/\\*(.T\nlabel\n.UE\n",
+        InputFormat::Man,
+    );
+    assert_eq!(device.links[0].target_a, "https://example.test/utf8");
+
+    // The same exact source was also run with the fixed ASCII reference;
+    // `term.c::term_word` expands the selected device to `ascii` there.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "device-ascii.1",
+            b".TH TEST 1\n.SH REFERENCES\n.UR https://example.test/\\*(.T\nlabel\n.UE\n".to_vec(),
+        )
+        .unwrap();
+    let ascii = render_prelude_profile(
+        "device-ascii.1",
+        &bundle,
+        InputFormat::Man,
+        PROFILE_ASCII,
+        18,
+        &Limits::default(),
+    )
+    .unwrap();
+    assert_eq!(ascii.links[0].target_a, "https://example.test/ascii");
+}
+
+#[test]
+fn nested_manual_link_reuses_the_outer_occurrence_after_the_child() {
+    // Fixed CVS `man_term.c::pre_UR/post_UR` encloses the one `pre_MR`
+    // execution; it does not create a second UR macro after the child.
+    let document = fixture(
+        "nested.1",
+        b".TH TEST 1\n.SH DESCRIPTION\n.UR https://outer.test\nbefore\n.MR printf 3 ,\nafter\n.UE\n",
+        InputFormat::Man,
+    );
+    assert_eq!(document.links.len(), 2, "{document:#?}");
+    let outer = document
+        .links
+        .iter()
+        .find(|link| link.target_a == "https://outer.test")
+        .unwrap();
+    let inner = document
+        .links
+        .iter()
+        .find(|link| link.target_a == "printf")
+        .unwrap();
+    let outer_atoms = document.link_label_parts[outer.first_label_part as usize - 1
+        ..outer.first_label_part as usize - 1 + outer.label_part_count as usize]
+        .iter()
+        .map(|part| part.atom)
+        .collect::<Vec<_>>();
+    let inner_atoms = document.link_label_parts[inner.first_label_part as usize - 1
+        ..inner.first_label_part as usize - 1 + inner.label_part_count as usize]
+        .iter()
+        .map(|part| part.atom)
+        .collect::<Vec<_>>();
+    assert!(
+        outer_atoms[0] < inner_atoms[0]
+            && inner_atoms[inner_atoms.len() - 1] < outer_atoms[outer_atoms.len() - 1],
+        "{document:#?}"
+    );
+    let inner_label = inner_atoms
+        .iter()
+        .map(|key| document.content_atoms[*key as usize - 1].text.as_str())
+        .collect::<String>();
+    assert_eq!(inner_label, "printf(3)", "{document:#?}");
+    let outer_label = outer_atoms
+        .iter()
+        .map(|key| document.content_atoms[*key as usize - 1].text.as_str())
+        .collect::<String>();
+    assert!(outer_label.contains("before"));
+    assert!(outer_label.contains(','));
+    assert!(outer_label.contains("after"));
+}
+
+#[test]
+fn multiple_nested_manual_links_keep_disjoint_grouped_label_parts() {
+    // Exact 18-column source was checked against the fixed reference.
+    // `man_term.c::pre_MR` executes twice inside one UR block; punctuation
+    // after either nested MR remains inside the outer UR body.
+    let document = fixture(
+        "nested-pair.1",
+        b".TH TEST 1\n.SH DESCRIPTION\n.UR https://outer.test\nbefore\n.MR printf 3 ,\nmiddle\n.MR scanf 3 ;\nafter\n.UE\n",
+        InputFormat::Man,
+    );
+    assert_eq!(document.links.len(), 3, "{document:#?}");
+    let parts = document
+        .links
+        .iter()
+        .flat_map(|link| {
+            &document.link_label_parts[link.first_label_part as usize - 1
+                ..link.first_label_part as usize - 1 + link.label_part_count as usize]
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(parts.len(), document.link_label_parts.len());
+    let distinct_atoms = parts
+        .iter()
+        .map(|part| part.atom)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(distinct_atoms.len(), parts.len(), "{document:#?}");
+}
+
+#[test]
+fn man_ur_crosses_definition_owners_without_changing_occurrence() {
+    // Fixed CVS `man_term.c::pre_UR/post_UR` keeps one block while
+    // `man_term.c::pre_TP/pre_IP` changes the formatting owner inside it.
+    for item in [
+        b".TP\nterm\nbody\n".as_slice(),
+        b".IP label\nbody\n".as_slice(),
+    ] {
+        let mut source =
+            b".TH TEST 1\n.SH DESCRIPTION\n.UR https://example.test\nbefore\n".to_vec();
+        source.extend_from_slice(item);
+        source.extend_from_slice(b".UE\n");
+        let document = fixture("cross-owner.1", &source, InputFormat::Man);
+        assert_eq!(document.links.len(), 1, "{document:#?}");
+        let link = &document.links[0];
+        let owners = document.link_label_parts[link.first_label_part as usize - 1
+            ..link.first_label_part as usize - 1 + link.label_part_count as usize]
+            .iter()
+            .map(|part| document.content_atoms[part.atom as usize - 1].owner)
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(owners.len() > 1, "{document:#?}");
+    }
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use std::{error::Error, fmt};
+use std::{collections::HashMap, error::Error, fmt};
 
 use crate::LinkTarget;
 
@@ -238,11 +238,26 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
             root_positions[atom.index().expect("validated atom key fits usize")] = position;
         }
     }
+    let link_bounds = store
+        .links
+        .iter()
+        .map(|link| {
+            let atom = |part: &LinkLabelPart| match part {
+                LinkLabelPart::Content { content } => content.atom,
+                LinkLabelPart::HardBreak { atom } => *atom,
+            };
+            link.label
+                .first()
+                .zip(link.label.last())
+                .map(|(first, last)| (atom(first), atom(last)))
+        })
+        .collect::<Vec<_>>();
     for link in &store.links {
         if store.owner(link.owner).is_none() {
             return invalid("link occurrence references an unknown owner");
         }
         let mut previous = None;
+        let mut previous_by_root = HashMap::new();
         for part in &link.label {
             let atom = match part {
                 LinkLabelPart::Content { content } => {
@@ -271,37 +286,48 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
                 }
             };
             let record = store.atom(atom).expect("label atom was resolved");
-            if record.link != Some(link.key) || record.owner != link.owner {
-                return invalid("link label atom has inconsistent occurrence or owner");
+            if record.link != Some(link.key) {
+                return invalid("link label atom has inconsistent occurrence");
             }
             let count = &mut linked_parts[atom.index().expect("validated key fits usize")];
             *count = count.saturating_add(1);
-            if let Some(previous_key) = previous {
-                let previous_atom = store
-                    .atom(previous_key)
-                    .expect("previous label atom resolved");
-                if previous_key >= atom {
-                    return invalid("link label atoms must follow retained execution order");
-                }
-                if previous_atom.root == record.root {
-                    let root = store.root(record.root).expect("label root resolved");
-                    let previous_index = root_positions
-                        [previous_key.index().expect("validated atom key fits usize")];
-                    let current_index =
-                        root_positions[atom.index().expect("validated atom key fits usize")];
-                    if previous_index >= current_index
-                        || root.atoms[previous_index + 1..current_index]
-                            .iter()
-                            .any(|key| {
-                                store.atom(*key).is_none_or(|gap| {
-                                    !matches!(gap.kind, ContentAtomKind::BreakOpportunity {})
-                                })
-                            })
-                    {
-                        return invalid(
-                            "same-root link label parts may be separated only by break opportunities",
-                        );
-                    }
+            if let Some(previous_key) = previous
+                && previous_key >= atom
+            {
+                return invalid("link label atoms must follow retained execution order");
+            }
+            let current_index =
+                root_positions[atom.index().expect("validated atom key fits usize")];
+            if let Some((previous_index, previous_key)) =
+                previous_by_root.insert(record.root, (current_index, atom))
+            {
+                let root = store.root(record.root).expect("label root resolved");
+                if previous_index >= current_index
+                    || root.atoms[previous_index + 1..current_index]
+                        .iter()
+                        .any(|key| {
+                            let Some(gap) = store.atom(*key) else {
+                                return true;
+                            };
+                            if matches!(gap.kind, ContentAtomKind::BreakOpportunity {}) {
+                                return false;
+                            }
+                            let Some(nested) = gap.link else {
+                                return true;
+                            };
+                            let Some((first, last)) = nested
+                                .index()
+                                .and_then(|index| link_bounds.get(index))
+                                .and_then(|bounds| *bounds)
+                            else {
+                                return true;
+                            };
+                            nested == link.key || first <= previous_key || last >= atom
+                        })
+                {
+                    return invalid(
+                        "same-root link label parts may be separated only by nested links or break opportunities",
+                    );
                 }
             }
             previous = Some(atom);

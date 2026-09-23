@@ -175,7 +175,6 @@ commit_token(struct structured_session *session, uint32_t key)
 		    MANT_ATOM_TEXT, token->style, token->role, token->link,
 		    bytes, 1, NULL, 0, 0))
 			return;
-		mant_structured_record_link_part(session, token->link);
 		mant_structured_append_atom(session, token->root, token->provenance,
 		    MANT_ATOM_BREAK_OPPORTUNITY, 0, 0, 0, NULL, 0,
 		    NULL, 0, 0);
@@ -187,14 +186,13 @@ commit_token(struct structured_session *session, uint32_t key)
 
 		mant_structured_address_before_atom(session, token->root,
 		    token->sequence);
-		if (mant_structured_append_atom(session, token->root, token->provenance,
+		mant_structured_append_atom(session, token->root, token->provenance,
 		    MANT_ATOM_WHITESPACE, token->style, token->role, token->link,
 		    nbsp, sizeof(nbsp),
 		    session->result->profile == MANT_PROFILE_ASCII ? ascii_space :
 		    NULL,
 		    session->result->profile == MANT_PROFILE_ASCII ?
-		    sizeof(ascii_space) : 0, 0))
-			mant_structured_record_link_part(session, token->link);
+		    sizeof(ascii_space) : 0, 0);
 		return;
 	}
 	length = encode_scalar(token->value, bytes);
@@ -218,11 +216,10 @@ commit_token(struct structured_session *session, uint32_t key)
 		if (projection_survived[index])
 			projection_bytes[display_length++] = projection_bytes[index];
 	mant_structured_address_before_atom(session, token->root, token->sequence);
-	if (mant_structured_append_atom(session, token->root, token->provenance, kind,
+	mant_structured_append_atom(session, token->root, token->provenance, kind,
 	    token->style, token->role, token->link, bytes, length,
 	    display_length == 0 ? NULL : projection_bytes,
-	    display_length, breakable))
-		mant_structured_record_link_part(session, token->link);
+	    display_length, breakable);
 }
 
 static void
@@ -477,23 +474,31 @@ collect_logical(struct structured_session *session,
 	token->root = session->current_root;
 	token->role = semantic_role(node);
 	token->style = style_flags(event->font);
-	if (mant_structured_link_node(node) != NULL &&
-	    (event->node == NULL ||
-	    (event->node->flags & NODE_DELIMC) == 0)) {
+	if (mant_structured_link_node(node) != NULL) {
 		const struct roff_node *canonical = mant_structured_link_node(node);
 		const struct roff_node *third = canonical->child == NULL ? NULL :
 		    canonical->child->next == NULL ? NULL :
 		    canonical->child->next->next;
+		int outside_inner;
 
 		/* mdoc_html.c::mdoc_mt_pre gives each address its own link;
 		 * term.c::term_word inserts auto-space before each child, outside
 		 * that address's label.  The authored child remains the identity
 		 * across any buffer consumption or terminal wrap. */
-		if (!(canonical->tok == MDOC_Mt &&
+		outside_inner = (event->reason == TERM_COLLECT_AUTO_SPACE &&
+		    mant_structured_existing_link(session, node) == 0) ||
+		    (event->node != NULL &&
+		    (event->node->flags & NODE_DELIMC) != 0) ||
+		    (canonical->tok == MDOC_Mt &&
 		    (event->node == NULL ||
-		    event->reason == TERM_COLLECT_AUTO_SPACE)) &&
-		    !(canonical->tok == MAN_MR && event->node == third))
-			token->link = mant_structured_ensure_link(session, node,
+		    event->reason == TERM_COLLECT_AUTO_SPACE)) ||
+		    (canonical->tok == MAN_MR && third != NULL &&
+		    event->node == third);
+		if (outside_inner)
+			canonical = mant_structured_link_node(canonical->parent);
+		if (canonical != NULL)
+			token->link = mant_structured_ensure_link(session,
+			    outside_inner ? canonical : node,
 			    session->current_owner);
 		if (session->status != MANT_STRUCTURED_OK)
 			return;
@@ -763,11 +768,10 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 
 		mant_structured_address_before_atom(session,
 		    session->pending_break_root, session->pending_break_sequence);
-		if (mant_structured_append_atom(session, session->pending_break_root,
+		if (!mant_structured_append_atom(session, session->pending_break_root,
 		    session->pending_break_provenance, MANT_ATOM_HARD_BREAK,
-		    0, 0, link, NULL, 0, NULL, 0, 0))
-			mant_structured_record_link_part(session, link);
-		else if (session->status == MANT_STRUCTURED_OK)
+		    0, 0, link, NULL, 0, NULL, 0, 0) &&
+		    session->status == MANT_STRUCTURED_OK)
 			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 		session->pending_break_root = 0;
@@ -789,10 +793,9 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 			    session->current_root,
 			    session->token_total == UINT64_MAX ? UINT64_MAX :
 			    session->token_total + 1);
-			if (mant_structured_append_atom(session, session->current_root,
+			mant_structured_append_atom(session, session->current_root,
 			    provenance, MANT_ATOM_HARD_BREAK, 0, 0, link, NULL, 0,
-			    NULL, 0, 0))
-				mant_structured_record_link_part(session, link);
+			    NULL, 0, 0);
 		}
 	}
 }
@@ -839,6 +842,8 @@ mant_structured_buffer_release(struct structured_session *session,
 		}
 		sidecar_bytes = (uint64_t)session->node_capacity *
 		    sizeof(*session->node_stack) +
+		    (uint64_t)session->link_identity_capacity *
+		    sizeof(*session->link_identities) +
 		    (uint64_t)session->token_capacity * sizeof(*session->tokens) +
 		    (uint64_t)session->column_capacity * sizeof(*session->columns) +
 		    session->projection_peak_bytes;

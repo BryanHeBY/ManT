@@ -545,6 +545,29 @@ fn validate_links(
     document: &StructuredDocument,
     roots: &[NativeProseRoot],
 ) -> Result<(), NativeProjectionError> {
+    let mut link_bounds = vec![None; document.links().len()];
+    for link in document.links() {
+        let label = document
+            .link_label(link)
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "link label range is invalid",
+            ))?;
+        let part_atom = |part: &structured::LinkLabelPart| match part {
+            structured::LinkLabelPart::Content(reference) => reference.atom(),
+            structured::LinkLabelPart::HardBreak(atom) => *atom,
+        };
+        let first = label.first().map(part_atom);
+        let last = label.last().map(part_atom);
+        let index = one_based_index(link.key().get(), "link occurrence key")?;
+        let slot = link_bounds
+            .get_mut(index)
+            .ok_or(NativeProjectionError::InvalidRelation(
+                "link occurrence key exceeds link table",
+            ))?;
+        *slot = first
+            .zip(last)
+            .map(|(first, last)| (first.get(), last.get()));
+    }
     for link in document.links() {
         provenance_key(document, link.provenance())?;
         let label = document
@@ -569,8 +592,7 @@ fn validate_links(
                     .ok_or(NativeProjectionError::InvalidRelation(
                         "link label references an unknown atom",
                     ))?;
-            if atom.owner() != link.owner()
-                || atom.link() != Some(link.key())
+            if atom.link() != Some(link.key())
                 || match part {
                     structured::LinkLabelPart::Content(reference) => {
                         document.resolve_content_ref(reference).is_none()
@@ -584,43 +606,74 @@ fn validate_links(
                     "link label does not resolve to its linked owner atom",
                 ));
             }
-            if let Some(previous) = previous_by_root.insert(atom.root(), atom.ordinal()) {
-                let root = roots
-                    .get(one_based_index(atom.root().get(), "link label root key")?)
-                    .ok_or(NativeProjectionError::InvalidRelation(
-                        "link label references an unknown root",
-                    ))?;
-                let gap_start = usize::try_from(previous)
-                    .ok()
-                    .and_then(|ordinal| ordinal.checked_add(1));
-                let gap_end = usize::try_from(atom.ordinal()).ok();
-                let gap = gap_start
-                    .zip(gap_end)
-                    .and_then(|(start, end)| (start <= end).then_some(start..end))
-                    .and_then(|range| root.leaves.get(range))
-                    .ok_or(NativeProjectionError::InvalidRelation(
-                        "link label atom order is invalid within its root",
-                    ))?;
-                if !only_break_opportunities(gap.iter().map(|leaf| {
-                    document
-                        .content_atom(leaf.atom())
-                        .expect("projected roots contain validated native atoms")
-                        .kind()
-                })) {
-                    return Err(NativeProjectionError::InvalidRelation(
-                        "link occurrence is interrupted by visible content within one root",
-                    ));
-                }
+            if let Some((previous, previous_key)) =
+                previous_by_root.insert(atom.root(), (atom.ordinal(), atom_key))
+            {
+                validate_link_gap(
+                    document,
+                    roots,
+                    &link_bounds,
+                    link.key(),
+                    (previous, previous_key),
+                    (atom.ordinal(), atom_key),
+                    atom.root(),
+                )?;
             }
         }
     }
     Ok(())
 }
 
-fn only_break_opportunities<'a>(kinds: impl IntoIterator<Item = &'a ContentAtomKind>) -> bool {
-    kinds
-        .into_iter()
-        .all(|kind| matches!(kind, ContentAtomKind::BreakOpportunity))
+fn validate_link_gap(
+    document: &StructuredDocument,
+    roots: &[NativeProseRoot],
+    link_bounds: &[Option<(u32, u32)>],
+    link: LinkOccurrenceKey,
+    previous: (u32, ContentAtomKey),
+    current: (u32, ContentAtomKey),
+    root_key: ContentRootKey,
+) -> Result<(), NativeProjectionError> {
+    let root = roots
+        .get(one_based_index(root_key.get(), "link label root key")?)
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "link label references an unknown root",
+        ))?;
+    let gap_start = usize::try_from(previous.0)
+        .ok()
+        .and_then(|ordinal| ordinal.checked_add(1));
+    let gap_end = usize::try_from(current.0).ok();
+    let gap = gap_start
+        .zip(gap_end)
+        .and_then(|(start, end)| (start <= end).then_some(start..end))
+        .and_then(|range| root.leaves.get(range))
+        .ok_or(NativeProjectionError::InvalidRelation(
+            "link label atom order is invalid within its root",
+        ))?;
+    if gap.iter().any(|leaf| {
+        let record = document
+            .content_atom(leaf.atom())
+            .expect("projected roots contain validated native atoms");
+        if matches!(record.kind(), structured::ContentAtomKind::BreakOpportunity) {
+            return false;
+        }
+        let Some(nested) = record.link() else {
+            return true;
+        };
+        let Some((first, last)) = nested
+            .get()
+            .checked_sub(1)
+            .and_then(|index| link_bounds.get(index as usize))
+            .and_then(|bounds| *bounds)
+        else {
+            return true;
+        };
+        nested == link || first <= previous.1.get() || last >= current.1.get()
+    }) {
+        return Err(NativeProjectionError::InvalidRelation(
+            "link occurrence is interrupted by unrelated visible content within one root",
+        ));
+    }
+    Ok(())
 }
 
 fn source_key(key: structured::SourceKey) -> Result<SourceKey, NativeProjectionError> {

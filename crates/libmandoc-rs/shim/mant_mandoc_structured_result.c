@@ -598,7 +598,7 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 			    label_part->atom > result->content_atom_count)
 				return 0;
 			atom = result->content_atoms + label_part->atom - 1;
-			if (atom->link != link->key || atom->owner != link->owner ||
+			if (atom->link != link->key ||
 			    label_part->atom <= previous_atom ||
 			    result->validation_atoms[label_part->atom - 1] != 0)
 				return 0;
