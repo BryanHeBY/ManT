@@ -6,6 +6,7 @@
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use libmandoc_rs::annotated::AnnotatedRenderer;
 use libmandoc_rs::{InputFormat, SourceBundle};
@@ -32,10 +33,20 @@ fn four_representative_pages_have_checked_native_surfaces() {
             zstd::stream::decode_all(compressed.as_slice()).unwrap()
         };
         let mut bundle = SourceBundle::new();
+        let input_bytes = decoded.len();
         bundle.insert(name, decoded).unwrap();
+        let started = Instant::now();
         let page = AnnotatedRenderer::default()
             .render_bundle(name, &bundle, InputFormat::Man)
             .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        eprintln!(
+            "{name}: input={input_bytes} surface={} rows={} runs={} marks={} elapsed_ms={}",
+            page.text.len(),
+            page.rows.len(),
+            page.runs.len(),
+            page.marks.len(),
+            started.elapsed().as_millis()
+        );
         assert!(!page.text.is_empty(), "{name}");
         assert_eq!(page.sources.len(), 1, "{name}");
         assert!(!page.rows.is_empty(), "{name}");
