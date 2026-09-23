@@ -94,6 +94,8 @@ pub struct AnnotatedMark {
     pub title_region: u32,
     pub body_region: u32,
     pub flags: u32,
+    /// Native tbl column and offset hint, not a final display point.
+    pub native_table_position: Option<(u32, u64)>,
     pub name: Option<String>,
 }
 
@@ -431,6 +433,8 @@ mod tests {
         bundle
             .insert("t.1", b".TH T 1\n.SH D\nbody\n".to_vec())
             .unwrap();
+        let mut mark_limited = AnnotatedRenderer::default();
+        mark_limited.limits.max_transfer_objects = 1;
         for renderer in [
             AnnotatedRenderer::default()
                 .with_max_content_bytes(1)
@@ -444,6 +448,7 @@ mod tests {
             AnnotatedRenderer::default()
                 .with_max_builder_allocated_bytes(1)
                 .unwrap(),
+            mark_limited,
         ] {
             let error = renderer
                 .render_bundle("t.1", &bundle, InputFormat::Man)

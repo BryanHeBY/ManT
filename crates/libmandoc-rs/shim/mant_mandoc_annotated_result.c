@@ -182,12 +182,27 @@ valid_marks(const struct mant_annotated_result *result)
 		    mark->source > result->common->source_count ||
 		    ((mark->line == 0) != (mark->column == 0)) ||
 		    (mark->source == 0 && mark->line != 0) ||
-		    mark->region_kind > MANT_ANNOTATED_REGION_EQUATION ||
+		    mark->region_kind > MANT_ANNOTATED_REGION_TABLE_CELL ||
 		    mark->title_region > result->mark_count ||
 		    mark->body_region > result->mark_count ||
 		    (mark->flags & ~(MANT_ANNOTATED_MARK_AUTHORED |
 		    MANT_ANNOTATED_MARK_FINAL_POINT_UNVERIFIED)) != 0 ||
 		    mark->reserved != 0)
+			return 0;
+		if (mark->kind == MANT_ANNOTATED_MARK_REGION &&
+		    mark->region_kind == MANT_ANNOTATED_REGION_TABLE_CELL) {
+			if (mark->table_position_present != 1 ||
+			    mark->parent == 0 || mark->owner != mark->parent ||
+			    result->marks[mark->parent - 1].kind !=
+			    MANT_ANNOTATED_MARK_REGION ||
+			    result->marks[mark->parent - 1].region_kind !=
+			    MANT_ANNOTATED_REGION_TABLE_SPAN ||
+			    mark->line != 0 || mark->column != 0 ||
+			    (mark->flags & MANT_ANNOTATED_MARK_AUTHORED) != 0)
+				return 0;
+		} else if (mark->table_column != 0 ||
+		    mark->table_position_present != 0 ||
+		    mark->table_offset != 0)
 			return 0;
 		if (mark->kind == MANT_ANNOTATED_MARK_ANCHOR) {
 			if (mark->name == NULL || mark->name_length == 0 ||
@@ -272,7 +287,7 @@ mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 2;
+	return 3;
 }
 
 uint32_t
@@ -373,6 +388,8 @@ size_t mant_annotated_alignof_mark(void)
 { return _Alignof(struct mant_annotated_mark); }
 size_t mant_annotated_offsetof_mark_name(void)
 { return offsetof(struct mant_annotated_mark, name); }
+size_t mant_annotated_offsetof_mark_table_offset(void)
+{ return offsetof(struct mant_annotated_mark, table_offset); }
 size_t mant_annotated_sizeof_coverage_check(void)
 { return sizeof(struct mant_annotated_coverage_check); }
 size_t mant_annotated_alignof_coverage_check(void)

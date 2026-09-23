@@ -28,7 +28,8 @@ enum mant_annotated_region_kind {
 	MANT_ANNOTATED_REGION_LIST = 5,
 	MANT_ANNOTATED_REGION_LITERAL = 6,
 	MANT_ANNOTATED_REGION_TABLE_SPAN = 7,
-	MANT_ANNOTATED_REGION_EQUATION = 8
+	MANT_ANNOTATED_REGION_EQUATION = 8,
+	MANT_ANNOTATED_REGION_TABLE_CELL = 9
 };
 
 #define MANT_ANNOTATED_MARK_AUTHORED (1U << 0)
@@ -48,6 +49,11 @@ struct mant_annotated_mark {
 	uint32_t body_region;
 	uint32_t flags;
 	uint32_t reserved;
+	/* Native tbl column and offset hint, not a validated final DisplayPoint.
+	 * Present only for a table-cell region after TABLE_CELL_POSITION. */
+	uint32_t table_column;
+	uint32_t table_position_present;
+	uint64_t table_offset;
 	/* Owned UTF-8 only for ANCHOR.  Empty for other mark kinds. */
 	const uint8_t *name;
 	uint64_t name_length;

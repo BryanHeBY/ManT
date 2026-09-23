@@ -39,6 +39,11 @@ struct annotated_frame {
 	uint32_t saved_heading;
 };
 
+struct annotated_cell {
+	const struct tbl_dat *data;
+	uint32_t mark;
+};
+
 struct mant_annotated_collector {
 	struct structured_session *session;
 	struct mant_annotated_display *display;
@@ -50,6 +55,13 @@ struct mant_annotated_collector {
 	struct mant_annotated_mark *marks;
 	uint32_t mark_count;
 	uint32_t mark_capacity;
+	struct annotated_cell *cells;
+	uint32_t cell_capacity;
+	uint32_t cell_count;
+	const struct roff_node *table_node;
+	const struct tbl_dat *active_cell;
+	uint32_t cell_saved_owner;
+	uint8_t table_prepared;
 	uint32_t active_owner;
 	uint32_t active_link;
 	uint32_t active_heading;
@@ -211,17 +223,15 @@ add_mark(struct mant_annotated_collector *collector,
 {
 	struct mant_annotated_mark *marks, *mark;
 	size_t name_length;
+	uint32_t maximum;
 
-	if (collector->mark_count == UINT32_MAX) {
-		mant_structured_set_failure(collector->session,
-		    MANT_STRUCTURED_BUDGET, MANT_STRUCTURED_STAGE_RENDER,
-		    9, UINT32_MAX, UINT32_MAX - 1);
-		return 0;
-	}
+	maximum = collector->session->limits->max_transfer_objects >
+	    UINT32_MAX ? UINT32_MAX :
+	    (uint32_t)collector->session->limits->max_transfer_objects;
 	marks = mant_structured_grow_array(collector->session,
 	    collector->marks, collector->mark_count,
-	    &collector->mark_capacity, UINT32_MAX, sizeof(*marks),
-	    collector->session->limits->max_builder_allocated_bytes, 9,
+	    &collector->mark_capacity, maximum, sizeof(*marks),
+	    collector->session->limits->max_builder_allocated_bytes, 32,
 	    MANT_STRUCTURED_STAGE_RENDER);
 	if (marks == NULL)
 		return 0;
@@ -322,6 +332,7 @@ push_node(struct mant_annotated_collector *collector,
 			collector->last_top_heading = key;
 	} else if (node->type == ROFFT_BLOCK &&
 	    (node->tok == MAN_TP || node->tok == MAN_IP ||
+	    node->tok == MAN_TQ ||
 	    node->tok == MDOC_It)) {
 		key = add_mark(collector, node, node,
 		    MANT_ANNOTATED_MARK_OWNER, collector->active_owner, 0);
@@ -340,6 +351,10 @@ push_node(struct mant_annotated_collector *collector,
 		collector->active_owner = key;
 	} else if (node->type == ROFFT_TBL ||
 	    node->type == ROFFT_EQN) {
+		if (node->type == ROFFT_TBL && collector->table_node != NULL) {
+			fail_relation(collector, collector->frame_count, 0);
+			return 0;
+		}
 		region_kind = node->type == ROFFT_TBL ?
 		    MANT_ANNOTATED_REGION_TABLE_SPAN :
 		    MANT_ANNOTATED_REGION_EQUATION;
@@ -349,11 +364,17 @@ push_node(struct mant_annotated_collector *collector,
 		if (key == 0)
 			return 0;
 		collector->active_owner = key;
+		if (node->type == ROFFT_TBL) {
+			collector->table_node = node;
+			collector->cell_count = 0;
+			collector->table_prepared = 0;
+		}
 	} else if ((node->type == ROFFT_HEAD ||
 	    node->type == ROFFT_BODY) &&
 	    (node->tok == MAN_SH || node->tok == MAN_SS ||
 	    node->tok == MDOC_Sh || node->tok == MDOC_Ss ||
 	    node->tok == MAN_TP || node->tok == MAN_IP ||
+	    node->tok == MAN_TQ ||
 	    node->tok == MDOC_It)) {
 		parent = collector->active_owner;
 		parent_mark = parent == 0 ? NULL :
@@ -412,6 +433,196 @@ push_node(struct mant_annotated_collector *collector,
 	return 1;
 }
 
+static int
+text_cell(const struct tbl_cell *layout, const struct tbl_dat *data)
+{
+	if (layout->pos != TBL_CELL_LONG &&
+	    layout->pos != TBL_CELL_CENTRE &&
+	    layout->pos != TBL_CELL_LEFT &&
+	    layout->pos != TBL_CELL_RIGHT &&
+	    layout->pos != TBL_CELL_NUMBER)
+		return 0;
+	return data == NULL || data->pos == TBL_DATA_DATA ||
+	    data->pos == TBL_DATA_NONE;
+}
+
+static int
+prepare_table_span(struct mant_annotated_collector *collector,
+    const struct roff_node *node)
+{
+	const struct tbl_span *span;
+	const struct tbl_cell *layout;
+	const struct tbl_dat *data, *current;
+	struct annotated_cell *grown;
+	struct mant_annotated_mark *mark;
+	uint32_t columns, index, previous = UINT32_MAX, maximum, key;
+
+	if (collector->table_node != node || collector->table_prepared ||
+	    node->span == NULL || node->span->opts == NULL) {
+		fail_relation(collector, collector->frame_count, 0);
+		return 0;
+	}
+	collector->table_prepared = 1;
+	span = node->span;
+	collector->cell_count = 0;
+	if (span->pos != TBL_SPAN_DATA)
+		return 1;
+	if (span->opts->cols < 0 || span->layout == NULL) {
+		fail_relation(collector, span->opts->cols, 0);
+		return 0;
+	}
+	columns = (uint32_t)span->opts->cols;
+	if (columns == 0)
+		return 1;
+	maximum = collector->session->limits->max_table_cells > UINT32_MAX ?
+	    UINT32_MAX :
+	    (uint32_t)collector->session->limits->max_table_cells;
+	if (columns > maximum) {
+		mant_structured_set_failure(collector->session,
+		    MANT_STRUCTURED_BUDGET, MANT_STRUCTURED_STAGE_RENDER,
+		    19, columns, maximum);
+		return 0;
+	}
+	if (!charge_work(collector, columns))
+		return 0;
+	grown = mant_structured_grow_array(collector->session,
+	    collector->cells, columns - 1, &collector->cell_capacity,
+	    maximum, sizeof(*grown),
+	    collector->session->limits->max_builder_allocated_bytes, 9,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (grown == NULL)
+		return 0;
+	collector->cells = grown;
+	memset(collector->cells, 0, columns * sizeof(*collector->cells));
+	collector->cell_count = columns;
+	layout = span->layout->first;
+	data = span->first;
+	for (index = 0; layout != NULL; layout = layout->next) {
+		if (layout->col < 0 || (uint32_t)layout->col >= columns ||
+		    (previous != UINT32_MAX &&
+		    (uint32_t)layout->col <= previous)) {
+			fail_relation(collector, layout->col, columns);
+			return 0;
+		}
+		index = (uint32_t)layout->col;
+		previous = index;
+		current = data != NULL && data->layout == layout ? data : NULL;
+		if (current != NULL)
+			data = data->next;
+		if (text_cell(layout, current)) {
+			/* tbl_term.c::tbl_word() is the only authored text
+			 * emitter.  Even when it is skipped for an empty cell,
+			 * term_tbl() later reports that cell's native column. */
+			key = add_mark(collector, node, NULL,
+			    MANT_ANNOTATED_MARK_REGION,
+			    collector->active_owner,
+			    MANT_ANNOTATED_REGION_TABLE_CELL);
+			if (key == 0)
+				return 0;
+			mark = collector->marks + key - 1;
+			mark->source = source_key(node);
+			mark->table_column = index;
+			collector->cells[index].mark = key;
+			collector->cells[index].data = current;
+		}
+	}
+	return 1;
+}
+
+static void
+finish_table_span(struct mant_annotated_collector *collector,
+    const struct roff_node *node)
+{
+	uint32_t index, key;
+
+	if (collector->table_node != node || !collector->table_prepared ||
+	    collector->active_cell != NULL) {
+		fail_relation(collector, collector->frame_count, 0);
+		return;
+	}
+	for (index = 0; index < collector->cell_count; index++) {
+		key = collector->cells[index].mark;
+		if (key != 0 &&
+		    collector->marks[key - 1].table_position_present == 0) {
+			fail_relation(collector, key, 0);
+			return;
+		}
+	}
+	collector->table_node = NULL;
+	collector->table_prepared = 0;
+	collector->cell_count = 0;
+}
+
+static void
+observe_table_cell(struct mant_annotated_collector *collector,
+    const struct term_collector_event *event)
+{
+	const struct tbl_dat *data = event->cell;
+	struct annotated_cell *cell;
+	uint32_t column;
+
+	if (collector->table_node == NULL || !collector->table_prepared ||
+	    data == NULL || data->layout == NULL ||
+	    data->layout->col < 0) {
+		fail_relation(collector, collector->cell_count, 0);
+		return;
+	}
+	column = (uint32_t)data->layout->col;
+	if (column >= collector->cell_count) {
+		fail_relation(collector, column, collector->cell_count);
+		return;
+	}
+	cell = collector->cells + column;
+	if (cell->mark == 0 || cell->data != data) {
+		fail_relation(collector, column, cell->mark);
+		return;
+	}
+	if (event->phase == TERM_COLLECT_ENTER) {
+		if (collector->active_cell != NULL) {
+			fail_relation(collector, column, 0);
+			return;
+		}
+		collector->active_cell = data;
+		collector->cell_saved_owner = collector->active_owner;
+		collector->active_owner = cell->mark;
+	} else if (event->phase == TERM_COLLECT_LEAVE) {
+		if (collector->active_cell != data ||
+		    collector->active_owner != cell->mark) {
+			fail_relation(collector, column, 0);
+			return;
+		}
+		collector->active_owner = collector->cell_saved_owner;
+		collector->cell_saved_owner = 0;
+		collector->active_cell = NULL;
+	} else
+		fail_relation(collector, event->phase, TERM_COLLECT_LEAVE);
+}
+
+static void
+observe_table_cell_position(struct mant_annotated_collector *collector,
+    const struct term_collector_event *event)
+{
+	struct mant_annotated_mark *mark;
+	uint32_t key;
+
+	if (collector->table_node == NULL || !collector->table_prepared ||
+	    collector->active_cell != NULL || event->column >=
+	    collector->cell_count) {
+		fail_relation(collector, event->column, collector->cell_count);
+		return;
+	}
+	key = collector->cells[event->column].mark;
+	if (key == 0)
+		return; /* Native rule or span column, not a text cell. */
+	mark = collector->marks + key - 1;
+	if (mark->table_position_present != 0) {
+		fail_relation(collector, key, 0);
+		return;
+	}
+	mark->table_position_present = 1;
+	mark->table_offset = event->pos;
+}
+
 static void
 pop_node(struct mant_annotated_collector *collector,
     const struct roff_node *node)
@@ -426,6 +637,11 @@ pop_node(struct mant_annotated_collector *collector,
 	if (frame->node != node) {
 		fail_relation(collector, collector->frame_count, 0);
 		return;
+	}
+	if (node->type == ROFFT_TBL) {
+		finish_table_span(collector, node);
+		if (collector->session->status != MANT_STRUCTURED_OK)
+			return;
 	}
 	collector->active_owner = frame->saved_owner;
 	collector->active_link = frame->saved_link;
@@ -614,8 +830,18 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 	case TERM_COLLECT_NODE:
 		if (event->phase == TERM_COLLECT_ENTER)
 			(void)push_node(collector, event->node);
+		else if (event->phase == TERM_COLLECT_CHILD &&
+		    event->node != NULL &&
+		    event->node->type == ROFFT_TBL)
+			(void)prepare_table_span(collector, event->node);
 		else if (event->phase == TERM_COLLECT_LEAVE)
 			pop_node(collector, event->node);
+		return;
+	case TERM_COLLECT_TABLE_CELL:
+		observe_table_cell(collector, event);
+		return;
+	case TERM_COLLECT_TABLE_CELL_POSITION:
+		observe_table_cell_position(collector, event);
 		return;
 	case TERM_COLLECT_OUTPUT:
 		if (event->reason == TERM_COLLECT_HEADER) {
@@ -641,6 +867,10 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->pending_owner = collector->active_owner;
 		collector->pending_link = collector->active_link;
 		collector->pending_source = source_key(event->node);
+		if (collector->active_cell != NULL &&
+		    collector->pending_source == 0)
+			collector->pending_source =
+			    collector->marks[collector->active_owner - 1].source;
 		if (event->reason == TERM_COLLECT_AUTO_SPACE)
 			collector->pending_source = 0;
 		if (collector->pending_source >
@@ -927,6 +1157,7 @@ mant_annotated_collector_free(struct mant_annotated_collector *collector)
 	for (index = 0; index < collector->column_capacity; index++)
 		free(collector->columns[index].slots);
 	mant_annotated_marks_free(collector->marks, collector->mark_count);
+	free(collector->cells);
 	free(collector->frames);
 	free(collector->columns);
 	free(collector);

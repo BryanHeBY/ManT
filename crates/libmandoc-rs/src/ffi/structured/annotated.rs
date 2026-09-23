@@ -79,6 +79,9 @@ struct MarkView {
     body_region: u32,
     flags: u32,
     reserved: u32,
+    table_column: u32,
+    table_position_present: u32,
+    table_offset: u64,
     name: *const u8,
     name_length: u64,
 }
@@ -166,6 +169,7 @@ unsafe extern "C" {
     fn mant_annotated_sizeof_mark() -> usize;
     fn mant_annotated_alignof_mark() -> usize;
     fn mant_annotated_offsetof_mark_name() -> usize;
+    fn mant_annotated_offsetof_mark_table_offset() -> usize;
     fn mant_annotated_sizeof_coverage_check() -> usize;
     fn mant_annotated_alignof_coverage_check() -> usize;
     fn mant_annotated_sizeof_coverage_issue() -> usize;
@@ -221,7 +225,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 2
+        mant_annotated_abi_version() == 3
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -240,6 +244,8 @@ fn check_abi() -> bool {
             && mant_annotated_sizeof_mark() == std::mem::size_of::<MarkView>()
             && mant_annotated_alignof_mark() == std::mem::align_of::<MarkView>()
             && mant_annotated_offsetof_mark_name() == std::mem::offset_of!(MarkView, name)
+            && mant_annotated_offsetof_mark_table_offset()
+                == std::mem::offset_of!(MarkView, table_offset)
             && mant_annotated_sizeof_coverage_check() == std::mem::size_of::<CoverageCheckView>()
             && mant_annotated_alignof_coverage_check() == std::mem::align_of::<CoverageCheckView>()
             && mant_annotated_sizeof_coverage_issue() == std::mem::size_of::<CoverageIssueView>()
@@ -787,6 +793,29 @@ fn transfer(
         {
             return Err(invalid_result());
         }
+        let native_table_position = if mark.kind == 5 && mark.region_kind == 9 {
+            if mark.table_position_present != 1
+                || mark.parent == 0
+                || mark.owner != mark.parent
+                || mark.line != 0
+                || mark.column != 0
+                || mark.flags & 1 != 0
+                || marks
+                    .get(usize::try_from(mark.parent - 1).map_err(|_| invalid_result())?)
+                    .is_none_or(|parent: &AnnotatedMark| {
+                        parent.kind != 5 || parent.region_kind != 7
+                    })
+            {
+                return Err(invalid_result());
+            }
+            Some((mark.table_column, mark.table_offset))
+        } else {
+            if mark.table_column != 0 || mark.table_position_present != 0 || mark.table_offset != 0
+            {
+                return Err(invalid_result());
+            }
+            None
+        };
         marks.push(AnnotatedMark {
             key: mark.key,
             kind: mark.kind,
@@ -800,6 +829,7 @@ fn transfer(
             title_region: mark.title_region,
             body_region: mark.body_region,
             flags: mark.flags,
+            native_table_position,
             name: if mark.kind == 4 {
                 Some(copy_string(
                     handle,
