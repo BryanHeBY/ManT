@@ -520,6 +520,8 @@ pub struct NativeBlock {
     pub(crate) ordinal: u32,
     pub(crate) provenance: ProvenanceKey,
     pub(crate) root: Option<ContentRootKey>,
+    pub(crate) table: Option<super::NativeTableKey>,
+    pub(crate) fixed_view: Option<super::NativeFixedViewKey>,
 }
 
 impl NativeBlock {
@@ -550,6 +552,14 @@ impl NativeBlock {
     #[must_use]
     pub const fn root(&self) -> Option<ContentRootKey> {
         self.root
+    }
+    #[must_use]
+    pub const fn table(&self) -> Option<super::NativeTableKey> {
+        self.table
+    }
+    #[must_use]
+    pub const fn fixed_view(&self) -> Option<super::NativeFixedViewKey> {
+        self.fixed_view
     }
 }
 

@@ -178,7 +178,7 @@ supported_tree(const struct roff_node *node)
 {
 	for (; node != NULL; node = node->next) {
 		if ((node->flags & NODE_NOFILL) != 0 ||
-		    node->type == ROFFT_TBL || node->type == ROFFT_EQN ||
+		    node->type == ROFFT_EQN ||
 		    (node->tok == MDOC_Bl && node->norm != NULL &&
 		    node->norm->Bl.type == LIST_column) ||
 		    !supported_token(node->tok) || !supported_tree(node->child))

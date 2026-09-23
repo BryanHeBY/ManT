@@ -117,6 +117,10 @@ struct structured_session {
 	uint32_t output_depth;
 	uint32_t current_root;
 	uint32_t current_owner;
+	uint32_t active_table;
+	uint32_t active_table_row;
+	uint32_t active_table_cell;
+	uint32_t table_cell_start;
 	uint32_t section_owner;
 	uint32_t section_heading_block;
 	uint32_t top_level_block_count;

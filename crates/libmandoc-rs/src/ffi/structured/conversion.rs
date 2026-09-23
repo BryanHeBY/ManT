@@ -20,12 +20,14 @@ pub(super) fn semantic_document(
         ContentOwner, ContentOwnerKind, ContentPoint, ContentPointKey, ContentRef, ContentRoot,
         ContentRootKey, ContentRootKind, HeadingEvidence, HeadingEvidenceKey, LineColumn,
         LineColumns, LinkLabelPart, LinkOccurrence, LinkOccurrenceKey, NativeBlock, NativeBlockKey,
-        NativeBlockKind, NativeDiagnostic, NativeForm, NativeFormKey, NativeItem, NativeItemKey,
-        NativeLinkTarget, NativeList, NativeListKey, NativeListKind, NativeNameHint,
-        NativeNameHintKey, NativeRole, NativeTargetOrigin, OwnerKey, PointBoundary, Provenance,
-        ProvenanceKey, SourceCoordinates, SourceIdentity, SourceKey, SourceRecord, SourceSpan,
-        SpanKey, StructuredDiagnosticCode, StructuredDiagnosticLevel, StructuredDocument,
-        StructuredMetadata, StructuredProfile, StructuredStyle,
+        NativeBlockKind, NativeDiagnostic, NativeFixedViewKey, NativeForm, NativeFormKey,
+        NativeItem, NativeItemKey, NativeLinkTarget, NativeList, NativeListKey, NativeListKind,
+        NativeNameHint, NativeNameHintKey, NativeRole, NativeTable, NativeTableAlignment,
+        NativeTableCell, NativeTableCellKey, NativeTableCellKind, NativeTableKey, NativeTableRow,
+        NativeTableRowKey, NativeTableRowKind, NativeTargetOrigin, OwnerKey, PointBoundary,
+        Provenance, ProvenanceKey, SourceCoordinates, SourceIdentity, SourceKey, SourceRecord,
+        SourceSpan, SpanKey, StructuredDiagnosticCode, StructuredDiagnosticLevel,
+        StructuredDocument, StructuredMetadata, StructuredProfile, StructuredStyle,
     };
 
     let OwnedStructuredDocument {
@@ -48,6 +50,9 @@ pub(super) fn semantic_document(
         blocks,
         lists,
         items,
+        tables,
+        table_rows,
+        table_cells,
         forms,
         name_hints,
         diagnostics,
@@ -459,6 +464,20 @@ pub(super) fn semantic_document(
                         .ok_or_else(|| semantic_invalid("native block root key is absent"))
                 })
                 .transpose()?,
+            table: block
+                .table
+                .map(|table| {
+                    NativeTableKey::new(table)
+                        .ok_or_else(|| semantic_invalid("native block table key is absent"))
+                })
+                .transpose()?,
+            fixed_view: block
+                .fixed_view
+                .map(|view| {
+                    NativeFixedViewKey::new(view)
+                        .ok_or_else(|| semantic_invalid("native block fixed-view key is absent"))
+                })
+                .transpose()?,
         });
     }
 
@@ -505,6 +524,97 @@ pub(super) fn semantic_document(
             forms,
             provenance: ProvenanceKey::new(item.provenance)
                 .ok_or_else(|| semantic_invalid("native item provenance key is absent"))?,
+        });
+    }
+
+    let mut typed_tables = Vec::new();
+    typed_tables
+        .try_reserve_exact(tables.len())
+        .map_err(semantic_allocation)?;
+    for table in tables {
+        typed_tables.push(NativeTable {
+            key: NativeTableKey::new(table.key)
+                .ok_or_else(|| semantic_invalid("native table key is absent"))?,
+            block: NativeBlockKey::new(table.block)
+                .ok_or_else(|| semantic_invalid("native table block key is absent"))?,
+            fixed_view: table
+                .fixed_view
+                .map(|view| {
+                    NativeFixedViewKey::new(view)
+                        .ok_or_else(|| semantic_invalid("native table fixed-view key is absent"))
+                })
+                .transpose()?,
+            provenance: ProvenanceKey::new(table.provenance)
+                .ok_or_else(|| semantic_invalid("native table provenance key is absent"))?,
+        });
+    }
+    let mut typed_table_rows = Vec::new();
+    typed_table_rows
+        .try_reserve_exact(table_rows.len())
+        .map_err(semantic_allocation)?;
+    for row in table_rows {
+        typed_table_rows.push(NativeTableRow {
+            key: NativeTableRowKey::new(row.key)
+                .ok_or_else(|| semantic_invalid("native table row key is absent"))?,
+            table: NativeTableKey::new(row.table)
+                .ok_or_else(|| semantic_invalid("native table row table key is absent"))?,
+            ordinal: row.ordinal,
+            kind: match row.kind {
+                1 => NativeTableRowKind::Data,
+                2 => NativeTableRowKind::HorizontalRule,
+                3 => NativeTableRowKind::DoubleHorizontalRule,
+                4 => NativeTableRowKind::LayoutRule,
+                _ => return Err(semantic_invalid("native table row kind is unknown")),
+            },
+            point: row
+                .point
+                .map(|point| {
+                    ContentPointKey::new(point)
+                        .ok_or_else(|| semantic_invalid("native table row point key is absent"))
+                })
+                .transpose()?,
+            provenance: ProvenanceKey::new(row.provenance)
+                .ok_or_else(|| semantic_invalid("native table row provenance key is absent"))?,
+        });
+    }
+    let mut typed_table_cells = Vec::new();
+    typed_table_cells
+        .try_reserve_exact(table_cells.len())
+        .map_err(semantic_allocation)?;
+    for cell in table_cells {
+        typed_table_cells.push(NativeTableCell {
+            key: NativeTableCellKey::new(cell.key)
+                .ok_or_else(|| semantic_invalid("native table cell key is absent"))?,
+            row: NativeTableRowKey::new(cell.row)
+                .ok_or_else(|| semantic_invalid("native table cell row key is absent"))?,
+            column: cell.column,
+            owner: OwnerKey::new(cell.owner)
+                .ok_or_else(|| semantic_invalid("native table cell owner key is absent"))?,
+            kind: match cell.kind {
+                1 => NativeTableCellKind::Text,
+                2 => NativeTableCellKind::HorizontalRule,
+                3 => NativeTableCellKind::DoubleHorizontalRule,
+                4 => NativeTableCellKind::IsolatedHorizontalRule,
+                5 => NativeTableCellKind::IsolatedDoubleHorizontalRule,
+                _ => return Err(semantic_invalid("native table cell kind is unknown")),
+            },
+            alignment: match cell.alignment {
+                1 => NativeTableAlignment::Left,
+                2 => NativeTableAlignment::Center,
+                3 => NativeTableAlignment::Right,
+                _ => return Err(semantic_invalid("native table cell alignment is unknown")),
+            },
+            row_span: cell.row_span,
+            column_span: cell.column_span,
+            point: cell
+                .point
+                .map(|point| {
+                    ContentPointKey::new(point)
+                        .ok_or_else(|| semantic_invalid("native table cell point key is absent"))
+                })
+                .transpose()?,
+            provenance: ProvenanceKey::new(cell.provenance)
+                .ok_or_else(|| semantic_invalid("native table cell provenance key is absent"))?,
         });
     }
 
@@ -599,6 +709,9 @@ pub(super) fn semantic_document(
         blocks: typed_blocks,
         lists: typed_lists,
         items: typed_items,
+        tables: typed_tables,
+        table_rows: typed_table_rows,
+        table_cells: typed_table_cells,
         forms: typed_forms,
         name_hints: typed_name_hints,
         diagnostics: typed_diagnostics,

@@ -41,6 +41,7 @@ struct	eqn_box;
 struct	roff_meta;
 struct	roff_node;
 struct	tbl_span;
+struct	tbl_dat;
 struct	termp;
 
 typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
@@ -52,6 +53,7 @@ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
  */
 enum term_collector_op {
 	TERM_COLLECT_NODE,
+	TERM_COLLECT_TABLE_CELL,
 	TERM_COLLECT_OUTPUT,
 	TERM_COLLECT_LOGICAL,
 	TERM_COLLECT_COL_SELECT,
@@ -101,6 +103,7 @@ struct term_collector_event {
 	enum term_collector_phase phase;
 	enum term_collector_reason reason;
 	const struct roff_node	*node;     /* Exact authored origin, if any. */
+	const struct tbl_dat	*cell;     /* Active tbl data cell, if any. */
 	size_t			 column;   /* Index in termp.tcols. */
 	size_t			 pos;      /* Start/old position or allocation. */
 	size_t			 end;      /* Exclusive end/new position. */
@@ -217,6 +220,8 @@ void		  term_begin(struct termp *, term_margin,
 void		  term_end(struct termp *);
 void		  term_setcollector(struct termp *, term_collector, void *);
 void		  term_collect_node(struct termp *, const struct roff_node *,
+			enum term_collector_phase);
+void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
 			enum term_collector_phase);
 
 void		  term_setwidth(struct termp *, const char *);

@@ -243,37 +243,13 @@ mant_structured_append_block(struct structured_session *session, uint32_t owner,
 	return block->key;
 }
 
-int
-mant_structured_open_content_root(struct structured_session *session, int heading,
-    uint32_t provenance)
+uint32_t
+mant_structured_append_root(struct structured_session *session,
+    uint32_t owner_key, uint32_t root_kind, uint32_t provenance)
 {
 	struct mant_structured_content_root_view *roots, *root;
 	struct structured_root_atoms *root_atoms;
-	struct structured_node_context *context;
-	uint32_t owner_key, root_kind, block_kind, parent, block;
 
-	context = mant_structured_current_context(session);
-	if (heading) {
-		owner_key = mant_structured_append_owner(session, MANT_OWNER_SECTION,
-		    provenance);
-		root_kind = MANT_ROOT_HEADING;
-		block_kind = MANT_BLOCK_HEADING;
-		parent = 0;
-	} else if (context != NULL && context->item != 0) {
-		owner_key = context->owner;
-		root_kind = context->part == STRUCTURED_PART_TERM ?
-		    MANT_ROOT_TERM : MANT_ROOT_BODY;
-		block_kind = MANT_BLOCK_PARAGRAPH;
-		parent = context->container_block;
-	} else {
-		if (session->section_owner == 0)
-			session->section_owner = mant_structured_append_owner(session,
-			    MANT_OWNER_DOCUMENT, provenance);
-		owner_key = session->section_owner;
-		root_kind = MANT_ROOT_BODY;
-		block_kind = MANT_BLOCK_PARAGRAPH;
-		parent = session->section_heading_block;
-	}
 	if (owner_key == 0)
 		return 0;
 	roots = mant_structured_grow_array(session, session->result->content_roots,
@@ -310,15 +286,53 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 	root->ordinal = session->owner_root_counts[owner_key - 1]++;
 	root->kind = root_kind;
 	root->provenance = provenance;
+	return root->key;
+}
+
+int
+mant_structured_open_content_root(struct structured_session *session, int heading,
+    uint32_t provenance)
+{
+	struct structured_root_atoms *root_atoms;
+	struct structured_node_context *context;
+	uint32_t owner_key, root_kind, block_kind, parent, block, root_key;
+
+	context = mant_structured_current_context(session);
+	if (heading) {
+		owner_key = mant_structured_append_owner(session, MANT_OWNER_SECTION,
+		    provenance);
+		root_kind = MANT_ROOT_HEADING;
+		block_kind = MANT_BLOCK_HEADING;
+		parent = 0;
+	} else if (context != NULL && context->item != 0) {
+		owner_key = context->owner;
+		root_kind = context->part == STRUCTURED_PART_TERM ?
+		    MANT_ROOT_TERM : MANT_ROOT_BODY;
+		block_kind = MANT_BLOCK_PARAGRAPH;
+		parent = context->container_block;
+	} else {
+		if (session->section_owner == 0)
+			session->section_owner = mant_structured_append_owner(session,
+			    MANT_OWNER_DOCUMENT, provenance);
+		owner_key = session->section_owner;
+		root_kind = MANT_ROOT_BODY;
+		block_kind = MANT_BLOCK_PARAGRAPH;
+		parent = session->section_heading_block;
+	}
+	root_key = mant_structured_append_root(session, owner_key, root_kind,
+	    provenance);
+	if (root_key == 0)
+		return 0;
+	root_atoms = session->root_atoms + root_key - 1;
 	block = 0;
 	if (root_kind != MANT_ROOT_TERM) {
 		block = mant_structured_append_block(session, owner_key, block_kind,
-		    parent, provenance, root->key);
+		    parent, provenance, root_key);
 		if (block == 0)
 			return 0;
 	}
 	session->current_owner = owner_key;
-	session->current_root = root->key;
+	session->current_root = root_key;
 	if (heading) {
 		session->section_owner = owner_key;
 		session->section_heading_block = block;
@@ -330,7 +344,7 @@ mant_structured_open_content_root(struct structured_session *session, int headin
 			if (session->node_contexts[index - 1].item == context->item &&
 			    session->node_contexts[index - 1].part ==
 			    STRUCTURED_PART_TERM) {
-				session->node_contexts[index - 1].term_root = root->key;
+				session->node_contexts[index - 1].term_root = root_key;
 			}
 	}
 	return 1;

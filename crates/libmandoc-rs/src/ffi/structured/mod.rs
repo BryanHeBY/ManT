@@ -34,8 +34,8 @@ use transfer::{
     OwnedAnchor, OwnedBlock, OwnedContentAtom, OwnedContentPoint, OwnedContentRef,
     OwnedContentRoot, OwnedDiagnostic, OwnedForm, OwnedHeadingEvidence, OwnedItem, OwnedLink,
     OwnedLinkLabelPart, OwnedList, OwnedMetadata, OwnedNameHint, OwnedOwner, OwnedProvenance,
-    OwnedSource, OwnedSpan, OwnedStructuredDocument, ResultHandle, StructuredSlices,
-    copy_structured_document,
+    OwnedSource, OwnedSpan, OwnedStructuredDocument, OwnedTable, OwnedTableCell, OwnedTableRow,
+    ResultHandle, StructuredSlices, copy_structured_document,
 };
 use validation::{
     checked_slice, transfer_preflight, validate_metadata, validate_structured_relations,

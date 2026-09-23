@@ -4,8 +4,9 @@ use super::super::{
     BytesView, Limits, NativeStructuredError, OwnedAnchor, OwnedBlock, OwnedContentAtom,
     OwnedContentPoint, OwnedContentRef, OwnedContentRoot, OwnedDiagnostic, OwnedForm,
     OwnedHeadingEvidence, OwnedItem, OwnedLink, OwnedLinkLabelPart, OwnedList, OwnedNameHint,
-    OwnedOwner, OwnedProvenance, OwnedSource, OwnedSpan, PROVENANCE_AUTHORED, PROVENANCE_GENERATED,
-    ResultView, STATUS_BUDGET, StructuredSlices, relation_error,
+    OwnedOwner, OwnedProvenance, OwnedSource, OwnedSpan, OwnedTable, OwnedTableCell, OwnedTableRow,
+    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, ResultView, STATUS_BUDGET, StructuredSlices,
+    relation_error,
 };
 
 #[allow(clippy::too_many_lines)] // Mirrors every frozen result table and transfer counter.
@@ -117,6 +118,15 @@ pub(in super::super) fn transfer_preflight(
         add_edges(&mut edges, 3)?; // list, owner, provenance
         add_edges(&mut edges, item.form_count as usize)?;
     }
+    for table in slices.tables {
+        add_edges(&mut edges, 2 + usize::from(table.fixed_view != 0))?;
+    }
+    for row in slices.table_rows {
+        add_edges(&mut edges, 2 + usize::from(row.point != 0))?;
+    }
+    for cell in slices.table_cells {
+        add_edges(&mut edges, 3 + usize::from(cell.point != 0))?;
+    }
     for form in slices.forms {
         add_edges(&mut edges, 2)?; // owner, provenance
         add_edges(&mut edges, form.ref_count as usize)?;
@@ -190,6 +200,18 @@ pub(in super::super) fn transfer_preflight(
     add_transfer_table_bytes::<OwnedItem, crate::structured::NativeItem, _>(
         &mut bytes,
         slices.items,
+    )?;
+    add_transfer_table_bytes::<OwnedTable, crate::structured::NativeTable, _>(
+        &mut bytes,
+        slices.tables,
+    )?;
+    add_transfer_table_bytes::<OwnedTableRow, crate::structured::NativeTableRow, _>(
+        &mut bytes,
+        slices.table_rows,
+    )?;
+    add_transfer_table_bytes::<OwnedTableCell, crate::structured::NativeTableCell, _>(
+        &mut bytes,
+        slices.table_cells,
     )?;
     add_transfer_table_bytes::<OwnedForm, crate::structured::NativeForm, _>(
         &mut bytes,

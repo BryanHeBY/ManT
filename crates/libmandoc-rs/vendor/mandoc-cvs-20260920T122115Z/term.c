@@ -107,6 +107,23 @@ term_collect_node(struct termp *p, const struct roff_node *n,
 	p->collector_node = saved;
 }
 
+void
+term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
+		enum term_collector_phase phase)
+{
+	struct term_collector_event ev;
+
+	if (p->collector == NULL)
+		return;
+	memset(&ev, 0, sizeof(ev));
+	ev.op = TERM_COLLECT_TABLE_CELL;
+	ev.phase = phase;
+	ev.node = p->collector_node;
+	ev.cell = cell;
+	ev.column = p->tcol == NULL ? 0 : (size_t)(p->tcol - p->tcols);
+	(*p->collector)(p, p->collector_arg, &ev);
+}
+
 static void
 buffer_write(struct termp *p, size_t pos, int value,
 		enum term_collector_reason reason, enum termfont font)

@@ -23,6 +23,7 @@
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_structured_link.h"
 #include "mant_mandoc_structured_structure.h"
+#include "mant_mandoc_structured_table.h"
 #include "mant_mandoc_output.h"
 
 
@@ -425,18 +426,24 @@ collect_logical(struct structured_session *session,
 	if (session->output_depth != 0) {
 		return;
 	}
+	/* tbl_term.c emits generated border/padding words outside tbl_word's
+	 * authored cell scope.  They belong to the fixed view, not a cell root. */
+	if (session->active_table_row != 0 &&
+	    session->active_table_cell == 0)
+		return;
 	node = collector_node(session, event);
 	heading = heading_context(node);
-	authored = event->node != NULL &&
-	    (event->node->flags & NODE_NOSRC) == 0 &&
+	authored = ((event->node != NULL &&
+	    (event->node->flags & NODE_NOSRC) == 0) ||
+	    session->active_table_cell != 0) &&
 	    (event->reason == TERM_COLLECT_TEXT ||
 	    event->reason == TERM_COLLECT_ESCAPE);
 	provenance = mant_structured_append_provenance(session, node, authored);
 	if (provenance == 0 || session->status != MANT_STRUCTURED_OK)
 		return;
-	if (session->current_root == 0 ||
+	if (session->active_table_cell == 0 && (session->current_root == 0 ||
 	    (session->result->content_roots[session->current_root - 1].kind ==
-	    MANT_ROOT_HEADING) != heading) {
+	    MANT_ROOT_HEADING) != heading)) {
 		if (!mant_structured_open_content_root(session, heading, provenance))
 			return;
 		mant_structured_address_root_opened(session, node, heading);
@@ -647,6 +654,9 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 			session->node_stack[session->node_depth++] = event->node;
 			if (!mant_structured_enter_node(session, event->node))
 				return;
+			if (event->node != NULL && event->node->type == ROFFT_TBL &&
+			    !mant_structured_table_enter(session, event->node))
+				return;
 			if (event->node != NULL && (event->node->tok == MAN_SH ||
 			    event->node->tok == MDOC_Sh ||
 			    event->node->tok == MAN_PP ||
@@ -664,9 +674,16 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 				    MANT_STRUCTURED_STAGE_RENDER, 0, 0, 0);
 				return;
 			}
+			if (event->node != NULL && event->node->type == ROFFT_TBL)
+				mant_structured_table_leave(session, event->node);
 			mant_structured_leave_node(session, event->node);
 			session->node_depth--;
 		}
+		return;
+	}
+	if (event->op == TERM_COLLECT_TABLE_CELL) {
+		mant_structured_table_cell(session, event->cell,
+		    event->phase == TERM_COLLECT_ENTER);
 		return;
 	}
 	if (event->op == TERM_COLLECT_LOGICAL) {

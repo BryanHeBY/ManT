@@ -12,6 +12,7 @@ mod list_markers;
 mod lists;
 mod resources;
 mod source;
+mod tables;
 mod transfer;
 mod workset;
 

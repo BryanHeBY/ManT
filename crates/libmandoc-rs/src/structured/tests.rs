@@ -101,7 +101,7 @@ fn point_backed_anchor_origins_cross_the_typed_boundary() {
     // Pinned CVS tag.c:tag_put()/tag_postprocess() moves both automatic and
     // explicit destinations to their landing owner; mdoc_validate.c:post_tg()
     // keeps `.Tg` authored identity distinct from the generated `Ev` tag.
-    // ABI v4 carries both through point-backed evidence, never item fields.
+    // ABI v5 carries both through point-backed evidence, never item fields.
     let generated = document
         .anchors()
         .iter()
@@ -156,6 +156,9 @@ fn test_document(content_atoms: Vec<ContentAtom>) -> StructuredDocument {
         blocks: Vec::new(),
         lists: Vec::new(),
         items: Vec::new(),
+        tables: Vec::new(),
+        table_rows: Vec::new(),
+        table_cells: Vec::new(),
         forms: Vec::new(),
         name_hints: Vec::new(),
         diagnostics: Vec::new(),

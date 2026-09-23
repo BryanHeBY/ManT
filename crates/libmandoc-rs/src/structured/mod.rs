@@ -12,11 +12,13 @@ mod content;
 mod document;
 mod options;
 mod source;
+mod table;
 
 pub use content::*;
 pub use document::*;
 pub use options::*;
 pub use source::*;
+pub use table::*;
 
 macro_rules! key_type {
     ($name:ident) => {
@@ -53,6 +55,10 @@ key_type!(HeadingEvidenceKey);
 key_type!(NativeBlockKey);
 key_type!(NativeListKey);
 key_type!(NativeItemKey);
+key_type!(NativeTableKey);
+key_type!(NativeTableRowKey);
+key_type!(NativeTableCellKey);
+key_type!(NativeFixedViewKey);
 key_type!(NativeFormKey);
 key_type!(NativeNameHintKey);
 

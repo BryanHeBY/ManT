@@ -1,0 +1,77 @@
+Subject: expose authored tbl cell scope to terminal observer
+Upstream-Status: Local embedding (not submitted)
+
+Wrap only tbl_word()'s authored term_word() call in a cell identity event.
+The formatter's generated borders and padding remain outside that scope,
+without changing any rendering or buffer transition.
+
+--- a/tbl_term.c
++++ b/tbl_term.c
+@@ -993,7 +993,11 @@ tbl_word(struct termp *tp, const struct tbl_dat *dp)
+ 			abort();
+ 	}
+ 
++	/* Only this call emits authored cell text.  Padding and border words
++	 * remain outside the cell scope, even when the row is flushed later. */
++	term_collect_table_cell(tp, dp, TERM_COLLECT_ENTER);
+ 	term_word(tp, dp->string);
++	term_collect_table_cell(tp, dp, TERM_COLLECT_LEAVE);
+ 
+ 	term_fontpopq(tp, prev_font);
+ }
+--- a/term.c
++++ b/term.c
+@@ -107,6 +107,23 @@ term_collect_node(struct termp *p, const struct roff_node *n,
+ 	p->collector_node = saved;
+ }
+ 
++void
++term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
++		enum term_collector_phase phase)
++{
++	struct term_collector_event ev;
++
++	if (p->collector == NULL)
++		return;
++	memset(&ev, 0, sizeof(ev));
++	ev.op = TERM_COLLECT_TABLE_CELL;
++	ev.phase = phase;
++	ev.node = p->collector_node;
++	ev.cell = cell;
++	ev.column = p->tcol == NULL ? 0 : (size_t)(p->tcol - p->tcols);
++	(*p->collector)(p, p->collector_arg, &ev);
++}
++
+ static void
+ buffer_write(struct termp *p, size_t pos, int value,
+ 		enum term_collector_reason reason, enum termfont font)
+--- a/term.h
++++ b/term.h
+@@ -41,6 +41,7 @@ struct	eqn_box;
+ struct	roff_meta;
+ struct	roff_node;
+ struct	tbl_span;
++struct	tbl_dat;
+ struct	termp;
+ 
+ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
+@@ -52,6 +53,7 @@ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
+  */
+ enum term_collector_op {
+ 	TERM_COLLECT_NODE,
++	TERM_COLLECT_TABLE_CELL,
+ 	TERM_COLLECT_OUTPUT,
+ 	TERM_COLLECT_LOGICAL,
+ 	TERM_COLLECT_COL_SELECT,
+@@ -103,3 +105,4 @@ struct term_collector_event {
+ 	const struct roff_node	*node;     /* Exact authored origin, if any. */
++	const struct tbl_dat	*cell;     /* Active tbl data cell, if any. */
+ 	size_t			 column;   /* Index in termp.tcols. */
+ 	size_t			 pos;      /* Start/old position or allocation. */
+@@ -219,4 +222,6 @@ void		  term_end(struct termp *);
+ void		  term_collect_node(struct termp *, const struct roff_node *,
+ 			enum term_collector_phase);
++void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
++			enum term_collector_phase);
+ 
+ void		  term_setwidth(struct termp *, const char *);

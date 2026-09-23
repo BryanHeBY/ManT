@@ -112,8 +112,8 @@ owner_queue(struct structured_session *session, uint32_t owner)
 	return queues + owner - 1;
 }
 
-static uint32_t
-append_point(struct structured_session *session, uint32_t root_key,
+uint32_t
+mant_structured_append_point(struct structured_session *session, uint32_t root_key,
     uint32_t atom_boundary)
 {
 	const struct mant_structured_content_root_view *root;
@@ -341,7 +341,7 @@ resolve_queue_at(struct structured_session *session,
 	point = 0;
 	while (queue->head != 0 && session->status == MANT_STRUCTURED_OK) {
 		if (point == 0)
-			point = append_point(session, root, atom_boundary);
+			point = mant_structured_append_point(session, root, atom_boundary);
 		if (point == 0)
 			return;
 		key = queue_pop(session, queue, queue_kind);
@@ -588,7 +588,7 @@ mant_structured_address_before_atom(struct structured_session *session,
 	while (queue->head != 0 && session->anchor_states[
 	    queue->head - 1].threshold < sequence) {
 		if (point == 0)
-			point = append_point(session, root,
+			point = mant_structured_append_point(session, root,
 			    session->root_atoms[root - 1].count);
 		if (point == 0)
 			return;

@@ -5,8 +5,9 @@ use super::{
     ContentPoint, ContentPointKey, ContentRef, ContentRoot, ContentRootKey, HeadingEvidence,
     HeadingEvidenceKey, LinkLabelPart, LinkOccurrence, LinkOccurrenceKey, NativeBlock,
     NativeBlockKey, NativeForm, NativeFormKey, NativeItem, NativeItemKey, NativeList,
-    NativeListKey, NativeNameHint, NativeNameHintKey, OwnerKey, Provenance, ProvenanceKey,
-    SourceFormat, SourceKey, SourceRecord, SourceSpan, SpanKey, StructuredProfile,
+    NativeListKey, NativeNameHint, NativeNameHintKey, NativeTable, NativeTableCell, NativeTableRow,
+    OwnerKey, Provenance, ProvenanceKey, SourceFormat, SourceKey, SourceRecord, SourceSpan,
+    SpanKey, StructuredProfile,
 };
 use std::num::NonZeroU32;
 
@@ -153,6 +154,9 @@ pub struct StructuredDocument {
     pub(crate) blocks: Vec<NativeBlock>,
     pub(crate) lists: Vec<NativeList>,
     pub(crate) items: Vec<NativeItem>,
+    pub(crate) tables: Vec<NativeTable>,
+    pub(crate) table_rows: Vec<NativeTableRow>,
+    pub(crate) table_cells: Vec<NativeTableCell>,
     pub(crate) forms: Vec<NativeForm>,
     pub(crate) name_hints: Vec<NativeNameHint>,
     pub(crate) diagnostics: Vec<NativeDiagnostic>,
@@ -281,6 +285,18 @@ impl StructuredDocument {
     #[must_use]
     pub fn items(&self) -> &[NativeItem] {
         &self.items
+    }
+    #[must_use]
+    pub fn tables(&self) -> &[NativeTable] {
+        &self.tables
+    }
+    #[must_use]
+    pub fn table_rows(&self) -> &[NativeTableRow] {
+        &self.table_rows
+    }
+    #[must_use]
+    pub fn table_cells(&self) -> &[NativeTableCell] {
+        &self.table_cells
     }
     #[must_use]
     pub fn forms(&self) -> &[NativeForm] {

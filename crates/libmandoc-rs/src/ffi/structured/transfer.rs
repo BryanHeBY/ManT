@@ -171,6 +171,38 @@ pub(crate) struct OwnedItem {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedTable {
+    pub(crate) key: u32,
+    pub(crate) block: u32,
+    pub(crate) fixed_view: Option<u32>,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedTableRow {
+    pub(crate) key: u32,
+    pub(crate) table: u32,
+    pub(crate) ordinal: u32,
+    pub(crate) kind: u32,
+    pub(crate) point: Option<u32>,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnedTableCell {
+    pub(crate) key: u32,
+    pub(crate) row: u32,
+    pub(crate) column: u32,
+    pub(crate) owner: u32,
+    pub(crate) kind: u32,
+    pub(crate) alignment: u32,
+    pub(crate) row_span: u32,
+    pub(crate) column_span: u32,
+    pub(crate) point: Option<u32>,
+    pub(crate) provenance: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OwnedForm {
     pub(crate) key: u32,
     pub(crate) owner: u32,
@@ -233,6 +265,9 @@ pub(crate) struct OwnedStructuredDocument {
     pub(crate) blocks: Vec<OwnedBlock>,
     pub(crate) lists: Vec<OwnedList>,
     pub(crate) items: Vec<OwnedItem>,
+    pub(crate) tables: Vec<OwnedTable>,
+    pub(crate) table_rows: Vec<OwnedTableRow>,
+    pub(crate) table_cells: Vec<OwnedTableCell>,
     pub(crate) forms: Vec<OwnedForm>,
     pub(crate) name_hints: Vec<OwnedNameHint>,
     pub(crate) diagnostics: Vec<OwnedDiagnostic>,
@@ -325,6 +360,9 @@ pub(super) fn copy_structured_document(
     let mut owned_blocks = Vec::new();
     let mut owned_lists = Vec::new();
     let mut owned_items = Vec::new();
+    let mut owned_tables = Vec::new();
+    let mut owned_table_rows = Vec::new();
+    let mut owned_table_cells = Vec::new();
     let mut owned_forms = Vec::new();
     let mut owned_name_hints = Vec::new();
     let mut owned_diagnostics = Vec::new();
@@ -372,6 +410,15 @@ pub(super) fn copy_structured_document(
         .map_err(alloc_error)?;
     owned_items
         .try_reserve_exact(slices.items.len())
+        .map_err(alloc_error)?;
+    owned_tables
+        .try_reserve_exact(slices.tables.len())
+        .map_err(alloc_error)?;
+    owned_table_rows
+        .try_reserve_exact(slices.table_rows.len())
+        .map_err(alloc_error)?;
+    owned_table_cells
+        .try_reserve_exact(slices.table_cells.len())
         .map_err(alloc_error)?;
     owned_forms
         .try_reserve_exact(slices.forms.len())
@@ -557,6 +604,38 @@ pub(super) fn copy_structured_document(
             provenance: item.provenance,
         });
     }
+    for table in slices.tables {
+        owned_tables.push(OwnedTable {
+            key: table.key,
+            block: table.block,
+            fixed_view: (table.fixed_view != 0).then_some(table.fixed_view),
+            provenance: table.provenance,
+        });
+    }
+    for row in slices.table_rows {
+        owned_table_rows.push(OwnedTableRow {
+            key: row.key,
+            table: row.table,
+            ordinal: row.ordinal,
+            kind: row.kind,
+            point: (row.point != 0).then_some(row.point),
+            provenance: row.provenance,
+        });
+    }
+    for cell in slices.table_cells {
+        owned_table_cells.push(OwnedTableCell {
+            key: cell.key,
+            row: cell.row,
+            column: cell.column,
+            owner: cell.owner,
+            kind: cell.kind,
+            alignment: cell.alignment,
+            row_span: cell.row_span,
+            column_span: cell.column_span,
+            point: (cell.point != 0).then_some(cell.point),
+            provenance: cell.provenance,
+        });
+    }
     for form in slices.forms {
         owned_forms.push(OwnedForm {
             key: form.key,
@@ -621,6 +700,9 @@ pub(super) fn copy_structured_document(
         blocks: owned_blocks,
         lists: owned_lists,
         items: owned_items,
+        tables: owned_tables,
+        table_rows: owned_table_rows,
+        table_cells: owned_table_cells,
         forms: owned_forms,
         name_hints: owned_name_hints,
         diagnostics: owned_diagnostics,

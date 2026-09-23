@@ -502,6 +502,8 @@ pub(super) struct TableRowView {
     pub(super) key: u32,
     pub(super) table: u32,
     pub(super) ordinal: u32,
+    pub(super) kind: u32,
+    pub(super) point: u32,
     pub(super) provenance: u32,
     pub(super) reserved: u32,
 }
@@ -516,6 +518,7 @@ pub(super) struct TableCellView {
     pub(super) alignment: u32,
     pub(super) row_span: u32,
     pub(super) column_span: u32,
+    pub(super) point: u32,
     pub(super) provenance: u32,
     pub(super) reserved: u32,
 }

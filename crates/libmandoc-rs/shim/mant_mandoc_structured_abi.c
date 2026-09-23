@@ -7,7 +7,7 @@
 uint32_t
 mant_structured_abi_version(void)
 {
-	return 4;
+	return 5;
 }
 
 uint64_t
@@ -82,6 +82,10 @@ mant_structured_discriminant_fingerprint(void)
 		MANT_TABLE_CELL_DOUBLE_HORIZONTAL_RULE,
 		MANT_TABLE_CELL_ISOLATED_HORIZONTAL_RULE,
 		MANT_TABLE_CELL_ISOLATED_DOUBLE_HORIZONTAL_RULE,
+		/* table row */ 0, MANT_TABLE_ROW_DATA,
+		MANT_TABLE_ROW_HORIZONTAL_RULE,
+		MANT_TABLE_ROW_DOUBLE_HORIZONTAL_RULE,
+		MANT_TABLE_ROW_LAYOUT_RULE,
 		/* table alignment */ 0, MANT_TABLE_ALIGN_LEFT,
 		MANT_TABLE_ALIGN_CENTER, MANT_TABLE_ALIGN_RIGHT,
 		/* decoration */ 0, MANT_DECORATION_BORDER, MANT_DECORATION_RULE,
@@ -415,6 +419,8 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_table_row_view, key),
 		FIELD(struct mant_structured_table_row_view, table),
 		FIELD(struct mant_structured_table_row_view, ordinal),
+		FIELD(struct mant_structured_table_row_view, kind),
+		FIELD(struct mant_structured_table_row_view, point),
 		FIELD(struct mant_structured_table_row_view, provenance),
 		FIELD(struct mant_structured_table_row_view, reserved) };
 	static const size_t table_cell[] = {
@@ -426,6 +432,7 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_table_cell_view, alignment),
 		FIELD(struct mant_structured_table_cell_view, row_span),
 		FIELD(struct mant_structured_table_cell_view, column_span),
+		FIELD(struct mant_structured_table_cell_view, point),
 		FIELD(struct mant_structured_table_cell_view, provenance),
 		FIELD(struct mant_structured_table_cell_view, reserved) };
 	static const size_t fixed_view[] = {

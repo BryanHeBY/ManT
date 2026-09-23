@@ -16,6 +16,8 @@ uint32_t mant_structured_append_owner(struct structured_session *, uint32_t,
     uint32_t);
 uint32_t mant_structured_append_block(struct structured_session *, uint32_t,
     uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t mant_structured_append_root(struct structured_session *, uint32_t,
+    uint32_t, uint32_t);
 int mant_structured_open_content_root(struct structured_session *, int,
     uint32_t);
 int mant_structured_close_term_root(struct structured_session *, uint32_t,

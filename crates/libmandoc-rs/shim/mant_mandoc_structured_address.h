@@ -6,6 +6,9 @@
 
 struct roff_node;
 
+uint32_t mant_structured_append_point(struct structured_session *, uint32_t,
+    uint32_t);
+
 void mant_structured_address_enter_node(struct structured_session *,
     const struct roff_node *);
 void mant_structured_address_bind_item(struct structured_session *, uint32_t,

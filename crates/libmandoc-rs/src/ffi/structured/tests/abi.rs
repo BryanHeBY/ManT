@@ -5,7 +5,7 @@ use super::*;
 #[test]
 #[allow(clippy::too_many_lines)] // One exhaustive native ABI fingerprint table.
 fn all_frozen_view_sizes_and_alignments_match() {
-    assert_eq!(unsafe { mant_structured_abi_version() }, 4);
+    assert_eq!(unsafe { mant_structured_abi_version() }, 5);
     let layouts: &[(u32, usize, usize)] = &[
         (
             1,
@@ -144,9 +144,9 @@ fn all_frozen_view_sizes_and_alignments_match() {
     offsets!(15, BlockView; key, owner, kind, parent, ordinal, provenance,
         root, table, fixed_view, reserved);
     offsets!(16, TableView; key, block, fixed_view, provenance, reserved);
-    offsets!(17, TableRowView; key, table, ordinal, provenance, reserved);
+    offsets!(17, TableRowView; key, table, ordinal, kind, point, provenance, reserved);
     offsets!(18, TableCellView; key, row, column, owner, kind, alignment,
-        row_span, column_span, provenance, reserved);
+        row_span, column_span, point, provenance, reserved);
     offsets!(19, FixedView; key, owner, block, table, provenance, reserved);
     offsets!(20, FixedLineView; key, view, ordinal, total_columns, reserved);
     offsets!(21, PlacementView; key, line, ordinal, target_kind, atom,
@@ -193,6 +193,7 @@ fn all_frozen_view_sizes_and_alignments_match() {
         0, 1, 2, // placement target
         0, 1, 2, 3, // cell map
         0, 1, 2, 3, 4, 5, // table cell
+        0, 1, 2, 3, 4, // table row
         0, 1, 2, 3, // table alignment
         0, 1, 2, 3, // decoration
         0, 1, 2, // relation

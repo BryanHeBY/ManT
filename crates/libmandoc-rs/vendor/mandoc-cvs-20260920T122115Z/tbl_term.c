@@ -993,7 +993,11 @@ tbl_word(struct termp *tp, const struct tbl_dat *dp)
 			abort();
 	}
 
+	/* Only this call emits authored cell text.  Padding and border words
+	 * remain outside the cell scope, even when the row is flushed later. */
+	term_collect_table_cell(tp, dp, TERM_COLLECT_ENTER);
 	term_word(tp, dp->string);
+	term_collect_table_cell(tp, dp, TERM_COLLECT_LEAVE);
 
 	term_fontpopq(tp, prev_font);
 }

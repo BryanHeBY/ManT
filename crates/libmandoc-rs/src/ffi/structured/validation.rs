@@ -1,20 +1,22 @@
 //! ABI ranges, keys, and ordered relation validation.
 
 mod preflight;
+mod table;
 
 pub(super) use preflight::transfer_preflight;
 use preflight::validate_utf8_view;
+use table::validate_tables;
 
 use super::{
     ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_DEFINITION_LIST,
-    BLOCK_HEADING, BLOCK_LIST, BLOCK_PARAGRAPH, BytesView, COORD_NATIVE_NORMALIZED_BYTES,
-    DIAGNOSTIC_CODE_NATIVE_LAST, DIAGNOSTIC_STYLE, DIAGNOSTIC_UNSUPPORTED, FORMAT_MAN, FORMAT_MDOC,
-    LINK_LABEL_CONTENT, LINK_LABEL_HARD_BREAK, LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER,
-    LIST_ORDERED, LIST_PLAIN, MetadataView, NativeStructuredError, OWNER_DEFINITION_ITEM,
-    OWNER_KIND_LAST, OWNER_LIST_ITEM, PROVENANCE_AUTHORED, PROVENANCE_GENERATED,
-    PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_HEADING, ROOT_KIND_LAST, ROOT_TERM, ResultHandle,
-    ResultView, STYLE_MASK, SliceView, SpanView, StructuredSlices, TARGET_ORIGIN_AUTHORED,
-    TARGET_ORIGIN_GENERATED, alloc_error, relation_error,
+    BLOCK_HEADING, BLOCK_LIST, BLOCK_PARAGRAPH, BLOCK_TABLE, BytesView,
+    COORD_NATIVE_NORMALIZED_BYTES, DIAGNOSTIC_CODE_NATIVE_LAST, DIAGNOSTIC_STYLE,
+    DIAGNOSTIC_UNSUPPORTED, FORMAT_MAN, FORMAT_MDOC, LINK_LABEL_CONTENT, LINK_LABEL_HARD_BREAK,
+    LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER, LIST_ORDERED, LIST_PLAIN, MetadataView,
+    NativeStructuredError, OWNER_DEFINITION_ITEM, OWNER_KIND_LAST, OWNER_LIST_ITEM,
+    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_HEADING,
+    ROOT_KIND_LAST, ROOT_TERM, ResultHandle, ResultView, STYLE_MASK, SliceView, SpanView,
+    StructuredSlices, TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED, alloc_error, relation_error,
 };
 
 pub(super) fn validate_metadata(metadata: MetadataView) -> Result<(), NativeStructuredError> {
@@ -88,10 +90,7 @@ pub(super) fn validate_structured_relations(
     view: &ResultView,
     slices: &StructuredSlices<'_>,
 ) -> Result<(), NativeStructuredError> {
-    if !slices.tables.is_empty()
-        || !slices.table_rows.is_empty()
-        || !slices.table_cells.is_empty()
-        || !slices.fixed_views.is_empty()
+    if !slices.fixed_views.is_empty()
         || !slices.fixed_lines.is_empty()
         || !slices.placements.is_empty()
         || !slices.decorations.is_empty()
@@ -545,6 +544,7 @@ pub(super) fn validate_structured_relations(
             BLOCK_LIST | BLOCK_DEFINITION_LIST => {
                 block.root == 0 && block.table == 0 && block.fixed_view == 0
             }
+            BLOCK_TABLE => block.root == 0 && block.table != 0 && block.fixed_view == 0,
             _ => false,
         };
         if block.key != dense_key(index)?
@@ -709,6 +709,7 @@ pub(super) fn validate_structured_relations(
     {
         return Err(relation_error());
     }
+    validate_tables(slices)?;
     let mut term_root_evidence = Vec::new();
     term_root_evidence
         .try_reserve_exact(slices.content_roots.len())

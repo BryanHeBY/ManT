@@ -211,6 +211,9 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 	const struct mant_structured_block_view *block;
 	const struct mant_structured_list_view *list;
 	const struct mant_structured_item_view *item;
+	const struct mant_structured_table_view *table;
+	const struct mant_structured_table_row_view *table_row;
+	const struct mant_structured_table_cell_view *table_cell;
 	const struct mant_structured_form_view *form;
 	const struct mant_structured_name_hint_view *hint;
 	const struct mant_structured_diagnostic_view *diagnostic;
@@ -222,6 +225,9 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		MANT_METADATA_DATE_PRESENT, MANT_METADATA_ALIAS_PRESENT };
 	uint32_t i, expected_ordinal, previous_root, next_form;
 	uint32_t previous_hint_form, previous_item_owner, list_index;
+	uint32_t table_index, previous_table, row_ordinal, previous_cell_row;
+	uint32_t previous_cell_owner, next_column;
+	uint32_t table_cell_owner_count;
 	uint64_t next_label_part;
 
 	if (result == NULL || result->magic != MANT_STRUCTURED_MAGIC ||
@@ -252,6 +258,9 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 	    (result->block_count != 0) != (result->blocks != NULL) ||
 	    (result->list_count != 0) != (result->lists != NULL) ||
 	    (result->item_count != 0) != (result->items != NULL) ||
+	    (result->table_count != 0) != (result->tables != NULL) ||
+	    (result->table_row_count != 0) != (result->table_rows != NULL) ||
+	    (result->table_cell_count != 0) != (result->table_cells != NULL) ||
 	    (result->form_count != 0) != (result->forms != NULL) ||
 	    (result->name_hint_count != 0) != (result->name_hints != NULL) ||
 	    (result->diagnostic_count != 0) != (result->diagnostics != NULL) ||
@@ -353,13 +362,17 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 			return 0;
 		}
 	}
+	table_cell_owner_count = 0;
 	for (i = 0; i < result->owner_count; i++) {
 		owner = result->owners + i;
+		if (owner->kind == MANT_OWNER_TABLE_CELL)
+			table_cell_owner_count++;
 		if (owner->key != i + 1 || owner->reserved != 0 ||
 		    (owner->kind != MANT_OWNER_DOCUMENT &&
 		    owner->kind != MANT_OWNER_SECTION &&
 		    owner->kind != MANT_OWNER_LIST_ITEM &&
-		    owner->kind != MANT_OWNER_DEFINITION_ITEM) ||
+		    owner->kind != MANT_OWNER_DEFINITION_ITEM &&
+		    owner->kind != MANT_OWNER_TABLE_CELL) ||
 		    owner->provenance == 0 ||
 		    owner->provenance > result->provenance_count)
 			return 0;
@@ -371,7 +384,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    root->ordinal > i ||
 		    (root->kind != MANT_ROOT_HEADING &&
 		    root->kind != MANT_ROOT_TERM &&
-		    root->kind != MANT_ROOT_BODY) || root->provenance == 0 ||
+		    root->kind != MANT_ROOT_BODY &&
+		    root->kind != MANT_ROOT_CELL) || root->provenance == 0 ||
 		    root->provenance > result->provenance_count ||
 		    root->reserved != 0)
 			return 0;
@@ -379,6 +393,9 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    result->owners[root->owner - 1].kind != MANT_OWNER_LIST_ITEM &&
 		    result->owners[root->owner - 1].kind !=
 		    MANT_OWNER_DEFINITION_ITEM)
+			return 0;
+		if (root->kind == MANT_ROOT_CELL &&
+		    result->owners[root->owner - 1].kind != MANT_OWNER_TABLE_CELL)
 			return 0;
 	}
 	previous_root = expected_ordinal = 0;
@@ -638,7 +655,6 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    block->parent >= block->key || block->ordinal > i ||
 		    block->provenance == 0 ||
 		    block->provenance > result->provenance_count ||
-		    block->table != 0 ||
 		    block->fixed_view != 0 || block->reserved != 0 ||
 		    (block->kind == MANT_BLOCK_HEADING ?
 		    root == NULL || root->kind != MANT_ROOT_HEADING :
@@ -646,7 +662,10 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    root == NULL || root->kind != MANT_ROOT_BODY :
 		    block->kind == MANT_BLOCK_LIST ||
 		    block->kind == MANT_BLOCK_DEFINITION_LIST ?
-		    root != NULL : 1) ||
+		    root != NULL || block->table != 0 :
+		    block->kind == MANT_BLOCK_TABLE ?
+		    root != NULL || block->table == 0 : 1) ||
+		    (block->kind != MANT_BLOCK_TABLE && block->table != 0) ||
 		    (root != NULL && root->owner != block->owner))
 			return 0;
 	}
@@ -708,6 +727,104 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 	}
 	if (list_index != result->list_count)
 		return 0;
+	table_index = 0;
+	for (i = 0; i < result->block_count; i++) {
+		block = result->blocks + i;
+		if (block->kind != MANT_BLOCK_TABLE)
+			continue;
+		if (table_index >= result->table_count ||
+		    result->tables[table_index].block != block->key ||
+		    block->table != table_index + 1)
+			return 0;
+		table_index++;
+	}
+	if (table_index != result->table_count)
+		return 0;
+	for (i = 0; i < result->table_count; i++) {
+		table = result->tables + i;
+		if (table->key != i + 1 || table->fixed_view != 0 ||
+		    table->provenance == 0 ||
+		    table->provenance > result->provenance_count ||
+		    table->reserved != 0)
+			return 0;
+	}
+	previous_table = row_ordinal = 0;
+	for (i = 0; i < result->table_row_count; i++) {
+		table_row = result->table_rows + i;
+		if (table_row->table != previous_table) {
+			if (table_row->table < previous_table)
+				return 0;
+			previous_table = table_row->table;
+			row_ordinal = 0;
+		}
+		if (table_row->key != i + 1 || table_row->table == 0 ||
+		    table_row->table > result->table_count ||
+		    table_row->ordinal != row_ordinal++ ||
+		    table_row->kind < MANT_TABLE_ROW_DATA ||
+		    table_row->kind > MANT_TABLE_ROW_LAYOUT_RULE ||
+		    table_row->point > result->content_point_count ||
+		    table_row->provenance == 0 ||
+		    table_row->provenance > result->provenance_count ||
+		    table_row->reserved != 0)
+			return 0;
+	}
+	previous_cell_row = previous_cell_owner = next_column = 0;
+	for (i = 0; i < result->table_cell_count; i++) {
+		table_cell = result->table_cells + i;
+		if (table_cell->row != previous_cell_row) {
+			if (table_cell->row < previous_cell_row)
+				return 0;
+			previous_cell_row = table_cell->row;
+			next_column = 0;
+		}
+		if (table_cell->key != i + 1 || table_cell->row == 0 ||
+		    table_cell->row > result->table_row_count ||
+		    (result->table_rows[table_cell->row - 1].kind !=
+		    MANT_TABLE_ROW_DATA &&
+		    result->table_rows[table_cell->row - 1].kind !=
+		    MANT_TABLE_ROW_LAYOUT_RULE) ||
+		    table_cell->column != next_column ||
+		    table_cell->owner <= previous_cell_owner ||
+		    table_cell->owner > result->owner_count ||
+		    result->owners[table_cell->owner - 1].kind !=
+		    MANT_OWNER_TABLE_CELL ||
+		    table_cell->kind < MANT_TABLE_CELL_TEXT ||
+		    table_cell->kind >
+		    MANT_TABLE_CELL_ISOLATED_DOUBLE_HORIZONTAL_RULE ||
+		    (result->table_rows[table_cell->row - 1].kind ==
+		    MANT_TABLE_ROW_LAYOUT_RULE &&
+		    table_cell->kind != MANT_TABLE_CELL_HORIZONTAL_RULE &&
+		    table_cell->kind != MANT_TABLE_CELL_DOUBLE_HORIZONTAL_RULE) ||
+		    table_cell->alignment < MANT_TABLE_ALIGN_LEFT ||
+		    table_cell->alignment > MANT_TABLE_ALIGN_RIGHT ||
+		    table_cell->row_span == 0 || table_cell->column_span == 0 ||
+		    table_cell->point == 0 ||
+		    table_cell->point > result->content_point_count ||
+		    result->content_points[table_cell->point - 1].owner !=
+		    table_cell->owner ||
+		    result->content_roots[result->content_points[
+		    table_cell->point - 1].root - 1].kind != MANT_ROOT_CELL ||
+		    table_cell->provenance == 0 ||
+		    table_cell->provenance > result->provenance_count ||
+		    table_cell->reserved != 0)
+			return 0;
+		previous_cell_owner = table_cell->owner;
+		if (UINT32_MAX - table_cell->column < table_cell->column_span)
+			return 0;
+		next_column = table_cell->column + table_cell->column_span;
+	}
+	if (table_cell_owner_count != result->table_cell_count)
+		return 0;
+	table_index = 0;
+	for (i = 0; i < result->table_row_count; i++) {
+		while (table_index < result->table_cell_count &&
+		    result->table_cells[table_index].row < i + 1)
+			table_index++;
+		if (result->table_rows[i].kind == MANT_TABLE_ROW_LAYOUT_RULE &&
+		    (table_index == result->table_cell_count ||
+		    result->table_cells[table_index].row != i + 1))
+			return 0;
+	}
 	next_form = 1;
 	previous_item_owner = 0;
 	for (i = 0; i < result->item_count; i++) {
@@ -890,13 +1007,13 @@ mant_structured_result_view(const struct mant_structured_result *result,
 	view->blocks = SLICE(result->blocks, result->block_count);
 	view->lists = SLICE(result->lists, result->list_count);
 	view->items = SLICE(result->items, result->item_count);
-	view->tables = EMPTY_SLICE(struct mant_structured_table_view);
-	view->table_rows = EMPTY_SLICE(struct mant_structured_table_row_view);
-	view->table_cells = EMPTY_SLICE(struct mant_structured_table_cell_view);
-	view->fixed_views = EMPTY_SLICE(struct mant_structured_fixed_view);
-	view->fixed_lines = EMPTY_SLICE(struct mant_structured_fixed_line_view);
-	view->placements = EMPTY_SLICE(struct mant_structured_placement_view);
-	view->decorations = EMPTY_SLICE(struct mant_structured_decoration_view);
+	view->tables = SLICE(result->tables, result->table_count);
+	view->table_rows = SLICE(result->table_rows, result->table_row_count);
+	view->table_cells = SLICE(result->table_cells, result->table_cell_count);
+	view->fixed_views = SLICE(result->fixed_views, result->fixed_view_count);
+	view->fixed_lines = SLICE(result->fixed_lines, result->fixed_line_count);
+	view->placements = SLICE(result->placements, result->placement_count);
+	view->decorations = SLICE(result->decorations, result->decoration_count);
 	view->forms = SLICE(result->forms, result->form_count);
 	view->name_hints = SLICE(result->name_hints, result->name_hint_count);
 	view->relations = EMPTY_SLICE(struct mant_structured_relation_view);
@@ -942,6 +1059,8 @@ mant_structured_result_free(struct mant_structured_result *result)
 		    result->heading_evidence[i].authored_phrase);
 	for (i = 0; i < result->item_count; i++)
 		mant_structured_free_bytes(result->items[i].target);
+	for (i = 0; i < result->decoration_count; i++)
+		mant_structured_free_bytes(result->decorations[i].text);
 	for (i = 0; i < result->source_map_count; i++)
 		free(result->source_maps[i].lines);
 	mant_structured_free_bytes(result->metadata.title);
@@ -967,6 +1086,13 @@ mant_structured_result_free(struct mant_structured_result *result)
 	free(result->blocks);
 	free(result->lists);
 	free(result->items);
+	free(result->tables);
+	free(result->table_rows);
+	free(result->table_cells);
+	free(result->fixed_views);
+	free(result->fixed_lines);
+	free(result->placements);
+	free(result->decorations);
 	free(result->forms);
 	free(result->name_hints);
 	free(result->diagnostics);

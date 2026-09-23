@@ -219,6 +219,13 @@ enum mant_structured_table_cell_kind {
 	MANT_TABLE_CELL_ISOLATED_DOUBLE_HORIZONTAL_RULE = 5
 };
 
+enum mant_structured_table_row_kind {
+	MANT_TABLE_ROW_DATA = 1,
+	MANT_TABLE_ROW_HORIZONTAL_RULE = 2,
+	MANT_TABLE_ROW_DOUBLE_HORIZONTAL_RULE = 3,
+	MANT_TABLE_ROW_LAYOUT_RULE = 4
+};
+
 enum mant_structured_table_alignment {
 	MANT_TABLE_ALIGN_LEFT = 1,
 	MANT_TABLE_ALIGN_CENTER = 2,
@@ -472,11 +479,11 @@ struct mant_structured_table_view {
 	uint32_t key, block, fixed_view, provenance, reserved;
 };
 struct mant_structured_table_row_view {
-	uint32_t key, table, ordinal, provenance, reserved;
+	uint32_t key, table, ordinal, kind, point, provenance, reserved;
 };
 struct mant_structured_table_cell_view {
 	uint32_t key, row, column, owner, kind, alignment;
-	uint32_t row_span, column_span, provenance, reserved;
+	uint32_t row_span, column_span, point, provenance, reserved;
 };
 struct mant_structured_fixed_view {
 	uint32_t key, owner, block, table, provenance, reserved;
