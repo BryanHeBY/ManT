@@ -37,6 +37,7 @@ pub(super) const OWNER_DEFINITION_ITEM: u32 = 5;
 pub(super) const ROOT_HEADING: u32 = 1;
 pub(super) const ROOT_TERM: u32 = 2;
 pub(super) const ROOT_BODY: u32 = 3;
+pub(super) const ROOT_FIXED_BODY: u32 = 5;
 pub(super) const ROOT_KIND_LAST: u32 = 5;
 pub(super) const BLOCK_HEADING: u32 = 1;
 pub(super) const BLOCK_PARAGRAPH: u32 = 2;

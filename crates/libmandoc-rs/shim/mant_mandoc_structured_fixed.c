@@ -11,8 +11,10 @@
 #include "term.h"
 
 #include "mant_mandoc_structured_buffer.h"
+#include "mant_mandoc_structured_address.h"
 #include "mant_mandoc_structured_builder.h"
 #include "mant_mandoc_structured_fixed.h"
+#include "mant_mandoc_structured_structure.h"
 
 #define MANT_FIXED_MAX_LINE_COLUMNS 1048576U
 #define MANT_FIXED_MAX_TOTAL_COLUMNS (32U * 1024U * 1024U)
@@ -96,8 +98,8 @@ mant_structured_fixed_table_required(struct structured_session *session,
 	return fixed;
 }
 
-uint32_t
-mant_structured_fixed_open_table(struct structured_session *session,
+static uint32_t
+append_view(struct structured_session *session,
     uint32_t table_key, uint32_t block_key, uint32_t owner,
     uint32_t provenance)
 {
@@ -126,10 +128,132 @@ mant_structured_fixed_open_table(struct structured_session *session,
 	view->block = block_key;
 	view->table = table_key;
 	view->provenance = provenance;
-	session->result->tables[table_key - 1].fixed_view = view->key;
+	if (table_key != 0)
+		session->result->tables[table_key - 1].fixed_view = view->key;
 	session->result->blocks[block_key - 1].fixed_view = view->key;
 	session->active_fixed_view = view->key;
 	return view->key;
+}
+
+uint32_t
+mant_structured_fixed_open_table(struct structured_session *session,
+    uint32_t table_key, uint32_t block_key, uint32_t owner,
+    uint32_t provenance)
+{
+	return append_view(session, table_key, block_key, owner, provenance);
+}
+
+int
+mant_structured_fixed_open_display(struct structured_session *session,
+    const struct roff_node *node, uint32_t provenance)
+{
+	struct structured_node_context *context;
+	uint32_t owner, parent, root, block, view;
+
+	if (session->active_fixed_display != 0)
+		return 1;
+	context = mant_structured_current_context(session);
+	if (context != NULL && context->owner != 0)
+		owner = context->owner;
+	else {
+		if (session->section_owner == 0)
+			session->section_owner = mant_structured_append_owner(session,
+			    MANT_OWNER_DOCUMENT, provenance);
+		owner = session->section_owner;
+	}
+	parent = context != NULL && context->container_block != 0 ?
+	    context->container_block : session->section_heading_block;
+	if (owner == 0)
+		return 0;
+	root = mant_structured_append_root(session, owner, MANT_ROOT_FIXED_BODY,
+	    provenance);
+	if (root == 0)
+		return 0;
+	block = mant_structured_append_block(session, owner,
+	    MANT_BLOCK_FIXED_DISPLAY, parent, provenance, root);
+	if (block == 0)
+		return 0;
+	view = append_view(session, 0, block, owner, provenance);
+	if (view == 0)
+		return 0;
+	session->active_fixed_display = view;
+	session->fixed_display_root = root;
+	session->fixed_point_cursor = session->result->content_point_count;
+	session->current_root = root;
+	session->current_owner = owner;
+	mant_structured_address_root_opened(session, node, 0);
+	return session->status == MANT_STRUCTURED_OK;
+}
+
+int
+mant_structured_fixed_flush_breaks(struct structured_session *session,
+    int preserve_last, int keep_trailing_anchors)
+{
+	uint32_t count, index, root, provenance;
+
+	if (session->active_fixed_display == 0)
+		return 1;
+	count = session->fixed_pending_breaks;
+	if (!preserve_last && count != 0)
+		count--;
+	session->fixed_pending_breaks = 0;
+	root = session->fixed_display_root;
+	provenance = session->result->content_roots[root - 1].provenance;
+	for (index = 0; index < count; index++) {
+		if (!keep_trailing_anchors)
+			mant_structured_address_before_atom(session, root,
+			    session->token_total == UINT64_MAX ? UINT64_MAX :
+			    session->token_total + 1);
+		if (!mant_structured_append_atom(session, root, provenance,
+		    MANT_ATOM_HARD_BREAK, 0, 0, 0, NULL, 0, NULL, 0, 0))
+			return 0;
+	}
+	return session->status == MANT_STRUCTURED_OK;
+}
+
+void
+mant_structured_fixed_close_display(struct structured_session *session,
+    struct termp *p)
+{
+	int trailing_anchor;
+
+	if (session->active_fixed_display == 0)
+		return;
+	trailing_anchor = mant_structured_address_root_has_pending(session,
+	    session->fixed_display_root);
+	if (trailing_anchor) {
+		/* A trailing .Tg follows the final visible line.  The terminal
+		 * suppresses its empty row, but tag.c keeps the target at this
+		 * position; do not resolve it before the final logical break. */
+		if (!mant_structured_fixed_flush_breaks(session, 1, 1))
+			return;
+		mant_structured_address_finish_root(session,
+		    session->fixed_display_root);
+	}
+	mant_structured_fixed_sync_points(session, p);
+	if (session->active_fixed_line != 0 && trailing_anchor) {
+		uint32_t width = session->result->fixed_lines[
+		    session->active_fixed_line - 1].total_columns;
+		if (session->fixed_column_total > MANT_FIXED_MAX_TOTAL_COLUMNS - width)
+			mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
+			    MANT_STRUCTURED_STAGE_RENDER, 21,
+			    session->fixed_column_total + width,
+			    MANT_FIXED_MAX_TOTAL_COLUMNS);
+		else
+			session->fixed_column_total += width;
+		session->active_fixed_line = 0;
+	} else if (session->active_fixed_line != 0)
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, session->active_fixed_line, 0);
+	if (session->status == MANT_STRUCTURED_OK)
+		mant_structured_fixed_flush_breaks(session, 0, 0);
+	session->active_fixed_display = 0;
+	session->active_fixed_view = 0;
+	session->fixed_display_root = 0;
+	session->fixed_point_cursor = session->result->content_point_count;
+	session->fixed_close_on_footer = 0;
+	session->current_root = 0;
+	session->current_owner = 0;
 }
 
 static uint32_t
@@ -186,6 +310,101 @@ columns(struct structured_session *session, struct termp *p,
 	*start = (uint32_t)(position / unit);
 	*end = *start + (uint32_t)(width / unit);
 	return 1;
+}
+
+static int
+place_point(struct structured_session *session, uint32_t point_key,
+    uint32_t key, uint32_t start)
+{
+	struct mant_structured_placement_view *placements, *placement;
+	struct mant_structured_fixed_line_view *line;
+	const struct mant_structured_content_point_view *point;
+	uint32_t count;
+
+	point = session->result->content_points + point_key - 1;
+	line = session->result->fixed_lines + key - 1;
+	if (line->total_columns < start)
+		line->total_columns = start;
+	count = session->result->placement_count;
+	placements = mant_structured_grow_array(session,
+	    session->result->placements, count,
+	    &session->result->placement_capacity,
+	    mant_structured_limit_u32(session->limits->max_placements),
+	    sizeof(*placements), session->limits->max_builder_allocated_bytes,
+	    22, MANT_STRUCTURED_STAGE_RENDER);
+	if (placements == NULL)
+		return 0;
+	session->result->placements = placements;
+	if (!mant_structured_charge(session, &session->builder_operations,
+	    1, session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_RENDER) ||
+	    !mant_structured_charge(session, &session->relation_edges, 2,
+	    session->limits->max_relation_edges, 30,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	placement = placements + count;
+	memset(placement, 0, sizeof(*placement));
+	placement->key = ++session->result->placement_count;
+	placement->line = key;
+	placement->ordinal = count == 0 ||
+	    placements[count - 1].line != key ? 0 :
+	    placements[count - 1].ordinal + 1;
+	placement->target_kind = MANT_PLACEMENT_POINT;
+	placement->point = point_key;
+	placement->scalar_start = point->scalar_boundary;
+	placement->scalar_end = point->scalar_boundary;
+	placement->column_start = start;
+	placement->column_end = start;
+	placement->cell_map_kind = MANT_CELL_MAP_AFFINE;
+	return 1;
+}
+
+void
+mant_structured_fixed_points_before_token(struct structured_session *session,
+    const struct structured_token *token)
+{
+	uint32_t point_key, line, start;
+
+	if (session->active_fixed_display == 0 || token->fixed_use_count == 0)
+		return;
+	line = token->fixed_uses[0].line;
+	start = token->fixed_uses[0].start;
+	for (point_key = session->fixed_point_cursor + 1;
+	    point_key <= session->result->content_point_count; point_key++) {
+		if (session->result->content_points[point_key - 1].root ==
+		    session->fixed_display_root &&
+		    !place_point(session, point_key, line, start))
+			return;
+	}
+	session->fixed_point_cursor = session->result->content_point_count;
+}
+
+void
+mant_structured_fixed_sync_points(struct structured_session *session,
+    struct termp *p)
+{
+	const struct mant_structured_content_point_view *point;
+	uint32_t key, start, end, point_key;
+	size_t position;
+
+	if (session->active_fixed_display == 0)
+		return;
+	/* Every point is consumed once.  At display close, a trailing target
+	 * receives a structural zero-width line after its logical break. */
+	for (point_key = session->fixed_point_cursor + 1;
+	    point_key <= session->result->content_point_count; point_key++) {
+		point = session->result->content_points + point_key - 1;
+		if (point->root != session->fixed_display_root)
+			continue;
+		position = p->viscol != 0 ? p->viscol :
+		    p->tcol->offset + term_len(p, p->tcol->col);
+		if (!columns(session, p, position, 0, &start, &end) ||
+		    (key = open_line(session)) == 0)
+			return;
+		if (!place_point(session, point_key, key, start))
+			return;
+	}
+	session->fixed_point_cursor = session->result->content_point_count;
 }
 
 static void
@@ -340,7 +559,8 @@ mant_structured_fixed_endline(struct structured_session *session, struct termp *
 	uint32_t key, start, end;
 
 	if (session->active_fixed_view == 0 ||
-	    event->reason != TERM_COLLECT_TABLE_LINE)
+	    (session->active_fixed_display == 0 &&
+	    event->reason != TERM_COLLECT_TABLE_LINE))
 		return;
 	if (!columns(session, p, event->visual, 0, &start, &end) ||
 	    (key = open_line(session)) == 0)
@@ -358,6 +578,15 @@ mant_structured_fixed_endline(struct structured_session *session, struct termp *
 	}
 	session->fixed_column_total += line->total_columns;
 	session->active_fixed_line = 0;
+	if (session->active_fixed_display != 0) {
+		if (session->fixed_pending_breaks == UINT32_MAX) {
+			mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
+			    MANT_STRUCTURED_STAGE_RENDER, 21, UINT32_MAX,
+			    UINT32_MAX);
+			return;
+		}
+		session->fixed_pending_breaks++;
+	}
 }
 
 void

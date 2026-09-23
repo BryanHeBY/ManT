@@ -223,6 +223,380 @@ fn native_boxed_tbl_keeps_styled_cell_content() {
 }
 
 #[test]
+fn native_eqn_words_reach_the_final_ir_inline_consumer() {
+    fn words(nodes: &[Inline], content: mant_ir::ContentContext<'_>, output: &mut String) {
+        for node in nodes {
+            match node {
+                Inline::Text { content: reference } | Inline::Code { content: reference } => {
+                    output.push_str(content.resolve_text(*reference).unwrap());
+                }
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => words(children, content, output),
+                Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
+            }
+        }
+    }
+    // Exact UTF-8/78 source was checked with fixed CVS. Its man_term.c
+    // ROFFT_EQN branch calls term_eqn without imposing a separate display
+    // break, so simple formula words stay in the surrounding prose root.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "eqn.1",
+            b".TH T 1\n.SH DESCRIPTION\nbefore\n.EQ\nx + y\n.EN\nafter\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("eqn.1", &bundle, InputFormat::Man)
+        .expect("native equation reaches final IR");
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+        panic!("inline equation remains in prose")
+    };
+    let mut text = String::new();
+    words(children, document.content(), &mut text);
+    assert!(text.contains("before"));
+    assert!(text.contains('x'));
+    assert!(text.contains('y'));
+    assert!(text.contains("after"));
+}
+
+#[test]
+fn native_eqn_fraction_and_radical_execute_in_both_macrosets() {
+    // All exact sources were checked with fixed CVS UTF-8/78. In
+    // eqn_term.c::eqn_box, `over` emits a slash and `sqrt` emits a radical
+    // before its child expression; no Rust equation layout is synthesized.
+    let cases = [
+        (
+            "fraction.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH DESCRIPTION\n.EQ\nx over y\n.EN\n",
+            "x/y",
+        ),
+        (
+            "radical.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH DESCRIPTION\n.EQ\nsqrt { x + y }\n.EN\n",
+            "√(x + y)",
+        ),
+        (
+            "fraction.1",
+            InputFormat::Mdoc,
+            ".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\n.EQ\nx over y\n.EN\n",
+            "x/y",
+        ),
+    ];
+    for (name, format, source, expected) in cases {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = project_native_manual(name, &bundle, format).unwrap();
+        let text = document
+            .content_store
+            .atoms
+            .iter()
+            .filter_map(|atom| atom.kind.text())
+            .collect::<String>();
+        assert!(text.contains(expected), "{name}: {text}");
+    }
+}
+
+#[test]
+fn native_nofill_and_literal_display_share_logical_content_with_fixed_rows() {
+    // Both exact sources were checked with fixed CVS UTF-8/78 before these
+    // assertions. man/mdoc terminal handlers preserve two authored lines;
+    // the second begins with two authored spaces after the native indent.
+    let cases = [
+        (
+            "nf.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH DESCRIPTION\nbefore\n.nf\nalpha  beta\n  gamma\n.fi\nafter\n",
+        ),
+        (
+            "bd.1",
+            InputFormat::Mdoc,
+            ".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Bd -literal\nalpha  beta\n  gamma\n.Ed\nafter\n",
+        ),
+    ];
+    for (name, format, source) in cases {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = project_native_manual(name, &bundle, format)
+            .expect("no-fill content reaches the final IR consumer");
+        let blocks = &document.sections[0].blocks;
+        assert_eq!(blocks.len(), 3, "{name}");
+        let Block::FixedDisplay { view, children, .. } = &blocks[1] else {
+            panic!("{name}: middle block is fixed display")
+        };
+        let lines = document
+            .content_store
+            .fixed_view(*view)
+            .unwrap()
+            .physical_lines(document.content())
+            .unwrap();
+        assert_eq!(lines, ["     alpha  beta", "       gamma"], "{name}");
+        assert!(
+            children
+                .iter()
+                .any(|node| matches!(node, Inline::LineBreak { .. })),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn native_nofill_long_blank_and_eof_rows_remain_fixed() {
+    // Each exact source was checked with fixed CVS UTF-8 width=20. The
+    // terminal output preserves a long row, an interior blank row, and an
+    // unterminated no-fill region at EOF without introducing a soft wrap.
+    let cases: [(&str, &str, &[&str]); 3] = [
+        (
+            "long.1",
+            ".TH T 1\n.SH D\n.nf\nabcdefghijklmnopqrstuvwxyz0123456789\n.fi\n",
+            &["     abcdefghijklmnopqrstuvwxyz0123456789"],
+        ),
+        (
+            "blank.1",
+            ".TH T 1\n.SH D\n.nf\nalpha\n\nbeta\n.fi\n",
+            &["     alpha", "", "     beta"],
+        ),
+        (
+            "eof.1",
+            ".TH T 1\n.SH D\n.nf\nalpha\nbeta\n",
+            &["     alpha", "     beta"],
+        ),
+    ];
+    for (name, source, expected) in cases {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = project_native_manual(name, &bundle, InputFormat::Man).unwrap();
+        let fixed = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::FixedDisplay { view, .. } => Some(*view),
+                _ => None,
+            })
+            .expect("no-fill region has a fixed view");
+        let lines = document
+            .content_store
+            .fixed_view(fixed)
+            .unwrap()
+            .physical_lines(document.content())
+            .unwrap();
+        assert_eq!(lines, expected, "{name}");
+    }
+}
+
+#[test]
+fn literal_display_keeps_link_occurrence_on_shared_content() {
+    // Exact input was checked with fixed CVS UTF-8 width=20. In
+    // mdoc_term.c::termp_lk_pre, the label and URL execute inside the
+    // no-fill display; terminal underline is only presentation.
+    let mut bundle = SourceBundle::new();
+    bundle.insert("literal-link.1", b".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\n.Lk https://example.test label\nnext\n.Ed\n".to_vec()).unwrap();
+    let document = project_native_manual("literal-link.1", &bundle, InputFormat::Mdoc)
+        .expect("native literal link reaches final IR");
+    let Block::FixedDisplay { view, children, .. } = &document.sections[0].blocks[0] else {
+        panic!("literal display is fixed")
+    };
+    let lines = document
+        .content_store
+        .fixed_view(*view)
+        .unwrap()
+        .physical_lines(document.content())
+        .unwrap();
+    assert_eq!(lines, ["     label: https://example.test", "     next"]);
+    assert!(
+        children
+            .iter()
+            .any(|node| matches!(node, Inline::Link { .. }))
+    );
+    assert_eq!(document.content_store.links.len(), 1);
+}
+
+#[test]
+fn native_nofill_long_row_clips_in_real_horizontal_buffer() {
+    use mant_ir::ResolvedContent;
+    use mant_ui::DocumentView;
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+
+    // Exact long no-fill source was checked with fixed CVS UTF-8 width=20;
+    // its one physical row remains one row at narrow viewport widths.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "long.1",
+            b".TH T 1\n.SH D\n.nf\nabcdefghijklmnopqrstuvwxyz0123456789\n.fi\n".to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("long.1", &bundle, InputFormat::Man).unwrap();
+    let resolved = ResolvedContent {
+        label: "T(1)".to_owned(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    let view = DocumentView::new(&resolved);
+    let narrow = view.render_with_horizontal_offset(12, 0);
+    let row = narrow
+        .text
+        .lines
+        .iter()
+        .position(|line| line.to_string().contains("abcdefg"))
+        .unwrap();
+    let shifted = view.render_with_horizontal_offset(12, 20);
+    assert_eq!(narrow.row_count, shifted.row_count);
+    let area = Rect::new(0, 0, 12, 1);
+    let mut buffer = Buffer::empty(area);
+    Paragraph::new(shifted.text.lines[row].clone()).render(area, &mut buffer);
+    assert_eq!(buffer[(0, 0)].symbol(), "p");
+    assert_eq!(buffer[(11, 0)].symbol(), "0");
+}
+
+#[test]
+fn nested_literal_display_retains_native_absolute_columns() {
+    // Exact mdoc and man inputs were checked with fixed CVS UTF-8/78.
+    // mdoc_term.c::termp_bd_pre and man_term.c::pre_TP establish different
+    // native body origins; the fixed view stores each origin only once.
+    let cases = [
+        (
+            "nested.1",
+            InputFormat::Mdoc,
+            ".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a\n.Bd -literal\nfirst\n  second\n.Ed\n.El\n",
+            &["             first", "               second"] as &[_],
+        ),
+        (
+            "nested.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH OPTIONS\n.TP\n.B --alpha\n.nf\nfirst\n  second\n.fi\n",
+            &["            first", "              second"],
+        ),
+    ];
+    for (name, format, source, expected) in cases {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = project_native_manual(name, &bundle, format).unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("nested fixed region belongs to a definition")
+        };
+        let view = items[0]
+            .description
+            .iter()
+            .find_map(|block| match block {
+                Block::FixedDisplay { view, .. } => Some(*view),
+                _ => None,
+            })
+            .expect("definition contains fixed display");
+        let lines = document
+            .content_store
+            .fixed_view(view)
+            .unwrap()
+            .physical_lines(document.content())
+            .unwrap();
+        assert_eq!(lines, expected);
+    }
+}
+
+#[test]
+fn literal_target_remains_zero_width_at_its_fixed_row() {
+    use mant_ir::ResolvedContent;
+    use mant_ui::DocumentView;
+
+    // Exact source was checked with fixed CVS tree and HTML. tag.c keeps
+    // the authored .Tg on its own zero-width node, while mdoc_term.c emits
+    // the following no-fill text on the same physical display row.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "anchor.1",
+            b".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\n.Tg Anchor\nfirst\n.Ed\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("anchor.1", &bundle, InputFormat::Mdoc).unwrap();
+    let Block::FixedDisplay { children, .. } = &document.sections[0].blocks[0] else {
+        panic!("literal target belongs to fixed display")
+    };
+    assert!(
+        children
+            .iter()
+            .any(|node| matches!(node, Inline::Anchor { .. }))
+    );
+    let resolved = ResolvedContent {
+        label: "T(1)".to_owned(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    let view = DocumentView::new(&resolved);
+    let rendered = view.render(20);
+    let row = rendered
+        .text
+        .lines
+        .iter()
+        .position(|line| line.to_string().contains("first"))
+        .unwrap();
+    assert_eq!(rendered.anchor_row("Anchor"), Some(row));
+}
+
+#[test]
+fn literal_targets_between_and_after_rows_keep_their_structural_position() {
+    use mant_ir::ResolvedContent;
+    use mant_ui::DocumentView;
+
+    // Exact inputs were checked with fixed CVS HTML. post_tg() leaves these
+    // targets inside the literal display: Mid lies between physical rows,
+    // while Tail follows the final text row without moving to an old root.
+    for (target, body, following) in [
+        ("Mid", "first\n.Tg Mid\nsecond\n", Some("second")),
+        ("Tail", "first\n.Tg Tail\n", None),
+    ] {
+        let mut bundle = SourceBundle::new();
+        let source =
+            format!(".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\n{body}.Ed\n");
+        bundle.insert("anchor.1", source.into_bytes()).unwrap();
+        let document = project_native_manual("anchor.1", &bundle, InputFormat::Mdoc).unwrap();
+        let Block::FixedDisplay { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("target belongs to literal display")
+        };
+        assert!(
+            children
+                .iter()
+                .any(|node| matches!(node, Inline::Anchor { .. }))
+        );
+        let resolved = ResolvedContent {
+            label: "T(1)".to_owned(),
+            address: None,
+            document: Some(document),
+            tldr: None,
+        };
+        let rendered = DocumentView::new(&resolved).render(20);
+        let first = rendered
+            .text
+            .lines
+            .iter()
+            .position(|line| line.to_string().contains("first"))
+            .unwrap();
+        let anchor = rendered.anchor_row(target).unwrap();
+        assert!(anchor > first, "{target}: anchor must follow first row");
+        if let Some(next) = following {
+            let second = rendered
+                .text
+                .lines
+                .iter()
+                .position(|line| line.to_string().contains(next))
+                .unwrap();
+            // The terminal path has no visible row for .Tg itself.  The
+            // zero-width target sits at the next row's beginning.
+            assert_eq!(anchor, second, "{target}: target precedes second row text");
+        }
+    }
+}
+
+#[test]
 fn native_tbl_layout_rule_omits_ignored_data_text() {
     // Exact source checked with fixed CVS UTF-8/78. tbl_term.c::tbl_data
     // renders its layout `_`/`=` rule before consulting the row data.

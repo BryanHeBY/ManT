@@ -121,14 +121,13 @@ impl<'a> BlockRenderer<'a> {
                 padding(compose_origin(base_indent, layout.indent_columns)),
             ));
         }
-        if let Block::FixedDisplay { view, layout, .. }
+        if let Block::FixedDisplay { view, .. }
         | Block::Table {
             fixed_view: Some(view),
-            layout,
             ..
         } = block
         {
-            return self.fixed_flow(*view, *layout, base_indent);
+            return self.fixed_flow(*view);
         }
         if let Block::Paragraph {
             children, layout, ..
@@ -197,12 +196,7 @@ impl<'a> BlockRenderer<'a> {
         Self::nonliteral_leaf(&value, compose_origin(base_indent, layout_indent))
     }
 
-    fn fixed_flow(
-        &self,
-        view: mant_ir::FixedViewKey,
-        layout: mant_ir::LayoutHint,
-        base_indent: i32,
-    ) -> Flow {
+    fn fixed_flow(&self, view: mant_ir::FixedViewKey) -> Flow {
         let Some(lines) = self
             .content
             .fixed_view(view)
@@ -210,10 +204,10 @@ impl<'a> BlockRenderer<'a> {
         else {
             return Flow::default();
         };
-        Flow::literal(indent_lines(
-            &lines.join("\n"),
-            padding(compose_origin(base_indent, layout.indent_columns)),
-        ))
+        // Native fixed rows already carry absolute terminal columns, including
+        // enclosing list/display indentation. Reapplying structural origin
+        // would double-indent nested fixed regions.
+        Flow::literal(lines.join("\n"))
     }
 
     fn paragraph_flow(

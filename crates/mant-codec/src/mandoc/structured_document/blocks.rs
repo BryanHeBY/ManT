@@ -84,6 +84,21 @@ pub(super) fn lower_block(
             lower_list(projection, index, addresses, content, block, evidence)
         }
         NativeBlockKind::Table => lower_table(projection, index, addresses, content, block),
+        NativeBlockKind::FixedDisplay => Ok(Block::FixedDisplay {
+            children: root_inlines(
+                projection,
+                addresses,
+                content,
+                block.root().ok_or(NativeProjectionError::InvalidRelation(
+                    "fixed display block has no root",
+                ))?,
+            )?,
+            view: content.fixed_view(block.fixed_view().ok_or(
+                NativeProjectionError::InvalidRelation("fixed display block has no view"),
+            )?)?,
+            layout: LayoutHint::default(),
+            source: source_for(projection, block.provenance()),
+        }),
         kind => Err(NativeProjectionError::UnsupportedBlock(kind)),
     }
 }

@@ -17,6 +17,9 @@ void mant_structured_address_root_opened(struct structured_session *,
     const struct roff_node *, int);
 void mant_structured_address_before_atom(struct structured_session *, uint32_t,
     uint64_t);
+int mant_structured_address_root_has_pending(const struct structured_session *,
+    uint32_t);
+void mant_structured_address_finish_root(struct structured_session *, uint32_t);
 int mant_structured_address_owner_needs_root(const struct structured_session *,
     uint32_t);
 void mant_structured_address_finish_owner(struct structured_session *, uint32_t);

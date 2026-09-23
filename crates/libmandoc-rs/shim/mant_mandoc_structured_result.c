@@ -386,7 +386,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    (root->kind != MANT_ROOT_HEADING &&
 		    root->kind != MANT_ROOT_TERM &&
 		    root->kind != MANT_ROOT_BODY &&
-		    root->kind != MANT_ROOT_CELL) || root->provenance == 0 ||
+		    root->kind != MANT_ROOT_CELL &&
+		    root->kind != MANT_ROOT_FIXED_BODY) || root->provenance == 0 ||
 		    root->provenance > result->provenance_count ||
 		    root->reserved != 0)
 			return 0;
@@ -666,7 +667,10 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		    block->kind == MANT_BLOCK_DEFINITION_LIST ?
 		    root != NULL || block->table != 0 :
 		    block->kind == MANT_BLOCK_TABLE ?
-		    root != NULL || block->table == 0 : 1) ||
+		    root != NULL || block->table == 0 :
+		    block->kind == MANT_BLOCK_FIXED_DISPLAY ?
+		    root == NULL || root->kind != MANT_ROOT_FIXED_BODY ||
+		    block->fixed_view == 0 : 1) ||
 		    (block->kind != MANT_BLOCK_TABLE &&
 		    block->kind != MANT_BLOCK_FIXED_DISPLAY &&
 		    block->fixed_view != 0) ||

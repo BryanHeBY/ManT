@@ -123,6 +123,11 @@ struct structured_session {
 	uint32_t table_cell_start;
 	uint32_t active_fixed_view;
 	uint32_t active_fixed_line;
+	uint32_t active_fixed_display;
+	uint32_t fixed_display_root;
+	uint32_t fixed_pending_breaks;
+	uint32_t fixed_point_cursor;
+	uint8_t fixed_close_on_footer;
 	uint64_t fixed_column_total;
 	uint32_t section_owner;
 	uint32_t section_heading_block;

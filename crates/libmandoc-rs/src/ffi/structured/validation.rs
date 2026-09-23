@@ -11,14 +11,15 @@ use table::validate_tables;
 
 use super::{
     ATOM_BREAK_OPPORTUNITY, ATOM_HARD_BREAK, ATOM_TEXT, ATOM_WHITESPACE, BLOCK_DEFINITION_LIST,
-    BLOCK_HEADING, BLOCK_LIST, BLOCK_PARAGRAPH, BLOCK_TABLE, BytesView,
+    BLOCK_FIXED_DISPLAY, BLOCK_HEADING, BLOCK_LIST, BLOCK_PARAGRAPH, BLOCK_TABLE, BytesView,
     COORD_NATIVE_NORMALIZED_BYTES, DIAGNOSTIC_CODE_NATIVE_LAST, DIAGNOSTIC_STYLE,
     DIAGNOSTIC_UNSUPPORTED, FORMAT_MAN, FORMAT_MDOC, LINK_LABEL_CONTENT, LINK_LABEL_HARD_BREAK,
     LIST_BULLET, LIST_DEFINITION, LIST_NATIVE_MARKER, LIST_ORDERED, LIST_PLAIN, MetadataView,
     NativeStructuredError, OWNER_DEFINITION_ITEM, OWNER_KIND_LAST, OWNER_LIST_ITEM,
-    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_HEADING,
-    ROOT_KIND_LAST, ROOT_TERM, ResultHandle, ResultView, STYLE_MASK, SliceView, SpanView,
-    StructuredSlices, TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED, alloc_error, relation_error,
+    PROVENANCE_AUTHORED, PROVENANCE_GENERATED, PROVENANCE_UNKNOWN, ROOT_BODY, ROOT_FIXED_BODY,
+    ROOT_HEADING, ROOT_KIND_LAST, ROOT_TERM, ResultHandle, ResultView, STYLE_MASK, SliceView,
+    SpanView, StructuredSlices, TARGET_ORIGIN_AUTHORED, TARGET_ORIGIN_GENERATED, alloc_error,
+    relation_error,
 };
 
 pub(super) fn validate_metadata(metadata: MetadataView) -> Result<(), NativeStructuredError> {
@@ -545,6 +546,11 @@ pub(super) fn validate_structured_relations(
                 block.root == 0
                     && block.table != 0
                     && block.fixed_view as usize <= slices.fixed_views.len()
+            }
+            BLOCK_FIXED_DISPLAY => {
+                block_root.is_some_and(|root| root.kind == ROOT_FIXED_BODY)
+                    && block.table == 0
+                    && valid_required_key(block.fixed_view, slices.fixed_views.len())
             }
             _ => false,
         };

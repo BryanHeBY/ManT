@@ -110,6 +110,8 @@ supported_token(enum roff_tok tok)
 	switch (tok) {
 	case TOKEN_NONE:
 	case ROFF_br:
+	case ROFF_nf:
+	case ROFF_fi:
 	case ROFF_ll:
 	case MDOC_Dd:
 	case MDOC_Dt:
@@ -117,6 +119,8 @@ supported_token(enum roff_tok tok)
 	case MDOC_Sh:
 	case MDOC_Pp:
 	case MDOC_Bl:
+	case MDOC_Bd:
+	case MDOC_Ed:
 	case MDOC_El:
 	case MDOC_It:
 	case MDOC_Tg:
@@ -177,9 +181,7 @@ static int
 supported_tree(const struct roff_node *node)
 {
 	for (; node != NULL; node = node->next) {
-		if ((node->flags & NODE_NOFILL) != 0 ||
-		    node->type == ROFFT_EQN ||
-		    (node->tok == MDOC_Bl && node->norm != NULL &&
+		if ((node->tok == MDOC_Bl && node->norm != NULL &&
 		    node->norm->Bl.type == LIST_column) ||
 		    !supported_token(node->tok) || !supported_tree(node->child))
 			return 0;

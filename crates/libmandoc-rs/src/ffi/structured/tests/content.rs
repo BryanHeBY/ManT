@@ -3,6 +3,62 @@
 use super::*;
 
 #[test]
+fn equation_words_follow_native_inline_execution() {
+    // Exact source was checked with fixed CVS UTF-8/78 before this assertion.
+    // man_term.c::print_man_node passes ROFFT_EQN to eqn_term.c::term_eqn;
+    // its generated words remain inline between the neighboring prose.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "eqn.1",
+            b".TH T 1\n.SH DESCRIPTION\nbefore\n.EQ\nx + y\n.EN\nafter\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude("eqn.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("native eqn execution produces structured inline content");
+    let text = document
+        .content_atoms
+        .iter()
+        .map(|atom| atom.text.as_str())
+        .collect::<String>();
+    assert!(text.contains("before"));
+    assert!(text.contains('x'));
+    assert!(text.contains('y'));
+    assert!(text.contains("after"));
+}
+
+#[test]
+fn nofill_lines_follow_native_line_boundaries() {
+    // Both exact sources were checked with fixed CVS UTF-8/78.
+    // man_term.c::print_man_node and mdoc_term.c::print_mdoc_node call
+    // term_newln at NODE_LINE while TERMP_BRNEVER suppresses wrapping.
+    let cases = [
+        (
+            "nf.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH DESCRIPTION\nbefore\n.nf\nalpha  beta\n  gamma\n.fi\nafter\n",
+        ),
+        (
+            "bd.1",
+            InputFormat::Mdoc,
+            ".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Bd -literal\nalpha  beta\n  gamma\n.Ed\nafter\n",
+        ),
+    ];
+    for (name, format, source) in cases {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = render_prelude(name, &bundle, format, 78, &Limits::default())
+            .expect("no-fill source has a structured native result");
+        assert!(
+            document
+                .content_atoms
+                .iter()
+                .any(|atom| atom.text.contains("alpha"))
+        );
+    }
+}
+
+#[test]
 fn inline_link_head_and_body_phases_do_not_split_the_surrounding_root() {
     // The exact source was run through the pinned reference first. In
     // `man_term.c::print_man_node`, UR head/body enter/leave phases surround
@@ -857,39 +913,25 @@ fn unsupported_geometry_still_exercises_sidecar_mutations() {
 
 #[test]
 fn unsupported_structural_shapes_fail_whole_result() {
-    // Oracle preflight covered `.SS`, no-fill, and both equation forms;
-    // C02b intentionally has no complete hierarchy/fixed-view/equation
-    // representation for these shapes.  Pinned
-    // `eqn_term.c::term_eqn` still executes in the phase probe.
-    for (name, source) in [
-        (
+    // The exact `.SS` input was checked with fixed CVS UTF-8/78. Subsection
+    // hierarchy still lacks a complete structured representation; no-fill
+    // and eqn now have their own positive native-result tests above.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
             "subsection.1",
-            b".TH UNSUP 1\n.SH TOP\n.SS CHILD\ntext\n".as_slice(),
-        ),
-        (
-            "nofill.1",
-            b".TH UNSUP 1\n.SH TOP\n.nf\ntext\n.fi\n".as_slice(),
-        ),
-        (
-            "standalone-eqn.1",
-            b".TH EQN 1\n.SH TEST\n.EQ\nx sup 2\n.EN\n".as_slice(),
-        ),
-        (
-            "inline-eqn.1",
-            b".TH EQN 1\n.SH TEST\n.EQ\ndelim $$\n.EN\nbefore $x sup 2$ after\n".as_slice(),
-        ),
-    ] {
-        let mut bundle = SourceBundle::new();
-        bundle.insert(name, source.to_vec()).unwrap();
-        if name.contains("eqn") {
-            let metrics = probe_structured(name, &bundle, InputFormat::Man, 78, &Limits::default())
-                .expect("equation renderer executes in the discarded phase probe");
-            assert!(metrics.logical_events > 0 && metrics.buffer_writes > 0);
-        }
-        let error = render_prelude(name, &bundle, InputFormat::Man, 78, &Limits::default())
-            .expect_err("unsupported shape must not return a partial document");
-        assert_eq!((error.status, error.stage), (STATUS_UNSUPPORTED, 4));
-    }
+            b".TH UNSUP 1\n.SH TOP\n.SS CHILD\ntext\n".to_vec(),
+        )
+        .unwrap();
+    let error = render_prelude(
+        "subsection.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect_err("unsupported shape must not return a partial document");
+    assert_eq!((error.status, error.stage), (STATUS_UNSUPPORTED, 4));
     let mut recovered = SourceBundle::new();
     recovered
         .insert("ok.1", b".TH OK 1\n.SH NAME\nrecovered\n".to_vec())

@@ -85,6 +85,13 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 		    result->fixed_views[key - 1].table != i + 1))
 			return 0;
 	}
+	for (i = 0; i < result->block_count; i++) {
+		uint32_t key = result->blocks[i].fixed_view;
+
+		if (key != 0 && (key > result->fixed_view_count ||
+		    result->fixed_views[key - 1].block != i + 1))
+			return 0;
+	}
 	previous_view = ordinal = 0;
 	total_columns = 0;
 	for (i = 0; i < result->fixed_line_count; i++) {

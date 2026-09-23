@@ -2,7 +2,9 @@
 
 use unicode_width::UnicodeWidthStr;
 
-use super::super::{NativeStructuredError, StructuredSlices, alloc_error, relation_error};
+use super::super::{
+    BLOCK_FIXED_DISPLAY, NativeStructuredError, StructuredSlices, alloc_error, relation_error,
+};
 use super::{dense_key, preflight::validate_utf8_view, utf8_boundary, valid_required_key};
 
 #[allow(clippy::too_many_lines)] // Keep the one-pass handle-bound relation checks together.
@@ -24,7 +26,7 @@ pub(super) fn validate_fixed(
             .checked_sub(1)
             .and_then(|key| slices.blocks.get(key as usize));
         let valid_table = if view.table == 0 {
-            block.is_some_and(|block| block.kind == 7)
+            block.is_some_and(|block| block.kind == BLOCK_FIXED_DISPLAY)
         } else {
             slices
                 .tables
@@ -47,6 +49,16 @@ pub(super) fn validate_fixed(
                 .fixed_views
                 .get(table.fixed_view as usize - 1)
                 .is_none_or(|view| view.table as usize != index + 1)
+        {
+            return Err(relation_error());
+        }
+    }
+    for (index, block) in slices.blocks.iter().enumerate() {
+        if block.fixed_view != 0
+            && slices
+                .fixed_views
+                .get(block.fixed_view as usize - 1)
+                .is_none_or(|view| view.block as usize != index + 1)
         {
             return Err(relation_error());
         }

@@ -604,6 +604,27 @@ mant_structured_address_before_atom(struct structured_session *session,
 }
 
 int
+mant_structured_address_root_has_pending(const struct structured_session *session,
+    uint32_t root)
+{
+	return root != 0 && root <= session->result->content_root_count &&
+	    session->root_atoms[root - 1].pending_anchors.head != 0;
+}
+
+void
+mant_structured_address_finish_root(struct structured_session *session,
+    uint32_t root)
+{
+	struct structured_anchor_queue *queue;
+
+	if (!mant_structured_address_root_has_pending(session, root))
+		return;
+	queue = &session->root_atoms[root - 1].pending_anchors;
+	resolve_queue_at(session, queue, ANCHOR_QUEUE_ROOT, root,
+	    session->root_atoms[root - 1].count);
+}
+
+int
 mant_structured_address_owner_needs_root(const struct structured_session *session,
     uint32_t owner)
 {

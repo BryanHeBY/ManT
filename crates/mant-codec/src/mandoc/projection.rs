@@ -252,6 +252,7 @@ fn project_roots(
                 | ContentRootKind::Term
                 | ContentRootKind::Body
                 | ContentRootKind::Cell
+                | ContentRootKind::FixedBody
         ) {
             return Err(NativeProjectionError::UnsupportedRoot(root.kind()));
         }
@@ -377,6 +378,7 @@ fn project_blocks(
                 | NativeBlockKind::List
                 | NativeBlockKind::DefinitionList
                 | NativeBlockKind::Table
+                | NativeBlockKind::FixedDisplay
         ) {
             return Err(NativeProjectionError::UnsupportedBlock(block.kind()));
         }

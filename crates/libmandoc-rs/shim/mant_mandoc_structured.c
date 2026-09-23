@@ -143,6 +143,9 @@ append_token_atom(struct structured_session *session,
 	before_length = before_atom == 0 ? 0 :
 	    session->result->content_atoms[before_atom - 1].text.len;
 	before_scalar = session->root_atoms[token->root - 1].scalar_count;
+	mant_structured_fixed_points_before_token(session, token);
+	if (session->status != MANT_STRUCTURED_OK)
+		return 0;
 	if (!mant_structured_append_atom(session, token->root, token->provenance,
 	    kind, token->style, token->role, token->link, bytes, length,
 	    display, display_length, breakable))
@@ -440,7 +443,7 @@ consume_slot(struct structured_session *session, struct structured_slot *slot)
 }
 
 static void
-collect_logical(struct structured_session *session,
+collect_logical(struct structured_session *session, struct termp *p,
     const struct term_collector_event *event)
 {
 	const struct roff_node *node;
@@ -467,6 +470,18 @@ collect_logical(struct structured_session *session,
 	    event->reason == TERM_COLLECT_ESCAPE);
 	provenance = mant_structured_append_provenance(session, node, authored);
 	if (provenance == 0 || session->status != MANT_STRUCTURED_OK)
+		return;
+	if (session->active_table_cell == 0 && node != NULL &&
+	    (node->flags & NODE_NOFILL) != 0 && !heading) {
+		if (session->active_fixed_display == 0) {
+			if (!mant_structured_fixed_open_display(session, node,
+			    provenance))
+				return;
+		} else if (!mant_structured_fixed_flush_breaks(session, 1, 0))
+			return;
+	} else if (session->active_fixed_display != 0)
+		mant_structured_fixed_close_display(session, p);
+	if (session->status != MANT_STRUCTURED_OK)
 		return;
 	if (session->active_table_cell == 0 && (session->current_root == 0 ||
 	    (session->result->content_roots[session->current_root - 1].kind ==
@@ -658,11 +673,24 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 	    MANT_STRUCTURED_STAGE_RENDER))
 		return;
 	if (event->op == TERM_COLLECT_OUTPUT) {
-		if (event->phase == TERM_COLLECT_ENTER)
+		if (event->phase == TERM_COLLECT_ENTER) {
 			session->output_depth++;
+			/* man_term.c::print_man_foot and mdoc_term.c::print_mdoc_foot
+			 * first flush the final body line, then emit the footer. */
+			if (event->reason == TERM_COLLECT_FOOTER &&
+			    session->active_fixed_display != 0) {
+				if (p->tcol->lastcol == 0 && p->viscol == 0)
+					mant_structured_fixed_close_display(session, p);
+				else
+					session->fixed_close_on_footer = 1;
+			}
+		}
 		else if (event->phase == TERM_COLLECT_LEAVE &&
 		    session->output_depth != 0)
 			session->output_depth--;
+		if (event->phase == TERM_COLLECT_LEAVE &&
+		    event->reason == TERM_COLLECT_FOOTER)
+			mant_structured_fixed_close_display(session, p);
 		return;
 	}
 	if (event->op == TERM_COLLECT_NODE) {
@@ -693,6 +721,20 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 				session->current_root = 0;
 				session->current_owner = 0;
 			}
+			if (event->node != NULL && event->node->tok == MDOC_Tg &&
+			    (event->node->flags & NODE_NOFILL) != 0 &&
+			    session->active_table_cell == 0) {
+				if (session->active_fixed_display == 0) {
+					uint32_t provenance =
+					    mant_structured_append_provenance(session,
+					    event->node, 1);
+					if (provenance == 0 ||
+					    !mant_structured_fixed_open_display(session,
+					    event->node, provenance))
+						return;
+				} else if (!mant_structured_fixed_flush_breaks(session, 1, 0))
+					return;
+			}
 			mant_structured_address_enter_node(session, event->node);
 		} else if (event->phase == TERM_COLLECT_LEAVE) {
 			if (session->node_depth == 0 ||
@@ -704,6 +746,11 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 			if (event->node != NULL && event->node->type == ROFFT_TBL)
 				mant_structured_table_leave(session, event->node);
 			mant_structured_leave_node(session, event->node);
+			if (event->node != NULL &&
+			    (event->node->tok == ROFF_fi ||
+			    (event->node->tok == MDOC_Bd &&
+			    event->node->type == ROFFT_BODY)))
+				mant_structured_fixed_close_display(session, p);
 			session->node_depth--;
 		}
 		return;
@@ -714,7 +761,7 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 		return;
 	}
 	if (event->op == TERM_COLLECT_LOGICAL) {
-		collect_logical(session, event);
+		collect_logical(session, p, event);
 		return;
 	}
 	if (event->op == TERM_COLLECT_BUFFER_WRITE) {
@@ -831,6 +878,10 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 	if (event->op != TERM_COLLECT_ENDLINE)
 		return;
 	mant_structured_fixed_endline(session, p, event);
+	if (session->status != MANT_STRUCTURED_OK)
+		return;
+	if (session->fixed_close_on_footer != 0)
+		mant_structured_fixed_close_display(session, p);
 	if (session->status != MANT_STRUCTURED_OK)
 		return;
 	if (session->pending_break_root != 0) {
