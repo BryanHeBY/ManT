@@ -475,7 +475,10 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     assert!(packaged.contains(
         "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui mant)"
     ));
-    assert!(packaged.contains("mant-codec) dependencies=(libmandoc-rs mant-ir)"));
+    assert!(
+        packaged
+            .contains("mant-codec) dependencies=(libmandoc-rs mant-ir mant-protocol mant-query)")
+    );
     // Pure query/render packaging must not inject an unused native parser patch.
     for package in ["mant-query", "mant-render"] {
         let dependency_line = packaged
