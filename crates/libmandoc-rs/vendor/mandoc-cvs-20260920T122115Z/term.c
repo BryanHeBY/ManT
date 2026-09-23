@@ -137,6 +137,12 @@ term_collect_owner_point(struct termp *p, const struct roff_node *n)
 }
 
 void
+term_collect_region_point(struct termp *p, const struct roff_node *n)
+{
+	term_collect_point(p, n, TERM_COLLECT_REGION_POINT);
+}
+
+void
 term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
 		enum term_collector_phase phase)
 {

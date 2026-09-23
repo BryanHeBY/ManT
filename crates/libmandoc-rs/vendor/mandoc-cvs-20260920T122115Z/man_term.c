@@ -971,6 +971,7 @@ print_man_node(DECL_ARGS)
 	case ROFFT_EQN:
 		if ( ! (n->flags & NODE_LINE))
 			p->flags |= TERMP_NOSPACE;
+		term_collect_region_point(p, n);
 		term_eqn(p, n->eqn);
 		if (n->next != NULL && ! (n->next->flags & NODE_LINE))
 			p->flags |= TERMP_NOSPACE;
@@ -980,6 +981,7 @@ print_man_node(DECL_ARGS)
 	case ROFFT_TBL:
 		if (p->tbl.cols == NULL)
 			term_newln(p);
+		term_collect_region_point(p, n);
 		/* The preceding display has now flushed, but term_tbl() has not
 		 * emitted a frame or cell.  Observe this ownership boundary. */
 		term_collect_node(p, n, TERM_COLLECT_CHILD);
@@ -1005,6 +1007,11 @@ print_man_node(DECL_ARGS)
 	c = 1;
 	if (act->pre != NULL)
 		c = (*act->pre)(p, mt, n, meta);
+	if ((n->type == ROFFT_HEAD || n->type == ROFFT_BODY) &&
+	    (n->tok == MAN_SH || n->tok == MAN_SS ||
+	    n->tok == MAN_TP || n->tok == MAN_TQ ||
+	    n->tok == MAN_IP))
+		term_collect_region_point(p, n);
 
 	if (c && n->child != NULL) {
 		term_collect_node(p, n, TERM_COLLECT_CHILD);

@@ -391,6 +391,7 @@ print_mdoc_node(DECL_ARGS)
 	case ROFFT_EQN:
 		if ( ! (n->flags & NODE_LINE))
 			p->flags |= TERMP_NOSPACE;
+		term_collect_region_point(p, n);
 		term_eqn(p, n->eqn);
 		if (n->next != NULL && ! (n->next->flags & NODE_LINE))
 			p->flags |= TERMP_NOSPACE;
@@ -398,6 +399,7 @@ print_mdoc_node(DECL_ARGS)
 	case ROFFT_TBL:
 		if (p->tbl.cols == NULL)
 			term_newln(p);
+		term_collect_region_point(p, n);
 		/* Match the man terminal path: notify the observer only after
 		 * the prior line flush and before native table drawing. */
 		term_collect_node(p, n, TERM_COLLECT_CHILD);
@@ -417,6 +419,13 @@ print_mdoc_node(DECL_ARGS)
 			chld = (*act->pre)(p, &npair, meta, n);
 		break;
 	}
+	if ((n->type == ROFFT_HEAD || n->type == ROFFT_BODY) &&
+	    (n->tok == MDOC_Sh || n->tok == MDOC_Ss ||
+	    n->tok == MDOC_It))
+		term_collect_region_point(p, n);
+	else if (n->type == ROFFT_BLOCK &&
+	    (n->tok == MDOC_Bl || n->tok == MDOC_Bd))
+		term_collect_region_point(p, n);
 
 	if (chld && n->child) {
 		term_collect_node(p, n, TERM_COLLECT_CHILD);

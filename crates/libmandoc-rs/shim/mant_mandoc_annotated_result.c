@@ -392,12 +392,16 @@ valid_marks(const struct mant_annotated_result *result)
 		switch (mark->point_kind) {
 		case MANT_ANNOTATED_POINT_NONE:
 			if (mark->point_row != 0 || mark->point_column != 0 ||
-			    mark->kind == MANT_ANNOTATED_MARK_ANCHOR)
+			    mark->kind == MANT_ANNOTATED_MARK_ANCHOR ||
+			    (mark->kind == MANT_ANNOTATED_MARK_REGION &&
+			    mark->region_kind != MANT_ANNOTATED_REGION_TABLE_CELL))
 				return 0;
 			break;
 		case MANT_ANNOTATED_POINT_ROW_COLUMN:
 			if ((mark->kind != MANT_ANNOTATED_MARK_ANCHOR &&
-			    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
+			    mark->kind != MANT_ANNOTATED_MARK_OWNER &&
+			    (mark->kind != MANT_ANNOTATED_MARK_REGION ||
+			    mark->region_kind == MANT_ANNOTATED_REGION_TABLE_CELL)) ||
 			    mark->point_row == 0 ||
 			    mark->point_row > display.row_count ||
 			    mark->point_column >
@@ -406,7 +410,9 @@ valid_marks(const struct mant_annotated_result *result)
 			break;
 		case MANT_ANNOTATED_POINT_DOCUMENT_END:
 			if ((mark->kind != MANT_ANNOTATED_MARK_ANCHOR &&
-			    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
+			    mark->kind != MANT_ANNOTATED_MARK_OWNER &&
+			    (mark->kind != MANT_ANNOTATED_MARK_REGION ||
+			    mark->region_kind == MANT_ANNOTATED_REGION_TABLE_CELL)) ||
 			    mark->point_row != display.row_count ||
 			    mark->point_column != 0)
 				return 0;

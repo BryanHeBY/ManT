@@ -384,7 +384,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 39 ordered patches in `patches/series`. The following group contains
+the 40 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -482,6 +482,9 @@ The remaining patches implement the synchronous embedding boundary:
   drained buffered body content, before the footer's own separator/output.
 - `0039-observe-tag-and-item-display-points.patch` observes real pager-tag
   call sites and item starts as unresolved terminal buffer gaps, without
+  changing formatter output.
+- `0040-observe-post-pre-region-points.patch` observes non-cell region starts
+  after native pre handlers as unresolved terminal buffer gaps, without
   changing formatter output.
 
 Upstream already provides `MR`, modern standard names, root-element scope

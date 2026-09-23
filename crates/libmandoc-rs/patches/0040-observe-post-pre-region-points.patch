@@ -1,0 +1,108 @@
+Subject: observe native region positions after pre handlers
+Upstream-Status: Local embedding (not submitted)
+
+Report an unresolved terminal buffer gap for each non-cell region after
+its native pre handler has applied spacing.  man(7) IP/TP pre handlers may
+print HEAD children themselves, so their event is a post-pre candidate
+used for an empty final selection, not the start of nonempty head text.
+The table path reports after its preceding-line flush; the equation path
+reports immediately before eqn_term.c::term_eqn/eqn_box, which can remain
+inline with surrounding text.  The observer follows these gaps through
+field consumption and the final device surface; no formatter behavior or
+output changes.
+
+--- a/man_term.c
++++ b/man_term.c
+@@ -971,6 +971,7 @@ print_man_node(DECL_ARGS)
+ 	case ROFFT_EQN:
+ 		if ( ! (n->flags & NODE_LINE))
+ 			p->flags |= TERMP_NOSPACE;
++		term_collect_region_point(p, n);
+ 		term_eqn(p, n->eqn);
+ 		if (n->next != NULL && ! (n->next->flags & NODE_LINE))
+ 			p->flags |= TERMP_NOSPACE;
+@@ -980,6 +981,7 @@ print_man_node(DECL_ARGS)
+ 	case ROFFT_TBL:
+ 		if (p->tbl.cols == NULL)
+ 			term_newln(p);
++		term_collect_region_point(p, n);
+ 		/* The preceding display has now flushed, but term_tbl() has not
+ 		 * emitted a frame or cell.  Observe this ownership boundary. */
+ 		term_collect_node(p, n, TERM_COLLECT_CHILD);
+@@ -1005,6 +1007,11 @@ print_man_node(DECL_ARGS)
+ 	c = 1;
+ 	if (act->pre != NULL)
+ 		c = (*act->pre)(p, mt, n, meta);
++	if ((n->type == ROFFT_HEAD || n->type == ROFFT_BODY) &&
++	    (n->tok == MAN_SH || n->tok == MAN_SS ||
++	    n->tok == MAN_TP || n->tok == MAN_TQ ||
++	    n->tok == MAN_IP))
++		term_collect_region_point(p, n);
+ 
+ 	if (c && n->child != NULL) {
+ 		term_collect_node(p, n, TERM_COLLECT_CHILD);
+--- a/mdoc_term.c
++++ b/mdoc_term.c
+@@ -391,6 +391,7 @@ print_mdoc_node(DECL_ARGS)
+ 	case ROFFT_EQN:
+ 		if ( ! (n->flags & NODE_LINE))
+ 			p->flags |= TERMP_NOSPACE;
++		term_collect_region_point(p, n);
+ 		term_eqn(p, n->eqn);
+ 		if (n->next != NULL && ! (n->next->flags & NODE_LINE))
+ 			p->flags |= TERMP_NOSPACE;
+@@ -398,6 +399,7 @@ print_mdoc_node(DECL_ARGS)
+ 	case ROFFT_TBL:
+ 		if (p->tbl.cols == NULL)
+ 			term_newln(p);
++		term_collect_region_point(p, n);
+ 		/* Match the man terminal path: notify the observer only after
+ 		 * the prior line flush and before native table drawing. */
+ 		term_collect_node(p, n, TERM_COLLECT_CHILD);
+@@ -417,6 +419,13 @@ print_mdoc_node(DECL_ARGS)
+ 			chld = (*act->pre)(p, &npair, meta, n);
+ 		break;
+ 	}
++	if ((n->type == ROFFT_HEAD || n->type == ROFFT_BODY) &&
++	    (n->tok == MDOC_Sh || n->tok == MDOC_Ss ||
++	    n->tok == MDOC_It))
++		term_collect_region_point(p, n);
++	else if (n->type == ROFFT_BLOCK &&
++	    (n->tok == MDOC_Bl || n->tok == MDOC_Bd))
++		term_collect_region_point(p, n);
+ 
+ 	if (chld && n->child) {
+ 		term_collect_node(p, n, TERM_COLLECT_CHILD);
+--- a/term.c
++++ b/term.c
+@@ -136,6 +136,12 @@ term_collect_owner_point(struct termp *p, const struct roff_node *n)
+ 	term_collect_point(p, n, TERM_COLLECT_OWNER_POINT);
+ }
+ 
++void
++term_collect_region_point(struct termp *p, const struct roff_node *n)
++{
++	term_collect_point(p, n, TERM_COLLECT_REGION_POINT);
++}
++
+ void
+ term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
+ 		enum term_collector_phase phase)
+--- a/term.h
++++ b/term.h
+@@ -55,6 +55,7 @@ enum term_collector_op {
+ 	TERM_COLLECT_NODE,
+ 	TERM_COLLECT_TAG_POINT,
+ 	TERM_COLLECT_OWNER_POINT,
++	TERM_COLLECT_REGION_POINT,
+ 	TERM_COLLECT_TABLE_CELL,
+ 	TERM_COLLECT_TABLE_CELL_POSITION,
+ 	TERM_COLLECT_OUTPUT,
+@@ -229,6 +230,7 @@ void		  term_collect_node(struct termp *, const struct roff_node *,
+ 			enum term_collector_phase);
+ void		  term_collect_tag_point(struct termp *, const struct roff_node *);
+ void		  term_collect_owner_point(struct termp *, const struct roff_node *);
++void		  term_collect_region_point(struct termp *, const struct roff_node *);
+ void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
+ 			enum term_collector_phase);
+ void		  term_collect_table_cell_position(struct termp *, size_t, size_t);

@@ -56,6 +56,7 @@ struct annotated_frame {
 	uint64_t saved_link_epoch;
 	uint32_t owner_mark;
 	uint32_t anchor_mark;
+	uint32_t region_mark;
 };
 
 struct annotated_point_state {
@@ -402,7 +403,8 @@ arm_point(struct mant_annotated_collector *collector, struct termp *p,
 	}
 	frame = collector->frames + collector->frame_count - 1;
 	key = event->op == TERM_COLLECT_TAG_POINT ?
-	    frame->anchor_mark : frame->owner_mark;
+	    frame->anchor_mark : event->op == TERM_COLLECT_OWNER_POINT ?
+	    frame->owner_mark : frame->region_mark;
 	/* tag.c::tag_put() leaves `tag` NULL for an unchanged implicit
 	 * heading ID; term_tag_write() falls back to the first child string.
 	 * R01 AnchorMarks cover only stored target declarations, as push_node()
@@ -780,7 +782,7 @@ push_node(struct mant_annotated_collector *collector,
 	frame->saved_link_node = collector->active_link_node;
 	frame->saved_heading = collector->active_heading;
 	frame->saved_link_epoch = collector->active_link_epoch;
-	frame->owner_mark = frame->anchor_mark = 0;
+	frame->owner_mark = frame->anchor_mark = frame->region_mark = 0;
 
 	/* man_macro.c::blk_imp and mdoc_macro.c::blk_full produce a block
 	 * with distinct HEAD/BODY scopes.  Their terminal traversal emits
@@ -818,6 +820,7 @@ push_node(struct mant_annotated_collector *collector,
 		if (key == 0)
 			return 0;
 		collector->active_owner = key;
+		frame->region_mark = key;
 	} else if (node->type == ROFFT_TBL ||
 	    node->type == ROFFT_EQN) {
 		if (node->type == ROFFT_TBL && collector->table_node != NULL) {
@@ -833,6 +836,7 @@ push_node(struct mant_annotated_collector *collector,
 		if (key == 0)
 			return 0;
 		collector->active_owner = key;
+		frame->region_mark = key;
 		if (node->type == ROFFT_TBL) {
 			collector->table_node = node;
 			collector->cell_count = 0;
@@ -869,6 +873,7 @@ push_node(struct mant_annotated_collector *collector,
 		    MANT_ANNOTATED_MARK_REGION, parent, region_kind, NULL);
 		if (key == 0)
 			return 0;
+		frame->region_mark = key;
 		/* add_mark() may reallocate the array, so reselect parent. */
 		parent_mark = collector->marks + parent - 1;
 		if (node->type == ROFFT_HEAD)
@@ -1430,6 +1435,7 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		return;
 	case TERM_COLLECT_TAG_POINT:
 	case TERM_COLLECT_OWNER_POINT:
+	case TERM_COLLECT_REGION_POINT:
 		arm_point(collector, p, event);
 		return;
 	case TERM_COLLECT_TABLE_CELL:
@@ -1897,7 +1903,9 @@ mant_annotated_collector_finish_points(struct mant_annotated_collector *collecto
 		mark = collector->marks + index;
 		state = collector->points + index;
 		if (state->state == 0) {
-			if (mark->kind == MANT_ANNOTATED_MARK_ANCHOR) {
+			if (mark->kind == MANT_ANNOTATED_MARK_ANCHOR ||
+			    (mark->kind == MANT_ANNOTATED_MARK_REGION &&
+			    mark->region_kind != MANT_ANNOTATED_REGION_TABLE_CELL)) {
 				fail_relation(collector, mark->key, 0);
 				return 0;
 			}

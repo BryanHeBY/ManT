@@ -930,8 +930,16 @@ fn transfer(
             return Err(invalid_result());
         }
         let point = match mark.point_kind {
-            0 if mark.point_row == 0 && mark.point_column == 0 && mark.kind != 4 => None,
-            1 if (mark.kind == 2 || mark.kind == 4) && mark.point_row != 0 => {
+            0 if mark.point_row == 0
+                && mark.point_column == 0
+                && mark.kind != 4
+                && (mark.kind != 5 || mark.region_kind == 9) =>
+            {
+                None
+            }
+            1 if (mark.kind == 2 || mark.kind == 4 || mark.kind == 5 && mark.region_kind != 9)
+                && mark.point_row != 0 =>
+            {
                 let row = rows
                     .get(usize::try_from(mark.point_row - 1).map_err(|_| invalid_result())?)
                     .ok_or_else(invalid_result)?;
@@ -943,7 +951,7 @@ fn transfer(
                     column: mark.point_column,
                 })
             }
-            2 if (mark.kind == 2 || mark.kind == 4)
+            2 if (mark.kind == 2 || mark.kind == 4 || mark.kind == 5 && mark.region_kind != 9)
                 && mark.point_row == view.display.row_count
                 && mark.point_column == 0 =>
             {

@@ -181,3 +181,134 @@ fn tag_after_overstrike_uses_the_surviving_display_column() {
         }
     );
 }
+
+#[test]
+fn empty_man_owner_head_and_body_regions_have_their_own_points() {
+    // Both exact inputs ran on pinned CVS -Ttree/-Tutf8 -O width=78.
+    // man_term.c::pre_TP establishes HEAD/BODY separately; post_TP flushes
+    // the head before a missing body can be assigned its final position.
+    let empty_head = render(b".TH X 1\n.SH D\n.TP\n\\&\nbody\n", InputFormat::Man);
+    let head = empty_head
+        .marks
+        .iter()
+        .find(|mark| mark.kind == 5 && mark.region_kind == 3)
+        .unwrap();
+    assert_eq!(head.selection_count, 0);
+    valid_point(&empty_head, head.point.expect("empty TP head point"));
+
+    let empty_body = render(b".TH X 1\n.SH D\n.TP\nterm\n", InputFormat::Man);
+    let body = empty_body
+        .marks
+        .iter()
+        .find(|mark| mark.kind == 5 && mark.region_kind == 4)
+        .unwrap();
+    assert_eq!(body.selection_count, 0);
+    valid_point(&empty_body, body.point.expect("empty TP body point"));
+}
+
+#[test]
+fn empty_mdoc_list_item_and_literal_regions_do_not_borrow_following_text() {
+    // Exact inputs ran on pinned CVS -Ttree/-Tutf8 -O width=78.
+    // mdoc_term.c::termp_it_pre and termp_bd_pre apply spacing before their
+    // structural starts; subsequent text must not supply an empty selection.
+    let item = render(
+        b".Dd September 23, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bl -tag\n.It\n.El\n",
+        InputFormat::Mdoc,
+    );
+    for kind in [3, 4, 5] {
+        let region = item
+            .marks
+            .iter()
+            .find(|mark| mark.kind == 5 && mark.region_kind == kind)
+            .unwrap();
+        assert_eq!(region.selection_count, 0);
+        valid_point(&item, region.point.expect("empty list region point"));
+    }
+
+    let literal = render(
+        b".Dd September 23, 2026\n.Dt X 1\n.Os\n.Sh D\n.Bd -literal\n.Ed\nafter\n",
+        InputFormat::Mdoc,
+    );
+    let region = literal
+        .marks
+        .iter()
+        .find(|mark| mark.kind == 5 && mark.region_kind == 6)
+        .unwrap();
+    assert_eq!(region.selection_count, 0);
+    valid_point(&literal, region.point.expect("empty literal point"));
+    assert_eq!(text_column(&literal, "after").1, 5);
+}
+
+#[test]
+fn empty_section_body_points_to_its_own_boundary_before_next_title() {
+    // Exact input ran on pinned CVS -Ttree/-Tutf8 -O width=78.
+    // man_term.c::post_SH flushes FIRST's head before its empty BODY;
+    // pre_SH suppresses extra vspace before NEXT because FIRST is empty.
+    let page = render(b".TH X 1\n.SH FIRST\n.SH NEXT\ntext\n", InputFormat::Man);
+    let body = page
+        .marks
+        .iter()
+        .find(|mark| mark.kind == 5 && mark.region_kind == 2)
+        .unwrap();
+    assert_eq!(body.selection_count, 0);
+    let (next_row, _) = text_column(&page, "NEXT");
+    assert_eq!(
+        body.point,
+        Some(AnnotatedDisplayPoint::RowColumn {
+            row: next_row,
+            column: 0
+        })
+    );
+}
+
+#[test]
+fn empty_display_and_inline_equations_keep_final_region_points() {
+    // Both exact inputs ran on pinned CVS -Ttree/-Thtml/-Tutf8 -O width=78.
+    // eqn_term.c::term_eqn calls eqn_box() directly: an empty box emits no
+    // glyph and may remain inline between surrounding authored words.
+    let standalone = render(
+        b".TH X 1\n.SH D\nbefore\n.EQ\n.EN\nafter\n",
+        InputFormat::Man,
+    );
+    let region = standalone
+        .marks
+        .iter()
+        .find(|mark| mark.kind == 5 && mark.region_kind == 8 && mark.line == 4)
+        .unwrap();
+    assert_eq!(region.selection_count, 0);
+    let (before_row, before_col) = text_column(&standalone, "before");
+    let (after_row, after_col) = text_column(&standalone, "after");
+    assert_eq!(before_row, after_row);
+    match region.point.expect("empty display equation point") {
+        AnnotatedDisplayPoint::RowColumn { row, column } => {
+            assert_eq!(row, before_row);
+            assert!((before_col + 6..=after_col).contains(&column));
+        }
+        point @ AnnotatedDisplayPoint::DocumentEnd { .. } => {
+            panic!("equation lost its inline row: {point:?}")
+        }
+    }
+
+    let inline = render(
+        b".TH X 1\n.SH D\n.EQ\ndelim $$\n.EN\nbefore $$ after\n",
+        InputFormat::Man,
+    );
+    let region = inline
+        .marks
+        .iter()
+        .find(|mark| mark.kind == 5 && mark.region_kind == 8 && mark.line == 6)
+        .unwrap();
+    assert_eq!(region.selection_count, 0);
+    let (before_row, before_col) = text_column(&inline, "before");
+    let (after_row, after_col) = text_column(&inline, "after");
+    assert_eq!(before_row, after_row);
+    match region.point.expect("empty inline equation point") {
+        AnnotatedDisplayPoint::RowColumn { row, column } => {
+            assert_eq!(row, before_row);
+            assert!((before_col + 6..=after_col).contains(&column));
+        }
+        point @ AnnotatedDisplayPoint::DocumentEnd { .. } => {
+            panic!("inline equation lost its row: {point:?}")
+        }
+    }
+}
