@@ -450,6 +450,10 @@ pub struct TableCell {
     /// Requested horizontal alignment, if explicitly known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alignment: Option<TableAlignment>,
+    /// Original declaration of this cell, independent of the table row and
+    /// of any generated border or placement. Unknown for synthetic cells.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<SourceSpan>,
 }
 
 /// Effective content role of one table cell.

@@ -421,6 +421,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
             column_span: 1,
             row_span: 1,
             alignment: None,
+            source: None,
         };
         let table = Block::Table {
             fixed_view: None,

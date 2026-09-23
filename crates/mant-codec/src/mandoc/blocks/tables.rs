@@ -102,6 +102,10 @@ pub(super) fn append_table_row(
                         MandocTableAlignment::Center => AstTableAlignment::Center,
                         MandocTableAlignment::Right => AstTableAlignment::Right,
                     }),
+                    // The legacy row snapshot has no cell-local source
+                    // coordinate. The new structured producer supplies it;
+                    // do not misattribute every cell to the row macro.
+                    source: None,
                 }
             })
             .collect(),

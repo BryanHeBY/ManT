@@ -136,6 +136,7 @@ fn transparent_table_and_list_paths_keep_nested_semantic_coordinates() {
                 column_span: 1,
                 row_span: 1,
                 alignment: None,
+                source: None,
             }],
         }],
         layout: LayoutHint::default(),

@@ -237,6 +237,7 @@ fn table_cell_and_root_semantic_owner_positions_agree_with_scanner() {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     }],
                 }],
                 layout: mant_ir::LayoutHint::default(),

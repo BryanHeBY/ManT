@@ -353,6 +353,7 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     },
                     TableCell {
                         kind: mant_ir::TableCellKind::Text,
@@ -360,6 +361,7 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     },
                 ],
             }],

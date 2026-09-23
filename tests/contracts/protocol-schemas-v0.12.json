@@ -4126,6 +4126,17 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "source": {
+            "description": "Original declaration of this cell, independent of the table row and\nof any generated border or placement. Unknown for synthetic cells.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -8880,6 +8891,17 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "source": {
+            "description": "Original declaration of this cell, independent of the table row and\nof any generated border or placement. Unknown for synthetic cells.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -15924,6 +15946,17 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "source": {
+            "description": "Original declaration of this cell, independent of the table row and\nof any generated border or placement. Unknown for synthetic cells.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -22549,6 +22582,17 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "source": {
+            "description": "Original declaration of this cell, independent of the table row and\nof any generated border or placement. Unknown for synthetic cells.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

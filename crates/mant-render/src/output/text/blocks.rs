@@ -373,6 +373,7 @@ mod tests {
                 column_span: 2,
                 row_span: 1,
                 alignment: None,
+                source: None,
             };
             let table = Block::Table {
                 fixed_view: None,
@@ -406,6 +407,7 @@ mod tests {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     }],
                 }],
                 layout: LayoutHint {
@@ -431,6 +433,7 @@ mod tests {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     })
                     .into(),
             }],
@@ -461,6 +464,7 @@ mod tests {
                             column_span: 1,
                             row_span: 1,
                             alignment: None,
+                            source: None,
                         },
                         TableCell {
                             kind: mant_ir::TableCellKind::Text,
@@ -468,6 +472,7 @@ mod tests {
                             column_span: 1,
                             row_span: 1,
                             alignment: None,
+                            source: None,
                         },
                     ],
                 },
@@ -544,6 +549,7 @@ mod tests {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 }],
             }],
             layout: LayoutHint::default(),
@@ -585,6 +591,7 @@ mod tests {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     }],
                 }],
                 layout: LayoutHint::default(),
@@ -611,6 +618,7 @@ mod tests {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 }],
             }],
             layout: LayoutHint::default(),
@@ -722,6 +730,7 @@ mod tests {
                                 column_span: 1,
                                 row_span: 1,
                                 alignment: None,
+                                source: None,
                             }],
                         }],
                         layout: LayoutHint::default(),

@@ -58,6 +58,14 @@ pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelati
                 .iter()
                 .map(|record| record.provenance),
         )
+        .chain(document.content_store.fixed_views.iter().flat_map(|view| {
+            std::iter::once(view.provenance).chain(
+                view.lines
+                    .iter()
+                    .flat_map(|line| &line.decorations)
+                    .map(|decoration| decoration.provenance),
+            )
+        }))
     {
         if let Some(span) = provenance_span(provenance) {
             validate_relation_span(document, span)?;
@@ -119,6 +127,14 @@ pub fn document_has_source_spans(document: &Document) -> bool {
                 .iter()
                 .map(|record| record.provenance),
         )
+        .chain(document.content_store.fixed_views.iter().flat_map(|view| {
+            std::iter::once(view.provenance).chain(
+                view.lines
+                    .iter()
+                    .flat_map(|line| &line.decorations)
+                    .map(|decoration| decoration.provenance),
+            )
+        }))
         .any(|provenance| provenance_span(provenance).is_some())
     {
         return true;
@@ -338,6 +354,11 @@ impl<'ir> Visit<'ir> for SourceRelationCollector<'_> {
             | Block::Unsupported { source, .. } => *source,
         };
         self.span(source);
+        if let Block::Table { rows, .. } = block {
+            for cell in rows.iter().flat_map(|row| &row.cells) {
+                self.span(cell.source);
+            }
+        }
         visit::walk_block(self, block);
     }
 

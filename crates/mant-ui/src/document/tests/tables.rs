@@ -31,6 +31,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
             column_span: 2,
             row_span: 1,
             alignment: None,
+            source: None,
         };
         let mut query = bundle();
         let document = query.document.as_mut().unwrap();
@@ -91,6 +92,7 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 },
                 TableCell {
                     kind: mant_ir::TableCellKind::Text,
@@ -98,6 +100,7 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 },
             ],
         }],
@@ -136,6 +139,7 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
         column_span: 1,
         row_span: 1,
         alignment: None,
+        source: None,
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
@@ -182,6 +186,7 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
             column_span: 1,
             row_span: 1,
             alignment: None,
+            source: None,
         }],
     };
     let mut bundle = bundle();
@@ -240,6 +245,7 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 },
                 TableCell {
                     kind: mant_ir::TableCellKind::Text,
@@ -251,6 +257,7 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 },
             ],
         }],
@@ -290,6 +297,7 @@ fn stacked_partial_rule_cells_are_not_dropped() {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 },
                 TableCell {
                     kind: mant_ir::TableCellKind::Text,
@@ -304,6 +312,7 @@ fn stacked_partial_rule_cells_are_not_dropped() {
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: None,
                 },
             ],
         }],
@@ -339,6 +348,7 @@ fn rule_rows_do_not_split_table_wide_column_measurement() {
         column_span: 1,
         row_span: 1,
         alignment: None,
+        source: None,
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {

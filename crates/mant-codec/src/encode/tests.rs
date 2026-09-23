@@ -590,6 +590,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                                 column_span: 1,
                                 row_span: 1,
                                 alignment: None,
+                                source: None,
                             },
                             TableCell {
                                 kind: mant_ir::TableCellKind::Text,
@@ -599,6 +600,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                                 column_span: 1,
                                 row_span: 1,
                                 alignment: None,
+                                source: None,
                             },
                         ],
                     }],

@@ -188,6 +188,26 @@ fn document_deserialization_enforces_dense_rooted_source_relations() {
 }
 
 #[test]
+fn table_cell_source_is_independent_and_checked_at_the_wire_boundary() {
+    let mut document = document_value();
+    document["blocks"] = json!([{
+        "type": "table",
+        "rows": [{
+            "cells": [{
+                "blocks": [],
+                "source": {"source": 2, "line": 1, "column": 1}
+            }]
+        }]
+    }]);
+    let parsed: Document = serde_json::from_value(document.clone()).unwrap();
+    assert!(validate_document_sources(&parsed).is_ok());
+    assert!(mant_ir::document_has_source_spans(&parsed));
+
+    document["blocks"][0]["rows"][0]["cells"][0]["source"]["source"] = json!(3);
+    assert_document_rejected(document);
+}
+
+#[test]
 fn every_nested_span_is_checked_against_its_selected_source() {
     let mut unknown_key = document_value();
     unknown_key["heading"] = json!({"content":[], "source":span(3)});

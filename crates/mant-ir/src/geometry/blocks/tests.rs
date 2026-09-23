@@ -162,6 +162,7 @@ fn nested_reparenting_never_translates_descendants_or_source_twice() {
                 column_span: 1,
                 row_span: 1,
                 alignment: None,
+                source: None,
             }],
         }],
         layout: layout(),

@@ -430,6 +430,9 @@ impl<'ir> Visit<'ir> for InvariantCollector<'ir> {
                 }
             }
             for cell in rows.iter().flat_map(|row| &row.cells) {
+                if let Some(source) = cell.source {
+                    validate_source_span(&mut self.diagnostics, source);
+                }
                 if cell.kind != crate::TableCellKind::Text && !cell.blocks.is_empty() {
                     self.diagnostics.push(invariant(
                         "ir.invalid-table-rule-content",
@@ -935,6 +938,7 @@ mod tests {
                         column_span: 0,
                         row_span: 0,
                         alignment: None,
+                        source: None,
                     }],
                 }],
                 layout: LayoutHint::default(),
@@ -977,6 +981,7 @@ mod tests {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     }],
                 },
                 TableRow {
@@ -995,6 +1000,7 @@ mod tests {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     }],
                 },
             ],

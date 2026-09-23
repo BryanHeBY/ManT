@@ -147,6 +147,7 @@ mod tests {
             column_span: columns,
             row_span: rows,
             alignment: None,
+            source: None,
         }
     }
 

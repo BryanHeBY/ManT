@@ -467,6 +467,7 @@ fn lower_mdoc_column_list(
                     column_span: 1,
                     row_span: 1,
                     alignment: Some(AstTableAlignment::Left),
+                    source: body.first().and_then(source_span),
                 })
                 .collect::<Vec<_>>();
             if let Some(cell) = cells.first_mut() {
@@ -491,6 +492,7 @@ fn lower_mdoc_column_list(
                         column_span: 1,
                         row_span: 1,
                         alignment: Some(AstTableAlignment::Left),
+                        source: None,
                     });
                 }
             }
@@ -571,6 +573,7 @@ fn append_list_targets(
                         column_span: 1,
                         row_span: 1,
                         alignment: Some(AstTableAlignment::Left),
+                        source: None,
                     }],
                 });
             }

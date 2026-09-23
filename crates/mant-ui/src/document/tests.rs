@@ -132,6 +132,7 @@ fn geometry_bundle() -> ResolvedContent {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     },
                     TableCell {
                         kind: mant_ir::TableCellKind::Text,
@@ -139,6 +140,7 @@ fn geometry_bundle() -> ResolvedContent {
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
+                        source: None,
                     },
                 ],
             }],
@@ -401,6 +403,7 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
         column_span,
         row_span: 1,
         alignment: None,
+        source: None,
     };
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
         fixed_view: None,

@@ -415,6 +415,7 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         column_span: 1,
         row_span: 1,
         alignment: None,
+        source: None,
     };
     let table = |cells| Block::Table {
         fixed_view: None,

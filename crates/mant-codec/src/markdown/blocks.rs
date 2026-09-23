@@ -317,11 +317,13 @@ fn parse_table_row(
                     alignment: alignments
                         .get(cells.len())
                         .and_then(|alignment| table_alignment(*alignment)),
+                    source: Some(source.span(&(start..cell_end))),
                 });
             }
             Event::End(actual) if actual == end_tag => break,
             Event::Start(tag) => {
                 let whole = cursor.consume_balanced(range);
+                let cell_source = source.span(&whole);
                 cells.push(TableCell {
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![source.unsupported_block(
@@ -332,6 +334,7 @@ fn parse_table_row(
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
+                    source: Some(cell_source),
                 });
             }
             _ => {}
