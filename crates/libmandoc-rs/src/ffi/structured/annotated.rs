@@ -7,11 +7,10 @@ use super::{
 };
 use crate::annotated::{
     AnnotatedDiagnostic, AnnotatedDocument, AnnotatedError, AnnotatedLabel, AnnotatedLinkTarget,
-    AnnotatedMark,
-    AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow, AnnotatedRun, AnnotatedSource,
-    AnnotatedSpan, AnnotationCheckState, AnnotationCoverage, AnnotationCoverageCheck,
-    AnnotationCoverageIssue, AnnotationDimension, AnnotationIssueReason, AnnotationProducer,
-    AnnotationScope,
+    AnnotatedMark, AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow, AnnotatedRun,
+    AnnotatedSelectionPart, AnnotatedSource, AnnotatedSpan, AnnotatedTextJoin,
+    AnnotationCheckState, AnnotationCoverage, AnnotationCoverageCheck, AnnotationCoverageIssue,
+    AnnotationDimension, AnnotationIssueReason, AnnotationProducer, AnnotationScope,
 };
 use crate::{InputFormat, SourceBundle};
 use std::ptr::NonNull;
@@ -89,6 +88,17 @@ struct MarkView {
     target_b_present: u32,
     target_a: super::BytesView,
     target_b: super::BytesView,
+    selection_first: u32,
+    selection_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SelectionPartView {
+    run: u32,
+    join_before: u32,
+    start_byte: u64,
+    end_byte: u64,
 }
 
 #[repr(C)]
@@ -143,6 +153,7 @@ struct ResultView {
     coverage_checks: SliceView,
     coverage_issues: SliceView,
     display: DisplayView,
+    selection_parts: SliceView,
 }
 
 unsafe extern "C" {
@@ -176,12 +187,17 @@ unsafe extern "C" {
     fn mant_annotated_offsetof_mark_name() -> usize;
     fn mant_annotated_offsetof_mark_table_offset() -> usize;
     fn mant_annotated_offsetof_mark_target_a() -> usize;
+    fn mant_annotated_offsetof_mark_selection_first() -> usize;
+    fn mant_annotated_sizeof_selection_part() -> usize;
+    fn mant_annotated_alignof_selection_part() -> usize;
+    fn mant_annotated_offsetof_selection_part_end_byte() -> usize;
     fn mant_annotated_sizeof_coverage_check() -> usize;
     fn mant_annotated_alignof_coverage_check() -> usize;
     fn mant_annotated_sizeof_coverage_issue() -> usize;
     fn mant_annotated_alignof_coverage_issue() -> usize;
     fn mant_annotated_offsetof_result_view_coverage_checks() -> usize;
     fn mant_annotated_offsetof_result_view_coverage_issues() -> usize;
+    fn mant_annotated_offsetof_result_view_selection_parts() -> usize;
 }
 
 fn invalid_result() -> AnnotatedError {
@@ -231,7 +247,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 4
+        mant_annotated_abi_version() == 5
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -252,8 +268,13 @@ fn check_abi() -> bool {
             && mant_annotated_offsetof_mark_name() == std::mem::offset_of!(MarkView, name)
             && mant_annotated_offsetof_mark_table_offset()
                 == std::mem::offset_of!(MarkView, table_offset)
-            && mant_annotated_offsetof_mark_target_a()
-                == std::mem::offset_of!(MarkView, target_a)
+            && mant_annotated_offsetof_mark_target_a() == std::mem::offset_of!(MarkView, target_a)
+            && mant_annotated_offsetof_mark_selection_first()
+                == std::mem::offset_of!(MarkView, selection_first)
+            && mant_annotated_sizeof_selection_part() == std::mem::size_of::<SelectionPartView>()
+            && mant_annotated_alignof_selection_part() == std::mem::align_of::<SelectionPartView>()
+            && mant_annotated_offsetof_selection_part_end_byte()
+                == std::mem::offset_of!(SelectionPartView, end_byte)
             && mant_annotated_sizeof_coverage_check() == std::mem::size_of::<CoverageCheckView>()
             && mant_annotated_alignof_coverage_check() == std::mem::align_of::<CoverageCheckView>()
             && mant_annotated_sizeof_coverage_issue() == std::mem::size_of::<CoverageIssueView>()
@@ -262,6 +283,8 @@ fn check_abi() -> bool {
                 == std::mem::offset_of!(ResultView, coverage_checks)
             && mant_annotated_offsetof_result_view_coverage_issues()
                 == std::mem::offset_of!(ResultView, coverage_issues)
+            && mant_annotated_offsetof_result_view_selection_parts()
+                == std::mem::offset_of!(ResultView, selection_parts)
     }
 }
 
@@ -520,6 +543,18 @@ fn transfer(
     let diagnostic_views =
         checked_slice::<DiagnosticView>(handle, view.diagnostics, limits.max_diagnostics)?;
     let mark_views = checked_slice::<MarkView>(handle, view.marks, limits.max_transfer_objects)?;
+    if u64::from(view.selection_parts.count) > limits.max_transfer_edges {
+        return Err(transfer_budget(
+            33,
+            u64::from(view.selection_parts.count),
+            limits.max_transfer_edges,
+        ));
+    }
+    let selection_part_views = checked_slice::<SelectionPartView>(
+        handle,
+        view.selection_parts,
+        limits.max_transfer_edges,
+    )?;
     let coverage_check_views =
         checked_slice::<CoverageCheckView>(handle, view.coverage_checks, 24)?;
     let coverage_issue_views = checked_slice::<CoverageIssueView>(
@@ -575,6 +610,7 @@ fn transfer(
         provenance_views.len(),
         diagnostic_views.len(),
         mark_views.len(),
+        selection_part_views.len(),
         coverage_check_views.len(),
         coverage_issue_views.len(),
         rows.len(),
@@ -618,6 +654,10 @@ fn transfer(
         ),
         (mark_views.len(), std::mem::size_of::<AnnotatedMark>()),
         (
+            selection_part_views.len(),
+            std::mem::size_of::<AnnotatedSelectionPart>(),
+        ),
+        (
             coverage_check_views.len(),
             std::mem::size_of::<AnnotationCoverageCheck>(),
         ),
@@ -637,6 +677,9 @@ fn transfer(
     charge(std::mem::size_of::<AnnotatedDocument>() as u64)?;
     charge(std::mem::size_of::<AnnotatedMetadata>() as u64)?;
     charge(text_bytes.len() as u64)?;
+    // Temporary one-byte-per-run census prevents missing or duplicate
+    // direct owner/link selections from masquerading as a complete transfer.
+    charge(runs.len() as u64)?;
     for field in [
         view.metadata.title,
         view.metadata.section,
@@ -839,6 +882,8 @@ fn transfer(
             title_region: mark.title_region,
             body_region: mark.body_region,
             flags: mark.flags,
+            selection_first: mark.selection_first,
+            selection_count: mark.selection_count,
             native_table_position,
             name: if mark.kind == 4 {
                 Some(copy_string(
@@ -937,6 +982,11 @@ fn transfer(
             || run.label.glyph_origin != 0
             || run.label.flags != 0
             || end > view.display.byte_count
+            || run.byte_count == 0
+            || run.label.source as usize > sources.len()
+            || run.label.owner as usize > marks.len()
+            || run.label.link as usize > marks.len()
+            || (run.label.role != 1 && run.label.role != 4)
             || !text_view.is_char_boundary(start_usize)
             || !text_view.is_char_boundary(end_usize)
         {
@@ -957,6 +1007,78 @@ fn transfer(
             },
         });
     }
+    let mut selection_parts = reserve(selection_part_views.len())?;
+    let mut selected = reserve::<u8>(runs.len())?;
+    selected.resize(runs.len(), 0);
+    let mut next_part = 0_usize;
+    for mark in &marks {
+        let first = usize::try_from(mark.selection_first).map_err(|_| invalid_result())?;
+        let count = usize::try_from(mark.selection_count).map_err(|_| invalid_result())?;
+        let end = first.checked_add(count).ok_or_else(invalid_result)?;
+        if first != next_part || end > selection_part_views.len() || (mark.kind == 4 && count != 0)
+        {
+            return Err(invalid_result());
+        }
+        let mut previous_run = 0_u32;
+        for (index, part) in selection_part_views[first..end].iter().enumerate() {
+            if part.run == 0 || part.run <= previous_run {
+                return Err(invalid_result());
+            }
+            let run_index = usize::try_from(part.run - 1).map_err(|_| invalid_result())?;
+            let run = owned_runs.get(run_index).ok_or_else(invalid_result)?;
+            let (bit, direct_key) = if mark.kind == 3 {
+                (2_u8, run.label.link)
+            } else if mark.kind == 1 || mark.kind == 2 || mark.kind == 5 {
+                (1_u8, run.label.owner)
+            } else {
+                return Err(invalid_result());
+            };
+            let join_before = match (index, part.join_before) {
+                (0, 0) => AnnotatedTextJoin::None,
+                (1.., 4) => AnnotatedTextJoin::Unknown,
+                _ => return Err(invalid_result()),
+            };
+            let start = run
+                .byte_start
+                .checked_add(part.start_byte)
+                .ok_or_else(invalid_result)?;
+            let finish = run
+                .byte_start
+                .checked_add(part.end_byte)
+                .ok_or_else(invalid_result)?;
+            if direct_key != mark.key
+                || part.start_byte != 0
+                || part.end_byte != run.byte_count
+                || start >= finish
+                || finish > view.display.byte_count
+                || !text_view
+                    .is_char_boundary(usize::try_from(start).map_err(|_| invalid_result())?)
+                || !text_view
+                    .is_char_boundary(usize::try_from(finish).map_err(|_| invalid_result())?)
+                || selected[run_index] & bit != 0
+            {
+                return Err(invalid_result());
+            }
+            selected[run_index] |= bit;
+            selection_parts.push(AnnotatedSelectionPart {
+                run: part.run,
+                start_byte: part.start_byte,
+                end_byte: part.end_byte,
+                join_before,
+            });
+            previous_run = part.run;
+        }
+        next_part = end;
+    }
+    if next_part != selection_part_views.len() {
+        return Err(invalid_result());
+    }
+    for (index, run) in owned_runs.iter().enumerate() {
+        let expected = u8::from(run.label.owner != 0) | (u8::from(run.label.link != 0) << 1);
+        if selected[index] != expected {
+            return Err(invalid_result());
+        }
+    }
     let mut text = String::new();
     text.try_reserve_exact(text_view.len())
         .map_err(|_| transfer_alloc())?;
@@ -974,6 +1096,7 @@ fn transfer(
         rows: owned_rows,
         runs: owned_runs,
         marks,
+        selection_parts,
         coverage,
     })
 }

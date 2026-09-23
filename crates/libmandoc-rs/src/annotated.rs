@@ -71,6 +71,28 @@ pub struct AnnotatedRun {
     pub label: AnnotatedLabel,
 }
 
+/// One surviving, direct mark selection in a final display run.
+///
+/// Byte offsets are relative to the run's UTF-8 text, not terminal columns.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnnotatedSelectionPart {
+    pub run: u32,
+    pub start_byte: u64,
+    pub end_byte: u64,
+    pub join_before: AnnotatedTextJoin,
+}
+
+/// Known native relationship to the previous part of the same selection.
+///
+/// R01 records `Unknown` between distinct parts until native execution
+/// evidence establishes a more precise relationship.
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnotatedTextJoin {
+    None = 0,
+    Unknown = 4,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnotatedRow {
     pub key: u32,
@@ -94,6 +116,9 @@ pub struct AnnotatedMark {
     pub title_region: u32,
     pub body_region: u32,
     pub flags: u32,
+    /// Half-open range in `AnnotatedDocument::selection_parts`.
+    pub selection_first: u32,
+    pub selection_count: u32,
     /// Native tbl column and offset hint, not a final display point.
     pub native_table_position: Option<(u32, u64)>,
     pub name: Option<String>,
@@ -201,6 +226,8 @@ pub struct AnnotatedDocument {
     pub rows: Vec<AnnotatedRow>,
     pub runs: Vec<AnnotatedRun>,
     pub marks: Vec<AnnotatedMark>,
+    /// Final, surviving direct owner/link selections, grouped by mark key.
+    pub selection_parts: Vec<AnnotatedSelectionPart>,
     pub coverage: AnnotationCoverage,
 }
 

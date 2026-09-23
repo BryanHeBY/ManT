@@ -14,6 +14,8 @@ struct mant_annotated_result {
 	struct mant_annotated_display *display;
 	struct mant_annotated_mark *marks;
 	uint32_t mark_count;
+	struct mant_annotated_selection_part *selection_parts;
+	uint32_t selection_part_count;
 	/* Producer × dimension table, including explicit downstream pending/N/A. */
 	struct mant_annotated_coverage_check coverage_checks[24];
 	struct mant_annotated_coverage_issue *coverage_issues;
@@ -22,6 +24,9 @@ struct mant_annotated_result {
 };
 
 int mant_annotated_result_is_valid(const struct mant_annotated_result *);
+int mant_annotated_build_selection_parts(struct structured_session *,
+	struct mant_annotated_result *,
+	const struct mant_annotated_display_view *);
 int mant_annotated_coverage_build(struct structured_session *,
     struct mant_annotated_result *);
 int mant_annotated_coverage_is_valid(const struct mant_annotated_result *);

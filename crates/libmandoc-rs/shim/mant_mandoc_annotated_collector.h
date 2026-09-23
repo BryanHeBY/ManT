@@ -33,6 +33,23 @@ enum mant_annotated_region_kind {
 	MANT_ANNOTATED_REGION_TABLE_CELL = 9
 };
 
+/* Selection joins are deliberately unresolved in the first native transfer.
+ * No physical row/column adjacency is treated as logical text evidence. */
+enum mant_annotated_text_join {
+	MANT_ANNOTATED_JOIN_NONE = 0,
+	MANT_ANNOTATED_JOIN_DIRECT_CONTACT = 1,
+	MANT_ANNOTATED_JOIN_AUTHORED_SEPARATOR = 2,
+	MANT_ANNOTATED_JOIN_HARD_BOUNDARY = 3,
+	MANT_ANNOTATED_JOIN_UNKNOWN = 4
+};
+
+struct mant_annotated_selection_part {
+	uint32_t run;
+	uint32_t join_before;
+	uint64_t start_byte;
+	uint64_t end_byte;
+};
+
 #define MANT_ANNOTATED_MARK_AUTHORED (1U << 0)
 #define MANT_ANNOTATED_MARK_FINAL_POINT_UNVERIFIED (1U << 1)
 
@@ -63,6 +80,10 @@ struct mant_annotated_mark {
 	uint32_t target_b_present;
 	struct mant_bytes_view target_a;
 	struct mant_bytes_view target_b;
+	/* Zero-based range in the result's shared selection_parts arena.
+	 * Only direct owner and link labels are indexed; ancestors are not copied. */
+	uint32_t selection_first;
+	uint32_t selection_count;
 };
 
 struct mant_annotated_collector_metrics {

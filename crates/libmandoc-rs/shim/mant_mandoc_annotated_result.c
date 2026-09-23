@@ -1,8 +1,123 @@
 /* Checked borrowed view and destruction for one annotated native result. */
 #include "mant_mandoc_annotated_internal.h"
+#include "mant_mandoc_structured_session.h"
 
 #include <stdlib.h>
 #include <string.h>
+
+static int
+count_direct_part(struct structured_session *session,
+    struct mant_annotated_result *result, uint32_t key, uint32_t kind,
+    uint64_t *edges, uint64_t maximum)
+{
+	struct mant_annotated_mark *mark;
+
+	if (key == 0)
+		return 1;
+	if (key > result->mark_count || result->marks == NULL) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_CHECK, 0, key, result->mark_count);
+		return 0;
+	}
+	mark = result->marks + key - 1;
+	if ((kind == MANT_ANNOTATED_MARK_LINK &&
+	    mark->kind != MANT_ANNOTATED_MARK_LINK) ||
+	    (kind == 0 && mark->kind != MANT_ANNOTATED_MARK_OWNER &&
+	    mark->kind != MANT_ANNOTATED_MARK_HEADING &&
+	    mark->kind != MANT_ANNOTATED_MARK_REGION)) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_CHECK, 0, key, kind);
+		return 0;
+	}
+	if (!mant_structured_charge(session, edges, 1, maximum, 33,
+	    MANT_STRUCTURED_STAGE_CHECK))
+		return 0;
+	mark->selection_count++;
+	return 1;
+}
+
+static void
+write_direct_part(struct mant_annotated_result *result, uint32_t key,
+    const struct mant_annotated_display_run *run)
+{
+	struct mant_annotated_mark *mark;
+	struct mant_annotated_selection_part *part;
+
+	if (key == 0)
+		return;
+	mark = result->marks + key - 1;
+	part = result->selection_parts + mark->selection_first +
+	    mark->selection_count;
+	part->run = run->key;
+	part->join_before = mark->selection_count == 0 ?
+	    MANT_ANNOTATED_JOIN_NONE : MANT_ANNOTATED_JOIN_UNKNOWN;
+	part->start_byte = 0;
+	part->end_byte = run->byte_count;
+	mark->selection_count++;
+}
+
+/* Scan final, coalesced runs only.  Native buffer slots and overwritten
+ * display components have already been retired, so no hidden glyph acquires
+ * a public slice.  The result owns one arena partitioned by direct mark;
+ * structural ancestors can later refer to children without copying bytes. */
+int
+mant_annotated_build_selection_parts(struct structured_session *session,
+    struct mant_annotated_result *result,
+    const struct mant_annotated_display_view *display)
+{
+	const struct mant_annotated_display_run *run;
+	uint64_t edges = 0, maximum, work;
+	uint32_t index, first = 0;
+
+	if (session == NULL || result == NULL || display == NULL ||
+	    session->status != MANT_STRUCTURED_OK ||
+	    result->selection_parts != NULL || result->selection_part_count != 0 ||
+	    (result->mark_count != 0 && result->marks == NULL) ||
+	    (display->run_count != 0 && display->runs == NULL)) {
+		if (session != NULL)
+			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+			    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
+		return 0;
+	}
+	work = (uint64_t)display->run_count * 2 + result->mark_count;
+	if (!mant_structured_charge(session, &session->builder_operations, work,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_CHECK))
+		return 0;
+	maximum = session->limits->max_transfer_edges < UINT32_MAX ?
+	    session->limits->max_transfer_edges : UINT32_MAX;
+	for (index = 0; index < display->run_count; index++) {
+		run = display->runs + index;
+		if (run->key != index + 1 || run->byte_count == 0 ||
+		    !count_direct_part(session, result, run->label.owner,
+		    0, &edges, maximum) ||
+		    !count_direct_part(session, result, run->label.link,
+		    MANT_ANNOTATED_MARK_LINK, &edges, maximum))
+			return 0;
+	}
+	for (index = 0; index < result->mark_count; index++) {
+		struct mant_annotated_mark *mark = result->marks + index;
+		uint32_t count = mark->selection_count;
+
+		mark->selection_first = first;
+		first += count;
+		mark->selection_count = 0;
+	}
+	result->selection_part_count = first;
+	if (first != 0) {
+		result->selection_parts = mant_structured_allocate(session,
+		    (uint64_t)first * sizeof(*result->selection_parts), 1,
+		    MANT_STRUCTURED_STAGE_CHECK);
+		if (result->selection_parts == NULL)
+			return 0;
+	}
+	for (index = 0; index < display->run_count; index++) {
+		run = display->runs + index;
+		write_direct_part(result, run->label.owner, run);
+		write_direct_part(result, run->label.link, run);
+	}
+	return 1;
+}
 
 static int
 zero_bytes(const uint8_t *data, size_t length)
@@ -298,18 +413,73 @@ valid_display(const struct mant_annotated_result *result)
 	return next_run == display.run_count && next_byte == display.byte_count;
 }
 
+static int
+valid_selection_parts(const struct mant_annotated_result *result)
+{
+	struct mant_annotated_display_view display;
+	const struct mant_annotated_selection_part *part;
+	const struct mant_annotated_display_run *run;
+	const struct mant_annotated_mark *mark;
+	uint64_t expected = 0;
+	uint32_t first = 0, previous, i, j;
+
+	if (!mant_annotated_display_finish(result->display, &display) ||
+	    (result->selection_part_count != 0) !=
+	    (result->selection_parts != NULL))
+		return 0;
+	for (i = 0; i < display.run_count; i++) {
+		run = display.runs + i;
+		expected += (run->label.owner != 0) +
+		    (run->label.link != 0);
+	}
+	if (expected != result->selection_part_count)
+		return 0;
+	for (i = 0; i < result->mark_count; i++) {
+		mark = result->marks + i;
+		if (mark->selection_first != first ||
+		    mark->selection_count > result->selection_part_count - first)
+			return 0;
+		previous = 0;
+		for (j = 0; j < mark->selection_count; j++) {
+			part = result->selection_parts + first + j;
+			if (part->run <= previous ||
+			    part->run > display.run_count ||
+			    part->start_byte != 0 ||
+			    part->join_before != (j == 0 ?
+			    MANT_ANNOTATED_JOIN_NONE :
+			    MANT_ANNOTATED_JOIN_UNKNOWN))
+				return 0;
+			run = display.runs + part->run - 1;
+			if (part->end_byte != run->byte_count ||
+			    (mark->kind == MANT_ANNOTATED_MARK_LINK ?
+			    run->label.link : run->label.owner) != mark->key ||
+			    (mark->kind != MANT_ANNOTATED_MARK_LINK &&
+			    mark->kind != MANT_ANNOTATED_MARK_HEADING &&
+			    mark->kind != MANT_ANNOTATED_MARK_OWNER &&
+			    mark->kind != MANT_ANNOTATED_MARK_REGION))
+				return 0;
+			previous = part->run;
+		}
+		first += mark->selection_count;
+	}
+	/* Strict per-mark ordering prevents duplicates; the total equals all
+	 * direct run labels, so no marked final run can be omitted. */
+	return first == result->selection_part_count;
+}
+
 int
 mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 {
 	return result != NULL && result->magic == MANT_ANNOTATED_MAGIC &&
 	    valid_common(result->common) && valid_marks(result) &&
-	    mant_annotated_coverage_is_valid(result) && valid_display(result);
+	    mant_annotated_coverage_is_valid(result) && valid_display(result) &&
+	    valid_selection_parts(result);
 }
 
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 4;
+	return 5;
 }
 
 uint32_t
@@ -362,6 +532,9 @@ mant_annotated_result_view(const struct mant_annotated_result *result,
 	view->coverage_issues = VIEW_SLICE(result->coverage_issues,
 	    result->coverage_issue_count,
 	    struct mant_annotated_coverage_issue);
+	view->selection_parts = VIEW_SLICE(result->selection_parts,
+	    result->selection_part_count,
+	    struct mant_annotated_selection_part);
 	if (!mant_annotated_display_finish(result->display, &view->display))
 		return MANT_STRUCTURED_RELATION;
 	return MANT_STRUCTURED_OK;
@@ -374,6 +547,7 @@ mant_annotated_result_free(struct mant_annotated_result *result)
 		return;
 	mant_annotated_display_free(result->display);
 	mant_annotated_marks_free(result->marks, result->mark_count);
+	free(result->selection_parts);
 	free(result->coverage_issues);
 	mant_structured_result_free(result->common);
 	result->magic = 0;
@@ -414,6 +588,14 @@ size_t mant_annotated_offsetof_mark_table_offset(void)
 { return offsetof(struct mant_annotated_mark, table_offset); }
 size_t mant_annotated_offsetof_mark_target_a(void)
 { return offsetof(struct mant_annotated_mark, target_a); }
+size_t mant_annotated_offsetof_mark_selection_first(void)
+{ return offsetof(struct mant_annotated_mark, selection_first); }
+size_t mant_annotated_sizeof_selection_part(void)
+{ return sizeof(struct mant_annotated_selection_part); }
+size_t mant_annotated_alignof_selection_part(void)
+{ return _Alignof(struct mant_annotated_selection_part); }
+size_t mant_annotated_offsetof_selection_part_end_byte(void)
+{ return offsetof(struct mant_annotated_selection_part, end_byte); }
 size_t mant_annotated_sizeof_coverage_check(void)
 { return sizeof(struct mant_annotated_coverage_check); }
 size_t mant_annotated_alignof_coverage_check(void)
@@ -426,3 +608,5 @@ size_t mant_annotated_offsetof_result_view_coverage_checks(void)
 { return offsetof(struct mant_annotated_result_view, coverage_checks); }
 size_t mant_annotated_offsetof_result_view_coverage_issues(void)
 { return offsetof(struct mant_annotated_result_view, coverage_issues); }
+size_t mant_annotated_offsetof_result_view_selection_parts(void)
+{ return offsetof(struct mant_annotated_result_view, selection_parts); }

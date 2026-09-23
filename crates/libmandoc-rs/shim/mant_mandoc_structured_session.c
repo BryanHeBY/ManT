@@ -524,7 +524,11 @@ native_cleanup:
 				mant_annotated_collector_take_marks(
 				    session.annotated_collector,
 				    &annotated->marks, &annotated->mark_count);
-				if (!mant_annotated_coverage_build(&session, annotated) ||
+				if (!mant_annotated_display_finish(annotated->display,
+				    &display_view) ||
+				    !mant_annotated_build_selection_parts(&session,
+				    annotated, &display_view) ||
+				    !mant_annotated_coverage_build(&session, annotated) ||
 				    !mant_annotated_result_is_valid(annotated))
 					mant_structured_set_failure(&session,
 					    MANT_STRUCTURED_RELATION,

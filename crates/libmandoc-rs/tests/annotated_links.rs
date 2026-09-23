@@ -15,12 +15,14 @@ fn render(source: &[u8], format: InputFormat) -> AnnotatedDocument {
 
 fn labels(page: &AnnotatedDocument, key: u32) -> String {
     let mut out = String::new();
-    for run in &page.runs {
-        if run.label.link == key {
-            let start = usize::try_from(run.byte_start).unwrap();
-            let end = usize::try_from(run.byte_start + run.byte_count).unwrap();
-            out.push_str(&page.text[start..end]);
-        }
+    let mark = &page.marks[usize::try_from(key - 1).unwrap()];
+    let first = usize::try_from(mark.selection_first).unwrap();
+    let count = usize::try_from(mark.selection_count).unwrap();
+    for part in &page.selection_parts[first..first + count] {
+        let run = &page.runs[usize::try_from(part.run - 1).unwrap()];
+        let start = usize::try_from(run.byte_start + part.start_byte).unwrap();
+        let end = usize::try_from(run.byte_start + part.end_byte).unwrap();
+        out.push_str(&page.text[start..end]);
     }
     out
 }
