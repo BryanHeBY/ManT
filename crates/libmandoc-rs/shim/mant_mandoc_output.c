@@ -14,7 +14,10 @@ struct mant_mandoc_output {
 	size_t		 length;
 	size_t		 capacity;
 	size_t		 limit;
+	mant_mandoc_output_sink sink;
+	void		*sink_arg;
 	int		 status;
+	int		 in_callback;
 };
 
 MANT_THREAD_LOCAL struct mant_mandoc_output *active_output;
@@ -29,6 +32,22 @@ mant_mandoc_output_alloc(size_t limit)
 	output = calloc(1, sizeof(*output));
 	if (output != NULL)
 		output->limit = limit;
+	return output;
+}
+
+struct mant_mandoc_output *
+mant_mandoc_output_alloc_sink(size_t limit, mant_mandoc_output_sink sink,
+    void *sink_arg)
+{
+	struct mant_mandoc_output *output;
+
+	if (sink == NULL)
+		return NULL;
+	output = mant_mandoc_output_alloc(limit);
+	if (output != NULL) {
+		output->sink = sink;
+		output->sink_arg = sink_arg;
+	}
 	return output;
 }
 
@@ -51,8 +70,25 @@ mant_mandoc_output_write(const void *data, size_t length)
 	output = active_output;
 	if (output == NULL || output->status != 0 || length == 0)
 		return;
+	if (output->in_callback) {
+		output->status = 3;
+		return;
+	}
 	if (data == NULL || length > output->limit - output->length) {
 		output->status = 1;
+		return;
+	}
+	if (output->sink != NULL) {
+		int accepted;
+
+		output->in_callback = 1;
+		accepted = output->sink(output->sink_arg, data, length);
+		output->in_callback = 0;
+		if (!accepted || output->status != 0) {
+			output->status = 3;
+			return;
+		}
+		output->length += length;
 		return;
 	}
 	if (length <= output->capacity - output->length) {
@@ -119,13 +155,17 @@ mant_mandoc_ctype_locale(void)
 void
 mant_mandoc_output_end(void)
 {
+	if (active_output != NULL && active_output->in_callback) {
+		active_output->status = 3;
+		return;
+	}
 	active_output = NULL;
 }
 
 const unsigned char *
 mant_mandoc_output_data(const struct mant_mandoc_output *output)
 {
-	return output == NULL ? NULL : output->data;
+	return output == NULL || output->sink != NULL ? NULL : output->data;
 }
 
 size_t
@@ -143,6 +183,10 @@ mant_mandoc_output_status(const struct mant_mandoc_output *output)
 void
 mant_mandoc_output_free(struct mant_mandoc_output *output)
 {
+	if (output != NULL && output->in_callback) {
+		output->status = 3;
+		return;
+	}
 	if (active_output == output)
 		active_output = NULL;
 	if (output != NULL) {

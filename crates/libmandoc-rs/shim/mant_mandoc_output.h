@@ -6,7 +6,15 @@
 
 struct mant_mandoc_output;
 
+/* A sink consumes each native write before the next write begins. Returning
+ * zero records a hard output failure; it must not retain the borrowed bytes
+ * or call begin/write/end/free recursively on this thread. The implementation
+ * detects recursive write/end/free and makes the active call fail closed. */
+typedef int (*mant_mandoc_output_sink)(void *, const void *, size_t);
+
 struct mant_mandoc_output *mant_mandoc_output_alloc(size_t);
+struct mant_mandoc_output *mant_mandoc_output_alloc_sink(size_t,
+    mant_mandoc_output_sink, void *);
 int mant_mandoc_output_begin(struct mant_mandoc_output *);
 void mant_mandoc_output_write(const void *, size_t);
 void mant_mandoc_output_utf8(int);
