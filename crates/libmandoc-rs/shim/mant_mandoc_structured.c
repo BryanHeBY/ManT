@@ -718,9 +718,6 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 			session->node_stack[session->node_depth++] = event->node;
 			if (!mant_structured_enter_node(session, event->node))
 				return;
-			if (event->node != NULL && event->node->type == ROFFT_TBL &&
-			    !mant_structured_table_enter(session, event->node))
-				return;
 			if (event->node != NULL && (event->node->tok == MAN_SH ||
 			    event->node->tok == MDOC_Sh ||
 			    event->node->tok == MAN_PP ||
@@ -745,6 +742,29 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 					return;
 			}
 			mant_structured_address_enter_node(session, event->node);
+		} else if (event->phase == TERM_COLLECT_CHILD) {
+			/* man_term.c and mdoc_term.c report table readiness only
+			 * after term_newln has flushed the preceding display, but
+			 * before term_tbl can draw a frame or bind a cell. */
+			if (event->node != NULL && event->node->type == ROFFT_TBL) {
+				mant_structured_fixed_close_display(session, p);
+				if (session->status == MANT_STRUCTURED_OK)
+					mant_structured_table_enter(session, event->node);
+			} else if (event->node != NULL &&
+			    (event->node->tok == MAN_PP ||
+			    event->node->tok == MAN_LP ||
+			    event->node->tok == MAN_P)) {
+				/* Their pre handlers have completed native vertical
+				 * spacing.  The next child starts a new content scope. */
+				mant_structured_fixed_close_display(session, p);
+			}
+		} else if (event->phase == TERM_COLLECT_POST) {
+			if (event->node != NULL &&
+			    (event->node->tok == MDOC_Pp ||
+			    ((event->node->tok == MAN_PP ||
+			    event->node->tok == MAN_LP ||
+			    event->node->tok == MAN_P) && event->node->child == NULL)))
+				mant_structured_fixed_close_display(session, p);
 		} else if (event->phase == TERM_COLLECT_LEAVE) {
 			if (session->node_depth == 0 ||
 			    session->node_stack[session->node_depth - 1] != event->node) {

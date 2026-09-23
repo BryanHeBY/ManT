@@ -976,6 +976,9 @@ print_man_node(DECL_ARGS)
 	case ROFFT_TBL:
 		if (p->tbl.cols == NULL)
 			term_newln(p);
+		/* The preceding display has now flushed, but term_tbl() has not
+		 * emitted a frame or cell.  Observe this ownership boundary. */
+		term_collect_node(p, n, TERM_COLLECT_CHILD);
 		term_tbl(p, n->span);
 		term_collect_node(p, n, TERM_COLLECT_POST);
 		term_collect_node(p, n, TERM_COLLECT_LEAVE);

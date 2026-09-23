@@ -6,6 +6,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::LinkTarget;
 
 use super::fixed::placement_display;
+use super::scalar::ScalarBoundaryIndex;
 use super::{
     CellMapKind, ContentAtomKey, ContentAtomKind, ContentRootKey, ContentStore, LinkLabelPart,
     LinkOccurrenceKey, PlacementTarget, PointBoundary,
@@ -150,11 +151,11 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
     // quadratic in the number of zero-width destinations.
     let mut atom_scalar_prefix = vec![0_u32; store.atoms.len()];
     let mut root_scalar_total = vec![0_u32; store.roots.len()];
-    // Root points are ordered by scalar boundary. Once a point is accepted,
-    // later points in the same atom can only move forward. Count just the
-    // newly crossed UTF-8 slice instead of rescanning a long atom for every
-    // zero-width destination at (or near) its end.
-    let mut in_atom_progress = vec![(0_usize, 0_u32); store.atoms.len()];
+    // A bounded checkpoint lookup also handles points and physical slices
+    // whose atom byte offsets are not presented in monotone order.
+    let scalar_index = ScalarBoundaryIndex::build(store).ok_or_else(|| ContentStoreError {
+        detail: "fixed scalar index exceeds available resources".to_owned(),
+    })?;
     for root in &store.roots {
         let mut offset = 0_u32;
         for &key in &root.atoms {
@@ -203,29 +204,11 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
                 }
                 let index = atom.index().expect("validated atom key fits usize");
                 let prefix = atom_scalar_prefix[index];
-                let end = byte_offset as usize;
-                let (last_byte, last_scalar) = &mut in_atom_progress[index];
-                let (slice, prior) = if end >= *last_byte {
-                    (&text[*last_byte..end], *last_scalar)
-                } else {
-                    // An out-of-order point is invalid once its claimed
-                    // scalar is checked below. Keep that diagnostic rather
-                    // than assuming input validation has already succeeded.
-                    (&text[..end], 0)
-                };
-                let counted = prior
-                    .checked_add(u32::try_from(slice.chars().count()).map_err(|_| {
-                        ContentStoreError {
-                            detail: "content point scalar boundary exceeds u32".to_owned(),
-                        }
-                    })?)
+                let counted = scalar_index
+                    .prefix(index, text, byte_offset as usize)
                     .ok_or_else(|| ContentStoreError {
                         detail: "content point scalar boundary exceeds u32".to_owned(),
                     })?;
-                if end >= *last_byte {
-                    *last_byte = end;
-                    *last_scalar = counted;
-                }
                 prefix
                     .checked_add(counted)
                     .ok_or_else(|| ContentStoreError {
@@ -292,17 +275,17 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
         return invalid("linked atoms and occurrence label parts must correspond exactly once");
     }
     validate_link_nesting(store)?;
-    validate_fixed_views(store, &atom_scalar_prefix)
+    validate_fixed_views(store, &atom_scalar_prefix, &scalar_index)
 }
 
 #[allow(clippy::too_many_lines)] // One pass owns dense geometry, bounded scalar work, and widths.
 fn validate_fixed_views(
     store: &ContentStore,
     atom_scalar_prefix: &[u32],
+    scalar_index: &ScalarBoundaryIndex,
 ) -> Result<(), ContentStoreError> {
     validate_dense(&store.fixed_views, |view| view.key.get(), "fixed view")?;
     let (mut next_line, mut next_placement, mut next_decoration) = (0_usize, 0_usize, 0_usize);
-    let mut scalar_work = 0_usize;
     let mut total_columns = 0_usize;
     for view in &store.fixed_views {
         if store.owner(view.owner).is_none() {
@@ -324,8 +307,8 @@ fn validate_fixed_views(
             })?;
             let mut previous_start = 0_u32;
             let mut previous_end = 0_u32;
-            let mut previous_overlay = false;
-            let mut occupied = Vec::with_capacity(line.placements.len() + line.decorations.len());
+            let mut occupied: Vec<(u32, u32)> =
+                Vec::with_capacity(line.placements.len() + line.decorations.len());
             for placement in &line.placements {
                 if placement.key.index() != Some(next_placement) {
                     return invalid("fixed placement keys must be dense in line order");
@@ -343,22 +326,25 @@ fn validate_fixed_views(
                     return invalid("fixed placement lies outside its physical line");
                 }
                 let overlay = matches!(placement.map, CellMapKind::Overlay {});
-                if !matches!(placement.target, PlacementTarget::Point(_)) {
-                    let same_range = placement.start_column == previous_start
-                        && placement.end_column == previous_end;
-                    if placement.start_column < previous_end
-                        && !(same_range && (overlay || previous_overlay))
-                    {
+                if !matches!(placement.target, PlacementTarget::Point(_))
+                    && placement.start_column < placement.end_column
+                {
+                    let same_origin =
+                        placement.start_column == previous_start && previous_end > previous_start;
+                    if placement.start_column < previous_end && !(same_origin && overlay) {
                         return invalid(
-                            "fixed placements overlap outside one overstrike cell range",
+                            "fixed placements overlap without an observed same-origin overstrike",
                         );
                     }
-                    if !same_range && placement.start_column != placement.end_column {
+                    if same_origin && placement.start_column < previous_end {
+                        if let Some((_, end)) = occupied.last_mut() {
+                            *end = (*end).max(placement.end_column);
+                        }
+                    } else {
                         occupied.push((placement.start_column, placement.end_column));
                     }
                     previous_start = placement.start_column;
                     previous_end = placement.end_column;
-                    previous_overlay = overlay;
                 }
                 match placement.target {
                     PlacementTarget::Point(key) => {
@@ -397,29 +383,19 @@ fn validate_fixed_views(
                         {
                             return invalid("fixed placement contains non-printing glyphs");
                         }
-                        scalar_work = scalar_work
-                            .saturating_add(content.bytes.end as usize)
-                            .saturating_add(text.len());
-                        if scalar_work > 32 * 1024 * 1024 {
-                            return invalid(
-                                "fixed scalar mapping exceeds the validation work limit",
-                            );
-                        }
                         let prefix =
                             atom_scalar_prefix[content.atom.index().expect("valid atom key")];
-                        let Some(start) = prefix.checked_add(
-                            u32::try_from(whole[..content.bytes.start as usize].chars().count())
-                                .map_err(|_| ContentStoreError {
-                                    detail: "fixed scalar boundary exceeds u32".to_owned(),
-                                })?,
-                        ) else {
+                        let atom_index = content.atom.index().expect("valid atom key");
+                        let Some(start) = scalar_index
+                            .prefix(atom_index, whole, content.bytes.start as usize)
+                            .and_then(|boundary| prefix.checked_add(boundary))
+                        else {
                             return invalid("fixed scalar boundary exceeds u32");
                         };
-                        let Some(end) = start.checked_add(
-                            u32::try_from(text.chars().count()).map_err(|_| ContentStoreError {
-                                detail: "fixed scalar boundary exceeds u32".to_owned(),
-                            })?,
-                        ) else {
+                        let Some(end) = scalar_index
+                            .prefix(atom_index, whole, content.bytes.end as usize)
+                            .and_then(|boundary| prefix.checked_add(boundary))
+                        else {
                             return invalid("fixed scalar boundary exceeds u32");
                         };
                         if placement.root_scalar_range != (start..end)

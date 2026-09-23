@@ -43,6 +43,82 @@ utf8_scalar_count(struct mant_bytes_view view, uint64_t length)
 	return count;
 }
 
+#define MANT_SCALAR_CHECKPOINT_STRIDE 64U
+
+static int
+prepare_scalar_checkpoints(const struct mant_structured_result *result,
+    struct structured_session *session)
+{
+	struct mant_structured_result *mutable_result;
+	const struct mant_structured_content_atom_view *atom;
+	uint64_t total;
+	uint32_t i, byte, cursor, scalars;
+
+	total = 0;
+	for (i = 0; i < result->content_atom_count; i++) {
+		atom = result->content_atoms + i;
+		if (atom->text.len > UINT32_MAX ||
+		    atom->text.len / MANT_SCALAR_CHECKPOINT_STRIDE >
+		    UINT32_MAX - total)
+			return 0;
+		total += atom->text.len / MANT_SCALAR_CHECKPOINT_STRIDE;
+	}
+	if (result->validation_checkpoint_ready != 0 &&
+	    result->validation_checkpoint_count != total)
+		return 0;
+	if (result->validation_checkpoint_ready == 0) {
+		if (session == NULL || result->content_atom_count == UINT32_MAX)
+			return 0;
+		mutable_result = (struct mant_structured_result *)result;
+		mutable_result->validation_atom_checkpoint_offsets =
+		    mant_structured_allocate(session,
+		    ((uint64_t)result->content_atom_count + 1) * sizeof(uint32_t),
+		    1, MANT_STRUCTURED_STAGE_CHECK);
+		mutable_result->validation_scalar_checkpoints = total == 0 ? NULL :
+		    mant_structured_allocate(session, total * sizeof(uint32_t), 1,
+		    MANT_STRUCTURED_STAGE_CHECK);
+		if (result->validation_atom_checkpoint_offsets == NULL ||
+		    (total != 0 && result->validation_scalar_checkpoints == NULL))
+			return 0;
+		mutable_result->validation_checkpoint_count = (uint32_t)total;
+		mutable_result->validation_checkpoint_ready = 1;
+	}
+	cursor = 0;
+	for (i = 0; i < result->content_atom_count; i++) {
+		atom = result->content_atoms + i;
+		result->validation_atom_checkpoint_offsets[i] = cursor;
+		scalars = 0;
+		for (byte = 0; byte < atom->text.len; byte++) {
+			if ((atom->text.ptr[byte] & 0xc0) != 0x80)
+				scalars++;
+			if ((byte + 1) % MANT_SCALAR_CHECKPOINT_STRIDE == 0)
+				result->validation_scalar_checkpoints[cursor++] = scalars;
+		}
+	}
+	result->validation_atom_checkpoint_offsets[result->content_atom_count] =
+	    cursor;
+	return cursor == total;
+}
+
+uint64_t
+mant_structured_atom_scalar_prefix(const struct mant_structured_result *result,
+    uint32_t atom_key, uint32_t offset)
+{
+	const struct mant_structured_content_atom_view *atom;
+	uint32_t checkpoint, begin;
+	uint64_t prefix;
+
+	atom = result->content_atoms + atom_key - 1;
+	checkpoint = offset / MANT_SCALAR_CHECKPOINT_STRIDE;
+	begin = checkpoint * MANT_SCALAR_CHECKPOINT_STRIDE;
+	prefix = checkpoint == 0 ? 0 :
+	    result->validation_scalar_checkpoints[
+	    result->validation_atom_checkpoint_offsets[atom_key - 1] +
+	    checkpoint - 1];
+	return prefix + utf8_scalar_count((struct mant_bytes_view){
+	    atom->text.ptr + begin, offset - begin}, offset - begin);
+}
+
 static int
 allocation_fits(uint32_t count, size_t item_size)
 {
@@ -446,6 +522,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 		} else
 			return 0;
 	}
+	if (!prepare_scalar_checkpoints(result, session))
+		return 0;
 	for (i = 0; i < result->content_ref_count; i++) {
 		content_ref = result->content_refs + i;
 		if (content_ref->reserved != 0 || content_ref->atom == 0 ||
@@ -544,7 +622,8 @@ mant_structured_result_is_valid(const struct mant_structured_result *result,
 				return 0;
 			expected_scalar =
 			    result->validation_atom_scalar_offsets[point->atom - 1] +
-			    utf8_scalar_count(atom->text, point->byte_offset);
+			    mant_structured_atom_scalar_prefix(result, point->atom,
+			    point->byte_offset);
 		} else
 			return 0;
 		if (expected_scalar > UINT32_MAX ||
@@ -1116,6 +1195,8 @@ mant_structured_result_free(struct mant_structured_result *result)
 	free(result->validation_root_atom_offsets);
 	free(result->validation_root_atoms);
 	free(result->validation_atom_scalar_offsets);
+	free(result->validation_atom_checkpoint_offsets);
+	free(result->validation_scalar_checkpoints);
 	free(result->validation_root_scalar_totals);
 	result->magic = 0;
 	free(result);

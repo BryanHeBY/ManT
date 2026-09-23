@@ -36,6 +36,125 @@ fn simple_table_retains_data_and_empty_cell_roots() {
 }
 
 #[test]
+fn explicit_tbl_width_and_spacing_select_native_geometry() {
+    // Each exact input was run through fixed CVS UTF-8/78 first.  In
+    // tbl_layout.c::mods, SIZE_MAX means unspecified spacing while l0 is an
+    // explicit zero; out.c::tblcalc applies both spacing and minimum width.
+    for (layout, fixed) in [
+        ("l l.", false),
+        ("l0 l.", true),
+        ("l9 l.", true),
+        ("lw(20n) l.", true),
+    ] {
+        let source = format!(".TH T 1\n.SH D\n.TS\ntab(;);\n{layout}\na;b\n.TE\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert("spacing.1", source.into_bytes()).unwrap();
+        let document = render_prelude(
+            "spacing.1",
+            &bundle,
+            InputFormat::Man,
+            78,
+            &Limits::default(),
+        )
+        .expect("explicit native table geometry is retained");
+        assert_eq!(document.tables.len(), 1);
+        assert_eq!(document.tables[0].fixed_view.is_some(), fixed, "{layout}");
+    }
+}
+
+#[test]
+fn boxed_cell_overstrike_keeps_native_overlay_placement() {
+    // Exact source was run with fixed CVS UTF-8/78.  tbl_term.c::tbl_word
+    // passes cell text through term.c::term_field; its backspace precedes the
+    // next FIELD_PLACE even when the cell is inside a drawn frame.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "overlay.1",
+            b".TH T 1\n.SH D\n.TS\nbox tab(;);\nl l.\n\\zAB;x\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "overlay.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("boxed native cell overstrike is a valid fixed result");
+    assert_eq!(document.tables.len(), 1);
+    assert!(document.tables[0].fixed_view.is_some());
+    assert!(
+        document
+            .placements
+            .iter()
+            .any(|placement| placement.cell_map_kind == 3)
+    );
+}
+
+#[test]
+fn nofill_display_finishes_before_table_scope_binds_cells() {
+    // Each exact source was run through fixed CVS UTF-8/78.  In both
+    // man_term.c and mdoc_term.c, the ROFFT_TBL path calls term_newln before
+    // term_tbl; the observer switches ownership after that flush, before
+    // the table frame or first cell can be emitted.
+    for (name, format, source, fixed_table) in [
+        (
+            "plain.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.TS\ntab(;);\nl l.\na;b\n.TE\n.fi\n",
+            false,
+        ),
+        (
+            "boxed.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.TS\nbox tab(;);\nl l.\na;b\n.TE\n.fi\n",
+            true,
+        ),
+        (
+            "literal.1",
+            InputFormat::Mdoc,
+            ".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\nbefore\n.TS\ntab(;);\nl l.\na;b\n.TE\n.Ed\n",
+            false,
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = render_prelude(name, &bundle, format, 78, &Limits::default())
+            .expect("the preceding no-fill line and table cells remain distinct");
+        assert_eq!(document.tables.len(), 1, "{name}");
+        assert_eq!(document.table_cells.len(), 2, "{name}");
+        assert_eq!(
+            document.tables[0].fixed_view.is_some(),
+            fixed_table,
+            "{name}"
+        );
+        let before = document
+            .content_atoms
+            .iter()
+            .find(|atom| atom.text == "before")
+            .expect("preceding fixed body atom");
+        let prior_view = document.fixed_views[0].key;
+        let prior_lines = document
+            .fixed_lines
+            .iter()
+            .filter(|line| line.view == prior_view)
+            .map(|line| line.key)
+            .collect::<Vec<_>>();
+        assert!(
+            document.placements.iter().any(|placement| {
+                placement.atom == Some(before.key) && prior_lines.contains(&placement.line)
+            }),
+            "{name}: the prior physical line stays in its display"
+        );
+        for cell in &document.table_cells {
+            let root = document.content_points[(cell.point.expect("cell point") - 1) as usize].root;
+            assert_ne!(root, before.root, "{name}: cell has its own root");
+        }
+    }
+}
+
+#[test]
 fn table_count_budgets_are_independent_and_recover() {
     // Exact two-table, three-row, six-cell input was checked with fixed CVS
     // UTF-8/78. tbl_term.c::term_tbl executes each table and row; these

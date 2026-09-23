@@ -125,6 +125,12 @@ struct structured_session {
 	uint32_t active_fixed_line;
 	uint32_t active_fixed_display;
 	uint32_t fixed_display_root;
+	/* term.c::term_field emits backspace before moving the physical cursor.
+	 * These fields belong to one active field line, not to a logical token. */
+	uint32_t fixed_last_field_line;
+	uint32_t fixed_last_field_start;
+	uint32_t fixed_last_field_end;
+	uint8_t fixed_overlay_pending;
 	uint32_t fixed_pending_breaks;
 	uint32_t fixed_point_cursor;
 	uint8_t fixed_close_on_footer;

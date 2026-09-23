@@ -34,6 +34,158 @@ fn native_tbl_cells_lower_into_one_shared_content_store() {
 }
 
 #[test]
+fn explicit_tbl_geometry_is_not_reflowed_as_a_generic_table() {
+    // Each exact source was checked with fixed CVS UTF-8/78 first.
+    // tbl_layout.c::mods distinguishes unspecified spacing from l0, while
+    // out.c::tblcalc uses explicit spacing and minimum width for term_tbl.
+    for (layout, expected) in [
+        ("l0 l.", "     ab"),
+        ("l9 l.", "     a         b"),
+        ("lw(20n) l.", "     a                      b"),
+    ] {
+        let source = format!(".TH T 1\n.SH D\n.TS\ntab(;);\n{layout}\na;b\n.TE\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert("geometry.1", source.into_bytes()).unwrap();
+        let document = project_native_manual("geometry.1", &bundle, InputFormat::Man)
+            .expect("explicit tbl geometry reaches final IR");
+        let Block::Table {
+            fixed_view: Some(view),
+            ..
+        } = &document.sections[0].blocks[0]
+        else {
+            panic!("{layout}: explicit geometry requires native fixed view")
+        };
+        assert_eq!(
+            document
+                .content_store
+                .fixed_view(*view)
+                .unwrap()
+                .physical_lines(document.content())
+                .unwrap(),
+            [expected],
+            "{layout}"
+        );
+    }
+}
+
+#[test]
+fn nofill_scope_handoff_keeps_one_visible_copy_of_each_body() {
+    use mant_ir::ResolvedContent;
+    use mant_ui::DocumentView;
+
+    // Exact man and mdoc sources were checked with fixed CVS UTF-8/78.
+    // Their native paragraph pre handlers flush the prior no-fill line; a
+    // new block cannot also be placed in the prior fixed display.
+    for (name, format, source) in [
+        (
+            "pp.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.PP\nafter\n.fi\n",
+        ),
+        (
+            "pp-mdoc.1",
+            InputFormat::Mdoc,
+            ".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\nbefore\n.Pp\nafter\n.Ed\n",
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = project_native_manual(name, &bundle, format)
+            .expect("native paragraph boundary reaches final IR");
+        let diagnostics = mant_ir::validate_document(&document);
+        assert!(diagnostics.is_empty(), "{name}: {diagnostics:?}");
+        let resolved = ResolvedContent {
+            label: "T(1)".to_owned(),
+            address: None,
+            document: Some(document),
+            tldr: None,
+        };
+        let rendered = DocumentView::new(&resolved).render(78);
+        assert_eq!(
+            rendered
+                .text
+                .lines
+                .iter()
+                .filter(|line| line.to_string().contains("after"))
+                .count(),
+            1,
+            "{name}: a paragraph must not be shown by both surfaces"
+        );
+    }
+}
+
+#[test]
+fn native_overstrike_has_one_safe_fixed_row_and_keeps_logical_words() {
+    // The exact four sources were checked with fixed CVS UTF-8/78. Its
+    // terminal stream contains backspaces; the structured fixed projection
+    // safely shows the later glyph while preserving both logical scalars.
+    for (body, visible) in [
+        ("\\zAB", "     B"),
+        ("\\o'ab'", "     b"),
+        ("\\z界B", "     B "),
+        ("\\zA界", "     界"),
+    ] {
+        let source = format!(".TH T 1\n.SH D\n.nf\n{body}\n.fi\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert("overstrike.1", source.into_bytes()).unwrap();
+        let document = project_native_manual("overstrike.1", &bundle, InputFormat::Man)
+            .expect("overstrike reaches final IR");
+        assert!(mant_ir::validate_document(&document).is_empty(), "{body}");
+        let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+            panic!("{body}: fixed display")
+        };
+        assert_eq!(
+            document
+                .content_store
+                .fixed_view(*view)
+                .unwrap()
+                .physical_lines(document.content())
+                .unwrap(),
+            [visible],
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn combining_mark_between_backspace_and_glyph_reaches_final_ir() {
+    // Exact source was run through fixed CVS UTF-8/78: term.c::term_field
+    // keeps the zero-column combining mark between A's backspace and B.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "combining.1",
+            ".TH T 1\n.SH D\n.nf\n\\zA\u{301}B\n.fi\n"
+                .as_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("combining.1", &bundle, InputFormat::Man)
+        .expect("combining overstrike reaches final IR");
+    assert!(mant_ir::validate_document(&document).is_empty());
+}
+
+#[test]
+fn mixed_width_long_fixed_line_reaches_final_ir_without_prefix_limit() {
+    // The exact (a界)*2,900 source was run through fixed CVS UTF-8/78 first.
+    // Alternating terminal widths retain 5,800 placement slices, but checked
+    // scalar boundaries are indexed once per atom rather than per prefix.
+    let source = format!(".TH T 1\n.SH D\n.nf\n{}\n.fi\n", "a界".repeat(2_900));
+    let mut bundle = SourceBundle::new();
+    bundle.insert("mixed.1", source.into_bytes()).unwrap();
+    let document = project_native_manual("mixed.1", &bundle, InputFormat::Man)
+        .expect("the mixed-width fixed row reaches final IR");
+    assert!(mant_ir::validate_document(&document).is_empty());
+    let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+        panic!("long no-fill row has one fixed display")
+    };
+    let fixed = document.content_store.fixed_view(*view).unwrap();
+    assert_eq!(fixed.lines.len(), 1);
+    assert_eq!(fixed.lines[0].terminal_columns, 8_705);
+    assert_eq!(fixed.lines[0].placements.len(), 5_800);
+}
+
+#[test]
 fn boxed_tbl_uses_native_physical_rows_and_shared_cell_atoms() {
     // Exact input was checked with fixed CVS -T utf8 -O width=78 before
     // this assertion. tbl_term.c::term_tbl draws the frame while tbl_word

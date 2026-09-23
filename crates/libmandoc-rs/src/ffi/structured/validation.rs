@@ -2,11 +2,13 @@
 
 mod fixed;
 mod preflight;
+mod scalar;
 mod table;
 
 use fixed::validate_fixed;
 pub(super) use preflight::transfer_preflight;
 use preflight::validate_utf8_view;
+use scalar::ScalarBoundaryIndex;
 use table::validate_tables;
 
 use super::{
@@ -263,6 +265,12 @@ pub(super) fn validate_structured_relations(
             .ok_or_else(relation_error)?;
     }
 
+    // A bounded 64-byte checkpoint index makes both in-atom points and
+    // physical placement boundaries independent of prefix length.  The
+    // handle owns the text for the whole validation call; the index retains
+    // counts only, never a borrowed native slice.
+    let scalar_index = ScalarBoundaryIndex::build(slices.content_atoms)?;
+
     let mut root_atom_offsets = Vec::new();
     root_atom_offsets
         .try_reserve_exact(slices.content_roots.len() + 1)
@@ -368,16 +376,15 @@ pub(super) fn validate_structured_relations(
                 {
                     None
                 } else {
-                    atom_index
-                        .and_then(|atom| atom_scalar_starts.get(atom))
-                        .copied()
-                        .and_then(|start| {
-                            utf8_scalar_count(
-                                atom.expect("validated point atom").text,
-                                u64::from(point.byte_offset),
-                            )
-                            .and_then(|prefix| start.checked_add(prefix))
-                        })
+                    atom_index.and_then(|index| {
+                        let start = *atom_scalar_starts.get(index)?;
+                        let prefix = scalar_index.prefix(
+                            index,
+                            atom.expect("validated point atom").text,
+                            point.byte_offset,
+                        )?;
+                        start.checked_add(prefix)
+                    })
                 }
             }
             _ => None,
@@ -717,7 +724,7 @@ pub(super) fn validate_structured_relations(
         return Err(relation_error());
     }
     validate_tables(slices)?;
-    validate_fixed(slices, &atom_scalar_starts)?;
+    validate_fixed(slices, &atom_scalar_starts, &scalar_index)?;
     let mut term_root_evidence = Vec::new();
     term_root_evidence
         .try_reserve_exact(slices.content_roots.len())

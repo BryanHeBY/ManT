@@ -5,12 +5,16 @@ use unicode_width::UnicodeWidthStr;
 use super::super::{
     BLOCK_FIXED_DISPLAY, NativeStructuredError, StructuredSlices, alloc_error, relation_error,
 };
-use super::{dense_key, preflight::validate_utf8_view, utf8_boundary, valid_required_key};
+use super::{
+    dense_key, preflight::validate_utf8_view, scalar::ScalarBoundaryIndex, utf8_boundary,
+    valid_required_key,
+};
 
 #[allow(clippy::too_many_lines)] // Keep the one-pass handle-bound relation checks together.
 pub(super) fn validate_fixed(
     slices: &StructuredSlices<'_>,
     atom_scalar_starts: &[u32],
+    scalar_index: &ScalarBoundaryIndex,
 ) -> Result<(), NativeStructuredError> {
     let mut owner_table = Vec::new();
     owner_table
@@ -94,7 +98,7 @@ pub(super) fn validate_fixed(
         return Err(relation_error());
     }
 
-    let mut occupied = Vec::new();
+    let mut occupied: Vec<(u32, u32, u32)> = Vec::new();
     let mut cell_point_placements = Vec::new();
     cell_point_placements
         .try_reserve_exact(slices.content_points.len())
@@ -117,7 +121,6 @@ pub(super) fn validate_fixed(
     let mut previous_line = 0_u32;
     let mut previous_cell = 0_u32;
     let mut ordinal = 0_u32;
-    let mut scalar_work = 0_u64;
     for (index, placement) in slices.placements.iter().enumerate() {
         if placement.line != previous_line {
             if placement.line < previous_line {
@@ -157,26 +160,21 @@ pub(super) fn validate_fixed(
                     || !utf8_boundary(atom.text, placement.byte_start)
                     || !utf8_boundary(atom.text, placement.byte_end)
                     || (view.table != 0 && owner_table[atom.owner as usize - 1] != view.table)
-                    || (view.table == 0 && atom.owner != view.owner)
+                    || (view.table == 0
+                        && (atom.owner != view.owner
+                            || atom.root != slices.blocks[view.block as usize - 1].root))
                 {
                     return Err(relation_error());
                 }
-                let text_len = usize::try_from(atom.text.len).map_err(|_| relation_error())?;
-                let bytes = unsafe { std::slice::from_raw_parts(atom.text.ptr, text_len) };
-                let text = std::str::from_utf8(bytes).map_err(|_| relation_error())?;
-                let start = placement.byte_start as usize;
-                let end = placement.byte_end as usize;
-                let scalar_start = atom_scalar_starts[placement.atom as usize - 1]
-                    .checked_add(
-                        u32::try_from(text[..start].chars().count())
-                            .map_err(|_| relation_error())?,
-                    )
+                let atom_index = placement.atom as usize - 1;
+                let root_start = atom_scalar_starts[atom_index];
+                let scalar_start = scalar_index
+                    .prefix(atom_index, atom.text, placement.byte_start)
+                    .and_then(|prefix| root_start.checked_add(prefix))
                     .ok_or_else(relation_error)?;
-                let scalar_end = scalar_start
-                    .checked_add(
-                        u32::try_from(text[start..end].chars().count())
-                            .map_err(|_| relation_error())?,
-                    )
+                let scalar_end = scalar_index
+                    .prefix(atom_index, atom.text, placement.byte_end)
+                    .and_then(|prefix| root_start.checked_add(prefix))
                     .ok_or_else(relation_error)?;
                 if placement.scalar_start != scalar_start
                     || placement.scalar_end != scalar_end
@@ -184,21 +182,22 @@ pub(super) fn validate_fixed(
                 {
                     return Err(relation_error());
                 }
-                scalar_work = scalar_work
-                    .checked_add(
-                        u64::from(placement.byte_end)
-                            + u64::from(placement.byte_end - placement.byte_start),
-                    )
-                    .ok_or_else(relation_error)?;
-                if scalar_work > 32 * 1024 * 1024 {
-                    return Err(relation_error());
+                if placement.column_start < placement.column_end {
+                    if let Some(previous) = occupied.last_mut()
+                        && previous.0 == placement.line
+                        && previous.1 == placement.column_start
+                        && previous.2 > placement.column_start
+                        && placement.cell_map_kind == 3
+                    {
+                        previous.2 = previous.2.max(placement.column_end);
+                    } else {
+                        occupied.push((
+                            placement.line,
+                            placement.column_start,
+                            placement.column_end,
+                        ));
+                    }
                 }
-                occupied.push((
-                    placement.line,
-                    placement.column_start,
-                    placement.column_end,
-                    placement.cell_map_kind == 3,
-                ));
             }
             2 => {
                 let point = placement
@@ -215,7 +214,9 @@ pub(super) fn validate_fixed(
                     || placement.cell_map_kind != 1
                     || placement.cell_map_value != 0
                     || (view.table != 0 && owner_table[point.owner as usize - 1] != view.table)
-                    || (view.table == 0 && point.owner != view.owner)
+                    || (view.table == 0
+                        && (point.owner != view.owner
+                            || point.root != slices.blocks[view.block as usize - 1].root))
                 {
                     return Err(relation_error());
                 }
@@ -306,15 +307,11 @@ pub(super) fn validate_fixed(
             decoration.line,
             decoration.column_start,
             decoration.column_end,
-            false,
         ));
     }
     occupied.sort_unstable();
     for pair in occupied.windows(2) {
-        if pair[0].0 == pair[1].0
-            && pair[0].2 > pair[1].1
-            && !(pair[0].1 == pair[1].1 && pair[0].2 == pair[1].2 && (pair[0].3 || pair[1].3))
-        {
+        if pair[0].0 == pair[1].0 && pair[0].2 > pair[1].1 {
             return Err(relation_error());
         }
     }

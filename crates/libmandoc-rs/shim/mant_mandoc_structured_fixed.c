@@ -77,8 +77,12 @@ mant_structured_fixed_table_required(struct structured_session *session,
 			    session->limits->max_builder_operations, 8,
 			    MANT_STRUCTURED_STAGE_RENDER))
 				return -1;
+			/* tbl_layout.c::cell_alloc uses SIZE_MAX for unspecified
+			 * spacing; zero is an explicit request.  out.c::tblcalc
+			 * applies both that spacing and a requested width. */
 			if (cell->pos != TBL_CELL_LEFT || cell->vert != 0 ||
-			    cell->flags != 0)
+			    cell->flags != 0 || cell->width != 0 ||
+			    cell->spacing != SIZE_MAX)
 				fixed = 1;
 		}
 		for (data = span->first; data != NULL; data = data->next) {
@@ -128,6 +132,8 @@ append_view(struct structured_session *session,
 	view->block = block_key;
 	view->table = table_key;
 	view->provenance = provenance;
+	session->fixed_last_field_line = 0;
+	session->fixed_overlay_pending = 0;
 	if (table_key != 0)
 		session->result->tables[table_key - 1].fixed_view = view->key;
 	session->result->blocks[block_key - 1].fixed_view = view->key;
@@ -250,6 +256,8 @@ mant_structured_fixed_close_display(struct structured_session *session,
 	session->active_fixed_display = 0;
 	session->active_fixed_view = 0;
 	session->fixed_display_root = 0;
+	session->fixed_last_field_line = 0;
+	session->fixed_overlay_pending = 0;
 	session->fixed_point_cursor = session->result->content_point_count;
 	session->fixed_close_on_footer = 0;
 	session->current_root = 0;
@@ -525,13 +533,24 @@ mant_structured_fixed_field(struct structured_session *session, struct termp *p,
     uint32_t token_key)
 {
 	struct mant_structured_fixed_line_view *line;
-	uint32_t key, start, end, kind;
+	uint32_t key, start, end, kind, cursor;
+	int overlay;
 
 	if (session->active_fixed_view == 0)
 		return;
 	if (event->value == '\b') {
-		if (token != NULL && token->fixed_use_count != 0)
-			token->fixed_uses[token->fixed_use_count - 1].overlay = 1;
+		/* term.c::term_field observes the backspace before reducing
+		 * viscol.  The slot belongs to the next token, which may not have
+		 * any fixed use yet.  Remember the preceding physical glyph and
+		 * mark the next intersecting placement instead. */
+		session->fixed_overlay_pending = 0;
+		if (!columns(session, p, p->viscol, 0, &cursor, &end))
+			return;
+		if (session->fixed_last_field_line ==
+		    session->active_fixed_line &&
+		    session->fixed_last_field_line != 0 &&
+		    cursor == session->fixed_last_field_end)
+			session->fixed_overlay_pending = 1;
 		return;
 	}
 	if (!columns(session, p, p->viscol, event->visual, &start, &end) ||
@@ -540,8 +559,26 @@ mant_structured_fixed_field(struct structured_session *session, struct termp *p,
 	line = session->result->fixed_lines + key - 1;
 	if (line->total_columns < end)
 		line->total_columns = end;
+	if (start == end) {
+		/* A combining scalar does not advance the terminal cursor.
+		 * It cannot consume a pending backspace over a visible glyph. */
+		if (token_key != 0 && token != NULL)
+			record_use(session, token, key, start, end);
+		return;
+	}
+	overlay = session->fixed_overlay_pending != 0 &&
+	    session->fixed_last_field_line == key &&
+	    session->fixed_last_field_start == start &&
+	    start < end && start < session->fixed_last_field_end;
+	session->fixed_overlay_pending = 0;
+	session->fixed_last_field_line = key;
+	session->fixed_last_field_start = start;
+	session->fixed_last_field_end = end;
 	if (token_key != 0 && token != NULL) {
 		record_use(session, token, key, start, end);
+		if (session->status == MANT_STRUCTURED_OK && overlay &&
+		    token->fixed_use_count != 0)
+			token->fixed_uses[token->fixed_use_count - 1].overlay = 1;
 		return;
 	}
 	kind = session->active_table_row != 0 &&
@@ -618,6 +655,8 @@ mant_structured_fixed_endline(struct structured_session *session, struct termp *
 	}
 	session->fixed_column_total += line->total_columns;
 	session->active_fixed_line = 0;
+	session->fixed_last_field_line = 0;
+	session->fixed_overlay_pending = 0;
 	if (session->active_fixed_display != 0) {
 		if (session->fixed_pending_breaks == UINT32_MAX) {
 			mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,

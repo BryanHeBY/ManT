@@ -59,6 +59,218 @@ fn nofill_lines_follow_native_line_boundaries() {
 }
 
 #[test]
+fn nofill_paragraph_boundary_does_not_reuse_the_old_fixed_view() {
+    // Exact sources were run through fixed CVS UTF-8/78.  man_term.c's
+    // paragraph pre handler and mdoc_term.c::termp_pp_pre flush before the
+    // next body; a new logical root cannot stay in the old physical view.
+    for (name, format, source) in [
+        (
+            "pp.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.PP\nafter\n.fi\n",
+        ),
+        (
+            "pp-mdoc.1",
+            InputFormat::Mdoc,
+            ".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\nbefore\n.Pp\nafter\n.Ed\n",
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = render_prelude(name, &bundle, format, 78, &Limits::default())
+            .expect("paragraph transition preserves checked fixed views");
+        let after = document
+            .content_atoms
+            .iter()
+            .filter(|atom| atom.text == "after")
+            .collect::<Vec<_>>();
+        assert_eq!(after.len(), 1, "{name}: after is one logical atom");
+        let old_view = document.fixed_views[0].key;
+        let old_lines = document
+            .fixed_lines
+            .iter()
+            .filter(|line| line.view == old_view)
+            .map(|line| line.key)
+            .collect::<Vec<_>>();
+        assert!(
+            document.placements.iter().all(|placement| {
+                placement.atom != Some(after[0].key) || !old_lines.contains(&placement.line)
+            }),
+            "{name}: the old fixed surface cannot also display the new paragraph"
+        );
+    }
+}
+
+#[test]
+fn nofill_adjacent_structural_boundaries_keep_checked_views() {
+    // Each exact source was run with fixed CVS UTF-8/78.  man_term.c
+    // flushes the old line before rendering the next structure;
+    // the structured observer must not carry a fixed root across that edge.
+    for (name, format, source) in [
+        (
+            "section.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.SH NEXT\nafter\n.fi\n",
+        ),
+        (
+            "term.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.TP\nterm\nbody\n.fi\n",
+        ),
+        (
+            "item.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.IP label\nbody\n.fi\n",
+        ),
+        (
+            "equation.1",
+            InputFormat::Man,
+            ".TH T 1\n.SH D\n.nf\nbefore\n.EQ\nx + y\n.EN\nafter\n.fi\n",
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.as_bytes().to_vec()).unwrap();
+        let document = render_prelude(name, &bundle, format, 78, &Limits::default())
+            .unwrap_or_else(|error| panic!("{name}: adjacent native scope: {error:?}"));
+        assert!(
+            document
+                .content_atoms
+                .iter()
+                .any(|atom| atom.text.contains("before")),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn native_overstrike_marks_the_following_physical_glyph() {
+    // Each exact source was checked with fixed CVS UTF-8/78 before these
+    // assertions. term.c::term_field emits backspace before reducing viscol;
+    // the following FIELD_PLACE, not the backspace slot's token, overlays the
+    // prior glyph. The two wide cases retain different overlapping widths.
+    for (name, body, prior_width, overlay_width) in [
+        ("skip.1", "\\zAB", 1, 1),
+        ("strike.1", "\\o'ab'", 1, 1),
+        ("wide-first.1", "\\z界B", 2, 1),
+        ("wide-second.1", "\\zA界", 1, 2),
+    ] {
+        let source = format!(".TH T 1\n.SH D\n.nf\n{body}\n.fi\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.into_bytes()).unwrap();
+        let document = render_prelude(name, &bundle, InputFormat::Man, 78, &Limits::default())
+            .expect("native overstrike reaches the checked transfer boundary");
+        let placements = document
+            .placements
+            .iter()
+            .filter(|placement| placement.target_kind == 1)
+            .collect::<Vec<_>>();
+        assert!(placements.len() >= 2, "{body}: {placements:?}");
+        let prior = placements[placements.len() - 2];
+        let over = placements[placements.len() - 1];
+        assert_eq!(over.cell_map_kind, 3, "{body}: following glyph is overlay");
+        assert_eq!(over.columns.start, prior.columns.start, "{body}");
+        assert_eq!(
+            prior.columns.end - prior.columns.start,
+            prior_width,
+            "{body}"
+        );
+        assert_eq!(
+            over.columns.end - over.columns.start,
+            overlay_width,
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn multi_glyph_and_cross_font_overstrike_keep_checked_geometry() {
+    // Both exact sources were run through fixed CVS UTF-8/78.  term.c's
+    // backspace/placement order is unchanged across font switches and the
+    // three successive positions generated by \o.
+    for (name, body, minimum_overlays) in
+        [("triple.1", "\\o'abc'", 2), ("font.1", "\\zA\\fBB\\fP", 1)]
+    {
+        let source = format!(".TH T 1\n.SH D\n.nf\n{body}\n.fi\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.into_bytes()).unwrap();
+        let document = render_prelude(name, &bundle, InputFormat::Man, 78, &Limits::default())
+            .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        assert!(
+            document
+                .placements
+                .iter()
+                .filter(|placement| placement.cell_map_kind == 3)
+                .count()
+                >= minimum_overlays,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn combining_mark_does_not_consume_pending_overstrike() {
+    // Exact input was checked with fixed CVS UTF-8/78: term.c::term_field
+    // emits A, backspace, a zero-column combining mark, then B.  Only the
+    // final visible placement consumes the pending overlay relationship.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "combining.1",
+            ".TH T 1\n.SH D\n.nf\n\\zA\u{301}B\n.fi\n"
+                .as_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+    let document = render_prelude(
+        "combining.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("combining mark between backspace and glyph remains valid");
+    assert!(
+        document
+            .placements
+            .iter()
+            .any(|placement| placement.cell_map_kind == 3)
+    );
+}
+
+#[test]
+fn transfer_rejects_an_unmarked_glyph_after_an_overlay() {
+    // The source itself was checked with fixed CVS UTF-8/78.  This test
+    // mutates only the borrowed ABI view: a prior Overlay cannot authorize
+    // a later overlapping Affine placement without its own overstrike mark.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert("overlay.1", b".TH T 1\n.SH D\n.nf\n\\zAB\n.fi\n".to_vec())
+        .unwrap();
+    let limits = Limits::default();
+    let storage = InputStorage::new("overlay.1", &bundle, InputFormat::Man, &limits).unwrap();
+    let (status, pointer, failure) = raw_render(&storage.view(78, PROFILE_UTF8), &limits);
+    assert_eq!(status, STATUS_OK, "{failure:?}");
+    let handle = ResultHandle(NonNull::new(pointer).unwrap());
+    let mut view = ResultView::default();
+    assert_eq!(
+        unsafe { mant_structured_result_view(handle.0.as_ptr(), &raw mut view) },
+        STATUS_OK
+    );
+    let placements = unsafe {
+        std::slice::from_raw_parts_mut(
+            view.placements.ptr.cast::<PlacementView>().cast_mut(),
+            view.placements.count as usize,
+        )
+    };
+    assert_eq!(placements.len(), 2);
+    placements[0].cell_map_kind = 3;
+    placements[0].cell_map_value = 0;
+    placements[1].cell_map_kind = 1;
+    placements[1].cell_map_value = 1;
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+}
+
+#[test]
 fn long_nofill_line_transfers_one_affine_placement() {
     // Exact 10,000-scalar source was checked with fixed CVS UTF-8/78.
     // man_term.c::print_man_node keeps the full NODE_NOFILL line unwrapped;
@@ -86,6 +298,23 @@ fn long_nofill_line_transfers_one_affine_placement() {
         ),
         (1, 1)
     );
+}
+
+#[test]
+fn mixed_width_long_atom_validates_each_scalar_boundary_once() {
+    // This exact (a界)*2,900 no-fill source was accepted by fixed CVS UTF-8/78.
+    // term.c::term_field alternates one- and two-column glyphs, so affine
+    // placements cannot merge. Validation uses bounded per-atom checkpoints
+    // instead of rescanning the growing UTF-8 prefix for every placement.
+    let source = format!(".TH T 1\n.SH D\n.nf\n{}\n.fi\n", "a界".repeat(2_900));
+    let mut bundle = SourceBundle::new();
+    bundle.insert("mixed.1", source.into_bytes()).unwrap();
+    let document = render_prelude("mixed.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("valid mixed-width line stays within actual result budgets");
+    assert_eq!(document.fixed_lines.len(), 1);
+    assert_eq!(document.fixed_lines[0].terminal_columns, 8_705);
+    assert_eq!(document.placements.len(), 5_800);
+    assert_eq!(document.placements.last().unwrap().scalars.end, 5_800);
 }
 
 #[test]

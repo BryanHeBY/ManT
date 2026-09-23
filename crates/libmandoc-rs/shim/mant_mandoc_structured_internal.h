@@ -114,6 +114,10 @@ struct mant_structured_result {
 	uint32_t *validation_root_atom_offsets;
 	uint32_t *validation_root_atoms;
 	uint64_t *validation_atom_scalar_offsets;
+	uint32_t *validation_atom_checkpoint_offsets;
+	uint32_t *validation_scalar_checkpoints;
+	uint32_t validation_checkpoint_count;
+	uint8_t validation_checkpoint_ready;
 	uint64_t *validation_root_scalar_totals;
 	uint32_t validation_owner_count;
 	uint32_t validation_content_root_count;
@@ -134,6 +138,8 @@ int mant_structured_source_position_in_maps(
 struct structured_session;
 int mant_structured_result_is_valid(const struct mant_structured_result *,
     struct structured_session *);
+uint64_t mant_structured_atom_scalar_prefix(
+    const struct mant_structured_result *, uint32_t, uint32_t);
 void mant_structured_free_bytes(struct mant_bytes_view);
 
 #endif

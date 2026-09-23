@@ -13,6 +13,7 @@ use crate::{LinkTarget, Provenance};
 
 mod builder;
 mod fixed;
+mod scalar;
 mod validation;
 
 pub use builder::ContentStoreBuilder;

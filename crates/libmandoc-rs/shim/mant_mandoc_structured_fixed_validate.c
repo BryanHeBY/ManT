@@ -3,18 +3,6 @@
 
 #include <stddef.h>
 
-static uint64_t
-scalar_count(const uint8_t *bytes, uint32_t length)
-{
-	uint32_t index;
-	uint64_t count = 0;
-
-	for (index = 0; index < length; index++)
-		if ((bytes[index] & 0xc0) != 0x80)
-			count++;
-	return count;
-}
-
 static int
 utf8_boundary(const uint8_t *bytes, uint64_t length, uint32_t offset)
 {
@@ -86,7 +74,7 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 	const struct mant_structured_content_point_view *point;
 	uint32_t i, previous_view, ordinal, previous_line, last_fixed_cell;
 	uint32_t placement_ordinal, decoration_ordinal;
-	uint64_t total_columns, scalar_work, start, end;
+	uint64_t total_columns, start, end;
 
 	if ((result->fixed_view_count != 0) != (result->fixed_views != NULL) ||
 	    (result->fixed_line_count != 0) != (result->fixed_lines != NULL) ||
@@ -151,7 +139,6 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 		return 0;
 	previous_line = placement_ordinal = 0;
 	last_fixed_cell = 0;
-	scalar_work = 0;
 	for (i = 0; i < result->placement_count; i++) {
 		placement = result->placements + i;
 		if (placement->line != previous_line) {
@@ -190,19 +177,17 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 			    placement->byte_end) ||
 			    (view->table != 0 && !table_has_cell_owner(result,
 			    view->table, atom->owner)) ||
-			    (view->table == 0 && atom->owner != view->owner))
-				return 0;
-			/* Prefix recounts for repeated slices still consume work. */
-			scalar_work += (uint64_t)placement->byte_end +
-			    placement->byte_end - placement->byte_start;
-			if (scalar_work > 32U * 1024U * 1024U)
+			    (view->table == 0 && (atom->owner != view->owner ||
+			    atom->root != result->blocks[view->block - 1].root)))
 				return 0;
 			start = result->validation_atom_scalar_offsets[
-			    placement->atom - 1] + scalar_count(atom->text.ptr,
-			    placement->byte_start);
-			end = start + scalar_count(atom->text.ptr +
-			    placement->byte_start, placement->byte_end -
-			    placement->byte_start);
+			    placement->atom - 1] +
+			    mant_structured_atom_scalar_prefix(result,
+			    placement->atom, placement->byte_start);
+			end = result->validation_atom_scalar_offsets[
+			    placement->atom - 1] +
+			    mant_structured_atom_scalar_prefix(result,
+			    placement->atom, placement->byte_end);
 			if (end > UINT32_MAX ||
 			    placement->scalar_start != start ||
 			    placement->scalar_end != end)
@@ -228,7 +213,8 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 			    (view->table != 0 && placement->cell == 0 &&
 			    !table_has_cell_owner(result,
 			    view->table, point->owner)) ||
-			    (view->table == 0 && point->owner != view->owner))
+			    (view->table == 0 && (point->owner != view->owner ||
+			    point->root != result->blocks[view->block - 1].root)))
 				return 0;
 			if (placement->cell != 0) {
 				if (placement->cell != next_fixed_cell(result,

@@ -47,6 +47,7 @@ impl FixedView {
             let mut cells = vec![0_u32; width];
             let mut glyphs = Vec::new();
             let mut zero_width = Vec::new();
+            let mut previous_content_span: Option<(usize, usize)> = None;
             for placement in &line.placements {
                 let PlacementTarget::Content(reference) = placement.target else {
                     continue;
@@ -65,6 +66,7 @@ impl FixedView {
                     zero_width.push((start, display));
                     continue;
                 }
+                clear_overlaid_glyph(&mut cells, placement, previous_content_span, start, end)?;
                 match placement.map {
                     CellMapKind::Affine { columns_per_scalar } => {
                         let step = usize::from(columns_per_scalar);
@@ -98,6 +100,7 @@ impl FixedView {
                         )?;
                     }
                 }
+                previous_content_span = Some((start, end));
             }
             for decoration in &line.decorations {
                 put_glyph(
@@ -161,6 +164,24 @@ pub(super) fn placement_display<'a>(
 enum CellGlyph<'a> {
     Text(&'a str),
     Scalar(char),
+}
+
+fn clear_overlaid_glyph(
+    cells: &mut [u32],
+    placement: &Placement,
+    previous_content_span: Option<(usize, usize)>,
+    start: usize,
+    end: usize,
+) -> Option<()> {
+    if matches!(placement.map, CellMapKind::Overlay {})
+        && let Some((prior_start, prior_end)) = previous_content_span
+        && prior_start == start
+    {
+        // term.c::term_field can backspace over a wide glyph before placing
+        // a narrower one.  Clear old continuation cells; the last glyph wins.
+        cells.get_mut(start..prior_end.max(end))?.fill(0);
+    }
+    Some(())
 }
 
 fn put_glyph<'a>(
@@ -471,6 +492,16 @@ mod tests {
         store.fixed_views[0].lines[0].placements[1].map = CellMapKind::Overlay {};
         store.fixed_views[0].lines[0].placements[1].start_column = 0;
         store.fixed_views[0].lines[0].placements[1].end_column = 2;
+        // term.c::term_field may place a wide glyph over a narrower one at
+        // the same origin; only an unmarked overlap is invalid above.
+        validate_content_store(&store).unwrap();
+
+        let mut store = fixture();
+        store.fixed_views[0].lines[0].placements[0].map = CellMapKind::Overlay {};
+        store.fixed_views[0].lines[0].placements[1].start_column = 0;
+        store.fixed_views[0].lines[0].placements[1].end_column = 2;
+        // A previous overlay does not license a subsequent unmarked glyph
+        // to collide; term.c marks the glyph after the backspace.
         assert!(validate_content_store(&store).is_err());
     }
 

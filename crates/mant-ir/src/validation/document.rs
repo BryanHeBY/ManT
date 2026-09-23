@@ -395,6 +395,60 @@ impl InvariantCollector<'_> {
         *seen = seen.saturating_add(1);
     }
 
+    fn validate_fixed_display_content(&mut self, children: &[Inline], key: crate::FixedViewKey) {
+        fn collect_roots(
+            nodes: &[Inline],
+            content: crate::ContentContext<'_>,
+            roots: &mut std::collections::HashSet<crate::ContentRootKey>,
+        ) {
+            for node in nodes {
+                match node {
+                    Inline::Text { content: reference } | Inline::Code { content: reference } => {
+                        if let Some(atom) = content.atom(reference.atom) {
+                            roots.insert(atom.root);
+                        }
+                    }
+                    Inline::LineBreak { atom } => {
+                        if let Some(atom) = content.atom(*atom) {
+                            roots.insert(atom.root);
+                        }
+                    }
+                    Inline::Anchor { point, .. } => {
+                        if let Some(point) = content.point(*point) {
+                            roots.insert(point.root);
+                        }
+                    }
+                    Inline::Strong { children }
+                    | Inline::Emphasis { children }
+                    | Inline::Link { children, .. } => collect_roots(children, content, roots),
+                }
+            }
+        }
+
+        let Some(view) = self.content.fixed_view(key) else {
+            return; // The missing view is reported by record_fixed_view.
+        };
+        let mut roots = std::collections::HashSet::new();
+        collect_roots(children, self.content, &mut roots);
+        for placement in view.lines.iter().flat_map(|line| &line.placements) {
+            let root = match placement.target {
+                crate::PlacementTarget::Content(reference) => {
+                    self.content.atom(reference.atom).map(|atom| atom.root)
+                }
+                crate::PlacementTarget::Point(point) => {
+                    self.content.point(point).map(|point| point.root)
+                }
+            };
+            if root.is_some_and(|root| !roots.contains(&root)) {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-fixed-view-content",
+                    format!("fixed view {} places content outside its block", key.get()),
+                ));
+                break;
+            }
+        }
+    }
+
     fn invalid_content(&mut self, detail: impl Into<String>) {
         self.diagnostics
             .push(invariant("ir.invalid-content-reference", detail.into()));
@@ -504,6 +558,9 @@ impl<'ir> Visit<'ir> for InvariantCollector<'ir> {
                 ..
             } => self.record_fixed_view(*view),
             _ => {}
+        }
+        if let Block::FixedDisplay { children, view, .. } = block {
+            self.validate_fixed_display_content(children, *view);
         }
         if let Block::Paragraph { children, .. }
         | Block::Preformatted { children, .. }
@@ -806,6 +863,80 @@ mod tests {
             blocks,
             sections,
         }
+    }
+
+    #[test]
+    fn fixed_display_cannot_place_a_later_same_owner_paragraph() {
+        use crate::{
+            CellMapKind, ContentByteRange, ContentOwnerKind, ContentRef, ContentRootKind,
+            ContentStoreBuilder, ContentStyle, FixedLine, FixedLineKey, FixedView, FixedViewKey,
+            Placement, PlacementKey, PlacementTarget, Provenance,
+        };
+
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let fixed = builder.push_root(owner, ContentRootKind::FixedBody, Provenance::Unknown);
+        let paragraph = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let first = builder.push_text(
+            fixed,
+            "a".to_owned(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        let later = builder.push_text(
+            paragraph,
+            "b".to_owned(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        let mut store = builder.finish();
+        store.fixed_views.push(FixedView {
+            key: FixedViewKey::FIRST,
+            owner,
+            lines: vec![FixedLine {
+                key: FixedLineKey::FIRST,
+                terminal_columns: 1,
+                placements: vec![Placement {
+                    key: PlacementKey::FIRST,
+                    target: PlacementTarget::Content(ContentRef {
+                        atom: later.atom,
+                        bytes: ContentByteRange { start: 0, end: 1 },
+                    }),
+                    root_scalar_range: 0..1,
+                    start_column: 0,
+                    end_column: 1,
+                    map: CellMapKind::Affine {
+                        columns_per_scalar: 1,
+                    },
+                }],
+                decorations: Vec::new(),
+            }],
+            provenance: Provenance::Unknown,
+        });
+        let blocks = vec![
+            Block::FixedDisplay {
+                children: vec![Inline::Text { content: first }],
+                view: FixedViewKey::FIRST,
+                layout: crate::LayoutHint::default(),
+                source: None,
+            },
+            Block::Paragraph {
+                children: vec![Inline::Text { content: later }],
+                layout: crate::LayoutHint::default(),
+                source: None,
+            },
+        ];
+        let codes = validate_document(&document_with_store(store, Vec::new(), blocks))
+            .into_iter()
+            .filter_map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>();
+        assert!(codes.contains(&"ir.invalid-fixed-view-content".to_owned()));
     }
 
     fn section(id: &str) -> Section {

@@ -396,6 +396,9 @@ print_mdoc_node(DECL_ARGS)
 	case ROFFT_TBL:
 		if (p->tbl.cols == NULL)
 			term_newln(p);
+		/* Match the man terminal path: notify the observer only after
+		 * the prior line flush and before native table drawing. */
+		term_collect_node(p, n, TERM_COLLECT_CHILD);
 		term_tbl(p, n->span);
 		break;
 	default:
