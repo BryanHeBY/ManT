@@ -16,6 +16,8 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn mant_mandoc_output_begin(output: *mut c_void) -> i32;
     fn mant_mandoc_output_write(data: *const c_void, length: usize);
+    fn mant_mandoc_output_write_op(data: *const c_void, length: usize, operation: i32);
+    fn mant_mandoc_output_current_operation() -> i32;
     fn mant_mandoc_output_end();
     fn mant_mandoc_output_data(output: *const c_void) -> *const u8;
     fn mant_mandoc_output_length(output: *const c_void) -> usize;
@@ -49,6 +51,15 @@ extern "C" fn prematurely_end(_: *mut c_void, _: *const c_void, _: usize) -> i32
 extern "C" fn prematurely_free(arg: *mut c_void, _: *const c_void, _: usize) -> i32 {
     let output = unsafe { *(arg.cast::<*mut c_void>()) };
     unsafe { mant_mandoc_output_free(output) };
+    1
+}
+
+extern "C" fn collect_operations(arg: *mut c_void, _: *const c_void, _: usize) -> i32 {
+    let operations = unsafe { &mut *(arg.cast::<Vec<i32>>()) };
+    if operations.try_reserve(1).is_err() {
+        return 0;
+    }
+    operations.push(unsafe { mant_mandoc_output_current_operation() });
     1
 }
 
@@ -161,4 +172,25 @@ fn independent_threads_have_independent_active_sinks() {
             .collect::<Vec<_>>(),
         [b"alpha", b"bravo"]
     );
+}
+
+#[test]
+fn device_write_context_is_scoped_to_each_output_call() {
+    let mut operations: Vec<i32> = Vec::new();
+    let output = unsafe {
+        mant_mandoc_output_alloc_sink(
+            4,
+            collect_operations,
+            (&raw mut operations).cast::<c_void>(),
+        )
+    };
+    assert_eq!(unsafe { mant_mandoc_output_begin(output) }, 1);
+    unsafe { mant_mandoc_output_write_op(b"a".as_ptr().cast(), 1, 1) };
+    unsafe { mant_mandoc_output_write_op(b" ".as_ptr().cast(), 1, 2) };
+    unsafe { mant_mandoc_output_write_op(b"\n".as_ptr().cast(), 1, 3) };
+    unsafe { mant_mandoc_output_write(b"!".as_ptr().cast(), 1) };
+    assert_eq!(operations, [1, 2, 3, 0]);
+    assert_eq!(unsafe { mant_mandoc_output_length(output) }, 4);
+    assert_eq!(unsafe { mant_mandoc_output_status(output) }, 0);
+    unsafe { mant_mandoc_output_free(output) };
 }

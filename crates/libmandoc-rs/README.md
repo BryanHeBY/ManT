@@ -475,6 +475,9 @@ The remaining patches implement the synchronous embedding boundary:
   including cells without emitted words, without changing table rendering.
 - `0036-observe-tbl-ready-boundary.patch` reports the existing boundary after
   the previous line flush and before native table drawing.
+- `0037-label-terminal-device-writes.patch` labels the actual terminal letter,
+  advance-space and endline writes for the private annotated sink; it leaves
+  formatter byte order, width and raw renderer output unchanged.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

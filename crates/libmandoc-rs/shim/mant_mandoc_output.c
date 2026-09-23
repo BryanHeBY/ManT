@@ -16,6 +16,7 @@ struct mant_mandoc_output {
 	size_t		 limit;
 	mant_mandoc_output_sink sink;
 	void		*sink_arg;
+	enum mant_mandoc_output_operation operation;
 	int		 status;
 	int		 in_callback;
 };
@@ -116,7 +117,40 @@ mant_mandoc_output_write(const void *data, size_t length)
 }
 
 void
+mant_mandoc_output_write_op(const void *data, size_t length,
+    enum mant_mandoc_output_operation operation)
+{
+	struct mant_mandoc_output *output = active_output;
+	enum mant_mandoc_output_operation saved;
+
+	if (output == NULL)
+		return;
+	if (operation < MANT_OUTPUT_GENERIC || operation > MANT_OUTPUT_ENDLINE) {
+		output->status = 3;
+		return;
+	}
+	saved = output->operation;
+	output->operation = operation;
+	mant_mandoc_output_write(data, length);
+	output->operation = saved;
+}
+
+enum mant_mandoc_output_operation
+mant_mandoc_output_current_operation(void)
+{
+	return active_output == NULL ? MANT_OUTPUT_GENERIC :
+	    active_output->operation;
+}
+
+void
 mant_mandoc_output_utf8(int codepoint)
+{
+	mant_mandoc_output_utf8_op(codepoint, MANT_OUTPUT_GENERIC);
+}
+
+void
+mant_mandoc_output_utf8_op(int codepoint,
+    enum mant_mandoc_output_operation operation)
 {
 	unsigned char bytes[4];
 	size_t length;
@@ -143,7 +177,7 @@ mant_mandoc_output_utf8(int codepoint)
 		bytes[3] = 0x80 | (unsigned char)(codepoint & 0x3f);
 		length = 4;
 	}
-	mant_mandoc_output_write(bytes, length);
+	mant_mandoc_output_write_op(bytes, length, operation);
 }
 
 const char *

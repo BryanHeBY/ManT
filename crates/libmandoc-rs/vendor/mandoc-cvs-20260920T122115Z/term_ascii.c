@@ -220,7 +220,7 @@ ascii_letter(struct termp *p, int c)
 {
 	unsigned char byte = (unsigned char)c;
 
-	mant_mandoc_output_write(&byte, 1);
+	mant_mandoc_output_write_op(&byte, 1, MANT_OUTPUT_LETTER);
 }
 
 static size_t
@@ -246,7 +246,7 @@ utf8_letter(struct termp *p, int c)
 {
 	if (c == ASCII_NBRSP)
 		c = ' ';
-	mant_mandoc_output_utf8(c);
+	mant_mandoc_output_utf8_op(c, MANT_OUTPUT_LETTER);
 }
 
 static void
@@ -272,7 +272,7 @@ ascii_endline(struct termp *p)
 	p->ti = 0;
 	p->minbl = 0;
 	p->viscol = 0;
-	mant_mandoc_output_write("\n", 1);
+	mant_mandoc_output_write_op("\n", 1, MANT_OUTPUT_ENDLINE);
 }
 
 static void
@@ -294,7 +294,7 @@ ascii_advance(struct termp *p, size_t len)
 
 	dst = p->viscol + len;
 	while (p->viscol + sz / 2 < dst) {
-		mant_mandoc_output_write(" ", 1);
+		mant_mandoc_output_write_op(" ", 1, MANT_OUTPUT_ADVANCE);
 		p->viscol += sz;
 	}
 }

@@ -384,10 +384,10 @@ owns source-neutral identification; IR owns body/addresses; query/protocol
 own one semantic query pipeline; UI only displays an already laid-out Fixed
 surface. Public parser/AST and raw Renderer remain independent capabilities.
 
-Patch ownership at P1 is unchanged: 0020 supplies raw output capture;
-0029 and 0032–0036 supply current observation/region boundaries; 0030–0031
-supply target origin/source. R01 may amend hooks in auditable patch units but
-does not prune the 36-patch series. Potential 0017/0024–0026/0033–0036
+Patch ownership at P1: 0020 supplies raw output capture; 0029 and 0032–0036
+supply current observation/region boundaries; 0030–0031 supply target
+origin/source. R01's 0037 labels actual device writes for the annotated sink.
+R01 does not prune the 37-patch series. Potential 0017/0024–0026/0033–0036
 removals belong to the later R09–R10 consumer-led removal ledger, with
 parser/render/security capabilities checked before any deletion.
 

@@ -12,12 +12,25 @@ struct mant_mandoc_output;
  * detects recursive write/end/free and makes the active call fail closed. */
 typedef int (*mant_mandoc_output_sink)(void *, const void *, size_t);
 
+/* The device operation is evidence for annotation, not a request to lay out
+ * content. The terminal formatter alone decides the bytes and their order. */
+enum mant_mandoc_output_operation {
+	MANT_OUTPUT_GENERIC = 0,
+	MANT_OUTPUT_LETTER = 1,
+	MANT_OUTPUT_ADVANCE = 2,
+	MANT_OUTPUT_ENDLINE = 3
+};
+
 struct mant_mandoc_output *mant_mandoc_output_alloc(size_t);
 struct mant_mandoc_output *mant_mandoc_output_alloc_sink(size_t,
     mant_mandoc_output_sink, void *);
 int mant_mandoc_output_begin(struct mant_mandoc_output *);
 void mant_mandoc_output_write(const void *, size_t);
+void mant_mandoc_output_write_op(const void *, size_t,
+    enum mant_mandoc_output_operation);
 void mant_mandoc_output_utf8(int);
+void mant_mandoc_output_utf8_op(int, enum mant_mandoc_output_operation);
+enum mant_mandoc_output_operation mant_mandoc_output_current_operation(void);
 size_t mant_mandoc_utf8_width(int);
 const char *mant_mandoc_ctype_locale(void);
 void mant_mandoc_output_end(void);
