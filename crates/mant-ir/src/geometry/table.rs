@@ -95,6 +95,7 @@ mod tests {
             cells: vec![TableCell {
                 kind: crate::TableCellKind::Text,
                 blocks: vec![block],
+                point: None,
                 column_span: 1,
                 row_span: 1,
                 alignment: None,

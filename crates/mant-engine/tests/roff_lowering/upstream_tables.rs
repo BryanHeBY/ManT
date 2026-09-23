@@ -140,31 +140,36 @@ fn layout_only_rule_rows_retain_each_column_strength() {
         })
         .collect::<Vec<_>>();
     assert_eq!(tables.len(), 6);
+    assert!(
+        tables
+            .iter()
+            .all(|rows| matches!(rows[0].kind, mant_ir::TableRowKind::LayoutRule { .. }))
+    );
+    let strengths =
+        |row: &mant_ir::TableRow| row.cells.iter().map(|cell| cell.kind).collect::<Vec<_>>();
     assert_eq!(
-        tables[0][0].kind,
-        mant_ir::TableRowKind::LayoutRule {
-            cells: vec![mant_ir::TableRuleCellKind::Horizontal],
-        }
+        strengths(&tables[0][0]),
+        [mant_ir::TableCellKind::HorizontalRule]
     );
     assert_eq!(
-        tables[1][0].kind,
-        mant_ir::TableRowKind::LayoutRule {
-            cells: vec![mant_ir::TableRuleCellKind::DoubleHorizontal],
-        }
+        strengths(&tables[1][0]),
+        [mant_ir::TableCellKind::DoubleHorizontalRule]
     );
     assert_eq!(
-        tables[2][0].kind,
-        mant_ir::TableRowKind::LayoutRule {
-            cells: vec![
-                mant_ir::TableRuleCellKind::Horizontal,
-                mant_ir::TableRuleCellKind::DoubleHorizontal,
-            ],
-        }
+        strengths(&tables[2][0]),
+        [
+            mant_ir::TableCellKind::HorizontalRule,
+            mant_ir::TableCellKind::DoubleHorizontalRule,
+        ]
     );
     assert_eq!(tables[3][0].kind, tables[0][0].kind);
     assert_eq!(tables[4][0].kind, tables[1][0].kind);
     assert_eq!(tables[5][0].kind, tables[2][0].kind);
-    assert!(tables[3..].iter().all(|rows| rows[0].cells.is_empty()));
+    assert!(
+        tables[3..]
+            .iter()
+            .all(|rows| rows[0].cells.iter().all(|cell| cell.blocks.is_empty()))
+    );
     let query = ResolvedContent {
         label: "probe".into(),
         address: None,

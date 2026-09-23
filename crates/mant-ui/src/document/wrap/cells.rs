@@ -294,6 +294,10 @@ pub(super) fn wrapped_cells_to_line(
     WrappedLine {
         source_end: cells.last().map(|cell| cell.source_index + 1),
         anchors: Vec::new(),
+        cell_points: Vec::new(),
+        points: Vec::new(),
+        fixed_lines: Vec::new(),
+        fixed_points: Vec::new(),
         line: cells_to_line(line, width, indent, cells),
         links,
         search_cells,

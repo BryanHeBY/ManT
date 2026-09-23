@@ -112,6 +112,7 @@ pub(super) fn validate_with_index(
         diagnostics: Vec::new(),
         seen_atoms: vec![0; document.content_store.atoms.len()],
         seen_fixed_views: vec![0; document.content_store.fixed_views.len()],
+        seen_table_points: vec![0; document.content_store.points.len()],
         strong_depth: 0,
         emphasis_depth: 0,
         active_link: None,
@@ -243,6 +244,7 @@ struct InvariantCollector<'a> {
     diagnostics: Vec<Diagnostic>,
     seen_atoms: Vec<usize>,
     seen_fixed_views: Vec<usize>,
+    seen_table_points: Vec<u8>,
     strong_depth: usize,
     emphasis_depth: usize,
     active_link: Option<crate::LinkOccurrenceKey>,
@@ -250,6 +252,135 @@ struct InvariantCollector<'a> {
 }
 
 impl InvariantCollector<'_> {
+    #[allow(clippy::too_many_lines)] // Keep row shape and cell-point relations in one pass.
+    fn validate_table(
+        &mut self,
+        rows: &[crate::TableRow],
+        fixed_view: Option<crate::FixedViewKey>,
+    ) {
+        let placed_points = fixed_view
+            .and_then(|view| self.content.fixed_view(view))
+            .map(|view| {
+                view.lines
+                    .iter()
+                    .flat_map(|line| &line.placements)
+                    .filter_map(|placement| match placement.target {
+                        crate::PlacementTarget::Point(point) => Some(point),
+                        crate::PlacementTarget::Content(_) => None,
+                    })
+                    .fold(std::collections::HashMap::new(), |mut counts, point| {
+                        *counts.entry(point).or_insert(0_usize) += 1;
+                        counts
+                    })
+            });
+        for row in rows {
+            if matches!(
+                row.kind,
+                crate::TableRowKind::HorizontalRule | crate::TableRowKind::DoubleHorizontalRule
+            ) && !row.cells.is_empty()
+            {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-rule-cells",
+                    "whole-row table rules must not contain cells".to_owned(),
+                ));
+            }
+            if let crate::TableRowKind::LayoutRule { cells } = &row.kind {
+                if cells.is_empty() {
+                    self.diagnostics.push(invariant(
+                        "ir.empty-table-layout-rule",
+                        "layout-only table rules must contain at least one rule cell".to_owned(),
+                    ));
+                }
+                // Historical v0.12 JSON stores strengths without cell
+                // records. Native lowering retains real cells too; when
+                // present, the two representations must agree exactly.
+                if !row.cells.is_empty()
+                    && (cells.len() != row.cells.len()
+                        || cells
+                            .iter()
+                            .zip(&row.cells)
+                            .any(|(strength, cell)| match cell.kind {
+                                crate::TableCellKind::HorizontalRule
+                                | crate::TableCellKind::IsolatedHorizontalRule => {
+                                    *strength != crate::TableRuleCellKind::Horizontal
+                                }
+                                crate::TableCellKind::DoubleHorizontalRule
+                                | crate::TableCellKind::IsolatedDoubleHorizontalRule => {
+                                    *strength != crate::TableRuleCellKind::DoubleHorizontal
+                                }
+                                crate::TableCellKind::Text => true,
+                            }))
+                {
+                    self.diagnostics.push(invariant(
+                        "ir.invalid-table-layout-rule",
+                        "layout-only rule cells must match the declared column strengths"
+                            .to_owned(),
+                    ));
+                }
+            }
+        }
+        for cell in rows.iter().flat_map(|row| &row.cells) {
+            if let Some(key) = cell.point {
+                let valid = self.content.point(key).is_some_and(|point| {
+                    self.content.root(point.root).is_some_and(|root| {
+                        root.kind == crate::ContentRootKind::Cell && root.owner == point.owner
+                    }) && self
+                        .content
+                        .owner(point.owner)
+                        .is_some_and(|owner| owner.kind == crate::ContentOwnerKind::TableCell)
+                });
+                if !valid {
+                    self.diagnostics.push(invariant(
+                        "ir.invalid-table-cell-point",
+                        format!(
+                            "table cell point {} must belong to a cell root and owner",
+                            key.get()
+                        ),
+                    ));
+                }
+                let seen = usize::try_from(key.get() - 1)
+                    .ok()
+                    .and_then(|index| self.seen_table_points.get_mut(index));
+                if let Some(seen) = seen {
+                    *seen = seen.saturating_add(1);
+                    if *seen != 1 {
+                        self.diagnostics.push(invariant(
+                            "ir.duplicate-table-cell-point",
+                            format!("table cell point {} is used more than once", key.get()),
+                        ));
+                    }
+                }
+                if placed_points
+                    .as_ref()
+                    .is_some_and(|points| points.get(&key) != Some(&1))
+                {
+                    self.diagnostics.push(invariant(
+                        "ir.unplaced-table-cell-point",
+                        format!(
+                            "fixed table cell point {} must have exactly one physical placement",
+                            key.get()
+                        ),
+                    ));
+                }
+            }
+            if let Some(source) = cell.source {
+                validate_source_span(&mut self.diagnostics, source);
+            }
+            if cell.kind != crate::TableCellKind::Text && !cell.blocks.is_empty() {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-rule-content",
+                    "table rule cells must not contain ordinary block content".to_owned(),
+                ));
+            }
+            if cell.column_span == 0 || cell.row_span == 0 {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-span",
+                    "table row and column spans must be at least one".to_owned(),
+                ));
+            }
+        }
+    }
+
     fn record_fixed_view(&mut self, key: crate::FixedViewKey) {
         let Some(seen) = usize::try_from(key.get() - 1)
             .ok()
@@ -412,40 +543,11 @@ impl<'ir> Visit<'ir> for InvariantCollector<'ir> {
         if let Some(source) = source {
             validate_source_span(&mut self.diagnostics, source);
         }
-        if let Block::Table { rows, .. } = block {
-            for row in rows {
-                if !matches!(&row.kind, crate::TableRowKind::Data) && !row.cells.is_empty() {
-                    self.diagnostics.push(invariant(
-                        "ir.invalid-table-rule-cells",
-                        "whole-row table rules must not contain data cells".to_owned(),
-                    ));
-                }
-                if let crate::TableRowKind::LayoutRule { cells } = &row.kind
-                    && cells.is_empty()
-                {
-                    self.diagnostics.push(invariant(
-                        "ir.empty-table-layout-rule",
-                        "layout-only table rules must contain at least one rule cell".to_owned(),
-                    ));
-                }
-            }
-            for cell in rows.iter().flat_map(|row| &row.cells) {
-                if let Some(source) = cell.source {
-                    validate_source_span(&mut self.diagnostics, source);
-                }
-                if cell.kind != crate::TableCellKind::Text && !cell.blocks.is_empty() {
-                    self.diagnostics.push(invariant(
-                        "ir.invalid-table-rule-content",
-                        "table rule cells must not contain ordinary block content".to_owned(),
-                    ));
-                }
-                if cell.column_span == 0 || cell.row_span == 0 {
-                    self.diagnostics.push(invariant(
-                        "ir.invalid-table-span",
-                        "table row and column spans must be at least one".to_owned(),
-                    ));
-                }
-            }
+        if let Block::Table {
+            rows, fixed_view, ..
+        } = block
+        {
+            self.validate_table(rows, *fixed_view);
         }
         visit::walk_block(self, block);
     }
@@ -627,6 +729,52 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn table_cell_points_require_cell_ownership_and_unique_use() {
+        let mut builder = crate::ContentStoreBuilder::new();
+        let owner =
+            builder.push_owner(crate::ContentOwnerKind::Content, crate::Provenance::Unknown);
+        let root = builder.push_root(
+            owner,
+            crate::ContentRootKind::Body,
+            crate::Provenance::Unknown,
+        );
+        let point = builder.push_point(
+            root,
+            crate::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+            0,
+            crate::Provenance::Unknown,
+        );
+        let cell = TableCell {
+            kind: crate::TableCellKind::Text,
+            blocks: Vec::new(),
+            point: Some(point),
+            column_span: 1,
+            row_span: 1,
+            alignment: None,
+            source: None,
+        };
+        let block = Block::Table {
+            rows: vec![TableRow {
+                kind: crate::TableRowKind::Data,
+                cells: vec![cell.clone(), cell],
+            }],
+            fixed_view: None,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let codes = validate_document(&document_with_store(
+            builder.finish(),
+            Vec::new(),
+            vec![block],
+        ))
+        .into_iter()
+        .filter_map(|diagnostic| diagnostic.code)
+        .collect::<Vec<_>>();
+        assert!(codes.contains(&"ir.invalid-table-cell-point".to_owned()));
+        assert!(codes.contains(&"ir.duplicate-table-cell-point".to_owned()));
+    }
 
     fn document(sections: Vec<Section>, blocks: Vec<Block>) -> Document {
         document_with_store(crate::ContentStore::default(), sections, blocks)
@@ -935,6 +1083,7 @@ mod tests {
                     cells: vec![TableCell {
                         kind: crate::TableCellKind::Text,
                         blocks: Vec::new(),
+                        point: None,
                         column_span: 0,
                         row_span: 0,
                         alignment: None,
@@ -978,6 +1127,7 @@ mod tests {
                     cells: vec![TableCell {
                         kind: crate::TableCellKind::Text,
                         blocks: Vec::new(),
+                        point: None,
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
@@ -989,6 +1139,20 @@ mod tests {
                     cells: Vec::new(),
                 },
                 TableRow {
+                    kind: crate::TableRowKind::LayoutRule {
+                        cells: vec![crate::TableRuleCellKind::Horizontal],
+                    },
+                    cells: vec![TableCell {
+                        kind: crate::TableCellKind::DoubleHorizontalRule,
+                        blocks: Vec::new(),
+                        point: None,
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                        source: None,
+                    }],
+                },
+                TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
                         kind: crate::TableCellKind::HorizontalRule,
@@ -997,6 +1161,7 @@ mod tests {
                             layout: LayoutHint::default(),
                             source: None,
                         }],
+                        point: None,
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
@@ -1014,6 +1179,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(codes.contains(&"ir.invalid-table-rule-cells"), "{codes:?}");
         assert!(codes.contains(&"ir.empty-table-layout-rule"), "{codes:?}");
+        assert!(codes.contains(&"ir.invalid-table-layout-rule"), "{codes:?}");
         assert!(
             codes.contains(&"ir.invalid-table-rule-content"),
             "{codes:?}"

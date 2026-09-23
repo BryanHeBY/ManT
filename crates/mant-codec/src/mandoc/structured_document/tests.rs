@@ -78,6 +78,12 @@ fn boxed_tbl_uses_native_physical_rows_and_shared_cell_atoms() {
             .count(),
         1
     );
+    // v0.12 wire/schema deliberately omits the private cell→point shortcut.
+    // The fixed geometry itself still round-trips as a valid document.
+    let wire = serde_json::to_vec(&document).expect("serialize fixed document");
+    let decoded: mant_ir::Document =
+        serde_json::from_slice(&wire).expect("deserialize v0.12-shaped document");
+    assert!(mant_ir::validate_document(&decoded).is_empty());
 }
 
 #[test]
@@ -833,7 +839,21 @@ fn native_tbl_layout_rule_omits_ignored_data_text() {
         rows[1].kind,
         mant_ir::TableRowKind::LayoutRule { .. }
     ));
-    assert!(rows[1].cells.is_empty());
+    assert_eq!(rows[1].cells.len(), 2);
+    assert_eq!(
+        rows[1].cells[0].kind,
+        mant_ir::TableCellKind::HorizontalRule
+    );
+    assert_eq!(
+        rows[1].cells[1].kind,
+        mant_ir::TableCellKind::DoubleHorizontalRule
+    );
+    assert!(
+        rows[1]
+            .cells
+            .iter()
+            .all(|cell| cell.blocks.is_empty() && cell.point.is_some())
+    );
     assert!(mant_ir::validate_content_store(&document.content_store).is_ok());
 }
 

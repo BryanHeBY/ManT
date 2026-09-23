@@ -7,7 +7,7 @@ use super::{
     tldr_style,
 };
 use mant_ir::geometry::{compose_origin, coordinate, padding};
-use mant_ir::{ContentContext, ContentPointKey, ContentRootKey, PlacementTarget};
+use mant_ir::{ContentContext, ContentPointKey, ContentRootKey, FixedLineKey, PlacementTarget};
 
 mod fixed;
 mod lists;
@@ -22,6 +22,9 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
     pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
+    fixed_line_rows: HashMap<FixedLineKey, usize>,
+    fixed_point_locations: HashMap<ContentPointKey, (usize, usize)>,
+    stacked_point_locations: HashMap<ContentPointKey, (usize, usize)>,
     fixed_search_records: std::collections::BTreeMap<ContentRootKey, FixedSearchRecordBuilder>,
     pending_anchors: Vec<String>,
     pending_gap: mant_ir::geometry::GapPlan,
@@ -44,6 +47,9 @@ pub(super) struct BuiltDocument {
     pub(super) content: LogicalFragment,
     pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
     pub(super) fixed_search_records: Vec<super::search::RenderedSearchRecord>,
+    pub(super) fixed_line_rows: HashMap<FixedLineKey, usize>,
+    pub(super) fixed_point_locations: HashMap<ContentPointKey, (usize, usize)>,
+    pub(super) stacked_point_locations: HashMap<ContentPointKey, (usize, usize)>,
 }
 
 impl<'a> DocumentBuilder<'a> {
@@ -59,6 +65,9 @@ impl<'a> DocumentBuilder<'a> {
                 anchors: self.anchors,
             },
             link_targets: self.link_targets,
+            fixed_line_rows: self.fixed_line_rows,
+            fixed_point_locations: self.fixed_point_locations,
+            stacked_point_locations: self.stacked_point_locations,
             fixed_search_records: self
                 .fixed_search_records
                 .into_values()
@@ -90,6 +99,9 @@ impl<'a> DocumentBuilder<'a> {
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
             link_targets: HashMap::new(),
+            fixed_line_rows: HashMap::new(),
+            fixed_point_locations: HashMap::new(),
+            stacked_point_locations: HashMap::new(),
             fixed_search_records: std::collections::BTreeMap::new(),
             pending_anchors: Vec::new(),
             pending_gap: mant_ir::geometry::GapPlan::default(),
@@ -425,6 +437,15 @@ impl<'a> DocumentBuilder<'a> {
             .expect("validated fixed display must materialize");
         for (line, geometry) in physical_lines.into_iter().zip(&view.lines) {
             let logical_row = self.lines.len();
+            self.fixed_line_rows.insert(geometry.key, logical_row);
+            for placement in &geometry.placements {
+                if let PlacementTarget::Point(point) = placement.target {
+                    self.fixed_point_locations.entry(point).or_insert((
+                        logical_row,
+                        usize::try_from(placement.start_column).expect("validated column"),
+                    ));
+                }
+            }
             let base_style = Style::default().fg(theme::TEXT);
             let mut column_styles = vec![
                 base_style;

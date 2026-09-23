@@ -56,6 +56,18 @@ impl<'a> DocumentBuilder<'a> {
                             cell.and_then(|cell| cell.alignment),
                         );
                         rendered.anchors = content.anchors;
+                        rendered.point = cell.and_then(|cell| cell.point);
+                        rendered.fixed_line_rows = built.fixed_line_rows.into_iter().collect();
+                        rendered.fixed_point_locations = built
+                            .fixed_point_locations
+                            .into_iter()
+                            .map(|(point, (row, column))| (point, row, column))
+                            .collect();
+                        rendered.stacked_point_locations = built
+                            .stacked_point_locations
+                            .into_iter()
+                            .map(|(point, (row, column))| (point, row, column))
+                            .collect();
                         rendered
                     })
                     .collect::<Vec<_>>()
@@ -87,6 +99,7 @@ impl<'a> DocumentBuilder<'a> {
                 TableRowKind::LayoutRule { cells } => self.push(LogicalLine::table_rule(
                     padding(indent),
                     cells.clone(),
+                    row.cells.iter().map(|cell| cell.point).collect(),
                     Arc::clone(&table_layout),
                 )),
             }
@@ -102,6 +115,7 @@ impl<'a> DocumentBuilder<'a> {
                 TableRowKind::Data if row.cells.is_empty() => self.push(LogicalLine::empty()),
                 TableRowKind::Data => {
                     for cell in &row.cells {
+                        let first_row = self.lines.len();
                         match cell.kind {
                             mant_ir::TableCellKind::Text => self.blocks(&cell.blocks, indent),
                             mant_ir::TableCellKind::HorizontalRule
@@ -112,6 +126,16 @@ impl<'a> DocumentBuilder<'a> {
                             | mant_ir::TableCellKind::IsolatedDoubleHorizontalRule => {
                                 self.push(LogicalLine::double_rule(padding(indent)));
                             }
+                        }
+                        if let Some(point) = cell.point {
+                            if self.lines.len() == first_row {
+                                // A native empty cell still has a structural
+                                // position even though it emits no text.
+                                self.push(LogicalLine::empty());
+                            }
+                            self.stacked_point_locations
+                                .entry(point)
+                                .or_insert((first_row, padding(indent)));
                         }
                     }
                 }
@@ -127,6 +151,7 @@ impl<'a> DocumentBuilder<'a> {
                     self.push(LogicalLine::table_rule(
                         padding(indent),
                         cells.clone(),
+                        row.cells.iter().map(|cell| cell.point).collect(),
                         layout,
                     ));
                 }

@@ -234,6 +234,7 @@ fn table_cell_and_root_semantic_owner_positions_agree_with_scanner() {
                     cells: vec![mant_ir::TableCell {
                         kind: mant_ir::TableCellKind::Text,
                         blocks,
+                        point: None,
                         column_span: 1,
                         row_span: 1,
                         alignment: None,

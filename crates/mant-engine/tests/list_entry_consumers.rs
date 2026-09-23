@@ -418,6 +418,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
         let cell = |blocks| mant_ir::TableCell {
             kind: mant_ir::TableCellKind::Text,
             blocks,
+            point: None,
             column_span: 1,
             row_span: 1,
             alignment: None,

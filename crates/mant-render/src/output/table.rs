@@ -146,6 +146,7 @@ mod tests {
         TableCell {
             kind: TableCellKind::Text,
             blocks: Vec::new(),
+            point: None,
             column_span: 1,
             row_span: 1,
             alignment: None,

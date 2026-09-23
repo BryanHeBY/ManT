@@ -464,6 +464,7 @@ fn lower_mdoc_column_list(
                         item_body_predecessor(false, 0, false),
                         formatter,
                     ),
+                    point: None,
                     column_span: 1,
                     row_span: 1,
                     alignment: Some(AstTableAlignment::Left),
@@ -489,6 +490,7 @@ fn lower_mdoc_column_list(
                     cells.push(AstTableCell {
                         kind: mant_ir::TableCellKind::Text,
                         blocks,
+                        point: None,
                         column_span: 1,
                         row_span: 1,
                         alignment: Some(AstTableAlignment::Left),
@@ -570,6 +572,7 @@ fn append_list_targets(
                     cells: vec![AstTableCell {
                         kind: mant_ir::TableCellKind::Text,
                         blocks: Vec::new(),
+                        point: None,
                         column_span: 1,
                         row_span: 1,
                         alignment: Some(AstTableAlignment::Left),

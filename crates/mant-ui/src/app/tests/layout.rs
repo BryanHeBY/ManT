@@ -29,6 +29,18 @@ fn fixed_surface_uses_real_buffer_for_horizontal_reveal_search_and_link_hit() {
     let clipped_row = (0..clipped.row_count)
         .find(|row| clipped.is_fixed_row(*row))
         .expect("fixed row");
+    assert_eq!(
+        clipped.fixed_line_row(mant_ir::FixedLineKey::FIRST),
+        Some(clipped_row)
+    );
+    assert_eq!(
+        clipped.fixed_line_row(mant_ir::FixedLineKey::new(2).unwrap()),
+        Some(clipped_row + 1)
+    );
+    assert_eq!(
+        clipped.point_location(mant_ir::ContentPointKey::FIRST),
+        Some((clipped_row, 36))
+    );
     assert_eq!(clipped.text.lines[clipped_row].to_string(), " LIN");
 
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
@@ -138,6 +150,124 @@ fn multirow_fixed_selection_copies_complete_intermediate_physical_rows() {
     assert_eq!(lines[0], "LINK│");
     assert_eq!(lines[1], format!("{}LINK│", " ".repeat(32)));
     assert_eq!(lines[2], "─".repeat(34));
+}
+
+#[test]
+fn fixed_point_and_rule_only_line_reveal_on_the_real_narrow_terminal_buffer() {
+    use mant_ir::{Decoration, DecorationKey, DecorationKind, FixedLine, FixedLineKey, Provenance};
+
+    let mut bundle = fixed_bundle();
+    let store = &mut bundle.document.as_mut().unwrap().content_store;
+    // CVS tbl_term.c::term_tbl emits whole-row rules without visiting data
+    // cells, so the line key must reveal the physical row on its own.
+    store.fixed_views[0].lines.push(FixedLine {
+        key: FixedLineKey::new(3).unwrap(),
+        terminal_columns: 37,
+        placements: Vec::new(),
+        decorations: vec![Decoration {
+            key: DecorationKey::new(4).unwrap(),
+            text: "─".repeat(37),
+            start_column: 0,
+            width_columns: 37,
+            kind: DecorationKind::Rule,
+            provenance: Provenance::Generated { trigger: None },
+        }],
+    });
+    assert!(mant_ir::validate_document(bundle.document.as_ref().unwrap()).is_empty());
+
+    let mut app = App::new(&bundle);
+    let mut terminal = Terminal::new(TestBackend::new(30, 12)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let area = app.geometry.content;
+    assert!(usize::from(area.width) < 37);
+    let rendered = &app.session.rendered_cache[&area.width];
+    let (point_row, point_column) = rendered
+        .point_location(mant_ir::ContentPointKey::FIRST)
+        .expect("zero-width fixed point");
+    assert_eq!(point_column, 36);
+    let rule_row = rendered
+        .fixed_line_row(FixedLineKey::new(3).unwrap())
+        .expect("rule-only physical line");
+    assert!(rule_row > point_row);
+
+    // The typed point reveals an offscreen native column without inventing a
+    // text anchor. Horizontal movement uses the un-clipped native coordinate.
+    app.session.content_scroll = point_row;
+    app.session.horizontal_offset = point_column.saturating_sub(3);
+    app.session.rendered_cache.clear();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let point_column_on_screen = point_column - app.session.horizontal_offset;
+    assert_eq!(
+        terminal.backend().buffer()[(
+            area.x + u16::try_from(point_column_on_screen).unwrap(),
+            area.y
+        )]
+            .symbol(),
+        "│"
+    );
+
+    // A rule line has no content point or cell, but its fixed-line key still
+    // lands on the exact row and survives the same clipped Buffer rendering.
+    app.session.content_scroll = rule_row;
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    assert_eq!(terminal.backend().buffer()[(area.x, area.y)].symbol(), "─");
+}
+
+#[test]
+fn nested_fixed_display_in_table_cell_keeps_line_and_point_locations() {
+    use mant_ir::{TableCell, TableRow, TableRowKind};
+
+    // CVS tbl_term.c::tbl_data can print T{...T} cell content containing a
+    // no-fill display; the cell wrapper must not discard fixed identities.
+    let mut bundle = fixed_bundle();
+    let document = bundle.document.as_mut().unwrap();
+    let fixed = document.blocks.remove(0);
+    document.content_store.owners[0].kind = mant_ir::ContentOwnerKind::TableCell;
+    document.blocks = vec![AstBlock::Table {
+        fixed_view: None,
+        rows: vec![TableRow {
+            kind: TableRowKind::Data,
+            cells: vec![
+                TableCell {
+                    kind: mant_ir::TableCellKind::Text,
+                    point: None,
+                    blocks: vec![fixed],
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                    source: None,
+                },
+                TableCell {
+                    kind: mant_ir::TableCellKind::Text,
+                    point: None,
+                    blocks: Vec::new(),
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                    source: None,
+                },
+            ],
+        }],
+        layout: mant_ir::LayoutHint::default(),
+        source: None,
+    }];
+    assert!(mant_ir::validate_document(document).is_empty());
+    let view = crate::document::DocumentView::new(&bundle);
+    for width in [80, 10] {
+        let rendered = view.render(width);
+        let first = rendered
+            .fixed_line_row(mant_ir::FixedLineKey::FIRST)
+            .expect("first nested fixed line");
+        assert_eq!(
+            rendered.fixed_line_row(mant_ir::FixedLineKey::new(2).unwrap()),
+            Some(first + 1)
+        );
+        let (row, column) = rendered
+            .point_location(mant_ir::ContentPointKey::FIRST)
+            .expect("nested fixed point");
+        assert_eq!(row, first);
+        assert!(column >= 36);
+    }
 }
 
 #[test]

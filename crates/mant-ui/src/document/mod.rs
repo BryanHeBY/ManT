@@ -17,8 +17,8 @@ mod wrap;
 use std::{collections::HashMap, sync::Arc};
 
 use mant_ir::{
-    Block, DocumentAddress, EntryKind, Inline, LinkOccurrenceKey, ListKind, ResolvedContent,
-    Section, SemanticEntry, SemanticIndex, SourceFormat, TldrDocument,
+    Block, ContentPointKey, DocumentAddress, EntryKind, FixedLineKey, Inline, LinkOccurrenceKey,
+    ListKind, ResolvedContent, Section, SemanticEntry, SemanticIndex, SourceFormat, TldrDocument,
 };
 #[cfg(test)]
 use mant_ir::{TldrCommandPart, TldrOrigin};
@@ -126,6 +126,9 @@ pub struct DocumentView {
     references_limited: bool,
     link_targets: HashMap<LinkIdentity, LinkTarget>,
     fixed_search_records: Vec<RenderedSearchRecord>,
+    fixed_line_rows: HashMap<FixedLineKey, usize>,
+    fixed_point_locations: HashMap<ContentPointKey, (usize, usize)>,
+    stacked_point_locations: HashMap<ContentPointKey, (usize, usize)>,
 }
 
 /// Exact terminal rows and anchor positions for one content width.
@@ -141,6 +144,8 @@ pub struct RenderedDocument {
     /// First visual row for each logical source row, followed by one sentinel.
     logical_rows: Vec<usize>,
     anchor_rows: HashMap<String, usize>,
+    fixed_line_rows: HashMap<FixedLineKey, usize>,
+    point_locations: HashMap<ContentPointKey, (usize, usize)>,
     links: Vec<RenderedLinkRegion>,
     search_records: Vec<RenderedSearchRecord>,
     horizontal_offset: usize,
@@ -368,6 +373,9 @@ impl DocumentView {
             references_limited: references.limited,
             link_targets: built.link_targets,
             fixed_search_records: built.fixed_search_records,
+            fixed_line_rows: built.fixed_line_rows,
+            fixed_point_locations: built.fixed_point_locations,
+            stacked_point_locations: built.stacked_point_locations,
         }
     }
 
@@ -434,6 +442,8 @@ impl DocumentView {
         let mut surfaces = Vec::new();
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
         let mut anchor_rows = HashMap::new();
+        let mut point_locations = HashMap::new();
+        let mut nested_fixed_line_rows = HashMap::new();
 
         for line in &self.lines {
             logical_rows.push(rows.len());
@@ -443,6 +453,18 @@ impl DocumentView {
             }
             for wrapped in wrapped_lines {
                 let row = rows.len();
+                for (point, column) in wrapped.points {
+                    point_locations.entry(point).or_insert((row, column));
+                }
+                for (point, column) in wrapped.cell_points {
+                    point_locations.entry(point).or_insert((row, column));
+                }
+                for (point, column) in wrapped.fixed_points {
+                    point_locations.entry(point).or_insert((row, column));
+                }
+                for key in wrapped.fixed_lines {
+                    nested_fixed_line_rows.entry(key).or_insert(row);
+                }
                 for id in wrapped.anchors {
                     anchor_rows.entry(id).or_insert(row);
                 }
@@ -457,6 +479,23 @@ impl DocumentView {
             }
         }
         logical_rows.push(rows.len());
+        let mut fixed_line_rows: HashMap<FixedLineKey, usize> = self
+            .fixed_line_rows
+            .iter()
+            .filter_map(|(key, logical)| logical_rows.get(*logical).copied().map(|row| (*key, row)))
+            .collect();
+        fixed_line_rows.extend(nested_fixed_line_rows);
+        for (point, (logical, column)) in &self.fixed_point_locations {
+            if let Some(row) = logical_rows.get(*logical) {
+                point_locations.entry(*point).or_insert((*row, *column));
+            }
+        }
+        for (point, (logical, column)) in &self.stacked_point_locations {
+            if let Some(row) = logical_rows.get(*logical) {
+                let column = wrap::readable_origins(*column, *column, width).0;
+                point_locations.entry(*point).or_insert((*row, column));
+            }
+        }
         search_records.extend(self.fixed_search_records.iter().cloned().map(|mut record| {
             for cell in &mut record.cells {
                 cell.fragment.row = logical_rows
@@ -482,6 +521,8 @@ impl DocumentView {
             surfaces,
             logical_rows,
             anchor_rows,
+            fixed_line_rows,
+            point_locations,
             links,
             search_records,
             horizontal_offset,
@@ -501,6 +542,20 @@ impl DocumentView {
 }
 
 impl RenderedDocument {
+    /// Return the rendered row for one native physical line, including empty
+    /// or rule-only lines with no logical text or anchor.
+    #[must_use]
+    pub fn fixed_line_row(&self, key: FixedLineKey) -> Option<usize> {
+        self.fixed_line_rows.get(&key).copied()
+    }
+
+    /// Return a point's rendered row and column. On a fixed row the column is
+    /// the native, unclipped column so callers can reveal it horizontally.
+    #[must_use]
+    pub fn point_location(&self, key: ContentPointKey) -> Option<(usize, usize)> {
+        self.point_locations.get(&key).copied()
+    }
+
     pub(crate) fn is_fixed_row(&self, row: usize) -> bool {
         self.surfaces.get(row) == Some(&LineSurface::Fixed)
     }

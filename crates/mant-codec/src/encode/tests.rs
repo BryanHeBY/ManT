@@ -587,6 +587,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                                 blocks: vec![paragraph(vec![crate::test_content::text(
                                     "left".to_owned(),
                                 )])],
+                                point: None,
                                 column_span: 1,
                                 row_span: 1,
                                 alignment: None,
@@ -597,6 +598,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                                 blocks: vec![paragraph(vec![crate::test_content::text(
                                     "right".to_owned(),
                                 )])],
+                                point: None,
                                 column_span: 1,
                                 row_span: 1,
                                 alignment: None,

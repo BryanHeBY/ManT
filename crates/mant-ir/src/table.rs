@@ -144,6 +144,7 @@ mod tests {
         TableCell {
             kind: crate::TableCellKind::Text,
             blocks: Vec::new(),
+            point: None,
             column_span: columns,
             row_span: rows,
             alignment: None,
@@ -301,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn table_row_kind_json_round_trip_is_closed_and_backward_compatible() {
+    fn table_row_kind_json_round_trip_is_closed() {
         let data = TableRow {
             kind: crate::TableRowKind::Data,
             cells: Vec::new(),
@@ -364,6 +365,7 @@ mod tests {
         let text = cell(1, 1);
         let text_json = serde_json::to_value(&text).unwrap();
         assert!(text_json.get("kind").is_none());
+        assert!(text_json.get("point").is_none());
         assert_eq!(
             serde_json::from_value::<TableCell>(serde_json::json!({
                 "blocks": [],
@@ -383,6 +385,16 @@ mod tests {
             let encoded = serde_json::to_value(&rule).unwrap();
             assert_eq!(serde_json::from_value::<TableCell>(encoded).unwrap(), rule);
         }
+        let pointful = TableCell {
+            point: crate::ContentPointKey::new(42),
+            ..cell(1, 1)
+        };
+        let encoded = serde_json::to_value(&pointful).unwrap();
+        assert!(encoded.get("point").is_none());
+        assert_eq!(
+            serde_json::from_value::<TableCell>(encoded).unwrap().point,
+            None
+        );
         assert!(
             serde_json::from_value::<TableCell>(serde_json::json!({
                 "kind": "future-rule",

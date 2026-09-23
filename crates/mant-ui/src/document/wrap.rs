@@ -10,6 +10,7 @@ use ratatui::{
 };
 
 use mant_ir::TableAlignment;
+use mant_ir::{ContentPointKey, FixedLineKey};
 
 use super::{
     LineSurface, LinkIdentity, LogicalLine, WrapMode,
@@ -29,7 +30,11 @@ use table::render_table_row_with_links;
 /// Reduce both origins by the same displacement whenever indentation would
 /// leave less than 16 cells (half the available width on a narrow viewport).
 /// The one/two-cell fallback necessarily reserves the entire content area.
-fn readable_origins(first: usize, continuation: usize, available: usize) -> (usize, usize) {
+pub(super) fn readable_origins(
+    first: usize,
+    continuation: usize,
+    available: usize,
+) -> (usize, usize) {
     let content = if available <= 2 {
         available
     } else {
@@ -47,6 +52,12 @@ fn readable_origins(first: usize, continuation: usize, available: usize) -> (usi
 pub(super) struct WrappedLine {
     pub(super) source_end: Option<usize>,
     pub(super) anchors: Vec<String>,
+    /// The current table cell's boundary, independent of text alignment.
+    pub(super) cell_points: Vec<(ContentPointKey, usize)>,
+    /// Points within the cell payload, translated with aligned content.
+    pub(super) points: Vec<(ContentPointKey, usize)>,
+    pub(super) fixed_lines: Vec<FixedLineKey>,
+    pub(super) fixed_points: Vec<(ContentPointKey, usize)>,
     pub(super) line: Line<'static>,
     pub(super) links: Vec<WrappedLink>,
     pub(super) search_cells: Vec<WrappedSearchCell>,
@@ -112,6 +123,10 @@ fn wrap_logical_line(
             return vec![WrappedLine {
                 source_end: None,
                 anchors: Vec::new(),
+                cell_points: Vec::new(),
+                points: Vec::new(),
+                fixed_lines: Vec::new(),
+                fixed_points: Vec::new(),
                 line: panel_border(width, '┌', '┐'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
@@ -121,6 +136,10 @@ fn wrap_logical_line(
             return vec![WrappedLine {
                 source_end: None,
                 anchors: Vec::new(),
+                cell_points: Vec::new(),
+                points: Vec::new(),
+                fixed_lines: Vec::new(),
+                fixed_points: Vec::new(),
                 line: panel_border(width, '└', '┘'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
@@ -130,6 +149,10 @@ fn wrap_logical_line(
             return vec![WrappedLine {
                 source_end: None,
                 anchors: Vec::new(),
+                cell_points: Vec::new(),
+                points: Vec::new(),
+                fixed_lines: Vec::new(),
+                fixed_points: Vec::new(),
                 line: Line::from(Span::styled(
                     "─".repeat(width),
                     Style::default().fg(theme::OVERLAY),
@@ -143,6 +166,10 @@ fn wrap_logical_line(
             return vec![WrappedLine {
                 source_end: None,
                 anchors: Vec::new(),
+                cell_points: Vec::new(),
+                points: Vec::new(),
+                fixed_lines: Vec::new(),
+                fixed_points: Vec::new(),
                 line: Line::from(vec![
                     Span::raw(" ".repeat(indent)),
                     Span::styled(
@@ -159,6 +186,10 @@ fn wrap_logical_line(
             return vec![WrappedLine {
                 source_end: None,
                 anchors: Vec::new(),
+                cell_points: Vec::new(),
+                points: Vec::new(),
+                fixed_lines: Vec::new(),
+                fixed_points: Vec::new(),
                 line: Line::from(vec![
                     Span::raw(" ".repeat(indent)),
                     Span::styled(

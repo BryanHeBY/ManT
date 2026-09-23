@@ -128,6 +128,7 @@ fn geometry_bundle() -> ResolvedContent {
                 cells: vec![
                     TableCell {
                         kind: mant_ir::TableCellKind::Text,
+                        point: None,
                         blocks: vec![paragraph("alpha beta gamma")],
                         column_span: 1,
                         row_span: 1,
@@ -136,6 +137,7 @@ fn geometry_bundle() -> ResolvedContent {
                     },
                     TableCell {
                         kind: mant_ir::TableCellKind::Text,
+                        point: None,
                         blocks: vec![paragraph("right hand value")],
                         column_span: 1,
                         row_span: 1,
@@ -395,6 +397,7 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
     let mut bundle = bundle();
     let cell = |text: &str, column_span| TableCell {
         kind: mant_ir::TableCellKind::Text,
+        point: None,
         blocks: vec![Block::Paragraph {
             children: vec![crate::test_content::text(text)],
             layout: LayoutHint::default(),
@@ -452,6 +455,8 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
         surfaces: vec![LineSurface::Normal],
         logical_rows: vec![0, 1],
         anchor_rows: HashMap::new(),
+        fixed_line_rows: HashMap::new(),
+        point_locations: HashMap::new(),
         links: Vec::new(),
         horizontal_offset: 0,
         search_records: vec![RenderedSearchRecord {

@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use mant_ir::{DocumentAddress, LinkOccurrenceKey, TableAlignment, TableRuleCellKind};
+use mant_ir::{
+    ContentPointKey, DocumentAddress, FixedLineKey, LinkOccurrenceKey, TableAlignment,
+    TableRuleCellKind,
+};
 use ratatui::{style::Style, text::Span};
 
 /// External URI that passed `ManT`'s host-activation policy.
@@ -113,12 +116,19 @@ pub(super) struct LogicalTableCell {
     pub(super) lines: Vec<LogicalLine>,
     pub(super) alignment: TableAlignment,
     pub(super) anchors: std::collections::HashMap<String, usize>,
+    /// The cell itself remains addressable even without visible content.
+    pub(super) point: Option<ContentPointKey>,
+    /// Nested fixed displays retain identity through cell-local wrapping.
+    pub(super) fixed_line_rows: Vec<(FixedLineKey, usize)>,
+    pub(super) fixed_point_locations: Vec<(ContentPointKey, usize, usize)>,
+    pub(super) stacked_point_locations: Vec<(ContentPointKey, usize, usize)>,
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct LogicalTableRow {
     pub(super) cells: Vec<LogicalTableCell>,
     pub(super) rules: Option<Vec<TableRuleCellKind>>,
+    pub(super) rule_points: Vec<Option<ContentPointKey>>,
     pub(super) layout: Arc<LogicalTableLayout>,
 }
 
@@ -159,6 +169,10 @@ impl LogicalTableCell {
             lines,
             alignment: alignment.unwrap_or(TableAlignment::Left),
             anchors: std::collections::HashMap::new(),
+            point: None,
+            fixed_line_rows: Vec::new(),
+            fixed_point_locations: Vec::new(),
+            stacked_point_locations: Vec::new(),
         }
     }
 
@@ -293,6 +307,7 @@ impl LogicalLine {
             table_row: Some(LogicalTableRow {
                 cells,
                 rules: None,
+                rule_points: Vec::new(),
                 layout,
             }),
             links: Vec::new(),
@@ -303,6 +318,7 @@ impl LogicalLine {
     pub(super) fn table_rule(
         indent: usize,
         rules: Vec<TableRuleCellKind>,
+        rule_points: Vec<Option<ContentPointKey>>,
         layout: Arc<LogicalTableLayout>,
     ) -> Self {
         Self {
@@ -315,6 +331,7 @@ impl LogicalLine {
             table_row: Some(LogicalTableRow {
                 cells: Vec::new(),
                 rules: Some(rules),
+                rule_points,
                 layout,
             }),
             links: Vec::new(),

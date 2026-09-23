@@ -25,13 +25,13 @@ pub(super) fn append_table_row(
         debug_assert!(node.table_cells.is_empty());
         return;
     };
-    if !matches!(&kind, mant_ir::TableRowKind::Data) && !node.table_cells.is_empty() {
-        // CVS whole-row rules do not own data cells. Refuse to reinterpret a
-        // structurally inconsistent foreign snapshot as printable contents.
+    if !matches!(kind, mant_ir::TableRowKind::Data) && !node.table_cells.is_empty() {
+        // CVS whole-row rules and layout-only rule rows do not own data cells
+        // in the legacy snapshot. Refuse an inconsistent foreign snapshot.
         return;
     }
     let mut text_block_index = 0;
-    let row = TableRow {
+    let mut row = TableRow {
         kind,
         // `tbl_data.c` determines field boundaries using the table's executed
         // delimiter and escape state. The owned native row is consequently
@@ -95,6 +95,7 @@ pub(super) fn append_table_row(
                 AstTableCell {
                     kind: table_cell_kind(cell.kind),
                     blocks,
+                    point: None,
                     column_span: cell.column_span,
                     row_span: cell.row_span,
                     alignment: Some(match cell.alignment {
@@ -110,6 +111,31 @@ pub(super) fn append_table_row(
             })
             .collect(),
     };
+    if matches!(row.kind, mant_ir::TableRowKind::LayoutRule { .. }) {
+        let Some(MandocTableRowKind::LayoutRule { cells }) = &node.table_row_kind else {
+            unreachable!("layout rule kind was matched above")
+        };
+        // The legacy snapshot records layout strengths but not cell-local
+        // positions. Preserve real rule cells in the IR while leaving their
+        // native point/source unknown; the structured producer supplies both.
+        row.cells = cells
+            .iter()
+            .map(|kind| AstTableCell {
+                kind: match kind {
+                    MandocTableRuleCellKind::Horizontal => mant_ir::TableCellKind::HorizontalRule,
+                    MandocTableRuleCellKind::DoubleHorizontal => {
+                        mant_ir::TableCellKind::DoubleHorizontalRule
+                    }
+                },
+                blocks: Vec::new(),
+                point: None,
+                column_span: 1,
+                row_span: 1,
+                alignment: None,
+                source: None,
+            })
+            .collect();
+    }
     if !node.flags.table_start
         && let Some(Block::Table { rows, .. }) = output.last_mut()
     {

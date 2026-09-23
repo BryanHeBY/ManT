@@ -214,6 +214,9 @@ impl<'a> ContentProjectionBuilder<'a> {
                         self.include_fixed_view(*view)?;
                     }
                     for cell in rows.iter().flat_map(|row| &row.cells) {
+                        if let Some(point) = cell.point {
+                            self.include_point(point)?;
+                        }
                         self.include_blocks(&cell.blocks)?;
                     }
                 }
@@ -867,6 +870,9 @@ impl ContentKeyRemap {
                         *view = self.fixed_view(*view)?;
                     }
                     for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
+                        if let Some(point) = &mut cell.point {
+                            *point = self.point(*point)?;
+                        }
                         self.remap_blocks(&mut cell.blocks)?;
                     }
                 }
@@ -1027,6 +1033,58 @@ fn link_target_bytes(target: &crate::LinkTarget) -> usize {
 mod tests {
     use super::*;
     use crate::{ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Provenance};
+
+    #[test]
+    fn table_cell_point_closes_and_remaps_without_visible_content() {
+        let mut builder = ContentStoreBuilder::new();
+        let unrelated_owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let unrelated_root =
+            builder.push_root(unrelated_owner, ContentRootKind::Body, Provenance::Unknown);
+        let _ = builder.push_point(
+            unrelated_root,
+            crate::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+            0,
+            Provenance::Unknown,
+        );
+        let cell_owner = builder.push_owner(ContentOwnerKind::TableCell, Provenance::Unknown);
+        let cell_root = builder.push_root(cell_owner, ContentRootKind::Cell, Provenance::Unknown);
+        let cell_point = builder.push_point(
+            cell_root,
+            crate::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+            0,
+            Provenance::Unknown,
+        );
+        let source = builder.finish();
+        let mut blocks = vec![Block::Table {
+            rows: vec![crate::TableRow {
+                kind: crate::TableRowKind::Data,
+                cells: vec![crate::TableCell {
+                    kind: crate::TableCellKind::Text,
+                    blocks: Vec::new(),
+                    point: Some(cell_point),
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                    source: None,
+                }],
+            }],
+            fixed_view: None,
+            layout: crate::LayoutHint::default(),
+            source: None,
+        }];
+        let mut projection = ContentProjectionBuilder::new(&source);
+        projection.include_blocks(&blocks).unwrap();
+        let (snapshot, remap) = projection.finish().unwrap();
+        remap.remap_blocks(&mut blocks).unwrap();
+        crate::validate_content_store(&snapshot.content_store).unwrap();
+        assert_eq!(snapshot.content_store.owners.len(), 1);
+        assert_eq!(snapshot.content_store.roots.len(), 1);
+        assert_eq!(snapshot.content_store.points.len(), 1);
+        let Block::Table { rows, .. } = &blocks[0] else {
+            panic!("table")
+        };
+        assert_eq!(rows[0].cells[0].point, Some(crate::ContentPointKey::FIRST));
+    }
 
     #[test]
     fn wide_nested_link_intervals_validate_and_snapshot_with_linear_work() {

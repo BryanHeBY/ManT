@@ -312,6 +312,7 @@ fn parse_table_row(
                 cells.push(TableCell {
                     kind: mant_ir::TableCellKind::Text,
                     blocks,
+                    point: None,
                     column_span: 1,
                     row_span: 1,
                     alignment: alignments
@@ -331,6 +332,7 @@ fn parse_table_row(
                         whole,
                         diagnostics,
                     )],
+                    point: None,
                     column_span: 1,
                     row_span: 1,
                     alignment: None,

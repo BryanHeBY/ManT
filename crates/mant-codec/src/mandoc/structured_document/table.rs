@@ -54,8 +54,8 @@ pub(super) fn lower_table(
             NativeTableRowKind::Data => TableRowKind::Data,
             NativeTableRowKind::HorizontalRule => TableRowKind::HorizontalRule,
             NativeTableRowKind::DoubleHorizontalRule => TableRowKind::DoubleHorizontalRule,
-            NativeTableRowKind::LayoutRule => {
-                let strengths = cells
+            NativeTableRowKind::LayoutRule => TableRowKind::LayoutRule {
+                cells: cells
                     .iter()
                     .map(|cell| match cell.kind {
                         TableCellKind::HorizontalRule | TableCellKind::IsolatedHorizontalRule => {
@@ -69,10 +69,8 @@ pub(super) fn lower_table(
                             "layout rule contains text cell",
                         )),
                     })
-                    .collect::<Result<Vec<_>, _>>()?;
-                cells.clear();
-                TableRowKind::LayoutRule { cells: strengths }
-            }
+                    .collect::<Result<Vec<_>, _>>()?,
+            },
         };
         rows.push(TableRow { kind, cells });
     }
@@ -137,6 +135,7 @@ fn lower_cell(
     Ok(TableCell {
         kind,
         blocks,
+        point: Some(public_point),
         column_span: u16::try_from(cell.column_span()).map_err(|_| {
             NativeProjectionError::InvalidRelation("table column span exceeds IR range")
         })?,

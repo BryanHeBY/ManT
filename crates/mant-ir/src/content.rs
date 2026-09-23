@@ -448,6 +448,12 @@ impl<'store> ContentContext<'store> {
         self.backend.store()?.point(key)
     }
 
+    /// Resolve one authoritative structural content owner.
+    #[must_use]
+    pub fn owner(self, key: crate::ContentOwnerKey) -> Option<&'store crate::ContentOwner> {
+        self.backend.store()?.owner(key)
+    }
+
     /// Build one reusable scalar-position index for document or projection
     /// admission. The store must already have passed structural validation.
     #[must_use]

@@ -349,6 +349,7 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
                 cells: vec![
                     TableCell {
                         kind: mant_ir::TableCellKind::Text,
+                        point: None,
                         blocks: vec![linked_block("left ", "CELLLINK")],
                         column_span: 1,
                         row_span: 1,
@@ -357,6 +358,7 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
                     },
                     TableCell {
                         kind: mant_ir::TableCellKind::Text,
+                        point: None,
                         blocks: vec![paragraph("right column has substantial wrapped content")],
                         column_span: 1,
                         row_span: 1,

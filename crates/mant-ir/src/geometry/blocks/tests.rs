@@ -159,6 +159,7 @@ fn nested_reparenting_never_translates_descendants_or_source_twice() {
             cells: vec![TableCell {
                 kind: crate::TableCellKind::Text,
                 blocks: vec![paragraph],
+                point: None,
                 column_span: 1,
                 row_span: 1,
                 alignment: None,

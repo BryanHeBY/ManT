@@ -441,6 +441,12 @@ pub struct TableCell {
     pub kind: TableCellKind,
     /// Block content contained in the cell.
     pub blocks: Vec<Block>,
+    /// Native cell position in the authoritative content store. Synthetic
+    /// and legacy cells have no such point. This private reveal shortcut is
+    /// intentionally omitted from the unchanged v0.12 wire/schema contract.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub point: Option<crate::ContentPointKey>,
     /// Number of logical columns occupied by the cell.
     #[serde(default = "one_u16", skip_serializing_if = "is_one_u16")]
     pub column_span: u16,

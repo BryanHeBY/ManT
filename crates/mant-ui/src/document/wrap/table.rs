@@ -3,6 +3,7 @@ use super::{
     Line, LogicalTableCell, LogicalTableLayout, LogicalTableRow, Span, TableAlignment, WrappedLine,
     WrappedLink, WrappedSearchCell, wrap_line_with_links,
 };
+use mant_ir::ContentPointKey;
 const TABLE_COLUMN_GAP: usize = 2;
 pub(super) fn render_table_row_with_links(
     indent: usize,
@@ -10,12 +11,16 @@ pub(super) fn render_table_row_with_links(
     width: usize,
 ) -> Vec<WrappedLine> {
     if let Some(rules) = &table.rules {
-        return render_layout_rule(indent, rules, &table.layout, width);
+        return render_layout_rule(indent, rules, &table.rule_points, &table.layout, width);
     }
     if table.cells.is_empty() {
         return vec![WrappedLine {
             source_end: None,
             anchors: Vec::new(),
+            cell_points: Vec::new(),
+            points: Vec::new(),
+            fixed_lines: Vec::new(),
+            fixed_points: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
@@ -35,6 +40,7 @@ pub(super) fn render_table_row_with_links(
 fn render_layout_rule(
     indent: usize,
     rules: &[mant_ir::TableRuleCellKind],
+    rule_points: &[Option<mant_ir::ContentPointKey>],
     layout: &LogicalTableLayout,
     width: usize,
 ) -> Vec<WrappedLine> {
@@ -47,19 +53,30 @@ fn render_layout_rule(
             vec![(base / rules.len().max(1)).max(1); rules.len()]
         });
     let mut spans = vec![Span::raw(" ".repeat(indent))];
+    let mut cell_points = Vec::new();
+    let mut column = indent;
     for (index, (rule, width)) in rules.iter().zip(widths).enumerate() {
         if index != 0 {
             spans.push(Span::raw(" ".repeat(TABLE_COLUMN_GAP)));
+            column += TABLE_COLUMN_GAP;
+        }
+        if let Some(point) = rule_points.get(index).copied().flatten() {
+            cell_points.push((point, column));
         }
         let glyph = match rule {
             mant_ir::TableRuleCellKind::Horizontal => '─',
             mant_ir::TableRuleCellKind::DoubleHorizontal => '═',
         };
         spans.push(Span::raw(glyph.to_string().repeat(width)));
+        column += width;
     }
     vec![WrappedLine {
         source_end: None,
         anchors: Vec::new(),
+        cell_points,
+        points: Vec::new(),
+        fixed_lines: Vec::new(),
+        fixed_points: Vec::new(),
         line: Line::from(spans),
         links: Vec::new(),
         search_cells: Vec::new(),
@@ -77,6 +94,10 @@ fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Ve
         rows.push(WrappedLine {
             source_end: None,
             anchors: Vec::new(),
+            cell_points: Vec::new(),
+            points: Vec::new(),
+            fixed_lines: Vec::new(),
+            fixed_points: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
@@ -103,6 +124,9 @@ fn wrap_table_cell(
         line.continuation_indent = line.continuation_indent.saturating_add(indent);
         let mut wrapped = wrap_line_with_links(&line, width);
         for row in &mut wrapped {
+            // The inner table's boundaries are payload of this outer cell.
+            // Only this cell's own point remains pinned to its column start.
+            row.points.append(&mut row.cell_points);
             for search_cell in &mut row.search_cells {
                 search_cell.group = *next_group;
             }
@@ -110,14 +134,23 @@ fn wrap_table_cell(
         *next_group += 1;
         rendered.extend(wrapped);
     }
-    if rendered.is_empty() && !cell.anchors.is_empty() {
+    if rendered.is_empty() && (!cell.anchors.is_empty() || cell.point.is_some()) {
         rendered.push(WrappedLine {
             source_end: None,
             anchors: Vec::new(),
+            cell_points: Vec::new(),
+            points: Vec::new(),
+            fixed_lines: Vec::new(),
+            fixed_points: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
         });
+    }
+    if let Some(point) = cell.point
+        && let Some(first) = rendered.first_mut()
+    {
+        first.cell_points.push((point, indent));
     }
     for (id, logical) in &cell.anchors {
         let row = logical_rows
@@ -128,7 +161,57 @@ fn wrap_table_cell(
             row.anchors.push(id.clone());
         }
     }
+    for (key, logical) in &cell.fixed_line_rows {
+        if let Some(row) = logical_rows
+            .get(*logical)
+            .and_then(|index| rendered.get_mut(*index))
+        {
+            row.fixed_lines.push(*key);
+        }
+    }
+    for (point, logical, column) in &cell.fixed_point_locations {
+        if let Some(row) = logical_rows
+            .get(*logical)
+            .and_then(|index| rendered.get_mut(*index))
+        {
+            row.fixed_points.push((*point, indent + column));
+        }
+    }
+    for (point, logical, column) in &cell.stacked_point_locations {
+        if let Some(row) = logical_rows
+            .get(*logical)
+            .and_then(|index| rendered.get_mut(*index))
+        {
+            let column = super::readable_origins(indent + column, indent + column, width).0;
+            row.points.push((*point, column));
+        }
+    }
     rendered
+}
+
+fn collect_column_points(
+    cell_points: &mut Vec<(ContentPointKey, usize)>,
+    points: &mut Vec<(ContentPointKey, usize)>,
+    row: &WrappedLine,
+    column_offset: usize,
+    left_padding: usize,
+) {
+    // The current cell's point stays on the column boundary. Inner content
+    // points move with the visible text under right/centre alignment.
+    cell_points.extend(
+        row.cell_points
+            .iter()
+            .map(|(point, local)| (*point, column_offset + local)),
+    );
+    points.extend(
+        row.points
+            .iter()
+            .map(|(point, local)| (*point, column_offset + left_padding + local)),
+    );
+}
+
+fn rendered_table_rows(cells: &[Vec<WrappedLine>]) -> usize {
+    cells.iter().map(Vec::len).max().unwrap_or(0).max(1)
 }
 
 fn render_table_columns(
@@ -148,16 +231,15 @@ fn render_table_columns(
             wrap_table_cell(cell, *column_width, 0, &mut next_search_group)
         })
         .collect::<Vec<_>>();
-    let row_count = rendered_cells
-        .iter()
-        .map(Vec::len)
-        .max()
-        .unwrap_or(0)
-        .max(1);
+    let row_count = rendered_table_rows(&rendered_cells);
 
     (0..row_count)
         .map(|row_index| {
             let mut anchors = Vec::new();
+            let mut cell_points = Vec::new();
+            let mut points = Vec::new();
+            let mut fixed_lines = Vec::new();
+            let mut fixed_points = Vec::new();
             let mut spans = Vec::new();
             let mut links = Vec::new();
             let mut search_cells = Vec::new();
@@ -191,6 +273,19 @@ fn render_table_columns(
                         start_column: column_offset + left_padding + link.start_column,
                         end_column: column_offset + left_padding + link.end_column,
                     }));
+                    collect_column_points(
+                        &mut cell_points,
+                        &mut points,
+                        row,
+                        column_offset,
+                        left_padding,
+                    );
+                    fixed_lines.extend(row.fixed_lines.iter().copied());
+                    fixed_points.extend(
+                        row.fixed_points
+                            .iter()
+                            .map(|(point, local)| (*point, column_offset + left_padding + local)),
+                    );
                     search_cells.extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
                         group: cell.group,
                         join_before: cell.join_before,
@@ -211,6 +306,10 @@ fn render_table_columns(
             WrappedLine {
                 source_end: None,
                 anchors,
+                cell_points,
+                points,
+                fixed_lines,
+                fixed_points,
                 line: Line::from(spans),
                 links,
                 search_cells,

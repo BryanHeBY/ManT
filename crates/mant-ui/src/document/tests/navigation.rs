@@ -411,6 +411,7 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
     };
     let cell = |blocks| TableCell {
         kind: mant_ir::TableCellKind::Text,
+        point: None,
         blocks,
         column_span: 1,
         row_span: 1,
