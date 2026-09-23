@@ -466,6 +466,74 @@ fn nofill_mixed_width_affine_ranges_keep_native_columns() {
 }
 
 #[test]
+fn nofill_zero_width_combining_marks_keep_native_byte_order() {
+    use mant_ir::ResolvedContent;
+    use mant_ui::DocumentView;
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+
+    // Each exact source was checked with fixed CVS UTF-8/78. Pinned
+    // term.c::term_field emits the combining scalar even though
+    // term_ascii.c::utf8_getwidth reports zero columns for it.
+    for (body, visible) in [
+        ("A\u{301}B", "A\u{301}B"),
+        ("\u{301}A", "\u{301}A"),
+        ("A\u{301}", "A\u{301}"),
+        ("A\\&\u{301}B", "A\u{301}B"),
+    ] {
+        let source = format!(".TH T 1\n.SH D\n.nf\n{body}\n.fi\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert("combining.1", source.into_bytes()).unwrap();
+        let document = project_native_manual("combining.1", &bundle, InputFormat::Man)
+            .expect("combining scalar reaches final fixed IR");
+        let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+            panic!("no-fill line is fixed")
+        };
+        let fixed = document.content_store.fixed_view(*view).unwrap();
+        assert_eq!(
+            fixed.physical_lines(document.content()).unwrap(),
+            [format!("     {visible}")],
+        );
+        let marks = fixed.lines[0]
+            .placements
+            .iter()
+            .filter(|placement| {
+                placement.start_column == placement.end_column
+                    && matches!(placement.target, mant_ir::PlacementTarget::Content(_))
+                    && matches!(placement.map, mant_ir::CellMapKind::GraphemeCluster {})
+            })
+            .count();
+        assert_eq!(
+            marks, 1,
+            "{body}: mark has one zero-column content placement"
+        );
+        if body == "A\u{301}B" {
+            let resolved = ResolvedContent {
+                label: "T(1)".to_owned(),
+                address: None,
+                document: Some(document),
+                tldr: None,
+            };
+            let rendered = DocumentView::new(&resolved).render(8);
+            let row = rendered
+                .text
+                .lines
+                .iter()
+                .position(|line| line.to_string().contains(visible))
+                .unwrap();
+            let area = Rect::new(0, 0, 8, 1);
+            let mut buffer = Buffer::empty(area);
+            Paragraph::new(rendered.text.lines[row].clone()).render(area, &mut buffer);
+            assert_eq!(buffer[(5, 0)].symbol(), "A\u{301}");
+            assert_eq!(buffer[(6, 0)].symbol(), "B");
+        }
+    }
+}
+
+#[test]
 fn literal_display_keeps_link_occurrence_on_shared_content() {
     // Exact input was checked with fixed CVS UTF-8 width=20. In
     // mdoc_term.c::termp_lk_pre, the label and URL execute inside the

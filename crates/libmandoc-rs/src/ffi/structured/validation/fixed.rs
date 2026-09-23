@@ -139,7 +139,8 @@ pub(super) fn validate_fixed(
                     .ok_or_else(relation_error)?;
                 if placement.point != 0
                     || placement.byte_start >= placement.byte_end
-                    || placement.column_start == placement.column_end
+                    || (placement.column_start == placement.column_end
+                        && placement.cell_map_kind != 2)
                     || !matches!(atom.kind, 1 | 2)
                     || !utf8_boundary(atom.text, placement.byte_start)
                     || !utf8_boundary(atom.text, placement.byte_end)

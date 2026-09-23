@@ -575,9 +575,13 @@ Placements on a line do not overlap unless an explicitly supported overstrike
 relationship says so. A content placement is split at extended-grapheme and
 non-linear movement boundaries. Contiguous ASCII-like scalars may use an affine
 segment; a wide or combining cluster uses one `GraphemeCluster` segment; an
-overstrike uses explicit `Overlay` segments at the same columns. Consequently,
-each terminal-column intersection maps to a whole grapheme and a checked
-content byte/scalar subrange. UTF-8 ranges, Unicode scalar ranges, and terminal
+overstrike uses explicit `Overlay` segments at the same columns. When the
+upstream terminal emits a combining scalar with zero column width as its own
+observation, a checked `GraphemeCluster` content placement may have equal start
+and end columns at that emission boundary; it retains byte order without
+inventing a cell. Consequently, each occupied terminal-column intersection
+maps to a whole grapheme and a checked content byte/scalar subrange. UTF-8
+ranges, Unicode scalar ranges, and terminal
 column ranges are validated separately. `root_scalar_range` is relative to the
 target's root and must equal the prefix sum implied by the content ref; a point
 placement uses its checked `scalar_boundary` for both endpoints. Point

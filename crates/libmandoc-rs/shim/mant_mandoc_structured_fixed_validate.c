@@ -140,7 +140,8 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 			    placement->atom > result->content_atom_count ||
 			    placement->point != 0 ||
 			    placement->byte_start >= placement->byte_end ||
-			    placement->column_start == placement->column_end ||
+			    (placement->column_start == placement->column_end &&
+			    placement->cell_map_kind != MANT_CELL_MAP_GRAPHEME_CLUSTER) ||
 			    placement->cell_map_kind < MANT_CELL_MAP_AFFINE ||
 			    placement->cell_map_kind > MANT_CELL_MAP_OVERLAY)
 				return 0;

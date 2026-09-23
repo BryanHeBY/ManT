@@ -353,7 +353,7 @@ fn validate_fixed_views(
                             "fixed placements overlap outside one overstrike cell range",
                         );
                     }
-                    if !same_range {
+                    if !same_range && placement.start_column != placement.end_column {
                         occupied.push((placement.start_column, placement.end_column));
                     }
                     previous_start = placement.start_column;
@@ -423,7 +423,8 @@ fn validate_fixed_views(
                             return invalid("fixed scalar boundary exceeds u32");
                         };
                         if placement.root_scalar_range != (start..end)
-                            || placement.start_column == placement.end_column
+                            || (placement.start_column == placement.end_column
+                                && !matches!(placement.map, CellMapKind::GraphemeCluster {}))
                         {
                             return invalid(
                                 "fixed content placement disagrees with its logical range",

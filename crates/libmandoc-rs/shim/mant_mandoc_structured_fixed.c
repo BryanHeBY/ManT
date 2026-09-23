@@ -607,8 +607,6 @@ mant_structured_fixed_commit(struct structured_session *session,
 
 	for (index = 0; index < token->fixed_use_count; index++) {
 		use = token->fixed_uses + index;
-		if (use->start == use->end)
-			continue;
 		width = use->end - use->start;
 		if (scalar_end != scalar_start + 1 || width > UINT8_MAX) {
 			mant_structured_set_failure(session, MANT_STRUCTURED_UNSUPPORTED,
@@ -625,7 +623,7 @@ mant_structured_fixed_commit(struct structured_session *session,
 		    MANT_STRUCTURED_STAGE_RENDER))
 			return;
 		count = session->result->placement_count;
-		if (count != 0 && !use->overlay) {
+		if (count != 0 && width != 0 && !use->overlay) {
 			placement = session->result->placements + count - 1;
 			if (placement->target_kind == MANT_PLACEMENT_CONTENT &&
 			    placement->cell_map_kind == MANT_CELL_MAP_AFFINE &&
@@ -669,8 +667,9 @@ mant_structured_fixed_commit(struct structured_session *session,
 		placement->scalar_end = scalar_end;
 		placement->column_start = use->start;
 		placement->column_end = use->end;
-		placement->cell_map_kind = use->overlay ?
+		placement->cell_map_kind = width == 0 ?
+		    MANT_CELL_MAP_GRAPHEME_CLUSTER : use->overlay ?
 		    MANT_CELL_MAP_OVERLAY : MANT_CELL_MAP_AFFINE;
-		placement->cell_map_value = use->overlay ? 0 : width;
+		placement->cell_map_value = width == 0 || use->overlay ? 0 : width;
 	}
 }

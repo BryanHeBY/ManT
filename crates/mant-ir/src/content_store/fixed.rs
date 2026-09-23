@@ -4,6 +4,7 @@ use std::ops::Range;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use unicode_width::UnicodeWidthStr;
 
 use crate::Provenance;
 
@@ -45,6 +46,7 @@ impl FixedView {
             // terminal cell on large fixed tables.
             let mut cells = vec![0_u32; width];
             let mut glyphs = Vec::new();
+            let mut zero_width = Vec::new();
             for placement in &line.placements {
                 let PlacementTarget::Content(reference) = placement.target else {
                     continue;
@@ -54,6 +56,15 @@ impl FixedView {
                 let display = placement_display(&atom.kind, reference, text);
                 let start = usize::try_from(placement.start_column).ok()?;
                 let end = usize::try_from(placement.end_column).ok()?;
+                if start == end {
+                    if !matches!(placement.map, CellMapKind::GraphemeCluster {})
+                        || UnicodeWidthStr::width(display) != 0
+                    {
+                        return None;
+                    }
+                    zero_width.push((start, display));
+                    continue;
+                }
                 match placement.map {
                     CellMapKind::Affine { columns_per_scalar } => {
                         let step = usize::from(columns_per_scalar);
@@ -97,8 +108,16 @@ impl FixedView {
                     CellGlyph::Text(&decoration.text),
                 )?;
             }
+            // The terminal emits zero-column scalars in byte order at their
+            // current column.  Keep them outside the cell array: assigning a
+            // synthetic column would shift every later glyph and hit region.
+            zero_width.sort_by_key(|(column, _)| *column);
+            let mut zero_width = zero_width.into_iter().peekable();
             let mut output = String::with_capacity(width);
-            for cell in cells {
+            for (column, cell) in cells.into_iter().enumerate() {
+                while zero_width.peek().is_some_and(|(start, _)| *start == column) {
+                    output.push_str(zero_width.next()?.1);
+                }
                 match cell {
                     0 => output.push(' '),
                     u32::MAX => {}
@@ -107,6 +126,12 @@ impl FixedView {
                         CellGlyph::Scalar(value) => output.push(*value),
                     },
                 }
+            }
+            for (column, text) in zero_width {
+                if column != width {
+                    return None;
+                }
+                output.push_str(text);
             }
             lines.push(output);
         }
@@ -347,6 +372,81 @@ mod tests {
                 .unwrap(),
             ["a界 │"]
         );
+    }
+
+    #[test]
+    fn emitted_combining_scalar_uses_zero_columns_without_losing_byte_order() {
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::FixedBody, Provenance::Unknown);
+        let atom = builder.push_text(
+            root,
+            "A\u{301}B".to_owned(),
+            None,
+            ContentStyle::default(),
+            None,
+            None,
+            Provenance::Unknown,
+        );
+        let mut store = builder.finish();
+        let placement = |key: u32,
+                         bytes: (u32, u32),
+                         scalars: (u32, u32),
+                         columns: (u32, u32),
+                         map: CellMapKind| Placement {
+            key: PlacementKey::new(key).unwrap(),
+            target: PlacementTarget::Content(ContentRef {
+                atom: atom.atom,
+                bytes: super::super::ContentByteRange {
+                    start: bytes.0,
+                    end: bytes.1,
+                },
+            }),
+            root_scalar_range: scalars.0..scalars.1,
+            start_column: columns.0,
+            end_column: columns.1,
+            map,
+        };
+        store.fixed_views.push(FixedView {
+            key: FixedViewKey::FIRST,
+            owner,
+            lines: vec![FixedLine {
+                key: FixedLineKey::FIRST,
+                terminal_columns: 2,
+                placements: vec![
+                    placement(
+                        1,
+                        (0, 1),
+                        (0, 1),
+                        (0, 1),
+                        CellMapKind::Affine {
+                            columns_per_scalar: 1,
+                        },
+                    ),
+                    placement(2, (1, 3), (1, 2), (1, 1), CellMapKind::GraphemeCluster {}),
+                    placement(
+                        3,
+                        (3, 4),
+                        (2, 3),
+                        (1, 2),
+                        CellMapKind::Affine {
+                            columns_per_scalar: 1,
+                        },
+                    ),
+                ],
+                decorations: Vec::new(),
+            }],
+            provenance: Provenance::Unknown,
+        });
+        validate_content_store(&store).unwrap();
+        assert_eq!(
+            store.fixed_views[0]
+                .physical_lines(store.content())
+                .unwrap(),
+            ["A\u{301}B"]
+        );
+        store.fixed_views[0].lines[0].placements[1].map = CellMapKind::Overlay {};
+        assert!(validate_content_store(&store).is_err());
     }
 
     #[test]
