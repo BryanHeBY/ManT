@@ -47,11 +47,6 @@ native_join(const struct mant_annotated_run_endpoint *endpoints,
 	    endpoints + current_run - 1;
 
 	*spaces = 0;
-	/* Link label scope across embedded structural macros still requires its
-	 * own pinned HTML audit.  Never certify adjacency of that selection from
-	 * formatter ownership alone; direct owner/region facts remain usable. */
-	if (mark_kind == MANT_ANNOTATED_MARK_LINK)
-		return MANT_ANNOTATED_JOIN_UNKNOWN;
 	if (prior->last_origin == 0 || current->first_origin == 0 ||
 	    current->first_edge.predecessor_origin != prior->last_origin)
 		return MANT_ANNOTATED_JOIN_UNKNOWN;

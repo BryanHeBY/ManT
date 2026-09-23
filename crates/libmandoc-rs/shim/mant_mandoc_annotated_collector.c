@@ -47,6 +47,7 @@ struct annotated_frame {
 	uint32_t saved_owner;
 	uint32_t saved_link;
 	uint32_t saved_heading;
+	uint64_t saved_link_epoch;
 };
 
 struct annotated_cell {
@@ -75,6 +76,8 @@ struct mant_annotated_collector {
 	uint32_t active_owner;
 	uint32_t active_link;
 	const struct roff_node *active_link_node;
+	uint64_t active_link_epoch;
+	uint64_t phrase_epoch;
 	uint32_t active_heading;
 	uint32_t last_top_heading;
 	uint64_t next_origin;
@@ -99,6 +102,7 @@ struct mant_annotated_collector {
 	uint8_t in_header;
 	uint8_t in_footer;
 	uint8_t footer_drained;
+	uint8_t html_nofill;
 };
 
 static void
@@ -340,7 +344,8 @@ visible_link(const struct mant_annotated_collector *collector,
 	const struct roff_node *macro = collector->active_link_node;
 	const struct roff_node *first, *second, *punct, *body, *head;
 
-	if (macro == NULL || collector->active_link == 0)
+	if (macro == NULL || collector->active_link == 0 ||
+	    collector->active_link_epoch != collector->phrase_epoch)
 		return 0;
 	/* mdoc_html.c::mdoc_mt_pre opens a separate anchor for every text
 	 * operand.  The terminal's automatic space before each operand is
@@ -555,6 +560,49 @@ unsupported_target:
 }
 
 static int
+observe_html_phrase_boundary(struct mant_annotated_collector *collector,
+    const struct roff_node *node)
+{
+	int nofill, closes;
+
+	/* man_html.c::print_man_node() skips comments and NOPRT before fillmode
+	 * or a macro handler can close an in-phrase anchor. NODE_ENTER
+	 * precedes output from this node and observes the same normalized tree. */
+	if (node->type == ROFFT_COMMENT || (node->flags & NODE_NOPRT) != 0)
+		return 1;
+	nofill = (node->flags & NODE_NOFILL) != 0;
+	closes = nofill != collector->html_nofill;
+	collector->html_nofill = nofill;
+	/* html.c::html_fillmode() closes phrase tags on both fi->nf and
+	 * nf->fi (the latter closes PRE with any nested A); tbl_html.c::
+	 * html_tblopen(),
+	 * roff_html.c::roff_html_pre_sp(), and the paragraph/list/section
+	 * handlers in man_html.c close all active phrase tags, including A.
+	 * A later nested link may open, but it cannot revive an old ancestor. */
+	if (node->type == ROFFT_TBL ||
+	    (node->tok == ROFF_sp && !nofill) ||
+	    (node->type == ROFFT_BLOCK &&
+	    (node->tok == MAN_PP || node->tok == MAN_LP ||
+	    node->tok == MAN_P || node->tok == MAN_HP ||
+	    node->tok == MAN_IP || node->tok == MAN_TP ||
+	    node->tok == MAN_TQ || node->tok == MAN_SH ||
+	    node->tok == MAN_SS || node->tok == MAN_RS ||
+	    node->tok == MAN_SY)))
+		closes = 1;
+	if (!closes || collector->active_link == 0 ||
+	    collector->active_link_epoch != collector->phrase_epoch)
+		return 1;
+	if (collector->phrase_epoch == UINT64_MAX) {
+		mant_structured_set_failure(collector->session,
+		    MANT_STRUCTURED_BUDGET, MANT_STRUCTURED_STAGE_RENDER, 29,
+		    UINT64_MAX, UINT64_MAX - 1);
+		return 0;
+	}
+	collector->phrase_epoch++;
+	return 1;
+}
+
+static int
 push_node(struct mant_annotated_collector *collector,
     const struct roff_node *node)
 {
@@ -571,6 +619,8 @@ push_node(struct mant_annotated_collector *collector,
 		    collector->session->limits->max_nesting_depth);
 		return 0;
 	}
+	if (!observe_html_phrase_boundary(collector, node))
+		return 0;
 	frames = mant_structured_grow_array(collector->session,
 	    collector->frames, collector->frame_count,
 	    &collector->frame_capacity, UINT32_MAX, sizeof(*frames),
@@ -585,6 +635,7 @@ push_node(struct mant_annotated_collector *collector,
 	frame->saved_link = collector->active_link;
 	frame->saved_link_node = collector->active_link_node;
 	frame->saved_heading = collector->active_heading;
+	frame->saved_link_epoch = collector->active_link_epoch;
 
 	/* man_macro.c::blk_imp and mdoc_macro.c::blk_full produce a block
 	 * with distinct HEAD/BODY scopes.  Their terminal traversal emits
@@ -698,6 +749,7 @@ push_node(struct mant_annotated_collector *collector,
 			return 0;
 		collector->active_link = key;
 		collector->active_link_node = node;
+		collector->active_link_epoch = collector->phrase_epoch;
 	} else if (node->type == ROFFT_TEXT && node->parent != NULL &&
 	    node->parent->tok == MDOC_Mt) {
 		/* mdoc_html.c::mdoc_mt_pre gives each direct operand its own
@@ -709,6 +761,7 @@ push_node(struct mant_annotated_collector *collector,
 			return 0;
 		collector->active_link = key;
 		collector->active_link_node = node;
+		collector->active_link_epoch = collector->phrase_epoch;
 	}
 	if ((node->flags & NODE_ID) != 0 && node->tag != NULL &&
 	    node->tag[0] != '\0') {
@@ -936,6 +989,7 @@ pop_node(struct mant_annotated_collector *collector,
 	collector->active_owner = frame->saved_owner;
 	collector->active_link = frame->saved_link;
 	collector->active_link_node = frame->saved_link_node;
+	collector->active_link_epoch = frame->saved_link_epoch;
 	collector->active_heading = frame->saved_heading;
 	collector->frame_count--;
 }

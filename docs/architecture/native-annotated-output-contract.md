@@ -52,7 +52,14 @@ as metadata where the native tree will be unavailable after return.
 All offsets name their units: source bytes, output UTF-8 bytes, Unicode
 scalars, graphemes and terminal columns are distinct. `SourceTable` records
 authorized logical paths only; generated/unknown provenance is explicit. A
-`direct-contact` join inserts no byte, including a proven native soft wrap
+link occurrence remains one native macro instance, but its clickable label
+ends when pinned HTML execution closes the phrase (paragraph/list/table
+boundary or fill-mode change), even if terminal traversal continues inside
+the same macro body. A later nested link may open independently; returning
+to the outer AST frame never reopens its closed label. The target and mark
+remain even when the final label is empty.
+
+A `direct-contact` join inserts no byte, including a proven native soft wrap
 between physical rows; the row keys carry that layout fact. An
 `authored-separator` join carries the exact native-consumed separator bytes
 in its bounded `text` payload (for R01, one or more ASCII spaces). A separator
