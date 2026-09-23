@@ -17,8 +17,9 @@ mod wrap;
 use std::{collections::HashMap, sync::Arc};
 
 use mant_ir::{
-    Block, ContentPointKey, DocumentAddress, EntryKind, FixedLineKey, Inline, LinkOccurrenceKey,
-    ListKind, ResolvedContent, Section, SemanticEntry, SemanticIndex, SourceFormat, TldrDocument,
+    Block, ContentPointKey, DocumentAddress, DocumentBody, EntryKind, FixedLineKey, Inline,
+    LinkOccurrenceKey, ListKind, ResolvedContent, Section, SemanticEntry, SemanticIndex,
+    SourceFormat, TldrDocument,
 };
 #[cfg(test)]
 use mant_ir::{TldrCommandPart, TldrOrigin};
@@ -244,6 +245,21 @@ impl DocumentView {
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn new(bundle: &ResolvedContent) -> Self {
+        // Deserialization validates FixedBody, but public Rust fields permit
+        // constructing an invalid one. Do not expose its unchecked references
+        // to indexing, navigation or native-row readers.
+        let fallback = bundle.document.as_ref().and_then(|document| {
+            let DocumentBody::Fixed(fixed) = &document.body else {
+                return None;
+            };
+            fixed.validate().err().map(|_| ResolvedContent {
+                label: bundle.label.clone(),
+                address: bundle.address.clone(),
+                document: None,
+                tldr: bundle.tldr.clone(),
+            })
+        });
+        let bundle = fallback.as_ref().unwrap_or(bundle);
         #[cfg(test)]
         let fixture_bundle = {
             let mut fixture = bundle.clone();

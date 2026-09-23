@@ -38,6 +38,98 @@ fn fixed_reader_preserves_native_column_gaps_without_reflow() {
     );
 }
 
+#[test]
+fn document_view_ignores_malformed_public_fixed_body() {
+    // Direct Rust construction bypasses the deserializer's relationship
+    // checks; an invalid row must not reach the unchecked native-row reader.
+    let query = ResolvedContent {
+        address: None,
+        label: "demo".to_owned(),
+        document: Some(Document {
+            parser: None,
+            sources: Vec::new(),
+            root_source: SourceKey::FIRST,
+            body: DocumentBody::Fixed(mant_ir::FixedBody {
+                surface: mant_ir::DisplaySurface {
+                    text: String::new(),
+                    rows: vec![mant_ir::DisplayRow {
+                        key: std::num::NonZeroU32::new(1).unwrap(),
+                        first_run: std::num::NonZeroU32::new(2).unwrap(),
+                        run_count: 1,
+                        column_count: 1,
+                        break_after: false,
+                    }],
+                    runs: Vec::new(),
+                },
+                headings: Vec::new(),
+                owners: Vec::new(),
+                links: Vec::new(),
+                anchors: Vec::new(),
+                regions: Vec::new(),
+            }),
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        }),
+        tldr: None,
+    };
+    let view = DocumentView::new(&query);
+    assert_eq!(view.label(), "demo");
+    let _rendered = view.render(80);
+}
+
+#[test]
+fn invalid_fixed_mark_preserves_tldr_in_document_view_fallback() {
+    let mut query = bundle();
+    let empty_selection = mant_ir::TextSelection {
+        parts: Vec::new(),
+        joins: Vec::new(),
+    };
+    let fixed = mant_ir::FixedBody {
+        surface: mant_ir::DisplaySurface {
+            text: String::new(),
+            rows: Vec::new(),
+            runs: Vec::new(),
+        },
+        headings: vec![mant_ir::HeadingMark {
+            key: std::num::NonZeroU32::new(2).unwrap(),
+            parent: None,
+            level_hint: 1,
+            title: empty_selection.clone(),
+            direct_body: empty_selection,
+            source: None,
+        }],
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    };
+    assert!(fixed.surface.validate().is_ok());
+    assert!(fixed.validate().is_err()); // The heading key is not dense.
+    query.document.as_mut().unwrap().body = DocumentBody::Fixed(fixed);
+    query.tldr = Some(TldrDocument {
+        title: "demo".to_owned(),
+        description: vec!["Quick reference".to_owned()],
+        more_information: None,
+        examples: Vec::new(),
+        platform: "common".to_owned(),
+        language: "en".to_owned(),
+        source_path: "demo.md".to_owned(),
+        origin: TldrOrigin::TldrPages,
+    });
+
+    let rendered = DocumentView::new(&query).render(80);
+    let output = rendered
+        .text
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(output.contains("Quick reference"));
+    assert!(output.contains("No local man page was found"));
+}
+
 fn styled_inline_lines_with_targets(
     nodes: &[Inline],
     style: Style,

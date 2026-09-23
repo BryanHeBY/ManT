@@ -27,6 +27,83 @@ fn key(value: u32) -> NonZeroU32 {
 }
 
 #[test]
+fn malformed_public_fixed_surface_does_not_panic_plain_renderers() {
+    // Public Rust fields bypass FixedBody's deserialization validation. These
+    // are malformed relationships, not native formatting expectations.
+    let invalid_surfaces = [
+        DisplaySurface {
+            text: String::new(),
+            rows: vec![DisplayRow {
+                key: key(1),
+                first_run: key(2),
+                run_count: 1,
+                column_count: 1,
+                break_after: false,
+            }],
+            runs: Vec::new(),
+        },
+        DisplaySurface {
+            text: "é".to_owned(),
+            rows: vec![DisplayRow {
+                key: key(1),
+                first_run: key(1),
+                run_count: 1,
+                column_count: 1,
+                break_after: false,
+            }],
+            runs: vec![DisplayRun {
+                key: key(1),
+                row: key(1),
+                column: 0,
+                width: 1,
+                byte_start: 1,
+                byte_count: 1,
+                label: DisplayLabel {
+                    owner: None,
+                    link: None,
+                    source: None,
+                    style: DisplayStyle {
+                        bold: false,
+                        underline: false,
+                    },
+                    role: DisplayRole::Body,
+                },
+            }],
+        },
+    ];
+    for surface in invalid_surfaces {
+        assert!(surface.validate().is_err());
+        let query = ResolvedContent {
+            address: None,
+            label: "demo".to_owned(),
+            document: Some(Document {
+                parser: None,
+                sources: sources(SourceFormat::Man),
+                root_source: SourceKey::FIRST,
+                body: DocumentBody::Fixed(FixedBody {
+                    surface,
+                    headings: Vec::new(),
+                    owners: Vec::new(),
+                    links: Vec::new(),
+                    anchors: Vec::new(),
+                    regions: Vec::new(),
+                }),
+                meta: DocumentMeta::default(),
+                fragment_aliases: Vec::new(),
+                diagnostics: Vec::new(),
+            }),
+            tldr: None,
+        };
+        assert_eq!(render_query_text(&query), "demo");
+        assert_eq!(render_query_man(&query), "demo");
+        assert_eq!(
+            super::render_query_text_with(&query, |_, text| text.to_owned()),
+            "demo"
+        );
+    }
+}
+
+#[test]
 #[allow(clippy::too_many_lines)] // One complete Fixed surface fixture keeps row/run keys auditable.
 fn fixed_body_reads_exact_native_rows_without_reflow_or_duplicate_title() {
     // Source-neutral final cells, not a new Flow reconstruction. Pinned CVS

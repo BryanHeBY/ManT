@@ -140,6 +140,11 @@ fn render_fixed_body(
     decorate: &dyn Fn(TextPresentation, &str) -> String,
 ) -> String {
     let surface = &fixed.surface;
+    // Deserialization validates this relationship, but callers can also
+    // construct a FixedBody directly through the public Rust fields.
+    if surface.validate().is_err() {
+        return String::new();
+    }
     let mut output = String::with_capacity(
         surface.text.len() + surface.rows.iter().filter(|row| row.break_after).count(),
     );
