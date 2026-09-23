@@ -1,5 +1,6 @@
 //! Global search pagination over validated, already-loaded snapshots.
 use super::{QueryScopeView, ScopeExecutionError};
+use crate::search::SearchError;
 use mant_protocol::{ScopeSearch, ScopedSearchDocument, SearchQuery};
 
 #[cfg(test)]
@@ -21,24 +22,38 @@ pub fn search_scope(
     let mut groups = Vec::new();
     for (scoped, bundle) in input.iter() {
         let document_ordinal_base = total;
+        if remaining_take == 0 {
+            let count = plan.count(bundle).map_err(ScopeExecutionError::Search)?;
+            total = total
+                .checked_add(count)
+                .ok_or(ScopeExecutionError::Search(SearchError::ResourceLimit))?;
+            continue;
+        }
         let local = plan
-            .execute(bundle, remaining_skip, remaining_take.max(1))
+            .execute(bundle, remaining_skip, remaining_take)
             .map_err(ScopeExecutionError::Search)?;
-        total = total.saturating_add(local.total);
+        total = total
+            .checked_add(local.total)
+            .ok_or(ScopeExecutionError::Search(SearchError::ResourceLimit))?;
+        // Skipping a document with fewer hits than the remaining cursor is a
+        // deliberate clamp, not a result-count overflow.
         remaining_skip = remaining_skip.saturating_sub(local.total);
-        if remaining_take == 0 || local.matches.is_empty() {
+        if local.matches.is_empty() {
             continue;
         }
         let mut local = local;
         let mut hits = std::mem::take(&mut local.matches);
-        if u32::try_from(hits.len()).unwrap_or(u32::MAX) > remaining_take {
-            hits.truncate(usize::try_from(remaining_take).unwrap_or(usize::MAX));
-        }
+        let hit_count = u32::try_from(hits.len())
+            .map_err(|_| ScopeExecutionError::Search(SearchError::ResourceLimit))?;
+        debug_assert!(hit_count <= remaining_take);
         for hit in &mut hits {
-            hit.ordinal = document_ordinal_base.saturating_add(hit.ordinal);
+            hit.ordinal = document_ordinal_base
+                .checked_add(hit.ordinal)
+                .ok_or(ScopeExecutionError::Search(SearchError::ResourceLimit))?;
         }
-        remaining_take =
-            remaining_take.saturating_sub(u32::try_from(hits.len()).unwrap_or(u32::MAX));
+        remaining_take = remaining_take
+            .checked_sub(hit_count)
+            .ok_or(ScopeExecutionError::Search(SearchError::ResourceLimit))?;
         groups.push(ScopedSearchDocument {
             address: scoped.address.clone(),
             depth: scoped.depth,
@@ -48,8 +63,14 @@ pub fn search_scope(
             matches: hits,
         });
     }
-    let returned = query.limit.saturating_sub(remaining_take);
-    let end = query.offset.saturating_add(returned);
+    let returned = query
+        .limit
+        .checked_sub(remaining_take)
+        .ok_or(ScopeExecutionError::Search(SearchError::ResourceLimit))?;
+    let end = query
+        .offset
+        .checked_add(returned)
+        .ok_or(ScopeExecutionError::Search(SearchError::ResourceLimit))?;
     Ok(ScopeSearch {
         query: query.clone(),
         total,

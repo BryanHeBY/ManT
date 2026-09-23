@@ -35,6 +35,8 @@ pub enum SearchError {
     InvalidPattern(String),
     /// The selected Fixed document has invalid display or source relationships.
     InvalidFixed(mant_codec::encode::EncodeError),
+    /// Exact search accounting or a required projection exceeded its budget.
+    ResourceLimit,
 }
 
 impl fmt::Display for SearchError {
@@ -64,6 +66,7 @@ impl fmt::Display for SearchError {
             }
             Self::InvalidPattern(message) => write!(formatter, "invalid search pattern: {message}"),
             Self::InvalidFixed(error) => write!(formatter, "{error}"),
+            Self::ResourceLimit => formatter.write_str("search resource limit exceeded"),
         }
     }
 }

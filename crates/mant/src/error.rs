@@ -216,6 +216,9 @@ fn scope_load_failure(error: ScopeLoadError) -> Failure {
 }
 
 fn search_failure(error: &SearchError) -> Failure {
+    if matches!(error, SearchError::ResourceLimit) {
+        return Failure::operational(error);
+    }
     let message = error.to_string();
     let mut lines = message.lines();
     Failure::usage_lines(lines.next().unwrap_or_default(), lines)
@@ -408,6 +411,27 @@ mod tests {
             assert_eq!(
                 report_failure(&failure, &mut Vec::new(), false),
                 expected_status
+            );
+        }
+    }
+
+    #[test]
+    fn search_resource_limit_is_operational_for_single_and_scoped_queries() {
+        use mant_engine::{QueryExecutionError, ScopeQueryError};
+        use mant_query::ScopeExecutionError;
+
+        let single =
+            super::query_execution_failure(QueryExecutionError::Search(SearchError::ResourceLimit));
+        let scoped = super::scope_query_failure(ScopeQueryError::Execution(
+            ScopeExecutionError::Search(SearchError::ResourceLimit),
+        ));
+        for failure in [single, scoped] {
+            assert_eq!(failure.message(), "search resource limit exceeded");
+            let mut diagnostics = Vec::new();
+            assert_eq!(report_failure(&failure, &mut diagnostics, false), 1);
+            assert_eq!(
+                String::from_utf8(diagnostics).unwrap(),
+                "mant: search resource limit exceeded\n"
             );
         }
     }

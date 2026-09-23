@@ -36,6 +36,13 @@ impl<'a> SearchPlan<'a> {
         validate_request(&request)?;
         super::search_with_matcher(document, &request, &self.matcher)
     }
+
+    /// Count every group through the same matcher and Markdown reader, without
+    /// retaining a page or manufacturing a one-result response for the caller.
+    pub(crate) fn count(&self, document: &crate::ResolvedContent) -> Result<u32, SearchError> {
+        self.execute(document, u32::MAX, 1)
+            .map(|result| result.total)
+    }
 }
 
 /// Validate search limits and compile its matcher without loading a manual.
@@ -173,6 +180,12 @@ mod tests {
             plan.execute(&document, 0, 0),
             Err(SearchError::InvalidLimit)
         );
+
+        let count_only = plan.execute(&document, u32::MAX, 1).unwrap();
+        assert_eq!(count_only.total, 2);
+        assert_eq!(count_only.returned, 0);
+        assert!(count_only.matches.is_empty());
+        assert_eq!(plan.count(&document).unwrap(), 2);
     }
 
     #[test]

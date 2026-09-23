@@ -46,9 +46,9 @@ fn search_flow_with_matcher(
         query.document.as_ref().map(mant_ir::Document::content),
     );
     let searchable = SearchableText::new(markdown, request.scope);
-    let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
-    let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
-    let mut collector = SearchCollector::new(markdown, &lines, offset, limit);
+    let line_count = u32::try_from(lines.count()).map_err(|_| SearchError::ResourceLimit)?;
+    let limit = usize::try_from(request.limit).map_err(|_| SearchError::ResourceLimit)?;
+    let mut collector = SearchCollector::new(markdown, &lines, request.offset, limit);
     collect_occurrences(
         matcher,
         &searchable,
@@ -72,8 +72,11 @@ fn search_flow_with_matcher(
             )
         })
         .collect::<Vec<_>>();
-    let returned = u32::try_from(selected.len()).unwrap_or(u32::MAX);
-    let consumed = request.offset.saturating_add(returned);
+    let returned = u32::try_from(selected.len()).map_err(|_| SearchError::ResourceLimit)?;
+    let consumed = request
+        .offset
+        .checked_add(returned)
+        .ok_or(SearchError::ResourceLimit)?;
     let truncated = consumed < total;
 
     Ok(QuerySearch {
@@ -95,7 +98,7 @@ fn search_flow_with_matcher(
             scope: SearchRenderScope::Full,
             line_base: 1,
             column_base: 1,
-            line_count: u32::try_from(lines.count()).unwrap_or(u32::MAX),
+            line_count,
         },
         total,
         returned,
@@ -116,6 +119,7 @@ fn collect_occurrences(
 ) -> Result<(), SearchError> {
     let mut invalid_utf8_match = false;
     let mut invalid_zero_width_match = false;
+    let mut collection_error = None;
     matcher
         .find_iter(searchable.text.as_bytes(), |found| {
             if found.start() == found.end() {
@@ -143,8 +147,7 @@ fn collect_occurrences(
                 // is intentionally absent rather than invalidating the query.
                 return true;
             }
-            let line_ranges = occurrence_line_ranges(markdown_start..markdown_end, markdown, lines);
-            if line_ranges.is_empty() {
+            if !occurrence_has_line_ranges(markdown_start..markdown_end, markdown, lines) {
                 // A Markdown-scope matcher can land wholly inside one of the
                 // zero-width source-map anchors. Such internal matches have
                 // no anchor-free presentation and must not become phantom
@@ -155,20 +158,21 @@ fn collect_occurrences(
             let end_owner = owners.owner(markdown_end - 1);
             if let (Some(owner), Some(end_owner)) = (owner, end_owner)
                 && owner.key == end_owner.key
-            {
-                collector.push(
-                    RawOccurrence {
-                        searchable: found.start()..found.end(),
-                        markdown: markdown_start..markdown_end,
-                        line_ranges,
-                    },
+                && let Err(error) = collector.push(
+                    found.start()..found.end(),
+                    markdown_start..markdown_end,
                     owner,
-                );
+                )
+            {
+                collection_error = Some(error);
+                return false;
             }
             true
         })
         .map_err(matcher_error)?;
-    if invalid_utf8_match {
+    if let Some(error) = collection_error {
+        Err(error)
+    } else if invalid_utf8_match {
         Err(non_utf8_pattern_error())
     } else if invalid_zero_width_match {
         Err(empty_match_error())
@@ -218,15 +222,15 @@ impl PendingOwner {
 struct SearchCollector<'a> {
     markdown: &'a str,
     lines: &'a LineIndex,
-    offset: usize,
+    offset: u32,
     limit: usize,
-    total: usize,
+    total: u32,
     selected: Vec<RawMatchGroup>,
     current: Option<PendingRawMatchGroup>,
 }
 
 impl<'a> SearchCollector<'a> {
-    fn new(markdown: &'a str, lines: &'a LineIndex, offset: usize, limit: usize) -> Self {
+    fn new(markdown: &'a str, lines: &'a LineIndex, offset: u32, limit: usize) -> Self {
         Self {
             markdown,
             lines,
@@ -238,33 +242,60 @@ impl<'a> SearchCollector<'a> {
         }
     }
 
-    fn push(&mut self, occurrence: RawOccurrence, owner: &Owner) {
+    fn push(
+        &mut self,
+        searchable: Range<usize>,
+        markdown: Range<usize>,
+        owner: &Owner,
+    ) -> Result<(), SearchError> {
         let start_line_index = self
             .lines
-            .position(self.markdown, occurrence.markdown.start)
+            .position(self.markdown, markdown.start)
             .line_index;
         let end_line_index = self
             .lines
-            .line_index_at_byte(occurrence.markdown.end.saturating_sub(1));
+            .line_index_at_byte(markdown.end.saturating_sub(1));
         if let Some(group) = self.current.as_mut().filter(|group| {
             group.start_line_index == start_line_index
                 && group.end_line_index == end_line_index
                 && group.owner.key() == owner.key
         }) {
-            group.occurrence_count = group.occurrence_count.saturating_add(1);
+            group.occurrence_count = group
+                .occurrence_count
+                .checked_add(1)
+                .ok_or(SearchError::ResourceLimit)?;
             if matches!(group.owner, PendingOwner::Retained(_))
                 && group.occurrences.len() < MAX_OCCURRENCES_PER_MATCH
             {
-                group.occurrences.push(occurrence);
+                group.occurrences.push(RawOccurrence {
+                    searchable,
+                    line_ranges: occurrence_line_ranges(
+                        markdown.clone(),
+                        self.markdown,
+                        self.lines,
+                    ),
+                    markdown,
+                });
             }
-            return;
+            return Ok(());
         }
 
         self.flush();
+        let ordinal = self
+            .total
+            .checked_add(1)
+            .ok_or(SearchError::ResourceLimit)?;
         let retained = self.total >= self.offset && self.selected.len() < self.limit;
-        let occurrences = retained.then_some(occurrence).into_iter().collect();
+        let occurrences = retained
+            .then(|| RawOccurrence {
+                searchable,
+                line_ranges: occurrence_line_ranges(markdown.clone(), self.markdown, self.lines),
+                markdown,
+            })
+            .into_iter()
+            .collect();
         self.current = Some(PendingRawMatchGroup {
-            ordinal: u32::try_from(self.total.saturating_add(1)).unwrap_or(u32::MAX),
+            ordinal,
             occurrences,
             occurrence_count: 1,
             owner: if retained {
@@ -275,13 +306,14 @@ impl<'a> SearchCollector<'a> {
             start_line_index,
             end_line_index,
         });
+        Ok(())
     }
 
     fn flush(&mut self) {
         let Some(group) = self.current.take() else {
             return;
         };
-        self.total = self.total.saturating_add(1);
+        self.total = group.ordinal;
         if let PendingOwner::Retained(owner) = group.owner {
             self.selected.push(RawMatchGroup {
                 ordinal: group.ordinal,
@@ -296,7 +328,7 @@ impl<'a> SearchCollector<'a> {
 
     fn finish(mut self) -> (Vec<RawMatchGroup>, u32) {
         self.flush();
-        (self.selected, u32::try_from(self.total).unwrap_or(u32::MAX))
+        (self.selected, self.total)
     }
 }
 
@@ -408,6 +440,32 @@ fn occurrence_line_ranges(
         .collect()
 }
 
+// Skipped pages and count-only groups still need to reject matches wholly
+// inside hidden source-map anchors, but they do not need retained line ranges.
+fn occurrence_has_line_ranges(
+    markdown_range: Range<usize>,
+    markdown: &str,
+    lines: &LineIndex,
+) -> bool {
+    let start = lines.position(markdown, markdown_range.start).line_index;
+    let end = lines.line_index_at_byte(markdown_range.end.saturating_sub(1));
+    (start..=end).any(|line_index| {
+        let line_start = lines.start(line_index);
+        let line = lines.line(markdown, line_index).trim_end();
+        let line_end = line_start.saturating_add(line.len());
+        let intersection = markdown_range.start.max(line_start)..markdown_range.end.min(line_end);
+        if intersection.start >= intersection.end {
+            return false;
+        }
+        lines.has_presented_range(
+            markdown,
+            line_index,
+            intersection.start.saturating_sub(line_start)
+                ..intersection.end.saturating_sub(line_start),
+        )
+    })
+}
+
 fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &LineIndex) -> String {
     let mut text = String::new();
     let mut previous_line = None;
@@ -425,4 +483,60 @@ fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &Li
         previous_line = Some(line_index);
     }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SearchCollector, SearchError, occurrence_has_line_ranges, occurrence_line_ranges};
+    use crate::search::mapping::LineIndex;
+    use crate::search::owners::Owner;
+
+    #[test]
+    fn count_only_visibility_agrees_with_retained_ranges() {
+        // The hidden anchor is inside line one; line two has trailing spaces
+        // which presentation deliberately trims. Exercise every byte range,
+        // including ranges that cross line and anchor boundaries.
+        let markdown = "ab<!-- -->cd  \nef  \n";
+        let lines = LineIndex::with_anchors(markdown, std::iter::once(2..10).collect());
+        for start in 0..markdown.len() {
+            for end in start + 1..=markdown.len() {
+                let range = start..end;
+                assert_eq!(
+                    occurrence_has_line_ranges(range.clone(), markdown, &lines),
+                    !occurrence_line_ranges(range.clone(), markdown, &lines).is_empty(),
+                    "range {range:?}"
+                );
+            }
+        }
+        assert!(!occurrence_has_line_ranges(2..10, markdown, &lines));
+        assert!(!occurrence_has_line_ranges(12..14, markdown, &lines));
+        assert!(occurrence_has_line_ranges(0..12, markdown, &lines));
+        assert!(occurrence_has_line_ranges(10..17, markdown, &lines));
+    }
+
+    #[test]
+    fn collector_rejects_group_and_occurrence_counter_overflow() {
+        let markdown = "a\n";
+        let lines = LineIndex::with_anchors(markdown, Vec::new());
+        let owner = Owner {
+            key: 0,
+            start: 0,
+            end: markdown.len(),
+            source: None,
+        };
+        let mut groups = SearchCollector::new(markdown, &lines, 0, 1);
+        groups.total = u32::MAX;
+        assert_eq!(
+            groups.push(0..1, 0..1, &owner),
+            Err(SearchError::ResourceLimit)
+        );
+
+        let mut occurrences = SearchCollector::new(markdown, &lines, 0, 1);
+        occurrences.push(0..1, 0..1, &owner).unwrap();
+        occurrences.current.as_mut().unwrap().occurrence_count = u32::MAX;
+        assert_eq!(
+            occurrences.push(0..1, 0..1, &owner),
+            Err(SearchError::ResourceLimit)
+        );
+    }
 }

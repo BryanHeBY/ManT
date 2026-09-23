@@ -92,6 +92,35 @@ impl LineIndex {
         AnchorStrippedLine::new(line, hidden)
     }
 
+    /// Determine whether a source range retains any presented bytes without
+    /// constructing a full line or its exact highlight fragments.
+    pub(super) fn has_presented_range(
+        &self,
+        text: &str,
+        line_index: usize,
+        source: Range<usize>,
+    ) -> bool {
+        let line_start = self.start(line_index);
+        let line_end = line_start + self.line(text, line_index).trim_end().len();
+        let start = (line_start + source.start).min(line_end);
+        let end = (line_start + source.end).min(line_end);
+        if start >= end {
+            return false;
+        }
+        let mut cursor = start;
+        let first = self.anchors.partition_point(|range| range.end <= start);
+        for hidden in self.anchors[first..]
+            .iter()
+            .take_while(|range| range.start < end)
+        {
+            if cursor < hidden.start {
+                return true;
+            }
+            cursor = cursor.max(hidden.end);
+        }
+        cursor < end
+    }
+
     pub(super) fn count(&self) -> usize {
         self.starts.len()
     }

@@ -173,3 +173,35 @@ fn global_pagination_counts_matching_line_groups() {
     assert_eq!(second.next_offset, None);
     assert_eq!(second.documents[0].matches[0].ordinal, 2);
 }
+
+#[test]
+fn exhausted_page_counts_later_documents_without_materializing_fake_hits() {
+    let contents = vec![manual("first"), tldr_only("quick"), manual("last")];
+    let graph = scope(&contents);
+    let mut request = query("needle");
+    request.limit = 1;
+
+    let result = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &request,
+    )
+    .unwrap();
+    assert_eq!(result.total, 3);
+    assert_eq!(result.returned, 1);
+    assert_eq!(result.next_offset, Some(1));
+    assert_eq!(result.documents.len(), 1);
+    assert_eq!(result.documents[0].matches.len(), 1);
+    assert_eq!(result.documents[0].matches[0].ordinal, 1);
+
+    request.offset = 2;
+    let last = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &request,
+    )
+    .unwrap();
+    assert_eq!(last.total, 3);
+    assert_eq!(last.returned, 1);
+    assert_eq!(last.next_offset, None);
+    assert_eq!(last.documents.len(), 1);
+    assert_eq!(last.documents[0].matches[0].ordinal, 3);
+}
