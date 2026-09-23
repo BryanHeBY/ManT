@@ -2,9 +2,11 @@
 
 Status on the current C05 `dev` candidate: the bounded private native → owned → shared-IR
 path covers logical `tbl` cells and native fixed geometry, no-fill/literal
-displays, and terminal-executed `eqn` words. This is not the default CLI path.
-The S1 representative-page and performance gates remain open as described
-below; this record does not approve a production switch.
+displays, terminal-executed `eqn` words, and typed reveal of empty/rule cells
+and fixed lines in a real terminal Buffer. This is not the default CLI path.
+C05's functional and N/F/S review findings are closed; the separate S1
+representative-page and production-performance gates remain open below. This
+record does not approve a production switch.
 
 ## Delivered units
 
@@ -16,6 +18,12 @@ below; this record does not approve a production switch.
 | `9d3d0eba` | Checked fixed-view transfer and native table geometry in IR/UI. |
 | `af7bd4d1` | No-fill/literal fixed rows, zero-width positions, and executed equation words. |
 | `2dfd332f` | Coalesce adjacent physical mappings without refunding per-scalar work. |
+| `721d396c` | Resolve fixed-display link origins in the final IR. |
+| `4f697258` | Enforce table budgets and reclaim fixed-use sidecars on failure. |
+| `7e92ba23` | Keep zero-column combining content in fixed placements. |
+| `c4ad1419` | Copy unclipped fixed rows across horizontal selection. |
+| `0b484d5c` | Observe every fixed table cell's native position; validate cell/point identity in C and Rust. |
+| `1cd09ab3` | Retain real rule cells and private point identities through IR, projection, and Buffer reveal. |
 
 The fixed view contains placements into the same logical roots as cells or
 display blocks. Generated borders/rules remain decorations. The fixed view
@@ -24,6 +32,10 @@ alignment/rules use the generic table display; geometry-sensitive tables carry
 the native fixed view. The pinned `eqn_term.c::eqn_box` emits terminal words
 through `term_word`; its inline and standalone examples are therefore retained
 as executed logical content, without a second equation layout algorithm.
+The v0.12 JSON/schema shape is unchanged: layout-rule strengths retain their
+old serialized form; `TableCell.point` is a private in-memory shortcut, not a
+new wire field. JSON round trips remain valid but do not retain that new
+cell-to-point reveal shortcut.
 
 ## Verification performed
 
@@ -32,22 +44,21 @@ as executed logical content, without a second equation layout algorithm.
   assertions. Relevant execution paths were inspected in pinned `tbl_term.c`,
   `term.c`, `man_term.c`, `mdoc_term.c`, `eqn_term.c`, `mdoc_validate.c`, and
   `tag.c`.
-- `libmandoc-rs --features structured --lib`: 198 passed, 2 ignored;
-  `mant-codec --features native-structured --lib`: 389 passed, 1 ignored after the
-  added scale and long-line checks;
-  `mant-render --lib`: 66 passed. Parser-only, render-only,
-  structured-only, and render+structured `libmandoc-rs` tests passed; the
-  latest render+structured run had 199 passed and 2 ignored.
-- `mant-ir`, `mant-ui`, `mant-query`, and `mant-protocol` suites and doctests
-  passed. Strict Clippy passed for the modified Rust packages. Native table
-  cases include empty/span/rule cells, shared links and fixed placements;
-  a real Ratatui `Buffer` checks narrow viewport horizontal viewing.
-- `cargo fmt --all --check` and `git diff --check` passed. Vendor patch replay
-  and `libmandoc-rs` package file inventory passed at this checkpoint.
-- The complete workspace test run passed when its local loopback test servers
-  were allowed to bind. The first sandboxed run failed only four
-  `mant-sources` tests at `bind()` with `PermissionDenied`; the same full
+- Current feature-matrix library tests: `libmandoc-rs` parser-only 96 passed,
+  render-only 97, structured-only 204 passed/2 ignored, render+structured 205
+  passed/2 ignored. `mant-codec` has 391 passed/1 ignored, `mant-ir` 138,
+  `mant-render` 66, and `mant-ui` 252. The v0.12 protocol schema snapshot has
+  4 passed. Native cases cover empty/span/rule/text-block cells and malformed
+  point identities; actual Ratatui Buffers cover narrow/horizontal viewing,
+  whole-row rules, origin-preserving stacking, and nested aligned cells.
+- Strict Clippy passed for the modified Rust packages with all targets and
+  features. The complete workspace test and doctest run passed with local
+  loopback binding allowed. A sandboxed run failed only four `mant-sources`
+  tests at local test-server `bind()` with `PermissionDenied`; the same full
   command then passed with loopback binding available.
+- `cargo fmt --all --check` and `git diff --check` passed. The locked CVS
+  archive replayed all 35 patches with `--verify`; the package inventory
+  includes the terminal observer and structured shim sources.
 
 ## S1 representative-page survey and performance boundary
 
@@ -74,9 +85,26 @@ ignored release-mode scale probe uses identical rows at all three sizes:
 | 5,000 | 58 ms | 88 ms | 35/54 MiB |
 | 20,000 | 255–263 ms | 373–385 ms | 133/203 MiB |
 
+Those are the earlier affine-placement measurements, before cell-point
+placements and checked reveal. The final `0b484d5c` + `1cd09ab3` candidate was
+rebuilt in release mode and measured by running its warmed test executable
+directly (not the Cargo driver) on the same generated rows:
+
+| Rows | Native owned transfer | Full native → final IR | Native/full peak RSS |
+| --- | --- | --- | --- |
+| 1,000 | 10.7–11.0 ms | 16.3 ms | 10.4/15.2 MiB |
+| 5,000 | 59.6 ms | 89.6 ms | 35.6/53.4 MiB |
+| 20,000 | 273.3 ms | 381.5–389.5 ms | 134.4/198.4 MiB |
+
+The 20,000-row case now retains 40,000 additional zero-width cell-point
+placements, bounded by the existing placement, byte, operation, and relation
+limits. Time and RSS remain approximately linear; the native-only time is a
+little above the prior candidate, while full-IR time overlaps its range.
+These are single-host observations, not a production-path comparison.
+
 At 20,000 rows this is 40,000 logical cells and 40,001 fixed lines. Time and
 RSS grow approximately linearly across these sizes; the additional full-IR
-peak is about 70 MiB at the largest size. The final IR and native-owned
+peak is about 64 MiB at the largest size. The final IR and native-owned
 representation coexist during transfer, so the peak is not the retained IR
 size. These figures include the Rust test process, not CLI startup. They are
 reproducible with the ignored `native_fixed_table_scale` test and
@@ -125,11 +153,11 @@ cost breakdown and an equivalent new-path large-page comparison still need
 a separate performance investigation before the S1 exit can be signed off.
 
 Independent N/F/S C05 review of `aa211f73..97cb0840` found native fixed-view,
-resource-budget, and consumer gaps. The subsequent resource repairs enforce
-the dedicated table/row/cell limits, release active fixed-use sidecars on
-failure, and include their peak capacity in the sidecar probe. The remaining
-findings are tracked as C05 follow-up work. The fixed-row copy repair now
-reads the complete unclipped physical source row through `DocumentView` when a visual
-selection crosses horizontally clipped rows, without caching a second full
-fixed body in `RenderedDocument`; viewport columns are translated only for
-the selected endpoint rows. This checkpoint is not an S1 approval.
+resource-budget, and consumer gaps. The repairs enforce dedicated table limits,
+release active fixed-use sidecars on failure, preserve combining content,
+copy complete unclipped fixed rows, and reveal checked cell/line positions.
+A second N/F/S read-only review found and then rechecked cell-identity swaps,
+source-coordinate stacking, nested alignment, and the old v0.12 wire shape;
+the affected regressions and full workspace suite passed after repair. The
+remaining S1 gates above are not C05 feature claims and this checkpoint is not
+an S1 approval.
