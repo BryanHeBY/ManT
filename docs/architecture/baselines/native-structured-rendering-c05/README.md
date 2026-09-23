@@ -4,9 +4,10 @@ Status on the current C05 `dev` candidate: the bounded private native → owned 
 path covers logical `tbl` cells and native fixed geometry, no-fill/literal
 displays, terminal-executed `eqn` words, and typed reveal of empty/rule cells
 and fixed lines in a real terminal Buffer. This is not the default CLI path.
-C05's functional and N/F/S review findings are closed; the separate S1
-representative-page and production-performance gates remain open below. This
-record does not approve a production switch.
+The original checkpoint's N/F/S findings were closed, but a later C05 review
+found five additional fixed/table defects. The repair below addresses
+those findings; the separate S1 representative-page and production-performance
+gates remain open. This record does not approve a production switch.
 
 ## Delivered units
 
@@ -24,6 +25,44 @@ record does not approve a production switch.
 | `c4ad1419` | Copy unclipped fixed rows across horizontal selection. |
 | `0b484d5c` | Observe every fixed table cell's native position; validate cell/point identity in C and Rust. |
 | `1cd09ab3` | Retain real rule cells and private point identities through IR, projection, and Buffer reveal. |
+| `fa3e9869` | Repair fixed scope handoff, overlay geometry, explicit tbl width/spacing, and bounded scalar validation. |
+
+## Post-checkpoint C05 review repairs
+
+- The table observer now switches after the existing `term_newln()` and before
+  `term_tbl()`, so a preceding no-fill/literal display closes before cell
+  ownership is bound. Paragraph handoffs close the old physical view after
+  the native pre-handler flush. C, FFI, and final IR checks reject a fixed
+  display placing content from another block root; this prevents the observed
+  double rendering of `after`.
+- Backspace marks the following visible placement as an overlay, including
+  cross-token, wide/narrow, and boxed-cell uses. A zero-column combining
+  placement retains the pending overstrike. Checked transfer and IR reject an
+  unmarked later overlap; the safe text projection clears stale wide-glyph
+  continuation cells.
+- Explicit tbl width and spacing, including `l0`, select native fixed geometry
+  according to `tbl_layout.c`/`out.c`. Three validation layers use bounded
+  scalar checkpoints for long mixed-width atoms, removing quadratic prefix
+  scans and the pseudo 32 MiB relation-failure threshold without refunding
+  actual rendering work.
+
+The independent review also exposed a separate unsupported composition:
+`.Bd -literal` containing a nested `.Bl` can share one native physical line
+between list head and body roots. The current structured model cannot claim a
+faithful fixed view for that line, and the structured entry rejects the
+combination during result validation. An attempted ordinary-list fallback was
+discarded after a fixed-CVS multi-line/double-space comparison showed it could
+merge physical lines. This remains a follow-up capability, not a C05 repair
+claim.
+
+The repair was verified with the pinned CVS minimal inputs before
+new behavior assertions; parser-only 96, render-only 97, structured-only 214
+(2 ignored), and render+structured 215 (2 ignored) `libmandoc-rs` library
+tests passed. `mant-ir` passed 139 tests and `mant-codec` 396 (1 ignored).
+The full workspace all-features test and doctest run passed when local loopback
+binding was available; its sandboxed first run failed only the four
+`mant-sources` test-server `bind()` cases. Strict workspace Clippy, format
+check, offline 36-patch vendor replay, and package inventory passed.
 
 The fixed view contains placements into the same logical roots as cells or
 display blocks. Generated borders/rules remain decorations. The fixed view
@@ -44,7 +83,7 @@ cell-to-point reveal shortcut.
   assertions. Relevant execution paths were inspected in pinned `tbl_term.c`,
   `term.c`, `man_term.c`, `mdoc_term.c`, `eqn_term.c`, `mdoc_validate.c`, and
   `tag.c`.
-- Current feature-matrix library tests: `libmandoc-rs` parser-only 96 passed,
+- Original checkpoint feature-matrix library tests: `libmandoc-rs` parser-only 96 passed,
   render-only 97, structured-only 204 passed/2 ignored, render+structured 205
   passed/2 ignored. `mant-codec` has 391 passed/1 ignored, `mant-ir` 138,
   `mant-render` 66, and `mant-ui` 252. The v0.12 protocol schema snapshot has
@@ -57,7 +96,8 @@ cell-to-point reveal shortcut.
   tests at local test-server `bind()` with `PermissionDenied`; the same full
   command then passed with loopback binding available.
 - `cargo fmt --all --check` and `git diff --check` passed. The locked CVS
-  archive replayed all 35 patches with `--verify`; the package inventory
+  archive replayed all 35 patches at this checkpoint. The repair adds patch
+  0036, and its offline `--verify` replay passed; the package inventory
   includes the terminal observer and structured shim sources.
 
 ## S1 representative-page survey and performance boundary
@@ -95,6 +135,11 @@ directly (not the Cargo driver) on the same generated rows:
 | 1,000 | 10.7–11.0 ms | 16.3 ms | 10.4/15.2 MiB |
 | 5,000 | 59.6 ms | 89.6 ms | 35.6/53.4 MiB |
 | 20,000 | 273.3 ms | 381.5–389.5 ms | 134.4/198.4 MiB |
+
+After the scalar-index repair, one release native-only 20,000-row probe via
+Cargo measured 277.8 ms, 40,002 atoms, 40,001 lines, and 40,000 cells. This
+is a single post-change timing, not a warmed direct-executable comparison;
+peak RSS and the full native → IR phase were not remeasured here.
 
 The 20,000-row case now retains 40,000 additional zero-width cell-point
 placements, bounded by the existing placement, byte, operation, and relation
