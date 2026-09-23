@@ -423,6 +423,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
             alignment: None,
         };
         let table = Block::Table {
+            fixed_view: None,
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(vec![ordinary]), cell(vec![definition])],

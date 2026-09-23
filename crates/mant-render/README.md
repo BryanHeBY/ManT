@@ -28,6 +28,12 @@ assert_eq!(plain, render_query_text_with(&content, |_, text| text.to_owned()));
 
 `cells` borrows complete grapheme clusters and preserves byte boundaries. Its input contract is already-sanitized single-line text. It does not replace source-neutral IR geometry or a frontend's wrapping policy.
 
+Plain-text output materializes checked fixed views only at the export boundary.
+Logical readers still use the original content store; the exporter does not
+turn native padding, rules or borders into searchable document text. Complex
+fixed tables are emitted as literal physical rows, while ordinary tables keep
+their existing generic layout.
+
 Scope report functions consume `ScopeQueryResponse` directly. They preserve the supplied evidence page, document order, failures and coverage; they do not execute a scope query or invent per-document pagination. CLI adapters supply ANSI decoration or terminal-safe Markdown identities. MCP uses the same plain/Markdown reports, then applies its own redaction, hints and character paging without depending on CLI format or error types.
 
 The `tldr` module supplies pure quick-reference layout and semantic span roles. CLI delivery and TUI widgets independently apply colors and terminal behavior; using this layout does not require a TUI backend.

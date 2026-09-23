@@ -26,6 +26,7 @@ pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) ->
         let layout = match block {
             Block::Paragraph { layout, .. }
             | Block::Preformatted { layout, .. }
+            | Block::FixedDisplay { layout, .. }
             | Block::Equation { layout, .. }
             | Block::Unsupported { layout, .. }
             | Block::List { layout, .. }
@@ -121,6 +122,7 @@ mod tests {
         assert!(table_requires_origin_preserving_stack(&positive, -2));
         for (indent, continuation) in [(-2, 0), (3, -2)] {
             let nested = rows(Block::Table {
+                fixed_view: None,
                 rows: rows(paragraph(indent, continuation)),
                 layout: LayoutHint::default(),
                 source: None,
@@ -148,6 +150,7 @@ mod tests {
             4096
         ));
         let nested = rows(Block::Table {
+            fixed_view: None,
             rows: rows(paragraph(4, 0)),
             layout: LayoutHint {
                 indent_columns: 3,

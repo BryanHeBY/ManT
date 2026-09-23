@@ -443,7 +443,9 @@ fn collect_blocks(
 ) {
     for block in blocks {
         match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+            Block::Paragraph { children, .. }
+            | Block::Preformatted { children, .. }
+            | Block::FixedDisplay { children, .. } => {
                 collect_inlines(content, children, output, independent);
             }
             Block::List { items, .. } => {
@@ -536,6 +538,7 @@ fn collect_block_definitions<'a>(
             }
             mant_ir::Block::Paragraph { .. }
             | mant_ir::Block::Preformatted { .. }
+            | mant_ir::Block::FixedDisplay { .. }
             | mant_ir::Block::Equation { .. }
             | mant_ir::Block::VerticalSpace { .. }
             | mant_ir::Block::ThematicBreak { .. }

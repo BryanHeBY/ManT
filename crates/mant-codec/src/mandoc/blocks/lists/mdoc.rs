@@ -503,6 +503,7 @@ fn lower_mdoc_column_list(
         .collect();
     Block::Table {
         rows,
+        fixed_view: None,
         layout: layout(indent_columns),
         source: source_span(node),
     }

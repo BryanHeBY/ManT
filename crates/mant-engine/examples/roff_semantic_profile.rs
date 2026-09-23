@@ -502,6 +502,7 @@ fn collect_definition_candidates(
             }
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
             | Block::ThematicBreak { .. }

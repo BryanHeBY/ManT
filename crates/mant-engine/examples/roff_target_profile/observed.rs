@@ -163,7 +163,9 @@ fn collect_blocks(
     for (block_index, block) in blocks.iter().enumerate() {
         let path = format!("{parent_path}/block[{block_index}]");
         match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+            Block::Paragraph { children, .. }
+            | Block::Preformatted { children, .. }
+            | Block::FixedDisplay { children, .. } => {
                 let container = if owner.container == "content" {
                     match block {
                         Block::Paragraph { .. } => "paragraph",
@@ -352,6 +354,7 @@ fn block_source_line(block: &Block) -> u32 {
     match block {
         Block::Paragraph { source, .. }
         | Block::Preformatted { source, .. }
+        | Block::FixedDisplay { source, .. }
         | Block::List { source, .. }
         | Block::DefinitionList { source, .. }
         | Block::Table { source, .. }

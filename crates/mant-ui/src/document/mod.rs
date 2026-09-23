@@ -49,7 +49,7 @@ use self::search::{RenderedSearchRecord, search_records_for_lines};
 pub(crate) use self::selection::{RenderedSelection, TextPosition};
 #[cfg(test)]
 use self::wrap::wrap_line;
-use self::wrap::{WrappedLine, wrap_line_with_links};
+use self::wrap::{WrappedLine, wrap_line_with_links_at_offset};
 
 const TLDR_ID: &str = "tldr";
 const ROOT_ID: &str = mant_ir::DOCUMENT_ROOT_ID;
@@ -125,6 +125,7 @@ pub struct DocumentView {
     reference_badges: HashMap<String, String>,
     references_limited: bool,
     link_targets: HashMap<LinkIdentity, LinkTarget>,
+    fixed_search_records: Vec<RenderedSearchRecord>,
 }
 
 /// Exact terminal rows and anchor positions for one content width.
@@ -141,6 +142,7 @@ pub struct RenderedDocument {
     anchor_rows: HashMap<String, usize>,
     links: Vec<RenderedLinkRegion>,
     search_records: Vec<RenderedSearchRecord>,
+    horizontal_offset: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -364,6 +366,7 @@ impl DocumentView {
             reference_badges,
             references_limited: references.limited,
             link_targets: built.link_targets,
+            fixed_search_records: built.fixed_search_records,
         }
     }
 
@@ -412,6 +415,17 @@ impl DocumentView {
     /// Wrap logical lines to the actual content width and translate anchors.
     #[must_use]
     pub fn render(&self, width: u16) -> RenderedDocument {
+        self.render_with_horizontal_offset(width, 0)
+    }
+
+    /// Project fixed rows at a viewport-local horizontal offset. Other rows
+    /// retain their ordinary wrapping and all searchable text remains intact.
+    #[must_use]
+    pub fn render_with_horizontal_offset(
+        &self,
+        width: u16,
+        horizontal_offset: usize,
+    ) -> RenderedDocument {
         let width = usize::from(width.max(1));
         let mut rows = Vec::new();
         let mut links = Vec::new();
@@ -422,8 +436,10 @@ impl DocumentView {
 
         for line in &self.lines {
             logical_rows.push(rows.len());
-            let wrapped_lines = wrap_line_with_links(line, width);
-            search_records.extend(search_records_for_lines(&wrapped_lines, rows.len()));
+            let wrapped_lines = wrap_line_with_links_at_offset(line, width, horizontal_offset);
+            if line.surface != LineSurface::Fixed {
+                search_records.extend(search_records_for_lines(&wrapped_lines, rows.len()));
+            }
             for wrapped in wrapped_lines {
                 let row = rows.len();
                 for id in wrapped.anchors {
@@ -440,6 +456,15 @@ impl DocumentView {
             }
         }
         logical_rows.push(rows.len());
+        search_records.extend(self.fixed_search_records.iter().cloned().map(|mut record| {
+            for cell in &mut record.cells {
+                cell.fragment.row = logical_rows
+                    .get(cell.fragment.row)
+                    .copied()
+                    .unwrap_or_default();
+            }
+            record
+        }));
 
         // Scalar-offset marks from the wrapped line are authoritative for
         // zero-width targets after a soft wrap. Keep the older logical-row
@@ -458,11 +483,27 @@ impl DocumentView {
             anchor_rows,
             links,
             search_records,
+            horizontal_offset,
         }
+    }
+
+    /// Maximum native fixed-row width before viewport clipping.
+    #[must_use]
+    pub fn max_fixed_columns(&self) -> usize {
+        self.lines
+            .iter()
+            .filter(|line| line.surface == LineSurface::Fixed)
+            .map(LogicalLine::preferred_width)
+            .max()
+            .unwrap_or(0)
     }
 }
 
 impl RenderedDocument {
+    pub(crate) fn is_fixed_row(&self, row: usize) -> bool {
+        self.surfaces.get(row) == Some(&LineSurface::Fixed)
+    }
+
     /// Return the first visual row associated with a document-local anchor.
     #[must_use]
     pub fn anchor_row(&self, id: &str) -> Option<usize> {

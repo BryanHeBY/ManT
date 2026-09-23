@@ -261,6 +261,7 @@ fn collect_blocks<'a>(blocks: &'a [Block], output: &mut Vec<&'a Block>) {
             }
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Equation { .. }
             | Block::ThematicBreak { .. }
             | Block::VerticalSpace { .. }
@@ -514,6 +515,7 @@ fn find_preformatted<'a>(
             }
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Equation { .. }
             | Block::ThematicBreak { .. }
             | Block::VerticalSpace { .. }
@@ -586,9 +588,9 @@ pub fn block_slice_text(content: ContentContext<'_>, blocks: &[Block]) -> String
 
 fn block_text(content: ContentContext<'_>, block: &Block) -> String {
     match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            inline_text(content, children)
-        }
+        Block::Paragraph { children, .. }
+        | Block::Preformatted { children, .. }
+        | Block::FixedDisplay { children, .. } => inline_text(content, children),
         Block::List { items, .. } => items
             .iter()
             .map(|item| block_slice_text(content, &item.blocks))
@@ -641,7 +643,9 @@ fn visit_section_inlines(sections: &[Section], visitor: &mut impl FnMut(&Inline)
 
 pub fn visit_block_inlines(block: &Block, visitor: &mut impl FnMut(&Inline)) {
     match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+        Block::Paragraph { children, .. }
+        | Block::Preformatted { children, .. }
+        | Block::FixedDisplay { children, .. } => {
             visit_inlines(children, visitor);
         }
         Block::List { items, .. } => {

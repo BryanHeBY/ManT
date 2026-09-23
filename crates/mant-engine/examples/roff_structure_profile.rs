@@ -910,6 +910,16 @@ fn collect_blocks(
                     topology,
                 );
             }
+            Block::FixedDisplay { children, .. } => {
+                collect_inlines(
+                    content,
+                    children,
+                    source_line(block),
+                    inside_table,
+                    profile,
+                    topology,
+                );
+            }
             Block::Unsupported { layout, .. } => {
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
             }
@@ -1253,6 +1263,7 @@ fn source_line(block: &Block) -> u32 {
     match block {
         Block::Paragraph { source, .. }
         | Block::Preformatted { source, .. }
+        | Block::FixedDisplay { source, .. }
         | Block::List { source, .. }
         | Block::DefinitionList { source, .. }
         | Block::Table { source, .. }

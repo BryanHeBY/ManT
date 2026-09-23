@@ -417,6 +417,7 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         alignment: None,
     };
     let table = |cells| Block::Table {
+        fixed_view: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells,

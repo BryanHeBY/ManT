@@ -35,6 +35,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         let mut query = bundle();
         let document = query.document.as_mut().unwrap();
         document.blocks = vec![Block::Table {
+            fixed_view: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("first", "FIRST"), cell("second", "SECOND")],
@@ -80,6 +81,7 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
         source: None,
     };
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
@@ -137,6 +139,7 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![
             TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -183,6 +186,7 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![
             data("BEFORE"),
             TableRow {
@@ -226,6 +230,7 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
 fn partial_rule_cells_remain_visible_beside_text_cells() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
@@ -275,6 +280,7 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
 fn stacked_partial_rule_cells_are_not_dropped() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
@@ -336,6 +342,7 @@ fn rule_rows_do_not_split_table_wide_column_measurement() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![
             TableRow {
                 kind: mant_ir::TableRowKind::Data,

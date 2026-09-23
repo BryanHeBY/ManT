@@ -73,6 +73,7 @@ fn normalize_nested_blocks(source: &MarkdownSource<'_>, block: &mut Block) {
             }
         }
         Block::Preformatted { .. }
+        | Block::FixedDisplay { .. }
         | Block::Paragraph { .. }
         | Block::Equation { .. }
         | Block::VerticalSpace { .. }

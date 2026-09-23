@@ -328,6 +328,7 @@ impl<'ir> Visit<'ir> for SourceRelationCollector<'_> {
         let source = match block {
             Block::Paragraph { source, .. }
             | Block::Preformatted { source, .. }
+            | Block::FixedDisplay { source, .. }
             | Block::List { source, .. }
             | Block::DefinitionList { source, .. }
             | Block::Table { source, .. }

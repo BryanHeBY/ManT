@@ -343,6 +343,7 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
             source: None,
         },
         Block::Table {
+            fixed_view: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![

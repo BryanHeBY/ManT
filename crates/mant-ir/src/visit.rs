@@ -78,7 +78,9 @@ where
     V: Visit<'ir> + ?Sized,
 {
     match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+        Block::Paragraph { children, .. }
+        | Block::Preformatted { children, .. }
+        | Block::FixedDisplay { children, .. } => {
             walk_inlines(visitor, children);
         }
         Block::List { items, .. } => {
@@ -232,7 +234,9 @@ where
     V: VisitMut + ?Sized,
 {
     match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+        Block::Paragraph { children, .. }
+        | Block::Preformatted { children, .. }
+        | Block::FixedDisplay { children, .. } => {
             walk_inlines_mut(visitor, children);
         }
         Block::List { items, .. } => {

@@ -118,6 +118,16 @@ fn render_block(
             ))
             .with_root(track.then(|| inline_root(content, children)).flatten()),
         ),
+        Block::FixedDisplay { children, view, .. } => {
+            let display = content
+                .fixed_view(*view)?
+                .physical_lines(content)?
+                .join("\n");
+            Some(
+                MappedText::from(fenced_code(&display, None))
+                    .with_root(track.then(|| inline_root(content, children)).flatten()),
+            )
+        }
         Block::List {
             kind,
             compact,
@@ -127,7 +137,17 @@ fn render_block(
         Block::DefinitionList { items, compact, .. } => {
             render_definition_list(content, items, *compact, options, locations, track)
         }
-        Block::Table { rows, .. } => render_table(content, rows, track),
+        Block::Table {
+            rows, fixed_view, ..
+        } => fixed_view.map_or_else(
+            || render_table(content, rows, track),
+            |view| {
+                content
+                    .fixed_view(view)?
+                    .physical_lines(content)
+                    .map(|lines| fenced_code(&lines.join("\n"), None).into())
+            },
+        ),
         Block::Equation { value, display, .. } => {
             if *display {
                 Some(fenced_code(value, Some("math")).into())

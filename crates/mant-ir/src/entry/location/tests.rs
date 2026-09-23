@@ -127,6 +127,7 @@ fn transparent_table_and_list_paths_keep_nested_semantic_coordinates() {
     let sibling = definition(&mut fixture, "sibling", Vec::new());
     transparent.entry = None;
     transparent.blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![TableRow {
             kind: crate::TableRowKind::Data,
             cells: vec![TableCell {

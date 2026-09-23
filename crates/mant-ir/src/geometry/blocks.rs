@@ -11,6 +11,7 @@ pub const fn block_layout(block: &Block) -> Option<&LayoutHint> {
     match block {
         Block::Paragraph { layout, .. }
         | Block::Preformatted { layout, .. }
+        | Block::FixedDisplay { layout, .. }
         | Block::List { layout, .. }
         | Block::DefinitionList { layout, .. }
         | Block::Table { layout, .. }
@@ -26,6 +27,7 @@ pub const fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
     match block {
         Block::Paragraph { layout, .. }
         | Block::Preformatted { layout, .. }
+        | Block::FixedDisplay { layout, .. }
         | Block::List { layout, .. }
         | Block::DefinitionList { layout, .. }
         | Block::Table { layout, .. }
@@ -41,6 +43,7 @@ pub const fn block_source(block: &Block) -> Option<SourceSpan> {
     match block {
         Block::Paragraph { source, .. }
         | Block::Preformatted { source, .. }
+        | Block::FixedDisplay { source, .. }
         | Block::List { source, .. }
         | Block::DefinitionList { source, .. }
         | Block::Table { source, .. }

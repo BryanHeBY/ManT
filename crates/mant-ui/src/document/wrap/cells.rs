@@ -168,7 +168,7 @@ fn cells_to_line(
 ) -> Line<'static> {
     let mut spans = Vec::new();
     let background = match line.surface {
-        LineSurface::Code => Some(theme::SURFACE),
+        LineSurface::Code | LineSurface::Fixed => Some(theme::SURFACE),
         LineSurface::Tldr => Some(theme::TLDR_SURFACE),
         LineSurface::Normal
         | LineSurface::TldrTop
@@ -219,7 +219,9 @@ fn cells_to_line(
     if let Some(color) = background {
         let content_width = cells.iter().map(|cell| cell.width).sum::<usize>();
         let fill = match line.surface {
-            LineSurface::Code => width.saturating_sub(indent).saturating_sub(content_width),
+            LineSurface::Code | LineSurface::Fixed => {
+                width.saturating_sub(indent).saturating_sub(content_width)
+            }
             LineSurface::Tldr => width
                 .saturating_sub(indent + content_width)
                 .saturating_sub(tldr_decoration_width(line, width)),

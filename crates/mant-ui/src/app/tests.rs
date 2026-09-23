@@ -70,6 +70,195 @@ fn empty_bundle() -> ResolvedContent {
     }
 }
 
+#[allow(clippy::too_many_lines)] // Complete key-backed fixed geometry fixture, including repeated placement.
+fn fixed_bundle() -> ResolvedContent {
+    use mant_ir::{
+        CellMapKind, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle,
+        FixedLine, FixedLineKey, FixedView, FixedViewKey, Inline, Placement, PlacementKey,
+        PlacementTarget, Provenance,
+    };
+
+    let mut builder = ContentStoreBuilder::new();
+    let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+    let root = builder.push_root(owner, ContentRootKind::FixedBody, Provenance::Unknown);
+    let prefix = builder.push_text(
+        root,
+        "a".repeat(30),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let wide = builder.push_text(
+        root,
+        "界".to_owned(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let label = builder.push_text(
+        root,
+        "LINK".to_owned(),
+        None,
+        ContentStyle {
+            strong: true,
+            ..ContentStyle::default()
+        },
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let point = builder.push_point(
+        root,
+        mant_ir::PointBoundary::BetweenAtoms { atom_boundary: 3 },
+        35,
+        Provenance::Unknown,
+    );
+    let occurrence = builder
+        .push_link_for_atoms(
+            &[label.atom],
+            mant_ir::LinkTarget::External {
+                uri: "https://example.test/fixed".to_owned(),
+            },
+            None,
+            Provenance::Unknown,
+        )
+        .expect("fixed label link");
+    let mut store = builder.finish();
+    store.fixed_views.push(FixedView {
+        key: FixedViewKey::FIRST,
+        owner,
+        provenance: Provenance::Unknown,
+        lines: vec![
+            FixedLine {
+                key: FixedLineKey::FIRST,
+                terminal_columns: 37,
+                placements: vec![
+                    Placement {
+                        key: PlacementKey::FIRST,
+                        target: PlacementTarget::Content(prefix),
+                        root_scalar_range: 0..30,
+                        start_column: 0,
+                        end_column: 30,
+                        map: CellMapKind::Affine {
+                            columns_per_scalar: 1,
+                        },
+                    },
+                    Placement {
+                        key: PlacementKey::new(2).unwrap(),
+                        target: PlacementTarget::Content(wide),
+                        root_scalar_range: 30..31,
+                        start_column: 30,
+                        end_column: 32,
+                        map: CellMapKind::GraphemeCluster {},
+                    },
+                    Placement {
+                        key: PlacementKey::new(3).unwrap(),
+                        target: PlacementTarget::Content(label),
+                        root_scalar_range: 31..35,
+                        start_column: 32,
+                        end_column: 36,
+                        map: CellMapKind::Affine {
+                            columns_per_scalar: 1,
+                        },
+                    },
+                    Placement {
+                        key: PlacementKey::new(4).unwrap(),
+                        target: PlacementTarget::Point(point),
+                        root_scalar_range: 35..35,
+                        start_column: 36,
+                        end_column: 36,
+                        map: CellMapKind::GraphemeCluster {},
+                    },
+                ],
+                decorations: vec![mant_ir::Decoration {
+                    key: mant_ir::DecorationKey::FIRST,
+                    text: "│".to_owned(),
+                    start_column: 36,
+                    width_columns: 1,
+                    kind: mant_ir::DecorationKind::Border,
+                    provenance: Provenance::Generated { trigger: None },
+                }],
+            },
+            FixedLine {
+                key: FixedLineKey::new(2).unwrap(),
+                terminal_columns: 37,
+                placements: vec![Placement {
+                    key: PlacementKey::new(5).unwrap(),
+                    target: PlacementTarget::Content(label),
+                    root_scalar_range: 31..35,
+                    start_column: 32,
+                    end_column: 36,
+                    map: CellMapKind::Affine {
+                        columns_per_scalar: 1,
+                    },
+                }],
+                decorations: vec![
+                    mant_ir::Decoration {
+                        key: mant_ir::DecorationKey::new(2).unwrap(),
+                        text: " ".repeat(32),
+                        start_column: 0,
+                        width_columns: 32,
+                        kind: mant_ir::DecorationKind::Padding,
+                        provenance: Provenance::Generated { trigger: None },
+                    },
+                    mant_ir::Decoration {
+                        key: mant_ir::DecorationKey::new(3).unwrap(),
+                        text: "│".to_owned(),
+                        start_column: 36,
+                        width_columns: 1,
+                        kind: mant_ir::DecorationKind::Border,
+                        provenance: Provenance::Generated { trigger: None },
+                    },
+                ],
+            },
+        ],
+    });
+    mant_ir::validate_content_store(&store).expect("fixed fixture store");
+    ResolvedContent {
+        address: None,
+        label: "fixed".to_owned(),
+        document: Some(Document {
+            parser: None,
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "fixed-fixture".to_owned(),
+                },
+                format: SourceFormat::Man,
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
+            content_store: store,
+            meta: DocumentMeta::default(),
+            heading: None,
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+            blocks: vec![AstBlock::FixedDisplay {
+                children: vec![
+                    Inline::Text { content: prefix },
+                    Inline::Text { content: wide },
+                    Inline::Link {
+                        occurrence,
+                        children: vec![Inline::Text { content: label }],
+                    },
+                    Inline::anchor(point, "fixed-end"),
+                ],
+                view: FixedViewKey::FIRST,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            sections: Vec::new(),
+        }),
+        tldr: None,
+    }
+}
+
 fn tldr_bundle() -> ResolvedContent {
     ResolvedContent {
         address: None,

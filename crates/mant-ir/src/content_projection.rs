@@ -4,7 +4,8 @@ use std::{collections::VecDeque, error::Error, fmt};
 
 use crate::{
     Block, ContentAtomKey, ContentOwnerKey, ContentPointKey, ContentProjection, ContentRootKey,
-    ContentStore, Heading, Inline, LinkLabelPart, LinkOccurrenceKey, Section,
+    ContentStore, DecorationKey, FixedLineKey, FixedViewKey, Heading, Inline, LinkLabelPart,
+    LinkOccurrenceKey, PlacementKey, PlacementTarget, Section,
 };
 
 const MAX_PROJECTION_OBJECTS: usize = 1_000_000;
@@ -37,6 +38,7 @@ enum Selection {
     Atom(ContentAtomKey),
     Point(ContentPointKey),
     Link(LinkOccurrenceKey),
+    FixedView(FixedViewKey),
 }
 
 /// Selection state needed to undo one speculative projection admission.
@@ -56,6 +58,7 @@ pub struct ContentProjectionBuilder<'a> {
     atoms: Vec<bool>,
     points: Vec<bool>,
     links: Vec<bool>,
+    fixed_views: Vec<bool>,
     queue: VecDeque<Edge>,
     steps: usize,
     snapshot_work: usize,
@@ -76,6 +79,7 @@ impl<'a> ContentProjectionBuilder<'a> {
             atoms: vec![false; source.atoms.len()],
             points: vec![false; source.points.len()],
             links: vec![false; source.links.len()],
+            fixed_views: vec![false; source.fixed_views.len()],
             queue: VecDeque::new(),
             steps: 0,
             snapshot_work: 0,
@@ -122,6 +126,7 @@ impl<'a> ContentProjectionBuilder<'a> {
                 Selection::Atom(key) => (&mut self.atoms, key.get()),
                 Selection::Point(key) => (&mut self.points, key.get()),
                 Selection::Link(key) => (&mut self.links, key.get()),
+                Selection::FixedView(key) => (&mut self.fixed_views, key.get()),
             };
             if let Ok(index) = usize::try_from(key - 1)
                 && let Some(selected) = bits.get_mut(index)
@@ -192,13 +197,22 @@ impl<'a> ContentProjectionBuilder<'a> {
                 Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
                     self.include_inlines(children)?;
                 }
+                Block::FixedDisplay { children, view, .. } => {
+                    self.include_fixed_view(*view)?;
+                    self.include_inlines(children)?;
+                }
                 Block::List { items, .. } => {
                     for item in items {
                         self.include_blocks(&item.blocks)?;
                     }
                 }
                 Block::DefinitionList { items, .. } => self.include_definition_items(items)?,
-                Block::Table { rows, .. } => {
+                Block::Table {
+                    rows, fixed_view, ..
+                } => {
+                    if let Some(view) = fixed_view {
+                        self.include_fixed_view(*view)?;
+                    }
                     for cell in rows.iter().flat_map(|row| &row.cells) {
                         self.include_blocks(&cell.blocks)?;
                     }
@@ -325,15 +339,31 @@ impl<'a> ContentProjectionBuilder<'a> {
             .saturating_add(self.source.roots.len())
             .saturating_add(self.source.atoms.len())
             .saturating_add(self.source.points.len())
-            .saturating_add(self.source.links.len());
+            .saturating_add(self.source.links.len())
+            .saturating_add(self.source.fixed_views.len());
         // Each scan is charged before it runs, including a trial that is
         // rejected by an object, edge, or byte limit below.
         self.charge_snapshot_work(source_objects)?;
+        let fixed_objects = self
+            .source
+            .fixed_views
+            .iter()
+            .filter(|view| selected(&self.fixed_views, view.key.get()))
+            .flat_map(|view| view.lines.iter())
+            .fold(0_usize, |total, line| {
+                total
+                    .saturating_add(1)
+                    .saturating_add(line.placements.len())
+                    .saturating_add(line.decorations.len())
+            });
+        self.charge_snapshot_work(fixed_objects)?;
         let object_count = count(&self.owners)
             .saturating_add(count(&self.roots))
             .saturating_add(count(&self.atoms))
             .saturating_add(count(&self.points))
-            .saturating_add(count(&self.links));
+            .saturating_add(count(&self.links))
+            .saturating_add(count(&self.fixed_views))
+            .saturating_add(fixed_objects);
         if object_count > MAX_PROJECTION_OBJECTS {
             return Err(ContentProjectionError(
                 "content projection exceeds the object limit",
@@ -375,6 +405,20 @@ impl<'a> ContentProjectionBuilder<'a> {
                     .filter(|record| selected(&self.links, record.key.get()))
                     .map(|record| record.label.len()),
             )
+            .chain(
+                self.source
+                    .fixed_views
+                    .iter()
+                    .filter(|view| selected(&self.fixed_views, view.key.get()))
+                    .map(|view| {
+                        view.lines.iter().fold(0_usize, |total, line| {
+                            total
+                                .saturating_add(1)
+                                .saturating_add(line.placements.len())
+                                .saturating_add(line.decorations.len())
+                        })
+                    }),
+            )
             .fold(0_usize, usize::saturating_add);
         if retained_edges > MAX_PROJECTION_EDGES {
             return Err(ContentProjectionError(
@@ -413,6 +457,15 @@ impl<'a> ContentProjectionBuilder<'a> {
                             .saturating_add(record.title.as_deref().map_or(0, str::len))
                     }),
             )
+            .chain(
+                self.source
+                    .fixed_views
+                    .iter()
+                    .filter(|view| selected(&self.fixed_views, view.key.get()))
+                    .flat_map(|view| view.lines.iter())
+                    .flat_map(|line| line.decorations.iter())
+                    .map(|decoration| decoration.text.len()),
+            )
             .fold(0_usize, usize::saturating_add);
         if retained_bytes > MAX_PROJECTION_BYTES {
             return Err(ContentProjectionError(
@@ -438,6 +491,7 @@ impl<'a> ContentProjectionBuilder<'a> {
             atoms: dense_map(&self.atoms, ContentAtomKey::new)?,
             points: dense_map(&self.points, ContentPointKey::new)?,
             links: dense_map(&self.links, LinkOccurrenceKey::new)?,
+            fixed_views: dense_map(&self.fixed_views, FixedViewKey::new)?,
         };
         let owners = self
             .source
@@ -529,12 +583,59 @@ impl<'a> ContentProjectionBuilder<'a> {
             })
             .collect::<Result<Vec<_>, ContentProjectionError>>()?;
 
+        let mut next_line = 0_usize;
+        let mut next_placement = 0_usize;
+        let mut next_decoration = 0_usize;
+        let fixed_views = self
+            .source
+            .fixed_views
+            .iter()
+            .filter(|view| selected(&self.fixed_views, view.key.get()))
+            .map(|view| {
+                let mut view = view.clone();
+                view.key = remap.fixed_view(view.key)?;
+                view.owner = remap.owner(view.owner)?;
+                for line in &mut view.lines {
+                    next_line = next_line.saturating_add(1);
+                    line.key = FixedLineKey::new(
+                        u32::try_from(next_line)
+                            .map_err(|_| ContentProjectionError("fixed line key overflow"))?,
+                    )
+                    .ok_or(ContentProjectionError("fixed line key overflow"))?;
+                    for placement in &mut line.placements {
+                        next_placement = next_placement.saturating_add(1);
+                        placement.key =
+                            PlacementKey::new(u32::try_from(next_placement).map_err(|_| {
+                                ContentProjectionError("fixed placement key overflow")
+                            })?)
+                            .ok_or(ContentProjectionError("fixed placement key overflow"))?;
+                        match &mut placement.target {
+                            PlacementTarget::Content(content) => {
+                                content.atom = remap.atom(content.atom)?;
+                            }
+                            PlacementTarget::Point(point) => *point = remap.point(*point)?,
+                        }
+                    }
+                    for decoration in &mut line.decorations {
+                        next_decoration = next_decoration.saturating_add(1);
+                        decoration.key =
+                            DecorationKey::new(u32::try_from(next_decoration).map_err(|_| {
+                                ContentProjectionError("fixed decoration key overflow")
+                            })?)
+                            .ok_or(ContentProjectionError("fixed decoration key overflow"))?;
+                    }
+                }
+                Ok(view)
+            })
+            .collect::<Result<Vec<_>, ContentProjectionError>>()?;
+
         let content_store = ContentStore {
             owners,
             roots,
             atoms,
             points,
             links,
+            fixed_views,
         };
         crate::validate_content_store(&content_store)
             .map_err(|_| ContentProjectionError("constructed projection is not closed"))?;
@@ -625,6 +726,37 @@ impl<'a> ContentProjectionBuilder<'a> {
         Ok(())
     }
 
+    fn include_fixed_view(&mut self, key: FixedViewKey) -> Result<(), ContentProjectionError> {
+        if !mark(
+            &mut self.fixed_views,
+            key.get(),
+            "projection fixed view key is invalid",
+        )? {
+            return Ok(());
+        }
+        self.newly_selected(Selection::FixedView(key));
+        let view = self.source.fixed_view(key).ok_or(ContentProjectionError(
+            "projection fixed view key is invalid",
+        ))?;
+        let work = view.lines.iter().fold(1_usize, |total, line| {
+            total
+                .saturating_add(1)
+                .saturating_add(line.placements.len())
+                .saturating_add(line.decorations.len())
+        });
+        self.charge_snapshot_work(work)?;
+        self.include_owner(view.owner)?;
+        for line in &view.lines {
+            for placement in &line.placements {
+                match placement.target {
+                    PlacementTarget::Content(content) => self.include_atom(content.atom)?,
+                    PlacementTarget::Point(point) => self.include_point(point)?,
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn step(&mut self) -> Result<(), ContentProjectionError> {
         self.steps = self.steps.saturating_add(1);
         if self.steps.saturating_add(self.snapshot_work) > MAX_PROJECTION_STEPS {
@@ -659,6 +791,7 @@ pub struct ContentKeyRemap {
     atoms: Vec<Option<ContentAtomKey>>,
     points: Vec<Option<ContentPointKey>>,
     links: Vec<Option<LinkOccurrenceKey>>,
+    fixed_views: Vec<Option<FixedViewKey>>,
 }
 
 impl ContentKeyRemap {
@@ -710,6 +843,10 @@ impl ContentKeyRemap {
                 Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
                     self.remap_inlines(children)?;
                 }
+                Block::FixedDisplay { children, view, .. } => {
+                    *view = self.fixed_view(*view)?;
+                    self.remap_inlines(children)?;
+                }
                 Block::List { items, .. } => {
                     for item in items {
                         self.remap_blocks(&mut item.blocks)?;
@@ -723,7 +860,12 @@ impl ContentKeyRemap {
                         self.remap_blocks(&mut item.description)?;
                     }
                 }
-                Block::Table { rows, .. } => {
+                Block::Table {
+                    rows, fixed_view, ..
+                } => {
+                    if let Some(view) = fixed_view {
+                        *view = self.fixed_view(*view)?;
+                    }
                     for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
                         self.remap_blocks(&mut cell.blocks)?;
                     }
@@ -799,6 +941,14 @@ impl ContentKeyRemap {
             &self.links,
             key.get(),
             "link occurrence is outside the projection",
+        )
+    }
+
+    fn fixed_view(&self, key: FixedViewKey) -> Result<FixedViewKey, ContentProjectionError> {
+        lookup(
+            &self.fixed_views,
+            key.get(),
+            "fixed view is outside this projection",
         )
     }
 }

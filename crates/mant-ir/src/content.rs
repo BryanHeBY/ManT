@@ -393,6 +393,11 @@ impl fmt::Debug for ContentContext<'_> {
 }
 
 impl<'store> ContentContext<'store> {
+    /// Resolve one checked native fixed display view without copying content.
+    #[must_use]
+    pub fn fixed_view(self, key: crate::FixedViewKey) -> Option<&'store crate::FixedView> {
+        self.backend.store()?.fixed_view(key)
+    }
     pub(crate) fn new(backend: &'store dyn ContentBackend) -> Self {
         Self { backend }
     }

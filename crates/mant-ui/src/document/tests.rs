@@ -122,6 +122,7 @@ fn geometry_bundle() -> ResolvedContent {
             source: None,
         },
         Block::Table {
+            fixed_view: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
@@ -402,6 +403,7 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
         alignment: None,
     };
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
+        fixed_view: None,
         rows: vec![
             TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -448,6 +450,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
         logical_rows: vec![0, 1],
         anchor_rows: HashMap::new(),
         links: Vec::new(),
+        horizontal_offset: 0,
         search_records: vec![RenderedSearchRecord {
             text: "İstanbul".to_owned(),
             cells: "İstanbul"

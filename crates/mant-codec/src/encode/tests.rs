@@ -578,6 +578,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                     source: None,
                 },
                 Block::Table {
+                    fixed_view: None,
                     rows: vec![TableRow {
                         kind: mant_ir::TableRowKind::Data,
                         cells: vec![

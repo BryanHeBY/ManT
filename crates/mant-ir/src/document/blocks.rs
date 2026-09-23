@@ -1,6 +1,7 @@
 //! Block, item and table models with resolved source layout facts.
 use super::{Inline, SourceSpan, is_zero_u16};
 use crate::EntryFacts;
+use crate::FixedViewKey;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -59,6 +60,19 @@ pub enum Block {
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Native physical display over one authoritative logical inline body.
+    FixedDisplay {
+        /// Searchable and semantically traversed logical content.
+        children: Vec<Inline>,
+        /// Checked fixed geometry referencing the same content store.
+        view: FixedViewKey,
+        /// Source-derived spacing outside the fixed surface.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
     /// Ordered, unordered, or marker-free block list.
     List {
         /// Marker behavior for the list.
@@ -97,6 +111,9 @@ pub enum Block {
     Table {
         /// Logical rows in source order.
         rows: Vec<TableRow>,
+        /// Native fixed geometry for complex table layout, if required.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fixed_view: Option<FixedViewKey>,
         /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,

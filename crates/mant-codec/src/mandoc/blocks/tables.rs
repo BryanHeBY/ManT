@@ -113,6 +113,7 @@ pub(super) fn append_table_row(
     } else {
         output.push(Block::Table {
             rows: vec![row],
+            fixed_view: None,
             layout: layout(indent_columns),
             source: source_span(node),
         });

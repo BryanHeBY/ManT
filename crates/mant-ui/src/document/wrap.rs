@@ -77,7 +77,15 @@ pub(super) fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> 
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
-    let mut rows = wrap_logical_line(line, width);
+    wrap_line_with_links_at_offset(line, width, 0)
+}
+
+pub(super) fn wrap_line_with_links_at_offset(
+    line: &LogicalLine,
+    width: usize,
+    horizontal_offset: usize,
+) -> Vec<WrappedLine> {
+    let mut rows = wrap_logical_line(line, width, horizontal_offset);
     for mark in &line.reference_marks {
         let index = rows
             .iter()
@@ -91,7 +99,11 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
 }
 
 #[allow(clippy::too_many_lines)]
-fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
+fn wrap_logical_line(
+    line: &LogicalLine,
+    width: usize,
+    horizontal_offset: usize,
+) -> Vec<WrappedLine> {
     if let Some(table) = &line.table_row {
         return render_table_row_with_links(line.indent, table, width);
     }
@@ -158,7 +170,34 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 search_cells: Vec::new(),
             }];
         }
-        LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
+        LineSurface::Normal | LineSurface::Code | LineSurface::Fixed | LineSurface::Tldr => {}
+    }
+
+    if line.wrap_mode == WrapMode::NoWrap {
+        let cells = styled_cells(line);
+        let end = horizontal_offset.saturating_add(width);
+        let mut column = 0_usize;
+        let mut start_index = None;
+        let mut end_index = 0;
+        let mut padding = 0;
+        for (index, cell) in cells.iter().enumerate() {
+            if cell.grapheme_start {
+                let next = column.saturating_add(cell.width);
+                if next > end {
+                    break;
+                }
+                if column >= horizontal_offset && start_index.is_none() {
+                    start_index = Some(index);
+                    padding = column - horizontal_offset;
+                }
+                column = next;
+            }
+            if start_index.is_some() {
+                end_index = index + 1;
+            }
+        }
+        let selected = start_index.map_or(&[][..], |start| &cells[start..end_index]);
+        return vec![wrapped_cells_to_line(line, width, padding, selected, false)];
     }
 
     let decoration_width = tldr_decoration_width(line, width);

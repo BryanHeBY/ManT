@@ -1,10 +1,14 @@
 use std::{error::Error, fmt};
 
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
+
 use crate::LinkTarget;
 
+use super::fixed::placement_display;
 use super::{
-    ContentAtomKey, ContentAtomKind, ContentRootKey, ContentStore, LinkLabelPart,
-    LinkOccurrenceKey, PointBoundary,
+    CellMapKind, ContentAtomKey, ContentAtomKind, ContentRootKey, ContentStore, LinkLabelPart,
+    LinkOccurrenceKey, PlacementTarget, PointBoundary,
 };
 
 /// Structural error in a document or response-local content store.
@@ -287,7 +291,222 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
     }) {
         return invalid("linked atoms and occurrence label parts must correspond exactly once");
     }
-    validate_link_nesting(store)
+    validate_link_nesting(store)?;
+    validate_fixed_views(store, &atom_scalar_prefix)
+}
+
+#[allow(clippy::too_many_lines)] // One pass owns dense geometry, bounded scalar work, and widths.
+fn validate_fixed_views(
+    store: &ContentStore,
+    atom_scalar_prefix: &[u32],
+) -> Result<(), ContentStoreError> {
+    validate_dense(&store.fixed_views, |view| view.key.get(), "fixed view")?;
+    let (mut next_line, mut next_placement, mut next_decoration) = (0_usize, 0_usize, 0_usize);
+    let mut scalar_work = 0_usize;
+    let mut total_columns = 0_usize;
+    for view in &store.fixed_views {
+        if store.owner(view.owner).is_none() {
+            return invalid("fixed view references an unknown owner");
+        }
+        for line in &view.lines {
+            if line.terminal_columns > 1_048_576 {
+                return invalid("fixed line exceeds the terminal-column limit");
+            }
+            total_columns = total_columns.saturating_add(line.terminal_columns as usize);
+            if total_columns > 32 * 1024 * 1024 {
+                return invalid("fixed views exceed the total terminal-column limit");
+            }
+            if line.key.index() != Some(next_line) {
+                return invalid("fixed line keys must be dense in view order");
+            }
+            next_line = next_line.checked_add(1).ok_or_else(|| ContentStoreError {
+                detail: "fixed line key space is exhausted".to_owned(),
+            })?;
+            let mut previous_start = 0_u32;
+            let mut previous_end = 0_u32;
+            let mut previous_overlay = false;
+            let mut occupied = Vec::with_capacity(line.placements.len() + line.decorations.len());
+            for placement in &line.placements {
+                if placement.key.index() != Some(next_placement) {
+                    return invalid("fixed placement keys must be dense in line order");
+                }
+                next_placement =
+                    next_placement
+                        .checked_add(1)
+                        .ok_or_else(|| ContentStoreError {
+                            detail: "fixed placement key space is exhausted".to_owned(),
+                        })?;
+                if placement.start_column > placement.end_column
+                    || placement.end_column > line.terminal_columns
+                    || placement.root_scalar_range.start > placement.root_scalar_range.end
+                {
+                    return invalid("fixed placement lies outside its physical line");
+                }
+                let overlay = matches!(placement.map, CellMapKind::Overlay {});
+                if !matches!(placement.target, PlacementTarget::Point(_)) {
+                    let same_range = placement.start_column == previous_start
+                        && placement.end_column == previous_end;
+                    if placement.start_column < previous_end
+                        && !(same_range && (overlay || previous_overlay))
+                    {
+                        return invalid(
+                            "fixed placements overlap outside one overstrike cell range",
+                        );
+                    }
+                    if !same_range {
+                        occupied.push((placement.start_column, placement.end_column));
+                    }
+                    previous_start = placement.start_column;
+                    previous_end = placement.end_column;
+                    previous_overlay = overlay;
+                }
+                match placement.target {
+                    PlacementTarget::Point(key) => {
+                        let Some(point) = store.point(key) else {
+                            return invalid("fixed placement references an unknown point");
+                        };
+                        if placement.root_scalar_range.start != point.scalar_boundary
+                            || placement.root_scalar_range.end != point.scalar_boundary
+                            || placement.start_column != placement.end_column
+                        {
+                            return invalid(
+                                "fixed point placement disagrees with its logical point",
+                            );
+                        }
+                    }
+                    PlacementTarget::Content(content) => {
+                        let Some(atom) = store.atom(content.atom) else {
+                            return invalid("fixed placement references an unknown atom");
+                        };
+                        let Some(text) = store.text(content) else {
+                            return invalid("fixed placement has an invalid UTF-8 content range");
+                        };
+                        if text.is_empty() {
+                            return invalid("fixed content placement has an empty range");
+                        }
+                        let Some(whole) = atom.kind.text() else {
+                            return invalid(
+                                "fixed content placement must reference text or whitespace",
+                            );
+                        };
+                        let display = placement_display(&atom.kind, content, text);
+                        if display.is_empty()
+                            || display.chars().any(|scalar| {
+                                scalar.is_control() || matches!(scalar, '\u{2028}' | '\u{2029}')
+                            })
+                        {
+                            return invalid("fixed placement contains non-printing glyphs");
+                        }
+                        scalar_work = scalar_work
+                            .saturating_add(content.bytes.end as usize)
+                            .saturating_add(text.len());
+                        if scalar_work > 32 * 1024 * 1024 {
+                            return invalid(
+                                "fixed scalar mapping exceeds the validation work limit",
+                            );
+                        }
+                        let prefix =
+                            atom_scalar_prefix[content.atom.index().expect("valid atom key")];
+                        let Some(start) = prefix.checked_add(
+                            u32::try_from(whole[..content.bytes.start as usize].chars().count())
+                                .map_err(|_| ContentStoreError {
+                                    detail: "fixed scalar boundary exceeds u32".to_owned(),
+                                })?,
+                        ) else {
+                            return invalid("fixed scalar boundary exceeds u32");
+                        };
+                        let Some(end) = start.checked_add(
+                            u32::try_from(text.chars().count()).map_err(|_| ContentStoreError {
+                                detail: "fixed scalar boundary exceeds u32".to_owned(),
+                            })?,
+                        ) else {
+                            return invalid("fixed scalar boundary exceeds u32");
+                        };
+                        if placement.root_scalar_range != (start..end)
+                            || placement.start_column == placement.end_column
+                        {
+                            return invalid(
+                                "fixed content placement disagrees with its logical range",
+                            );
+                        }
+                        match placement.map {
+                            CellMapKind::Affine { columns_per_scalar } => {
+                                let step = usize::from(columns_per_scalar);
+                                if columns_per_scalar == 0
+                                    || UnicodeSegmentation::graphemes(text, true)
+                                        .any(|grapheme| grapheme.chars().count() != 1)
+                                    || (display != text && UnicodeWidthStr::width(display) != step)
+                                    || (display == text
+                                        && text.chars().any(|scalar| {
+                                            UnicodeWidthStr::width(scalar.to_string().as_str())
+                                                != step
+                                        }))
+                                    || end
+                                        .saturating_sub(start)
+                                        .saturating_mul(u32::from(columns_per_scalar))
+                                        != placement.end_column - placement.start_column
+                                {
+                                    return invalid(
+                                        "fixed affine placement has inconsistent scalar columns",
+                                    );
+                                }
+                            }
+                            CellMapKind::GraphemeCluster {} => {
+                                if UnicodeSegmentation::graphemes(text, true).count() != 1
+                                    || UnicodeWidthStr::width(display)
+                                        != (placement.end_column - placement.start_column) as usize
+                                {
+                                    return invalid(
+                                        "fixed cluster placement has inconsistent glyph columns",
+                                    );
+                                }
+                            }
+                            CellMapKind::Overlay {} => {
+                                if UnicodeSegmentation::graphemes(text, true).count() != 1
+                                    || UnicodeWidthStr::width(display)
+                                        != (placement.end_column - placement.start_column) as usize
+                                {
+                                    return invalid("fixed overlay has inconsistent glyph columns");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for decoration in &line.decorations {
+                if decoration.key.index() != Some(next_decoration) {
+                    return invalid("fixed decoration keys must be dense in line order");
+                }
+                next_decoration =
+                    next_decoration
+                        .checked_add(1)
+                        .ok_or_else(|| ContentStoreError {
+                            detail: "fixed decoration key space is exhausted".to_owned(),
+                        })?;
+                let Some(end) = decoration
+                    .start_column
+                    .checked_add(decoration.width_columns)
+                else {
+                    return invalid("fixed decoration columns overflow");
+                };
+                if decoration.text.is_empty()
+                    || decoration.text.chars().any(char::is_control)
+                    || decoration.width_columns == 0
+                    || end > line.terminal_columns
+                    || UnicodeWidthStr::width(decoration.text.as_str())
+                        != decoration.width_columns as usize
+                {
+                    return invalid("fixed decoration has invalid glyphs or columns");
+                }
+                occupied.push((decoration.start_column, end));
+            }
+            occupied.sort_unstable();
+            if occupied.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+                return invalid("fixed content and decorations occupy the same columns");
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_link_nesting(store: &ContentStore) -> Result<(), ContentStoreError> {

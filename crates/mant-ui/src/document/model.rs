@@ -147,7 +147,7 @@ impl LogicalTableLayout {
         }
     }
 
-    fn preferred_width(&self) -> usize {
+    pub(super) fn preferred_width(&self) -> usize {
         self.preferred_widths.iter().sum::<usize>()
             + self.preferred_widths.len().saturating_sub(1) * 2
     }
@@ -190,12 +190,14 @@ pub(super) struct GlyphProjection {
 pub(super) enum WrapMode {
     Word,
     Character,
+    NoWrap,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum LineSurface {
     Normal,
     Code,
+    Fixed,
     Tldr,
     TldrTop,
     TldrBottom,
@@ -336,7 +338,7 @@ impl LogicalLine {
         line
     }
 
-    fn preferred_width(&self) -> usize {
+    pub(super) fn preferred_width(&self) -> usize {
         let content = self.table_row.as_ref().map_or_else(
             || super::inline::projected_spans_width(&self.spans, &self.glyph_projections),
             |table| table.layout.preferred_width(),

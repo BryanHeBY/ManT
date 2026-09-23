@@ -67,6 +67,7 @@ impl ContentStoreBuilder {
                 atoms: Vec::new(),
                 points: Vec::new(),
                 links: Vec::new(),
+                fixed_views: Vec::new(),
             },
         }
     }

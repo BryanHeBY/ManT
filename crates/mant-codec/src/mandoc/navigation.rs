@@ -212,7 +212,8 @@ fn promote_manual_references(content: &super::content::LegacyContent, blocks: &m
                     promote_manual_references(content, &mut cell.blocks);
                 }
             }
-            Block::Equation { .. }
+            Block::FixedDisplay { .. }
+            | Block::Equation { .. }
             | Block::VerticalSpace { .. }
             | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
@@ -318,7 +319,9 @@ fn resolve_blocks(
 ) {
     for block in blocks {
         match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+            Block::Paragraph { children, .. }
+            | Block::Preformatted { children, .. }
+            | Block::FixedDisplay { children, .. } => {
                 resolve_inlines(content, children, targets, explicit_targets, diagnostics);
             }
             Block::List { items, .. } => {

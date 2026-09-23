@@ -111,6 +111,7 @@ pub(super) fn validate_with_index(
         section_targets: Vec::new(),
         diagnostics: Vec::new(),
         seen_atoms: vec![0; document.content_store.atoms.len()],
+        seen_fixed_views: vec![0; document.content_store.fixed_views.len()],
         strong_depth: 0,
         emphasis_depth: 0,
         active_link: None,
@@ -133,6 +134,17 @@ pub(super) fn validate_with_index(
                 format!(
                     "content atom {} must occur exactly {expected} time(s) in inline topology, found {seen}",
                     atom.key.get()
+                ),
+            ));
+        }
+    }
+    for (index, seen) in collector.seen_fixed_views.iter().enumerate() {
+        if *seen != 1 {
+            collector.diagnostics.push(invariant(
+                "ir.invalid-fixed-view-coverage",
+                format!(
+                    "fixed view {} must be used by exactly one block or table",
+                    index + 1
                 ),
             ));
         }
@@ -230,6 +242,7 @@ struct InvariantCollector<'a> {
     section_targets: Vec<NodeId>,
     diagnostics: Vec<Diagnostic>,
     seen_atoms: Vec<usize>,
+    seen_fixed_views: Vec<usize>,
     strong_depth: usize,
     emphasis_depth: usize,
     active_link: Option<crate::LinkOccurrenceKey>,
@@ -237,6 +250,20 @@ struct InvariantCollector<'a> {
 }
 
 impl InvariantCollector<'_> {
+    fn record_fixed_view(&mut self, key: crate::FixedViewKey) {
+        let Some(seen) = usize::try_from(key.get() - 1)
+            .ok()
+            .and_then(|index| self.seen_fixed_views.get_mut(index))
+        else {
+            self.diagnostics.push(invariant(
+                "ir.invalid-fixed-view-reference",
+                format!("fixed view {} does not exist", key.get()),
+            ));
+            return;
+        };
+        *seen = seen.saturating_add(1);
+    }
+
     fn invalid_content(&mut self, detail: impl Into<String>) {
         self.diagnostics
             .push(invariant("ir.invalid-content-reference", detail.into()));
@@ -339,7 +366,18 @@ impl<'ir> Visit<'ir> for InvariantCollector<'ir> {
     }
 
     fn visit_block(&mut self, block: &'ir Block) {
-        if let Block::Paragraph { children, .. } | Block::Preformatted { children, .. } = block {
+        match block {
+            Block::FixedDisplay { view, .. }
+            | Block::Table {
+                fixed_view: Some(view),
+                ..
+            } => self.record_fixed_view(*view),
+            _ => {}
+        }
+        if let Block::Paragraph { children, .. }
+        | Block::Preformatted { children, .. }
+        | Block::FixedDisplay { children, .. } = block
+        {
             self.validate_inline_sequence(children);
         }
         if let Block::DefinitionList {
@@ -362,6 +400,7 @@ impl<'ir> Visit<'ir> for InvariantCollector<'ir> {
         let source = match block {
             Block::Paragraph { source, .. }
             | Block::Preformatted { source, .. }
+            | Block::FixedDisplay { source, .. }
             | Block::List { source, .. }
             | Block::DefinitionList { source, .. }
             | Block::Table { source, .. }
@@ -887,6 +926,7 @@ mod tests {
                 source: None,
             },
             Block::Table {
+                fixed_view: None,
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
@@ -927,6 +967,7 @@ mod tests {
     #[test]
     fn rejects_rule_rows_with_data_or_without_layout_strengths() {
         let blocks = vec![Block::Table {
+            fixed_view: None,
             rows: vec![
                 TableRow {
                     kind: crate::TableRowKind::HorizontalRule,

@@ -269,7 +269,11 @@ impl App {
             .session
             .rendered_cache
             .entry(sizing_width)
-            .or_insert_with(|| self.session.document.render(sizing_width))
+            .or_insert_with(|| {
+                self.session
+                    .document
+                    .render_with_horizontal_offset(sizing_width, self.session.horizontal_offset)
+            })
             .row_count;
         let needs_scrollbar = virtual_content_rows(sizing_rows, viewport_height) > viewport_height;
         let document_area = if needs_scrollbar && inner.width > scrollbar_gutter {
@@ -298,10 +302,15 @@ impl App {
                     .and_then(|rendered| rendered.viewport_anchor(self.session.content_scroll))
             })
             .flatten();
+        self.clamp_fixed_horizontal_offset(render_width);
         self.session
             .rendered_cache
             .entry(render_width)
-            .or_insert_with(|| self.session.document.render(render_width));
+            .or_insert_with(|| {
+                self.session
+                    .document
+                    .render_with_horizontal_offset(render_width, self.session.horizontal_offset)
+            });
         if !self.search.query.is_empty() && self.search.render_width != render_width {
             self.refresh_search(render_width);
         }
@@ -351,6 +360,19 @@ impl App {
         self.session
             .rendered_cache
             .retain(|width, _| *width == render_width);
+    }
+
+    fn clamp_fixed_horizontal_offset(&mut self, width: u16) {
+        let limit = self
+            .session
+            .document
+            .max_fixed_columns()
+            .saturating_sub(usize::from(width));
+        if self.session.horizontal_offset > limit {
+            self.session.horizontal_offset = limit;
+            self.session.rendered_cache.clear();
+            self.pointer.clear_selection();
+        }
     }
 
     fn draw_status(&self, frame: &mut Frame<'_>, area: Rect) {

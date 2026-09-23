@@ -267,6 +267,7 @@ fn collect_blocks(blocks: &[Block], path: &str, output: &mut Vec<ObservedBlock>)
             }
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
             | Block::ThematicBreak { .. }

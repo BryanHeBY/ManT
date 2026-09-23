@@ -122,7 +122,8 @@ pub(super) fn append_to_last_inline_block(blocks: &mut [Block], tail: &[Inline])
                     return true;
                 }
             }
-            Block::Equation { .. }
+            Block::FixedDisplay { .. }
+            | Block::Equation { .. }
             | Block::VerticalSpace { .. }
             | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}

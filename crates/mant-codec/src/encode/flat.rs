@@ -46,7 +46,9 @@ fn plain_cell(content: ContentContext<'_>, cell: &TableCell, track: bool) -> Map
 
 fn plain_block(content: ContentContext<'_>, block: &Block, track: bool) -> Option<MappedText> {
     match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+        Block::Paragraph { children, .. }
+        | Block::Preformatted { children, .. }
+        | Block::FixedDisplay { children, .. } => {
             plain_inline(content, children, track).trim().nonempty()
         }
         Block::List { items, .. } => MappedText::join(

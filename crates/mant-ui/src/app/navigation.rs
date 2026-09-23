@@ -48,11 +48,11 @@ impl App {
     pub(super) fn select_section_at_row(&mut self, row: usize) {
         let width = self.geometry.content.width.max(1);
         let visible = self.visible_navigation_indices();
-        let rendered = self
-            .session
-            .rendered_cache
-            .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+        let rendered = self.session.rendered_cache.entry(width).or_insert_with(|| {
+            self.session
+                .document
+                .render_with_horizontal_offset(width, self.session.horizontal_offset)
+        });
         let mut selected = None;
         for index in visible {
             let item = &self.session.document.navigation()[index];
@@ -78,11 +78,11 @@ impl App {
             return;
         };
         let width = self.geometry.content.width.max(1);
-        let rendered = self
-            .session
-            .rendered_cache
-            .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+        let rendered = self.session.rendered_cache.entry(width).or_insert_with(|| {
+            self.session
+                .document
+                .render_with_horizontal_offset(width, self.session.horizontal_offset)
+        });
         if let Some(row) = rendered.anchor_row(&item.target_id) {
             self.session.content_scroll = row;
         }
@@ -90,11 +90,11 @@ impl App {
 
     pub(super) fn activate_content_link(&mut self, column: u16, row: u16) {
         let width = self.geometry.content.width.max(1);
-        let rendered = self
-            .session
-            .rendered_cache
-            .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+        let rendered = self.session.rendered_cache.entry(width).or_insert_with(|| {
+            self.session
+                .document
+                .render_with_horizontal_offset(width, self.session.horizontal_offset)
+        });
         let document_row = self.session.content_scroll + usize::from(row - self.geometry.content.y);
         let document_column = usize::from(column - self.geometry.content.x);
         let Some(identity) = rendered.link_identity_at(document_row, document_column) else {
@@ -167,11 +167,11 @@ impl App {
 
     pub(super) fn reveal_anchor(&mut self, target: &str) -> bool {
         let width = self.geometry.content.width.max(1);
-        let rendered = self
-            .session
-            .rendered_cache
-            .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+        let rendered = self.session.rendered_cache.entry(width).or_insert_with(|| {
+            self.session
+                .document
+                .render_with_horizontal_offset(width, self.session.horizontal_offset)
+        });
         let Some(target_row) = rendered.anchor_row(target) else {
             self.notice = Some(format!("No outline node matches #{target}"));
             return false;

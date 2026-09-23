@@ -83,7 +83,9 @@ pub(crate) fn remove_native_definition_owner_markers(
     fn remove_blocks(blocks: &mut [Block]) {
         for block in blocks {
             match block {
-                Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                Block::Paragraph { children, .. }
+                | Block::Preformatted { children, .. }
+                | Block::FixedDisplay { children, .. } => {
                     remove_inlines(children);
                 }
                 Block::DefinitionList { items, .. } => {
@@ -369,6 +371,7 @@ impl GroupMatchingPlan {
                 }
                 Block::Paragraph { .. }
                 | Block::Preformatted { .. }
+                | Block::FixedDisplay { .. }
                 | Block::Equation { .. }
                 | Block::VerticalSpace { .. }
                 | Block::ThematicBreak { .. }

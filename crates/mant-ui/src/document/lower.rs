@@ -1,13 +1,14 @@
 //! IR to logical terminal content and anchors.
 use super::inline::styled_reference_inline_lines;
+use super::model::ReferenceMark;
 use super::{
     Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget,
     LogicalLine, LogicalLinkRange, Modifier, NavKind, NavNode, Section, SemanticIndex, Span, Style,
     TLDR_ID, TLDR_VERTICAL_PADDING_ROWS, TldrDocument, WrapMode, inline_anchor_rows, theme,
     tldr_style,
 };
-use mant_ir::ContentContext;
 use mant_ir::geometry::{compose_origin, coordinate, padding};
+use mant_ir::{ContentContext, ContentPointKey, ContentRootKey, PlacementTarget};
 
 mod lists;
 mod table;
@@ -21,8 +22,14 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
     pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
+    fixed_search_records: std::collections::BTreeMap<ContentRootKey, FixedSearchRecordBuilder>,
     pending_anchors: Vec<String>,
     pending_gap: mant_ir::geometry::GapPlan,
+}
+
+struct FixedSearchRecordBuilder {
+    record: super::search::RenderedSearchRecord,
+    byte_offsets: Vec<usize>,
 }
 
 /// Logical payload and its anchors must cross layout boundaries together.
@@ -36,6 +43,7 @@ pub(super) struct BuiltDocument {
     pub(super) navigation: Vec<NavNode>,
     pub(super) content: LogicalFragment,
     pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
+    pub(super) fixed_search_records: Vec<super::search::RenderedSearchRecord>,
 }
 
 impl<'a> DocumentBuilder<'a> {
@@ -51,6 +59,20 @@ impl<'a> DocumentBuilder<'a> {
                 anchors: self.anchors,
             },
             link_targets: self.link_targets,
+            fixed_search_records: self
+                .fixed_search_records
+                .into_values()
+                .map(|mut entry| {
+                    entry.record.cells.sort_by_key(|cell| {
+                        (
+                            cell.fragment.row,
+                            cell.fragment.start_column,
+                            cell.source_start,
+                        )
+                    });
+                    entry.record
+                })
+                .collect(),
         }
     }
     pub(super) fn new(
@@ -68,6 +90,7 @@ impl<'a> DocumentBuilder<'a> {
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
             link_targets: HashMap::new(),
+            fixed_search_records: std::collections::BTreeMap::new(),
             pending_anchors: Vec::new(),
             pending_gap: mant_ir::geometry::GapPlan::default(),
         }
@@ -317,6 +340,12 @@ impl<'a> DocumentBuilder<'a> {
                     LineSurface::Code,
                 );
             }
+            Block::FixedDisplay { children, view, .. } => {
+                self.styled_inlines(children, Style::default().fg(theme::TEXT));
+                let mut anchors = HashMap::new();
+                collect_fixed_inline_anchors(children, &mut anchors);
+                self.fixed_view(*view, &anchors);
+            }
             Block::List {
                 kind,
                 compact,
@@ -343,8 +372,21 @@ impl<'a> DocumentBuilder<'a> {
                     compose_origin(base_indent, layout.indent_columns),
                 );
             }
-            Block::Table { rows, layout, .. } => {
-                self.table(rows, compose_origin(base_indent, layout.indent_columns));
+            Block::Table {
+                rows,
+                fixed_view,
+                layout,
+                ..
+            } => {
+                if let Some(view) = fixed_view {
+                    let mut anchors = HashMap::new();
+                    for cell in rows.iter().flat_map(|row| &row.cells) {
+                        collect_fixed_block_anchors(&cell.blocks, &mut anchors);
+                    }
+                    self.fixed_view(*view, &anchors);
+                } else {
+                    self.table(rows, compose_origin(base_indent, layout.indent_columns));
+                }
             }
             Block::Equation { value, layout, .. } => {
                 self.push(
@@ -365,6 +407,192 @@ impl<'a> DocumentBuilder<'a> {
                     Style::default().fg(theme::PEACH),
                 ));
             }
+        }
+    }
+
+    #[allow(clippy::too_many_lines)] // Geometry, links, zero-width points and logical search share one physical-row walk.
+    fn fixed_view(
+        &mut self,
+        key: mant_ir::FixedViewKey,
+        anchors: &HashMap<ContentPointKey, Vec<String>>,
+    ) {
+        let view = self
+            .content()
+            .fixed_view(key)
+            .expect("validated fixed display must resolve");
+        let physical_lines = view
+            .physical_lines(self.content())
+            .expect("validated fixed display must materialize");
+        for (line, geometry) in physical_lines.into_iter().zip(&view.lines) {
+            let logical_row = self.lines.len();
+            let base_style = Style::default().fg(theme::TEXT);
+            let mut column_styles = vec![
+                base_style;
+                usize::try_from(geometry.terminal_columns)
+                    .expect("validated width")
+            ];
+            for placement in &geometry.placements {
+                let PlacementTarget::Content(reference) = placement.target else {
+                    continue;
+                };
+                let atom = self.content().atom(reference.atom).expect("validated atom");
+                if let Some(occurrence) = atom.link
+                    && let Some(target) = self.content().occurrence(occurrence)
+                    && let Some(target) =
+                        super::inline::local_link_target(&target.target, self.address.as_ref())
+                {
+                    self.link_targets
+                        .entry(super::LinkIdentity::Content(occurrence))
+                        .or_insert(target);
+                }
+                let style = fixed_atom_style(self.content(), atom);
+                let start = usize::try_from(placement.start_column).expect("validated column");
+                let end = usize::try_from(placement.end_column).expect("validated column");
+                column_styles[start..end].fill(style);
+            }
+            for decoration in &geometry.decorations {
+                let style = if matches!(
+                    decoration.kind,
+                    mant_ir::DecorationKind::Border | mant_ir::DecorationKind::Rule
+                ) {
+                    Style::default().fg(theme::OVERLAY)
+                } else {
+                    base_style
+                };
+                let start = usize::try_from(decoration.start_column).expect("validated column");
+                let end =
+                    start + usize::try_from(decoration.width_columns).expect("validated width");
+                column_styles[start..end].fill(style);
+            }
+            let mut column_scalars =
+                vec![
+                    0_usize;
+                    usize::try_from(geometry.terminal_columns).expect("validated width") + 1
+                ];
+            let mut column = 0_usize;
+            let mut scalar = 0_usize;
+            let mut styled_spans = Vec::new();
+            let mut current_style = base_style;
+            let mut current_text = String::new();
+            for grapheme in mant_render::cells::graphemes(&line) {
+                let width = grapheme.columns();
+                let style = column_styles.get(column).copied().unwrap_or(base_style);
+                if style != current_style && !current_text.is_empty() {
+                    styled_spans.push(Span::styled(
+                        std::mem::take(&mut current_text),
+                        current_style,
+                    ));
+                }
+                current_style = style;
+                current_text.push_str(grapheme.text());
+                for value in &mut column_scalars[column..column + width] {
+                    *value = scalar;
+                }
+                column += width;
+                scalar += grapheme.text().chars().count();
+                column_scalars[column] = scalar;
+            }
+            if !current_text.is_empty() {
+                styled_spans.push(Span::styled(current_text, current_style));
+            }
+            let links = geometry
+                .placements
+                .iter()
+                .filter_map(|placement| {
+                    let PlacementTarget::Content(reference) = placement.target else {
+                        return None;
+                    };
+                    let occurrence = self.content().atom(reference.atom)?.link?;
+                    let start = usize::try_from(placement.start_column).ok()?;
+                    let end = usize::try_from(placement.end_column).ok()?;
+                    Some(LogicalLinkRange {
+                        identity: super::LinkIdentity::Content(occurrence),
+                        start_scalar: *column_scalars.get(start)?,
+                        end_scalar: *column_scalars.get(end)?,
+                    })
+                })
+                .collect();
+            let reference_marks = geometry
+                .placements
+                .iter()
+                .filter_map(|placement| {
+                    let PlacementTarget::Point(point) = placement.target else {
+                        return None;
+                    };
+                    let scalar_offset =
+                        *column_scalars.get(usize::try_from(placement.start_column).ok()?)?;
+                    Some(anchors.get(&point)?.iter().map(move |id| ReferenceMark {
+                        id: Arc::from(id.as_str()),
+                        scalar_offset,
+                    }))
+                })
+                .flatten()
+                .collect();
+            let content = self.content();
+            for placement in &geometry.placements {
+                let PlacementTarget::Content(reference) = placement.target else {
+                    continue;
+                };
+                let atom = content
+                    .atom(reference.atom)
+                    .expect("validated fixed placement atom");
+                let entry = self
+                    .fixed_search_records
+                    .entry(atom.root)
+                    .or_insert_with(|| {
+                        let text = content
+                            .root_logical_text(atom.root)
+                            .expect("validated fixed placement root");
+                        let mut byte_offsets = text
+                            .char_indices()
+                            .map(|(byte, _)| byte)
+                            .collect::<Vec<_>>();
+                        byte_offsets.push(text.len());
+                        FixedSearchRecordBuilder {
+                            record: super::search::RenderedSearchRecord {
+                                text,
+                                cells: Vec::new(),
+                            },
+                            byte_offsets,
+                        }
+                    });
+                for root_scalar in placement.root_scalar_range.clone() {
+                    let scalar_index =
+                        usize::try_from(root_scalar).expect("validated scalar range");
+                    let (start_column, end_column) = match placement.map {
+                        mant_ir::CellMapKind::Affine { columns_per_scalar } => {
+                            let relative = root_scalar - placement.root_scalar_range.start;
+                            let start =
+                                placement.start_column + relative * u32::from(columns_per_scalar);
+                            (start, start + u32::from(columns_per_scalar))
+                        }
+                        mant_ir::CellMapKind::GraphemeCluster {}
+                        | mant_ir::CellMapKind::Overlay {} => {
+                            (placement.start_column, placement.end_column)
+                        }
+                    };
+                    entry
+                        .record
+                        .cells
+                        .push(super::search::RenderedSearchSourceCell {
+                            source_start: entry.byte_offsets[scalar_index],
+                            source_end: entry.byte_offsets[scalar_index + 1],
+                            fragment: super::search::RenderedSearchFragment {
+                                row: logical_row,
+                                start_column: usize::try_from(start_column)
+                                    .expect("validated column"),
+                                end_column: usize::try_from(end_column).expect("validated column"),
+                            },
+                        });
+                }
+            }
+            let mut visible = LogicalLine::plain(0, line, base_style)
+                .surface(LineSurface::Fixed)
+                .wrap_mode(WrapMode::NoWrap)
+                .with_links(links)
+                .with_reference_marks(reference_marks);
+            visible.spans = styled_spans;
+            self.push(visible);
         }
     }
 
@@ -478,5 +706,97 @@ impl<'a> DocumentBuilder<'a> {
         }
         self.content
             .expect("document lowering requires an authoritative content store")
+    }
+}
+
+fn collect_fixed_inline_anchors(
+    nodes: &[Inline],
+    anchors: &mut HashMap<ContentPointKey, Vec<String>>,
+) {
+    for node in nodes {
+        match node {
+            Inline::Anchor {
+                point,
+                id,
+                fragment_aliases,
+            } => {
+                let ids = anchors.entry(*point).or_default();
+                ids.push(id.to_string());
+                ids.extend(
+                    fragment_aliases
+                        .iter()
+                        .map(|alias| alias.as_str().to_owned()),
+                );
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => collect_fixed_inline_anchors(children, anchors),
+            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak { .. } => {}
+        }
+    }
+}
+
+fn fixed_atom_style(content: ContentContext<'_>, atom: &mant_ir::ContentAtom) -> Style {
+    let mut style = Style::default().fg(theme::TEXT);
+    if atom.style.strong {
+        style = style.fg(theme::STRONG).add_modifier(Modifier::BOLD);
+    }
+    if atom.style.emphasis {
+        style = style.add_modifier(Modifier::ITALIC);
+    }
+    if atom.style.literal {
+        style = style.fg(theme::HEADING);
+    }
+    if atom.style.underline {
+        style = style.add_modifier(Modifier::UNDERLINED);
+    }
+    if let Some(link) = atom.link {
+        let external = content.occurrence(link).is_some_and(|occurrence| {
+            matches!(
+                &occurrence.target,
+                mant_ir::LinkTarget::External { .. } | mant_ir::LinkTarget::Email { .. }
+            )
+        });
+        style = style
+            .fg(if external { theme::BLUE } else { theme::LINK })
+            .add_modifier(Modifier::UNDERLINED);
+    }
+    style
+}
+
+fn collect_fixed_block_anchors(
+    blocks: &[Block],
+    anchors: &mut HashMap<ContentPointKey, Vec<String>>,
+) {
+    for block in blocks {
+        match block {
+            Block::Paragraph { children, .. }
+            | Block::Preformatted { children, .. }
+            | Block::FixedDisplay { children, .. } => {
+                collect_fixed_inline_anchors(children, anchors);
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    collect_fixed_block_anchors(&item.blocks, anchors);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    for term in &item.terms {
+                        collect_fixed_inline_anchors(term, anchors);
+                    }
+                    collect_fixed_block_anchors(&item.description, anchors);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter().flat_map(|row| &row.cells) {
+                    collect_fixed_block_anchors(&cell.blocks, anchors);
+                }
+            }
+            Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
     }
 }

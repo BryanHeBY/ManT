@@ -2,6 +2,97 @@
 use super::*;
 
 #[test]
+fn fixed_surface_uses_real_buffer_for_horizontal_reveal_search_and_link_hit() {
+    let bundle = fixed_bundle();
+    let document = bundle.document.as_ref().expect("fixed document");
+    assert!(mant_ir::validate_document(document).is_empty());
+    let mut terminal = Terminal::new(TestBackend::new(30, 12)).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("initial draw");
+    let area = app.geometry.content;
+    assert!(area.width < 36);
+    let visible = |terminal: &Terminal<TestBackend>, area: Rect| {
+        (area.y..area.bottom())
+            .map(|row| {
+                (area.x..area.right())
+                    .map(|column| terminal.backend().buffer()[(column, row)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    assert!(!visible(&terminal, area).contains("LINK"));
+    assert_eq!(app.session.document.max_fixed_columns(), 37);
+    let clipped = app.session.document.render_with_horizontal_offset(4, 31);
+    let clipped_row = (0..clipped.row_count)
+        .find(|row| clipped.is_fixed_row(*row))
+        .expect("fixed row");
+    assert_eq!(clipped.text.lines[clipped_row].to_string(), " LIN");
+
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+    assert_eq!(app.session.horizontal_offset, 0);
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
+    assert_eq!(app.session.horizontal_offset, 4);
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("horizontal draw");
+    assert!(!visible(&terminal, area).contains("LINK"));
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    for character in "LINK".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.search.scope_matches.len(), 1);
+    assert!(app.session.horizontal_offset > 4);
+    terminal.draw(|frame| app.draw(frame)).expect("reveal draw");
+    assert!(visible(&terminal, area).contains("LINK"));
+
+    let width = app.geometry.content.width;
+    let rendered = &app.session.rendered_cache[&width];
+    let found = &app.search.scope_matches[0].rendered;
+    assert!(rendered.search("│").is_empty());
+    assert_eq!(rendered.anchor_row("fixed-end"), Some(found.row));
+    let column = found.start_column - app.session.horizontal_offset;
+    assert!(rendered.link_identity_at(found.row, column).is_some());
+    assert!(matches!(
+        app.session
+            .document
+            .link_target_at(rendered, found.row, column),
+        Some(crate::document::LinkTarget::External(_))
+    ));
+    let viewport_row = found.row.saturating_sub(app.session.content_scroll);
+    let cell = terminal
+        .backend()
+        .buffer()
+        .cell((
+            area.x + u16::try_from(column).unwrap(),
+            area.y + u16::try_from(viewport_row).unwrap(),
+        ))
+        .expect("visible linked fixed cell");
+    assert!(
+        cell.modifier
+            .contains(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED)
+    );
+    let selection = RenderedSelection::new(TextPosition {
+        row: found.row,
+        column,
+    });
+    assert_eq!(
+        rendered.selected_text(RenderedSelection {
+            anchor: selection.anchor,
+            focus: TextPosition {
+                row: found.row,
+                column: column + 3,
+            },
+        }),
+        "LINK"
+    );
+}
+
+#[test]
 fn successful_page_change_cancels_splitter_timer_but_failed_candidate_retains_it() {
     use crate::app::{HistoryDirection, LocalTarget};
     use std::sync::Arc;

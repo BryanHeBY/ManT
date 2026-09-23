@@ -196,6 +196,7 @@ fn collect_entity_blocks(content: ContentContext<'_>, blocks: &[Block], output: 
             }
             Block::Unsupported { text, .. } => extend_entity_spellings(text, output),
             Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
             | Block::ThematicBreak { .. } => {}
@@ -315,11 +316,13 @@ fn collect_blocks(
                 owner_depth: owner_items.len(),
                 language: language.clone(),
             }),
-            Block::Table { .. } => topology.fences.push(FenceTopology {
-                section: section.to_vec(),
-                owner_depth: owner_items.len(),
-                language: None,
-            }),
+            Block::FixedDisplay { .. } | Block::Table { .. } => {
+                topology.fences.push(FenceTopology {
+                    section: section.to_vec(),
+                    owner_depth: owner_items.len(),
+                    language: None,
+                });
+            }
             Block::Equation { display: true, .. } => topology.fences.push(FenceTopology {
                 section: section.to_vec(),
                 owner_depth: owner_items.len(),
@@ -524,7 +527,9 @@ fn blocks_have_projection(content: ContentContext<'_>, blocks: &[Block]) -> bool
 fn block_has_projection(content: ContentContext<'_>, block: &Block) -> bool {
     match block {
         Block::Paragraph { children, .. } => has_visible_inline(content, children),
-        Block::Preformatted { .. } | Block::ThematicBreak { .. } => true,
+        Block::Preformatted { .. } | Block::FixedDisplay { .. } | Block::ThematicBreak { .. } => {
+            true
+        }
         Block::List { items, .. } => items
             .iter()
             .any(|item| blocks_have_projection(content, &item.blocks)),

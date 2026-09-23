@@ -121,34 +121,20 @@ impl<'a> BlockRenderer<'a> {
                 padding(compose_origin(base_indent, layout.indent_columns)),
             ));
         }
+        if let Block::FixedDisplay { view, layout, .. }
+        | Block::Table {
+            fixed_view: Some(view),
+            layout,
+            ..
+        } = block
+        {
+            return self.fixed_flow(*view, *layout, base_indent);
+        }
         if let Block::Paragraph {
             children, layout, ..
         } = block
         {
-            let value = self.inline_text(children, TextRole::Body);
-            if value.trim().is_empty() {
-                return Flow::default();
-            }
-            let first_origin = compose_origin(base_indent, layout.indent_columns);
-            return Flow::text(
-                value
-                    // A leading inline break can be formatter output from an
-                    // empty word containing `\p`; unlike a trailing line
-                    // terminator it is observable vertical content.
-                    .trim_end_matches('\n')
-                    .split('\n')
-                    .enumerate()
-                    .map(|(index, line)| {
-                        let origin = if index == 0 {
-                            first_origin
-                        } else {
-                            compose_origin(first_origin, layout.continuation_indent_columns)
-                        };
-                        format!("{}{line}", " ".repeat(padding(origin)))
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            );
+            return self.paragraph_flow(children, *layout, base_indent);
         }
         let (value, layout_indent) = match block {
             Block::Paragraph {
@@ -160,6 +146,7 @@ impl<'a> BlockRenderer<'a> {
                 self.inline_text(children, TextRole::Body),
                 layout.indent_columns,
             ),
+            Block::FixedDisplay { .. } => unreachable!("handled before flow layout"),
             Block::List {
                 kind,
                 items,
@@ -208,6 +195,57 @@ impl<'a> BlockRenderer<'a> {
             Block::ThematicBreak { .. } => ("---".to_owned(), 0),
         };
         Self::nonliteral_leaf(&value, compose_origin(base_indent, layout_indent))
+    }
+
+    fn fixed_flow(
+        &self,
+        view: mant_ir::FixedViewKey,
+        layout: mant_ir::LayoutHint,
+        base_indent: i32,
+    ) -> Flow {
+        let Some(lines) = self
+            .content
+            .fixed_view(view)
+            .and_then(|view| view.physical_lines(self.content))
+        else {
+            return Flow::default();
+        };
+        Flow::literal(indent_lines(
+            &lines.join("\n"),
+            padding(compose_origin(base_indent, layout.indent_columns)),
+        ))
+    }
+
+    fn paragraph_flow(
+        &self,
+        children: &[mant_ir::Inline],
+        layout: mant_ir::LayoutHint,
+        base_indent: i32,
+    ) -> Flow {
+        let value = self.inline_text(children, TextRole::Body);
+        if value.trim().is_empty() {
+            return Flow::default();
+        }
+        let first_origin = compose_origin(base_indent, layout.indent_columns);
+        Flow::text(
+            value
+                // A leading inline break can be formatter output from an
+                // empty word containing `\p`; unlike a trailing line
+                // terminator it is observable vertical content.
+                .trim_end_matches('\n')
+                .split('\n')
+                .enumerate()
+                .map(|(index, line)| {
+                    let origin = if index == 0 {
+                        first_origin
+                    } else {
+                        compose_origin(first_origin, layout.continuation_indent_columns)
+                    };
+                    format!("{}{line}", " ".repeat(padding(origin)))
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
     }
 
     fn nonliteral_leaf(value: &str, origin: i32) -> Flow {
@@ -337,6 +375,7 @@ mod tests {
                 alignment: None,
             };
             let table = Block::Table {
+                fixed_view: None,
                 rows: vec![mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![cell("FIRST"), cell("SECOND")],
@@ -358,6 +397,7 @@ mod tests {
         }
         let nested = plain_list(
             vec![Block::Table {
+                fixed_view: None,
                 rows: vec![mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![TableCell {
@@ -381,6 +421,7 @@ mod tests {
             format!("{}NESTED", " ".repeat(4096))
         );
         let table = Block::Table {
+            fixed_view: None,
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: ["FIRST", "SECOND"]
@@ -409,6 +450,7 @@ mod tests {
     fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
         let renderer = super::super::plain_renderer();
         let table = Block::Table {
+            fixed_view: None,
             rows: vec![
                 mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
@@ -485,6 +527,7 @@ mod tests {
     fn table_cells_preserve_formatter_generated_line_breaks() {
         let renderer = super::super::plain_renderer();
         let table = Block::Table {
+            fixed_view: None,
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {
@@ -529,6 +572,7 @@ mod tests {
             ),
         ] {
             let table = Block::Table {
+                fixed_view: None,
                 rows: vec![mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![TableCell {
@@ -554,6 +598,7 @@ mod tests {
     fn an_empty_table_row_remains_a_physical_row() {
         let renderer = super::super::plain_renderer();
         let table = Block::Table {
+            fixed_view: None,
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {
@@ -668,6 +713,7 @@ mod tests {
                         source: None,
                     },
                     Block::Table {
+                        fixed_view: None,
                         rows: vec![mant_ir::TableRow {
                             kind: mant_ir::TableRowKind::Data,
                             cells: vec![TableCell {

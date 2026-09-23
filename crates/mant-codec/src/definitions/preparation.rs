@@ -180,6 +180,7 @@ impl PreparedDefinitions {
                 }
                 Block::Paragraph { .. }
                 | Block::Preformatted { .. }
+                | Block::FixedDisplay { .. }
                 | Block::Equation { .. }
                 | Block::VerticalSpace { .. }
                 | Block::ThematicBreak { .. }
@@ -237,6 +238,7 @@ fn normalize_blocks(
             }
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
             | Block::ThematicBreak { .. }

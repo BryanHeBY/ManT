@@ -127,6 +127,26 @@ impl RenderedDocument {
                 std::iter::once(first).chain(search_match.additional_fragments.iter().copied())
             {
                 if (start..end).contains(&fragment.row) {
+                    let mut fragment = fragment;
+                    if self.surfaces.get(fragment.row) == Some(&super::LineSurface::Fixed) {
+                        let visible = self
+                            .text
+                            .lines
+                            .get(fragment.row)
+                            .map_or(0, |line| super::inline::spans_width(&line.spans));
+                        let viewport_end = self.horizontal_offset.saturating_add(visible);
+                        if fragment.end_column <= self.horizontal_offset
+                            || fragment.start_column >= viewport_end
+                        {
+                            continue;
+                        }
+                        fragment.start_column =
+                            fragment.start_column.saturating_sub(self.horizontal_offset);
+                        fragment.end_column = fragment
+                            .end_column
+                            .saturating_sub(self.horizontal_offset)
+                            .min(visible);
+                    }
                     by_row
                         .entry(fragment.row - start)
                         .or_default()

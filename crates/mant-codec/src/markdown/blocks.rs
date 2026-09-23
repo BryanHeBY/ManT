@@ -270,6 +270,7 @@ fn parse_table(
     }
     Block::Table {
         rows,
+        fixed_view: None,
         layout: LayoutHint::default(),
         source: Some(source.span(&(start_range.start..end))),
     }

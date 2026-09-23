@@ -236,6 +236,9 @@ where
             }
             | Block::Preformatted {
                 children, source, ..
+            }
+            | Block::FixedDisplay {
+                children, source, ..
             } => {
                 self.inlines(children, Root::Content(ContentInlineRoot::Inlines), *source)?;
             }

@@ -185,6 +185,7 @@ pub const fn block_gap(block: &crate::Block) -> u16 {
     match block {
         Block::Paragraph { layout, .. }
         | Block::Preformatted { layout, .. }
+        | Block::FixedDisplay { layout, .. }
         | Block::List { layout, .. }
         | Block::DefinitionList { layout, .. }
         | Block::Table { layout, .. }

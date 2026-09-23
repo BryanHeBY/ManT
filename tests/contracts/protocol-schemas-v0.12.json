@@ -816,6 +816,48 @@
             ]
           },
           {
+            "description": "Native physical display over one authoritative logical inline body.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Searchable and semantically traversed logical content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "layout": {
+                "description": "Source-derived spacing outside the fixed surface.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "fixed-display"
+              },
+              "view": {
+                "description": "Checked fixed geometry referencing the same content store.",
+                "$ref": "#/$defs/FixedViewKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "children",
+              "view"
+            ]
+          },
+          {
             "description": "Ordered, unordered, or marker-free block list.",
             "type": "object",
             "properties": {
@@ -913,6 +955,17 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "fixedView": {
+                "description": "Native fixed geometry for complex table layout, if required.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FixedViewKey"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -1081,6 +1134,61 @@
             "required": [
               "type",
               "text"
+            ]
+          }
+        ]
+      },
+      "CellMapKind": {
+        "description": "Closed terminal-cell mapping family.",
+        "oneOf": [
+          {
+            "description": "Equal-width scalar cells, such as printable ASCII.",
+            "type": "object",
+            "properties": {
+              "columns_per_scalar": {
+                "description": "Positive terminal-cell width of each scalar.",
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "affine"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "columns_per_scalar"
+            ]
+          },
+          {
+            "description": "One indivisible extended grapheme, including wide/combining glyphs.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "grapheme-cluster"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Explicitly observed overstrike at the same terminal columns.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "overlay"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
             ]
           }
         ]
@@ -1569,6 +1677,13 @@
               "$ref": "#/$defs/ContentAtom"
             }
           },
+          "fixedViews": {
+            "description": "Native physical views over the same logical roots and atoms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedView"
+            }
+          },
           "links": {
             "description": "Logical link occurrences in key order.",
             "type": "array",
@@ -1651,6 +1766,75 @@
         "required": [
           "startItem",
           "endItem"
+        ]
+      },
+      "Decoration": {
+        "description": "Non-semantic native drawing glyphs kept outside the logical body.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense document-local decoration key.",
+            "$ref": "#/$defs/DecorationKey"
+          },
+          "kind": {
+            "description": "Native-generated drawing role.",
+            "$ref": "#/$defs/DecorationKind"
+          },
+          "provenance": {
+            "description": "Authorship, generated or unknown for formatter-created glyphs.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Profile-specific visible glyphs, never searched as logical content.",
+            "type": "string"
+          },
+          "widthColumns": {
+            "description": "Width in terminal columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "startColumn",
+          "widthColumns",
+          "kind",
+          "provenance"
+        ]
+      },
+      "DecorationKey": {
+        "description": "Document-local non-content decoration key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "DecorationKind": {
+        "description": "Closed set of non-semantic decoration roles.",
+        "oneOf": [
+          {
+            "description": "A table frame or cell separator.",
+            "type": "string",
+            "const": "border"
+          },
+          {
+            "description": "A rule line or rule cell.",
+            "type": "string",
+            "const": "rule"
+          },
+          {
+            "description": "Native field padding.",
+            "type": "string",
+            "const": "padding"
+          }
         ]
       },
       "DefinitionItem": {
@@ -2472,6 +2656,87 @@
           }
         ]
       },
+      "FixedLine": {
+        "description": "One native physical line. Its content is referenced, not copied.",
+        "type": "object",
+        "properties": {
+          "decorations": {
+            "description": "Native border, rule, and padding glyphs without semantic content.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Decoration"
+            }
+          },
+          "key": {
+            "description": "Dense document-local line key.",
+            "$ref": "#/$defs/FixedLineKey"
+          },
+          "placements": {
+            "description": "Ordered placements of semantic content and zero-width points.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Placement"
+            }
+          },
+          "terminalColumns": {
+            "description": "Width in terminal columns, independent of the current viewport.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "terminalColumns",
+          "placements",
+          "decorations"
+        ]
+      },
+      "FixedLineKey": {
+        "description": "Document-local native fixed-line key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "FixedView": {
+        "description": "One document-local native display projection.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position in the content store.",
+            "$ref": "#/$defs/FixedViewKey"
+          },
+          "lines": {
+            "description": "Native physical lines, without viewport clipping or reflow.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedLine"
+            }
+          },
+          "owner": {
+            "description": "Logical owner shared with the fixed block or table.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the display boundary.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "lines",
+          "provenance"
+        ]
+      },
+      "FixedViewKey": {
+        "description": "Document-local native fixed-view key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
@@ -3271,6 +3536,96 @@
           }
         ]
       },
+      "Placement": {
+        "description": "One visible use of a logical content slice or point.",
+        "type": "object",
+        "properties": {
+          "endColumn": {
+            "description": "Exclusive last terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "key": {
+            "description": "Dense document-local placement key.",
+            "$ref": "#/$defs/PlacementKey"
+          },
+          "map": {
+            "description": "Mapping from complete logical graphemes to terminal columns.",
+            "$ref": "#/$defs/CellMapKind"
+          },
+          "rootScalarRange": {
+            "description": "Root-relative Unicode scalar range of the selected target.",
+            "$ref": "#/$defs/Range_of_uint32"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "target": {
+            "description": "The one authoritative logical object shown here.",
+            "$ref": "#/$defs/PlacementTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "target",
+          "rootScalarRange",
+          "startColumn",
+          "endColumn",
+          "map"
+        ]
+      },
+      "PlacementKey": {
+        "description": "Document-local fixed content-placement key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "PlacementTarget": {
+        "description": "A placement never carries both text and a zero-width target.",
+        "oneOf": [
+          {
+            "description": "A checked UTF-8 slice of one logical atom.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentRef"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "A checked zero-width point in one logical root.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "point"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentPointKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        ]
+      },
       "Producer": {
         "description": "Identifies `ManT` and the parser used to build a wire document.",
         "type": "object",
@@ -3374,6 +3729,25 @@
           "start": {
             "type": "integer",
             "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "Range_of_uint32": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint32",
             "minimum": 0
           }
         },
@@ -4324,6 +4698,48 @@
             ]
           },
           {
+            "description": "Native physical display over one authoritative logical inline body.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Searchable and semantically traversed logical content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "layout": {
+                "description": "Source-derived spacing outside the fixed surface.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "fixed-display"
+              },
+              "view": {
+                "description": "Checked fixed geometry referencing the same content store.",
+                "$ref": "#/$defs/FixedViewKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "children",
+              "view"
+            ]
+          },
+          {
             "description": "Ordered, unordered, or marker-free block list.",
             "type": "object",
             "properties": {
@@ -4421,6 +4837,17 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "fixedView": {
+                "description": "Native fixed geometry for complex table layout, if required.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FixedViewKey"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -4589,6 +5016,61 @@
             "required": [
               "type",
               "text"
+            ]
+          }
+        ]
+      },
+      "CellMapKind": {
+        "description": "Closed terminal-cell mapping family.",
+        "oneOf": [
+          {
+            "description": "Equal-width scalar cells, such as printable ASCII.",
+            "type": "object",
+            "properties": {
+              "columns_per_scalar": {
+                "description": "Positive terminal-cell width of each scalar.",
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "affine"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "columns_per_scalar"
+            ]
+          },
+          {
+            "description": "One indivisible extended grapheme, including wide/combining glyphs.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "grapheme-cluster"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Explicitly observed overstrike at the same terminal columns.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "overlay"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
             ]
           }
         ]
@@ -5173,6 +5655,13 @@
               "$ref": "#/$defs/ContentAtom"
             }
           },
+          "fixedViews": {
+            "description": "Native physical views over the same logical roots and atoms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedView"
+            }
+          },
           "links": {
             "description": "Logical link occurrences in key order.",
             "type": "array",
@@ -5255,6 +5744,75 @@
         "required": [
           "startItem",
           "endItem"
+        ]
+      },
+      "Decoration": {
+        "description": "Non-semantic native drawing glyphs kept outside the logical body.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense document-local decoration key.",
+            "$ref": "#/$defs/DecorationKey"
+          },
+          "kind": {
+            "description": "Native-generated drawing role.",
+            "$ref": "#/$defs/DecorationKind"
+          },
+          "provenance": {
+            "description": "Authorship, generated or unknown for formatter-created glyphs.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Profile-specific visible glyphs, never searched as logical content.",
+            "type": "string"
+          },
+          "widthColumns": {
+            "description": "Width in terminal columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "startColumn",
+          "widthColumns",
+          "kind",
+          "provenance"
+        ]
+      },
+      "DecorationKey": {
+        "description": "Document-local non-content decoration key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "DecorationKind": {
+        "description": "Closed set of non-semantic decoration roles.",
+        "oneOf": [
+          {
+            "description": "A table frame or cell separator.",
+            "type": "string",
+            "const": "border"
+          },
+          {
+            "description": "A rule line or rule cell.",
+            "type": "string",
+            "const": "rule"
+          },
+          {
+            "description": "Native field padding.",
+            "type": "string",
+            "const": "padding"
+          }
         ]
       },
       "DefinitionItem": {
@@ -6940,6 +7498,87 @@
           "content"
         ]
       },
+      "FixedLine": {
+        "description": "One native physical line. Its content is referenced, not copied.",
+        "type": "object",
+        "properties": {
+          "decorations": {
+            "description": "Native border, rule, and padding glyphs without semantic content.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Decoration"
+            }
+          },
+          "key": {
+            "description": "Dense document-local line key.",
+            "$ref": "#/$defs/FixedLineKey"
+          },
+          "placements": {
+            "description": "Ordered placements of semantic content and zero-width points.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Placement"
+            }
+          },
+          "terminalColumns": {
+            "description": "Width in terminal columns, independent of the current viewport.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "terminalColumns",
+          "placements",
+          "decorations"
+        ]
+      },
+      "FixedLineKey": {
+        "description": "Document-local native fixed-line key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "FixedView": {
+        "description": "One document-local native display projection.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position in the content store.",
+            "$ref": "#/$defs/FixedViewKey"
+          },
+          "lines": {
+            "description": "Native physical lines, without viewport clipping or reflow.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedLine"
+            }
+          },
+          "owner": {
+            "description": "Logical owner shared with the fixed block or table.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the display boundary.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "lines",
+          "provenance"
+        ]
+      },
+      "FixedViewKey": {
+        "description": "Document-local native fixed-view key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
@@ -7711,6 +8350,96 @@
           }
         ]
       },
+      "Placement": {
+        "description": "One visible use of a logical content slice or point.",
+        "type": "object",
+        "properties": {
+          "endColumn": {
+            "description": "Exclusive last terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "key": {
+            "description": "Dense document-local placement key.",
+            "$ref": "#/$defs/PlacementKey"
+          },
+          "map": {
+            "description": "Mapping from complete logical graphemes to terminal columns.",
+            "$ref": "#/$defs/CellMapKind"
+          },
+          "rootScalarRange": {
+            "description": "Root-relative Unicode scalar range of the selected target.",
+            "$ref": "#/$defs/Range_of_uint32"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "target": {
+            "description": "The one authoritative logical object shown here.",
+            "$ref": "#/$defs/PlacementTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "target",
+          "rootScalarRange",
+          "startColumn",
+          "endColumn",
+          "map"
+        ]
+      },
+      "PlacementKey": {
+        "description": "Document-local fixed content-placement key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "PlacementTarget": {
+        "description": "A placement never carries both text and a zero-width target.",
+        "oneOf": [
+          {
+            "description": "A checked UTF-8 slice of one logical atom.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentRef"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "A checked zero-width point in one logical root.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "point"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentPointKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        ]
+      },
       "Producer": {
         "description": "Identifies `ManT` and the parser used to build a wire document.",
         "type": "object",
@@ -7814,6 +8543,25 @@
           "start": {
             "type": "integer",
             "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "Range_of_uint32": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint32",
             "minimum": 0
           }
         },
@@ -8442,6 +9190,61 @@
       "nodes"
     ],
     "$defs": {
+      "CellMapKind": {
+        "description": "Closed terminal-cell mapping family.",
+        "oneOf": [
+          {
+            "description": "Equal-width scalar cells, such as printable ASCII.",
+            "type": "object",
+            "properties": {
+              "columns_per_scalar": {
+                "description": "Positive terminal-cell width of each scalar.",
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "affine"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "columns_per_scalar"
+            ]
+          },
+          {
+            "description": "One indivisible extended grapheme, including wide/combining glyphs.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "grapheme-cluster"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Explicitly observed overstrike at the same terminal columns.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "overlay"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "ContentAtom": {
         "description": "One atom in global retained execution order.",
         "type": "object",
@@ -9323,6 +10126,13 @@
               "$ref": "#/$defs/ContentAtom"
             }
           },
+          "fixedViews": {
+            "description": "Native physical views over the same logical roots and atoms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedView"
+            }
+          },
           "links": {
             "description": "Logical link occurrences in key order.",
             "type": "array",
@@ -9383,6 +10193,75 @@
           }
         },
         "additionalProperties": false
+      },
+      "Decoration": {
+        "description": "Non-semantic native drawing glyphs kept outside the logical body.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense document-local decoration key.",
+            "$ref": "#/$defs/DecorationKey"
+          },
+          "kind": {
+            "description": "Native-generated drawing role.",
+            "$ref": "#/$defs/DecorationKind"
+          },
+          "provenance": {
+            "description": "Authorship, generated or unknown for formatter-created glyphs.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Profile-specific visible glyphs, never searched as logical content.",
+            "type": "string"
+          },
+          "widthColumns": {
+            "description": "Width in terminal columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "startColumn",
+          "widthColumns",
+          "kind",
+          "provenance"
+        ]
+      },
+      "DecorationKey": {
+        "description": "Document-local non-content decoration key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "DecorationKind": {
+        "description": "Closed set of non-semantic decoration roles.",
+        "oneOf": [
+          {
+            "description": "A table frame or cell separator.",
+            "type": "string",
+            "const": "border"
+          },
+          {
+            "description": "A rule line or rule cell.",
+            "type": "string",
+            "const": "rule"
+          },
+          {
+            "description": "Native field padding.",
+            "type": "string",
+            "const": "padding"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -9968,6 +10847,87 @@
             ]
           }
         ]
+      },
+      "FixedLine": {
+        "description": "One native physical line. Its content is referenced, not copied.",
+        "type": "object",
+        "properties": {
+          "decorations": {
+            "description": "Native border, rule, and padding glyphs without semantic content.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Decoration"
+            }
+          },
+          "key": {
+            "description": "Dense document-local line key.",
+            "$ref": "#/$defs/FixedLineKey"
+          },
+          "placements": {
+            "description": "Ordered placements of semantic content and zero-width points.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Placement"
+            }
+          },
+          "terminalColumns": {
+            "description": "Width in terminal columns, independent of the current viewport.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "terminalColumns",
+          "placements",
+          "decorations"
+        ]
+      },
+      "FixedLineKey": {
+        "description": "Document-local native fixed-line key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "FixedView": {
+        "description": "One document-local native display projection.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position in the content store.",
+            "$ref": "#/$defs/FixedViewKey"
+          },
+          "lines": {
+            "description": "Native physical lines, without viewport clipping or reflow.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedLine"
+            }
+          },
+          "owner": {
+            "description": "Logical owner shared with the fixed block or table.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the display boundary.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "lines",
+          "provenance"
+        ]
+      },
+      "FixedViewKey": {
+        "description": "Document-local native fixed-view key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
       },
       "LinkLabelPart": {
         "description": "One ordered component of a complete logical link label.",
@@ -10591,6 +11551,96 @@
           }
         ]
       },
+      "Placement": {
+        "description": "One visible use of a logical content slice or point.",
+        "type": "object",
+        "properties": {
+          "endColumn": {
+            "description": "Exclusive last terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "key": {
+            "description": "Dense document-local placement key.",
+            "$ref": "#/$defs/PlacementKey"
+          },
+          "map": {
+            "description": "Mapping from complete logical graphemes to terminal columns.",
+            "$ref": "#/$defs/CellMapKind"
+          },
+          "rootScalarRange": {
+            "description": "Root-relative Unicode scalar range of the selected target.",
+            "$ref": "#/$defs/Range_of_uint32"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "target": {
+            "description": "The one authoritative logical object shown here.",
+            "$ref": "#/$defs/PlacementTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "target",
+          "rootScalarRange",
+          "startColumn",
+          "endColumn",
+          "map"
+        ]
+      },
+      "PlacementKey": {
+        "description": "Document-local fixed content-placement key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "PlacementTarget": {
+        "description": "A placement never carries both text and a zero-width target.",
+        "oneOf": [
+          {
+            "description": "A checked UTF-8 slice of one logical atom.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentRef"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "A checked zero-width point in one logical root.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "point"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentPointKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        ]
+      },
       "Provenance": {
         "description": "Authorship provenance for content that may not map to an exact range.",
         "oneOf": [
@@ -10652,6 +11702,25 @@
               "kind"
             ]
           }
+        ]
+      },
+      "Range_of_uint32": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
         ]
       },
       "ReferenceAssociation": {
@@ -11792,6 +12861,48 @@
             ]
           },
           {
+            "description": "Native physical display over one authoritative logical inline body.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Searchable and semantically traversed logical content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "layout": {
+                "description": "Source-derived spacing outside the fixed surface.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "fixed-display"
+              },
+              "view": {
+                "description": "Checked fixed geometry referencing the same content store.",
+                "$ref": "#/$defs/FixedViewKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "children",
+              "view"
+            ]
+          },
+          {
             "description": "Ordered, unordered, or marker-free block list.",
             "type": "object",
             "properties": {
@@ -11889,6 +13000,17 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "fixedView": {
+                "description": "Native fixed geometry for complex table layout, if required.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FixedViewKey"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -12057,6 +13179,61 @@
             "required": [
               "type",
               "text"
+            ]
+          }
+        ]
+      },
+      "CellMapKind": {
+        "description": "Closed terminal-cell mapping family.",
+        "oneOf": [
+          {
+            "description": "Equal-width scalar cells, such as printable ASCII.",
+            "type": "object",
+            "properties": {
+              "columns_per_scalar": {
+                "description": "Positive terminal-cell width of each scalar.",
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "affine"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "columns_per_scalar"
+            ]
+          },
+          {
+            "description": "One indivisible extended grapheme, including wide/combining glyphs.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "grapheme-cluster"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Explicitly observed overstrike at the same terminal columns.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "overlay"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
             ]
           }
         ]
@@ -12531,6 +13708,13 @@
               "$ref": "#/$defs/ContentAtom"
             }
           },
+          "fixedViews": {
+            "description": "Native physical views over the same logical roots and atoms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedView"
+            }
+          },
           "links": {
             "description": "Logical link occurrences in key order.",
             "type": "array",
@@ -12613,6 +13797,75 @@
         "required": [
           "startItem",
           "endItem"
+        ]
+      },
+      "Decoration": {
+        "description": "Non-semantic native drawing glyphs kept outside the logical body.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense document-local decoration key.",
+            "$ref": "#/$defs/DecorationKey"
+          },
+          "kind": {
+            "description": "Native-generated drawing role.",
+            "$ref": "#/$defs/DecorationKind"
+          },
+          "provenance": {
+            "description": "Authorship, generated or unknown for formatter-created glyphs.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Profile-specific visible glyphs, never searched as logical content.",
+            "type": "string"
+          },
+          "widthColumns": {
+            "description": "Width in terminal columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "startColumn",
+          "widthColumns",
+          "kind",
+          "provenance"
+        ]
+      },
+      "DecorationKey": {
+        "description": "Document-local non-content decoration key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "DecorationKind": {
+        "description": "Closed set of non-semantic decoration roles.",
+        "oneOf": [
+          {
+            "description": "A table frame or cell separator.",
+            "type": "string",
+            "const": "border"
+          },
+          {
+            "description": "A rule line or rule cell.",
+            "type": "string",
+            "const": "rule"
+          },
+          {
+            "description": "Native field padding.",
+            "type": "string",
+            "const": "padding"
+          }
         ]
       },
       "DefinitionItem": {
@@ -13401,6 +14654,87 @@
           }
         ]
       },
+      "FixedLine": {
+        "description": "One native physical line. Its content is referenced, not copied.",
+        "type": "object",
+        "properties": {
+          "decorations": {
+            "description": "Native border, rule, and padding glyphs without semantic content.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Decoration"
+            }
+          },
+          "key": {
+            "description": "Dense document-local line key.",
+            "$ref": "#/$defs/FixedLineKey"
+          },
+          "placements": {
+            "description": "Ordered placements of semantic content and zero-width points.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Placement"
+            }
+          },
+          "terminalColumns": {
+            "description": "Width in terminal columns, independent of the current viewport.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "terminalColumns",
+          "placements",
+          "decorations"
+        ]
+      },
+      "FixedLineKey": {
+        "description": "Document-local native fixed-line key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "FixedView": {
+        "description": "One document-local native display projection.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position in the content store.",
+            "$ref": "#/$defs/FixedViewKey"
+          },
+          "lines": {
+            "description": "Native physical lines, without viewport clipping or reflow.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedLine"
+            }
+          },
+          "owner": {
+            "description": "Logical owner shared with the fixed block or table.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the display boundary.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "lines",
+          "provenance"
+        ]
+      },
+      "FixedViewKey": {
+        "description": "Document-local native fixed-view key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
@@ -14012,6 +15346,96 @@
           }
         ]
       },
+      "Placement": {
+        "description": "One visible use of a logical content slice or point.",
+        "type": "object",
+        "properties": {
+          "endColumn": {
+            "description": "Exclusive last terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "key": {
+            "description": "Dense document-local placement key.",
+            "$ref": "#/$defs/PlacementKey"
+          },
+          "map": {
+            "description": "Mapping from complete logical graphemes to terminal columns.",
+            "$ref": "#/$defs/CellMapKind"
+          },
+          "rootScalarRange": {
+            "description": "Root-relative Unicode scalar range of the selected target.",
+            "$ref": "#/$defs/Range_of_uint32"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "target": {
+            "description": "The one authoritative logical object shown here.",
+            "$ref": "#/$defs/PlacementTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "target",
+          "rootScalarRange",
+          "startColumn",
+          "endColumn",
+          "map"
+        ]
+      },
+      "PlacementKey": {
+        "description": "Document-local fixed content-placement key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "PlacementTarget": {
+        "description": "A placement never carries both text and a zero-width target.",
+        "oneOf": [
+          {
+            "description": "A checked UTF-8 slice of one logical atom.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentRef"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "A checked zero-width point in one logical root.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "point"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentPointKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        ]
+      },
       "Producer": {
         "description": "Identifies `ManT` and the parser used to build a wire document.",
         "type": "object",
@@ -14125,6 +15549,25 @@
           "start": {
             "type": "integer",
             "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "Range_of_uint32": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint32",
             "minimum": 0
           }
         },
@@ -15528,7 +16971,7 @@
             "const": "visible"
           },
           {
-            "description": "Search the generated CommonMark bytes, including markup.",
+            "description": "Search the generated `CommonMark` bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }
@@ -15662,6 +17105,48 @@
             ]
           },
           {
+            "description": "Native physical display over one authoritative logical inline body.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Searchable and semantically traversed logical content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "layout": {
+                "description": "Source-derived spacing outside the fixed surface.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "fixed-display"
+              },
+              "view": {
+                "description": "Checked fixed geometry referencing the same content store.",
+                "$ref": "#/$defs/FixedViewKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "children",
+              "view"
+            ]
+          },
+          {
             "description": "Ordered, unordered, or marker-free block list.",
             "type": "object",
             "properties": {
@@ -15759,6 +17244,17 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "fixedView": {
+                "description": "Native fixed geometry for complex table layout, if required.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FixedViewKey"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -15927,6 +17423,61 @@
             "required": [
               "type",
               "text"
+            ]
+          }
+        ]
+      },
+      "CellMapKind": {
+        "description": "Closed terminal-cell mapping family.",
+        "oneOf": [
+          {
+            "description": "Equal-width scalar cells, such as printable ASCII.",
+            "type": "object",
+            "properties": {
+              "columns_per_scalar": {
+                "description": "Positive terminal-cell width of each scalar.",
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "affine"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "columns_per_scalar"
+            ]
+          },
+          {
+            "description": "One indivisible extended grapheme, including wide/combining glyphs.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "grapheme-cluster"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Explicitly observed overstrike at the same terminal columns.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "overlay"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
             ]
           }
         ]
@@ -16511,6 +18062,13 @@
               "$ref": "#/$defs/ContentAtom"
             }
           },
+          "fixedViews": {
+            "description": "Native physical views over the same logical roots and atoms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedView"
+            }
+          },
           "links": {
             "description": "Logical link occurrences in key order.",
             "type": "array",
@@ -16593,6 +18151,75 @@
         "required": [
           "startItem",
           "endItem"
+        ]
+      },
+      "Decoration": {
+        "description": "Non-semantic native drawing glyphs kept outside the logical body.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense document-local decoration key.",
+            "$ref": "#/$defs/DecorationKey"
+          },
+          "kind": {
+            "description": "Native-generated drawing role.",
+            "$ref": "#/$defs/DecorationKind"
+          },
+          "provenance": {
+            "description": "Authorship, generated or unknown for formatter-created glyphs.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Profile-specific visible glyphs, never searched as logical content.",
+            "type": "string"
+          },
+          "widthColumns": {
+            "description": "Width in terminal columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "startColumn",
+          "widthColumns",
+          "kind",
+          "provenance"
+        ]
+      },
+      "DecorationKey": {
+        "description": "Document-local non-content decoration key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "DecorationKind": {
+        "description": "Closed set of non-semantic decoration roles.",
+        "oneOf": [
+          {
+            "description": "A table frame or cell separator.",
+            "type": "string",
+            "const": "border"
+          },
+          {
+            "description": "A rule line or rule cell.",
+            "type": "string",
+            "const": "rule"
+          },
+          {
+            "description": "Native field padding.",
+            "type": "string",
+            "const": "padding"
+          }
         ]
       },
       "DefinitionItem": {
@@ -18430,6 +20057,87 @@
           "content"
         ]
       },
+      "FixedLine": {
+        "description": "One native physical line. Its content is referenced, not copied.",
+        "type": "object",
+        "properties": {
+          "decorations": {
+            "description": "Native border, rule, and padding glyphs without semantic content.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Decoration"
+            }
+          },
+          "key": {
+            "description": "Dense document-local line key.",
+            "$ref": "#/$defs/FixedLineKey"
+          },
+          "placements": {
+            "description": "Ordered placements of semantic content and zero-width points.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Placement"
+            }
+          },
+          "terminalColumns": {
+            "description": "Width in terminal columns, independent of the current viewport.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "terminalColumns",
+          "placements",
+          "decorations"
+        ]
+      },
+      "FixedLineKey": {
+        "description": "Document-local native fixed-line key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "FixedView": {
+        "description": "One document-local native display projection.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position in the content store.",
+            "$ref": "#/$defs/FixedViewKey"
+          },
+          "lines": {
+            "description": "Native physical lines, without viewport clipping or reflow.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedLine"
+            }
+          },
+          "owner": {
+            "description": "Logical owner shared with the fixed block or table.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the display boundary.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "lines",
+          "provenance"
+        ]
+      },
+      "FixedViewKey": {
+        "description": "Document-local native fixed-view key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
@@ -19211,6 +20919,96 @@
           }
         ]
       },
+      "Placement": {
+        "description": "One visible use of a logical content slice or point.",
+        "type": "object",
+        "properties": {
+          "endColumn": {
+            "description": "Exclusive last terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "key": {
+            "description": "Dense document-local placement key.",
+            "$ref": "#/$defs/PlacementKey"
+          },
+          "map": {
+            "description": "Mapping from complete logical graphemes to terminal columns.",
+            "$ref": "#/$defs/CellMapKind"
+          },
+          "rootScalarRange": {
+            "description": "Root-relative Unicode scalar range of the selected target.",
+            "$ref": "#/$defs/Range_of_uint32"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "target": {
+            "description": "The one authoritative logical object shown here.",
+            "$ref": "#/$defs/PlacementTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "target",
+          "rootScalarRange",
+          "startColumn",
+          "endColumn",
+          "map"
+        ]
+      },
+      "PlacementKey": {
+        "description": "Document-local fixed content-placement key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "PlacementTarget": {
+        "description": "A placement never carries both text and a zero-width target.",
+        "oneOf": [
+          {
+            "description": "A checked UTF-8 slice of one logical atom.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentRef"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "A checked zero-width point in one logical root.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "point"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentPointKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        ]
+      },
       "Producer": {
         "description": "Identifies `ManT` and the parser used to build a wire document.",
         "type": "object",
@@ -19314,6 +21112,25 @@
           "start": {
             "type": "integer",
             "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "Range_of_uint32": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint32",
             "minimum": 0
           }
         },
@@ -20019,7 +21836,7 @@
         ]
       },
       "SearchHit": {
-        "description": "One matching logical occurrence or rendered line group with presentation context.",
+        "description": "One rendered line group containing one or more exact occurrences.",
         "type": "object",
         "properties": {
           "context": {
@@ -20060,7 +21877,7 @@
             "type": "boolean"
           },
           "ordinal": {
-            "description": "One-based logical-hit number in the unpaginated result set.",
+            "description": "One-based line-group number in the unpaginated result set.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
@@ -20270,7 +22087,7 @@
             "default": "insensitive"
           },
           "contextLines": {
-            "description": "Neighboring logical-root lines included around each match.",
+            "description": "Neighboring rendered lines included around each match.",
             "type": "integer",
             "format": "uint16",
             "default": 0,
@@ -20278,7 +22095,7 @@
             "minimum": 0
           },
           "limit": {
-            "description": "Maximum number of logical occurrences returned.",
+            "description": "Maximum number of matching line groups returned.",
             "type": "integer",
             "format": "uint32",
             "default": 100,
@@ -20286,7 +22103,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of logical occurrences skipped before collection.",
+            "description": "Number of matching line groups skipped before collection.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -20401,7 +22218,7 @@
             "const": "visible"
           },
           {
-            "description": "Search the generated CommonMark bytes, including markup.",
+            "description": "Search the generated `CommonMark` bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }
@@ -21276,7 +23093,7 @@
             "const": "visible"
           },
           {
-            "description": "Search the generated CommonMark bytes, including markup.",
+            "description": "Search the generated `CommonMark` bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }
@@ -21322,7 +23139,7 @@
         "type": "string"
       },
       "matches": {
-        "description": "Logical occurrences in document/root order.",
+        "description": "Matching line groups in canonical render order.",
         "type": "array",
         "items": {
           "$ref": "#/$defs/SearchHit"
@@ -21349,7 +23166,7 @@
         "minimum": 0
       },
       "offset": {
-        "description": "Applied zero-based logical-occurrence offset.",
+        "description": "Applied zero-based matching-line-group offset.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -21363,7 +23180,7 @@
         "$ref": "#/$defs/SearchRender"
       },
       "returned": {
-        "description": "Number of logical occurrences present in [`Self::matches`].",
+        "description": "Number of matching line groups present in [`Self::matches`].",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -21384,7 +23201,7 @@
         ]
       },
       "total": {
-        "description": "Total logical occurrences before pagination.",
+        "description": "Total matching line groups before pagination.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -21406,6 +23223,61 @@
       "matches"
     ],
     "$defs": {
+      "CellMapKind": {
+        "description": "Closed terminal-cell mapping family.",
+        "oneOf": [
+          {
+            "description": "Equal-width scalar cells, such as printable ASCII.",
+            "type": "object",
+            "properties": {
+              "columns_per_scalar": {
+                "description": "Positive terminal-cell width of each scalar.",
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "affine"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "columns_per_scalar"
+            ]
+          },
+          {
+            "description": "One indivisible extended grapheme, including wide/combining glyphs.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "grapheme-cluster"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Explicitly observed overstrike at the same terminal columns.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "overlay"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "ContentAtom": {
         "description": "One atom in global retained execution order.",
         "type": "object",
@@ -21890,6 +23762,13 @@
               "$ref": "#/$defs/ContentAtom"
             }
           },
+          "fixedViews": {
+            "description": "Native physical views over the same logical roots and atoms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedView"
+            }
+          },
           "links": {
             "description": "Logical link occurrences in key order.",
             "type": "array",
@@ -21950,6 +23829,75 @@
           }
         },
         "additionalProperties": false
+      },
+      "Decoration": {
+        "description": "Non-semantic native drawing glyphs kept outside the logical body.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense document-local decoration key.",
+            "$ref": "#/$defs/DecorationKey"
+          },
+          "kind": {
+            "description": "Native-generated drawing role.",
+            "$ref": "#/$defs/DecorationKind"
+          },
+          "provenance": {
+            "description": "Authorship, generated or unknown for formatter-created glyphs.",
+            "$ref": "#/$defs/Provenance"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Profile-specific visible glyphs, never searched as logical content.",
+            "type": "string"
+          },
+          "widthColumns": {
+            "description": "Width in terminal columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "startColumn",
+          "widthColumns",
+          "kind",
+          "provenance"
+        ]
+      },
+      "DecorationKey": {
+        "description": "Document-local non-content decoration key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "DecorationKind": {
+        "description": "Closed set of non-semantic decoration roles.",
+        "oneOf": [
+          {
+            "description": "A table frame or cell separator.",
+            "type": "string",
+            "const": "border"
+          },
+          {
+            "description": "A rule line or rule cell.",
+            "type": "string",
+            "const": "rule"
+          },
+          {
+            "description": "Native field padding.",
+            "type": "string",
+            "const": "padding"
+          }
+        ]
       },
       "DocumentMeta": {
         "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
@@ -22120,6 +24068,87 @@
             ]
           }
         ]
+      },
+      "FixedLine": {
+        "description": "One native physical line. Its content is referenced, not copied.",
+        "type": "object",
+        "properties": {
+          "decorations": {
+            "description": "Native border, rule, and padding glyphs without semantic content.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Decoration"
+            }
+          },
+          "key": {
+            "description": "Dense document-local line key.",
+            "$ref": "#/$defs/FixedLineKey"
+          },
+          "placements": {
+            "description": "Ordered placements of semantic content and zero-width points.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Placement"
+            }
+          },
+          "terminalColumns": {
+            "description": "Width in terminal columns, independent of the current viewport.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "terminalColumns",
+          "placements",
+          "decorations"
+        ]
+      },
+      "FixedLineKey": {
+        "description": "Document-local native fixed-line key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "FixedView": {
+        "description": "One document-local native display projection.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense key equal to this record's position in the content store.",
+            "$ref": "#/$defs/FixedViewKey"
+          },
+          "lines": {
+            "description": "Native physical lines, without viewport clipping or reflow.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedLine"
+            }
+          },
+          "owner": {
+            "description": "Logical owner shared with the fixed block or table.",
+            "$ref": "#/$defs/ContentOwnerKey"
+          },
+          "provenance": {
+            "description": "Authorship of the display boundary.",
+            "$ref": "#/$defs/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "owner",
+          "lines",
+          "provenance"
+        ]
+      },
+      "FixedViewKey": {
+        "description": "Document-local native fixed-view key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
       },
       "LinkLabelPart": {
         "description": "One ordered component of a complete logical link label.",
@@ -22565,6 +24594,96 @@
           }
         ]
       },
+      "Placement": {
+        "description": "One visible use of a logical content slice or point.",
+        "type": "object",
+        "properties": {
+          "endColumn": {
+            "description": "Exclusive last terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "key": {
+            "description": "Dense document-local placement key.",
+            "$ref": "#/$defs/PlacementKey"
+          },
+          "map": {
+            "description": "Mapping from complete logical graphemes to terminal columns.",
+            "$ref": "#/$defs/CellMapKind"
+          },
+          "rootScalarRange": {
+            "description": "Root-relative Unicode scalar range of the selected target.",
+            "$ref": "#/$defs/Range_of_uint32"
+          },
+          "startColumn": {
+            "description": "Inclusive first terminal column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "target": {
+            "description": "The one authoritative logical object shown here.",
+            "$ref": "#/$defs/PlacementTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "target",
+          "rootScalarRange",
+          "startColumn",
+          "endColumn",
+          "map"
+        ]
+      },
+      "PlacementKey": {
+        "description": "Document-local fixed content-placement key.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+      },
+      "PlacementTarget": {
+        "description": "A placement never carries both text and a zero-width target.",
+        "oneOf": [
+          {
+            "description": "A checked UTF-8 slice of one logical atom.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentRef"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "A checked zero-width point in one logical root.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "point"
+              },
+              "value": {
+                "$ref": "#/$defs/ContentPointKey"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        ]
+      },
       "Provenance": {
         "description": "Authorship provenance for content that may not map to an exact range.",
         "oneOf": [
@@ -22628,6 +24747,25 @@
           }
         ]
       },
+      "Range_of_uint32": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
       "SearchCase": {
         "description": "Case-folding policy applied when compiling the matcher.",
         "oneOf": [
@@ -22674,7 +24812,7 @@
         ]
       },
       "SearchHit": {
-        "description": "One matching logical occurrence or rendered line group with presentation context.",
+        "description": "One rendered line group containing one or more exact occurrences.",
         "type": "object",
         "properties": {
           "context": {
@@ -22715,7 +24853,7 @@
             "type": "boolean"
           },
           "ordinal": {
-            "description": "One-based logical-hit number in the unpaginated result set.",
+            "description": "One-based line-group number in the unpaginated result set.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
@@ -22925,7 +25063,7 @@
             "default": "insensitive"
           },
           "contextLines": {
-            "description": "Neighboring logical-root lines included around each match.",
+            "description": "Neighboring rendered lines included around each match.",
             "type": "integer",
             "format": "uint16",
             "default": 0,
@@ -22933,7 +25071,7 @@
             "minimum": 0
           },
           "limit": {
-            "description": "Maximum number of logical occurrences returned.",
+            "description": "Maximum number of matching line groups returned.",
             "type": "integer",
             "format": "uint32",
             "default": 100,
@@ -22941,7 +25079,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of logical occurrences skipped before collection.",
+            "description": "Number of matching line groups skipped before collection.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -23066,7 +25204,7 @@
             "const": "visible"
           },
           {
-            "description": "Search the generated CommonMark bytes, including markup.",
+            "description": "Search the generated `CommonMark` bytes, including markup.",
             "type": "string",
             "const": "markdown"
           }

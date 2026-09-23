@@ -37,6 +37,10 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
 - Width-aware visual text selection plus typed requests for plain-text and
   complete-node Text/Markdown clipboard content.
+- Native fixed surfaces use `NoWrap` physical rows. Shift+Left/Right moves a
+  viewport-local horizontal offset; search reveals off-screen logical matches,
+  and hit regions, selection and resize use the clipped terminal cells. This
+  does not alter IR or ordinary Markdown code-block wrapping.
 - Public `App` and `DocumentView` layers for callers embedding the frontend in
   an existing Ratatui host.
 

@@ -266,6 +266,7 @@ fn normalize_nested_blocks(
         }
         Block::Paragraph { .. }
         | Block::Preformatted { .. }
+        | Block::FixedDisplay { .. }
         | Block::Equation { .. }
         | Block::VerticalSpace { .. }
         | Block::ThematicBreak { .. }

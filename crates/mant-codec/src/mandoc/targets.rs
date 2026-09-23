@@ -371,7 +371,10 @@ fn prepend_to_first_descendant(
                 }
                 return false;
             }
-            Block::Equation { .. } | Block::ThematicBreak { .. } | Block::Unsupported { .. } => {
+            Block::FixedDisplay { .. }
+            | Block::Equation { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {
                 return false;
             }
         }
@@ -433,7 +436,10 @@ fn append_to_last_descendant(
                 };
                 return append_to_last_descendant(content, &mut cell.blocks, targets, source);
             }
-            Block::Equation { .. } | Block::ThematicBreak { .. } | Block::Unsupported { .. } => {
+            Block::FixedDisplay { .. }
+            | Block::Equation { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {
                 return false;
             }
         }
@@ -453,9 +459,9 @@ fn prepend_inlines(
 
 pub(in crate::mandoc) fn contains_anchor(blocks: &[Block], target: &str) -> bool {
     blocks.iter().any(|block| match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            inlines_contain_anchor(children, target)
-        }
+        Block::Paragraph { children, .. }
+        | Block::Preformatted { children, .. }
+        | Block::FixedDisplay { children, .. } => inlines_contain_anchor(children, target),
         Block::List { items, .. } => items
             .iter()
             .any(|item| contains_anchor(&item.blocks, target)),

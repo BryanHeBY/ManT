@@ -34,6 +34,14 @@ is derived with `Heading::plain_text()`. A leading Markdown H1 becomes
 titles remain bibliographic metadata and do not fabricate displayed headings.
 The ordinary immutable/mutable visitors include heading content in source order.
 
+Native fixed displays and complex tables retain one logical body in
+`ContentStore`. `Block::FixedDisplay` references a checked `FixedView`; a
+`Block::Table` may optionally do the same while its logical rows and cells
+remain authoritative. Each physical line contains content or zero-width point
+placements plus generated decorations, with separate scalar and terminal-cell
+coordinates. Repeated placements do not duplicate logical atoms, links, entry
+facts or search hits. Simple tables continue to use ordinary table layout.
+
 Names and kinds are independent: a `Term` may have exact bound names, while a
 native template can have a proved parameter/environment kind but no supported
 exact name. `terms` are native displayed content, `forms` reference authored

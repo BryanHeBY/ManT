@@ -425,6 +425,7 @@ fn semantic_fingerprint(
             let marker = match block {
                 Block::Paragraph { .. } => "paragraph",
                 Block::Preformatted { .. } => "preformatted",
+                Block::FixedDisplay { .. } => "fixed-display",
                 Block::List { .. } => "list",
                 Block::DefinitionList { .. } => "definition-list",
                 Block::Table { .. } => "table",

@@ -62,6 +62,12 @@ impl App {
         if key.code == KeyCode::Esc && self.pointer.clear_selection() {
             return UpdateOutcome::Redraw;
         }
+        if key.modifiers.contains(KeyModifiers::SHIFT)
+            && matches!(key.code, KeyCode::Left | KeyCode::Right)
+        {
+            self.shift_fixed_horizontal(key.code);
+            return UpdateOutcome::Redraw;
+        }
         match key.code {
             KeyCode::Char('q' | 'Q') => self.quit = true,
             KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::SHIFT) => {
@@ -100,6 +106,25 @@ impl App {
             _ => return UpdateOutcome::Unchanged,
         }
         UpdateOutcome::Redraw
+    }
+
+    fn shift_fixed_horizontal(&mut self, direction: KeyCode) {
+        let width = usize::from(self.geometry.content.width.max(1));
+        let limit = self
+            .session
+            .document
+            .max_fixed_columns()
+            .saturating_sub(width);
+        let next = if direction == KeyCode::Left {
+            self.session.horizontal_offset.saturating_sub(4)
+        } else {
+            self.session.horizontal_offset.saturating_add(4).min(limit)
+        };
+        if next != self.session.horizontal_offset {
+            self.session.horizontal_offset = next;
+            self.session.rendered_cache.clear();
+            self.pointer.clear_selection();
+        }
     }
 
     /// Apply one mouse event using geometry retained from the last frame.

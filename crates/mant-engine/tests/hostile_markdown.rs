@@ -202,6 +202,7 @@ fn fenced_block_count(blocks: &[Block]) -> usize {
         .iter()
         .map(|block| match block {
             Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Table { .. }
             | Block::Equation { display: true, .. } => 1,
             Block::List { items, .. } => items

@@ -245,6 +245,28 @@ impl App {
         }
         self.sync_current_search_matches();
         self.session.content_scroll = search_match.rendered.row;
+        let width = self.geometry.content.width.max(1);
+        let rendered = self.session.rendered_cache.entry(width).or_insert_with(|| {
+            self.session
+                .document
+                .render_with_horizontal_offset(width, self.session.horizontal_offset)
+        });
+        if rendered.is_fixed_row(search_match.rendered.row) {
+            let offset = self.session.horizontal_offset;
+            let start = search_match.rendered.start_column;
+            let end = search_match.rendered.end_column;
+            let visible_end = offset.saturating_add(usize::from(width));
+            if start < offset || end > visible_end {
+                let limit = self
+                    .session
+                    .document
+                    .max_fixed_columns()
+                    .saturating_sub(usize::from(width));
+                self.session.horizontal_offset =
+                    start.saturating_sub(usize::from(width) / 4).min(limit);
+                self.session.rendered_cache.clear();
+            }
+        }
         self.select_section_at_row(search_match.rendered.row);
     }
 

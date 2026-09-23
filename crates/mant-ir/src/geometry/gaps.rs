@@ -183,6 +183,14 @@ fn walk(
                     *gap = GapPlan::default();
                 }
             }
+            Block::FixedDisplay { view, .. } => {
+                if content
+                    .fixed_view(*view)
+                    .is_some_and(|view| !view.lines.is_empty())
+                {
+                    *gap = GapPlan::default();
+                }
+            }
             Block::Paragraph { children, .. } => {
                 if visible(content, children) {
                     *gap = GapPlan::default();
@@ -390,6 +398,7 @@ mod tests {
         let content = store.content();
         for (origin, expected) in [(-2, true), (2, false)] {
             let table = Block::Table {
+                fixed_view: None,
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {

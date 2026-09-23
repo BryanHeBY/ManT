@@ -617,7 +617,7 @@ impl App {
                 Line::raw("Shift+Y      copy selected reference target"),
                 Line::raw("O            choose associated reference to open"),
                 Line::raw("r (chooser)  reveal occurrence source; Esc returns"),
-                Line::raw("d/u          scroll content by ten rows"),
+                Line::raw("d/u scroll rows · Shift+←/→ pan fixed display"),
                 Line::raw("b            toggle sidebar"),
                 Line::raw("F10          open menu bar"),
                 Line::raw("q            quit"),

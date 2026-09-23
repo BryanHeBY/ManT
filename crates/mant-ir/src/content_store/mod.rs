@@ -12,9 +12,13 @@ use serde::{Deserialize, Serialize};
 use crate::{LinkTarget, Provenance};
 
 mod builder;
+mod fixed;
 mod validation;
 
 pub use builder::ContentStoreBuilder;
+pub use fixed::{
+    CellMapKind, Decoration, DecorationKind, FixedLine, FixedView, Placement, PlacementTarget,
+};
 pub use validation::{ContentStoreError, validate_content_store};
 
 use builder::{dense_key, detach_link};
@@ -69,6 +73,10 @@ content_key!(ContentOwnerKey, "Document-local content owner key.");
 content_key!(ContentRootKey, "Document-local logical inline-root key.");
 content_key!(ContentAtomKey, "Document-local logical atom key.");
 content_key!(ContentPointKey, "Document-local zero-width point key.");
+content_key!(FixedViewKey, "Document-local native fixed-view key.");
+content_key!(FixedLineKey, "Document-local native fixed-line key.");
+content_key!(PlacementKey, "Document-local fixed content-placement key.");
+content_key!(DecorationKey, "Document-local non-content decoration key.");
 content_key!(
     LinkOccurrenceKey,
     "Document-local logical link occurrence key."
@@ -600,6 +608,9 @@ pub struct ContentStore {
     pub points: Vec<ContentPoint>,
     /// Logical link occurrences in key order.
     pub links: Vec<LinkOccurrence>,
+    /// Native physical views over the same logical roots and atoms.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixed_views: Vec<FixedView>,
 }
 
 impl ContentStore {
@@ -639,6 +650,14 @@ impl ContentStore {
     #[must_use]
     pub fn link(&self, key: LinkOccurrenceKey) -> Option<&LinkOccurrence> {
         self.links
+            .get(key.index()?)
+            .filter(|record| record.key == key)
+    }
+
+    /// Resolve a native fixed display view.
+    #[must_use]
+    pub fn fixed_view(&self, key: FixedViewKey) -> Option<&FixedView> {
+        self.fixed_views
             .get(key.index()?)
             .filter(|record| record.key == key)
     }

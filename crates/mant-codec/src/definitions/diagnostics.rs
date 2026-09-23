@@ -77,6 +77,7 @@ fn visit_manual_discovery_blocks(
             }
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
+            | Block::FixedDisplay { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
             | Block::ThematicBreak { .. }
