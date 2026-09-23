@@ -10,16 +10,10 @@ mod diagnostics;
 mod formatter;
 pub(crate) mod inline;
 mod layout;
-mod navigation;
-#[cfg(feature = "native-structured")]
-#[allow(dead_code)] // C02b is a private vertical slice; C03 supplies its first product caller.
-mod projection;
+pub(crate) mod navigation;
 mod redirect;
 mod reference;
 mod roff_escape;
-#[cfg(feature = "native-structured")]
-#[allow(dead_code)] // Private vertical slice until the production cutover phase.
-mod structured_document;
 pub use redirect::{RedirectSyntaxError, redirect_target};
 mod source_context;
 mod source_lines;

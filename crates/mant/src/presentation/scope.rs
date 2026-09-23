@@ -45,12 +45,13 @@ mod tests {
     use super::*;
     use mant_protocol::{
         DocumentScope, DocumentTraversal, QuerySearch, ResolvedDocumentScope, ScopeQueryResult,
-        ScopeQuerySchema, ScopeSearch, ScopedSearchDocument,
+        ScopeQuerySchema, ScopeSearch, ScopeSearchSchema, ScopedSearchCoverage,
+        ScopedSearchDocument,
     };
 
     #[test]
     #[allow(clippy::too_many_lines)] // One byte-for-byte fixture covers all CLI presentation modes.
-    fn cli_scope_adapter_preserves_existing_search_ansi_and_terminal_markdown_bytes() {
+    fn cli_scope_adapter_preserves_ansi_and_terminal_markdown_identity() {
         let local: QuerySearch = serde_json::from_value(serde_json::json!({
             "schema": "mant.search/v0.12",
             "label": " odd\u{1b} ",
@@ -69,7 +70,9 @@ mod tests {
                 "schema": "mant.markdown/v1", "format": "markdown", "scope": "full",
                 "lineBase": 1, "columnBase": 1, "lineCount": 1
             },
-            "total": 0, "returned": 0, "offset": 0, "truncated": false, "matches": []
+            "total": 0, "returned": 0, "offset": 0, "truncated": false,
+            "semanticsComplete": true, "coverageDetailsOmitted": 0,
+            "diagnostics": [], "matches": []
         }))
         .unwrap();
         let address = mant_ir::DocumentAddress::Markdown {
@@ -91,12 +94,22 @@ mod tests {
             },
             result: ScopeQueryResult::Search {
                 search: ScopeSearch {
+                    schema: ScopeSearchSchema::V0Dot12,
                     query: local.query.clone(),
                     total: 0,
                     returned: 0,
                     offset: 0,
                     truncated: false,
                     next_offset: None,
+                    semantics_complete: true,
+                    coverage_by_document: vec![ScopedSearchCoverage {
+                        address: address.clone(),
+                        depth: 0,
+                        source_context: local.source_context.clone(),
+                        semantics_complete: true,
+                        coverage_details_omitted: 0,
+                        diagnostics: vec![],
+                    }],
                     documents: vec![ScopedSearchDocument {
                         address: address.clone(),
                         depth: 0,
@@ -120,27 +133,21 @@ mod tests {
         let expected = format!(
             "{style}{}{style:#}\n{}",
             sanitize_terminal_text(&address.catalog_path()),
-            super::super::terminal::render_terminal_search(&local, true).trim()
+            super::super::terminal::render_terminal_search(&local, true)
+                .trim()
+                .replacen("No matches for", "No retained occurrences for", 1)
         );
         assert_eq!(
             render_scope_query_result(&response, options).unwrap(),
             expected
         );
         for terminal in [false, true] {
-            let expected_local = if terminal {
-                super::super::terminal::terminal_search(&local)
-            } else {
-                local.clone()
-            };
             let heading = if terminal {
                 sanitize_terminal_text(&address.catalog_path()).into_owned()
             } else {
                 address.catalog_path()
             };
-            let expected = format!(
-                "## {heading}\n{}",
-                mant_render::render_search_markdown(&expected_local).trim()
-            );
+            let expected = format!("## {heading}\n");
             let options = RenderOptions {
                 format: QueryFormat::Markdown,
                 target: if terminal {

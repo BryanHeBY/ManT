@@ -66,6 +66,11 @@ pub(super) fn execute_query(
         source => source,
     };
     let result = match source {
+        #[cfg(feature = "annotated-preview")]
+        QuerySource::AnnotatedPreview { path, view } => {
+            let query = crate::annotated_preview::load(&path)?;
+            mant_engine::project_query_view(query, &view).map_err(query_execution_failure)?
+        }
         QuerySource::InputStdin { format, view } => {
             validate_markdown_policy(policy)?;
             let query = match format {

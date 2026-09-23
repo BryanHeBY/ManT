@@ -14,13 +14,13 @@ pub(super) const MAX_DOCUMENT_CHARS: usize = mant_protocol::MAX_DOCUMENT_SELECTO
 pub(super) const MAX_SELECTORS: usize = mant_protocol::MAX_NODE_SELECTORS;
 /// Default number of catalog rows materialized by discovery.
 pub(super) const DEFAULT_FIND_RESULTS: u32 = 50;
-/// Default number of matching line groups materialized by search.
+/// Default number of complete search occurrences materialized by search.
 pub(super) const DEFAULT_SEARCH_MATCHES: u32 = 20;
 /// Maximum catalog rows materialized by one discovery call.
 pub(super) const MAX_FIND_RESULTS: u32 = 10_000;
-/// Maximum matching line groups materialized by one agent search.
+/// Maximum complete search occurrences materialized by one agent search.
 ///
-/// Search groups retain previews, occurrences, and optional context, unlike a
+/// Search occurrences retain previews and optional context, unlike a
 /// catalog row. Keep this separate from discovery so a compact character page
 /// cannot cause an unboundedly large in-memory search projection.
 pub(super) const MAX_SEARCH_MATCHES: u32 = 100;
@@ -186,7 +186,7 @@ pub(super) struct SearchParams {
     pub(super) syntax: Option<SearchSyntax>,
     /// Case-folding policy. The default is `insensitive`.
     pub(super) case: Option<SearchCase>,
-    /// Search visible text (the default) or generated `CommonMark` markup.
+    /// Search visible text (the default) or canonical addressable Markdown bytes.
     pub(super) scope: Option<mant_protocol::SearchScope>,
     /// Restrict matches to Unicode-aware word boundaries.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
@@ -195,11 +195,11 @@ pub(super) struct SearchParams {
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     #[schemars(range(max = 5))]
     pub(super) context_lines: u16,
-    /// Maximum matching line groups included in the canonical result text.
+    /// Maximum complete search occurrences included in the canonical result text.
     #[schemars(range(min = 1, max = 100))]
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_matches: Option<u32>,
-    /// Skip this many global matching-line groups before materialization.
+    /// Skip this many global search occurrences before materialization.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) offset: u32,
     /// Zero-based Unicode scalar offset into the canonical result text.

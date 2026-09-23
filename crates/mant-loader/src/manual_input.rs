@@ -39,9 +39,25 @@ pub fn parse_manual_source(path: &Path) -> Result<Document, ManualError> {
 pub fn parse_manual_source_with_report(
     path: &Path,
 ) -> Result<(Document, ParseReport), ManualError> {
+    let source = read_standalone_manual_bytes(path)?;
+    parse_roff_bytes_with_report(path, &source).map_err(ManualError::from)
+}
+
+/// Read one standalone manual with the production bounded decompression and
+/// `.so` redirect policy, without starting a parser or formatter.
+///
+/// This input boundary is shared with the feature-gated annotated renderer so
+/// a preview call does not first execute the legacy parser. The returned bytes
+/// are uncompressed and independently owned by the caller.
+///
+/// # Errors
+///
+/// Returns [`ManualError`] for source I/O, decompression, size limits or a
+/// standalone redirect that requires a registered manual hierarchy.
+pub fn read_standalone_manual_bytes(path: &Path) -> Result<Vec<u8>, ManualError> {
     let loaded = load_manual_source(path)?;
     reject_standalone_redirect(path, &loaded.source)?;
-    parse_roff_bytes_with_report(path, &loaded.source).map_err(ManualError::from)
+    Ok(loaded.source)
 }
 
 /// Parse one already bounded, uncompressed standalone roff input.

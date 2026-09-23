@@ -460,7 +460,7 @@ fn assert_tool_replies(replies: &[Value]) {
     assert_eq!(search.matches("Outline root").count(), 1);
     assert_eq!(search.matches("needle").count(), 1);
     assert!(
-        search.contains("[search: offset=0, returned=1, totalMatchingLineGroups=2, nextOffset=1]"),
+        search.contains("[search: offset=0, returned=1, totalOccurrences=2, nextOffset=1]"),
         "{search}"
     );
     assert!(!search.contains("--offset"), "{search}");
@@ -497,7 +497,7 @@ fn assert_tool_replies(replies: &[Value]) {
     let compatible_search = successful_text(reply(replies, 11));
     assert!(compatible_search.contains("needle"), "{compatible_search}");
     assert!(
-        compatible_search.contains("[search: offset=1, returned=1, totalMatchingLineGroups=2]"),
+        compatible_search.contains("[search: offset=1, returned=1, totalOccurrences=2]"),
         "{compatible_search}"
     );
     let compatible_read = successful_text(reply(replies, 12));

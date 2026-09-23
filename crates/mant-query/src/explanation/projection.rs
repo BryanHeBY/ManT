@@ -208,7 +208,8 @@ fn project(
                 ExplanationContent::Entry { block } | ExplanationContent::Block { block } => {
                     builder.include_blocks(std::slice::from_ref(block))?;
                 }
-                ExplanationContent::SharedEntry { .. }
+                ExplanationContent::FixedOwner { .. }
+                | ExplanationContent::SharedEntry { .. }
                 | ExplanationContent::DeclarationMember { .. } => {}
             }
         }
@@ -241,7 +242,8 @@ fn remap_topology(
                 ExplanationContent::Entry { block } | ExplanationContent::Block { block } => {
                     remap.remap_blocks(std::slice::from_mut(block))?;
                 }
-                ExplanationContent::SharedEntry { .. }
+                ExplanationContent::FixedOwner { .. }
+                | ExplanationContent::SharedEntry { .. }
                 | ExplanationContent::DeclarationMember { .. } => {}
             }
         }

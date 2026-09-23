@@ -1,6 +1,8 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
+#[cfg(feature = "annotated-preview")]
+mod annotated_preview;
 mod application;
 mod arguments;
 mod cli;

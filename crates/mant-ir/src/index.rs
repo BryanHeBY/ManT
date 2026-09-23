@@ -84,12 +84,55 @@ impl DocumentIndex {
                     builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
                 }
             }
-            DocumentBodyRef::Fixed(_) => {
-                // Fixed marks retain original target spellings; normalization
-                // and collision handling belong to the R02b projection. The
-                // document root itself remains addressable without inventing
-                // semantic section or entry IDs from native mark keys.
+            DocumentBodyRef::Fixed(fixed) => {
+                // The codec assigned normalized identities independently of
+                // native mark keys. Keep raw declarations as provenance and
+                // register only the fragments actually emitted by native HTML.
                 builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
+                for heading in &fixed.headings {
+                    builder.section_stack.clear();
+                    if let Some(parent) = heading.parent
+                        && let Some(parent) = fixed.headings.get((parent.get() - 1) as usize)
+                    {
+                        builder.section_stack.push(parent.id.clone());
+                    }
+                    builder.register(&heading.id, IndexedRole::Section);
+                    for alias in &heading.fragment_aliases {
+                        builder.index.authored_fragments.insert(alias.clone());
+                    }
+                    for alias in &heading.rendered_fragment_aliases {
+                        builder.register_fragment(alias.clone(), &heading.id, false);
+                    }
+                }
+                builder.section_stack.clear();
+                for owner in &fixed.owners {
+                    if fixed.owner_complete_form(owner).is_none() {
+                        continue;
+                    }
+                    if let Some(section) = owner.section
+                        && let Some(section) = fixed.headings.get((section.get() - 1) as usize)
+                    {
+                        builder.section_stack.push(section.id.clone());
+                    }
+                    builder.register(&owner.id, IndexedRole::Entry);
+                    builder.section_stack.clear();
+                }
+                for anchor in &fixed.anchors {
+                    if let Some(section) = anchor.section
+                        && let Some(section) = fixed.headings.get((section.get() - 1) as usize)
+                    {
+                        builder.section_stack.push(section.id.clone());
+                    }
+                    builder.register(&anchor.id, IndexedRole::Anchor);
+                    if anchor.authored {
+                        builder
+                            .index
+                            .authored_fragments
+                            .insert(FragmentAlias::from(anchor.name.as_str()));
+                    }
+                    builder.register_fragment(anchor.rendered_fragment.clone(), &anchor.id, false);
+                    builder.section_stack.clear();
+                }
             }
         }
         for alias in &document.fragment_aliases {
@@ -126,7 +169,7 @@ impl DocumentIndex {
         &self.duplicates
     }
 
-    /// Resolve one canonical or source-authored fragment without guessing.
+    /// Resolve one canonical or emitted fragment without guessing.
     ///
     /// `None` means the fragment is absent or names more than one target.
     #[must_use]
@@ -373,5 +416,117 @@ mod tests {
             index.fragment_target("mixed-target").map(NodeId::as_str),
             Some("mixed-target")
         );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // Complete synthetic Fixed mark graph keeps identity edges auditable.
+    fn fixed_marks_index_normalized_ids_and_exact_authored_aliases() {
+        let key = std::num::NonZeroU32::new(1).unwrap();
+        let empty = crate::TextSelection {
+            parts: Vec::new(),
+            joins: Vec::new(),
+        };
+        let document = Document {
+            parser: None,
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "fixed".to_owned(),
+                },
+                format: SourceFormat::Mdoc,
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::NativeNormalizedBytes,
+            }],
+            root_source: SourceKey::FIRST,
+            body: crate::DocumentBody::Fixed(crate::FixedBody {
+                surface: crate::DisplaySurface {
+                    text: String::new(),
+                    rows: Vec::new(),
+                    runs: Vec::new(),
+                },
+                headings: vec![crate::HeadingMark {
+                    key,
+                    id: NodeId::from("mixed-target"),
+                    fragment_aliases: vec![FragmentAlias::from("Mixed.Target")],
+                    generated_fragment_aliases: vec![FragmentAlias::from("MIXED_TARGET")],
+                    rendered_fragment_aliases: vec![
+                        FragmentAlias::from("Mixed.Target"),
+                        FragmentAlias::from("MIXED_TARGET"),
+                    ],
+                    parent: None,
+                    level_hint: 1,
+                    at: crate::DisplayPoint::DocumentEnd { row_count: 0 },
+                    title: empty.clone(),
+                    direct_body: empty,
+                    source: None,
+                }],
+                owners: Vec::new(),
+                links: Vec::new(),
+                anchors: vec![
+                    crate::AnchorMark {
+                        key,
+                        id: NodeId::from("option"),
+                        section: Some(key),
+                        name: "--option".to_owned(),
+                        rendered_fragment: "--option".into(),
+                        authored: true,
+                        at: crate::DisplayPoint::DocumentEnd { row_count: 0 },
+                        source: None,
+                    },
+                    crate::AnchorMark {
+                        key: std::num::NonZeroU32::new(2).unwrap(),
+                        id: NodeId::from("generated"),
+                        section: Some(key),
+                        name: "Generated.Tag".to_owned(),
+                        rendered_fragment: "Generated.Tag".into(),
+                        authored: false,
+                        at: crate::DisplayPoint::DocumentEnd { row_count: 0 },
+                        source: None,
+                    },
+                ],
+                regions: Vec::new(),
+            }),
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        };
+        assert!(crate::validate_document(&document).is_empty());
+        let index = DocumentIndex::build(&document);
+        assert_eq!(
+            index.fragment_target("Mixed.Target").map(NodeId::as_str),
+            Some("mixed-target")
+        );
+        assert_eq!(
+            index.fragment_target("MIXED_TARGET").map(NodeId::as_str),
+            Some("mixed-target")
+        );
+        assert!(
+            !index
+                .authored_fragments()
+                .any(|alias| alias.as_str() == "MIXED_TARGET")
+        );
+        assert_eq!(
+            index.fragment_target("--option").map(NodeId::as_str),
+            Some("option")
+        );
+        assert_eq!(
+            index.fragment_target("Generated.Tag").map(NodeId::as_str),
+            Some("generated")
+        );
+        assert!(
+            !index
+                .authored_fragments()
+                .any(|alias| alias.as_str() == "Generated.Tag")
+        );
+
+        let mut collision = document.clone();
+        let crate::DocumentBody::Fixed(fixed) = &mut collision.body else {
+            unreachable!();
+        };
+        fixed.anchors[1].rendered_fragment = "--option".into();
+        assert!(crate::validate_document(&collision)
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("ir.ambiguous-fragment-alias")));
     }
 }

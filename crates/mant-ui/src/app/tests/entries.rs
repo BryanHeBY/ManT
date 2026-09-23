@@ -50,6 +50,62 @@ fn edit_actions_copy_complete_semantic_nodes_only() {
 }
 
 #[test]
+fn fixed_node_copy_menu_routes_to_exact_visual_selection_only() {
+    let fixed = serde_json::from_value(serde_json::json!({
+        "surface": {
+            "text": "X",
+            "rows": [{"key": 1, "firstRun": 1, "runCount": 1, "columnCount": 1, "breakAfter": false}],
+            "runs": [{
+                "key": 1, "row": 1, "column": 0, "width": 1,
+                "byteStart": 0, "byteCount": 1,
+                "label": {"owner": null, "link": null, "source": null,
+                          "style": {"bold": false, "underline": false}, "role": "body"}
+            }]
+        },
+        "headings": [{
+            "key": 1, "id": "test-section", "parent": null, "levelHint": 1,
+            "at": {"kind": "run-boundary", "run": 1, "byte": 0},
+            "title": {"parts": [{"run": 1, "startByte": 0, "endByte": 1}], "joins": []},
+            "directBody": {"parts": [], "joins": []}, "source": null
+        }],
+        "owners": [], "links": [], "regions": [], "anchors": []
+    }))
+    .expect("valid final Fixed fixture");
+    let bundle = ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(Document {
+            parser: None,
+            sources: Vec::new(),
+            root_source: SourceKey::FIRST,
+            body: DocumentBody::Fixed(fixed),
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        }),
+        tldr: None,
+    };
+    let mut app = App::new(&bundle);
+    for action in [MenuAction::CopyNodeText, MenuAction::CopyNodeMarkdown] {
+        app.activate_menu_action(action);
+        assert!(app.take_copy_request().is_none());
+        assert_eq!(
+            app.notice.as_deref(),
+            Some("For Fixed pages, drag across text and use Copy Selection")
+        );
+    }
+    app.selected = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Section)
+        .expect("Fixed heading");
+    app.activate_menu_action(MenuAction::CopyNodeText);
+    assert!(app.take_copy_request().is_none());
+}
+
+#[test]
 fn open_menus_follow_pointer_hover_across_entries_and_menu_buttons() {
     let backend = TestBackend::new(100, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");

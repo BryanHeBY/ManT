@@ -688,6 +688,328 @@ fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exac
     assert!(terminal.contains("ris�c"));
 }
 
+#[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_preview_uses_the_real_cli_query_and_recovers_after_rejected_input() {
+    use std::{fs, path::PathBuf};
+
+    let directory =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/annotated-preview-tests");
+    fs::create_dir_all(&directory).expect("repository target directory");
+    let path = directory.join(format!("preview-{}.1", std::process::id()));
+    let name = path.to_str().expect("UTF-8 repository path");
+    let host = FakeHost::new();
+    let arguments = [
+        "--annotated-preview",
+        "--input",
+        name,
+        "--input-format",
+        "roff",
+        "--format",
+        "text",
+        "--display",
+        "direct",
+    ];
+
+    fs::write(&path, b".so missing.1\n").expect("write disallowed redirect");
+    let (status, output, diagnostics) = invoke(&arguments, b"", &host);
+    assert_ne!(status, 0);
+    assert!(output.is_empty());
+    assert!(diagnostics.contains("standalone .so redirects"));
+    assert_eq!(host.query_calls.get(), 0);
+
+    // Oracle: pinned CVS man_term.c::terminal_man prints the NAME body once.
+    // The exact minimal input was run through target/mandoc-migration/reference/mandoc.
+    fs::write(&path, b".TH T 1\n.SH NAME\nT \\- preview\n").expect("write valid standalone source");
+    let (status, output, diagnostics) = invoke(&arguments, b"", &host);
+    fs::remove_file(&path).expect("remove test-owned source");
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(diagnostics.is_empty());
+    assert_eq!(output.matches("preview").count(), 1);
+    assert_eq!(
+        host.query_calls.get(),
+        0,
+        "preview must not use the old loader"
+    );
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_preview_loads_all_four_representative_pages_end_to_end() {
+    // Each exact compressed fixture was decoded and rendered with the pinned
+    // CVS -Tutf8 reference before these assertions. This exercises the real
+    // loader, native result, Fixed IR, presentation and CLI direct output.
+    let fixtures = [
+        "../../tests/fixtures/roff/real/archlinux/gcc.1.gz",
+        "../../tests/fixtures/roff/real/archlinux/git.1.gz",
+        "../../tests/fixtures/roff/real/archlinux/clang.1.gz",
+        "../../tests/fixtures/roff/real/windows-releases/rclone.1.zst",
+    ];
+    let host = FakeHost::new();
+    for fixture in fixtures {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(fixture);
+        let name = path.to_str().expect("UTF-8 fixture path");
+        let args = [
+            "--annotated-preview",
+            "--input",
+            name,
+            "--input-format",
+            "roff",
+            "--format",
+            "text",
+            "--display",
+            "direct",
+            "--color",
+            "never",
+        ];
+        let (status, output, diagnostics) = invoke(&args, b"", &host);
+        assert_eq!(status, 0, "{fixture}: {diagnostics}");
+        assert!(diagnostics.is_empty(), "{fixture}: {diagnostics}");
+        assert!(output.len() > 1_000, "{fixture}: incomplete display");
+    }
+    assert_eq!(host.query_calls.get(), 0, "preview must not use old loader");
+}
+
+#[test]
+#[cfg(all(feature = "annotated-preview", feature = "tui"))]
+fn annotated_preview_four_pages_keep_one_surface_across_real_viewports() {
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+
+    let fixtures = [
+        "../../tests/fixtures/roff/real/archlinux/gcc.1.gz",
+        "../../tests/fixtures/roff/real/archlinux/git.1.gz",
+        "../../tests/fixtures/roff/real/archlinux/clang.1.gz",
+        "../../tests/fixtures/roff/real/windows-releases/rclone.1.zst",
+    ];
+    for fixture in fixtures {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(fixture);
+        let query = crate::annotated_preview::load(path.to_str().expect("UTF-8 fixture path"))
+            .unwrap_or_else(|error| panic!("{fixture}: {error:?}"));
+        let document = query.document.as_ref().expect("annotated document");
+        let mant_ir::DocumentBodyRef::Fixed(fixed) = document.body() else {
+            panic!("{fixture}: wrong document body");
+        };
+        let source_rows = fixed.surface.rows.len();
+        let source_bytes = fixed.surface.text.len();
+        assert!(source_rows > 100, "{fixture}: incomplete native surface");
+        assert!(!fixed.headings.is_empty(), "{fixture}: missing navigation");
+        let first_visible = fixed
+            .surface
+            .rows
+            .iter()
+            .position(|row| row.run_count != 0)
+            .expect("nonempty native row");
+        let view = mant_ui::DocumentView::new(&query);
+        for width in [20_u16, 40, 78, 120] {
+            let rendered = view.render(width);
+            assert_eq!(
+                rendered.row_count, source_rows,
+                "{fixture} at width {width}"
+            );
+            let mut buffer = Buffer::empty(Rect::new(0, 0, width, 6));
+            Paragraph::new(rendered.text)
+                .scroll((u16::try_from(first_visible).expect("first row fits"), 0))
+                .render(buffer.area, &mut buffer);
+            assert!(
+                buffer.content.iter().any(|cell| cell.symbol() != " "),
+                "{fixture} at width {width}: blank viewport"
+            );
+        }
+        assert_eq!(
+            fixed.surface.text.len(),
+            source_bytes,
+            "viewport changed {fixture}"
+        );
+        eprintln!(
+            "G1 {fixture}: rows={source_rows} bytes={source_bytes} runs={} headings={} owners={} links={} anchors={} nav={}",
+            fixed.surface.runs.len(),
+            fixed.headings.len(),
+            fixed.owners.len(),
+            fixed.links.len(),
+            fixed.anchors.len(),
+            view.navigation().len()
+        );
+    }
+}
+
+#[test]
+#[ignore = "manual G1 complete four-page, four-width Ratatui cell comparison"]
+#[cfg(all(feature = "annotated-preview", feature = "tui"))]
+#[allow(clippy::too_many_lines)] // One bounded full-surface audit keeps all four fixture widths together.
+fn annotated_preview_full_body_matches_real_tui_buffer_at_four_widths() {
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        text::Line,
+        widgets::{Paragraph, Widget},
+    };
+
+    // All four exact decoded inputs were run through the fixed CVS reference
+    // before these P1 assertions. This checks the consumer of the same final
+    // Fixed result, not a separate formatter run per viewport.
+    for fixture in [
+        "../../tests/fixtures/roff/real/archlinux/gcc.1.gz",
+        "../../tests/fixtures/roff/real/archlinux/git.1.gz",
+        "../../tests/fixtures/roff/real/archlinux/clang.1.gz",
+        "../../tests/fixtures/roff/real/windows-releases/rclone.1.zst",
+    ] {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(fixture);
+        let query = crate::annotated_preview::load(path.to_str().expect("UTF-8 fixture path"))
+            .unwrap_or_else(|error| panic!("{fixture}: {error:?}"));
+        let document = query.document.as_ref().expect("annotated document");
+        let mant_ir::DocumentBodyRef::Fixed(fixed) = document.body() else {
+            panic!("{fixture}: wrong body");
+        };
+        let native_rows = fixed.surface.rows.len();
+        let text = mant_render::render_query_text(&query);
+        let text_rows = text.split_terminator('\n').collect::<Vec<_>>();
+        assert!(text_rows.len() >= 2 && text_rows[1].is_empty());
+        let body_rows = &text_rows[2..];
+        assert_eq!(body_rows.len(), native_rows, "{fixture}: text rows");
+        let view = mant_ui::DocumentView::new(&query);
+        for width in [20_u16, 40, 78, 120] {
+            let rendered = view.render(width);
+            assert_eq!(rendered.row_count, native_rows);
+            assert_eq!(rendered.text.lines.len(), native_rows);
+            let mut compared = 0;
+            for start in (0..native_rows).step_by(128) {
+                let end = (start + 128).min(native_rows);
+                let height = u16::try_from(end - start).expect("bounded viewport");
+                let area = Rect::new(0, 0, width, height);
+                let mut expected = Buffer::empty(area);
+                let mut actual = Buffer::empty(area);
+                let source = body_rows[start..end]
+                    .iter()
+                    .map(|line| Line::raw(*line))
+                    .collect::<Vec<_>>();
+                Paragraph::new(source).render(area, &mut expected);
+                Paragraph::new(rendered.text.lines[start..end].to_vec()).render(area, &mut actual);
+                for (column, (left, right)) in
+                    expected.content.iter().zip(&actual.content).enumerate()
+                {
+                    assert_eq!(
+                        left.symbol(),
+                        right.symbol(),
+                        "{fixture}: width {width}, row {}, column {}",
+                        start + column / usize::from(width),
+                        column % usize::from(width)
+                    );
+                }
+                compared += end - start;
+            }
+            assert_eq!(compared, native_rows, "{fixture}: incomplete Buffer probe");
+            eprintln!("G1 full Buffer {fixture}: width={width} rows={compared} complete=true");
+        }
+    }
+}
+
+#[test]
+#[ignore = "manual G1 release-stage timing on representative pages"]
+#[cfg(feature = "annotated-preview")]
+#[allow(clippy::too_many_lines)] // One repeated run reports comparable native, IR, query and render stages.
+fn annotated_preview_four_page_stage_costs() {
+    use std::time::Instant;
+
+    use libmandoc_rs::{InputFormat, SourceBundle, annotated::AnnotatedRenderer};
+    use mant_protocol::{
+        ExplanationOptions, ExplanationQuery, OutlineDetail, SearchCase, SearchQuery, SearchScope,
+        SearchSyntax,
+    };
+
+    // The exact four decoded sources were first run through the pinned CVS
+    // reference. Timings are observational, not output expectations.
+    let fixtures = [
+        (
+            "GCC",
+            "../../tests/fixtures/roff/real/archlinux/gcc.1.gz",
+            "-x",
+        ),
+        (
+            "Git",
+            "../../tests/fixtures/roff/real/archlinux/git.1.gz",
+            "--help",
+        ),
+        (
+            "Clang",
+            "../../tests/fixtures/roff/real/archlinux/clang.1.gz",
+            "-help",
+        ),
+        (
+            "rclone",
+            "../../tests/fixtures/roff/real/windows-releases/rclone.1.zst",
+            "--help",
+        ),
+    ];
+    for pass in 0..2 {
+        for index in 0..fixtures.len() {
+            let (name, fixture, term) = fixtures[if pass == 0 { index } else { 3 - index }];
+            let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(fixture);
+            let started = Instant::now();
+            let source = mant_loader::read_standalone_manual_bytes(&path).unwrap();
+            let decode_us = started.elapsed().as_micros();
+            let root = path.file_name().unwrap().to_str().unwrap();
+            let mut bundle = SourceBundle::new();
+            bundle.insert(root, source).unwrap();
+            let started = Instant::now();
+            let page = AnnotatedRenderer::default()
+                .render_bundle(root, &bundle, InputFormat::Auto)
+                .unwrap();
+            let native_us = started.elapsed().as_micros();
+            let started = Instant::now();
+            let document = mant_codec::annotated_fixed::lower_annotated_document(page).unwrap();
+            let lower_us = started.elapsed().as_micros();
+            let query = ResolvedContent {
+                label: name.into(),
+                address: None,
+                document: Some(document),
+                tldr: None,
+            };
+            let started = Instant::now();
+            let outline =
+                mant_query::build_outline_with_detail(&query, OutlineDetail::Entries).unwrap();
+            let outline_us = started.elapsed().as_micros();
+            let started = Instant::now();
+            let explanation = mant_query::explain_query(
+                &query,
+                &ExplanationQuery {
+                    entry: term.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            let explain_us = started.elapsed().as_micros();
+            let started = Instant::now();
+            let search = mant_query::search_query(
+                &query,
+                &SearchQuery {
+                    pattern: term.into(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope: SearchScope::Visible,
+                    word: false,
+                    context_lines: 0,
+                    offset: 0,
+                    limit: 10,
+                },
+            )
+            .unwrap();
+            let search_us = started.elapsed().as_micros();
+            let started = Instant::now();
+            let text = mant_render::render_query_text(&query);
+            let render_us = started.elapsed().as_micros();
+            assert!(!outline.nodes.is_empty() && !text.is_empty());
+            eprintln!(
+                "G1 stage pass={pass} page={name} decode_us={decode_us} native_us={native_us} lower_us={lower_us} outline_us={outline_us} explain_us={explain_us} search_us={search_us} text_render_us={render_us} explain_returned={} search_returned={}",
+                explanation.returned, search.returned
+            );
+        }
+    }
+}
+
 fn manual() -> Document {
     manual_with_option(false)
 }
@@ -1255,7 +1577,8 @@ fn searches_report_markdown_coordinates_and_reusable_outline_nodes() {
     assert_eq!(value["total"], 1);
     assert_eq!(value["matches"][0]["outline"]["node"]["path"], "2.1");
     assert_eq!(value["matches"][0]["outline"]["node"]["id"], "common-3");
-    assert!(value["matches"][0]["occurrences"][0]["markdown"]["startLine"].as_u64() > Some(1));
+    assert_eq!(value["matches"][0]["location"]["kind"], "visible-flow");
+    assert!(value["matches"][0]["location"]["unit"].as_u64() > Some(0));
     assert!(diagnostics.is_empty());
 
     let (status, output, diagnostics) = invoke(&["demo", "--grep", "missing"], b"", &host);

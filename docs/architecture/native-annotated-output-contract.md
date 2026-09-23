@@ -12,7 +12,7 @@ spelling may change with evidence, but not the ownership or display authority.
 
 The baseline, oracle identity, inputs, outputs and current measurements are
 recorded in [`baselines/native-annotated-output-p0/README.md`](baselines/native-annotated-output-p0/README.md).
-The disposition of each current module and all 36 vendor patches is in the
+The disposition of each current module and the now 40 vendor patches is in the
 [`native-annotated-removal-ledger.md`](native-annotated-removal-ledger.md).
 The current product still uses AST lowering. An `annotated` result is a private
 migration path until R08; no P1 test is a claim that production has switched.
@@ -282,8 +282,10 @@ unpresentable synthetic separator, remain filtered as today. Fixed searches
 surviving selections with known `TextJoin`s instead. One match is one
 occurrence even if it projects to several runs or rows; independent cells and
 unknown joins block a fabricated cross-boundary match.
-`scope=markdown` searches bytes of the exact user-exportable artifact. Flow
-keeps its current exporter; Fixed uses the same safe-length literal fence
+`scope=markdown` searches bytes of the canonical addressable user-exportable
+artifact. For Flow/TLDR this is the existing exporter selected by
+`--format markdown --preserve-anchors`, not the default clean Markdown export;
+the request has no presentation-option switch. Fixed uses the same safe-length literal fence
 exporter as R03. Fence-only hits are valid Markdown coordinates without a
 native display projection. Fixed's soft-wrap visible match and literal
 Markdown-byte match intentionally can differ.
@@ -404,6 +406,14 @@ literal offset in `Demo`. A partially overprinted `--help` head whose final
 visible text is `--he` yields no `--help` name binding or direct match;
 the owner and its source remain, and a correctly accounted native overwrite
 does not by itself create `SemanticCoverage`.
+For Fixed+TLDR visible search, the independent TLDR units precede native
+Fixed units in one occurrence cursor and never join across that boundary.
+The result's `fixed-visible` render and `lineCount` describe the primary
+native surface only; a `visible-flow` TLDR hit retains its own unit and
+TLDR-local Markdown context lines, not a fabricated native row. The result
+`scope=full` means neither arm was viewport-clipped. In the single Markdown
+artifact, a hit wholly inside the TLDR range has the TLDR outline path `0`;
+the export byte coordinates remain artifact-global.
 For scope search, the `documents` array still contains only retained-hit
 groups, but a separate `coverageByDocument` array contains **every scanned
 document in scope order**, including zero-hit and globally paginated-away
@@ -415,6 +425,10 @@ document or its completeness fails instead of returning an apparently
 complete subset. A two-document scope whose first document has no hit and an
 unverified link association, while the second has one retained hit, has this
 required response shape (the second document's hit details are abbreviated):
+
+Coverage diagnostics and hit-group source tables also share a 32 MiB
+aggregate serialized-metadata budget across the whole scope response. The
+per-document diagnostic bound is not an independently reusable allocation.
 
 ```json
 {"schema":"mant.scope-search/v0.12","total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":false,"coverageByDocument":[{"address":{"kind":"manual","name":"first","manualSection":"1"},"depth":0,"semanticsComplete":false,"coverageDetailsOmitted":1,"diagnostics":[{"level":"unsupported","impact":"semantic-coverage","code":"annotated.coverage.summary","message":"coverage detail omitted","coverageScope":{"kind":"document"}}]},{"address":{"kind":"manual","name":"second","manualSection":"1"},"depth":1,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[]}],"documents":[{"address":{"kind":"manual","name":"second","manualSection":"1"},"depth":1,"matches":[{"ordinal":1,"location":{"kind":"visible-fixed","unit":1,"startByte":0,"endByte":3}}]}]}

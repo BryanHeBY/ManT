@@ -10,7 +10,7 @@ use std::{fmt, num::NonZeroU32};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{LinkTarget, SourceKey, SourceSpan};
+use crate::{FragmentAlias, LinkTarget, NodeId, SourceKey, SourceSpan};
 
 // Match the existing native fixed-display geometry ceiling. A small UTF-8
 // arena must not authorize an unbounded sparse row when a consumer expands
@@ -208,10 +208,24 @@ pub enum DisplayPoint {
 pub struct HeadingMark {
     /// Dense one-based section key.
     pub key: NonZeroU32,
+    /// Normalized document-local navigation identity, independent of the key.
+    pub id: NodeId,
+    /// Exact authored native target spellings retained for provenance.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fragment_aliases: Vec<FragmentAlias>,
+    /// Native-generated target spellings, distinct from authored aliases.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub generated_fragment_aliases: Vec<FragmentAlias>,
+    /// Fragments emitted for these targets after native HTML ID de-duplication.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rendered_fragment_aliases: Vec<FragmentAlias>,
     /// Root or an earlier section, not a derived depth.
     pub parent: Option<NonZeroU32>,
     /// Native heading-level hint.
     pub level_hint: u16,
+    /// Final native display boundary where this section begins, including
+    /// headings whose title has no surviving visible glyph.
+    pub at: DisplayPoint,
     /// Surviving visible title.
     pub title: TextSelection,
     /// Direct content, excluding child sections.
@@ -238,6 +252,8 @@ pub enum OwnerRole {
 pub struct OwnerMark {
     /// Dense one-based owner key.
     pub key: NonZeroU32,
+    /// Normalized document-local identity, distinct from the native key.
+    pub id: NodeId,
     /// Root or an earlier enclosing owner.
     pub parent: Option<NonZeroU32>,
     /// Enclosing section, if known.
@@ -252,6 +268,48 @@ pub struct OwnerMark {
     pub empty_point: Option<DisplayPoint>,
     /// Authored owner location when known.
     pub source: Option<SourceSpan>,
+}
+
+impl OwnerMark {
+    /// Whether the surviving head is one complete evidence-backed form.
+    /// Unknown or structural joins never license a selectable entry name.
+    #[must_use]
+    pub fn has_complete_form(&self) -> bool {
+        self.role == OwnerRole::Definition
+            && !self.head.parts.is_empty()
+            && self.head.joins.iter().all(|join| {
+                matches!(
+                    join,
+                    TextJoin::DirectContact | TextJoin::AuthoredSeparator(_)
+                )
+            })
+    }
+}
+
+impl FixedBody {
+    /// Read one complete surviving definition head without inferring bytes
+    /// from neighboring rows, owners or unknown native joins.
+    #[must_use]
+    pub fn owner_complete_form(&self, owner: &OwnerMark) -> Option<String> {
+        if !owner.has_complete_form() {
+            return None;
+        }
+        let mut form = String::new();
+        for (index, part) in owner.head.parts.iter().enumerate() {
+            if index != 0 {
+                match &owner.head.joins[index - 1] {
+                    TextJoin::DirectContact => {}
+                    TextJoin::AuthoredSeparator(separator) => form.push_str(separator),
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                }
+            }
+            let run = self.surface.run_text(part.run)?;
+            let start = usize::try_from(part.start_byte).ok()?;
+            let end = usize::try_from(part.end_byte).ok()?;
+            form.push_str(run.get(start..end)?);
+        }
+        (!form.trim().is_empty()).then_some(form)
+    }
 }
 
 /// One native link macro instance, independent of its visible slice count.
@@ -330,8 +388,17 @@ impl<'de> Deserialize<'de> for LinkMark {
 pub struct AnchorMark {
     /// Dense one-based declaration key.
     pub key: NonZeroU32,
+    /// Normalized document-local identity, independent of authored spelling.
+    pub id: NodeId,
+    /// Enclosing native section, if the declaration was made within one.
+    pub section: Option<NonZeroU32>,
     /// Authored declaration spelling, not a copied visible body.
     pub name: String,
+    /// Fragment emitted after native HTML ID de-duplication.
+    pub rendered_fragment: FragmentAlias,
+    /// Whether the retained target originated in an explicit `.Tg` request.
+    /// Generated native tags remain addressable but are not authored aliases.
+    pub authored: bool,
     /// Final location after any native target migration.
     pub at: DisplayPoint,
     /// Original authored declaration location, distinct from `at`.
@@ -665,6 +732,7 @@ impl FixedBody {
     ///
     /// # Errors
     /// Returns the first malformed source-neutral relationship.
+    #[allow(clippy::too_many_lines)] // One pass closes all typed mark relations over one surface.
     pub fn validate(&self) -> Result<(), FixedBodyError> {
         self.surface.validate()?;
         let non_layout_prefix = self.surface.non_layout_prefix();
@@ -686,12 +754,17 @@ impl FixedBody {
         };
         for (index, heading) in self.headings.iter().enumerate() {
             dense_key(heading.key, index)?;
+            validate_heading_identity(heading)?;
             earlier(heading.parent, heading.key)?;
+            self.surface.validate_point(heading.at)?;
             validate_selection(&heading.title)?;
             validate_selection(&heading.direct_body)?;
         }
         for (index, owner) in self.owners.iter().enumerate() {
             dense_key(owner.key, index)?;
+            if !crate::is_normalized_node_id(owner.id.as_str()) {
+                return Err(FixedBodyError("fixed owner has invalid identity"));
+            }
             earlier(owner.parent, owner.key)?;
             reference(owner.section, self.headings.len())?;
             validate_selection(&owner.head)?;
@@ -736,6 +809,8 @@ impl FixedBody {
         }
         for (index, anchor) in self.anchors.iter().enumerate() {
             dense_key(anchor.key, index)?;
+            validate_anchor_identity(anchor)?;
+            reference(anchor.section, self.headings.len())?;
             self.surface.validate_point(anchor.at)?;
         }
         for (index, region) in self.regions.iter().enumerate() {
@@ -781,6 +856,41 @@ impl FixedBody {
             .chain(self.anchors.iter().filter_map(|mark| mark.source))
             .chain(self.regions.iter().filter_map(|mark| mark.source))
     }
+}
+
+fn validate_heading_identity(heading: &HeadingMark) -> Result<(), FixedBodyError> {
+    if !crate::is_normalized_node_id(heading.id.as_str()) {
+        return Err(FixedBodyError("fixed heading has invalid identity"));
+    }
+    if heading.rendered_fragment_aliases.len()
+        != heading.fragment_aliases.len() + heading.generated_fragment_aliases.len()
+        || heading
+            .fragment_aliases
+            .iter()
+            .chain(&heading.generated_fragment_aliases)
+            .chain(&heading.rendered_fragment_aliases)
+            .any(|alias| !valid_alias(alias))
+    {
+        return Err(FixedBodyError("fixed heading has invalid fragment alias"));
+    }
+    Ok(())
+}
+
+fn validate_anchor_identity(anchor: &AnchorMark) -> Result<(), FixedBodyError> {
+    if !crate::is_normalized_node_id(anchor.id.as_str())
+        || !valid_alias(&anchor.name)
+        || !valid_alias(&anchor.rendered_fragment)
+    {
+        return Err(FixedBodyError("fixed anchor has invalid identity or name"));
+    }
+    Ok(())
+}
+
+fn valid_alias(value: &str) -> bool {
+    !value.is_empty()
+        && !value
+            .chars()
+            .any(|scalar| scalar.is_control() || scalar.is_whitespace())
 }
 
 fn selections_overlap(left: &TextSelection, right: &TextSelection) -> bool {
@@ -1200,8 +1310,16 @@ mod hardening_tests {
         body.headings = (1..=COUNT)
             .map(|index| HeadingMark {
                 key: key(index),
+                id: crate::NodeId::new(format!("heading-{index}")),
+                fragment_aliases: Vec::new(),
+                generated_fragment_aliases: Vec::new(),
+                rendered_fragment_aliases: Vec::new(),
                 parent: None,
                 level_hint: 1,
+                at: DisplayPoint::RunBoundary {
+                    run: key(1),
+                    byte: 0,
+                },
                 title: title.clone(),
                 direct_body: TextSelection {
                     parts: vec![],
@@ -1262,6 +1380,7 @@ mod hardening_tests {
         let mut body = body_with_run("abc", 3);
         body.owners.push(OwnerMark {
             key: key(1),
+            id: crate::NodeId::from("native-owner-1"),
             parent: None,
             section: None,
             role: OwnerRole::Definition,

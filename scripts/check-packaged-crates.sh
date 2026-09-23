@@ -20,7 +20,7 @@ for package in "${PACKAGES[@]}"; do
   dependencies=()
   case "$package" in
     mant-protocol) dependencies=(mant-ir) ;;
-    mant-codec) dependencies=(libmandoc-rs mant-ir mant-protocol mant-query) ;;
+    mant-codec) dependencies=(libmandoc-rs mant-ir mant-protocol mant-query mant-ui) ;;
     mant-loader) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec) ;;
     # Query/render use codec without native features, so no libmandoc patch applies.
     mant-query) dependencies=(mant-ir mant-protocol mant-codec) ;;
@@ -43,6 +43,10 @@ for package in "${PACKAGES[@]}"; do
   if [[ -f $destination/Cargo.toml.orig ]]; then
     mv "$destination/Cargo.toml.orig" "$destination/Cargo.toml"
   fi
+  # Cargo archives normalize source mtimes far into the past. The shared repo
+  # target may otherwise treat an older same-version packaged rlib as Fresh.
+  # Refresh only this disposable extraction, so every source set is compiled.
+  find "$destination" -type f -exec touch {} +
   if [[ $package == mant ]]; then
     # Private unit tests exercise the production terminal boundary. Their shared
     # PTY harness and the embedded pager's complete licenses must ship too.
@@ -52,9 +56,16 @@ for package in "${PACKAGES[@]}"; do
   fi
 done
 
-# The unique extracted source path invalidates workspace fingerprints even for
-# dirty same-version checks. Keep build products in the repository target tree
-# (not a temporary filesystem); third-party dependency artifacts can be reused.
+# Packaged source tests cover the repository's full parser fixture corpus and
+# four representative annotated pages. Keep fixtures outside crate archives,
+# but make the same exact inputs available to this disposable test workspace.
+mkdir -p "$PACKAGE_CHECK_ROOT/tests/fixtures/roff/real"
+cp -R "$ROOT/tests/fixtures/roff/real/." \
+  "$PACKAGE_CHECK_ROOT/tests/fixtures/roff/real/"
+
+# Refreshed extracted source mtimes invalidate stale same-version fingerprints.
+# Keep build products in the repository target tree; unrelated third-party
+# dependency artifacts can still be reused.
 export CARGO_TARGET_DIR="$ROOT/target"
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked --workspace
 # Exercise both packaged codec surfaces separately. This checks packaged tests,
@@ -63,6 +74,8 @@ cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant-codec --no-default-features
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant-codec --no-default-features --features roff
+cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+  --package mant-codec --no-default-features --features native-annotated
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant-loader --no-default-features
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
@@ -75,6 +88,8 @@ cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
 # default full-product feature unification, using the same packaged sources.
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant --no-default-features --lib
+cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+  --package mant --features annotated-preview --lib
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package libmandoc-rs --all-features
 

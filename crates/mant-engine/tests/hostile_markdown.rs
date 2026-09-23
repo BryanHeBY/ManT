@@ -8,7 +8,7 @@
 
 use std::{fs, path::PathBuf};
 
-use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_options};
+use mant_codec::encode::render_markdown;
 use mant_codec::parse_markdown;
 use mant_ir::{Block, Section};
 use mant_loader::load_markdown_text;
@@ -86,8 +86,6 @@ fn exercise(label: &str, source: &str) {
         }
     }
 
-    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE)
-        .expect("valid Flow export");
     for (pattern, syntax) in [
         ("a", SearchSyntax::Literal),
         ("—", SearchSyntax::Literal),
@@ -112,7 +110,7 @@ fn exercise(label: &str, source: &str) {
             continue;
         };
         let _ = render_search_text(&result);
-        verify_search_result(label, &query, &result, &addressable);
+        verify_search_result(label, &query, &result);
     }
 
     verify_sampled_search(label, &query);
@@ -228,8 +226,10 @@ fn verify_search_result(
     label: &str,
     query: &mant_ir::ResolvedContent,
     result: &mant_protocol::QuerySearch,
-    addressable: &str,
 ) {
+    result
+        .validate()
+        .expect("search result must be self-consistent");
     assert_eq!(
         result.returned as usize,
         result.matches.len(),
@@ -240,32 +240,12 @@ fn verify_search_result(
         "{label}: total covers returned matches"
     );
     for found in &result.matches {
-        for occurrence in &found.occurrences {
-            assert!(
-                occurrence.markdown.is_some() || !occurrence.markdown_projections.is_empty(),
-                "{label}: every hit needs a canonical presentation coordinate"
-            );
-            for markdown in occurrence
-                .markdown
-                .iter()
-                .chain(&occurrence.markdown_projections)
-            {
-                let start = usize::try_from(markdown.start_byte).expect("start fits usize");
-                let end = usize::try_from(markdown.end_byte).expect("end fits usize");
-                assert!(
-                    start <= end && end <= addressable.len(),
-                    "{label}: match byte range must stay inside the render"
-                );
-                assert!(
-                    addressable.is_char_boundary(start) && addressable.is_char_boundary(end),
-                    "{label}: match byte range must sit on char boundaries"
-                );
-                assert!(
-                    markdown.start_line >= 1 && markdown.start_line <= result.render.line_count,
-                    "{label}: match line must exist in the render"
-                );
-            }
-        }
+        result
+            .content_projection
+            .as_ref()
+            .expect("visible matches carry a closed projection")
+            .validate_match(found)
+            .expect("exact hit belongs to its projected visible unit");
         let selector = vec![mant_protocol::ContentSelector::path(
             found.outline.node.path(),
         )];

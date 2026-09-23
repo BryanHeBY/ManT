@@ -5,9 +5,11 @@ use mant_ir::{
 };
 use mant_protocol::{
     DocumentScope, DocumentTraversal, EvidenceCounts, EvidenceOrder, ExplanationOptions,
-    ExplanationOutcome, ExplanationQuery, ExplanationTruncation, MarkdownSchema,
-    ResolvedDocumentScope, ScopeExplanation, ScopeQuerySchema, ScopeSearch, ScopedQueryFailure,
-    SearchCase, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSyntax,
+    ExplanationOutcome, ExplanationQuery, ExplanationTruncation, OutlineNodeReference,
+    OutlineTrail, ResolvedDocumentScope, ScopeExplanation, ScopeQuerySchema, ScopeSearch,
+    ScopeSearchSchema, ScopedQueryFailure, ScopedSearchCoverage, ScopedSearchDocument, SearchCase,
+    SearchLocation, SearchMatch, SearchQuery, SearchRender, SearchRenderFormat, SearchRenderSchema,
+    SearchRenderScope, SearchSyntax,
 };
 
 fn address(path: &str) -> DocumentAddress {
@@ -68,31 +70,68 @@ fn explanation() -> ScopeExplanation {
 }
 fn search() -> ScopeSearch {
     ScopeSearch {
+        schema: ScopeSearchSchema::V0Dot12,
         query: SearchQuery {
             pattern: "needle".into(),
             syntax: SearchSyntax::Literal,
             case: SearchCase::Sensitive,
-            scope: mant_protocol::SearchScope::Visible,
+            scope: mant_protocol::SearchScope::Markdown,
             word: false,
             context_lines: 0,
-            limit: 1,
+            limit: 2,
             offset: 9,
         },
         total: 12,
-        returned: 0,
+        returned: 2,
         offset: 9,
         truncated: true,
-        next_offset: Some(10),
+        next_offset: Some(11),
+        semantics_complete: true,
+        coverage_by_document: ["z-last", "a-first"]
+            .into_iter()
+            .map(|path| ScopedSearchCoverage {
+                address: address(path),
+                depth: 0,
+                source_context: Some(source_context()),
+                semantics_complete: true,
+                coverage_details_omitted: 0,
+                diagnostics: vec![],
+            })
+            .collect(),
         documents: ["z-last", "a-first"]
             .into_iter()
-            .map(|path| ScopedSearchDocument {
+            .enumerate()
+            .map(|(index, path)| ScopedSearchDocument {
                 address: address(path),
                 depth: 0,
                 source_context: Some(source_context()),
                 content_projection: None,
-                matches: vec![],
+                matches: vec![SearchMatch {
+                    ordinal: 10 + u32::try_from(index).unwrap(),
+                    outline: OutlineTrail {
+                        ancestors: vec![],
+                        node: OutlineNodeReference::DocumentRoot {
+                            path: "root".into(),
+                            id: mant_ir::DOCUMENT_ROOT_ID.into(),
+                            title: "OVERVIEW".into(),
+                        },
+                    },
+                    matched_text: "needle".into(),
+                    location: SearchLocation::MarkdownArtifact {
+                        start_byte: 0,
+                        end_byte: 6,
+                        start_line: 1,
+                        start_column: 1,
+                        end_line: 1,
+                        end_column: 7,
+                    },
+                    display_slices: vec![],
+                    node_source: None,
+                    preview: "needle".into(),
+                    context: vec![],
+                }],
                 render: SearchRender {
-                    schema: MarkdownSchema::V1,
+                    schema: SearchRenderSchema::Markdown,
                     format: SearchRenderFormat::Markdown,
                     scope: SearchRenderScope::Full,
                     line_base: 1,
@@ -111,26 +150,42 @@ fn search_grouping_preserves_dto_order_and_does_not_invent_local_pagination() {
         search: search.clone(),
     });
     let before = response.clone();
-    assert_eq!(
-        render_scope_query_text(&response),
-        "documents/z-last\nNo matches for \"needle\" in z-last.\n\ndocuments/a-first\nNo matches for \"needle\" in a-first."
-    );
+    assert!(search.validate().is_ok());
+    let text = render_scope_query_text(&response);
+    assert!(text.starts_with("documents/z-last\nz-last  Outline root: OVERVIEW\n  #10"));
+    assert!(text.contains("documents/a-first\na-first  Outline root: OVERVIEW\n  #11"));
+    assert_eq!(text.matches("Match: needle").count(), 2);
+    assert_eq!(text.matches("next occurrence offset 11").count(), 1);
     let markdown = render_scope_query_markdown(&response);
     assert!(markdown.starts_with("## documents/z-last\n"));
     assert!(
         markdown.find("documents/z-last").unwrap() < markdown.find("documents/a-first").unwrap()
     );
-    assert!(!markdown.contains("Next offset"));
+    assert_eq!(markdown.matches("Next offset: `11`").count(), 1);
     assert!(!markdown.contains("Showing matching lines"));
-    let local = scoped_search_projection(&search.documents[0], &search.query);
-    assert_eq!(
-        (local.offset, local.next_offset, local.truncated),
-        (0, None, false)
-    );
-    assert_eq!(local.query, search.query);
-    assert_eq!(local.render, search.documents[0].render);
-    assert_eq!(local.matches, search.documents[0].matches);
     assert_eq!(response, before);
+}
+
+#[test]
+fn scoped_zero_hit_page_does_not_invent_document_groups() {
+    let mut search = search();
+    search.documents.clear();
+    search.total = 0;
+    search.returned = 0;
+    search.offset = 0;
+    search.query.offset = 0;
+    search.truncated = false;
+    search.next_offset = None;
+    assert!(search.validate().is_ok());
+    let response = response(ScopeQueryResult::Search { search });
+    assert_eq!(
+        render_scope_query_text(&response),
+        "No matches for \"needle\" in scope."
+    );
+    assert_eq!(
+        render_scope_query_markdown(&response),
+        "No matches for `needle` in scope."
+    );
 }
 
 #[test]
@@ -167,16 +222,23 @@ fn decoration_keeps_identity_whitespace_and_search_role_boundaries() {
     let mut search = search();
     search.documents.truncate(1);
     search.documents[0].address = address(" odd\u{1b} ");
+    search.coverage_by_document.truncate(1);
+    search.coverage_by_document[0].address = search.documents[0].address.clone();
+    search.total = 10;
+    search.returned = 1;
+    search.truncated = false;
+    search.next_offset = None;
+    assert!(search.validate().is_ok());
     let response = response(ScopeQueryResult::Search { search });
     let decorated = render_scope_query_text_with(&response, |role, text| match role {
         ScopeTextRole::Document => format!("<group>{text}</group>"),
         ScopeTextRole::Search(SearchTextRole::Match) => format!("<match>{text}</match>"),
         _ => text.to_owned(),
     });
-    assert_eq!(
-        decorated,
-        "<group>documents/ odd� </group>\nNo matches for \"<match>needle</match>\" in  odd� ."
+    assert!(
+        decorated.starts_with("<group>documents/ odd� </group>\n odd�   Outline root: OVERVIEW")
     );
+    assert!(decorated.contains("Match: <match>needle</match>"));
     assert_eq!(
         render_scope_query_text(&response),
         render_scope_query_text_with(&response, |_, text| text.to_owned())

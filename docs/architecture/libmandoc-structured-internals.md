@@ -71,19 +71,13 @@ Borrowed views are constructed only from `&ResultHandle` and are consumed
 before that handle can be dropped.  The current raw-owned intermediate model
 remains distinct from the public typed model in this refactor.
 
-The private codec consumer is split at the same semantic boundaries without
-adding a second model:
-
-```text
-mant-codec/src/mandoc/structured_document.rs
-  orchestration from the native projection into stable IR
-mant-codec/src/mandoc/structured_document/
-  index.rs       native relationship indexes
-  blocks.rs      section, block, list, and item lowering
-  evidence.rs    declaration ranges and native head evidence
-  content.rs     inline, link-target, provenance, and diagnostic lowering
-  tests.rs       end-to-end native structured lowering fixtures
-```
+The former private codec `NativeProseProjection` and
+`mandoc/structured_document` tree were removed during annotated P1. They were
+test-only consumers of the old structured result, not a production fallback.
+The active native-to-IR bridge is `mant-codec/src/annotated_fixed.rs` with
+borrowed final-run selections and one owned Fixed surface. The public
+`libmandoc_rs::structured::*` facade remains intact until the later loader
+cutover/removal unit; this module map describes its historical ownership.
 
 ## Native modules and ownership
 

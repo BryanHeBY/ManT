@@ -57,6 +57,15 @@ impl DisplayCapabilities {
                         ..
                     }) | QuerySource::ScopeArguments { view: None, .. }
                 );
+                #[cfg(feature = "annotated-preview")]
+                let full = full
+                    || matches!(
+                        source,
+                        QuerySource::AnnotatedPreview {
+                            view: QueryView::Full {},
+                            ..
+                        }
+                    );
                 Self {
                     reader: cfg!(feature = "tui")
                         && full

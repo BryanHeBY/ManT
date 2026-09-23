@@ -12,7 +12,7 @@ use mant_ir::{
     visit::{self, Visit, VisitMut},
 };
 
-pub(super) type SectionTargets = HashMap<String, Option<String>>;
+pub(crate) type SectionTargets = HashMap<String, Option<String>>;
 
 pub(super) fn promote_manual_navigation(
     content: &super::content::LegacyContent,
@@ -485,7 +485,7 @@ fn resolve_inlines(
 /// (Field Splitting)`.  Accept that form only when it identifies one target;
 /// every other prefix remains unresolved rather than becoming a surprising
 /// navigation jump.
-pub(super) fn resolve_section_target(targets: &SectionTargets, reference: &str) -> Option<String> {
+pub(crate) fn resolve_section_target(targets: &SectionTargets, reference: &str) -> Option<String> {
     match targets.get(reference) {
         Some(Some(section_id)) => return Some(section_id.clone()),
         Some(None) => return None,

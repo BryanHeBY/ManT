@@ -26,7 +26,7 @@ fn fixed_reader_preserves_native_column_gaps_without_reflow() {
     }))
     .expect("valid final surface");
     let mut builder = lower::DocumentBuilder::new("demo".to_owned(), None, None);
-    builder.native_fixed_rows(&fixed);
+    builder.native_fixed_rows(&fixed, &SemanticIndex::default());
     let line = &builder.lines[0];
     assert_eq!(line.wrap_mode, WrapMode::NoWrap);
     assert_eq!(
@@ -35,6 +35,101 @@ fn fixed_reader_preserves_native_column_gaps_without_reflow() {
             .map(|span| span.content.as_ref())
             .collect::<String>(),
         "a   b"
+    );
+}
+
+#[test]
+fn native_fixed_marks_drive_navigation_reveal_links_and_copy() {
+    // The pinned CVS mdoc_term.c termp_sh_pre and termp_lk_pre paths produce
+    // a visible heading and underlined link label. The exact .Sh/.Lk input
+    // was checked with target/mandoc-migration/reference/mandoc before this
+    // final-surface fixture was written.
+    let fixed: mant_ir::FixedBody = serde_json::from_value(serde_json::json!({
+        "surface": {
+            "text": "NAMEexample",
+            "rows": [
+                {"key": 1, "firstRun": 1, "runCount": 1, "columnCount": 4, "breakAfter": true},
+                {"key": 2, "firstRun": 2, "runCount": 1, "columnCount": 11, "breakAfter": false}
+            ],
+            "runs": [
+                {"key": 1, "row": 1, "column": 0, "width": 4, "byteStart": 0, "byteCount": 4,
+                 "label": {"style": {"bold": true, "underline": false}, "role": "body"}},
+                {"key": 2, "row": 2, "column": 4, "width": 7, "byteStart": 4, "byteCount": 7,
+                 "label": {"link": 1, "style": {"bold": false, "underline": true}, "role": "body"}}
+            ]
+        },
+        "headings": [{
+            "key": 1, "id": "name", "parent": null, "levelHint": 1,
+            "at": {"kind": "run-boundary", "run": 1, "byte": 0},
+            "title": {"parts": [{"run": 1, "startByte": 0, "endByte": 4}], "joins": []},
+            "directBody": {"parts": [{"run": 2, "startByte": 0, "endByte": 7}], "joins": []},
+            "source": null
+        }],
+        "owners": [],
+        "links": [{
+            "key": 1, "target": {"kind": "external", "uri": "https://example.com"},
+            "label": {"parts": [{"run": 2, "startByte": 0, "endByte": 7}], "joins": []},
+            "source": null
+        }],
+        "anchors": [{
+            "key": 1, "id": "target", "section": 1, "name": "Target",
+            "renderedFragment": "Target", "authored": true,
+            "at": {"kind": "row-column", "row": 2, "column": 4}, "source": null
+        }],
+        "regions": []
+    }))
+    .expect("valid native marks");
+    let query = ResolvedContent {
+        address: None,
+        label: "demo".to_owned(),
+        document: Some(Document {
+            parser: None,
+            sources: Vec::new(),
+            root_source: SourceKey::FIRST,
+            body: DocumentBody::Fixed(fixed),
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        }),
+        tldr: None,
+    };
+    let view = DocumentView::new(&query);
+    assert_eq!(view.top_level_count(), 1);
+    assert_eq!(
+        view.navigation()
+            .iter()
+            .find(|node| node.id == "name")
+            .unwrap()
+            .title,
+        "NAME"
+    );
+    let rendered = view.render(80);
+    assert_eq!(rendered.anchor_row("name"), Some(0));
+    assert_eq!(rendered.anchor_row("Target"), Some(1));
+    assert_eq!(rendered.anchor_column("Target"), Some(4));
+    assert!(matches!(view.link_target_at(&rendered, 1, 4),
+        Some(LinkTarget::External(uri)) if uri.as_str() == "https://example.com"));
+    assert_eq!(
+        view.selected_text(
+            &rendered,
+            RenderedSelection {
+                anchor: TextPosition { row: 1, column: 4 },
+                focus: TextPosition { row: 1, column: 10 },
+            }
+        ),
+        "example"
+    );
+    let clipped = view.render_with_horizontal_offset(5, 4);
+    assert!(view.link_target_at(&clipped, 1, 0).is_some());
+    assert_eq!(
+        view.selected_text(
+            &clipped,
+            RenderedSelection {
+                anchor: TextPosition { row: 1, column: 0 },
+                focus: TextPosition { row: 1, column: 4 },
+            }
+        ),
+        "examp"
     );
 }
 
@@ -93,8 +188,13 @@ fn invalid_fixed_mark_preserves_tldr_in_document_view_fallback() {
         },
         headings: vec![mant_ir::HeadingMark {
             key: std::num::NonZeroU32::new(2).unwrap(),
+            id: mant_ir::NodeId::from("heading"),
+            fragment_aliases: Vec::new(),
+            generated_fragment_aliases: Vec::new(),
+            rendered_fragment_aliases: Vec::new(),
             parent: None,
             level_hint: 1,
+            at: mant_ir::DisplayPoint::DocumentEnd { row_count: 0 },
             title: empty_selection.clone(),
             direct_body: empty_selection,
             source: None,
@@ -589,6 +689,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
         surfaces: vec![LineSurface::Normal],
         logical_rows: vec![0, 1],
         anchor_rows: HashMap::new(),
+        anchor_columns: HashMap::new(),
         fixed_line_rows: HashMap::new(),
         point_locations: HashMap::new(),
         links: Vec::new(),

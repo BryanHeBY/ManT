@@ -65,8 +65,16 @@ fn sample_body() -> FixedBody {
         },
         headings: vec![HeadingMark {
             key: key(1),
+            id: crate::NodeId::from("heading"),
+            fragment_aliases: Vec::new(),
+            generated_fragment_aliases: Vec::new(),
+            rendered_fragment_aliases: Vec::new(),
             parent: None,
             level_hint: 1,
+            at: DisplayPoint::RunBoundary {
+                run: key(1),
+                byte: 0,
+            },
             title: TextSelection {
                 parts: vec![OutputSlice {
                     run: key(1),
@@ -80,6 +88,7 @@ fn sample_body() -> FixedBody {
         }],
         owners: vec![OwnerMark {
             key: key(1),
+            id: crate::NodeId::from("native-owner-1"),
             parent: None,
             section: Some(key(1)),
             role: OwnerRole::Definition,
@@ -115,7 +124,11 @@ fn sample_body() -> FixedBody {
         }],
         anchors: vec![AnchorMark {
             key: key(1),
+            id: crate::NodeId::from("target"),
+            section: Some(key(1)),
             name: "target".to_owned(),
+            rendered_fragment: "target".into(),
+            authored: true,
             at: DisplayPoint::RunBoundary {
                 run: key(2),
                 byte: 3,
@@ -160,7 +173,11 @@ fn empty_surface_keeps_document_end_without_fake_run() {
     body.links.clear();
     body.anchors = vec![AnchorMark {
         key: key(1),
+        id: crate::NodeId::from("empty"),
+        section: None,
         name: "empty".to_owned(),
+        rendered_fragment: "empty".into(),
+        authored: false,
         at: DisplayPoint::DocumentEnd { row_count: 0 },
         source: None,
     }];
@@ -180,6 +197,22 @@ fn rejects_dangling_and_non_utf8_slices_on_wire() {
 
     let mut wire = serde_json::to_value(sample_body()).unwrap();
     wire["surface"]["runs"][1]["byteStart"] = 0.into();
+    assert!(serde_json::from_value::<FixedBody>(wire).is_err());
+}
+
+#[test]
+fn fixed_navigation_id_and_authored_alias_have_distinct_wire_rules() {
+    let mut body = sample_body();
+    body.headings[0].fragment_aliases = vec![crate::FragmentAlias::from("Mixed.Target")];
+    body.headings[0].rendered_fragment_aliases = vec![crate::FragmentAlias::from("Mixed.Target")];
+    body.validate().unwrap();
+
+    let mut wire = serde_json::to_value(&body).unwrap();
+    wire["headings"][0]["id"] = "Mixed.Target".into();
+    assert!(serde_json::from_value::<FixedBody>(wire).is_err());
+
+    let mut wire = serde_json::to_value(&body).unwrap();
+    wire["anchors"][0]["name"] = "two words".into();
     assert!(serde_json::from_value::<FixedBody>(wire).is_err());
 }
 

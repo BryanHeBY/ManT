@@ -128,6 +128,7 @@ pub struct DocumentView {
     link_targets: HashMap<LinkIdentity, LinkTarget>,
     fixed_search_records: Vec<RenderedSearchRecord>,
     fixed_line_rows: HashMap<FixedLineKey, usize>,
+    fixed_anchor_columns: HashMap<String, usize>,
     fixed_point_locations: HashMap<ContentPointKey, (usize, usize)>,
     stacked_point_locations: HashMap<ContentPointKey, (usize, usize)>,
 }
@@ -145,6 +146,7 @@ pub struct RenderedDocument {
     /// First visual row for each logical source row, followed by one sentinel.
     logical_rows: Vec<usize>,
     anchor_rows: HashMap<String, usize>,
+    anchor_columns: HashMap<String, usize>,
     fixed_line_rows: HashMap<FixedLineKey, usize>,
     point_locations: HashMap<ContentPointKey, (usize, usize)>,
     links: Vec<RenderedLinkRegion>,
@@ -292,8 +294,14 @@ impl DocumentView {
         let top_level_count = bundle
             .document
             .as_ref()
-            .and_then(mant_ir::Document::flow)
-            .map_or(0, |flow| flow.sections.len());
+            .map_or(0, |document| match &document.body {
+                DocumentBody::Flow(flow) => flow.sections.len(),
+                DocumentBody::Fixed(fixed) => fixed
+                    .headings
+                    .iter()
+                    .filter(|heading| heading.parent.is_none())
+                    .count(),
+            });
         let terminal_label = bundle.document.as_ref().map_or_else(
             || bundle.label.clone(),
             |document| {
@@ -306,8 +314,10 @@ impl DocumentView {
         let section_count = bundle
             .document
             .as_ref()
-            .and_then(mant_ir::Document::flow)
-            .map_or(0, |flow| count_sections(&flow.sections));
+            .map_or(0, |document| match &document.body {
+                DocumentBody::Flow(flow) => count_sections(&flow.sections),
+                DocumentBody::Fixed(fixed) => fixed.headings.len(),
+            });
 
         if let Some(tldr) = &bundle.tldr {
             let document_gap = u16::from(
@@ -364,7 +374,12 @@ impl DocumentView {
                     );
                 }
             } else if let mant_ir::DocumentBody::Fixed(fixed) = &document.body {
-                builder.native_fixed_rows(fixed);
+                builder.native_fixed_rows(fixed, &semantic_index);
+                for alias in &document.fragment_aliases {
+                    if let Some(&row) = builder.anchors.get(ROOT_ID) {
+                        builder.anchors.entry(alias.to_string()).or_insert(row);
+                    }
+                }
             }
         }
 
@@ -397,6 +412,7 @@ impl DocumentView {
             link_targets: built.link_targets,
             fixed_search_records: built.fixed_search_records,
             fixed_line_rows: built.fixed_line_rows,
+            fixed_anchor_columns: built.fixed_anchor_columns,
             fixed_point_locations: built.fixed_point_locations,
             stacked_point_locations: built.stacked_point_locations,
         }
@@ -544,6 +560,7 @@ impl DocumentView {
             surfaces,
             logical_rows,
             anchor_rows,
+            anchor_columns: self.fixed_anchor_columns.clone(),
             fixed_line_rows,
             point_locations,
             links,
@@ -587,6 +604,12 @@ impl RenderedDocument {
     #[must_use]
     pub fn anchor_row(&self, id: &str) -> Option<usize> {
         self.anchor_rows.get(id).copied()
+    }
+
+    /// Native terminal column for a Fixed anchor, before horizontal clipping.
+    #[must_use]
+    pub fn anchor_column(&self, id: &str) -> Option<usize> {
+        self.anchor_columns.get(id).copied()
     }
 
     pub(crate) fn viewport_anchor(&self, row: usize) -> Option<(usize, usize)> {

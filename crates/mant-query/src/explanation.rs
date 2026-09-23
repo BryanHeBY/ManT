@@ -4,6 +4,7 @@ mod literal;
 mod location;
 pub use location::resolve_explanation_block;
 mod details;
+mod fixed;
 mod matches;
 mod materialize;
 mod page;
@@ -25,6 +26,8 @@ use mant_protocol::{EvidenceBasis, ExplanationQuery, QueryExplanation};
 pub enum ExplanationError {
     /// The selected Fixed document requires annotated explanation support.
     UnsupportedFixed,
+    /// A Fixed display selection or hierarchy could not be read safely.
+    InvalidFixed,
     /// Empty, overlong, or control-bearing literal.
     Entry(mant_protocol::ScopeTextError),
     /// Result count is outside 1..=256.
@@ -40,6 +43,7 @@ impl std::fmt::Display for ExplanationError {
             Self::UnsupportedFixed => {
                 f.write_str("Fixed document explanation is not yet supported")
             }
+            Self::InvalidFixed => f.write_str("invalid Fixed explanation selection"),
             Self::Entry(mant_protocol::ScopeTextError::Empty) => {
                 f.write_str("explanation entry must not be empty")
             }
@@ -97,6 +101,11 @@ pub(crate) fn explain_with_usage(
     query: &ExplanationQuery,
 ) -> Result<(QueryExplanation, u32), ExplanationError> {
     validate_explanation_query(query)?;
+    if let Some(document) = &content.document
+        && let mant_ir::DocumentBodyRef::Fixed(fixed) = document.body()
+    {
+        return fixed::response(content, document, fixed, query);
+    }
     let plan = collection_plan(content, query.entry.trim())?;
     Ok(materialize::response(plan, query))
 }

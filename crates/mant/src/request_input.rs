@@ -10,6 +10,10 @@ pub(super) fn read_query_request(
 ) -> Result<QueryRequest, Failure> {
     match source {
         QuerySource::Arguments(request) => return Ok(request),
+        #[cfg(feature = "annotated-preview")]
+        QuerySource::AnnotatedPreview { .. } => {
+            unreachable!("annotated preview is consumed before protocol request decoding");
+        }
         QuerySource::StdinJson => {}
         QuerySource::InputStdin { .. } => {
             unreachable!("direct stdin input is consumed before protocol request decoding");

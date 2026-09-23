@@ -1,5 +1,5 @@
 //! Operation-local native head evidence, never serialized as a second IR.
-use std::{collections::HashMap, ops::Range};
+use std::collections::HashMap;
 
 use mant_ir::{DefinitionItem, Inline, SourceSpan};
 
@@ -20,24 +20,6 @@ struct HeadWitness {
     role: NativeHeadRole,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NativeContentRange {
-    pub(crate) term: usize,
-    pub(crate) parts: Vec<Range<usize>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NativeDeclarationEvidence {
-    pub(crate) forms: Vec<NativeContentRange>,
-    pub(crate) name_hints: Vec<NativeContentRange>,
-}
-
-struct DeclarationWitness {
-    source: SourceSpan,
-    terms: Vec<Vec<Inline>>,
-    evidence: NativeDeclarationEvidence,
-}
-
 /// Locations only select a bucket. Evidence is reusable only when the entire
 /// styled head and complete source coordinate still match. Moving an owner or
 /// nesting its body preserves the witness; changing/splitting a head invalidates
@@ -49,7 +31,6 @@ pub(crate) struct NativeHeadEvidence {
     /// owner. Later indentation recovery cannot move them into its last child.
     pub(crate) continuations: std::collections::HashSet<(u32, u32)>,
     witnesses: HashMap<(u32, u32), Vec<HeadWitness>>,
-    declarations: HashMap<(u32, u32), Vec<DeclarationWitness>>,
 }
 
 impl NativeHeadEvidence {
@@ -75,36 +56,6 @@ impl NativeHeadEvidence {
             .filter(|witness| witness.source == source && witness.terms == terms);
         let role = matches.next()?.role;
         matches.all(|witness| witness.role == role).then_some(role)
-    }
-
-    #[cfg(feature = "native-structured")]
-    pub(crate) fn record_declaration(
-        &mut self,
-        item: &DefinitionItem,
-        evidence: NativeDeclarationEvidence,
-    ) {
-        let Some(source) = item.source else { return };
-        self.declarations
-            .entry((source.line, source.column))
-            .or_default()
-            .push(DeclarationWitness {
-                source,
-                terms: head_content(&item.terms),
-                evidence,
-            });
-    }
-
-    pub(super) fn declaration(&self, item: &DefinitionItem) -> Option<&NativeDeclarationEvidence> {
-        let source = item.source?;
-        let candidates = self.declarations.get(&(source.line, source.column))?;
-        let terms = head_content(&item.terms);
-        let mut matches = candidates
-            .iter()
-            .filter(|witness| witness.source == source && witness.terms == terms);
-        let evidence = &matches.next()?.evidence;
-        matches
-            .all(|witness| witness.evidence == *evidence)
-            .then_some(evidence)
     }
 }
 

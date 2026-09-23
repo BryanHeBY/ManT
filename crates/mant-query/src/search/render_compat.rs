@@ -1,32 +1,36 @@
-//! Compatibility search over canonical Markdown, including TLDR-only content.
+//! R02a Flow/TLDR search over the unchanged canonical Markdown visible extractor.
+//!
+//! The matcher and owner filter preserve the pre-R02a selection rule. Only
+//! retention changes: each occurrence gets one ordinal and one bounded unit;
+//! renderer-inserted visible breaks are explicit joins, never authored bytes.
 
+use std::num::NonZeroU32;
 use std::ops::Range;
 
 use grep_matcher::Matcher;
+use mant_codec::encode::render_addressable_markdown;
+use mant_ir::DocumentBodyRef;
 use mant_protocol::{
-    MarkdownSchema, QuerySearch, SearchContextLine, SearchHit, SearchLineRange,
-    SearchMarkdownRange, SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat,
-    SearchRenderScope, SearchSchema,
+    MAX_SEARCH_PRESENTATION_BYTES, QuerySearch, SearchContentProjection, SearchContextLine,
+    SearchDisplaySlice, SearchFlowFragmentSource, SearchFlowSourceKind, SearchFragment,
+    SearchFragmentSource, SearchLocation, SearchMatch, SearchQuery, SearchRender,
+    SearchRenderDerivedFragmentSource, SearchRenderDerivedSourceKind, SearchRenderFormat,
+    SearchRenderSchema, SearchRenderScope, SearchSchema, SearchScope, SearchTextJoin,
+    SearchTextUnit, SearchTldrFragmentSource, SearchTldrSourceKind,
 };
 
 use super::SearchError;
-use super::mapping::{LineIndex, SearchableText};
+use super::mapping::{LineIndex, SearchableText, VisiblePart};
+use super::origins::FlowOrigins;
 use super::owners::{Owner, OwnerIndex};
 use super::plan::{empty_match_error, matcher_error, non_utf8_pattern_error};
 use crate::ResolvedContent;
-use mant_codec::encode::render_addressable_markdown;
-use mant_ir::DocumentBodyRef;
-
-const MAX_OCCURRENCES_PER_MATCH: usize = 256;
 
 pub(super) fn search_with_matcher(
     query: &ResolvedContent,
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
-    // The compatibility search below is defined for Flow's canonical
-    // Markdown. A future Fixed arm must select its explicit visible/artifact
-    // reader here; it must never fall through to an empty Flow export.
     match query.document.as_ref().map(mant_ir::Document::body) {
         Some(DocumentBodyRef::Flow(_)) | None => search_flow_with_matcher(query, request, matcher),
         Some(DocumentBodyRef::Fixed(_)) => Err(SearchError::UnsupportedFixed),
@@ -47,39 +51,91 @@ fn search_flow_with_matcher(
     );
     let searchable = SearchableText::new(markdown, request.scope);
     let line_count = u32::try_from(lines.count()).map_err(|_| SearchError::ResourceLimit)?;
-    let limit = usize::try_from(request.limit).map_err(|_| SearchError::ResourceLimit)?;
-    let mut collector = SearchCollector::new(markdown, &lines, request.offset, limit);
+    let mut collector = OccurrenceCollector::new(request.offset, request.limit);
     collect_occurrences(
         matcher,
         &searchable,
         markdown,
         &lines,
         &owners,
+        request.scope,
         &mut collector,
     )?;
+    let (selected, total) = collector.finish();
+    let origins = if request.scope == SearchScope::Visible && !selected.is_empty() {
+        FlowOrigins::new(query.document.as_ref(), &artifact)
+    } else {
+        FlowOrigins::default()
+    };
 
-    let (raw_groups, total) = collector.finish();
-    let selected = raw_groups
+    let mut projection = SearchContentProjection {
+        fragments: Vec::new(),
+        units: Vec::new(),
+    };
+    let mut presentation_bytes = 0usize;
+    let match_context = MatchContext {
+        searchable: &searchable,
+        markdown,
+        lines: &lines,
+        owners: &owners,
+        origins: &origins,
+        context_lines: request.context_lines,
+        scope: request.scope,
+    };
+    let retained_matches = selected
         .iter()
         .map(|found| {
             build_match(
                 found,
-                &searchable,
-                markdown,
-                &lines,
-                &owners,
-                request.context_lines,
+                &match_context,
+                &mut projection,
+                &mut presentation_bytes,
             )
         })
-        .collect::<Vec<_>>();
-    let returned = u32::try_from(selected.len()).map_err(|_| SearchError::ResourceLimit)?;
+        .collect::<Result<Vec<_>, _>>()?;
+    let content_projection =
+        if request.scope == SearchScope::Visible && !retained_matches.is_empty() {
+            projection
+                .validate()
+                .map_err(|_| SearchError::ResourceLimit)?;
+            Some(projection)
+        } else {
+            None
+        };
+    finish_flow_search(
+        query,
+        request,
+        line_count,
+        total,
+        retained_matches,
+        content_projection,
+    )
+}
+
+fn finish_flow_search(
+    query: &ResolvedContent,
+    request: &SearchQuery,
+    line_count: u32,
+    total: u32,
+    retained_matches: Vec<SearchMatch>,
+    content_projection: Option<SearchContentProjection>,
+) -> Result<QuerySearch, SearchError> {
+    let returned = u32::try_from(retained_matches.len()).map_err(|_| SearchError::ResourceLimit)?;
     let consumed = request
         .offset
         .checked_add(returned)
         .ok_or(SearchError::ResourceLimit)?;
-    let truncated = consumed < total;
-
-    Ok(QuerySearch {
+    let truncated = returned != 0 && consumed < total;
+    let diagnostics = query
+        .document
+        .as_ref()
+        .map_or_else(Vec::new, |document| document.diagnostics.clone());
+    // Document-level diagnostics are already bounded by the normalized input
+    // budget. Do not silently lose evidence of incomplete semantic coverage.
+    if diagnostics.len() > mant_protocol::MAX_SEARCH_DIAGNOSTICS {
+        return Err(SearchError::ResourceLimit);
+    }
+    let result = QuerySearch {
         schema: SearchSchema::V0Dot12,
         label: query.label.clone(),
         source_context: query
@@ -90,10 +146,10 @@ fn search_flow_with_matcher(
             .document
             .as_ref()
             .map(|document| document.meta.clone()),
-        content_projection: None,
+        content_projection,
         query: request.clone(),
         render: SearchRender {
-            schema: MarkdownSchema::V1,
+            schema: SearchRenderSchema::Markdown,
             format: SearchRenderFormat::Markdown,
             scope: SearchRenderScope::Full,
             line_base: 1,
@@ -105,8 +161,15 @@ fn search_flow_with_matcher(
         offset: request.offset,
         truncated,
         next_offset: truncated.then_some(consumed),
-        matches: selected,
-    })
+        semantics_complete: mant_ir::semantics_complete(&diagnostics),
+        coverage_details_omitted: 0,
+        diagnostics,
+        matches: retained_matches,
+    };
+    result
+        .validate()
+        .map_err(|_| SearchError::ContentProjection)?;
+    Ok(result)
 }
 
 fn collect_occurrences(
@@ -115,7 +178,8 @@ fn collect_occurrences(
     markdown: &str,
     lines: &LineIndex,
     owners: &OwnerIndex<'_, '_>,
-    collector: &mut SearchCollector<'_>,
+    scope: SearchScope,
+    collector: &mut OccurrenceCollector,
 ) -> Result<(), SearchError> {
     let mut invalid_utf8_match = false;
     let mut invalid_zero_width_match = false;
@@ -140,28 +204,22 @@ fn collect_occurrences(
                 invalid_utf8_match = true;
                 return false;
             }
-            if markdown_start >= markdown_end {
-                // Visible text contains synthetic separators between block
-                // events. They make whitespace searchable but have no
-                // canonical Markdown bytes of their own, so this occurrence
-                // is intentionally absent rather than invalidating the query.
-                return true;
-            }
-            if !occurrence_has_line_ranges(markdown_start..markdown_end, markdown, lines) {
-                // A Markdown-scope matcher can land wholly inside one of the
-                // zero-width source-map anchors. Such internal matches have
-                // no anchor-free presentation and must not become phantom
-                // result rows.
+            if markdown_start >= markdown_end
+                || (scope == SearchScope::Visible
+                    && !occurrence_is_presented(markdown_start..markdown_end, lines))
+            {
                 return true;
             }
             let owner = owners.owner(markdown_start);
             let end_owner = owners.owner(markdown_end - 1);
-            if let (Some(owner), Some(end_owner)) = (owner, end_owner)
-                && owner.key == end_owner.key
+            if let Some(owner) = owner
+                && (scope == SearchScope::Markdown
+                    || end_owner.is_some_and(|end_owner| owner.key == end_owner.key))
                 && let Err(error) = collector.push(
                     found.start()..found.end(),
                     markdown_start..markdown_end,
-                    owner,
+                    *owner,
+                    lines,
                 )
             {
                 collection_error = Some(error);
@@ -181,64 +239,30 @@ fn collect_occurrences(
     }
 }
 
+#[derive(Clone)]
 struct RawOccurrence {
+    ordinal: u32,
     searchable: Range<usize>,
     markdown: Range<usize>,
-    line_ranges: Vec<SearchLineRange>,
-}
-
-struct RawMatchGroup {
-    ordinal: u32,
-    occurrences: Vec<RawOccurrence>,
-    occurrence_count: u32,
     owner: Owner,
     start_line_index: usize,
     end_line_index: usize,
 }
 
-struct PendingRawMatchGroup {
-    ordinal: u32,
-    occurrences: Vec<RawOccurrence>,
-    occurrence_count: u32,
-    owner: PendingOwner,
-    start_line_index: usize,
-    end_line_index: usize,
-}
-
-enum PendingOwner {
-    Retained(Owner),
-    CountOnly(usize),
-}
-
-impl PendingOwner {
-    const fn key(&self) -> usize {
-        match self {
-            Self::Retained(owner) => owner.key,
-            Self::CountOnly(key) => *key,
-        }
-    }
-}
-
-struct SearchCollector<'a> {
-    markdown: &'a str,
-    lines: &'a LineIndex,
+struct OccurrenceCollector {
     offset: u32,
-    limit: usize,
+    limit: u32,
     total: u32,
-    selected: Vec<RawMatchGroup>,
-    current: Option<PendingRawMatchGroup>,
+    selected: Vec<RawOccurrence>,
 }
 
-impl<'a> SearchCollector<'a> {
-    fn new(markdown: &'a str, lines: &'a LineIndex, offset: u32, limit: usize) -> Self {
+impl OccurrenceCollector {
+    fn new(offset: u32, limit: u32) -> Self {
         Self {
-            markdown,
-            lines,
             offset,
             limit,
             total: 0,
-            selected: Vec::with_capacity(limit.min(256)),
-            current: None,
+            selected: Vec::new(),
         }
     }
 
@@ -246,297 +270,291 @@ impl<'a> SearchCollector<'a> {
         &mut self,
         searchable: Range<usize>,
         markdown: Range<usize>,
-        owner: &Owner,
+        owner: Owner,
+        lines: &LineIndex,
     ) -> Result<(), SearchError> {
-        let start_line_index = self
-            .lines
-            .position(self.markdown, markdown.start)
-            .line_index;
-        let end_line_index = self
-            .lines
-            .line_index_at_byte(markdown.end.saturating_sub(1));
-        if let Some(group) = self.current.as_mut().filter(|group| {
-            group.start_line_index == start_line_index
-                && group.end_line_index == end_line_index
-                && group.owner.key() == owner.key
-        }) {
-            group.occurrence_count = group
-                .occurrence_count
-                .checked_add(1)
-                .ok_or(SearchError::ResourceLimit)?;
-            if matches!(group.owner, PendingOwner::Retained(_))
-                && group.occurrences.len() < MAX_OCCURRENCES_PER_MATCH
-            {
-                group.occurrences.push(RawOccurrence {
-                    searchable,
-                    line_ranges: occurrence_line_ranges(
-                        markdown.clone(),
-                        self.markdown,
-                        self.lines,
-                    ),
-                    markdown,
-                });
-            }
-            return Ok(());
-        }
-
-        self.flush();
-        let ordinal = self
+        self.total = self
             .total
             .checked_add(1)
             .ok_or(SearchError::ResourceLimit)?;
-        let retained = self.total >= self.offset && self.selected.len() < self.limit;
-        let occurrences = retained
-            .then(|| RawOccurrence {
-                searchable,
-                line_ranges: occurrence_line_ranges(markdown.clone(), self.markdown, self.lines),
-                markdown,
-            })
-            .into_iter()
-            .collect();
-        self.current = Some(PendingRawMatchGroup {
-            ordinal,
-            occurrences,
-            occurrence_count: 1,
-            owner: if retained {
-                PendingOwner::Retained(*owner)
-            } else {
-                PendingOwner::CountOnly(owner.key)
-            },
-            start_line_index,
-            end_line_index,
+        if self.total <= self.offset || self.selected.len() >= self.limit as usize {
+            return Ok(());
+        }
+        self.selected.push(RawOccurrence {
+            ordinal: self.total,
+            searchable,
+            start_line_index: lines.line_index_at_byte(markdown.start),
+            end_line_index: lines.line_index_at_byte(markdown.end - 1),
+            markdown,
+            owner,
         });
         Ok(())
     }
 
-    fn flush(&mut self) {
-        let Some(group) = self.current.take() else {
-            return;
-        };
-        self.total = group.ordinal;
-        if let PendingOwner::Retained(owner) = group.owner {
-            self.selected.push(RawMatchGroup {
-                ordinal: group.ordinal,
-                occurrences: group.occurrences,
-                occurrence_count: group.occurrence_count,
-                owner,
-                start_line_index: group.start_line_index,
-                end_line_index: group.end_line_index,
-            });
-        }
-    }
-
-    fn finish(mut self) -> (Vec<RawMatchGroup>, u32) {
-        self.flush();
+    fn finish(self) -> (Vec<RawOccurrence>, u32) {
         (self.selected, self.total)
     }
 }
 
-impl RawMatchGroup {
-    fn occurrences_truncated(&self) -> bool {
-        usize::try_from(self.occurrence_count).map_or(true, |count| count > self.occurrences.len())
-    }
+struct MatchContext<'a, 'b> {
+    searchable: &'a SearchableText,
+    markdown: &'a str,
+    lines: &'a LineIndex,
+    owners: &'a OwnerIndex<'a, 'b>,
+    origins: &'a FlowOrigins,
+    context_lines: u16,
+    scope: SearchScope,
 }
 
 fn build_match(
-    found: &RawMatchGroup,
-    searchable: &SearchableText,
-    markdown: &str,
-    lines: &LineIndex,
-    owners: &OwnerIndex<'_, '_>,
-    context_lines: u16,
-) -> SearchHit {
-    let first = &found.occurrences[0];
-    let start = lines.position(markdown, first.markdown.start);
+    found: &RawOccurrence,
+    context: &MatchContext<'_, '_>,
+    projection: &mut SearchContentProjection,
+    presentation_bytes: &mut usize,
+) -> Result<SearchMatch, SearchError> {
+    let MatchContext {
+        searchable,
+        markdown,
+        lines,
+        owners,
+        origins,
+        context_lines,
+        scope,
+    } = context;
+    let start = lines.position(markdown, found.markdown.start);
+    let end = lines.position(markdown, found.markdown.end);
     let preview = lines.presented_line(markdown, start.line_index).text;
-    let context_start = found
-        .start_line_index
-        .saturating_sub(usize::from(context_lines));
-    let context_end = found
-        .end_line_index
-        .saturating_add(usize::from(context_lines))
-        .min(lines.count().saturating_sub(1));
-    let context = if context_lines == 0 {
+    let surrounding = if *context_lines == 0 {
         Vec::new()
     } else {
-        (context_start..=context_end)
+        let first = found
+            .start_line_index
+            .saturating_sub(*context_lines as usize);
+        let last = found
+            .end_line_index
+            .saturating_add(*context_lines as usize)
+            .min(lines.count().saturating_sub(1));
+        (first..=last)
             .map(|line_index| SearchContextLine {
-                line: u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
+                line: u32::try_from(line_index + 1).unwrap_or(u32::MAX),
                 text: lines.presented_line(markdown, line_index).text,
                 matched: (found.start_line_index..=found.end_line_index).contains(&line_index),
             })
             .collect()
     };
-
-    SearchHit {
+    let (matched_text, location, display_slices) = if *scope == SearchScope::Markdown {
+        let matched_text = markdown[found.markdown.clone()].to_owned();
+        let location = SearchLocation::MarkdownArtifact {
+            start_byte: u64::try_from(found.markdown.start)
+                .map_err(|_| SearchError::ResourceLimit)?,
+            end_byte: u64::try_from(found.markdown.end).map_err(|_| SearchError::ResourceLimit)?,
+            start_line: u32::try_from(start.line_index + 1)
+                .map_err(|_| SearchError::ResourceLimit)?,
+            start_column: u32::try_from(start.column).map_err(|_| SearchError::ResourceLimit)?,
+            end_line: u32::try_from(end.line_index + 1).map_err(|_| SearchError::ResourceLimit)?,
+            end_column: u32::try_from(end.column).map_err(|_| SearchError::ResourceLimit)?,
+        };
+        (matched_text, location, Vec::new())
+    } else {
+        let matched_text = searchable.text[found.searchable.clone()].to_owned();
+        let tldr_base = owners
+            .tldr_start(found.owner.key)
+            .and_then(|start| searchable.visible_start_for_markdown(start));
+        let visible_projection = project_visible(
+            searchable,
+            found.searchable.clone(),
+            projection,
+            origins,
+            tldr_base,
+        )?;
+        let location = SearchLocation::VisibleFlow {
+            unit: visible_projection.unit,
+            start_byte: visible_projection.start_byte,
+            end_byte: visible_projection.end_byte,
+        };
+        (matched_text, location, visible_projection.display_slices)
+    };
+    *presentation_bytes = presentation_bytes
+        .checked_add(matched_text.len())
+        .and_then(|value| value.checked_add(preview.len()))
+        .ok_or(SearchError::ResourceLimit)?;
+    for line in &surrounding {
+        *presentation_bytes = presentation_bytes
+            .checked_add(line.text.len())
+            .ok_or(SearchError::ResourceLimit)?;
+    }
+    if *presentation_bytes > MAX_SEARCH_PRESENTATION_BYTES {
+        return Err(SearchError::ResourceLimit);
+    }
+    Ok(SearchMatch {
         ordinal: found.ordinal,
         outline: owners.trail(found.owner.key),
-        occurrences: found
-            .occurrences
-            .iter()
-            .map(|occurrence| {
-                let start = lines.position(markdown, occurrence.markdown.start);
-                let end = lines.position(markdown, occurrence.markdown.end);
-                SearchOccurrence {
-                    root: None,
-                    logical: None,
-                    markdown_projections: Vec::new(),
-                    matched_text: if searchable.direct_markdown {
-                        presented_matched_text(occurrence, markdown, lines)
-                    } else {
-                        searchable.text[occurrence.searchable.clone()].to_owned()
-                    },
-                    markdown: Some(SearchMarkdownRange {
-                        start_byte: u64::try_from(occurrence.markdown.start).unwrap_or(u64::MAX),
-                        end_byte: u64::try_from(occurrence.markdown.end).unwrap_or(u64::MAX),
-                        start_line: u32::try_from(start.line_index.saturating_add(1))
-                            .unwrap_or(u32::MAX),
-                        start_column: u32::try_from(start.column).unwrap_or(u32::MAX),
-                        end_line: u32::try_from(end.line_index.saturating_add(1))
-                            .unwrap_or(u32::MAX),
-                        end_column: u32::try_from(end.column).unwrap_or(u32::MAX),
-                    }),
-                    line_ranges: occurrence.line_ranges.clone(),
-                }
-            })
-            .collect(),
-        occurrence_count: found.occurrence_count,
-        occurrences_truncated: found.occurrences_truncated(),
+        matched_text,
+        location,
+        display_slices,
         node_source: found.owner.source,
         preview,
-        context,
-    }
-}
-
-fn occurrence_line_ranges(
-    markdown_range: Range<usize>,
-    markdown: &str,
-    lines: &LineIndex,
-) -> Vec<SearchLineRange> {
-    let start = lines.position(markdown, markdown_range.start).line_index;
-    let end = lines.line_index_at_byte(markdown_range.end.saturating_sub(1));
-    (start..=end)
-        .flat_map(|line_index| {
-            let line_start = lines.start(line_index);
-            let line = lines.line(markdown, line_index).trim_end();
-            let line_end = line_start.saturating_add(line.len());
-            let intersection =
-                markdown_range.start.max(line_start)..markdown_range.end.min(line_end);
-            (intersection.start < intersection.end)
-                .then(|| lines.presented_line(markdown, line_index))
-                .into_iter()
-                .flat_map(move |visible| {
-                    visible.map_range(
-                        intersection.start.saturating_sub(line_start)
-                            ..intersection.end.saturating_sub(line_start),
-                    )
-                })
-                .map(move |range| SearchLineRange {
-                    line: u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
-                    start_byte: u32::try_from(range.start).unwrap_or(u32::MAX),
-                    end_byte: u32::try_from(range.end).unwrap_or(u32::MAX),
-                })
-        })
-        .collect()
-}
-
-// Skipped pages and count-only groups still need to reject matches wholly
-// inside hidden source-map anchors, but they do not need retained line ranges.
-fn occurrence_has_line_ranges(
-    markdown_range: Range<usize>,
-    markdown: &str,
-    lines: &LineIndex,
-) -> bool {
-    let start = lines.position(markdown, markdown_range.start).line_index;
-    let end = lines.line_index_at_byte(markdown_range.end.saturating_sub(1));
-    (start..=end).any(|line_index| {
-        let line_start = lines.start(line_index);
-        let line = lines.line(markdown, line_index).trim_end();
-        let line_end = line_start.saturating_add(line.len());
-        let intersection = markdown_range.start.max(line_start)..markdown_range.end.min(line_end);
-        if intersection.start >= intersection.end {
-            return false;
-        }
-        lines.has_presented_range(
-            markdown,
-            line_index,
-            intersection.start.saturating_sub(line_start)
-                ..intersection.end.saturating_sub(line_start),
-        )
+        context: surrounding,
     })
 }
 
-fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &LineIndex) -> String {
-    let mut text = String::new();
-    let mut previous_line = None;
-    for range in &occurrence.line_ranges {
-        let line_index = usize::try_from(range.line.saturating_sub(1)).unwrap_or(usize::MAX);
-        if previous_line.is_some_and(|previous| previous != line_index) {
-            text.push('\n');
-        }
-        let line = lines.presented_line(markdown, line_index).text;
-        let start = usize::try_from(range.start_byte).unwrap_or(usize::MAX);
-        let end = usize::try_from(range.end_byte).unwrap_or(usize::MAX);
-        if let Some(fragment) = line.get(start..end) {
-            text.push_str(fragment);
-        }
-        previous_line = Some(line_index);
-    }
-    text
+struct VisibleProjection {
+    unit: NonZeroU32,
+    start_byte: u64,
+    end_byte: u64,
+    display_slices: Vec<SearchDisplaySlice>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{SearchCollector, SearchError, occurrence_has_line_ranges, occurrence_line_ranges};
-    use crate::search::mapping::LineIndex;
-    use crate::search::owners::Owner;
-
-    #[test]
-    fn count_only_visibility_agrees_with_retained_ranges() {
-        // The hidden anchor is inside line one; line two has trailing spaces
-        // which presentation deliberately trims. Exercise every byte range,
-        // including ranges that cross line and anchor boundaries.
-        let markdown = "ab<!-- -->cd  \nef  \n";
-        let lines = LineIndex::with_anchors(markdown, std::iter::once(2..10).collect());
-        for start in 0..markdown.len() {
-            for end in start + 1..=markdown.len() {
-                let range = start..end;
-                assert_eq!(
-                    occurrence_has_line_ranges(range.clone(), markdown, &lines),
-                    !occurrence_line_ranges(range.clone(), markdown, &lines).is_empty(),
-                    "range {range:?}"
-                );
-            }
+fn project_visible(
+    searchable: &SearchableText,
+    matched_range: Range<usize>,
+    projection: &mut SearchContentProjection,
+    origins: &FlowOrigins,
+    tldr_base: Option<usize>,
+) -> Result<VisibleProjection, SearchError> {
+    // A leading render break needs a real predecessor to be a join, rather
+    // than invented display bytes. It is context, not part of the match.
+    let prefix_start = if searchable.is_separator_at(matched_range.start) {
+        searchable.text[..matched_range.start]
+            .char_indices()
+            .next_back()
+            .map_or(matched_range.start, |(start, _)| start)
+    } else {
+        matched_range.start
+    };
+    let unit_range = prefix_start..matched_range.end;
+    let unit_key = dense_key(projection.units.len())?;
+    let mut keys = Vec::new();
+    let mut joins = Vec::new();
+    let mut slices = Vec::new();
+    let mut pending_separator = String::new();
+    for part in searchable.parts(unit_range.clone()) {
+        if part.separator {
+            pending_separator.push_str(part.text);
+            continue;
         }
-        assert!(!occurrence_has_line_ranges(2..10, markdown, &lines));
-        assert!(!occurrence_has_line_ranges(12..14, markdown, &lines));
-        assert!(occurrence_has_line_ranges(0..12, markdown, &lines));
-        assert!(occurrence_has_line_ranges(10..17, markdown, &lines));
+        if !keys.is_empty() {
+            joins.push(if pending_separator.is_empty() {
+                SearchTextJoin::DirectContact
+            } else {
+                SearchTextJoin::RenderSeparator {
+                    text: std::mem::take(&mut pending_separator),
+                }
+            });
+        }
+        let key = dense_key(projection.fragments.len())?;
+        let source = source_for_visible_part(&part, matched_range.start, origins, tldr_base)?;
+        let display_start = matched_range.start.max(part.visible.start);
+        let display_end = matched_range.end.min(part.visible.end);
+        if display_start < display_end {
+            slices.push(SearchDisplaySlice {
+                fragment: key,
+                start_byte: u64::try_from(display_start - part.visible.start)
+                    .map_err(|_| SearchError::ResourceLimit)?,
+                end_byte: u64::try_from(display_end - part.visible.start)
+                    .map_err(|_| SearchError::ResourceLimit)?,
+            });
+        }
+        projection.fragments.push(SearchFragment {
+            key,
+            text: part.text.to_owned(),
+            source,
+        });
+        keys.push(key);
     }
-
-    #[test]
-    fn collector_rejects_group_and_occurrence_counter_overflow() {
-        let markdown = "a\n";
-        let lines = LineIndex::with_anchors(markdown, Vec::new());
-        let owner = Owner {
-            key: 0,
-            start: 0,
-            end: markdown.len(),
-            source: None,
-        };
-        let mut groups = SearchCollector::new(markdown, &lines, 0, 1);
-        groups.total = u32::MAX;
-        assert_eq!(
-            groups.push(0..1, 0..1, &owner),
-            Err(SearchError::ResourceLimit)
-        );
-
-        let mut occurrences = SearchCollector::new(markdown, &lines, 0, 1);
-        occurrences.push(0..1, 0..1, &owner).unwrap();
-        occurrences.current.as_mut().unwrap().occurrence_count = u32::MAX;
-        assert_eq!(
-            occurrences.push(0..1, 0..1, &owner),
-            Err(SearchError::ResourceLimit)
-        );
+    if keys.is_empty() {
+        return Err(SearchError::ContentProjection);
     }
+    if !pending_separator.is_empty() {
+        // No following glyph exists in this unit. A zero-width derived
+        // endpoint closes the exact separator join without claiming display.
+        let sentinel = dense_key(projection.fragments.len())?;
+        joins.push(SearchTextJoin::RenderSeparator {
+            text: pending_separator,
+        });
+        projection.fragments.push(SearchFragment {
+            key: sentinel,
+            text: String::new(),
+            source: render_derived_source(),
+        });
+        keys.push(sentinel);
+    }
+    projection.units.push(SearchTextUnit {
+        key: unit_key,
+        fragments: keys,
+        joins,
+    });
+    Ok(VisibleProjection {
+        unit: unit_key,
+        start_byte: u64::try_from(matched_range.start - unit_range.start)
+            .map_err(|_| SearchError::ResourceLimit)?,
+        end_byte: u64::try_from(matched_range.end - unit_range.start)
+            .map_err(|_| SearchError::ResourceLimit)?,
+        display_slices: slices,
+    })
+}
+
+fn source_for_visible_part(
+    part: &VisiblePart<'_>,
+    matched_start: usize,
+    origins: &FlowOrigins,
+    tldr_base: Option<usize>,
+) -> Result<SearchFragmentSource, SearchError> {
+    if part.visible.end <= matched_start {
+        // One real glyph may precede a matched leading render break. It
+        // closes the response-local join but asserts no match provenance.
+        return Ok(render_derived_source());
+    }
+    if let Some(base) = tldr_base.filter(|base| part.visible.start >= *base) {
+        let start = part.visible.start - base;
+        let end = part.visible.end - base;
+        return Ok(SearchFragmentSource::Tldr(SearchTldrFragmentSource {
+            kind: SearchTldrSourceKind::Tldr,
+            path: "0".to_owned(),
+            start_byte: u64::try_from(start).map_err(|_| SearchError::ResourceLimit)?,
+            end_byte: u64::try_from(end).map_err(|_| SearchError::ResourceLimit)?,
+        }));
+    }
+    if let Some((location, start_byte, end_byte)) = part
+        .markdown
+        .clone()
+        .and_then(|markdown| origins.locate(markdown, part.text))
+    {
+        return Ok(SearchFragmentSource::Flow(SearchFlowFragmentSource {
+            kind: SearchFlowSourceKind::Flow,
+            location,
+            start_byte,
+            end_byte,
+        }));
+    }
+    Ok(render_derived_source())
+}
+
+fn render_derived_source() -> SearchFragmentSource {
+    SearchFragmentSource::RenderDerived(SearchRenderDerivedFragmentSource {
+        kind: SearchRenderDerivedSourceKind::RenderDerived,
+    })
+}
+
+fn dense_key(index: usize) -> Result<NonZeroU32, SearchError> {
+    let one = index.checked_add(1).ok_or(SearchError::ResourceLimit)?;
+    NonZeroU32::new(u32::try_from(one).map_err(|_| SearchError::ResourceLimit)?)
+        .ok_or(SearchError::ResourceLimit)
+}
+
+// Count-only scans still reject hidden source-map anchors without constructing
+// per-hit presentation strings or copies of the complete searched document.
+fn occurrence_is_presented(range: Range<usize>, lines: &LineIndex) -> bool {
+    let start = lines.line_index_at_byte(range.start);
+    let end = lines.line_index_at_byte(range.end.saturating_sub(1));
+    (start..=end).any(|line_index| {
+        let line_start = lines.start(line_index);
+        let line_end = lines.presented_end(line_index);
+        let intersection = range.start.max(line_start)..range.end.min(line_end);
+        intersection.start < intersection.end
+            && lines.has_presented_range(
+                line_index,
+                intersection.start - line_start..intersection.end - line_start,
+            )
+    })
 }

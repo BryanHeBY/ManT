@@ -190,6 +190,18 @@ impl<'src> MarkdownArtifact<'src> {
             .filter(move |candidate| candidate.root == root)
             .map(|candidate| candidate.markdown.clone())
     }
+
+    /// Iterate all tracked root placements in one pass for bounded consumers.
+    ///
+    /// A placement is only a candidate for exact source attribution; readers
+    /// must still prove its rendered bytes equal the logical root bytes.
+    pub fn rendered_root_ranges(
+        &self,
+    ) -> impl Iterator<Item = (ContentRootKey, Range<usize>)> + '_ {
+        self.roots
+            .iter()
+            .map(|candidate| (candidate.root, candidate.markdown.clone()))
+    }
 }
 
 /// One source-owned node and its canonical output byte range.

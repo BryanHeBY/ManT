@@ -70,6 +70,50 @@ fn empty_bundle() -> ResolvedContent {
     }
 }
 
+#[test]
+fn fixed_fragments_validate_emitted_aliases_without_claiming_raw_declarations() {
+    // The exact `.Tg Raw.Target` source was run through the pinned CVS
+    // reference first. tag.c::tag_move_id may move the target while
+    // html.c::html_make_id determines its emitted fragment independently.
+    let fixed: mant_ir::FixedBody = serde_json::from_value(serde_json::json!({
+        "surface": {"text": "", "rows": [], "runs": []},
+        "headings": [], "owners": [], "links": [], "regions": [],
+        "anchors": [{
+            "key": 1, "id": "canonical-target", "section": null,
+            "name": "Raw.Target", "renderedFragment": "Emitted.Target",
+            "authored": true, "at": {"kind": "document-end", "rowCount": 0},
+            "source": null
+        }]
+    }))
+    .expect("valid fixed anchor");
+    let bundle = ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(Document {
+            parser: None,
+            sources: Vec::new(),
+            root_source: SourceKey::FIRST,
+            body: DocumentBody::Fixed(fixed),
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        }),
+        tldr: None,
+    };
+    assert!(super::validate_fragment(&bundle, "canonical-target").is_ok());
+    assert!(super::validate_fragment(&bundle, "Emitted.Target").is_ok());
+    assert!(super::validate_fragment(&bundle, "Raw.Target").is_err());
+    let view = crate::DocumentView::new(&bundle);
+    assert!(
+        view.navigation()
+            .iter()
+            .all(|node| node.kind != NavKind::ReferenceNotice)
+    );
+    let rendered = view.render(20);
+    assert_eq!(rendered.anchor_row("Emitted.Target"), Some(0));
+    assert_eq!(rendered.anchor_row("Raw.Target"), None);
+}
+
 #[allow(clippy::too_many_lines)] // Complete key-backed fixed geometry fixture, including repeated placement.
 fn fixed_bundle() -> ResolvedContent {
     use mant_ir::{

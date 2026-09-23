@@ -237,6 +237,7 @@ pub(super) fn declaration_groups(content: ContentContext<'_>, term: &[Inline]) -
 /// Return the exact visible byte ranges selected by the same declaration
 /// state machine as [`declaration_groups`]. Callers can bind those decisions
 /// back to the original styled tree without searching flattened text.
+#[allow(dead_code)] // Source-neutral range grammar retained for later native evidence binding.
 pub(in crate::definitions) fn declaration_group_ranges(
     content: ContentContext<'_>,
     term: &[Inline],
@@ -463,6 +464,7 @@ struct SplitRanges {
     groups: Vec<Range<usize>>,
 }
 
+#[allow(dead_code)] // Range tracking is retained for the next native semantic evidence unit.
 impl SplitRanges {
     fn tracking() -> Self {
         Self {

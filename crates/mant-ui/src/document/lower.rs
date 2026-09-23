@@ -8,12 +8,52 @@ use super::{
 };
 use mant_ir::geometry::{compose_origin, coordinate, padding};
 use mant_ir::{
-    ContentContext, ContentPointKey, ContentRootKey, FixedBody, FixedLineKey, PlacementTarget,
+    ContentContext, ContentPointKey, ContentRootKey, DisplayPoint, FixedBody, FixedLineKey,
+    FixedSectionReader, PlacementTarget,
 };
+use std::num::NonZeroU32;
 
 mod fixed;
 mod lists;
 mod table;
+
+fn insert_fixed_anchor(
+    anchors: &mut HashMap<String, usize>,
+    columns: &mut HashMap<String, usize>,
+    fixed: &FixedBody,
+    first_row: usize,
+    id: &str,
+    point: DisplayPoint,
+) {
+    let location = match point {
+        DisplayPoint::RunBoundary { run, byte } => {
+            let Some(record) = fixed.surface.runs.get((run.get() - 1) as usize) else {
+                return;
+            };
+            let Some(prefix) = fixed
+                .surface
+                .run_text(run)
+                .and_then(|text| usize::try_from(byte).ok().and_then(|end| text.get(..end)))
+            else {
+                return;
+            };
+            let column = mant_render::cells::graphemes(prefix)
+                .map(|grapheme| grapheme.columns())
+                .sum::<usize>();
+            (
+                first_row + (record.row.get() - 1) as usize,
+                record.column as usize + column,
+            )
+        }
+        DisplayPoint::RowColumn { row, column } => {
+            (first_row + (row.get() - 1) as usize, column as usize)
+        }
+        DisplayPoint::DocumentEnd { row_count } => (first_row + row_count as usize, 0),
+    };
+    anchors.entry(id.to_owned()).or_insert(location.0);
+    columns.entry(id.to_owned()).or_insert(location.1);
+}
+
 pub(super) struct DocumentBuilder<'a> {
     pub(super) content: Option<ContentContext<'a>>,
     pub(super) entry_styles: Option<Arc<mant_render::EntryStyleMap<'a>>>,
@@ -24,6 +64,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
     pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
+    pub(super) fixed_anchor_columns: HashMap<String, usize>,
     fixed_line_rows: HashMap<FixedLineKey, usize>,
     fixed_point_locations: HashMap<ContentPointKey, (usize, usize)>,
     stacked_point_locations: HashMap<ContentPointKey, (usize, usize)>,
@@ -48,6 +89,7 @@ pub(super) struct BuiltDocument {
     pub(super) navigation: Vec<NavNode>,
     pub(super) content: LogicalFragment,
     pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
+    pub(super) fixed_anchor_columns: HashMap<String, usize>,
     pub(super) fixed_search_records: Vec<super::search::RenderedSearchRecord>,
     pub(super) fixed_line_rows: HashMap<FixedLineKey, usize>,
     pub(super) fixed_point_locations: HashMap<ContentPointKey, (usize, usize)>,
@@ -67,6 +109,7 @@ impl<'a> DocumentBuilder<'a> {
                 anchors: self.anchors,
             },
             link_targets: self.link_targets,
+            fixed_anchor_columns: self.fixed_anchor_columns,
             fixed_line_rows: self.fixed_line_rows,
             fixed_point_locations: self.fixed_point_locations,
             stacked_point_locations: self.stacked_point_locations,
@@ -101,6 +144,7 @@ impl<'a> DocumentBuilder<'a> {
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
             link_targets: HashMap::new(),
+            fixed_anchor_columns: HashMap::new(),
             fixed_line_rows: HashMap::new(),
             fixed_point_locations: HashMap::new(),
             stacked_point_locations: HashMap::new(),
@@ -116,25 +160,39 @@ impl<'a> DocumentBuilder<'a> {
         self.lines.push(line);
     }
 
-    /// Read final native rows without introducing Flow layout or viewport wraps.
-    pub(super) fn native_fixed_rows(&mut self, fixed: &FixedBody) {
+    /// Read final native rows and locate their marks on the same immutable surface.
+    #[allow(clippy::too_many_lines)] // One final surface and its marks share the same row map.
+    pub(super) fn native_fixed_rows(&mut self, fixed: &FixedBody, index: &SemanticIndex) {
+        let first_row = self.lines.len();
+        let mut run_scalars: HashMap<NonZeroU32, (usize, usize)> = HashMap::new();
         for row in &fixed.surface.rows {
             let first = (row.first_run.get() - 1) as usize;
             let end = first + row.run_count as usize;
             let mut spans = Vec::new();
             let mut column = 0;
+            let mut scalar = 0;
             for run in &fixed.surface.runs[first..end] {
                 if run.column > column {
                     spans.push(Span::raw(" ".repeat((run.column - column) as usize)));
+                    scalar += (run.column - column) as usize;
                 }
-                spans.push(Span::styled(
-                    fixed
-                        .surface
-                        .run_text(run.key)
-                        .expect("validated Fixed run")
-                        .to_owned(),
-                    Style::default(),
-                ));
+                let value = fixed
+                    .surface
+                    .run_text(run.key)
+                    .expect("validated Fixed run");
+                run_scalars.insert(run.key, (self.lines.len(), scalar));
+                scalar += value.chars().count();
+                let mut style = Style::default().fg(theme::TEXT);
+                if run.label.style.bold {
+                    style = style.add_modifier(Modifier::BOLD);
+                }
+                if run.label.style.underline {
+                    style = style.add_modifier(Modifier::UNDERLINED);
+                }
+                if run.label.link.is_some() {
+                    style = style.fg(theme::LINK).add_modifier(Modifier::UNDERLINED);
+                }
+                spans.push(Span::styled(value.to_owned(), style));
                 column = run.column + run.width;
             }
             if row.column_count > column {
@@ -151,6 +209,191 @@ impl<'a> DocumentBuilder<'a> {
                 links: Vec::new(),
                 reference_marks: Vec::new(),
             });
+        }
+
+        if let Some(first) = fixed.surface.rows.first() {
+            insert_fixed_anchor(
+                &mut self.anchors,
+                &mut self.fixed_anchor_columns,
+                fixed,
+                first_row,
+                super::ROOT_ID,
+                DisplayPoint::RowColumn {
+                    row: first.key,
+                    column: 0,
+                },
+            );
+        } else {
+            insert_fixed_anchor(
+                &mut self.anchors,
+                &mut self.fixed_anchor_columns,
+                fixed,
+                first_row,
+                super::ROOT_ID,
+                DisplayPoint::DocumentEnd { row_count: 0 },
+            );
+        }
+        if let Ok(reader) = FixedSectionReader::new(fixed) {
+            let has_preface = reader
+                .root_preface_parts()
+                .is_ok_and(|parts| !parts.is_empty());
+            if has_preface || !fixed.anchors.is_empty() || !index.root().is_empty() {
+                self.navigation.push(NavNode {
+                    id: super::ROOT_ID.to_owned(),
+                    target_id: super::ROOT_ID.to_owned(),
+                    title: "OVERVIEW".to_owned(),
+                    full_title: None,
+                    depth: 0,
+                    kind: NavKind::Root,
+                    has_children: !index.root().is_empty(),
+                    is_last: reader.roots().is_empty(),
+                    parent_id: None,
+                });
+                self.entry_group(
+                    super::ROOT_ID,
+                    super::ROOT_ID,
+                    index.root(),
+                    1,
+                    reader.roots().is_empty(),
+                );
+            }
+            for heading in &fixed.headings {
+                let id = heading.id.as_str();
+                insert_fixed_anchor(
+                    &mut self.anchors,
+                    &mut self.fixed_anchor_columns,
+                    fixed,
+                    first_row,
+                    id,
+                    heading.at,
+                );
+                for alias in &heading.rendered_fragment_aliases {
+                    insert_fixed_anchor(
+                        &mut self.anchors,
+                        &mut self.fixed_anchor_columns,
+                        fixed,
+                        first_row,
+                        alias.as_str(),
+                        heading.at,
+                    );
+                }
+                let depth = reader
+                    .breadcrumbs(heading.key)
+                    .map_or(0, |chain| chain.len() - 1);
+                let parent_id = heading
+                    .parent
+                    .and_then(|key| reader.heading(key))
+                    .map(|parent| parent.id.to_string());
+                let siblings = heading
+                    .parent
+                    .and_then(|parent| reader.children(parent))
+                    .unwrap_or_else(|| reader.roots());
+                self.navigation.push(NavNode {
+                    id: id.to_owned(),
+                    target_id: id.to_owned(),
+                    title: reader
+                        .label(heading.key)
+                        .filter(|label| !label.is_empty())
+                        .unwrap_or_else(|| format!("SECTION {}", heading.key)),
+                    full_title: None,
+                    depth,
+                    kind: NavKind::Section,
+                    has_children: !index.section(id).is_empty()
+                        || reader
+                            .children(heading.key)
+                            .is_some_and(|children| !children.is_empty()),
+                    is_last: siblings.last() == Some(&heading.key),
+                    parent_id,
+                });
+                self.entry_group(
+                    id,
+                    id,
+                    index.section(id),
+                    depth + 1,
+                    reader
+                        .children(heading.key)
+                        .is_none_or(<[std::num::NonZeroU32]>::is_empty),
+                );
+            }
+        }
+        for owner in &fixed.owners {
+            let at = owner
+                .head
+                .parts
+                .first()
+                .map(|slice| DisplayPoint::RunBoundary {
+                    run: slice.run,
+                    byte: slice.start_byte,
+                })
+                .or(owner.empty_point);
+            if let Some(at) = at {
+                insert_fixed_anchor(
+                    &mut self.anchors,
+                    &mut self.fixed_anchor_columns,
+                    fixed,
+                    first_row,
+                    owner.id.as_str(),
+                    at,
+                );
+            }
+        }
+        for anchor in &fixed.anchors {
+            insert_fixed_anchor(
+                &mut self.anchors,
+                &mut self.fixed_anchor_columns,
+                fixed,
+                first_row,
+                anchor.id.as_str(),
+                anchor.at,
+            );
+            insert_fixed_anchor(
+                &mut self.anchors,
+                &mut self.fixed_anchor_columns,
+                fixed,
+                first_row,
+                anchor.rendered_fragment.as_str(),
+                anchor.at,
+            );
+        }
+        for link in &fixed.links {
+            let Some(target) = link
+                .target
+                .as_ref()
+                .and_then(|target| super::inline::local_link_target(target, self.address.as_ref()))
+            else {
+                continue;
+            };
+            let identity = super::LinkIdentity::NativeFixed(link.key);
+            self.link_targets.insert(identity, target);
+            for slice in &link.label.parts {
+                let Some(&(row, first_scalar)) = run_scalars.get(&slice.run) else {
+                    continue;
+                };
+                let Some(text) = fixed.surface.run_text(slice.run) else {
+                    continue;
+                };
+                let (Ok(start), Ok(end)) = (
+                    usize::try_from(slice.start_byte),
+                    usize::try_from(slice.end_byte),
+                ) else {
+                    continue;
+                };
+                let Some(prefix) = text.get(..start) else {
+                    continue;
+                };
+                let Some(fragment) = text.get(start..end) else {
+                    continue;
+                };
+                let start_scalar = first_scalar + prefix.chars().count();
+                let end_scalar = start_scalar + fragment.chars().count();
+                if start_scalar < end_scalar {
+                    self.lines[row].links.push(LogicalLinkRange {
+                        identity,
+                        start_scalar,
+                        end_scalar,
+                    });
+                }
+            }
         }
     }
 

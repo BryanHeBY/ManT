@@ -141,6 +141,7 @@ pub(super) fn entry(
             case: facts.case,
             names: names.to_vec(),
             forms: forms.into_owned(),
+            fixed_forms: Vec::new(),
             name_bindings: Vec::new(),
             alias_groups: alias_groups.to_vec(),
             alias_of: alias_of.cloned(),

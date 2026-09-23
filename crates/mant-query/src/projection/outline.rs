@@ -16,6 +16,8 @@ use mant_protocol::{
     OutlineNode, OutlineSchema, QueryOutline,
 };
 
+mod fixed;
+
 /// Build a block-free, addressable outline for one complete query.
 ///
 /// # Errors
@@ -89,50 +91,53 @@ pub fn build_outline_with_references(
         });
     }
     if let Some(manual) = &query.document {
-        let flow = manual.flow().ok_or(ProjectionError::UnsupportedFixed)?;
-        let content = manual.content();
-        // Compact outlines inspect borrowed facts only. Forms and names are
-        // materialized exclusively when entry rows are actually requested.
-        let index = (!matches!(
-            materialized_entries,
-            EntryProjection::None | EntryProjection::Summary
-        ))
-        .then(|| SemanticIndex::build(manual));
-        if flow.heading.is_some() || !flow.blocks.is_empty() {
-            let root_entries = index.as_ref().map_or(&[][..], SemanticIndex::root);
-            let children = project_entries(
-                root_entries,
-                None,
+        if let mant_ir::DocumentBodyRef::Fixed(fixed_body) = manual.body() {
+            fixed::append_nodes(query, manual, fixed_body, &materialized_entries, &mut nodes)?;
+        } else if let mant_ir::DocumentBodyRef::Flow(flow) = manual.body() {
+            let content = manual.content();
+            // Compact outlines inspect borrowed facts only. Forms and names are
+            // materialized exclusively when entry rows are actually requested.
+            let index = (!matches!(
+                materialized_entries,
+                EntryProjection::None | EntryProjection::Summary
+            ))
+            .then(|| SemanticIndex::build(manual));
+            if flow.heading.is_some() || !flow.blocks.is_empty() {
+                let root_entries = index.as_ref().map_or(&[][..], SemanticIndex::root);
+                let children = project_entries(
+                    root_entries,
+                    None,
+                    &[],
+                    &materialized_entries,
+                    query.address.as_ref(),
+                    &|path| index.as_ref()?.owner_at(path).cloned(),
+                );
+                let root = OutlineNode::DocumentRoot {
+                    path: OutlinePath::DocumentRoot.to_string().into(),
+                    id: DOCUMENT_ROOT_ID.into(),
+                    title: DOCUMENT_ROOT_TITLE.to_owned(),
+                    entry_summary: if index.is_some() {
+                        projected_summary(root_entries, &materialized_entries)
+                    } else {
+                        borrowed_summary(content, flow.blocks, &materialized_entries)
+                    },
+                    children,
+                };
+                if !matches!(&materialized_entries, EntryProjection::Kinds { .. })
+                    || !root.children().is_empty()
+                {
+                    nodes.push(root);
+                }
+            }
+            nodes.extend(outline_nodes(
+                content,
+                flow.sections,
                 &[],
+                index.as_ref(),
                 &materialized_entries,
                 query.address.as_ref(),
-                &|path| index.as_ref()?.owner_at(path).cloned(),
-            );
-            let root = OutlineNode::DocumentRoot {
-                path: OutlinePath::DocumentRoot.to_string().into(),
-                id: DOCUMENT_ROOT_ID.into(),
-                title: DOCUMENT_ROOT_TITLE.to_owned(),
-                entry_summary: if index.is_some() {
-                    projected_summary(root_entries, &materialized_entries)
-                } else {
-                    borrowed_summary(content, &flow.blocks, &materialized_entries)
-                },
-                children,
-            };
-            if !matches!(&materialized_entries, EntryProjection::Kinds { .. })
-                || !root.children().is_empty()
-            {
-                nodes.push(root);
-            }
+            ));
         }
-        nodes.extend(outline_nodes(
-            content,
-            &flow.sections,
-            &[],
-            index.as_ref(),
-            &materialized_entries,
-            query.address.as_ref(),
-        ));
     }
     if let Some(selector) = root.as_ref() {
         let mut selected = resolve_outline_root(query, &nodes, selector, &entries)?;
@@ -170,13 +175,6 @@ fn validate_outline_request(
     root: Option<&ContentSelector>,
     policy: &mant_protocol::ReferenceProjection,
 ) -> Result<(), ProjectionError> {
-    if query
-        .document
-        .as_ref()
-        .is_some_and(|document| document.flow().is_none())
-    {
-        return Err(ProjectionError::UnsupportedFixed);
-    }
     policy
         .validate()
         .map_err(ProjectionError::InvalidReferenceProjection)?;
@@ -204,6 +202,13 @@ fn reference_inventory(
             policy.clone(),
         ));
     };
+    if document.flow().is_none() {
+        // R02b does not yet expose a Fixed reference occurrence coordinate.
+        // The policy and semantic outline remain usable; inventory is honest.
+        return Ok(mant_protocol::ReferenceInventory::not_scanned(
+            policy.clone(),
+        ));
+    }
     let scan = |scope| super::project_references(document, query.address.as_ref(), scope, policy);
     let Some(root) = root else {
         return Ok(scan(ReferenceScope::Document));
@@ -504,6 +509,13 @@ fn resolve_outline_root(
     selector: &ContentSelector,
     entries: &EntryProjection,
 ) -> Result<OutlineNode, ProjectionError> {
+    if query
+        .document
+        .as_ref()
+        .is_some_and(|document| document.flow().is_none())
+    {
+        return fixed::resolve_root(query, nodes, selector);
+    }
     let mut located = Vec::new();
     if let Some(manual) = &query.document {
         let flow = manual

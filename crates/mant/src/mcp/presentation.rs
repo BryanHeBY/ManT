@@ -171,7 +171,7 @@ fn render_scope_search(
 
 fn search_status(search: &mant_protocol::ScopeSearch) -> String {
     let mut status = format!(
-        "[search: offset={}, returned={}, totalMatchingLineGroups={}",
+        "[search: offset={}, returned={}, totalOccurrences={}",
         search.offset, search.returned, search.total
     );
     if let Some(next_offset) = search.next_offset {

@@ -64,8 +64,8 @@ fn options_are_addressable_in_v0_12_outlines_and_excerpts() {
     ));
 }
 
-/// `search_query` for `--acls` returns markdown line/column coordinates
-/// and the result node is directly selectable.
+/// Visible `--acls` search returns a closed Flow coordinate, and the result
+/// node is directly selectable.
 #[test]
 fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
     let query = query_for_document("tar", fedora44_manual("tar"));
@@ -95,11 +95,16 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
         })
         .expect("--acls option match");
     assert!(option.outline.node.path().contains("/e"));
-    let markdown = option.occurrences[0]
-        .markdown
-        .expect("canonical Markdown coordinate");
-    assert!(markdown.start_line > 1);
-    assert!(markdown.start_column > 0);
+    assert!(matches!(
+        option.location,
+        mant_protocol::SearchLocation::VisibleFlow { .. }
+    ));
+    result
+        .content_projection
+        .as_ref()
+        .expect("visible search projection")
+        .validate_match(option)
+        .expect("closed match coordinate");
     assert!(option.preview.contains("--acls"));
 
     let excerpt = mant_query::select_excerpt(

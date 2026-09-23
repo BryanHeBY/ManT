@@ -984,25 +984,28 @@ neither is available. Display fallbacks do not create aliases or new entries.
 - `--regex`: Interpret the pattern as a regular expression.
 - `--case POLICY`: Use `insensitive`, `sensitive`, or `smart` case handling.
 - `--word`: Require Unicode-aware word boundaries.
-- `--scope SCOPE`: Search `visible` text (the default) or generated `markdown` bytes, including markup.
+- `--scope SCOPE`: Search `visible` text (the default) or canonical addressable `markdown` bytes, including markup (Flow/TLDR: `--format markdown --preserve-anchors`).
 - `--context LINES`: Include surrounding rendered lines.
-- `--limit COUNT`: Limit returned matching line groups, catalog rows, or explanation owners. Explanation defaults to 50 owners and accepts 1–256; search/catalog limits remain independent.
-- `--offset COUNT`: Skip matching line groups, catalog rows, or explanation evidence for deterministic pagination. Explain uses one global cursor after evidence classification: direct entries, explicitly related entries, other-entry mentions, then ordinary mentions. Within each class it preserves document BFS order and original IR order; returned `nextOffset` continues that ordered result. Search follows canonical render order. MCP character paging is independent.
+- `--limit COUNT`: Limit returned search occurrences, catalog rows, or explanation owners. Explanation defaults to 50 owners and accepts 1–256; search/catalog limits remain independent.
+- `--offset COUNT`: Skip complete search occurrences, catalog rows, or explanation evidence for deterministic pagination. Explain uses one global cursor after evidence classification: direct entries, explicitly related entries, other-entry mentions, then ordinary mentions. Within each class it preserves document BFS order and original IR order; returned `nextOffset` continues that ordered result. Search follows content order. MCP character paging is independent.
 
 Search defaults to a case-insensitive visible literal, returns at most 100
-matching line groups, and includes no context lines. Visible and Markdown
-scopes both search the generated CommonMark render, including TLDR-only input
-without inventing an authored source or logical root. Canonical rendering uses
-logical IR, so native terminal wraps do not split search matches.
+complete occurrences, and includes no context lines. Flow/TLDR visible search
+uses the canonical Markdown visible-text extractor, including TLDR-only input
+without inventing an authored source or logical root. Markdown scope searches
+the exact addressable export bytes (`--format markdown --preserve-anchors`
+for Flow/TLDR). Viewport wraps do not split matches.
 Context cannot exceed 100 lines on either side of a match. Distinct
-occurrences on one rendered line share one pagination result. `smart`
+occurrences on one rendered line have independent pagination items. `smart`
 case becomes case-sensitive when the pattern contains uppercase text. In regex
 mode, `^` and `$` match the beginning and end of each searched line.
 Regex patterns must preserve Unicode mode and UTF-8 character boundaries;
 byte-oriented forms that disable Unicode, such as `(?-u:.)`, are rejected
-before document matching. Results carry exact generated-Markdown ranges and
-anchor-free line fragments. Terminal wrapping changes neither coordinate basis
-nor paging.
+before document matching. Visible results carry tagged unit-relative UTF-8
+locations and bounded display fragments; Markdown results carry artifact byte
+and line/column ranges. Terminal wrapping changes neither coordinate basis nor
+paging. A match across adjacent Flow roots can remain one occurrence when the
+renderer owner is the same and their exact separator is known.
 
 Use the `=` form when a value begins with a hyphen:
 
@@ -1187,8 +1190,8 @@ used by external process integrations. MCP exposes `mant_find`, `mant_outline`,
 `mant_read`, `mant_explain`, and `mant_search`. `mant_find` merges local
 Markdown candidates with the native manual index and returns canonical logical
 IDs. It accepts literal or regex name matching, explicit case policy, and a
-result offset. `mant_search` likewise exposes visible or generated-Markdown
-scope plus a global matching-line-group offset. Focused tools accept one
+result offset. `mant_search` likewise exposes visible or user-exportable Markdown
+scope plus a global occurrence offset. Focused tools accept one
 unqualified selector or canonical ID, never an
 arbitrary local path. Successful calls contain one bounded plain-text or
 CommonMark result rather than a complete AST or schema envelope. Every result
@@ -1198,7 +1201,7 @@ The largest page body is 32,768 scalars and therefore at most 131,072 UTF-8
 bytes before MCP/JSON framing; it is not a 32 KiB byte page. `maxResults` and
 `maxMatches` truncate the canonical result before character paging, so callers
 must raise those limits or narrow the query to reach omitted rows or matches.
-Result `offset` skips catalog rows, explanation owners or matching-line groups before that
+Result `offset` skips catalog rows, explanation owners or search occurrences before that
 materialization; `startChar` then pages only the resulting canonical text.
 Paging is stateless: MCP reads current local files on every call, has no update
 tool, and makes no cross-call snapshot guarantee.

@@ -144,11 +144,7 @@ fn literal_anchor_code_is_searchable_and_cannot_steal_entry_ownership() {
                         !matches!(hit.outline.node, OutlineNodeReference::DocumentEntry { .. }),
                         "{pattern}: {hit:?}"
                     );
-                    assert!(
-                        hit.occurrences
-                            .iter()
-                            .any(|occurrence| occurrence.matched_text.contains(pattern))
-                    );
+                    assert!(hit.matched_text.contains(pattern));
                 }
             }
         }

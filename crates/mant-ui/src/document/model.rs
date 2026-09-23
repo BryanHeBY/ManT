@@ -1,5 +1,6 @@
 //! Width-independent logical rows produced from the document IR.
 
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use mant_ir::{
@@ -86,6 +87,8 @@ pub(super) struct ReferenceMark {
 pub(crate) enum LinkIdentity {
     /// A link occurrence that resolves in the document content store.
     Content(LinkOccurrenceKey),
+    /// Native Fixed occurrence keys live outside the Flow content store.
+    NativeFixed(NonZeroU32),
     /// The generated TLDR more-information link, which has no content store.
     TldrMoreInformation,
 }

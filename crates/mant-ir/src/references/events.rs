@@ -112,6 +112,12 @@ pub enum ContentReveal {
         /// Zero-based item index.
         item_index: u32,
     },
+    /// Exact native owner in a Fixed body. The one-based key resolves only
+    /// against the containing document's validated `FixedBody.owners`.
+    FixedOwner {
+        /// Dense, result-local native owner key.
+        key: std::num::NonZeroU32,
+    },
     /// Exact inline destination, including zero-width anchors.
     Inline {
         /// Snapshot-local inline node position.
@@ -128,11 +134,26 @@ pub enum ContentRevealRef<'a> {
     Section(&'a [u32]),
     /// Original item.
     Owner(EntryOwnerLocationRef<'a>),
+    /// Exact native owner key in a Fixed body.
+    FixedOwner(std::num::NonZeroU32),
     /// Exact inline node.
     Inline(ContentLocationRef<'a>),
 }
 
 impl ContentReveal {
+    /// Resolve a Fixed owner only against the exact containing Fixed body.
+    /// A Flow document or an out-of-range result-local key is not a target.
+    #[must_use]
+    pub fn fixed_owner<'a>(&self, document: &'a crate::Document) -> Option<&'a crate::OwnerMark> {
+        let Self::FixedOwner { key } = self else {
+            return None;
+        };
+        let crate::DocumentBodyRef::Fixed(fixed) = document.body() else {
+            return None;
+        };
+        fixed.owners.get((key.get() - 1) as usize)
+    }
+
     /// Borrow an exact destination without allocating another coordinate path.
     #[must_use]
     pub fn as_ref(&self) -> ContentRevealRef<'_> {
@@ -148,6 +169,7 @@ impl ContentReveal {
                 blocks,
                 item_index: *item_index,
             }),
+            Self::FixedOwner { key } => ContentRevealRef::FixedOwner(*key),
             Self::Inline { location } => ContentRevealRef::Inline(location.as_ref()),
         }
     }
@@ -165,6 +187,7 @@ impl ContentRevealRef<'_> {
                 .len()
                 .saturating_add(owner.blocks.len())
                 .saturating_add(1),
+            Self::FixedOwner(_) => 1,
             Self::Inline(location) => location.depth(),
         }
     }
@@ -199,6 +222,10 @@ impl ContentRevealRef<'_> {
                         .checked_ilog10()
                         .map_or(1, |n| n as usize + 1)
             }
+            Self::FixedOwner(key) => {
+                r#"{"kind":"fixed-owner","key":}"#.len()
+                    + key.get().checked_ilog10().map_or(1, |n| n as usize + 1)
+            }
             Self::Inline(location) => location
                 .encoded_len()
                 .saturating_add(r#"{"kind":"inline","location":}"#.len()),
@@ -223,6 +250,7 @@ impl ContentRevealRef<'_> {
                 blocks: owner.blocks.to_vec(),
                 item_index: owner.item_index,
             },
+            Self::FixedOwner(key) => ContentReveal::FixedOwner { key },
             Self::Inline(location) => ContentReveal::Inline {
                 location: location.to_owned()?,
             },

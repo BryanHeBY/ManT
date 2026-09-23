@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DocumentAddress, SearchCase, SearchHit, SearchQuery, SearchRender, SearchScope, SearchSyntax,
-    SourceContext, default_search_limit,
+    DocumentAddress, SearchCase, SearchContentProjection, SearchMatch, SearchQuery, SearchRender,
+    SearchScope, SearchSyntax, SourceContext, default_search_limit,
 };
 
 /// Maximum number of initial documents accepted by the native scope contract.
@@ -203,11 +203,11 @@ pub enum ScopeQueryView {
         #[serde(default)]
         #[schemars(range(max = 100))]
         context_lines: u16,
-        /// Global maximum number of matching line groups returned.
+        /// Global maximum number of complete occurrences returned.
         #[serde(default = "default_search_limit")]
         #[schemars(range(min = 1, max = 10000))]
         limit: u32,
-        /// Global number of matching line groups skipped.
+        /// Global number of complete occurrences skipped.
         #[serde(default)]
         offset: u32,
     },
@@ -366,14 +366,14 @@ pub struct ScopedSearchDocument {
     /// Source table resolving authored hit coordinates, when present.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_context: Option<SourceContext>,
-    /// Closed response-local store resolving every retained logical root.
+    /// Closed response-local visible units for retained occurrences.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub content_projection: Option<mant_ir::ContentProjection>,
-    /// Canonical Markdown coordinate space for this document's hits.
+    pub content_projection: Option<SearchContentProjection>,
+    /// Coordinate space for this document's hits.
     pub render: SearchRender,
-    /// Matching line groups retained from the globally paginated result set.
+    /// Complete occurrences retained from the globally paginated result set.
     /// Their ordinals are global across all documents in the scope.
-    pub matches: Vec<SearchHit>,
+    pub matches: Vec<SearchMatch>,
 }
 
 #[derive(Deserialize)]
@@ -387,9 +387,9 @@ struct ScopedSearchDocumentWire {
     pub depth: u16,
     pub source_context: Option<SourceContext>,
     #[serde(default)]
-    pub content_projection: Option<mant_ir::ContentProjection>,
+    pub content_projection: Option<SearchContentProjection>,
     pub render: SearchRender,
-    pub matches: Vec<SearchHit>,
+    pub matches: Vec<SearchMatch>,
 }
 
 impl<'de> Deserialize<'de> for ScopedSearchDocument {
@@ -400,36 +400,258 @@ impl<'de> Deserialize<'de> for ScopedSearchDocument {
             value.matches.iter().filter_map(|hit| hit.node_source),
         )
         .map_err(serde::de::Error::custom)?;
-        crate::document::validate_projection_sources(
-            value.source_context.as_ref(),
-            value.content_projection.as_ref(),
-        )
-        .map_err(serde::de::Error::custom)?;
-        crate::search::validate_search_content(value.content_projection.as_ref(), &value.matches)
-            .map_err(serde::de::Error::custom)?;
+        if let Some(projection) = &value.content_projection {
+            projection.validate().map_err(serde::de::Error::custom)?;
+        }
         Ok(value)
     }
 }
 
-/// Globally paginated logical-root search over a resolved document scope.
+/// Coverage of one scanned scope document, including zero-hit documents.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScopedSearchCoverage {
+    /// Stable logical document identity.
+    pub address: DocumentAddress,
+    /// Minimum distance from any initial document.
+    pub depth: u16,
+    /// Source table closing diagnostic spans, absent for TLDR-only input.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_context: Option<SourceContext>,
+    /// Whether all semantic associations were verified.
+    pub semantics_complete: bool,
+    /// Exact count of diagnostics replaced by one summary.
+    pub coverage_details_omitted: u32,
+    /// Bounded producer and validation findings.
+    pub diagnostics: Vec<mant_ir::Diagnostic>,
+}
+
+/// Exact schema marker for a scoped search response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum ScopeSearchSchema {
+    /// Version 0.12 of the pre-stable scoped search contract.
+    #[serde(rename = "mant.scope-search/v0.12")]
+    V0Dot12,
+}
+
+/// Globally paginated occurrence search over a resolved document scope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopeSearch {
+    /// Exact scoped-search schema discriminator.
+    pub schema: ScopeSearchSchema,
     /// Normalized search configuration.
     pub query: SearchQuery,
-    /// Matching line groups across all documents before pagination.
+    /// Complete occurrences across all documents before pagination.
     pub total: u32,
-    /// Matching line groups present in this response.
+    /// Complete occurrences present in this response.
     pub returned: u32,
     /// Applied global zero-based offset.
     pub offset: u32,
-    /// Whether additional matching line groups remain.
+    /// Whether additional complete occurrences remain.
     pub truncated: bool,
     /// Global offset for the next page.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<u32>,
+    /// Conjunction of every scanned document's semantic completeness.
+    pub semantics_complete: bool,
+    /// Per-document coverage, including zero-hit and paginated-away documents.
+    pub coverage_by_document: Vec<ScopedSearchCoverage>,
     /// Non-empty document groups in scope order.
     pub documents: Vec<ScopedSearchDocument>,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "ScopeSearch", rename_all = "camelCase", deny_unknown_fields)]
+struct ScopeSearchWire {
+    schema: ScopeSearchSchema,
+    query: SearchQuery,
+    total: u32,
+    returned: u32,
+    offset: u32,
+    truncated: bool,
+    next_offset: Option<u32>,
+    semantics_complete: bool,
+    coverage_by_document: Vec<ScopedSearchCoverage>,
+    documents: Vec<ScopedSearchDocument>,
+}
+
+impl<'de> Deserialize<'de> for ScopeSearch {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopeSearchWire::deserialize(deserializer)?;
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
+
+impl ScopeSearch {
+    /// Validate occurrence pagination and all returned-document coverage links.
+    ///
+    /// # Errors
+    /// Returns malformed page counts, duplicate addresses or missing coverage.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.query.limit == 0
+            || self.query.limit > 10_000
+            || self.query.context_lines > 100
+            || self.returned > self.query.limit
+        {
+            return Err("scope search request or page exceeds protocol bounds");
+        }
+        if self.coverage_by_document.len() > MAX_SCOPE_DOCUMENT_LIMIT as usize {
+            return Err("scope search coverage exceeds document bound");
+        }
+        let mut retained = Vec::new();
+        let mut last_group_index = None;
+        let mut projection_bytes = 0usize;
+        let mut metadata_bytes = ScopeSearchMetadataCounter::default();
+        for group in &self.documents {
+            if group.matches.is_empty() {
+                return Err("scope search document group has no retained occurrences");
+            }
+            retained.extend(group.matches.iter().cloned());
+            let group_index = self
+                .coverage_by_document
+                .iter()
+                .position(|coverage| {
+                    coverage.address == group.address && coverage.depth == group.depth
+                })
+                .ok_or("scope search document group has no coverage entry")?;
+            if last_group_index.is_some_and(|last| group_index <= last) {
+                return Err("scope search document groups are not in scope order");
+            }
+            if group.source_context != self.coverage_by_document[group_index].source_context {
+                return Err("scope search hit group and coverage source tables disagree");
+            }
+            if let Some(context) = &group.source_context {
+                metadata_bytes.add(context)?;
+            }
+            crate::document::validate_optional_source_spans(
+                group.source_context.as_ref(),
+                group.matches.iter().filter_map(|hit| hit.node_source),
+            )
+            .map_err(|_| "scope search hit source is not closed by its source table")?;
+            last_group_index = Some(group_index);
+            crate::search::validate_search_content(
+                self.query.scope,
+                &group.render,
+                group.content_projection.as_ref(),
+                &group.matches,
+            )?;
+            if let Some(projection) = &group.content_projection {
+                add_scope_projection_bytes(projection, &mut projection_bytes)?;
+            }
+        }
+        crate::search::validate_search_page(
+            self.offset,
+            self.returned,
+            self.total,
+            self.truncated,
+            self.next_offset,
+            &retained,
+        )?;
+        crate::search::validate_search_presentation(&retained)?;
+        if self.coverage_by_document.is_empty() && !self.documents.is_empty() {
+            return Err("scope search has no scanned-document coverage");
+        }
+        for (index, coverage) in self.coverage_by_document.iter().enumerate() {
+            metadata_bytes.add(coverage)?;
+            if self.coverage_by_document[..index]
+                .iter()
+                .any(|prior| prior.address == coverage.address)
+            {
+                return Err("scope search duplicates a coverage document");
+            }
+            crate::search::validate_search_coverage(
+                coverage.semantics_complete,
+                coverage.coverage_details_omitted,
+                &coverage.diagnostics,
+            )?;
+            crate::document::validate_optional_source_spans(
+                coverage.source_context.as_ref(),
+                coverage
+                    .diagnostics
+                    .iter()
+                    .filter_map(|diagnostic| diagnostic.source),
+            )
+            .map_err(|_| "scope search diagnostic source is not closed by its source table")?;
+        }
+        if self.semantics_complete
+            != self
+                .coverage_by_document
+                .iter()
+                .all(|entry| entry.semantics_complete)
+        {
+            return Err("scope search completeness disagrees with scanned documents");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct ScopeSearchMetadataCounter {
+    bytes: usize,
+}
+
+impl ScopeSearchMetadataCounter {
+    fn add<T: Serialize>(&mut self, value: &T) -> Result<(), &'static str> {
+        serde_json::to_writer(self, value)
+            .map_err(|_| "scope search metadata exceeds global byte budget")
+    }
+}
+
+impl std::io::Write for ScopeSearchMetadataCounter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.bytes = self
+            .bytes
+            .checked_add(bytes.len())
+            .filter(|total| *total <= crate::MAX_SEARCH_PRESENTATION_BYTES)
+            .ok_or_else(|| std::io::Error::other("scope search metadata byte budget"))?;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod metadata_budget_tests {
+    use super::ScopeSearchMetadataCounter;
+
+    #[test]
+    fn serialized_diagnostics_and_source_tables_share_one_response_limit() {
+        let mut counter = ScopeSearchMetadataCounter {
+            bytes: crate::MAX_SEARCH_PRESENTATION_BYTES - 4,
+        };
+        assert!(counter.add(&"long diagnostic").is_err());
+        assert!(counter.bytes <= crate::MAX_SEARCH_PRESENTATION_BYTES);
+    }
+}
+
+fn add_scope_projection_bytes(
+    projection: &SearchContentProjection,
+    total: &mut usize,
+) -> Result<(), &'static str> {
+    for fragment in &projection.fragments {
+        *total = total
+            .checked_add(fragment.text.len())
+            .ok_or("scope search projection byte count overflows")?;
+    }
+    for unit in &projection.units {
+        for join in &unit.joins {
+            if let crate::SearchTextJoin::AuthoredSeparator { text }
+            | crate::SearchTextJoin::RenderSeparator { text } = join
+            {
+                *total = total
+                    .checked_add(text.len())
+                    .ok_or("scope search projection byte count overflows")?;
+            }
+        }
+    }
+    if *total > crate::search::MAX_SEARCH_PROJECTION_BYTES {
+        return Err("scope search projection exceeds global byte budget");
+    }
+    Ok(())
 }
 
 /// One readable document's contribution to the evidence result.
@@ -579,8 +801,8 @@ pub struct ScopeExplanation {
 }
 
 /// Complete bounded multi-document response.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:scope-query:v0.12"))]
 pub struct ScopeQueryResponse {
     /// Exact response schema discriminator.
@@ -589,6 +811,39 @@ pub struct ScopeQueryResponse {
     pub scope: ResolvedDocumentScope,
     /// Requested projection over that graph.
     pub result: ScopeQueryResult,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    remote = "ScopeQueryResponse",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ScopeQueryResponseWire {
+    schema: ScopeQuerySchema,
+    scope: ResolvedDocumentScope,
+    result: ScopeQueryResult,
+}
+
+impl<'de> Deserialize<'de> for ScopeQueryResponse {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopeQueryResponseWire::deserialize(deserializer)?;
+        if let ScopeQueryResult::Search { search } = &value.result
+            && (search.coverage_by_document.len() != value.scope.documents.len()
+                || !search
+                    .coverage_by_document
+                    .iter()
+                    .zip(&value.scope.documents)
+                    .all(|(coverage, scoped)| {
+                        coverage.address == scoped.address && coverage.depth == scoped.depth
+                    }))
+        {
+            return Err(serde::de::Error::custom(
+                "scope search coverage must include every scanned document in scope order",
+            ));
+        }
+        Ok(value)
+    }
 }
 
 // Remote derive keeps the public schema closed while validating cross-field

@@ -16,6 +16,8 @@ pub(super) fn normalize(parsed: Cli, color: ColorMode) -> Result<Command, clap::
 }
 
 fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
+    #[cfg(feature = "annotated-preview")]
+    validate_annotated_preview(&parsed, color)?;
     validate_scope_mode(&parsed, color)?;
     validate_machine_display(&parsed, color)?;
     if parsed.mcp {
@@ -79,6 +81,8 @@ fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap:
             max_documents: parsed.max_documents,
             input_path: parsed.input,
             input_format: parsed.input_format,
+            #[cfg(feature = "annotated-preview")]
+            annotated_preview: parsed.annotated_preview,
             configured_source: parsed.source,
             manual_section: parsed.man_section,
             tldr: parsed.tldr,
@@ -108,6 +112,23 @@ fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap:
         },
         preserve_anchors: parsed.preserve_anchors,
     })
+}
+
+#[cfg(feature = "annotated-preview")]
+fn validate_annotated_preview(parsed: &Cli, color: ColorMode) -> Result<(), clap::Error> {
+    if !parsed.annotated_preview {
+        return Ok(());
+    }
+    if parsed.input.as_deref().is_none_or(|path| path == "-")
+        || parsed.input_format != Some(InputFormatMode::Roff)
+    {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--annotated-preview requires --input PATH and explicit --input-format roff",
+            color,
+        ));
+    }
+    Ok(())
 }
 
 fn validate_machine_display(parsed: &Cli, color: ColorMode) -> Result<(), clap::Error> {
@@ -434,6 +455,9 @@ fn validate_manual_source(
     Ok(())
 }
 
+// These flags preserve independent CLI spelling during normalization; they
+// are not parallel document-state sources after the request is constructed.
+#[allow(clippy::struct_excessive_bools)]
 struct QuerySourceOptions {
     request_json: bool,
     selectors: Vec<String>,
@@ -443,6 +467,8 @@ struct QuerySourceOptions {
     max_documents: Option<u32>,
     input_path: Option<String>,
     input_format: Option<InputFormatMode>,
+    #[cfg(feature = "annotated-preview")]
+    annotated_preview: bool,
     configured_source: Option<String>,
     manual_section: Option<String>,
     tldr: bool,
@@ -464,6 +490,10 @@ fn normalize_query_source(
     let source = if options.request_json {
         QuerySource::StdinJson
     } else if let Some(path) = options.input_path {
+        #[cfg(feature = "annotated-preview")]
+        if options.annotated_preview {
+            return Ok(QuerySource::AnnotatedPreview { path, view });
+        }
         let format = options.input_format.map_or(InputFormat::Auto, Into::into);
         if path == "-" {
             if format == InputFormat::Auto {

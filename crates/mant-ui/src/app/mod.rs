@@ -451,6 +451,21 @@ impl App {
     }
 
     pub(super) fn copy_selected_node(&mut self, format: CopyFormat) {
+        if self
+            .session
+            .current_bundle
+            .document
+            .as_ref()
+            .is_some_and(|document| matches!(document.body(), mant_ir::DocumentBodyRef::Fixed(_)))
+        {
+            // A Fixed visual selection is exact. A section/node excerpt is
+            // not yet defined: its semantic parts omit native drawing and
+            // blank rows, and Markdown would invent a Flow structure.
+            self.report_notice(
+                "For Fixed pages, drag across text and use Copy Selection".to_owned(),
+            );
+            return;
+        }
         let Some(node) = self.session.document.navigation().get(self.selected) else {
             self.report_notice("No document node is selected".to_owned());
             return;
@@ -688,6 +703,22 @@ fn validate_fragment(bundle: &ResolvedContent, fragment: &str) -> Result<(), Str
             Err(format!("No outline node matches #{fragment}"))
         };
     };
+    if matches!(document.body(), mant_ir::DocumentBodyRef::Fixed(_)) {
+        let index = mant_ir::DocumentIndex::build(document);
+        let matches = index.fragment_target(fragment).is_some();
+        return if matches && tldr {
+            Err(format!("Ambiguous local target #{fragment}"))
+        } else if matches || tldr {
+            Ok(())
+        } else if index
+            .ambiguous_fragments()
+            .any(|(alias, _)| alias.as_str() == fragment)
+        {
+            Err(format!("Ambiguous local target #{fragment}"))
+        } else {
+            Err(format!("No outline node matches #{fragment}"))
+        };
+    }
     let mut found: Option<mant_ir::ContentReveal> = None;
     let mut ambiguous = false;
     let mut position_limited = false;

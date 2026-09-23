@@ -82,6 +82,20 @@ fn explanation_rejects_unknown_sources_in_previews_and_support_blocks() {
 
 #[test]
 fn scope_results_validate_spans_against_each_document_context() {
+    let mut coverage: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    coverage["result"]["search"]["coverageByDocument"][0]["diagnostics"] = serde_json::json!([{"level":"warning","impact":"none", "message":"source finding",
+            "source":{"source":2,"line":1,"column":1}}]);
+    assert!(serde_json::from_value::<ScopeQueryResponse>(coverage).is_err());
+
+    let mut missing_coverage_context: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    missing_coverage_context["result"]["search"]["coverageByDocument"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("sourceContext");
+    missing_coverage_context["result"]["search"]["coverageByDocument"][0]["diagnostics"] = serde_json::json!([{"level":"warning","impact":"none", "message":"source finding",
+            "source":{"source":1,"line":1,"column":1}}]);
+    assert!(serde_json::from_value::<ScopeQueryResponse>(missing_coverage_context).is_err());
+
     let mut search: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
     search["result"]["search"]["documents"][0]["matches"][0]["nodeSource"] =
         serde_json::json!({"source":2,"line":1,"column":1});
@@ -126,20 +140,18 @@ fn scope_results_validate_spans_against_each_document_context() {
 }
 
 #[test]
-fn search_rejects_empty_hit_and_unknown_projection_source() {
-    let mut empty_hit: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
-    empty_hit["result"]["search"]["documents"][0]["matches"][0]["occurrences"] =
-        serde_json::json!([]);
-    empty_hit["result"]["search"]["documents"][0]["matches"][0]["occurrenceCount"] =
-        serde_json::json!(0);
-    assert!(serde_json::from_value::<ScopeQueryResponse>(empty_hit).is_err());
+fn search_rejects_old_grouped_hit_and_invalid_projection_source() {
+    let mut old_group: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    let matched = &mut old_group["result"]["search"]["documents"][0]["matches"][0];
+    matched.as_object_mut().unwrap().remove("location");
+    matched["occurrences"] = serde_json::json!([{"matchedText":"index","root":1}]);
+    assert!(serde_json::from_value::<ScopeQueryResponse>(old_group).is_err());
 
-    let mut unknown_source: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
-    unknown_source["result"]["search"]["documents"][0]["contentProjection"]["contentStore"]["atoms"]
-        [0]["provenance"] = serde_json::json!({
-        "kind":"authored", "span":{"source":2,"line":1,"column":1}
+    let mut bad_source: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    bad_source["result"]["search"]["documents"][0]["contentProjection"]["fragments"][0]["source"] = serde_json::json!({
+        "kind":"tldr", "path":"9", "startByte":0, "endByte":5
     });
-    assert!(serde_json::from_value::<ScopeQueryResponse>(unknown_source).is_err());
+    assert!(serde_json::from_value::<ScopeQueryResponse>(bad_source).is_err());
 }
 
 #[test]

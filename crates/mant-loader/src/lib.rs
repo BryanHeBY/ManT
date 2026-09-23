@@ -29,7 +29,7 @@ pub use manual::{is_command_manual_section, parenthesized_manual_reference};
 #[cfg(feature = "roff")]
 pub use manual_input::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, parse_manual_bytes, parse_manual_page,
-    parse_manual_source, parse_manual_source_with_report,
+    parse_manual_source, parse_manual_source_with_report, read_standalone_manual_bytes,
 };
 pub use manual_paths::{
     ManualPathDiagnostic, ManualRootDiscovery, discover_manual_roots, inspect_manual_roots,

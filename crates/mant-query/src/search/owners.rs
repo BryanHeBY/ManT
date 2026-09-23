@@ -28,6 +28,13 @@ pub(super) struct OwnerIndex<'map, 'src> {
 }
 
 impl<'map, 'src> OwnerIndex<'map, 'src> {
+    pub(super) fn tldr_start(&self, key: usize) -> Option<usize> {
+        self.tldr
+            .as_ref()
+            .filter(|owner| owner.key == key)
+            .map(|owner| owner.start)
+    }
+
     pub(super) fn new(
         artifact: &'map MarkdownArtifact<'src>,
         content: Option<mant_ir::ContentContext<'src>>,

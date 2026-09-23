@@ -1,14 +1,10 @@
 //! Pure reports over an already resolved scope; no loading or query execution.
+use super::search::{render_scoped_search_markdown, render_scoped_search_text_with};
 use super::{
     SearchTextRole, render_scope_explanation_markdown, render_scope_explanation_text_with,
-    render_search_markdown, render_search_text_with,
 };
 use crate::{TextPresentation, TextRole, sanitize_terminal_text};
-use mant_ir::DocumentMeta;
-use mant_protocol::{
-    QuerySearch, ScopeQueryResponse, ScopeQueryResult, ScopedSearchDocument, SearchQuery,
-    SearchSchema,
-};
+use mant_protocol::{ScopeQueryResponse, ScopeQueryResult};
 use std::fmt::Write as _;
 
 /// A scope report span. Hosts may decorate it without changing report ordering.
@@ -69,6 +65,19 @@ pub fn render_scope_query_text_with(
         }
         ScopeQueryResult::Search { search } => {
             let mut output = String::new();
+            if search.documents.is_empty() {
+                if search.total == 0 {
+                    output.push_str("No matches for \"");
+                    output.push_str(&sanitize_terminal_text(&search.query.pattern));
+                    output.push_str("\" in scope.");
+                } else {
+                    let _ = write!(
+                        output,
+                        "No occurrences returned at global offset {} ({} total).",
+                        search.offset, search.total
+                    );
+                }
+            }
             for (index, found) in search.documents.iter().enumerate() {
                 if index > 0 {
                     output.push_str("\n\n");
@@ -78,13 +87,21 @@ pub fn render_scope_query_text_with(
                     &sanitize_terminal_text(&found.address.catalog_path()),
                 ));
                 output.push('\n');
-                let rendered = render_search_text_with(
-                    &scoped_search_projection(found, &search.query),
-                    |role, text| {
+                let rendered =
+                    render_scoped_search_text_with(found, &search.query, |role, text| {
                         decorate(ScopeTextRole::Search(role), &sanitize_terminal_text(text))
-                    },
+                    });
+                output.push_str(rendered.trim_end());
+            }
+            if let Some(next) = search.next_offset {
+                let _ = write!(
+                    output,
+                    "\n\n{} total occurrences; next occurrence offset {next}.",
+                    search.total
                 );
-                output.push_str(rendered.trim());
+            }
+            if !search.semantics_complete {
+                output.push_str("\n\nSemantic coverage incomplete.");
             }
             output
         }
@@ -124,6 +141,21 @@ pub fn render_scope_query_markdown_with(
         }
         ScopeQueryResult::Search { search } => {
             let mut output = String::new();
+            if search.documents.is_empty() {
+                if search.total == 0 {
+                    output.push_str("No matches for ");
+                    output.push_str(&mant_codec::encode::commonmark_code_span(
+                        &search.query.pattern,
+                    ));
+                    output.push_str(" in scope.");
+                } else {
+                    let _ = write!(
+                        output,
+                        "No occurrences returned at global offset {} ({} total).",
+                        search.offset, search.total
+                    );
+                }
+            }
             for (index, found) in search.documents.iter().enumerate() {
                 if index > 0 {
                     output.push_str("\n\n");
@@ -131,16 +163,17 @@ pub fn render_scope_query_markdown_with(
                 output.push_str("## ");
                 output.push_str(&identity(&found.address.catalog_path()));
                 output.push('\n');
-                let mut local = scoped_search_projection(found, &search.query);
-                local.label = identity(&local.label);
-                if let Some(section) = local
-                    .meta
-                    .as_mut()
-                    .and_then(|meta| meta.manual_section.as_mut())
-                {
-                    *section = identity(section);
-                }
-                output.push_str(render_search_markdown(&local).trim());
+                output.push_str(&render_scoped_search_markdown(found));
+            }
+            if let Some(next) = search.next_offset {
+                let _ = write!(
+                    output,
+                    "\n\n{} total occurrences. Next offset: `{next}`.",
+                    search.total
+                );
+            }
+            if !search.semantics_complete {
+                output.push_str("\n\nSemantic coverage incomplete.");
             }
             output
         }
@@ -169,40 +202,6 @@ fn write_reference_limits(output: &mut String, response: &ScopeQueryResponse) {
         if let Some(limit) = limited.retention_limit {
             let _ = write!(output, " ({limit:?})");
         }
-    }
-}
-
-// Each group is already globally paginated. Local reports must not invent
-// independent continuation hints or replace the retained global hit ordinals.
-fn scoped_search_projection(found: &ScopedSearchDocument, query: &SearchQuery) -> QuerySearch {
-    let (label, meta) = match &found.address {
-        mant_protocol::DocumentAddress::Manual {
-            name,
-            manual_section,
-        } => (
-            name.clone(),
-            Some(DocumentMeta {
-                manual_section: Some(manual_section.clone()),
-                ..DocumentMeta::default()
-            }),
-        ),
-        mant_protocol::DocumentAddress::Markdown { path, .. } => (path.clone(), None),
-    };
-    let returned = u32::try_from(found.matches.len()).unwrap_or(u32::MAX);
-    QuerySearch {
-        schema: SearchSchema::V0Dot12,
-        label,
-        source_context: found.source_context.clone(),
-        meta,
-        content_projection: found.content_projection.clone(),
-        query: query.clone(),
-        render: found.render.clone(),
-        total: returned,
-        returned,
-        offset: 0,
-        truncated: false,
-        next_offset: None,
-        matches: found.matches.clone(),
     }
 }
 

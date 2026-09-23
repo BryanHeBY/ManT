@@ -24,8 +24,13 @@ use native as minus;
 /// # Errors
 ///
 /// Returns terminal setup, rendering, input, or restoration errors.
-pub(crate) fn page_text(text: String, prompt: &str) -> io::Result<()> {
+pub(crate) fn page_text_with_mode(text: String, prompt: &str, no_wrap: bool) -> io::Result<()> {
     let pager = Pager::new();
+    // A Fixed page already has final native physical rows. The pager may
+    // crop them horizontally, but must not fabricate another line layout.
+    if no_wrap {
+        pager.horizontal_scroll(true).map_err(pager_error)?;
+    }
     pager.set_text(text).map_err(pager_error)?;
     pager.set_prompt(prompt).map_err(pager_error)?;
 

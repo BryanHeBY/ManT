@@ -37,8 +37,8 @@ impl<'a> SearchPlan<'a> {
         super::search_with_matcher(document, &request, &self.matcher)
     }
 
-    /// Count every group through the same matcher and Markdown reader, without
-    /// retaining a page or manufacturing a one-result response for the caller.
+    /// Count every occurrence through the same matcher and Markdown reader,
+    /// without retaining a page or materializing response-local units.
     pub(crate) fn count(&self, document: &crate::ResolvedContent) -> Result<u32, SearchError> {
         self.execute(document, u32::MAX, 1)
             .map(|result| result.total)

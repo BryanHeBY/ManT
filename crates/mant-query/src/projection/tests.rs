@@ -167,7 +167,7 @@ fn tldr() -> TldrDocument {
 }
 
 #[test]
-fn fixed_body_does_not_masquerade_as_an_empty_flow_projection() {
+fn empty_fixed_body_uses_fixed_outline_without_flow_excerpt() {
     let mut query = query();
     query.document.as_mut().unwrap().body = mant_ir::DocumentBody::Fixed(mant_ir::FixedBody {
         surface: mant_ir::DisplaySurface {
@@ -181,18 +181,16 @@ fn fixed_body_does_not_masquerade_as_an_empty_flow_projection() {
         anchors: Vec::new(),
         regions: Vec::new(),
     });
-    assert_eq!(
-        build_outline(&query),
-        Err(ProjectionError::UnsupportedFixed)
-    );
+    let outline = build_outline(&query).expect("empty Fixed outline remains valid");
+    assert!(outline.nodes.is_empty());
     assert_eq!(
         select_excerpt(&query, &[ContentSelector::path("root")]),
         Err(ProjectionError::UnsupportedFixed)
     );
-    assert!(matches!(
-        super::select_explanation(&query, "needle"),
-        Err(crate::ExplanationError::UnsupportedFixed)
-    ));
+    let explanation =
+        super::select_explanation(&query, "needle").expect("empty Fixed explanation remains valid");
+    assert_eq!(explanation.total, 0);
+    assert!(explanation.supports.is_empty());
     let inventory = super::project_references(
         query.document.as_ref().unwrap(),
         None,

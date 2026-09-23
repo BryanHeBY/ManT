@@ -44,6 +44,12 @@ pub(super) struct ReferenceNavigation {
 
 impl ReferenceNavigation {
     pub(super) fn build(document: &Document) -> Self {
+        // The structural reference scanner addresses Flow content locations.
+        // Fixed links remain directly clickable through their final surface
+        // marks; they have no Flow-style sidebar location to inventory here.
+        if matches!(document.body(), mant_ir::DocumentBodyRef::Fixed(_)) {
+            return Self::default();
+        }
         let mut result = Self::default();
         let mut payload = 0usize;
         let mut budget = mant_ir::ReferenceWorkBudget::new(ReferenceScanLimits::default());

@@ -68,6 +68,17 @@ fn query(pattern: &str) -> SearchQuery {
 }
 
 #[test]
+fn aggregate_metadata_budget_is_not_repaid_between_documents() {
+    let mut bytes = mant_protocol::MAX_SEARCH_PRESENTATION_BYTES - 4;
+    let error = super::accumulate_metadata_bytes(&"diagnostic", &mut bytes)
+        .expect_err("serialized coverage must count against the aggregate budget");
+    assert!(matches!(
+        error,
+        crate::ScopeExecutionError::Search(crate::search::SearchError::ResourceLimit)
+    ));
+}
+
+#[test]
 fn tldr_only_scope_search_retains_rendered_hit_without_authored_source() {
     let contents = vec![tldr_only("quick")];
     let graph = scope(&contents);
@@ -80,7 +91,9 @@ fn tldr_only_scope_search_retains_rendered_hit_without_authored_source() {
     assert_eq!(result.total, 1);
     assert_eq!(result.documents.len(), 1);
     assert!(result.documents[0].source_context.is_none());
-    assert!(result.documents[0].content_projection.is_none());
+    assert!(result.documents[0].content_projection.is_some());
+    assert_eq!(result.coverage_by_document.len(), 1);
+    assert!(result.coverage_by_document[0].source_context.is_none());
     assert!(result.documents[0].matches[0].node_source.is_none());
     serde_json::from_value::<mant_protocol::ScopeSearch>(serde_json::to_value(result).unwrap())
         .unwrap();
@@ -97,6 +110,7 @@ fn zero_hit_tldr_only_search_stays_empty() {
     .unwrap();
     assert_eq!(result.total, 0);
     assert!(result.documents.is_empty());
+    assert_eq!(result.coverage_by_document.len(), 1);
 }
 
 #[test]
@@ -123,7 +137,8 @@ fn mixed_manual_and_tldr_pages_keep_stable_global_pagination() {
     assert_eq!(second.total, 2);
     assert_eq!(second.next_offset, None);
     assert_eq!(second.documents[0].matches[0].ordinal, 2);
-    assert!(second.documents[0].content_projection.is_none());
+    assert!(second.documents[0].content_projection.is_some());
+    assert_eq!(second.coverage_by_document.len(), 2);
 }
 
 #[test]
@@ -137,18 +152,17 @@ fn scoped_document_hits_keep_rendered_coordinates() {
     .unwrap();
 
     assert_eq!(result.total, 1);
-    assert!(result.documents[0].content_projection.is_none());
-    assert!(
-        result.documents[0].matches[0].occurrences[0]
-            .markdown
-            .is_some()
-    );
+    assert!(result.documents[0].content_projection.is_some());
+    assert!(matches!(
+        result.documents[0].matches[0].location,
+        mant_protocol::SearchLocation::VisibleFlow { .. }
+    ));
     serde_json::from_value::<mant_protocol::ScopeSearch>(serde_json::to_value(result).unwrap())
         .unwrap();
 }
 
 #[test]
-fn global_pagination_counts_matching_line_groups() {
+fn global_pagination_counts_complete_occurrences() {
     let contents = vec![manual("first"), manual("second")];
     let graph = scope(&contents);
     let mut request = query("needle");
@@ -204,4 +218,42 @@ fn exhausted_page_counts_later_documents_without_materializing_fake_hits() {
     assert_eq!(last.next_offset, None);
     assert_eq!(last.documents.len(), 1);
     assert_eq!(last.documents[0].matches[0].ordinal, 3);
+}
+
+#[test]
+fn zero_hit_document_coverage_survives_global_pagination() {
+    let mut first =
+        crate::query_fixture::markdown("# Manual\n\nNo match here\n", Some("first.md".to_owned()))
+            .unwrap();
+    first.address = Some(address("first"));
+    first
+        .document
+        .as_mut()
+        .unwrap()
+        .diagnostics
+        .push(mant_ir::Diagnostic {
+            level: mant_ir::DiagnosticLevel::Unsupported,
+            impact: mant_ir::DiagnosticImpact::SemanticCoverage,
+            code: Some("test.unverified".to_owned()),
+            message: "test coverage gap".to_owned(),
+            source: None,
+            coverage_scope: Some(mant_ir::CoverageScope::Document),
+        });
+    let second = manual("second");
+    let contents = vec![first, second];
+    let graph = scope(&contents);
+    let mut request = query("needle");
+    request.offset = 0;
+    request.limit = 1;
+    let result = super::search_scope(
+        crate::QueryScopeView::new(&graph, &contents).unwrap(),
+        &request,
+    )
+    .unwrap();
+    assert_eq!(result.coverage_by_document.len(), 2);
+    assert!(!result.semantics_complete);
+    assert!(!result.coverage_by_document[0].semantics_complete);
+    assert!(result.coverage_by_document[0].source_context.is_some());
+    assert_eq!(result.documents.len(), 1);
+    assert_eq!(result.documents[0].address, address("second"));
 }

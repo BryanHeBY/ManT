@@ -34,6 +34,7 @@ all-features = true
 [features]
 default = ["roff", "tui", "pager", "mcp", "update"]
 roff = ["mant-engine/roff"]
+annotated-preview = ["roff", "mant-codec/native-annotated", "mant-loader/roff", "dep:libmandoc-rs"]
 tui = ["dep:mant-ui", "dep:ratatui", "dep:crossterm", "dep:arboard", "dep:base64", "dep:signal-hook"]
 pager = ["dep:crossterm", "dep:crossbeam-channel", "dep:parking_lot", "dep:regex", "dep:textwrap", "dep:thiserror", "dep:signal-hook"]
 mcp = ["dep:rmcp", "dep:rmcp-macros", "dep:tokio"]
@@ -56,6 +57,7 @@ mant-ir = { path = "../mant-ir", version = "^0.12.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.12.0" }
 mant-render = { path = "../mant-render", version = "^0.12.0" }
 mant-codec = { path = "../mant-codec", version = "^0.12.0", default-features = false }
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.12.0", optional = true }
 mant-engine = { path = "../mant-engine", version = "^0.12.0", default-features = false }
 mant-loader = { path = "../mant-loader", version = "^0.12.0", default-features = false }
 mant-query = { path = "../mant-query", version = "^0.12.0", default-features = false }

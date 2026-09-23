@@ -32,7 +32,7 @@ pub(super) fn validate_with_index(
         let DocumentBodyRef::Fixed(fixed) = document.body() else {
             unreachable!("all document body arms were matched")
         };
-        return validate_fixed_document(document, fixed);
+        return validate_fixed_document(document, fixed, index);
     };
     let mut diagnostics = Vec::new();
 
@@ -193,7 +193,11 @@ pub(super) fn validate_with_index(
     diagnostics
 }
 
-fn validate_fixed_document(document: &Document, fixed: &crate::FixedBody) -> Vec<Diagnostic> {
+fn validate_fixed_document(
+    document: &Document,
+    fixed: &crate::FixedBody,
+    index: &DocumentIndex,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     if let Err(error) = fixed.validate() {
         diagnostics.push(invariant("ir.invalid-fixed-body", error.to_string()));
@@ -214,6 +218,49 @@ fn validate_fixed_document(document: &Document, fixed: &crate::FixedBody) -> Vec
             diagnostics.push(invariant(
                 "ir.invalid-fragment-alias",
                 "document root fragment alias must not be empty or contain whitespace".to_owned(),
+            ));
+        }
+    }
+    for (id, node) in index.iter() {
+        if !is_normalized_node_id(id) {
+            diagnostics.push(invariant(
+                "ir.invalid-identity",
+                format!("identity '{id}' is not a normalized document-local ID"),
+            ));
+        }
+        if node.roles().len() > 1 {
+            diagnostics.push(invariant(
+                "ir.identity-role-collision",
+                format!("identity '{id}' is shared by incompatible roles"),
+            ));
+        }
+    }
+    for duplicate in index.duplicates() {
+        diagnostics.push(invariant(
+            "ir.duplicate-identity",
+            format!("duplicate {:?} identity '{}'", duplicate.role, duplicate.id),
+        ));
+    }
+    for (alias, targets) in index.ambiguous_fragments() {
+        diagnostics.push(invariant(
+            "ir.ambiguous-fragment-alias",
+            format!(
+                "fragment '{alias}' resolves to multiple document-local IDs: {}",
+                targets
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+    for link in &fixed.links {
+        if let Some(LinkTarget::Section { id }) = &link.target
+            && !index.contains(id.as_str())
+        {
+            diagnostics.push(invariant(
+                "ir.dangling-section-link",
+                format!("section link target '{id}' does not exist"),
             ));
         }
     }

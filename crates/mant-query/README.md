@@ -86,9 +86,12 @@ Query errors stay separate from source acquisition and host delivery errors.
 
 ## Format boundary
 
-Search matches the visible text or markup of the canonical Markdown artifact
-from `mant-codec` and pages matching line groups. The artifact is rendered
-from authoritative logical content; native terminal wraps are not search input.
+Flow/TLDR visible search retains the canonical Markdown visible-text extractor;
+Markdown scope searches canonical addressable export bytes (Flow/TLDR:
+`--format markdown --preserve-anchors`). Results page whole
+occurrences, including a match spanning several visible fragments. The
+artifact is rendered from authoritative content; viewport wraps are not search
+input. Fixed visible search reads the final annotated surface and proven joins.
 This format dependency does not enable native parsing or report rendering. Reference
 destination checks inspect typed logical addresses and already supplied
 content only; they perform no IO.

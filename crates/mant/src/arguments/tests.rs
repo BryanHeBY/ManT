@@ -1,3 +1,5 @@
+#[cfg(feature = "annotated-preview")]
+use clap::CommandFactory;
 use mant_ir::{EntryKind, ParameterKind};
 #[cfg(feature = "roff")]
 use mant_protocol::CatalogDocumentKind;
@@ -340,6 +342,73 @@ fn dispatches_explicit_files_and_direct_stdin_without_embedding_content() {
             .expect_err("input has no man section selector")
             .to_string()
             .contains("cannot be used with")
+    );
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_preview_is_hidden_and_requires_an_explicit_roff_file() {
+    assert!(matches!(
+        parse(&args(&[
+            "--annotated-preview",
+            "--input",
+            "probe.1.gz",
+            "--input-format",
+            "roff",
+            "--outline",
+        ]))
+        .expect("preview query"),
+        Command::Query {
+            source: QuerySource::AnnotatedPreview {
+                path,
+                view: QueryView::Outline { .. },
+            },
+            ..
+        } if path == "probe.1.gz"
+    ));
+    for invalid in [
+        vec!["--annotated-preview"],
+        vec!["--annotated-preview", "--input", "probe.1"],
+        vec![
+            "--annotated-preview",
+            "--input",
+            "probe.1",
+            "--input-format",
+            "auto",
+        ],
+        vec![
+            "--annotated-preview",
+            "--input",
+            "probe.md",
+            "--input-format",
+            "markdown",
+        ],
+        vec![
+            "--annotated-preview",
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+        ],
+    ] {
+        assert!(parse(&args(&invalid)).is_err(), "accepted {invalid:?}");
+    }
+    let help = super::Cli::command().render_help().to_string();
+    assert!(!help.contains("--annotated-preview"));
+}
+
+#[test]
+#[cfg(not(feature = "annotated-preview"))]
+fn annotated_preview_selector_does_not_exist_without_its_feature() {
+    assert!(
+        parse(&args(&[
+            "--annotated-preview",
+            "--input",
+            "probe.1",
+            "--input-format",
+            "roff",
+        ]))
+        .is_err()
     );
 }
 

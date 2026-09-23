@@ -19,6 +19,10 @@ pub use mant_ir::ResolvedContent;
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use tldr::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 
+/// Direct, feature-gated projection of the checked native display into Fixed IR.
+#[cfg(feature = "native-annotated")]
+pub mod annotated_fixed;
+
 #[cfg(feature = "roff")]
 pub use mandoc::{
     RedirectSyntaxError, lower_mandoc_document, parse_plain_manual as parse_roff_bytes,

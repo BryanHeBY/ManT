@@ -936,6 +936,7 @@ dependencies = [
  "crossterm",
  "crossterm_winapi",
  "libc",
+ "libmandoc-rs",
  "mant-codec",
  "mant-engine",
  "mant-ir",

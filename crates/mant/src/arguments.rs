@@ -254,6 +254,12 @@ impl From<InputFormatMode> for InputFormat {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum QuerySource {
     Arguments(QueryRequest),
+    /// Temporary P1 path to one native Fixed result; never used for normal input.
+    #[cfg(feature = "annotated-preview")]
+    AnnotatedPreview {
+        path: String,
+        view: QueryView,
+    },
     ScopeArguments {
         scope: DocumentScope,
         view: Option<ScopeQueryView>,
@@ -395,6 +401,11 @@ struct Cli {
         help_heading = "Input"
     )]
     input_format: Option<InputFormatMode>,
+
+    /// Use the experimental native Fixed route for one explicit roff file.
+    #[cfg(feature = "annotated-preview")]
+    #[arg(long, hide = true, requires = "input")]
+    annotated_preview: bool,
 
     /// List locally available documents grouped by source and manual section.
     #[arg(long, help_heading = "Discovery")]

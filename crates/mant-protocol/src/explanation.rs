@@ -1,10 +1,12 @@
 //! Bounded semantic evidence, deliberately separate from strict navigation.
 mod classification;
+mod fixed;
 mod locations;
 mod matches;
 mod support;
 use crate::{OutlineTrail, Producer, SourceContext};
 pub use classification::*;
+pub use fixed::*;
 pub use locations::ExplanationTextRoot;
 use mant_ir::{
     ContentProjection, Diagnostic, DocumentAddress, EntryKind, Inline, NameCase, NodeId,
@@ -195,6 +197,9 @@ pub struct ExplanationEntry {
     pub names: Vec<String>,
     /// Original visible forms projected through validated content bindings.
     pub forms: Vec<Vec<Inline>>,
+    /// Complete native Fixed forms, mutually exclusive with Flow `forms`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixed_forms: Vec<ExplanationFixedSelection>,
     /// Ordinary validated name locations, independent of the actual query match.
     pub name_bindings: Vec<ExplanationNameBinding>,
     /// Explicit same-owner equivalence groups.
@@ -272,6 +277,14 @@ impl ExplanationEvidence {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum ExplanationContent {
+    /// The selected native owner's direct body, copied only under the response
+    /// budget from final display slices; no Flow block is synthesized.
+    FixedOwner {
+        /// Exact one-based owner key in the queried Fixed document.
+        key: std::num::NonZeroU32,
+        /// Direct body only, never a later sibling or child owner's body.
+        direct_body: ExplanationFixedSelection,
+    },
     /// Physical owner stored once because nested selected contexts also use
     /// its body; not a declaration-group or alias relationship.
     SharedEntry {
@@ -417,6 +430,7 @@ impl<'de> Deserialize<'de> for QueryExplanation {
     }
 }
 
+#[allow(clippy::too_many_lines)] // One shared source closure for every explanation evidence variant.
 pub(crate) fn validate_explanation_sources<'a>(
     content_projection: Option<&'a ContentProjection>,
     source_context: Option<&SourceContext>,
@@ -425,6 +439,33 @@ pub(crate) fn validate_explanation_sources<'a>(
     evidence: impl IntoIterator<Item = &'a ExplanationEvidence>,
 ) -> Result<(), String> {
     let evidence = evidence.into_iter().collect::<Vec<_>>();
+    let valid_fixed_source = |source: Option<mant_ir::SourceKey>| {
+        source.is_none_or(|key| {
+            source_context.is_some_and(|context| key.get() as usize <= context.sources.len())
+        })
+    };
+    for record in &evidence {
+        let forms = record
+            .entry
+            .as_ref()
+            .into_iter()
+            .flat_map(|entry| &entry.fixed_forms);
+        let bodies = record
+            .content
+            .as_ref()
+            .into_iter()
+            .filter_map(|content| match content {
+                ExplanationContent::FixedOwner { direct_body, .. } => Some(direct_body),
+                _ => None,
+            });
+        if forms
+            .chain(bodies)
+            .flat_map(|selection| &selection.parts)
+            .any(|part| !valid_fixed_source(part.source))
+        {
+            return Err("Fixed explanation fragment has invalid source key".to_owned());
+        }
+    }
     crate::document::validate_optional_source_spans(
         source_context,
         diagnostics

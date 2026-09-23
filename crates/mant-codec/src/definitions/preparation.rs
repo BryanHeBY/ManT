@@ -141,9 +141,8 @@ impl PreparedDefinitions {
                             .resolve(content, items, &heads, group_matches);
                     crate::definitions::remove_native_definition_owner_markers_from_items(items);
                     for item in items.iter_mut() {
-                        let mut identity =
+                        let identity =
                             identity_plan(content, item, item_context, evidence.role(item));
-                        identity.native_declaration = evidence.declaration(item).cloned();
                         if has_semantic_spelling(content, item, &identity) {
                             *self
                                 .preferred_counts

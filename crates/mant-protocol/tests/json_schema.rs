@@ -106,32 +106,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(excerpt.contains("document-entry"));
     assert!(excerpt.contains("NameCase"));
 
-    let search = serde_json::to_string(&query_search_json_schema()).expect("search schema JSON");
-    assert!(search.contains("startLine"));
-    assert!(search.contains("document-entry"));
-    assert!(search.contains("nextOffset"));
-
-    let search = value(query_search_json_schema());
-    for base in ["lineBase", "columnBase"] {
-        let field = &search["$defs"]["SearchRender"]["properties"][base];
-        assert_eq!(field["minimum"], 1);
-        assert_eq!(field["maximum"], 1);
-    }
-    assert_eq!(
-        search["$defs"]["SearchHit"]["properties"]["ordinal"]["minimum"],
-        1
-    );
-    assert!(search["$defs"].get("SearchLineRange").is_some());
-    assert_eq!(
-        required(&search["$defs"]["SearchOccurrence"]),
-        ["matchedText"]
-    );
-    for coordinate in ["startLine", "startColumn", "endLine", "endColumn"] {
-        assert_eq!(
-            search["$defs"]["SearchMarkdownRange"]["properties"][coordinate]["minimum"],
-            1
-        );
-    }
+    assert_search_wire_schema();
 
     let scope = value(scope_query_response_json_schema());
     let scoped_document = &scope["$defs"]["ScopedSearchDocument"];
@@ -139,6 +114,17 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
         required(scoped_document),
         ["address", "depth", "render", "matches"]
     );
+    let scoped_search = &scope["$defs"]["ScopeSearch"];
+    for field in [
+        "schema",
+        "semanticsComplete",
+        "coverageByDocument",
+        "documents",
+    ] {
+        assert!(required(scoped_search).contains(&field));
+    }
+    let coverage = &scope["$defs"]["ScopedSearchCoverage"];
+    assert!(coverage["properties"].get("sourceContext").is_some());
     for local_pagination_field in [
         "query",
         "total",
@@ -153,6 +139,32 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
                 .is_none(),
             "unexpected document-local field {local_pagination_field}"
         );
+    }
+}
+
+fn assert_search_wire_schema() {
+    let search = serde_json::to_string(&query_search_json_schema()).expect("search schema JSON");
+    assert!(search.contains("startLine"));
+    assert!(search.contains("document-entry"));
+    assert!(search.contains("nextOffset"));
+
+    let search = value(query_search_json_schema());
+    for base in ["lineBase", "columnBase"] {
+        let field = &search["$defs"]["SearchRender"]["properties"][base];
+        assert_eq!(field["minimum"], 1);
+        assert_eq!(field["maximum"], 1);
+    }
+    assert_eq!(
+        search["$defs"]["SearchMatch"]["properties"]["ordinal"]["minimum"],
+        1
+    );
+    assert!(search["$defs"].get("SearchContentProjection").is_some());
+    assert!(search["$defs"].get("SearchLocation").is_some());
+    assert!(search["$defs"].get("SearchHit").is_none());
+    assert!(search["$defs"].get("SearchOccurrence").is_none());
+    assert!(search["$defs"].get("SearchLineRange").is_none());
+    for field in ["ordinal", "matchedText", "location", "preview"] {
+        assert!(required(&search["$defs"]["SearchMatch"]).contains(&field));
     }
 }
 

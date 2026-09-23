@@ -475,10 +475,9 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     assert!(packaged.contains(
         "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui mant)"
     ));
-    assert!(
-        packaged
-            .contains("mant-codec) dependencies=(libmandoc-rs mant-ir mant-protocol mant-query)")
-    );
+    assert!(packaged.contains(
+        "mant-codec) dependencies=(libmandoc-rs mant-ir mant-protocol mant-query mant-ui)"
+    ));
     // Pure query/render packaging must not inject an unused native parser patch.
     for package in ["mant-query", "mant-render"] {
         let dependency_line = packaged
@@ -505,11 +504,16 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     }
     assert!(packaged.contains("--package mant-codec --no-default-features\n"));
     assert!(packaged.contains("--package mant-codec --no-default-features --features roff\n"));
+    assert!(
+        packaged
+            .contains("--package mant-codec --no-default-features --features native-annotated\n")
+    );
     assert!(packaged.contains("--package mant-loader --no-default-features\n"));
     assert!(packaged.contains("--package mant-loader --no-default-features --features roff\n"));
     assert!(packaged.contains("--package mant-query --no-default-features\n"));
     assert!(packaged.contains("--package mant-render --no-default-features\n"));
     assert!(packaged.contains("--package mant --no-default-features --lib\n"));
+    assert!(packaged.contains("--package mant --features annotated-preview --lib\n"));
 
     let windows = include_str!("../../../scripts/check-windows.ps1");
     assert!(windows.contains("\"--package\", \"mant-codec\""));

@@ -258,6 +258,7 @@ impl super::ExplanationContent {
     ) -> Option<super::ExplanationTextRoot<'a>> {
         use super::{ExplanationBlockStep as Step, ExplanationContentRange as Range};
         match self {
+            Self::FixedOwner { .. } => None,
             Self::SharedEntry {
                 support,
                 path,
@@ -397,6 +398,28 @@ impl super::ExplanationEvidence {
                 self.content,
                 Some(ExplanationContent::DeclarationMember { .. })
             ) && !self.covered_by_support(context, pool)
+            || self.entry.as_ref().is_some_and(|entry| {
+                !entry.forms.is_empty() && !entry.fixed_forms.is_empty()
+                    || entry
+                        .fixed_forms
+                        .iter()
+                        .any(|form| form.validate().is_err())
+            })
+            || self.content.as_ref().is_some_and(|content| match content {
+                ExplanationContent::FixedOwner { direct_body, .. } => {
+                    self.class != super::EvidenceClass::DirectEntry
+                        || self.support.is_some()
+                        || direct_body.validate().is_err()
+                        || self
+                            .entry
+                            .as_ref()
+                            .is_some_and(|entry| !entry.forms.is_empty())
+                }
+                _ => self
+                    .entry
+                    .as_ref()
+                    .is_some_and(|entry| !entry.fixed_forms.is_empty()),
+            })
         {
             return false;
         }
@@ -411,6 +434,13 @@ impl super::ExplanationEvidence {
                     .as_ref()
                     .is_some_and(|entry| range.resolve(context, &entry.forms).is_some())
             }) && occurrence.content.iter().all(&valid_content)
+                && (occurrence.fixed_forms.is_empty()
+                    || occurrence.forms.is_empty() && occurrence.content.is_empty())
+                && occurrence.fixed_forms.iter().all(|range| {
+                    self.entry
+                        .as_ref()
+                        .is_some_and(|entry| range.resolve(&entry.fixed_forms).is_some())
+                })
         };
         self.bases.iter().all(|basis| match basis {
             EvidenceBasis::Name { matches } => matches

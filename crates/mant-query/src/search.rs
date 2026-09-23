@@ -1,4 +1,4 @@
-//! Search the canonical, anchor-free Markdown presentation without using terminal wraps.
+//! Search canonical Flow/TLDR text or final Fixed output without viewport wraps.
 
 use std::{error::Error, fmt};
 
@@ -6,7 +6,9 @@ use mant_protocol::{MAX_SEARCH_PATTERN_CHARS, QuerySearch, SearchQuery};
 
 use crate::ResolvedContent;
 
+mod fixed_visible;
 mod mapping;
+mod origins;
 mod owners;
 mod plan;
 mod render_compat;
@@ -73,10 +75,10 @@ impl fmt::Display for SearchError {
 
 impl Error for SearchError {}
 
-/// Search one complete query with the stable v0.12 line-group pagination.
+/// Search one complete query with v0.12 occurrence pagination.
 ///
-/// The canonical render comes from logical IR, never native terminal rows, so
-/// a formatter's physical wrap cannot split a match or alter a result cursor.
+/// Flow/TLDR uses the canonical Markdown-visible extractor; Fixed uses native
+/// final-surface selections and proven joins, independent of viewport wraps.
 ///
 /// # Errors
 ///
@@ -93,7 +95,15 @@ fn search_with_matcher(
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
-    render_compat::search_with_matcher(query, request, matcher)
+    if query
+        .document
+        .as_ref()
+        .is_some_and(|document| matches!(document.body(), mant_ir::DocumentBodyRef::Fixed(_)))
+    {
+        fixed_visible::search_with_matcher(query, request, matcher)
+    } else {
+        render_compat::search_with_matcher(query, request, matcher)
+    }
 }
 
 #[cfg(test)]

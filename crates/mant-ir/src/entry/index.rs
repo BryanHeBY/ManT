@@ -4,9 +4,10 @@ use super::{
     walk::{owner_child_step, visit_child_entry_locations},
 };
 use crate::{
-    Block, ContentContext, ContentReadError, Document, EntryOwner, Inline, InlineView, NodeId,
+    Block, ContentContext, ContentReadError, Document, DocumentBodyRef, EntryKind, EntryOwner,
+    FixedBody, Inline, InlineView, NameCase, NodeId, OwnerMark,
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, num::NonZeroU32};
 
 /// Rebuildable semantic index for the document root and every section.
 ///
@@ -25,21 +26,19 @@ impl SemanticIndex {
     /// Build the semantic index from finalized facts on either content shape.
     #[must_use]
     pub fn build(document: &Document) -> Self {
-        // Native owner marks are candidates, not classified semantic entries.
-        // R02b supplies their evidence-backed EntryKind and bindings; an empty
-        // Flow tree must never be manufactured for this Fixed branch.
-        let Some(flow) = document.flow() else {
-            return Self::default();
+        let flow = match document.body() {
+            DocumentBodyRef::Flow(flow) => flow,
+            DocumentBodyRef::Fixed(fixed) => return Self::build_fixed(fixed),
         };
         let content = document.content();
         let mut owner_locations = BTreeMap::new();
         let root =
-            entries_with_locations(content, &flow.blocks, &[], &[], &[], &mut owner_locations);
+            entries_with_locations(content, flow.blocks, &[], &[], &[], &mut owner_locations);
         let mut sections = BTreeMap::new();
         let mut section_paths = BTreeMap::new();
         collect_section_entries(
             content,
-            &flow.sections,
+            flow.sections,
             &[],
             &mut sections,
             &mut section_paths,
@@ -71,6 +70,108 @@ impl SemanticIndex {
             clear_rejected_relations(&mut result.root, &rejected);
             for entries in result.sections.values_mut() {
                 clear_rejected_relations(entries, &rejected);
+            }
+        }
+        result
+    }
+
+    fn build_fixed(fixed: &FixedBody) -> Self {
+        // The final surface is authoritative. Only a native Definition owner
+        // with one fully recoverable, nonblank head can become a conservative
+        // Term; owner keys and parent edges never invent another Flow tree.
+        let mut result = Self::default();
+        let mut heading_paths = Vec::<Vec<usize>>::with_capacity(fixed.headings.len());
+        let mut heading_child_counts = vec![0usize; fixed.headings.len() + 1];
+        for heading in &fixed.headings {
+            let parent = heading.parent.map_or(0, |key| key.get() as usize);
+            let sibling = heading_child_counts[parent];
+            heading_child_counts[parent] += 1;
+            let mut path = heading.parent.map_or_else(Vec::new, |key| {
+                heading_paths[(key.get() - 1) as usize].clone()
+            });
+            path.push(sibling);
+            result
+                .section_paths
+                .entry(heading.id.clone())
+                .and_modify(|existing| *existing = None)
+                .or_insert_with(|| Some(path.clone()));
+            result.sections.insert(path.clone(), Vec::new());
+            heading_paths.push(path);
+        }
+
+        let mut candidates = Vec::<FixedCandidate>::new();
+        let mut nearest_entry: Vec<Option<usize>> = vec![None; fixed.owners.len() + 1];
+        let mut root_counts = BTreeMap::<Option<NonZeroU32>, usize>::new();
+        for owner in &fixed.owners {
+            let parent = owner
+                .parent
+                .and_then(|key| nearest_entry[key.get() as usize]);
+            let Some(form) = fixed.owner_complete_form(owner) else {
+                nearest_entry[owner.key.get() as usize] = parent;
+                continue;
+            };
+            let parent = parent.filter(|&index| candidates[index].section == owner.section);
+            let next = if let Some(index) = parent {
+                let next = candidates[index].child_count;
+                candidates[index].child_count += 1;
+                next
+            } else {
+                let counter = root_counts.entry(owner.section).or_default();
+                let next = *counter;
+                *counter += 1;
+                next
+            };
+            let mut entry_indices =
+                parent.map_or_else(Vec::new, |index| candidates[index].entry_indices.clone());
+            entry_indices.push(next + 1);
+            let section_path = owner.section.map(|key| {
+                heading_paths[(key.get() - 1) as usize]
+                    .iter()
+                    .map(|coordinate| coordinate + 1)
+                    .collect::<Vec<_>>()
+            });
+            if let Some(path) =
+                crate::OutlinePath::nested_entry(section_path.as_deref(), &entry_indices)
+            {
+                result
+                    .owner_locations
+                    .insert(path, crate::ContentReveal::FixedOwner { key: owner.key });
+            }
+            let index = candidates.len();
+            candidates.push(FixedCandidate {
+                section: owner.section,
+                parent,
+                child_count: 0,
+                entry_indices,
+                entry: Some(fixed_entry(owner, form)),
+            });
+            nearest_entry[owner.key.get() as usize] = Some(index);
+        }
+        let mut roots = BTreeMap::<Option<NonZeroU32>, Vec<SemanticEntry>>::new();
+        for index in (0..candidates.len()).rev() {
+            let mut entry = candidates[index].entry.take().expect("unassembled entry");
+            entry.children.reverse();
+            if let Some(parent) = candidates[index].parent {
+                candidates[parent]
+                    .entry
+                    .as_mut()
+                    .expect("parent precedes child")
+                    .children
+                    .push(entry);
+            } else {
+                roots
+                    .entry(candidates[index].section)
+                    .or_default()
+                    .push(entry);
+            }
+        }
+        for (scope, mut entries) in roots {
+            entries.reverse();
+            if let Some(section) = scope {
+                let path = &heading_paths[(section.get() - 1) as usize];
+                result.sections.insert(path.clone(), entries);
+            } else {
+                result.root = entries;
             }
         }
         result
@@ -117,6 +218,29 @@ impl SemanticIndex {
     #[must_use]
     pub fn section_summary(&self, id: &str) -> EntrySummary {
         EntrySummary::for_entries(self.section(id))
+    }
+}
+
+struct FixedCandidate {
+    section: Option<NonZeroU32>,
+    parent: Option<usize>,
+    child_count: usize,
+    entry_indices: Vec<usize>,
+    entry: Option<SemanticEntry>,
+}
+
+fn fixed_entry(owner: &OwnerMark, form: String) -> SemanticEntry {
+    SemanticEntry {
+        id: owner.id.clone(),
+        kind: EntryKind::Term,
+        names: vec![form.clone()],
+        alias_groups: Vec::new(),
+        alias_of: None,
+        case: NameCase::Sensitive,
+        forms: vec![form],
+        document_targets: Vec::new(),
+        children: Vec::new(),
+        value_domain: None,
     }
 }
 

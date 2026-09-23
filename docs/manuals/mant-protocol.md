@@ -679,7 +679,7 @@ Example:
 }
 ```
 
-The response uses `mant.scope-query/v0.12`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, a canonical Markdown `render` descriptor, and `matches`; the current rendered search path omits the optional `contentProjection`. Groups deliberately have no local pagination fields or nested `mant.search/v0.12` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes hit pagination, not document traversal. Limit and offset apply globally, not once per document.
+The response uses `mant.scope-query/v0.12`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each retained document group contains `address`, `depth`, a `render` descriptor, and complete `matches`; visible hits also carry a bounded `contentProjection`. The descriptor identifies the applicable artifact and must not be treated as the authoritative coordinate for a `visible-flow` or `visible-fixed` match. Groups deliberately have no local pagination fields or nested `mant.search/v0.12` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes occurrence pagination, not document traversal. Limit and offset apply globally, not once per document.
 
 ```json
 {
@@ -692,11 +692,14 @@ The response uses `mant.scope-query/v0.12`. Its `scope` field contains the reque
   "result": {
     "kind": "search",
     "search": {
+      "schema": "mant.scope-search/v0.12",
       "query": { "pattern": "index", "syntax": "literal", "case": "insensitive", "word": false, "contextLines": 0, "limit": 20, "offset": 0 },
       "total": 0,
       "returned": 0,
       "offset": 0,
       "truncated": false,
+      "semanticsComplete": true,
+      "coverageByDocument": [],
       "documents": []
     }
   }
@@ -2134,11 +2137,11 @@ examples, expands real environment values or requests additional authority.
 
 ## Search Projection
 
-`mant.search/v0.12` defaults to visible-text search in the canonical CommonMark
-render. `scope: "markdown"` searches the generated CommonMark bytes, including
-markup. A TLDR quick reference remains searchable even when no full document
-exists. The render comes from logical IR; terminal visual wraps are never
-search input. All scopes retain the same matching-line-group pagination.
+`mant.search/v0.12` defaults to visible-text search. Flow and TLDR retain the
+canonical Markdown visible-text extractor; `scope: "markdown"` searches the
+exact user-exportable Markdown bytes, including markup. TLDR remains searchable
+without a primary document or invented authored source. A viewport wrap is
+never search input. Every scope pages complete occurrences, not rendered lines.
 
 ### Result Envelope
 
@@ -2146,39 +2149,62 @@ search input. All scopes retain the same matching-line-group pagination.
 | --- | --- |
 | `schema` | `mant.search/v0.12` |
 | `label`, `sourceContext`, `meta` | Source identity table/root key and metadata |
-| `contentProjection` | Optional closed response-local store for a logical-coordinate projection; omitted by the current rendered search path |
+| `contentProjection` | Bounded response-local units and fragments closing retained visible matches; absent for Markdown-only or zero-hit pages |
 | `query` | Fully normalized search settings |
-| `render` | Canonical Markdown presentation-coordinate descriptor |
-| `total` | All matching rendered line groups before pagination |
-| `returned` | Number of hits in this page |
+| `render` | Coordinate-bearing Markdown artifact or Fixed visible-surface descriptor |
+| `total` | Exact number of complete occurrences after the full scan |
+| `returned` | Number of retained occurrences in this page |
 | `offset` | Echoed result pagination offset |
 | `truncated` | Whether more hits remain |
 | `nextOffset` | Next deterministic offset when truncated |
-| `matches` | Rendered line groups in canonical order |
+| `semanticsComplete`, `coverageDetailsOmitted`, `diagnostics` | Coverage state independent of hit count and pagination |
+| `matches` | Complete occurrences in snapshot order |
 
 `query` always echoes all defaults, even when the request omitted them.
 A no-match search is successful and returns `total = 0` with an empty
 `matches` array.
 
-### Logical and Presentation Coordinates
+`mant.scope-search/v0.12` uses the same occurrence pagination globally across
+the resolved document order. Its `documents` retain only groups with page
+hits, while `coverageByDocument` contains every scanned document in scope
+order, including zero-hit and paginated-away documents. Each coverage entry
+reports `address`, `depth`, `semanticsComplete`, bounded `diagnostics`, and
+exact `coverageDetailsOmitted`. A coverage entry includes `sourceContext`
+when the scanned document has a primary source; this closes diagnostic spans
+even if no hit from that document is retained. A tldr-only entry can omit it
+only when no authored span needs a source table. Top-level `semanticsComplete` is their
+conjunction; an empty retained page cannot erase a semantic gap. A scan that
+cannot account for every document fails rather than returning a false complete
+subset. A scoped hit keeps its global ordinal; it has no local pagination
+cursor.
 
-Each current search hit is a canonical rendered line group. It may contain
-multiple exact occurrences, retaining at most 256 ranges while
-`occurrenceCount` preserves the full count. `matchedText` and `markdown` refer
-to that render, with `lineRanges` describing its anchor-free presentation.
-Pagination groups matches by rendered line span and owning node; a native
-terminal wrap does not change that render or its result cursor. Regex `^` and
-`$` apply to canonical rendered line boundaries, not terminal wraps.
+In a scope search, coverage diagnostics and source contexts in retained hit
+groups share a 32 MiB aggregate serialized-metadata limit. A per-document
+diagnostic count bound does not permit 256 independent unbounded copies.
 
-The wire format also admits an exact logical-coordinate occurrence with a
-`root` in `contentProjection.contentStore` and a half-open `logical` byte and
-Unicode-scalar range. Its optional `markdownProjections` are presentation-only
-placements of that same logical occurrence. This alternative is validated on
-decode but is not emitted by the current search producer; it does not alter
-the v0.12 rendered-line pagination contract. Neither Markdown coordinates nor
-logical root keys are `SourceSpan` positions in an original input file.
+### Authoritative and Display Coordinates
 
-The render descriptor is currently:
+Each `matches` item is one exact occurrence. `location` is a tagged
+`visible-flow`, `visible-fixed`, or `markdown-artifact` coordinate; the former
+two name a response-local unit and half-open UTF-8 byte range, while the latter
+names half-open export bytes and one-based line/column. `displaySlices` are
+subordinate presentation fragments, not another authoritative range.
+`matchedText` must equal the exact unit substring for visible matches. An
+occurrence can span several Flow roots or Fixed runs without being split into
+several pagination items. The old `occurrences` line group and nullable
+`root`/`logical`/`markdown` coordinates are rejected on decode.
+
+Visible units contain ordered, nonempty UTF-8 fragments and one explicit join
+between each adjacent pair. A `render-separator` join carries the exact
+separator bytes once; unknown or hard boundaries cannot license a cross-boundary
+match. Fragment sources are tagged Flow content locations, TLDR paths,
+render-derived text, or Fixed final row/run slices. The producer checks these
+against its input snapshot; the decoder checks the bounded response-local
+keys, ranges, UTF-8, joins and `matchedText` without fetching that snapshot.
+Count-only scans do not copy the full document into the response. Regex `^`
+and `$` follow the searched representation's line boundaries, not a viewport.
+
+For a Flow Markdown-coordinate result, `render` has this shape:
 
 ```json
 {
@@ -2191,32 +2217,29 @@ The render descriptor is currently:
 }
 ```
 
-`lineCount` is document-dependent. Each Markdown projection's `startByte` and
-`endByte` form a half-open UTF-8 range in that exact canonical render. Its
-`startLine`, `startColumn`, `endLine`, and `endColumn` are one-based human
-coordinates; columns count Unicode scalar values. Escapes or styling may make
-one logical match occupy several displayed pieces. Search also accepts a
-generated-Markdown `scope` selector. The current producer emits render-only
-occurrences carrying `markdown` and `lineRanges`, whether or not TLDR content
-is present. Regex compilation has a
+Fixed visible results use `schema: "mant.fixed/v1"` and
+`format: "fixed-visible"`; they never put terminal columns into Markdown byte
+ranges. `lineCount` is document-dependent. Artifact `startByte`/`endByte` are
+half-open UTF-8 ranges in the exact export, while the one-based human columns
+count Unicode scalars. An artifact-only fence hit legitimately has no native
+display slice. Regex compilation has a
 fixed project resource budget in addition to the pattern-length bound; an
 expression whose compiled program exceeds that budget is rejected before
 document matching.
 
-Each hit includes:
+Each occurrence includes:
 
 - a one-based global `ordinal` that is not reset by pagination;
 - an `outline` trail ending at the nearest reusable node accepted by excerpt
   selection;
-- a bounded group of render-only occurrences with Markdown ranges;
+- exact `matchedText`, tagged `location`, and zero or more display slices;
 - an optional original `nodeSource` span for the owning outline node;
 - a human-readable `preview`;
 - optional full Markdown context lines.
 
-Text presentations may merge overlapping context windows and group displayed
-rows for readability, but do not change hit counts or offsets. Color decorators
-preserve visible bytes; source document content remains authoritative, not an
-inserted terminal wrap or Markdown escape.
+Text presentations may merge context windows for readability but cannot change
+hit counts or offsets. Color decorators preserve visible bytes; the tagged
+location, not preview or terminal wrapping, is authoritative.
 
 The trail has the same `ancestors` and typed terminal `node` shape used by
 excerpt selections. The node union uses the same `tldr`, `document-root`,
@@ -2252,6 +2275,9 @@ A complete no-match response is:
   "returned": 0,
   "offset": 0,
   "truncated": false,
+  "semanticsComplete": true,
+  "coverageDetailsOmitted": 0,
+  "diagnostics": [],
   "matches": []
 }
 ```
@@ -2311,7 +2337,7 @@ tools. Outputs intentionally remain text-first:
 | `mant_outline` | `document` | `entries`, default `summary`; `references`, default summary of document/manual links; `root`, `startChar`, `maxChars` | Content hierarchy and independent reference inventory |
 | `mant_read` | `document`, 1–16 `selectors` | `startChar`, `maxChars` | CommonMark excerpts |
 | `mant_explain` | 1–16 `documents`, `entry` | `followLinks`, `maxDepth`, `maxDocuments`, `maxResults`, `offset`, `contentBytes`, `startChar`, `maxChars` | CommonMark class-first evidence with source-qualified read targets |
-| `mant_search` | 1–16 `documents`, `pattern` | `followLinks`, `maxDepth`, `maxDocuments`, `syntax`, `case`, `word`, `contextLines`, `maxMatches`, `offset`, `startChar`, `maxChars` | Canonical rendered-line matches grouped by document |
+| `mant_search` | 1–16 `documents`, `pattern` | `followLinks`, `maxDepth`, `maxDocuments`, `syntax`, `case`, `word`, `contextLines`, `maxMatches`, `offset`, `startChar`, `maxChars` | Complete search occurrences grouped by document |
 
 Every tool is annotated read-only, non-destructive, and closed-world.
 `mant_find` accepts literal or regex matching, explicit case policy, and a
@@ -2364,17 +2390,17 @@ be an independently complete Markdown construct or grapheme cluster.
 
 Semantic query bounds remain separate from text paging. `mant_find`
 materializes at most `maxResults` matching catalog rows, default 50;
-`mant_search` materializes at most `maxMatches` hits, default
+`mant_search` materializes at most `maxMatches` complete occurrences, default
 20. `maxResults` accepts 1 through 10,000; `maxMatches` accepts 1 through
-100 because each hit retains preview, occurrence, and context data.
+100 because each occurrence retains preview, coordinates, and context data.
 Their compact bodies report returned and total match counts, while `totalChars`
 describes only the canonical body produced under the requested semantic bound.
 Rows or matches excluded by `maxResults` or `maxMatches` cannot be reached by
 advancing `startChar`; increase the semantic bound or narrow the query first.
 The independent `offset` skips matching catalog rows or global search hits
 before materialization. The compact search status names its count
-`totalMatchingLineGroups` for compatibility; every search scope counts rendered
-line groups. When more remain it returns `nextOffset`. Callers
+`totalOccurrences`; every search scope counts complete occurrences. When more
+remain it returns `nextOffset`. Callers
 rerun the same non-page query with that value. Character paging is applied
 afterward and continues only with `nextChar` as `startChar`.
 
@@ -2572,14 +2598,15 @@ A structure-aware search tool call is:
 }
 ```
 
-Search uses the canonical visible render generated from authoritative logical
-document content; terminal wraps are not search input. It permits zero through
-five context lines. `maxMatches` selects 1 through 100 matching rendered line
-groups for the canonical result and defaults to 20. `offset` skips that many
-groups globally across the ordered document scope. `mant_read` and
+Flow/TLDR visible search uses the canonical visible extractor, while Markdown
+scope searches canonical addressable export bytes (the Flow/TLDR
+`--format markdown --preserve-anchors` artifact); terminal wraps are not search input. It permits
+zero through five context lines. `maxMatches` selects 1 through 100 complete
+occurrences and defaults to 20. `offset` skips that many occurrences globally
+across the ordered document scope. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
-Occurrences on one rendered line share a pagination result; the text
-presentation can merge overlapping context windows.
+Occurrences on one rendered line remain separate pagination results; the text
+presentation may merge overlapping context windows.
 Regex `^` and `$` match canonical rendered line boundaries, and the same Unicode/UTF-8
 validation applies before a document is loaded. Result offsets and character
 paging are deliberately separate: use `nextOffset` to materialize another
@@ -2604,11 +2631,10 @@ schema.
    response discriminator.
 9. Use typed outline paths and IDs only within their current source document;
    aliases belong to explain, not read or outline-root selection.
-10. For search, interpret hit offsets in canonical rendered-line-group order.
-    Use each occurrence's `markdown` and `lineRanges` for presentation; do not
-    confuse them with original roff/Markdown source spans. If a future producer
-    supplies an exact logical range, resolve it only through its accompanying
-    response-local `contentProjection`.
+10. For search, interpret offsets in complete occurrence order. Resolve each
+    tagged `location`; visible unit keys require their response-local
+    `contentProjection`, while `markdown-artifact` coordinates refer to export
+    bytes. Do not confuse any of these with original source spans.
 
 For long-lived agent integration, use `mant --mcp`, perform standard MCP
 initialization, consume the generated input schemas from `tools/list`, discover

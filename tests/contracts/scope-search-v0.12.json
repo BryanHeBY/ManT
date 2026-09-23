@@ -24,6 +24,7 @@
   "result": {
     "kind": "search",
     "search": {
+      "schema": "mant.scope-search/v0.12",
       "query": {
         "pattern": "index",
         "syntax": "literal",
@@ -39,6 +40,11 @@
       "offset": 3,
       "truncated": true,
       "nextOffset": 5,
+      "semanticsComplete": true,
+      "coverageByDocument": [
+        {"address": {"kind": "manual", "name": "git", "manualSection": "1"}, "depth": 0, "sourceContext": {"sources": [{"key": 1, "identity": {"kind": "anonymous", "name": "git"}, "format": "man", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}], "rootSource": 1}, "semanticsComplete": true, "coverageDetailsOmitted": 0, "diagnostics": []},
+        {"address": {"kind": "manual", "name": "git-add", "manualSection": "1"}, "depth": 1, "sourceContext": {"sources": [{"key": 1, "identity": {"kind": "anonymous", "name": "git-add"}, "format": "man", "decodedByteLength": 0, "coordinates": {"kind": "decoded-utf8-bytes"}}], "rootSource": 1}, "semanticsComplete": true, "coverageDetailsOmitted": 0, "diagnostics": []}
+      ],
       "documents": [
         {
           "address": { "kind": "manual", "name": "git", "manualSection": "1" },
@@ -48,13 +54,8 @@
             "rootSource": 1
           },
           "contentProjection": {
-            "contentStore": {
-              "owners": [{"key": 1, "kind": "content", "roots": [1], "provenance": {"kind": "unknown"}}],
-              "roots": [{"key": 1, "owner": 1, "kind": "body", "atoms": [1], "points": [], "provenance": {"kind": "unknown"}}],
-              "atoms": [{"key": 1, "root": 1, "owner": 1, "kind": "text", "text": "the index records content", "provenance": {"kind": "unknown"}}],
-              "points": [],
-              "links": []
-            }
+            "fragments": [{"key": 1, "text": "index", "source": {"kind": "render-derived"}}],
+            "units": [{"key": 1, "fragments": [1], "joins": []}]
           },
           "render": {
             "schema": "mant.markdown/v1",
@@ -75,29 +76,11 @@
                   "title": "DESCRIPTION"
                 }
               },
-              "occurrences": [
-                {
-                  "matchedText": "index",
-                  "root": 1,
-                  "logical": {
-                    "startByte": 4,
-                    "endByte": 9,
-                    "startScalar": 4,
-                    "endScalar": 9
-                  },
-                  "markdownProjections": [{
-                    "startByte": 320,
-                    "endByte": 325,
-                    "startLine": 18,
-                    "startColumn": 7,
-                    "endLine": 18,
-                    "endColumn": 12
-                  }]
-                }
-              ],
-              "occurrenceCount": 1,
-              "occurrencesTruncated": false,
-              "preview": "18:7: the index records content"
+              "matchedText": "index",
+              "location": {"kind": "visible-flow", "unit": 1, "startByte": 0, "endByte": 5},
+              "displaySlices": [{"fragment": 1, "startByte": 0, "endByte": 5}],
+              "preview": "18:7: the index records content",
+              "context": []
             }
           ]
         },
@@ -109,13 +92,8 @@
             "rootSource": 1
           },
           "contentProjection": {
-            "contentStore": {
-              "owners": [{"key": 1, "kind": "content", "roots": [1], "provenance": {"kind": "unknown"}}],
-              "roots": [{"key": 1, "owner": 1, "kind": "body", "atoms": [1], "points": [], "provenance": {"kind": "unknown"}}],
-              "atoms": [{"key": 1, "root": 1, "owner": 1, "kind": "text", "text": "add content to the index", "provenance": {"kind": "unknown"}}],
-              "points": [],
-              "links": []
-            }
+            "fragments": [{"key": 1, "text": "index", "source": {"kind": "render-derived"}}],
+            "units": [{"key": 1, "fragments": [1], "joins": []}]
           },
           "render": {
             "schema": "mant.markdown/v1",
@@ -136,29 +114,11 @@
                   "title": "DESCRIPTION"
                 }
               },
-              "occurrences": [
-                {
-                  "matchedText": "index",
-                  "root": 1,
-                  "logical": {
-                    "startByte": 19,
-                    "endByte": 24,
-                    "startScalar": 19,
-                    "endScalar": 24
-                  },
-                  "markdownProjections": [{
-                    "startByte": 210,
-                    "endByte": 215,
-                    "startLine": 12,
-                    "startColumn": 16,
-                    "endLine": 12,
-                    "endColumn": 21
-                  }]
-                }
-              ],
-              "occurrenceCount": 1,
-              "occurrencesTruncated": false,
-              "preview": "12:16: add content to the index"
+              "matchedText": "index",
+              "location": {"kind": "visible-flow", "unit": 1, "startByte": 0, "endByte": 5},
+              "displaySlices": [{"fragment": 1, "startByte": 0, "endByte": 5}],
+              "preview": "12:16: add content to the index",
+              "context": []
             }
           ]
         }

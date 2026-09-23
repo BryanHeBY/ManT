@@ -86,6 +86,9 @@ impl App {
         if let Some(row) = rendered.anchor_row(&item.target_id) {
             self.session.content_scroll = row;
         }
+        if let Some(column) = rendered.anchor_column(&item.target_id) {
+            self.reveal_fixed_column(column, width);
+        }
     }
 
     pub(super) fn activate_content_link(&mut self, column: u16, row: u16) {
@@ -178,6 +181,9 @@ impl App {
         };
         self.notice = None;
         self.session.content_scroll = target_row;
+        if let Some(column) = rendered.anchor_column(target) {
+            self.reveal_fixed_column(column, width);
+        }
         if let Some(index) = self
             .session
             .document
@@ -191,6 +197,22 @@ impl App {
             self.select_section_at_row(target_row);
         }
         true
+    }
+
+    fn reveal_fixed_column(&mut self, column: usize, width: u16) {
+        let width = usize::from(width.max(1));
+        let current = self.session.horizontal_offset;
+        let next = if column < current {
+            column
+        } else if column >= current.saturating_add(width) {
+            column.saturating_sub(width - 1)
+        } else {
+            current
+        };
+        if next != current {
+            self.session.horizontal_offset = next;
+            self.session.rendered_cache.clear();
+        }
     }
 
     fn expand_navigation_ancestors(&mut self, index: usize) {

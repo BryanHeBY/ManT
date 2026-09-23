@@ -28,7 +28,7 @@ use host::SystemHost;
 #[cfg(feature = "tui")]
 use mant_loader::LoadPolicy;
 #[cfg(feature = "tui")]
-use mant_protocol::{CatalogQuery, QueryView};
+use mant_protocol::{CatalogQuery, DocumentCatalog, QueryView};
 use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation};
 
 /// Run one native-process invocation, including the long-lived MCP mode.
@@ -115,6 +115,20 @@ fn run_paged(
     host: &dyn CliHost,
     diagnostics_color: bool,
 ) -> u8 {
+    #[cfg(feature = "annotated-preview")]
+    let fixed_preview = matches!(
+        &command,
+        Command::Query {
+            source: arguments::QuerySource::AnnotatedPreview {
+                view: QueryView::Full {},
+                ..
+            },
+            presentation,
+            ..
+        } if matches!(presentation.format(), arguments::QueryFormat::Text | arguments::QueryFormat::Man)
+    );
+    #[cfg(not(feature = "annotated-preview"))]
+    let fixed_preview = false;
     let mut output = Vec::new();
     let status = run_command(
         command,
@@ -134,7 +148,7 @@ fn run_paged(
             return report_failure(&Failure::operational(error), diagnostics, diagnostics_color);
         }
     };
-    match delivery::pager::page_text(rendered, "mant") {
+    match delivery::pager::page_text_with_mode(rendered, "mant", fixed_preview) {
         Ok(()) => status,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
@@ -166,7 +180,29 @@ fn run_interactive(
             diagnostics_color,
         );
     };
+    #[cfg(feature = "annotated-preview")]
+    let fixed_preview = matches!(&source, QuerySource::AnnotatedPreview { .. });
+    #[cfg(not(feature = "annotated-preview"))]
+    let fixed_preview = false;
     let scope_documents = match source {
+        #[cfg(feature = "annotated-preview")]
+        QuerySource::AnnotatedPreview { path, view } => {
+            if !matches!(view, QueryView::Full {}) {
+                return report_failure(
+                    &Failure::usage("interactive mode requires the complete document view"),
+                    diagnostics,
+                    diagnostics_color,
+                );
+            }
+            let query = match crate::annotated_preview::load(&path) {
+                Ok(query) => query,
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
+            };
+            if let Err(error) = presentation::admit_fixed_content(&query) {
+                return report_failure(&error, diagnostics, diagnostics_color);
+            }
+            vec![Arc::new(query)]
+        }
         QuerySource::Arguments(request) => {
             if !matches!(request.view, QueryView::Full {}) {
                 return report_failure(
@@ -224,16 +260,22 @@ fn run_interactive(
             diagnostics_color,
         );
     };
-    let catalog = match host.discover(&CatalogQuery::default()) {
-        Ok(catalog) => catalog,
-        Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
-    };
+    let catalog =
+        match preview_catalog_or_else(fixed_preview, || host.discover(&CatalogQuery::default())) {
+            Ok(catalog) => catalog,
+            Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
+        };
     let mut clipboard = SystemClipboard::default();
-    let mut discover =
-        |catalog_query: &CatalogQuery| host.discover(catalog_query).map_err(Failure::into_message);
+    let mut discover = |catalog_query: &CatalogQuery| {
+        preview_catalog_or_else(fixed_preview, || {
+            host.discover(catalog_query).map_err(Failure::into_message)
+        })
+    };
     let mut open = |target: &mant_protocol::DocumentOpenTarget| {
-        let (request, policy) = request_for_navigation(target);
-        application::read_full(&request, policy, host).map_err(Failure::into_message)
+        preview_open_or_else(fixed_preview, || {
+            let (request, policy) = request_for_navigation(target);
+            application::read_full(&request, policy, host).map_err(Failure::into_message)
+        })
     };
     let mut external = open_external_uri;
     let mut copy = |request| clipboard.copy(request);
@@ -252,6 +294,52 @@ fn run_interactive(
     ) {
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
+    }
+}
+
+#[cfg(feature = "tui")]
+fn preview_catalog_or_else<E>(
+    fixed_preview: bool,
+    discover: impl FnOnce() -> Result<DocumentCatalog, E>,
+) -> Result<DocumentCatalog, E> {
+    if fixed_preview {
+        Ok(DocumentCatalog::default())
+    } else {
+        discover()
+    }
+}
+
+#[cfg(feature = "tui")]
+fn preview_open_or_else<T>(
+    fixed_preview: bool,
+    open: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    if fixed_preview {
+        Err("annotated preview covers only the explicit input file".to_owned())
+    } else {
+        open()
+    }
+}
+
+#[cfg(all(test, feature = "tui", feature = "annotated-preview"))]
+mod annotated_preview_tests {
+    use super::{preview_catalog_or_else, preview_open_or_else};
+
+    #[test]
+    fn preview_reader_does_not_discover_or_open_from_the_old_loader() {
+        let catalog = preview_catalog_or_else(true, || -> Result<_, ()> {
+            panic!("preview must not invoke registered discovery")
+        })
+        .expect("empty preview catalog");
+        assert_eq!(catalog.total, 0);
+        assert!(catalog.documents.is_empty());
+
+        let error = preview_open_or_else::<()>(true, || {
+            panic!("preview must not open a registered document")
+        })
+        .expect_err("one explicit file only");
+        assert!(error.contains("only the explicit input file"));
+        assert_eq!(preview_open_or_else(false, || Ok(7)), Ok(7));
     }
 }
 

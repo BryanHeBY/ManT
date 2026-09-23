@@ -16,9 +16,20 @@ pub(super) struct StyledCell {
 }
 
 pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
+    let mut cells = Vec::new();
+    visit_styled_cells(line, |cell| {
+        cells.push(cell);
+        true
+    });
+    cells
+}
+
+/// Visit terminal cells in source order. A `NoWrap` viewport can stop before
+/// allocating cells to the right of its visible edge.
+#[allow(clippy::too_many_lines)] // Grapheme, style and link cells advance one shared cursor.
+pub(super) fn visit_styled_cells(line: &LogicalLine, mut visit: impl FnMut(StyledCell) -> bool) {
     const TAB_STOP: usize = 8;
 
-    let mut cells = Vec::new();
     let mut column = line.indent;
     let mut source_index = 0;
     // A grapheme can cross source-style boundaries. Segment the whole logical
@@ -33,7 +44,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
     let mut spans = line.spans.iter();
     let mut span = spans.next();
     let mut span_end = span.map_or(0, |span| span.content.len());
-    for grapheme in mant_render::cells::graphemes(&text) {
+    'graphemes: for grapheme in mant_render::cells::graphemes(&text) {
         while grapheme.bytes().start >= span_end {
             span = spans.next();
             span_end += span.map_or(0, |span| span.content.len());
@@ -73,17 +84,21 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             });
         if grapheme.text() == "\t" && projection.is_none() {
             let spaces = TAB_STOP - column % TAB_STOP;
-            cells.extend((0..spaces).map(|_| StyledCell {
-                source_index,
-                character: ' ',
-                display_character: Some(' '),
-                display_override: None,
-                grapheme_start: true,
-                whitespace: true,
-                width: 1,
-                style,
-                link_index,
-            }));
+            for _ in 0..spaces {
+                if !visit(StyledCell {
+                    source_index,
+                    character: ' ',
+                    display_character: Some(' '),
+                    display_override: None,
+                    grapheme_start: true,
+                    whitespace: true,
+                    width: 1,
+                    style,
+                    link_index,
+                }) {
+                    break 'graphemes;
+                }
+            }
             column += spaces;
             source_index += 1;
             continue;
@@ -107,7 +122,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
                 character
             };
             let cell_width = if index == 0 { display_width } else { 0 };
-            cells.push(StyledCell {
+            if !visit(StyledCell {
                 source_index,
                 character,
                 display_character: projection.is_none().then_some(character),
@@ -117,12 +132,13 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
                 width: cell_width,
                 style,
                 link_index,
-            });
+            }) {
+                break 'graphemes;
+            }
             column += cell_width;
             source_index += 1;
         }
     }
-    cells
 }
 
 /// A terminal glyph is indivisible. A unique occurrence covering any source
@@ -313,5 +329,26 @@ pub(super) const fn tldr_decoration_width(line: &LogicalLine, width: usize) -> u
         4
     } else {
         0
+    }
+}
+
+#[cfg(test)]
+mod bounded_visit_tests {
+    use super::*;
+    use crate::document::WrapMode;
+
+    #[test]
+    fn no_wrap_cell_visit_stops_before_allocating_the_far_suffix() {
+        // The pinned CVS term.c::term_field can emit a long literal field in
+        // one physical row. Only viewport cells need owned StyledCell values.
+        let line = LogicalLine::plain(0, "x".repeat(1_000_000), Style::default())
+            .surface(LineSurface::Fixed)
+            .wrap_mode(WrapMode::NoWrap);
+        let mut visited = 0;
+        visit_styled_cells(&line, |_| {
+            visited += 1;
+            visited < 9
+        });
+        assert_eq!(visited, 9);
     }
 }

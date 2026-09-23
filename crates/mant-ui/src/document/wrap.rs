@@ -22,7 +22,7 @@ mod cells;
 mod table;
 use cells::{
     fitting_prefix, styled_cells, tldr_decoration_width, trim_trailing_whitespace,
-    wrapped_cells_to_line,
+    visit_styled_cells, wrapped_cells_to_line,
 };
 use table::render_table_row_with_links;
 
@@ -205,30 +205,31 @@ fn wrap_logical_line(
     }
 
     if line.wrap_mode == WrapMode::NoWrap {
-        let cells = styled_cells(line);
         let end = horizontal_offset.saturating_add(width);
         let mut column = 0_usize;
-        let mut start_index = None;
-        let mut end_index = 0;
+        let mut selected = Vec::new();
+        let mut started = false;
         let mut padding = 0;
-        for (index, cell) in cells.iter().enumerate() {
+        visit_styled_cells(line, |cell| {
             if cell.grapheme_start {
                 let next = column.saturating_add(cell.width);
                 if next > end {
-                    break;
+                    return false;
                 }
-                if column >= horizontal_offset && start_index.is_none() {
-                    start_index = Some(index);
+                if column >= horizontal_offset && !started {
+                    started = true;
                     padding = column - horizontal_offset;
                 }
                 column = next;
             }
-            if start_index.is_some() {
-                end_index = index + 1;
+            if started {
+                selected.push(cell);
             }
-        }
-        let selected = start_index.map_or(&[][..], |start| &cells[start..end_index]);
-        return vec![wrapped_cells_to_line(line, width, padding, selected, false)];
+            true
+        });
+        return vec![wrapped_cells_to_line(
+            line, width, padding, &selected, false,
+        )];
     }
 
     let decoration_width = tldr_decoration_width(line, width);
@@ -344,4 +345,67 @@ fn panel_border(width: usize, left: char, right: char) -> Line<'static> {
         format!("{left}{}{right}", "─".repeat(width.saturating_sub(2))),
         style,
     ))
+}
+
+#[cfg(test)]
+mod no_wrap_tests {
+    use std::num::NonZeroU32;
+
+    use ratatui::{style::Modifier, text::Span};
+
+    use super::*;
+    use crate::document::{LogicalLinkRange, model::LinkIdentity};
+
+    #[test]
+    fn million_column_fixed_row_projects_only_the_requested_window() {
+        // Pinned CVS term.c::term_flushln/term_field keeps native physical
+        // rows; the exact .Bd -literal input was checked with the reference.
+        let line = LogicalLine::plain(0, "x".repeat(1_000_000), Style::default())
+            .surface(LineSurface::Fixed)
+            .wrap_mode(WrapMode::NoWrap);
+        let first = wrap_line_with_links_at_offset(&line, 8, 0);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].line.to_string(), "xxxxxxxx");
+        let tail = wrap_line_with_links_at_offset(&line, 8, 999_992);
+        assert_eq!(tail.len(), 1);
+        assert_eq!(tail[0].line.to_string(), "xxxxxxxx");
+    }
+
+    #[test]
+    fn left_clipped_wide_glyph_keeps_link_cells_and_source_style() {
+        // Pinned CVS term.c::term_field places the UTF-8 glyph at its native
+        // visual column; viewport clipping does not split that glyph.
+        let identity = LinkIdentity::NativeFixed(NonZeroU32::new(1).unwrap());
+        let linked = Style::default().add_modifier(Modifier::UNDERLINED);
+        let mut line = LogicalLine::plain(0, "", Style::default())
+            .surface(LineSurface::Fixed)
+            .wrap_mode(WrapMode::NoWrap);
+        line.spans = vec![Span::raw("abc"), Span::styled("界LINK", linked)];
+        line.links.push(LogicalLinkRange {
+            identity,
+            start_scalar: 4,
+            end_scalar: 8,
+        });
+        let clipped = wrap_line_with_links_at_offset(&line, 5, 4);
+        assert_eq!(clipped[0].line.to_string(), " LINK");
+        assert_eq!(clipped[0].links.len(), 1);
+        assert_eq!(clipped[0].links[0].identity, identity);
+        assert_eq!(
+            (
+                clipped[0].links[0].start_column,
+                clipped[0].links[0].end_column
+            ),
+            (1, 5)
+        );
+        assert!(
+            clipped[0]
+                .line
+                .spans
+                .iter()
+                .any(|span| span.content == "LINK"
+                    && span.style.add_modifier.contains(Modifier::UNDERLINED))
+        );
+        let complete = wrap_line_with_links_at_offset(&line, 3, 3);
+        assert_eq!(complete[0].line.to_string(), "界L");
+    }
 }

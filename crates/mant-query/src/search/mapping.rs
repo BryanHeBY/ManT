@@ -2,62 +2,27 @@
 use mant_codec::markdown_mapping::{InlineMappingKind, map_inline_characters};
 use mant_protocol::SearchScope;
 use pulldown_cmark::{Event, Parser, TagEnd};
+use std::cell::Cell;
 use std::ops::Range;
 
 pub(super) struct AnchorStrippedLine {
     pub(super) text: String,
-    segments: Vec<OffsetSegment>,
 }
 
 impl AnchorStrippedLine {
     pub(super) fn new(line: &str, hidden: impl Iterator<Item = Range<usize>>) -> Self {
         let mut text = String::with_capacity(line.len());
-        let mut segments = Vec::new();
         let mut cursor = 0;
         for range in hidden {
-            push_retained_line_segment(
-                line,
-                cursor..range.start.min(line.len()),
-                &mut text,
-                &mut segments,
-            );
-            cursor = range.end.min(line.len());
+            let start = range.start.min(line.len());
+            if cursor < start {
+                text.push_str(&line[cursor..start]);
+            }
+            cursor = cursor.max(range.end.min(line.len()));
         }
-        push_retained_line_segment(line, cursor..line.len(), &mut text, &mut segments);
-        Self { text, segments }
+        text.push_str(&line[cursor..]);
+        Self { text }
     }
-
-    pub(super) fn map_range(&self, source: Range<usize>) -> Vec<Range<usize>> {
-        self.segments
-            .iter()
-            .filter_map(|segment| {
-                let start = source.start.max(segment.markdown.start);
-                let end = source.end.min(segment.markdown.end);
-                (start < end).then(|| {
-                    segment.visible.start + start.saturating_sub(segment.markdown.start)
-                        ..segment.visible.start + end.saturating_sub(segment.markdown.start)
-                })
-            })
-            .collect()
-    }
-}
-
-fn push_retained_line_segment(
-    line: &str,
-    source: Range<usize>,
-    text: &mut String,
-    segments: &mut Vec<OffsetSegment>,
-) {
-    if source.is_empty() {
-        return;
-    }
-    let visible_start = text.len();
-    text.push_str(&line[source.clone()]);
-    segments.push(OffsetSegment {
-        visible: visible_start..text.len(),
-        markdown: source,
-        linear: true,
-    });
 }
 
 pub(super) struct TextPosition {
@@ -67,7 +32,14 @@ pub(super) struct TextPosition {
 
 pub(super) struct LineIndex {
     starts: Vec<usize>,
+    // Final presented end per line. Trimming a long whitespace suffix for
+    // every hit on the same line would make count-only scans quadratic.
+    presented_ends: Vec<usize>,
     anchors: Vec<Range<usize>>,
+    // Search hits are visited in source order. The cursor makes repeated
+    // Unicode columns on one long line amortized linear, without a per-scalar
+    // side index for the entire document.
+    column_cursor: Cell<(usize, usize, usize)>,
 }
 
 impl LineIndex {
@@ -78,12 +50,28 @@ impl LineIndex {
                 .enumerate()
                 .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
         );
-        Self { starts, anchors }
+        let presented_ends = starts
+            .iter()
+            .enumerate()
+            .map(|(index, start)| {
+                let end = starts.get(index + 1).copied().unwrap_or(text.len());
+                let line = text[*start..end]
+                    .strip_suffix('\n')
+                    .unwrap_or(&text[*start..end]);
+                *start + line.trim_end().len()
+            })
+            .collect();
+        Self {
+            starts,
+            presented_ends,
+            anchors,
+            column_cursor: Cell::new((0, 0, 0)),
+        }
     }
 
     pub(super) fn presented_line(&self, text: &str, index: usize) -> AnchorStrippedLine {
         let start = self.start(index);
-        let line = self.line(text, index).trim_end();
+        let line = &text[start..self.presented_end(index)];
         let first = self.anchors.partition_point(|range| range.end <= start);
         let hidden = self.anchors[first..]
             .iter()
@@ -94,14 +82,9 @@ impl LineIndex {
 
     /// Determine whether a source range retains any presented bytes without
     /// constructing a full line or its exact highlight fragments.
-    pub(super) fn has_presented_range(
-        &self,
-        text: &str,
-        line_index: usize,
-        source: Range<usize>,
-    ) -> bool {
+    pub(super) fn has_presented_range(&self, line_index: usize, source: Range<usize>) -> bool {
         let line_start = self.start(line_index);
-        let line_end = line_start + self.line(text, line_index).trim_end().len();
+        let line_end = self.presented_end(line_index);
         let start = (line_start + source.start).min(line_end);
         let end = (line_start + source.end).min(line_end);
         if start >= end {
@@ -129,9 +112,17 @@ impl LineIndex {
         let offset = offset.min(text.len());
         let line_index = self.starts.partition_point(|start| *start <= offset) - 1;
         let line_start = self.starts[line_index];
+        let (old_line, old_byte, old_scalars) = self.column_cursor.get();
+        let (begin, prior_scalars) = if old_line == line_index && old_byte <= offset {
+            (old_byte, old_scalars)
+        } else {
+            (line_start, 0)
+        };
+        let scalars = prior_scalars.saturating_add(text[begin..offset].chars().count());
+        self.column_cursor.set((line_index, offset, scalars));
         TextPosition {
             line_index,
-            column: text[line_start..offset].chars().count().saturating_add(1),
+            column: scalars.saturating_add(1),
         }
     }
 
@@ -139,20 +130,12 @@ impl LineIndex {
         self.starts.partition_point(|start| *start <= offset) - 1
     }
 
-    pub(super) fn line<'a>(&self, text: &'a str, line_index: usize) -> &'a str {
-        let start = self.starts[line_index];
-        let end = self
-            .starts
-            .get(line_index + 1)
-            .copied()
-            .unwrap_or(text.len());
-        text[start..end]
-            .strip_suffix('\n')
-            .unwrap_or(&text[start..end])
-    }
-
     pub(super) fn start(&self, line_index: usize) -> usize {
         self.starts[line_index]
+    }
+
+    pub(super) fn presented_end(&self, line_index: usize) -> usize {
+        self.presented_ends[line_index]
     }
 }
 
@@ -167,9 +150,55 @@ struct OffsetSegment {
     visible: Range<usize>,
     markdown: Range<usize>,
     linear: bool,
+    separator: bool,
+}
+
+pub(super) struct VisiblePart<'a> {
+    pub(super) text: &'a str,
+    pub(super) separator: bool,
+    pub(super) markdown: Option<Range<usize>>,
+    pub(super) visible: Range<usize>,
 }
 
 impl SearchableText {
+    pub(super) fn is_separator_at(&self, offset: usize) -> bool {
+        self.segment_at(offset)
+            .is_some_and(|segment| segment.separator)
+    }
+
+    pub(super) fn visible_start_for_markdown(&self, markdown_start: usize) -> Option<usize> {
+        self.segments
+            .iter()
+            .find(|segment| {
+                segment.markdown.end > markdown_start
+                    || (segment.markdown.is_empty() && segment.markdown.start == markdown_start)
+            })
+            .map(|segment| segment.visible.start)
+    }
+
+    /// Retained canonical-visible parts, with synthetic breaks kept separate.
+    pub(super) fn parts(&self, range: Range<usize>) -> Vec<VisiblePart<'_>> {
+        let first = self
+            .segments
+            .partition_point(|segment| segment.visible.end <= range.start);
+        self.segments[first..]
+            .iter()
+            .take_while(|segment| segment.visible.start < range.end)
+            .filter_map(|segment| {
+                let start = range.start.max(segment.visible.start);
+                let end = range.end.min(segment.visible.end);
+                (start < end).then(|| VisiblePart {
+                    text: &self.text[start..end],
+                    separator: segment.separator,
+                    markdown: segment.linear.then(|| {
+                        let source_start = segment.markdown.start + start - segment.visible.start;
+                        source_start..source_start + end - start
+                    }),
+                    visible: start..end,
+                })
+            })
+            .collect()
+    }
     pub(super) fn new(markdown: &str, scope: SearchScope) -> Self {
         if scope == SearchScope::Markdown {
             return Self {
@@ -275,6 +304,7 @@ impl<'a> VisibleBuilder<'a> {
                 visible: visible_start..visible_end,
                 markdown: mapped.source,
                 linear: mapped.linear,
+                separator: false,
             });
         }
     }
@@ -289,6 +319,7 @@ impl<'a> VisibleBuilder<'a> {
             visible: start..self.text.len(),
             markdown,
             linear: false,
+            separator: true,
         });
     }
 
@@ -312,6 +343,27 @@ impl<'a> VisibleBuilder<'a> {
             text: self.text,
             segments: self.segments,
             direct_markdown: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LineIndex;
+
+    #[test]
+    fn unicode_columns_remain_exact_across_forward_and_backward_offsets() {
+        let text = "a界e\u{301}z\nβ🙂x";
+        let lines = LineIndex::with_anchors(text, Vec::new());
+        let offsets = [0, 1, 4, 5, 7, 8, 9, 11, 15, 16, 8, 7, 0, text.len()];
+        for offset in offsets {
+            let found = lines.position(text, offset);
+            let line_start = lines.start(found.line_index);
+            assert_eq!(
+                found.column,
+                text[line_start..offset].chars().count() + 1,
+                "byte offset {offset}"
+            );
         }
     }
 }

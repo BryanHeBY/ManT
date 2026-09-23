@@ -6907,6 +6907,32 @@
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
+            "description": "The selected native owner's direct body, copied only under the response\nbudget from final display slices; no Flow block is synthesized.",
+            "type": "object",
+            "properties": {
+              "direct_body": {
+                "description": "Direct body only, never a later sibling or child owner's body.",
+                "$ref": "#/$defs/ExplanationFixedSelection"
+              },
+              "key": {
+                "description": "Exact one-based owner key in the queried Fixed document.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "fixed-owner"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "key",
+              "direct_body"
+            ]
+          },
+          {
             "description": "Physical owner stored once because nested selected contexts also use\nits body; not a declaration-group or alias relationship.",
             "type": "object",
             "properties": {
@@ -7130,6 +7156,13 @@
             "description": "Matching policy for documented names/forms.",
             "$ref": "#/$defs/NameCase"
           },
+          "fixedForms": {
+            "description": "Complete native Fixed forms, mutually exclusive with Flow `forms`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedSelection"
+            }
+          },
           "forms": {
             "description": "Original visible forms projected through validated content bindings.",
             "type": "array",
@@ -7301,6 +7334,105 @@
           "contentOmitted"
         ]
       },
+      "ExplanationFixedFormRange": {
+        "description": "A complete or partial byte range in a returned Fixed form's logical text.\nIts display fragments resolve through `entry.fixedForms[formIndex]`.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive UTF-8 byte offset in the joined form.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "formIndex": {
+            "description": "Index in this evidence's returned Fixed forms.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "startByte": {
+            "description": "Inclusive UTF-8 byte offset in the joined form.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "formIndex",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "ExplanationFixedPart": {
+        "description": "One exact final-run fragment copied under an explanation response budget.",
+        "type": "object",
+        "properties": {
+          "row": {
+            "description": "Final physical row containing the run.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "runColumn": {
+            "description": "Run's native starting terminal column; UTF-8 bytes are not columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "slice": {
+            "description": "Byte range in the original Fixed surface's final run.",
+            "$ref": "#/$defs/OutputSlice"
+          },
+          "source": {
+            "description": "Source-qualified native run identity, when it survived.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "description": "Exact copied UTF-8 bytes from this slice.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "slice",
+          "row",
+          "runColumn",
+          "text"
+        ]
+      },
+      "ExplanationFixedSelection": {
+        "description": "One bounded selection with native join evidence and no second full body.",
+        "type": "object",
+        "properties": {
+          "joins": {
+            "description": "One native join fact per adjacent pair.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TextJoin"
+            }
+          },
+          "parts": {
+            "description": "Ordered, copied final-run fragments.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedPart"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parts",
+          "joins"
+        ]
+      },
       "ExplanationFormMatch": {
         "description": "One complete authored form that actually matched during collection.",
         "type": "object",
@@ -7430,6 +7562,13 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/ExplanationContentRange"
+            }
+          },
+          "fixedForms": {
+            "description": "Matched byte ranges in returned native Fixed forms. Flow uses an empty\narray; these never masquerade as `Inline`/`ContentStore` positions.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedFormRange"
             }
           },
           "forms": {
@@ -8565,6 +8704,36 @@
           "node"
         ]
       },
+      "OutputSlice": {
+        "description": "One half-open UTF-8 byte range in a final run.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "run": {
+            "description": "Final run key, not a temporary buffer token.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run",
+          "startByte",
+          "endByte"
+        ]
+      },
       "ParameterKind": {
         "description": "Semantic behavior of one command parameter.",
         "oneOf": [
@@ -9242,6 +9411,71 @@
             "description": "A double horizontal rule.",
             "type": "string",
             "const": "double-horizontal"
+          }
+        ]
+      },
+      "TextJoin": {
+        "description": "Evidence for whether adjacent slices form one searchable logical text.",
+        "oneOf": [
+          {
+            "description": "No byte lies between the slices, including a proven soft wrap.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "direct-contact"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact native-consumed authored separator between the slices.\n\nA separator already visible inside a slice is not repeated here.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored-separator"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "A native structural boundary forbids a cross-slice match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-boundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Adjacency exists but cannot license a cross-slice match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           }
         ]
       },
@@ -10184,6 +10418,27 @@
               "sections",
               "blocks",
               "itemIndex"
+            ]
+          },
+          {
+            "description": "Exact native owner in a Fixed body. The one-based key resolves only\nagainst the containing document's validated `FixedBody.owners`.",
+            "type": "object",
+            "properties": {
+              "key": {
+                "description": "Dense, result-local native owner key.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "fixed-owner"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "key"
             ]
           },
           {
@@ -13142,6 +13397,14 @@
             "description": "Final location after any native target migration.",
             "$ref": "#/$defs/DisplayPoint"
           },
+          "authored": {
+            "description": "Whether the retained target originated in an explicit `.Tg` request.\nGenerated native tags remain addressable but are not authored aliases.",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Normalized document-local identity, independent of authored spelling.",
+            "$ref": "#/$defs/NodeId"
+          },
           "key": {
             "description": "Dense one-based declaration key.",
             "type": "integer",
@@ -13151,6 +13414,19 @@
           "name": {
             "description": "Authored declaration spelling, not a copied visible body.",
             "type": "string"
+          },
+          "renderedFragment": {
+            "description": "Fragment emitted after native HTML ID de-duplication.",
+            "$ref": "#/$defs/FragmentAlias"
+          },
+          "section": {
+            "description": "Enclosing native section, if the declaration was made within one.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
           },
           "source": {
             "description": "Original authored declaration location, distinct from `at`.",
@@ -13167,7 +13443,11 @@
         "additionalProperties": false,
         "required": [
           "key",
+          "id",
+          "section",
           "name",
+          "renderedFragment",
+          "authored",
           "at",
           "source"
         ]
@@ -15659,9 +15939,31 @@
         "description": "Native section navigation, with title and direct body separate.",
         "type": "object",
         "properties": {
+          "at": {
+            "description": "Final native display boundary where this section begins, including\nheadings whose title has no surviving visible glyph.",
+            "$ref": "#/$defs/DisplayPoint"
+          },
           "directBody": {
             "description": "Direct content, excluding child sections.",
             "$ref": "#/$defs/TextSelection"
+          },
+          "fragmentAliases": {
+            "description": "Exact authored native target spellings retained for provenance.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FragmentAlias"
+            }
+          },
+          "generatedFragmentAliases": {
+            "description": "Native-generated target spellings, distinct from authored aliases.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FragmentAlias"
+            }
+          },
+          "id": {
+            "description": "Normalized document-local navigation identity, independent of the key.",
+            "$ref": "#/$defs/NodeId"
           },
           "key": {
             "description": "Dense one-based section key.",
@@ -15685,6 +15987,13 @@
             "format": "uint32",
             "minimum": 1
           },
+          "renderedFragmentAliases": {
+            "description": "Fragments emitted for these targets after native HTML ID de-duplication.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FragmentAlias"
+            }
+          },
           "source": {
             "description": "Authored heading location when known.",
             "anyOf": [
@@ -15704,8 +16013,10 @@
         "additionalProperties": false,
         "required": [
           "key",
+          "id",
           "parent",
           "levelHint",
+          "at",
           "title",
           "directBody",
           "source"
@@ -16368,6 +16679,10 @@
             "description": "Direct visible head, possibly empty.",
             "$ref": "#/$defs/TextSelection"
           },
+          "id": {
+            "description": "Normalized document-local identity, distinct from the native key.",
+            "$ref": "#/$defs/NodeId"
+          },
           "key": {
             "description": "Dense one-based owner key.",
             "type": "integer",
@@ -16411,6 +16726,7 @@
         "additionalProperties": false,
         "required": [
           "key",
+          "id",
           "parent",
           "section",
           "role",
@@ -18298,15 +18614,15 @@
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains available for presentation.",
+        "description": "Text representation searched.",
         "oneOf": [
           {
-            "description": "Search visible document text.",
+            "description": "Search final visible document content.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search bytes of the user-exportable Markdown artifact.",
             "type": "string",
             "const": "markdown"
           }
@@ -18349,6 +18665,7 @@
         "$ref": "#/$defs/ResolvedDocumentScope"
       }
     },
+    "additionalProperties": false,
     "required": [
       "schema",
       "scope",
@@ -19078,6 +19395,163 @@
         "required": [
           "start",
           "end"
+        ]
+      },
+      "ContentInlineRoot": {
+        "description": "Inline root within the addressed final block.",
+        "oneOf": [
+          {
+            "description": "Paragraph or preformatted content.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "inlines"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A term in a definition list, whether or not it has semantic facts.",
+            "type": "object",
+            "properties": {
+              "itemIndex": {
+                "description": "Zero-based item in the addressed definition list.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-term"
+              },
+              "termIndex": {
+                "description": "Zero-based term in the selected item.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "itemIndex",
+              "termIndex"
+            ]
+          }
+        ]
+      },
+      "ContentLocation": {
+        "description": "Exact final-IR inline position, valid only in the document being addressed.\n\nAn empty inline path denotes the whole inline root; a link occurrence always\nuses a nonempty path to its actual `Inline::Link`. Source bytes, visible\nscalar ranges and terminal cells are not represented by this type.",
+        "oneOf": [
+          {
+            "description": "Original visible document heading, not native bibliographic metadata.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "document-heading"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ]
+          },
+          {
+            "description": "Original visible heading of a structurally addressed section.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "section-heading"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "sections": {
+                "description": "Zero-based nested section indices, nonempty for a section heading.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections",
+              "path"
+            ]
+          },
+          {
+            "description": "Content before sections or within one section.",
+            "type": "object",
+            "properties": {
+              "blocks": {
+                "description": "Typed path beginning with a block step.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContentBlockStep"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "root": {
+                "description": "Inline container within the addressed block.",
+                "$ref": "#/$defs/ContentInlineRoot"
+              },
+              "sections": {
+                "description": "Zero-based nested section indices; empty selects root content.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections",
+              "blocks",
+              "root",
+              "path"
+            ]
+          }
         ]
       },
       "ContentOwner": {
@@ -20688,6 +21162,32 @@
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
+            "description": "The selected native owner's direct body, copied only under the response\nbudget from final display slices; no Flow block is synthesized.",
+            "type": "object",
+            "properties": {
+              "direct_body": {
+                "description": "Direct body only, never a later sibling or child owner's body.",
+                "$ref": "#/$defs/ExplanationFixedSelection"
+              },
+              "key": {
+                "description": "Exact one-based owner key in the queried Fixed document.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "fixed-owner"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "key",
+              "direct_body"
+            ]
+          },
+          {
             "description": "Physical owner stored once because nested selected contexts also use\nits body; not a declaration-group or alias relationship.",
             "type": "object",
             "properties": {
@@ -20911,6 +21411,13 @@
             "description": "Matching policy for documented names/forms.",
             "$ref": "#/$defs/NameCase"
           },
+          "fixedForms": {
+            "description": "Complete native Fixed forms, mutually exclusive with Flow `forms`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedSelection"
+            }
+          },
           "forms": {
             "description": "Original visible forms projected through validated content bindings.",
             "type": "array",
@@ -21082,6 +21589,105 @@
           "contentOmitted"
         ]
       },
+      "ExplanationFixedFormRange": {
+        "description": "A complete or partial byte range in a returned Fixed form's logical text.\nIts display fragments resolve through `entry.fixedForms[formIndex]`.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive UTF-8 byte offset in the joined form.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "formIndex": {
+            "description": "Index in this evidence's returned Fixed forms.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "startByte": {
+            "description": "Inclusive UTF-8 byte offset in the joined form.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "formIndex",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "ExplanationFixedPart": {
+        "description": "One exact final-run fragment copied under an explanation response budget.",
+        "type": "object",
+        "properties": {
+          "row": {
+            "description": "Final physical row containing the run.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "runColumn": {
+            "description": "Run's native starting terminal column; UTF-8 bytes are not columns.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "slice": {
+            "description": "Byte range in the original Fixed surface's final run.",
+            "$ref": "#/$defs/OutputSlice"
+          },
+          "source": {
+            "description": "Source-qualified native run identity, when it survived.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "description": "Exact copied UTF-8 bytes from this slice.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "slice",
+          "row",
+          "runColumn",
+          "text"
+        ]
+      },
+      "ExplanationFixedSelection": {
+        "description": "One bounded selection with native join evidence and no second full body.",
+        "type": "object",
+        "properties": {
+          "joins": {
+            "description": "One native join fact per adjacent pair.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TextJoin"
+            }
+          },
+          "parts": {
+            "description": "Ordered, copied final-run fragments.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedPart"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parts",
+          "joins"
+        ]
+      },
       "ExplanationFormMatch": {
         "description": "One complete authored form that actually matched during collection.",
         "type": "object",
@@ -21211,6 +21817,13 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/ExplanationContentRange"
+            }
+          },
+          "fixedForms": {
+            "description": "Matched byte ranges in returned native Fixed forms. Flow uses an empty\narray; these never masquerade as `Inline`/`ContentStore` positions.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedFormRange"
             }
           },
           "forms": {
@@ -22129,16 +22742,6 @@
           }
         ]
       },
-      "MarkdownSchema": {
-        "description": "Markdown contract used as the coordinate space for every search format.",
-        "oneOf": [
-          {
-            "description": "Version 1 of `ManT`'s deterministic Markdown rendering contract.",
-            "type": "string",
-            "const": "mant.markdown/v1"
-          }
-        ]
-      },
       "NameCase": {
         "description": "Matching policy for semantic names, independent of document provenance.",
         "oneOf": [
@@ -22344,6 +22947,36 @@
         "additionalProperties": false,
         "required": [
           "node"
+        ]
+      },
+      "OutputSlice": {
+        "description": "One half-open UTF-8 byte range in a final run.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "run": {
+            "description": "Final run key, not a temporary buffer token.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run",
+          "startByte",
+          "endByte"
         ]
       },
       "ParameterKind": {
@@ -22939,9 +23572,16 @@
         ]
       },
       "ScopeSearch": {
-        "description": "Globally paginated logical-root search over a resolved document scope.",
+        "description": "Globally paginated occurrence search over a resolved document scope.",
         "type": "object",
         "properties": {
+          "coverageByDocument": {
+            "description": "Per-document coverage, including zero-hit and paginated-away documents.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ScopedSearchCoverage"
+            }
+          },
           "documents": {
             "description": "Non-empty document groups in scope order.",
             "type": "array",
@@ -22969,29 +23609,51 @@
             "$ref": "#/$defs/SearchQuery"
           },
           "returned": {
-            "description": "Matching line groups present in this response.",
+            "description": "Complete occurrences present in this response.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
           },
+          "schema": {
+            "description": "Exact scoped-search schema discriminator.",
+            "$ref": "#/$defs/ScopeSearchSchema"
+          },
+          "semanticsComplete": {
+            "description": "Conjunction of every scanned document's semantic completeness.",
+            "type": "boolean"
+          },
           "total": {
-            "description": "Matching line groups across all documents before pagination.",
+            "description": "Complete occurrences across all documents before pagination.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
           },
           "truncated": {
-            "description": "Whether additional matching line groups remain.",
+            "description": "Whether additional complete occurrences remain.",
             "type": "boolean"
           }
         },
+        "additionalProperties": false,
         "required": [
+          "schema",
           "query",
           "total",
           "returned",
           "offset",
           "truncated",
+          "semanticsComplete",
+          "coverageByDocument",
           "documents"
+        ]
+      },
+      "ScopeSearchSchema": {
+        "description": "Exact schema marker for a scoped search response.",
+        "oneOf": [
+          {
+            "description": "Version 0.12 of the pre-stable scoped search contract.",
+            "type": "string",
+            "const": "mant.scope-search/v0.12"
+          }
         ]
       },
       "ScopedDocument": {
@@ -23181,6 +23843,59 @@
           "reason"
         ]
       },
+      "ScopedSearchCoverage": {
+        "description": "Coverage of one scanned scope document, including zero-hit documents.",
+        "type": "object",
+        "properties": {
+          "address": {
+            "description": "Stable logical document identity.",
+            "$ref": "#/$defs/DocumentAddress"
+          },
+          "coverageDetailsOmitted": {
+            "description": "Exact count of diagnostics replaced by one summary.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "depth": {
+            "description": "Minimum distance from any initial document.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "diagnostics": {
+            "description": "Bounded producer and validation findings.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Diagnostic"
+            }
+          },
+          "semanticsComplete": {
+            "description": "Whether all semantic associations were verified.",
+            "type": "boolean"
+          },
+          "sourceContext": {
+            "description": "Source table closing diagnostic spans, absent for TLDR-only input.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "address",
+          "depth",
+          "semanticsComplete",
+          "coverageDetailsOmitted",
+          "diagnostics"
+        ]
+      },
       "ScopedSearchDocument": {
         "description": "One document's logical hits inside a globally paginated scope result.",
         "type": "object",
@@ -23190,10 +23905,10 @@
             "$ref": "#/$defs/DocumentAddress"
           },
           "contentProjection": {
-            "description": "Closed response-local store resolving every retained logical root.",
+            "description": "Closed response-local visible units for retained occurrences.",
             "anyOf": [
               {
-                "$ref": "#/$defs/ContentProjection"
+                "$ref": "#/$defs/SearchContentProjection"
               },
               {
                 "type": "null"
@@ -23208,14 +23923,14 @@
             "minimum": 0
           },
           "matches": {
-            "description": "Matching line groups retained from the globally paginated result set.\nTheir ordinals are global across all documents in the scope.",
+            "description": "Complete occurrences retained from the globally paginated result set.\nTheir ordinals are global across all documents in the scope.",
             "type": "array",
             "items": {
-              "$ref": "#/$defs/SearchHit"
+              "$ref": "#/$defs/SearchMatch"
             }
           },
           "render": {
-            "description": "Canonical Markdown coordinate space for this document's hits.",
+            "description": "Coordinate space for this document's hits.",
             "$ref": "#/$defs/SearchRender"
           },
           "sourceContext": {
@@ -23257,44 +23972,375 @@
           }
         ]
       },
+      "SearchContentProjection": {
+        "description": "Only retained occurrences contribute fragments and units.",
+        "type": "object",
+        "properties": {
+          "fragments": {
+            "description": "Dense copied fragments, each with a typed producer-checked source.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchFragment"
+            }
+          },
+          "units": {
+            "description": "Dense ordered units closing every visible match.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchTextUnit"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fragments",
+          "units"
+        ]
+      },
       "SearchContextLine": {
-        "description": "One logical-root line surrounding a match.",
+        "description": "One presentation line surrounding an exact occurrence.",
         "type": "object",
         "properties": {
           "line": {
-            "description": "One-based line number inside the authoritative logical root.",
+            "description": "One-based presentation line number.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
           },
           "matched": {
-            "description": "Whether this is one of the lines intersecting the match.",
+            "description": "Whether this line intersects the occurrence.",
             "type": "boolean"
           },
           "text": {
-            "description": "Complete rendered line without its newline terminator.",
+            "description": "Rendered line without its newline terminator.",
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "line",
           "text",
           "matched"
         ]
       },
-      "SearchHit": {
-        "description": "One rendered line group containing one or more exact occurrences.",
+      "SearchDisplaySlice": {
+        "description": "The part of one response fragment that highlights the actual display.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive fragment-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "fragment": {
+            "description": "Fragment referenced by this display slice.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive fragment-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fragment",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchFixedFragmentSource": {
+        "description": "Navigation metadata for a Fixed fragment; producer validates it against the surface.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive run-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "row": {
+            "description": "One-based final physical row.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "run": {
+            "description": "One-based final run key.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive run-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "run",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchFlowFragmentSource": {
+        "description": "Exact Flow source of one copied fragment.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive root-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "kind": {
+            "description": "Required source-kind discriminator.",
+            "$ref": "#/$defs/SearchFlowSourceKind"
+          },
+          "location": {
+            "description": "Complete document-local structural location.",
+            "$ref": "#/$defs/ContentLocation"
+          },
+          "startByte": {
+            "description": "Inclusive root-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "location",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchFlowSourceKind": {
+        "description": "Literal discriminator of a Flow fragment source.",
+        "oneOf": [
+          {
+            "description": "A source fragment of the primary Flow document.",
+            "type": "string",
+            "const": "flow"
+          }
+        ]
+      },
+      "SearchFragment": {
+        "description": "One exact visible fragment; text is copied only for a retained hit.\nThe sole empty form is a derived terminal endpoint for a render join.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense one-based response-local key.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "source": {
+            "description": "Snapshot-relative producer-checked origin or honest derived status.",
+            "$ref": "#/$defs/SearchFragmentSource"
+          },
+          "text": {
+            "description": "Exact UTF-8 bytes contributed by this fragment.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "source"
+        ]
+      },
+      "SearchFragmentSource": {
+        "description": "Provenance of a retained visible fragment.",
+        "anyOf": [
+          {
+            "description": "Exact Flow content location and root-relative source bytes.",
+            "$ref": "#/$defs/SearchFlowFragmentSource"
+          },
+          {
+            "description": "Exact quick-reference path and source bytes, not a manual `SourceKey`.",
+            "$ref": "#/$defs/SearchTldrFragmentSource"
+          },
+          {
+            "description": "Visible bytes produced by a rendering transform without proven authored bytes.",
+            "$ref": "#/$defs/SearchRenderDerivedFragmentSource"
+          },
+          {
+            "description": "Final native row/run bytes.",
+            "$ref": "#/$defs/SearchFixedFragmentSource"
+          }
+        ]
+      },
+      "SearchLocation": {
+        "description": "The sole authoritative coordinate of one match.",
+        "oneOf": [
+          {
+            "description": "A validated Flow or TLDR visible-text unit.",
+            "type": "object",
+            "properties": {
+              "endByte": {
+                "description": "Exclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "visible-flow"
+              },
+              "startByte": {
+                "description": "Inclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "unit": {
+                "description": "Response-local complete text unit.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "unit",
+              "startByte",
+              "endByte"
+            ]
+          },
+          {
+            "description": "A validated Fixed visible-text unit.",
+            "type": "object",
+            "properties": {
+              "endByte": {
+                "description": "Exclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "visible-fixed"
+              },
+              "startByte": {
+                "description": "Inclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "unit": {
+                "description": "Response-local complete text unit.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "unit",
+              "startByte",
+              "endByte"
+            ]
+          },
+          {
+            "description": "UTF-8 bytes in the exact user-exportable Markdown artifact.",
+            "type": "object",
+            "properties": {
+              "endByte": {
+                "description": "Exclusive artifact byte offset.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "endColumn": {
+                "description": "One-based exclusive end column.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "endLine": {
+                "description": "One-based end line.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "markdown-artifact"
+              },
+              "startByte": {
+                "description": "Inclusive artifact byte offset.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "startColumn": {
+                "description": "One-based start column.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "startLine": {
+                "description": "One-based start line.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "startByte",
+              "endByte",
+              "startLine",
+              "startColumn",
+              "endLine",
+              "endColumn"
+            ]
+          }
+        ]
+      },
+      "SearchMatch": {
+        "description": "One exact match, never a group of equal-line matches.",
         "type": "object",
         "properties": {
           "context": {
-            "description": "Optional rendered lines surrounding the match.",
+            "description": "Bounded surrounding presentation lines.",
             "type": "array",
+            "default": [],
             "items": {
               "$ref": "#/$defs/SearchContextLine"
             }
           },
+          "displaySlices": {
+            "description": "Subordinate visible fragments; empty for artifact-only hits.",
+            "type": "array",
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/SearchDisplaySlice"
+            }
+          },
+          "location": {
+            "description": "Authoritative tagged occurrence coordinate.",
+            "$ref": "#/$defs/SearchLocation"
+          },
+          "matchedText": {
+            "description": "Exact searched bytes, not a presentation-only preview.",
+            "type": "string"
+          },
           "nodeSource": {
-            "description": "Original-source location of the owning outline node, when retained.",
+            "description": "Source of the outline owner, when known.",
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
@@ -23304,224 +24350,30 @@
               }
             ]
           },
-          "occurrenceCount": {
-            "description": "Total exact occurrences, including any omitted to bound the response.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "occurrences": {
-            "description": "Retained exact occurrences represented by this hit.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchOccurrence"
-            },
-            "maxItems": 256,
-            "minItems": 1
-          },
-          "occurrencesTruncated": {
-            "description": "Whether occurrence ranges were omitted to bound a rendered line group.",
-            "type": "boolean"
-          },
           "ordinal": {
-            "description": "One-based line-group number in the unpaginated result set.",
+            "description": "One-based occurrence ordinal in the unpaginated snapshot.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
           },
           "outline": {
-            "description": "Complete logical location of the nearest addressable node.",
+            "description": "Nearest addressable node for navigation, independent of match identity.",
             "$ref": "#/$defs/OutlineTrail"
           },
           "preview": {
-            "description": "Compact single-string presentation of the match.",
+            "description": "Bounded human presentation; never coordinate authority.",
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "ordinal",
           "outline",
-          "occurrences",
-          "occurrenceCount",
-          "occurrencesTruncated",
-          "preview"
-        ]
-      },
-      "SearchLineRange": {
-        "description": "One exact occurrence fragment within an anchor-free rendered Markdown line.",
-        "type": "object",
-        "properties": {
-          "endByte": {
-            "description": "Exclusive zero-based UTF-8 byte offset within the presented line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "line": {
-            "description": "One-based line number in the deterministic full Markdown render.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "startByte": {
-            "description": "Inclusive zero-based UTF-8 byte offset within the presented line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "line",
-          "startByte",
-          "endByte"
-        ]
-      },
-      "SearchLogicalRange": {
-        "description": "Half-open root-relative logical coordinates for one matcher occurrence.",
-        "type": "object",
-        "properties": {
-          "endByte": {
-            "description": "Exclusive UTF-8 byte offset in the root's canonical logical sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "endScalar": {
-            "description": "Exclusive Unicode-scalar offset in the same sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "startByte": {
-            "description": "Inclusive UTF-8 byte offset in the root's canonical logical sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "startScalar": {
-            "description": "Inclusive Unicode-scalar offset in the same sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "startByte",
-          "endByte",
-          "startScalar",
-          "endScalar"
-        ]
-      },
-      "SearchMarkdownRange": {
-        "description": "Half-open byte range plus one-based human coordinates in full Markdown.",
-        "type": "object",
-        "properties": {
-          "endByte": {
-            "description": "Exclusive zero-based UTF-8 byte offset.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "endColumn": {
-            "description": "One-based exclusive ending column.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "endLine": {
-            "description": "One-based ending line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "startByte": {
-            "description": "Inclusive zero-based UTF-8 byte offset.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "startColumn": {
-            "description": "One-based starting column.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "startLine": {
-            "description": "One-based starting line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          }
-        },
-        "required": [
-          "startByte",
-          "endByte",
-          "startLine",
-          "startColumn",
-          "endLine",
-          "endColumn"
-        ]
-      },
-      "SearchOccurrence": {
-        "description": "One exact matcher occurrence in either a logical root or the rendered document.",
-        "type": "object",
-        "properties": {
-          "lineRanges": {
-            "description": "Anchor-free presentation fragments for a render-only hit.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchLineRange"
-            }
-          },
-          "logical": {
-            "description": "Root-relative logical UTF-8 byte and Unicode-scalar range, when available.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/SearchLogicalRange"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "markdown": {
-            "description": "Authoritative Markdown range for a render-only hit, including TLDR text.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/SearchMarkdownRange"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "markdownProjections": {
-            "description": "Zero or more presentation-only placements in canonical Markdown v1.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchMarkdownRange"
-            }
-          },
-          "matchedText": {
-            "description": "Bounded presentation echo; the logical range remains authoritative.",
-            "type": "string"
-          },
-          "root": {
-            "description": "Response-local logical root containing the complete match, when available.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ContentRootKey"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "matchedText"
+          "matchedText",
+          "location",
+          "displaySlices",
+          "preview",
+          "context"
         ]
       },
       "SearchQuery": {
@@ -23534,7 +24386,7 @@
             "default": "insensitive"
           },
           "contextLines": {
-            "description": "Neighboring rendered lines included around each match.",
+            "description": "Neighboring presentation lines included around each match.",
             "type": "integer",
             "format": "uint16",
             "default": 0,
@@ -23542,7 +24394,7 @@
             "minimum": 0
           },
           "limit": {
-            "description": "Maximum number of matching line groups returned.",
+            "description": "Maximum number of complete occurrences returned.",
             "type": "integer",
             "format": "uint32",
             "default": 100,
@@ -23550,7 +24402,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching line groups skipped before collection.",
+            "description": "Number of complete occurrences skipped before retention.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -23591,42 +24443,43 @@
         ]
       },
       "SearchRender": {
-        "description": "Description of the deterministic document whose Markdown coordinates are reported.",
+        "description": "Description of the coordinate-bearing presentation.",
         "type": "object",
         "properties": {
           "columnBase": {
-            "description": "First valid human-readable column number.",
+            "description": "One-based column numbering.",
             "type": "integer",
             "format": "uint8",
             "maximum": 1,
             "minimum": 1
           },
           "format": {
-            "description": "Rendered text format.",
+            "description": "Visible Fixed surface or Markdown artifact.",
             "$ref": "#/$defs/SearchRenderFormat"
           },
           "lineBase": {
-            "description": "First valid human-readable line number.",
+            "description": "One-based line numbering.",
             "type": "integer",
             "format": "uint8",
             "maximum": 1,
             "minimum": 1
           },
           "lineCount": {
-            "description": "Total rendered line count.",
+            "description": "Number of full presentation rows or lines.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
           },
           "schema": {
-            "description": "Coordinate-space schema discriminator.",
-            "$ref": "#/$defs/MarkdownSchema"
+            "description": "Exact coordinate-space schema discriminator.",
+            "$ref": "#/$defs/SearchRenderSchema"
           },
           "scope": {
-            "description": "Portion of the query represented by the render.",
+            "description": "Portion represented by this presentation.",
             "$ref": "#/$defs/SearchRenderScope"
           }
         },
+        "additionalProperties": false,
         "required": [
           "schema",
           "format",
@@ -23636,13 +24489,57 @@
           "lineCount"
         ]
       },
-      "SearchRenderFormat": {
-        "description": "Canonical render format used for search coordinates.",
+      "SearchRenderDerivedFragmentSource": {
+        "description": "A visible transformation whose exact authored byte origin is unproven.",
+        "type": "object",
+        "properties": {
+          "kind": {
+            "description": "Required source-kind discriminator.",
+            "$ref": "#/$defs/SearchRenderDerivedSourceKind"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ]
+      },
+      "SearchRenderDerivedSourceKind": {
+        "description": "Literal discriminator of render-derived visible bytes.",
         "oneOf": [
           {
-            "description": "Generated `CommonMark` text.",
+            "description": "This is not an authored root range.",
+            "type": "string",
+            "const": "render-derived"
+          }
+        ]
+      },
+      "SearchRenderFormat": {
+        "description": "The format whose coordinates are used for the search response.",
+        "oneOf": [
+          {
+            "description": "User-exportable Markdown artifact.",
             "type": "string",
             "const": "markdown"
+          },
+          {
+            "description": "Final native Fixed visible surface, before viewport clipping.",
+            "type": "string",
+            "const": "fixed-visible"
+          }
+        ]
+      },
+      "SearchRenderSchema": {
+        "description": "Schema of the coordinate-bearing presentation.",
+        "oneOf": [
+          {
+            "description": "Canonical Flow or literal Fixed Markdown export.",
+            "type": "string",
+            "const": "mant.markdown/v1"
+          },
+          {
+            "description": "Final native Fixed visible surface.",
+            "type": "string",
+            "const": "mant.fixed/v1"
           }
         ]
       },
@@ -23650,22 +24547,22 @@
         "description": "Amount of the query included in the coordinate-bearing render.",
         "oneOf": [
           {
-            "description": "Complete query document, including optional tldr content.",
+            "description": "Complete query document, including an optional TLDR.",
             "type": "string",
             "const": "full"
           }
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains available for presentation.",
+        "description": "Text representation searched.",
         "oneOf": [
           {
-            "description": "Search visible document text.",
+            "description": "Search final visible document content.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search bytes of the user-exportable Markdown artifact.",
             "type": "string",
             "const": "markdown"
           }
@@ -23683,6 +24580,168 @@
             "description": "Interpret the pattern as a Rust regular expression.",
             "type": "string",
             "const": "regex"
+          }
+        ]
+      },
+      "SearchTextJoin": {
+        "description": "Exact visible text between adjacent response fragments.",
+        "oneOf": [
+          {
+            "description": "Proven zero-byte contact, including a native soft wrap.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "direct-contact"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact native-consumed authored separator between fragments.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored-separator"
+              },
+              "text": {
+                "description": "One or more source-authored ASCII spaces absent from final runs.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Structural boundary that blocks a cross-fragment match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-boundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Unknown connection that blocks a cross-fragment match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact bytes introduced by Flow/TLDR rendering between roots.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "render-separator"
+              },
+              "text": {
+                "description": "Exact inserted UTF-8 text, represented only in this join.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          }
+        ]
+      },
+      "SearchTextUnit": {
+        "description": "One complete concatenated searchable unit.",
+        "type": "object",
+        "properties": {
+          "fragments": {
+            "description": "Fragment keys in exact visible order.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 1
+            }
+          },
+          "joins": {
+            "description": "One explicit join for each adjacent fragment pair.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchTextJoin"
+            }
+          },
+          "key": {
+            "description": "Dense one-based response-local key.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "fragments",
+          "joins"
+        ]
+      },
+      "SearchTldrFragmentSource": {
+        "description": "Exact TLDR source of one copied fragment.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive TLDR logical-unit UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "kind": {
+            "description": "Required source-kind discriminator.",
+            "$ref": "#/$defs/SearchTldrSourceKind"
+          },
+          "path": {
+            "description": "Current TLDR selection path, independent of the primary source table.",
+            "type": "string"
+          },
+          "startByte": {
+            "description": "Inclusive TLDR logical-unit UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchTldrSourceKind": {
+        "description": "Literal discriminator of a TLDR fragment source.",
+        "oneOf": [
+          {
+            "description": "A source fragment of the optional quick reference.",
+            "type": "string",
+            "const": "tldr"
           }
         ]
       },
@@ -24126,6 +25185,71 @@
           }
         ]
       },
+      "TextJoin": {
+        "description": "Evidence for whether adjacent slices form one searchable logical text.",
+        "oneOf": [
+          {
+            "description": "No byte lies between the slices, including a proven soft wrap.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "direct-contact"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact native-consumed authored separator between the slices.\n\nA separator already visible inside a slice is not repeated here.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored-separator"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "A native structural boundary forbids a cross-slice match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-boundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Adjacency exists but cannot license a cross-slice match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "TextRange": {
         "description": "Half-open byte range (`start..end`) in one source's coordinate domain.",
         "type": "object",
@@ -24468,7 +25592,7 @@
                 "const": "search"
               },
               "limit": {
-                "description": "Global maximum number of matching line groups returned.",
+                "description": "Global maximum number of complete occurrences returned.",
                 "type": "integer",
                 "format": "uint32",
                 "default": 100,
@@ -24476,7 +25600,7 @@
                 "minimum": 1
               },
               "offset": {
-                "description": "Global number of matching line groups skipped.",
+                "description": "Global number of complete occurrences skipped.",
                 "type": "integer",
                 "format": "uint32",
                 "default": 0,
@@ -24543,15 +25667,15 @@
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains available for presentation.",
+        "description": "Text representation searched.",
         "oneOf": [
           {
-            "description": "Search visible document text.",
+            "description": "Search final visible document content.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search bytes of the user-exportable Markdown artifact.",
             "type": "string",
             "const": "markdown"
           }
@@ -24578,33 +25702,46 @@
     "$id": "urn:mant:search:v0.12",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "QuerySearch",
-    "description": "Complete, paginatable search result returned to agents and scripts.",
+    "description": "Complete paginated result with one match per returned occurrence.",
     "type": "object",
     "properties": {
       "contentProjection": {
-        "description": "Closed response-local store resolving every returned logical root.",
+        "description": "Closed, bounded visible units for retained occurrences only.",
         "anyOf": [
           {
-            "$ref": "#/$defs/ContentProjection"
+            "$ref": "#/$defs/SearchContentProjection"
           },
           {
             "type": "null"
           }
         ]
       },
+      "coverageDetailsOmitted": {
+        "description": "Exact number of coverage details omitted from this bounded response.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "diagnostics": {
+        "description": "Bounded producer and coverage findings, retained even for zero hits.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/Diagnostic"
+        }
+      },
       "label": {
         "description": "Human-readable selected-document label.",
         "type": "string"
       },
       "matches": {
-        "description": "Matching line groups in canonical render order.",
+        "description": "Retained complete occurrences in snapshot order.",
         "type": "array",
         "items": {
-          "$ref": "#/$defs/SearchHit"
+          "$ref": "#/$defs/SearchMatch"
         }
       },
       "meta": {
-        "description": "Document metadata, when one was loaded.",
+        "description": "Primary document metadata, when one was loaded.",
         "anyOf": [
           {
             "$ref": "#/$defs/DocumentMeta"
@@ -24615,7 +25752,7 @@
         ]
       },
       "nextOffset": {
-        "description": "Offset for the next page, when one exists.",
+        "description": "Next occurrence offset, when one exists.",
         "type": [
           "integer",
           "null"
@@ -24624,7 +25761,7 @@
         "minimum": 0
       },
       "offset": {
-        "description": "Applied zero-based matching-line-group offset.",
+        "description": "Applied zero-based occurrence offset.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -24634,11 +25771,11 @@
         "$ref": "#/$defs/SearchQuery"
       },
       "render": {
-        "description": "Coordinate-space description shared by all matching line groups.",
+        "description": "Coordinate-space description for this result.",
         "$ref": "#/$defs/SearchRender"
       },
       "returned": {
-        "description": "Number of matching line groups present in [`Self::matches`].",
+        "description": "Number of retained occurrences.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -24647,8 +25784,12 @@
         "description": "Exact response schema discriminator.",
         "$ref": "#/$defs/SearchSchema"
       },
+      "semanticsComplete": {
+        "description": "Completeness of semantic extraction, independent of the selected page.",
+        "type": "boolean"
+      },
       "sourceContext": {
-        "description": "Authoritative document source, when one was loaded.",
+        "description": "Primary document source context, absent for TLDR-only results.",
         "anyOf": [
           {
             "$ref": "#/$defs/SourceContext"
@@ -24659,16 +25800,17 @@
         ]
       },
       "total": {
-        "description": "Total matching line groups before pagination.",
+        "description": "Exact occurrence count after the complete scan.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
       },
       "truncated": {
-        "description": "Whether additional matching line groups remain.",
+        "description": "Whether another page of occurrences remains.",
         "type": "boolean"
       }
     },
+    "additionalProperties": false,
     "required": [
       "schema",
       "label",
@@ -24678,682 +25820,455 @@
       "returned",
       "offset",
       "truncated",
+      "semanticsComplete",
+      "coverageDetailsOmitted",
+      "diagnostics",
       "matches"
     ],
     "$defs": {
-      "CellMapKind": {
-        "description": "Closed terminal-cell mapping family.",
+      "ContentBlockStep": {
+        "description": "A checked transition through block arrays and their containing items/cells.",
         "oneOf": [
           {
-            "description": "Equal-width scalar cells, such as printable ASCII.",
+            "description": "One ordinary list item's block array.",
             "type": "object",
             "properties": {
-              "columns_per_scalar": {
-                "description": "Positive terminal-cell width of each scalar.",
-                "type": "integer",
-                "format": "uint8",
-                "maximum": 255,
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "affine"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "columns_per_scalar"
-            ]
-          },
-          {
-            "description": "One indivisible extended grapheme, including wide/combining glyphs.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "grapheme-cluster"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind"
-            ]
-          },
-          {
-            "description": "Explicitly observed overstrike at the same terminal columns.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "overlay"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind"
-            ]
-          }
-        ]
-      },
-      "ContentAtom": {
-        "description": "One atom in global retained execution order.",
-        "type": "object",
-        "properties": {
-          "key": {
-            "description": "Dense key equal to this record's position.",
-            "$ref": "#/$defs/ContentAtomKey"
-          },
-          "link": {
-            "description": "Logical link occurrence containing this atom.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/LinkOccurrenceKey"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "owner": {
-            "description": "Owner repeated for bounded validation.",
-            "$ref": "#/$defs/ContentOwnerKey"
-          },
-          "provenance": {
-            "description": "Authorship of the atom.",
-            "$ref": "#/$defs/Provenance"
-          },
-          "role": {
-            "description": "Optional native semantic role.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ContentRole"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "root": {
-            "description": "Logical root containing this atom.",
-            "$ref": "#/$defs/ContentRootKey"
-          },
-          "style": {
-            "description": "Native style attributes.",
-            "$ref": "#/$defs/ContentStyle"
-          }
-        },
-        "oneOf": [
-          {
-            "description": "Visible non-whitespace text.",
-            "type": "object",
-            "properties": {
-              "displayOverride": {
-                "description": "Optional profile-specific glyph projection.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "kind": {
-                "type": "string",
-                "const": "text"
-              },
-              "text": {
-                "description": "Searchable and copyable logical text.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "text"
-            ]
-          },
-          {
-            "description": "Visible logical whitespace.",
-            "type": "object",
-            "properties": {
-              "breakable": {
-                "description": "Whether ordinary flow may wrap after this atom.",
-                "type": "boolean"
-              },
-              "displayOverride": {
-                "description": "Optional profile-specific glyph projection.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "kind": {
-                "type": "string",
-                "const": "whitespace"
-              },
-              "text": {
-                "description": "Searchable and copyable logical whitespace.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "text",
-              "breakable"
-            ]
-          },
-          {
-            "description": "Zero-width legal wrapping boundary.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "break-opportunity"
-              }
-            },
-            "required": [
-              "kind"
-            ]
-          },
-          {
-            "description": "One logical newline.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "hard-break"
-              }
-            },
-            "required": [
-              "kind"
-            ]
-          }
-        ],
-        "required": [
-          "key",
-          "root",
-          "owner",
-          "provenance"
-        ],
-        "unevaluatedProperties": false
-      },
-      "ContentAtomKey": {
-        "description": "Document-local logical atom key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "ContentByteRange": {
-        "description": "Half-open UTF-8 byte range in one text or whitespace atom.",
-        "type": "object",
-        "properties": {
-          "end": {
-            "description": "Exclusive byte offset.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "start": {
-            "description": "Inclusive byte offset.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "start",
-          "end"
-        ]
-      },
-      "ContentOwner": {
-        "description": "One owner of roots and structural blocks.",
-        "type": "object",
-        "properties": {
-          "key": {
-            "description": "Dense key equal to this record's position.",
-            "$ref": "#/$defs/ContentOwnerKey"
-          },
-          "kind": {
-            "description": "Stable owner category.",
-            "$ref": "#/$defs/ContentOwnerKind"
-          },
-          "provenance": {
-            "description": "Authorship of the owner boundary.",
-            "$ref": "#/$defs/Provenance"
-          },
-          "roots": {
-            "description": "Roots owned in logical source order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ContentRootKey"
-            }
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "key",
-          "kind",
-          "roots",
-          "provenance"
-        ]
-      },
-      "ContentOwnerKey": {
-        "description": "Document-local content owner key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "ContentOwnerKind": {
-        "description": "Stable source-neutral owner category.",
-        "oneOf": [
-          {
-            "description": "Whole normalized document.",
-            "type": "string",
-            "const": "document"
-          },
-          {
-            "description": "Section subtree.",
-            "type": "string",
-            "const": "section"
-          },
-          {
-            "description": "Ordinary list item.",
-            "type": "string",
-            "const": "list-item"
-          },
-          {
-            "description": "Definition-list item.",
-            "type": "string",
-            "const": "definition-item"
-          },
-          {
-            "description": "Table cell.",
-            "type": "string",
-            "const": "table-cell"
-          },
-          {
-            "description": "Other producer-defined content boundary.",
-            "type": "string",
-            "const": "content"
-          }
-        ]
-      },
-      "ContentPoint": {
-        "description": "One zero-width logical position.",
-        "type": "object",
-        "properties": {
-          "key": {
-            "description": "Dense key equal to this record's position.",
-            "$ref": "#/$defs/ContentPointKey"
-          },
-          "owner": {
-            "description": "Owning structural object.",
-            "$ref": "#/$defs/ContentOwnerKey"
-          },
-          "provenance": {
-            "description": "Authorship of the target position.",
-            "$ref": "#/$defs/Provenance"
-          },
-          "root": {
-            "description": "Logical root containing the point.",
-            "$ref": "#/$defs/ContentRootKey"
-          },
-          "scalarBoundary": {
-            "description": "Derived root-relative Unicode-scalar boundary.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          }
-        },
-        "oneOf": [
-          {
-            "description": "Boundary between root atom slots.",
-            "type": "object",
-            "properties": {
-              "atomBoundary": {
-                "description": "Zero-based boundary in the root atom vector.",
+              "index": {
+                "description": "Zero-based item index.",
                 "type": "integer",
                 "format": "uint32",
                 "minimum": 0
               },
               "kind": {
                 "type": "string",
-                "const": "between-atoms"
+                "const": "list-item"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
-              "atomBoundary"
+              "index"
             ]
           },
           {
-            "description": "UTF-8 byte boundary inside a text or whitespace atom.",
+            "description": "One definition item's description block array.",
             "type": "object",
             "properties": {
-              "atom": {
-                "description": "Atom containing the point.",
-                "$ref": "#/$defs/ContentAtomKey"
-              },
-              "byteOffset": {
-                "description": "UTF-8 byte offset in the atom text.",
+              "index": {
+                "description": "Zero-based item index.",
                 "type": "integer",
                 "format": "uint32",
                 "minimum": 0
               },
               "kind": {
                 "type": "string",
-                "const": "in-atom"
+                "const": "definition-item"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
-              "atom",
-              "byteOffset"
+              "index"
+            ]
+          },
+          {
+            "description": "One original table cell, independent of visual spans.",
+            "type": "object",
+            "properties": {
+              "column": {
+                "description": "Zero-based original cell.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "table-cell"
+              },
+              "row": {
+                "description": "Zero-based original row.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "row",
+              "column"
+            ]
+          },
+          {
+            "description": "One block in the current block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based block index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
             ]
           }
-        ],
-        "required": [
-          "key",
-          "root",
-          "owner",
-          "scalarBoundary",
-          "provenance"
-        ],
-        "unevaluatedProperties": false
-      },
-      "ContentPointKey": {
-        "description": "Document-local zero-width point key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "ContentProjection": {
-        "description": "Response-local store for retained topology that does not embed a Document.",
-        "type": "object",
-        "properties": {
-          "contentStore": {
-            "description": "Complete closed store for all retained response-local references.",
-            "$ref": "#/$defs/ContentStore"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "contentStore"
         ]
       },
-      "ContentRef": {
-        "description": "A checked slice of one authoritative logical atom.",
-        "type": "object",
-        "properties": {
-          "atom": {
-            "description": "Referenced text or whitespace atom.",
-            "$ref": "#/$defs/ContentAtomKey"
-          },
-          "bytes": {
-            "description": "UTF-8 byte range in that atom's logical text.",
-            "$ref": "#/$defs/ContentByteRange"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "atom",
-          "bytes"
-        ]
-      },
-      "ContentRole": {
-        "description": "Optional native semantic role, distinct from inferred entry facts.",
+      "ContentInlineRoot": {
+        "description": "Inline root within the addressed final block.",
         "oneOf": [
           {
-            "description": "Command-line flag.",
-            "type": "string",
-            "const": "flag"
+            "description": "Paragraph or preformatted content.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "inlines"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
-            "description": "Environment variable.",
-            "type": "string",
-            "const": "environment-variable"
-          },
-          {
-            "description": "Command argument or placeholder.",
-            "type": "string",
-            "const": "argument"
-          },
-          {
-            "description": "Command or configuration directive.",
-            "type": "string",
-            "const": "command-or-directive"
-          },
-          {
-            "description": "Filesystem-like path.",
-            "type": "string",
-            "const": "path"
+            "description": "A term in a definition list, whether or not it has semantic facts.",
+            "type": "object",
+            "properties": {
+              "itemIndex": {
+                "description": "Zero-based item in the addressed definition list.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-term"
+              },
+              "termIndex": {
+                "description": "Zero-based term in the selected item.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "itemIndex",
+              "termIndex"
+            ]
           }
         ]
       },
-      "ContentRoot": {
-        "description": "One independently searchable logical inline sequence.",
-        "type": "object",
-        "properties": {
-          "atoms": {
-            "description": "Atoms in authoritative logical order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ContentAtomKey"
-            }
-          },
-          "key": {
-            "description": "Dense key equal to this record's position.",
-            "$ref": "#/$defs/ContentRootKey"
-          },
-          "kind": {
-            "description": "Stable root category.",
-            "$ref": "#/$defs/ContentRootKind"
-          },
-          "owner": {
-            "description": "Owning structural object.",
-            "$ref": "#/$defs/ContentOwnerKey"
-          },
-          "points": {
-            "description": "Zero-width points in root order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ContentPointKey"
-            }
-          },
-          "provenance": {
-            "description": "Authorship of this root.",
-            "$ref": "#/$defs/Provenance"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "key",
-          "owner",
-          "kind",
-          "atoms",
-          "points",
-          "provenance"
-        ]
-      },
-      "ContentRootKey": {
-        "description": "Document-local logical inline-root key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "ContentRootKind": {
-        "description": "Stable logical-root category.",
+      "ContentLocation": {
+        "description": "Exact final-IR inline position, valid only in the document being addressed.\n\nAn empty inline path denotes the whole inline root; a link occurrence always\nuses a nonempty path to its actual `Inline::Link`. Source bytes, visible\nscalar ranges and terminal cells are not represented by this type.",
         "oneOf": [
           {
-            "description": "Visible document or section heading.",
-            "type": "string",
-            "const": "heading"
+            "description": "Original visible document heading, not native bibliographic metadata.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "document-heading"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ]
           },
           {
-            "description": "Ordinary flow body.",
-            "type": "string",
-            "const": "body"
+            "description": "Original visible heading of a structurally addressed section.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "section-heading"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "sections": {
+                "description": "Zero-based nested section indices, nonempty for a section heading.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections",
+              "path"
+            ]
           },
           {
-            "description": "Definition or list term.",
-            "type": "string",
-            "const": "term"
-          },
-          {
-            "description": "Table-cell body.",
-            "type": "string",
-            "const": "cell"
-          },
-          {
-            "description": "Fixed-display logical body.",
-            "type": "string",
-            "const": "fixed-body"
+            "description": "Content before sections or within one section.",
+            "type": "object",
+            "properties": {
+              "blocks": {
+                "description": "Typed path beginning with a block step.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContentBlockStep"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "root": {
+                "description": "Inline container within the addressed block.",
+                "$ref": "#/$defs/ContentInlineRoot"
+              },
+              "sections": {
+                "description": "Zero-based nested section indices; empty selects root content.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections",
+              "blocks",
+              "root",
+              "path"
+            ]
           }
         ]
       },
-      "ContentStore": {
-        "description": "The single authoritative content store for one document or projection.",
-        "type": "object",
-        "properties": {
-          "atoms": {
-            "description": "Logical atoms in global retained order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ContentAtom"
-            }
+      "CoverageScope": {
+        "description": "Best-known scope of one semantic coverage finding.\n\nNon-source keys are nonzero here; their closure against a Fixed document's\nmark tables is checked when those tables are introduced. Source keys are\nclosed against `Document::sources` at the current wire boundary.",
+        "oneOf": [
+          {
+            "description": "The whole document; no local scope is known.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "document"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
-          "fixedViews": {
-            "description": "Native physical views over the same logical roots and atoms.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/FixedView"
-            }
+          {
+            "description": "A document-local section mark.",
+            "type": "object",
+            "properties": {
+              "key": {
+                "description": "Nonzero document-local section key.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "section"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "key"
+            ]
           },
-          "links": {
-            "description": "Logical link occurrences in key order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/LinkOccurrence"
-            }
+          {
+            "description": "A document-local owner mark.",
+            "type": "object",
+            "properties": {
+              "key": {
+                "description": "Nonzero document-local owner key.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "owner"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "key"
+            ]
           },
-          "owners": {
-            "description": "Structural owners in key order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ContentOwner"
-            }
+          {
+            "description": "A document-local region mark.",
+            "type": "object",
+            "properties": {
+              "key": {
+                "description": "Nonzero document-local region key.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "region"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "key"
+            ]
           },
-          "points": {
-            "description": "Zero-width points in key order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ContentPoint"
-            }
-          },
-          "roots": {
-            "description": "Logical roots in key order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ContentRoot"
-            }
+          {
+            "description": "A source-table member, without invented line or column coordinates.",
+            "type": "object",
+            "properties": {
+              "key": {
+                "description": "Source-table key, validated against the document's source table.",
+                "$ref": "#/$defs/SourceKey"
+              },
+              "kind": {
+                "type": "string",
+                "const": "source"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "key"
+            ]
           }
-        },
-        "additionalProperties": false,
-        "required": [
-          "owners",
-          "roots",
-          "atoms",
-          "points",
-          "links"
         ]
       },
-      "ContentStyle": {
-        "description": "Native text attributes attached to one atom.",
+      "Diagnostic": {
+        "description": "Recoverable parser or IR validation finding attached to the document.",
         "type": "object",
         "properties": {
-          "emphasis": {
-            "description": "Emphasized/italic presentation.",
-            "type": "boolean"
+          "code": {
+            "description": "Stable machine-readable code, when the producer defines one.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
-          "literal": {
-            "description": "Literal/code presentation.",
-            "type": "boolean"
+          "coverageScope": {
+            "description": "Source-neutral semantic coverage scope; an authored location, if known,\nremains in `source` independently of this scope.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CoverageScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "strong": {
-            "description": "Strong/bold presentation.",
-            "type": "boolean"
+          "impact": {
+            "description": "Explicit effect on semantic extraction, independent of severity or code.\nRequired on the wire: missing producer coverage must never mean complete.",
+            "$ref": "#/$defs/DiagnosticImpact"
           },
-          "underline": {
-            "description": "Underline presentation retained from native output.",
-            "type": "boolean"
-          }
-        },
-        "additionalProperties": false
-      },
-      "Decoration": {
-        "description": "Non-semantic native drawing glyphs kept outside the logical body.",
-        "type": "object",
-        "properties": {
-          "key": {
-            "description": "Dense document-local decoration key.",
-            "$ref": "#/$defs/DecorationKey"
+          "level": {
+            "description": "Severity of the finding.",
+            "$ref": "#/$defs/DiagnosticLevel"
           },
-          "kind": {
-            "description": "Native-generated drawing role.",
-            "$ref": "#/$defs/DecorationKind"
-          },
-          "provenance": {
-            "description": "Authorship, generated or unknown for formatter-created glyphs.",
-            "$ref": "#/$defs/Provenance"
-          },
-          "startColumn": {
-            "description": "Inclusive first terminal column.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "text": {
-            "description": "Profile-specific visible glyphs, never searched as logical content.",
+          "message": {
+            "description": "Concise human-readable explanation.",
             "type": "string"
           },
-          "widthColumns": {
-            "description": "Width in terminal columns.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
+          "source": {
+            "description": "Original source location associated with the finding.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
-        "additionalProperties": false,
         "required": [
-          "key",
-          "text",
-          "startColumn",
-          "widthColumns",
-          "kind",
-          "provenance"
+          "level",
+          "impact",
+          "message"
         ]
       },
-      "DecorationKey": {
-        "description": "Document-local non-content decoration key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "DecorationKind": {
-        "description": "Closed set of non-semantic decoration roles.",
+      "DiagnosticImpact": {
+        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
         "oneOf": [
           {
-            "description": "A table frame or cell separator.",
+            "description": "This finding does not invalidate semantic extraction coverage.",
             "type": "string",
-            "const": "border"
+            "const": "none"
           },
           {
-            "description": "A rule line or rule cell.",
+            "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
             "type": "string",
-            "const": "rule"
+            "const": "semantic-coverage"
+          }
+        ]
+      },
+      "DiagnosticLevel": {
+        "description": "Severity reported by the parser without turning useful output into failure.",
+        "oneOf": [
+          {
+            "description": "Non-semantic source style issue.",
+            "type": "string",
+            "const": "style"
           },
           {
-            "description": "Native field padding.",
+            "description": "Recoverable source defect or portability concern.",
             "type": "string",
-            "const": "padding"
+            "const": "warning"
+          },
+          {
+            "description": "Invalid source that left partial output available.",
+            "type": "string",
+            "const": "error"
+          },
+          {
+            "description": "Valid construct that the active parser cannot represent fully.",
+            "type": "string",
+            "const": "unsupported"
           }
         ]
       },
@@ -25524,304 +26439,6 @@
             "required": [
               "kind"
             ]
-          }
-        ]
-      },
-      "FixedLine": {
-        "description": "One native physical line. Its content is referenced, not copied.",
-        "type": "object",
-        "properties": {
-          "decorations": {
-            "description": "Native border, rule, and padding glyphs without semantic content.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/Decoration"
-            }
-          },
-          "key": {
-            "description": "Dense document-local line key.",
-            "$ref": "#/$defs/FixedLineKey"
-          },
-          "placements": {
-            "description": "Ordered placements of semantic content and zero-width points.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/Placement"
-            }
-          },
-          "terminalColumns": {
-            "description": "Width in terminal columns, independent of the current viewport.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "key",
-          "terminalColumns",
-          "placements",
-          "decorations"
-        ]
-      },
-      "FixedLineKey": {
-        "description": "Document-local native fixed-line key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "FixedView": {
-        "description": "One document-local native display projection.",
-        "type": "object",
-        "properties": {
-          "key": {
-            "description": "Dense key equal to this record's position in the content store.",
-            "$ref": "#/$defs/FixedViewKey"
-          },
-          "lines": {
-            "description": "Native physical lines, without viewport clipping or reflow.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/FixedLine"
-            }
-          },
-          "owner": {
-            "description": "Logical owner shared with the fixed block or table.",
-            "$ref": "#/$defs/ContentOwnerKey"
-          },
-          "provenance": {
-            "description": "Authorship of the display boundary.",
-            "$ref": "#/$defs/Provenance"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "key",
-          "owner",
-          "lines",
-          "provenance"
-        ]
-      },
-      "FixedViewKey": {
-        "description": "Document-local native fixed-view key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "LinkLabelPart": {
-        "description": "One ordered component of a complete logical link label.",
-        "oneOf": [
-          {
-            "description": "Text or whitespace content.",
-            "type": "object",
-            "properties": {
-              "content": {
-                "description": "Exact atom slice.",
-                "$ref": "#/$defs/ContentRef"
-              },
-              "kind": {
-                "type": "string",
-                "const": "content"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "content"
-            ]
-          },
-          {
-            "description": "One linked logical newline.",
-            "type": "object",
-            "properties": {
-              "atom": {
-                "description": "Hard-break atom.",
-                "$ref": "#/$defs/ContentAtomKey"
-              },
-              "kind": {
-                "type": "string",
-                "const": "hard-break"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "atom"
-            ]
-          }
-        ]
-      },
-      "LinkOccurrence": {
-        "description": "One logical link occurrence, possibly represented by several wrappers.",
-        "type": "object",
-        "properties": {
-          "key": {
-            "description": "Dense key equal to this record's position.",
-            "$ref": "#/$defs/LinkOccurrenceKey"
-          },
-          "label": {
-            "description": "Complete ordered logical label, which may span roots.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/LinkLabelPart"
-            }
-          },
-          "owner": {
-            "description": "Owning structural object.",
-            "$ref": "#/$defs/ContentOwnerKey"
-          },
-          "provenance": {
-            "description": "Authorship of the destination.",
-            "$ref": "#/$defs/Provenance"
-          },
-          "target": {
-            "description": "Typed destination shared by every display fragment.",
-            "$ref": "#/$defs/LinkTarget"
-          },
-          "title": {
-            "description": "Optional non-visible advisory title.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "key",
-          "owner",
-          "target",
-          "label",
-          "provenance"
-        ]
-      },
-      "LinkOccurrenceKey": {
-        "description": "Document-local logical link occurrence key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "LinkTarget": {
-        "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
-        "oneOf": [
-          {
-            "description": "An external URI from mdoc `Lk`, man `UR`, or Markdown links.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "external"
-              },
-              "uri": {
-                "description": "Absolute URI.",
-                "type": "string"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "uri"
-            ]
-          },
-          {
-            "description": "An email address without a `mailto:` prefix.",
-            "type": "object",
-            "properties": {
-              "address": {
-                "description": "Mailbox address without a URI scheme.",
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "const": "email"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "address"
-            ]
-          },
-          {
-            "description": "A relative Markdown link to another document in the current source.\n\nThis is a logical cross-document graph edge, not a physical path.",
-            "type": "object",
-            "properties": {
-              "fragment": {
-                "description": "Optional document-local destination.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "kind": {
-                "type": "string",
-                "const": "document"
-              },
-              "name": {
-                "description": "Extension-free relative document path.",
-                "type": "string"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "name"
-            ]
-          },
-          {
-            "description": "A typed reference to another installed manual page.\n\nThis is a logical cross-document graph edge resolved through the manual\ncatalog and its normal ambiguity rules.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "manual"
-              },
-              "manualSection": {
-                "description": "Native manual category, when specified by the source.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "name": {
-                "description": "Manual topic without a section suffix.",
-                "type": "string"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "name"
-            ]
-          },
-          {
-            "description": "A reference to addressable content in this document, including a\nsection, entry-backed owner, or inline anchor (such as mdoc `Sx`).\n\nThe target is a canonical document-local identity in [`crate::DocumentIndex`],\nnot a rendered heading slug or unresolved authored fragment.",
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Canonical target identity in the current document.",
-                "$ref": "#/$defs/NodeId"
-              },
-              "kind": {
-                "type": "string",
-                "const": "section"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "id"
-            ]
-          }
-        ]
-      },
-      "MarkdownSchema": {
-        "description": "Markdown contract used as the coordinate space for every search format.",
-        "oneOf": [
-          {
-            "description": "Version 1 of `ManT`'s deterministic Markdown rendering contract.",
-            "type": "string",
-            "const": "mant.markdown/v1"
           }
         ]
       },
@@ -26052,178 +26669,6 @@
           }
         ]
       },
-      "Placement": {
-        "description": "One visible use of a logical content slice or point.",
-        "type": "object",
-        "properties": {
-          "endColumn": {
-            "description": "Exclusive last terminal column.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "key": {
-            "description": "Dense document-local placement key.",
-            "$ref": "#/$defs/PlacementKey"
-          },
-          "map": {
-            "description": "Mapping from complete logical graphemes to terminal columns.",
-            "$ref": "#/$defs/CellMapKind"
-          },
-          "rootScalarRange": {
-            "description": "Root-relative Unicode scalar range of the selected target.",
-            "$ref": "#/$defs/Range_of_uint32"
-          },
-          "startColumn": {
-            "description": "Inclusive first terminal column.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "target": {
-            "description": "The one authoritative logical object shown here.",
-            "$ref": "#/$defs/PlacementTarget"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "key",
-          "target",
-          "rootScalarRange",
-          "startColumn",
-          "endColumn",
-          "map"
-        ]
-      },
-      "PlacementKey": {
-        "description": "Document-local fixed content-placement key.",
-        "type": "integer",
-        "format": "uint32",
-        "minimum": 1
-      },
-      "PlacementTarget": {
-        "description": "A placement never carries both text and a zero-width target.",
-        "oneOf": [
-          {
-            "description": "A checked UTF-8 slice of one logical atom.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "content"
-              },
-              "value": {
-                "$ref": "#/$defs/ContentRef"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "value"
-            ]
-          },
-          {
-            "description": "A checked zero-width point in one logical root.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "point"
-              },
-              "value": {
-                "$ref": "#/$defs/ContentPointKey"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "value"
-            ]
-          }
-        ]
-      },
-      "Provenance": {
-        "description": "Authorship provenance for content that may not map to an exact range.",
-        "oneOf": [
-          {
-            "description": "Content copied directly from authored source.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "authored"
-              },
-              "span": {
-                "description": "Exact authored location.",
-                "$ref": "#/$defs/SourceSpan"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "span"
-            ]
-          },
-          {
-            "description": "Content generated by normalization, optionally attributed to a trigger.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "generated"
-              },
-              "trigger": {
-                "description": "Authored construct that caused generation.",
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/SourceSpan"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind"
-            ]
-          },
-          {
-            "description": "Provenance is unavailable.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "unknown"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind"
-            ]
-          }
-        ]
-      },
-      "Range_of_uint32": {
-        "type": "object",
-        "properties": {
-          "end": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "start": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "start",
-          "end"
-        ]
-      },
       "SearchCase": {
         "description": "Case-folding policy applied when compiling the matcher.",
         "oneOf": [
@@ -26244,44 +26689,375 @@
           }
         ]
       },
+      "SearchContentProjection": {
+        "description": "Only retained occurrences contribute fragments and units.",
+        "type": "object",
+        "properties": {
+          "fragments": {
+            "description": "Dense copied fragments, each with a typed producer-checked source.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchFragment"
+            }
+          },
+          "units": {
+            "description": "Dense ordered units closing every visible match.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchTextUnit"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fragments",
+          "units"
+        ]
+      },
       "SearchContextLine": {
-        "description": "One logical-root line surrounding a match.",
+        "description": "One presentation line surrounding an exact occurrence.",
         "type": "object",
         "properties": {
           "line": {
-            "description": "One-based line number inside the authoritative logical root.",
+            "description": "One-based presentation line number.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
           },
           "matched": {
-            "description": "Whether this is one of the lines intersecting the match.",
+            "description": "Whether this line intersects the occurrence.",
             "type": "boolean"
           },
           "text": {
-            "description": "Complete rendered line without its newline terminator.",
+            "description": "Rendered line without its newline terminator.",
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "line",
           "text",
           "matched"
         ]
       },
-      "SearchHit": {
-        "description": "One rendered line group containing one or more exact occurrences.",
+      "SearchDisplaySlice": {
+        "description": "The part of one response fragment that highlights the actual display.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive fragment-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "fragment": {
+            "description": "Fragment referenced by this display slice.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive fragment-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fragment",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchFixedFragmentSource": {
+        "description": "Navigation metadata for a Fixed fragment; producer validates it against the surface.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive run-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "row": {
+            "description": "One-based final physical row.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "run": {
+            "description": "One-based final run key.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive run-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "run",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchFlowFragmentSource": {
+        "description": "Exact Flow source of one copied fragment.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive root-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "kind": {
+            "description": "Required source-kind discriminator.",
+            "$ref": "#/$defs/SearchFlowSourceKind"
+          },
+          "location": {
+            "description": "Complete document-local structural location.",
+            "$ref": "#/$defs/ContentLocation"
+          },
+          "startByte": {
+            "description": "Inclusive root-relative UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "location",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchFlowSourceKind": {
+        "description": "Literal discriminator of a Flow fragment source.",
+        "oneOf": [
+          {
+            "description": "A source fragment of the primary Flow document.",
+            "type": "string",
+            "const": "flow"
+          }
+        ]
+      },
+      "SearchFragment": {
+        "description": "One exact visible fragment; text is copied only for a retained hit.\nThe sole empty form is a derived terminal endpoint for a render join.",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Dense one-based response-local key.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "source": {
+            "description": "Snapshot-relative producer-checked origin or honest derived status.",
+            "$ref": "#/$defs/SearchFragmentSource"
+          },
+          "text": {
+            "description": "Exact UTF-8 bytes contributed by this fragment.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "text",
+          "source"
+        ]
+      },
+      "SearchFragmentSource": {
+        "description": "Provenance of a retained visible fragment.",
+        "anyOf": [
+          {
+            "description": "Exact Flow content location and root-relative source bytes.",
+            "$ref": "#/$defs/SearchFlowFragmentSource"
+          },
+          {
+            "description": "Exact quick-reference path and source bytes, not a manual `SourceKey`.",
+            "$ref": "#/$defs/SearchTldrFragmentSource"
+          },
+          {
+            "description": "Visible bytes produced by a rendering transform without proven authored bytes.",
+            "$ref": "#/$defs/SearchRenderDerivedFragmentSource"
+          },
+          {
+            "description": "Final native row/run bytes.",
+            "$ref": "#/$defs/SearchFixedFragmentSource"
+          }
+        ]
+      },
+      "SearchLocation": {
+        "description": "The sole authoritative coordinate of one match.",
+        "oneOf": [
+          {
+            "description": "A validated Flow or TLDR visible-text unit.",
+            "type": "object",
+            "properties": {
+              "endByte": {
+                "description": "Exclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "visible-flow"
+              },
+              "startByte": {
+                "description": "Inclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "unit": {
+                "description": "Response-local complete text unit.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "unit",
+              "startByte",
+              "endByte"
+            ]
+          },
+          {
+            "description": "A validated Fixed visible-text unit.",
+            "type": "object",
+            "properties": {
+              "endByte": {
+                "description": "Exclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "visible-fixed"
+              },
+              "startByte": {
+                "description": "Inclusive UTF-8 byte offset in the unit.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "unit": {
+                "description": "Response-local complete text unit.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "unit",
+              "startByte",
+              "endByte"
+            ]
+          },
+          {
+            "description": "UTF-8 bytes in the exact user-exportable Markdown artifact.",
+            "type": "object",
+            "properties": {
+              "endByte": {
+                "description": "Exclusive artifact byte offset.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "endColumn": {
+                "description": "One-based exclusive end column.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "endLine": {
+                "description": "One-based end line.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "markdown-artifact"
+              },
+              "startByte": {
+                "description": "Inclusive artifact byte offset.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              },
+              "startColumn": {
+                "description": "One-based start column.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              },
+              "startLine": {
+                "description": "One-based start line.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "startByte",
+              "endByte",
+              "startLine",
+              "startColumn",
+              "endLine",
+              "endColumn"
+            ]
+          }
+        ]
+      },
+      "SearchMatch": {
+        "description": "One exact match, never a group of equal-line matches.",
         "type": "object",
         "properties": {
           "context": {
-            "description": "Optional rendered lines surrounding the match.",
+            "description": "Bounded surrounding presentation lines.",
             "type": "array",
+            "default": [],
             "items": {
               "$ref": "#/$defs/SearchContextLine"
             }
           },
+          "displaySlices": {
+            "description": "Subordinate visible fragments; empty for artifact-only hits.",
+            "type": "array",
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/SearchDisplaySlice"
+            }
+          },
+          "location": {
+            "description": "Authoritative tagged occurrence coordinate.",
+            "$ref": "#/$defs/SearchLocation"
+          },
+          "matchedText": {
+            "description": "Exact searched bytes, not a presentation-only preview.",
+            "type": "string"
+          },
           "nodeSource": {
-            "description": "Original-source location of the owning outline node, when retained.",
+            "description": "Source of the outline owner, when known.",
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
@@ -26291,224 +27067,30 @@
               }
             ]
           },
-          "occurrenceCount": {
-            "description": "Total exact occurrences, including any omitted to bound the response.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "occurrences": {
-            "description": "Retained exact occurrences represented by this hit.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchOccurrence"
-            },
-            "maxItems": 256,
-            "minItems": 1
-          },
-          "occurrencesTruncated": {
-            "description": "Whether occurrence ranges were omitted to bound a rendered line group.",
-            "type": "boolean"
-          },
           "ordinal": {
-            "description": "One-based line-group number in the unpaginated result set.",
+            "description": "One-based occurrence ordinal in the unpaginated snapshot.",
             "type": "integer",
             "format": "uint32",
             "minimum": 1
           },
           "outline": {
-            "description": "Complete logical location of the nearest addressable node.",
+            "description": "Nearest addressable node for navigation, independent of match identity.",
             "$ref": "#/$defs/OutlineTrail"
           },
           "preview": {
-            "description": "Compact single-string presentation of the match.",
+            "description": "Bounded human presentation; never coordinate authority.",
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "ordinal",
           "outline",
-          "occurrences",
-          "occurrenceCount",
-          "occurrencesTruncated",
-          "preview"
-        ]
-      },
-      "SearchLineRange": {
-        "description": "One exact occurrence fragment within an anchor-free rendered Markdown line.",
-        "type": "object",
-        "properties": {
-          "endByte": {
-            "description": "Exclusive zero-based UTF-8 byte offset within the presented line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "line": {
-            "description": "One-based line number in the deterministic full Markdown render.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "startByte": {
-            "description": "Inclusive zero-based UTF-8 byte offset within the presented line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "line",
-          "startByte",
-          "endByte"
-        ]
-      },
-      "SearchLogicalRange": {
-        "description": "Half-open root-relative logical coordinates for one matcher occurrence.",
-        "type": "object",
-        "properties": {
-          "endByte": {
-            "description": "Exclusive UTF-8 byte offset in the root's canonical logical sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "endScalar": {
-            "description": "Exclusive Unicode-scalar offset in the same sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "startByte": {
-            "description": "Inclusive UTF-8 byte offset in the root's canonical logical sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "startScalar": {
-            "description": "Inclusive Unicode-scalar offset in the same sequence.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "startByte",
-          "endByte",
-          "startScalar",
-          "endScalar"
-        ]
-      },
-      "SearchMarkdownRange": {
-        "description": "Half-open byte range plus one-based human coordinates in full Markdown.",
-        "type": "object",
-        "properties": {
-          "endByte": {
-            "description": "Exclusive zero-based UTF-8 byte offset.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "endColumn": {
-            "description": "One-based exclusive ending column.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "endLine": {
-            "description": "One-based ending line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "startByte": {
-            "description": "Inclusive zero-based UTF-8 byte offset.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0
-          },
-          "startColumn": {
-            "description": "One-based starting column.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          },
-          "startLine": {
-            "description": "One-based starting line.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 1
-          }
-        },
-        "required": [
-          "startByte",
-          "endByte",
-          "startLine",
-          "startColumn",
-          "endLine",
-          "endColumn"
-        ]
-      },
-      "SearchOccurrence": {
-        "description": "One exact matcher occurrence in either a logical root or the rendered document.",
-        "type": "object",
-        "properties": {
-          "lineRanges": {
-            "description": "Anchor-free presentation fragments for a render-only hit.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchLineRange"
-            }
-          },
-          "logical": {
-            "description": "Root-relative logical UTF-8 byte and Unicode-scalar range, when available.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/SearchLogicalRange"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "markdown": {
-            "description": "Authoritative Markdown range for a render-only hit, including TLDR text.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/SearchMarkdownRange"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "markdownProjections": {
-            "description": "Zero or more presentation-only placements in canonical Markdown v1.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchMarkdownRange"
-            }
-          },
-          "matchedText": {
-            "description": "Bounded presentation echo; the logical range remains authoritative.",
-            "type": "string"
-          },
-          "root": {
-            "description": "Response-local logical root containing the complete match, when available.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ContentRootKey"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "matchedText"
+          "matchedText",
+          "location",
+          "displaySlices",
+          "preview",
+          "context"
         ]
       },
       "SearchQuery": {
@@ -26521,7 +27103,7 @@
             "default": "insensitive"
           },
           "contextLines": {
-            "description": "Neighboring rendered lines included around each match.",
+            "description": "Neighboring presentation lines included around each match.",
             "type": "integer",
             "format": "uint16",
             "default": 0,
@@ -26529,7 +27111,7 @@
             "minimum": 0
           },
           "limit": {
-            "description": "Maximum number of matching line groups returned.",
+            "description": "Maximum number of complete occurrences returned.",
             "type": "integer",
             "format": "uint32",
             "default": 100,
@@ -26537,7 +27119,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching line groups skipped before collection.",
+            "description": "Number of complete occurrences skipped before retention.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -26578,42 +27160,43 @@
         ]
       },
       "SearchRender": {
-        "description": "Description of the deterministic document whose Markdown coordinates are reported.",
+        "description": "Description of the coordinate-bearing presentation.",
         "type": "object",
         "properties": {
           "columnBase": {
-            "description": "First valid human-readable column number.",
+            "description": "One-based column numbering.",
             "type": "integer",
             "format": "uint8",
             "maximum": 1,
             "minimum": 1
           },
           "format": {
-            "description": "Rendered text format.",
+            "description": "Visible Fixed surface or Markdown artifact.",
             "$ref": "#/$defs/SearchRenderFormat"
           },
           "lineBase": {
-            "description": "First valid human-readable line number.",
+            "description": "One-based line numbering.",
             "type": "integer",
             "format": "uint8",
             "maximum": 1,
             "minimum": 1
           },
           "lineCount": {
-            "description": "Total rendered line count.",
+            "description": "Number of full presentation rows or lines.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
           },
           "schema": {
-            "description": "Coordinate-space schema discriminator.",
-            "$ref": "#/$defs/MarkdownSchema"
+            "description": "Exact coordinate-space schema discriminator.",
+            "$ref": "#/$defs/SearchRenderSchema"
           },
           "scope": {
-            "description": "Portion of the query represented by the render.",
+            "description": "Portion represented by this presentation.",
             "$ref": "#/$defs/SearchRenderScope"
           }
         },
+        "additionalProperties": false,
         "required": [
           "schema",
           "format",
@@ -26623,13 +27206,57 @@
           "lineCount"
         ]
       },
-      "SearchRenderFormat": {
-        "description": "Canonical render format used for search coordinates.",
+      "SearchRenderDerivedFragmentSource": {
+        "description": "A visible transformation whose exact authored byte origin is unproven.",
+        "type": "object",
+        "properties": {
+          "kind": {
+            "description": "Required source-kind discriminator.",
+            "$ref": "#/$defs/SearchRenderDerivedSourceKind"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ]
+      },
+      "SearchRenderDerivedSourceKind": {
+        "description": "Literal discriminator of render-derived visible bytes.",
         "oneOf": [
           {
-            "description": "Generated `CommonMark` text.",
+            "description": "This is not an authored root range.",
+            "type": "string",
+            "const": "render-derived"
+          }
+        ]
+      },
+      "SearchRenderFormat": {
+        "description": "The format whose coordinates are used for the search response.",
+        "oneOf": [
+          {
+            "description": "User-exportable Markdown artifact.",
             "type": "string",
             "const": "markdown"
+          },
+          {
+            "description": "Final native Fixed visible surface, before viewport clipping.",
+            "type": "string",
+            "const": "fixed-visible"
+          }
+        ]
+      },
+      "SearchRenderSchema": {
+        "description": "Schema of the coordinate-bearing presentation.",
+        "oneOf": [
+          {
+            "description": "Canonical Flow or literal Fixed Markdown export.",
+            "type": "string",
+            "const": "mant.markdown/v1"
+          },
+          {
+            "description": "Final native Fixed visible surface.",
+            "type": "string",
+            "const": "mant.fixed/v1"
           }
         ]
       },
@@ -26637,7 +27264,7 @@
         "description": "Amount of the query included in the coordinate-bearing render.",
         "oneOf": [
           {
-            "description": "Complete query document, including optional tldr content.",
+            "description": "Complete query document, including an optional TLDR.",
             "type": "string",
             "const": "full"
           }
@@ -26654,15 +27281,15 @@
         ]
       },
       "SearchScope": {
-        "description": "Text representation searched while Markdown remains available for presentation.",
+        "description": "Text representation searched.",
         "oneOf": [
           {
-            "description": "Search visible document text.",
+            "description": "Search final visible document content.",
             "type": "string",
             "const": "visible"
           },
           {
-            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "description": "Search bytes of the user-exportable Markdown artifact.",
             "type": "string",
             "const": "markdown"
           }
@@ -26680,6 +27307,168 @@
             "description": "Interpret the pattern as a Rust regular expression.",
             "type": "string",
             "const": "regex"
+          }
+        ]
+      },
+      "SearchTextJoin": {
+        "description": "Exact visible text between adjacent response fragments.",
+        "oneOf": [
+          {
+            "description": "Proven zero-byte contact, including a native soft wrap.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "direct-contact"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact native-consumed authored separator between fragments.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "authored-separator"
+              },
+              "text": {
+                "description": "One or more source-authored ASCII spaces absent from final runs.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Structural boundary that blocks a cross-fragment match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hard-boundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Unknown connection that blocks a cross-fragment match.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact bytes introduced by Flow/TLDR rendering between roots.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "render-separator"
+              },
+              "text": {
+                "description": "Exact inserted UTF-8 text, represented only in this join.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          }
+        ]
+      },
+      "SearchTextUnit": {
+        "description": "One complete concatenated searchable unit.",
+        "type": "object",
+        "properties": {
+          "fragments": {
+            "description": "Fragment keys in exact visible order.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 1
+            }
+          },
+          "joins": {
+            "description": "One explicit join for each adjacent fragment pair.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchTextJoin"
+            }
+          },
+          "key": {
+            "description": "Dense one-based response-local key.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "fragments",
+          "joins"
+        ]
+      },
+      "SearchTldrFragmentSource": {
+        "description": "Exact TLDR source of one copied fragment.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive TLDR logical-unit UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "kind": {
+            "description": "Required source-kind discriminator.",
+            "$ref": "#/$defs/SearchTldrSourceKind"
+          },
+          "path": {
+            "description": "Current TLDR selection path, independent of the primary source table.",
+            "type": "string"
+          },
+          "startByte": {
+            "description": "Inclusive TLDR logical-unit UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path",
+          "startByte",
+          "endByte"
+        ]
+      },
+      "SearchTldrSourceKind": {
+        "description": "Literal discriminator of a TLDR fragment source.",
+        "oneOf": [
+          {
+            "description": "A source fragment of the optional quick reference.",
+            "type": "string",
+            "const": "tldr"
           }
         ]
       },

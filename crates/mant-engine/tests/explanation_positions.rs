@@ -148,7 +148,9 @@ fn fixture_owner(document: &Document) -> ContentOwnerKey {
 fn content_block(evidence: &ExplanationEvidence) -> &Block {
     match evidence.content.as_ref().unwrap() {
         ExplanationContent::Entry { block } | ExplanationContent::Block { block } => block,
-        ExplanationContent::DeclarationMember { .. } | ExplanationContent::SharedEntry { .. } => {
+        ExplanationContent::DeclarationMember { .. }
+        | ExplanationContent::SharedEntry { .. }
+        | ExplanationContent::FixedOwner { .. } => {
             panic!("fixture has no shared context")
         }
     }

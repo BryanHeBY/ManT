@@ -142,13 +142,18 @@ The unreleased v0.12 document envelope retains authoritative heading inlines:
 section `title` is rejected. Outline/excerpt `displayTitle` is only a derived
 report label. Root excerpts include the real heading even without body blocks.
 
-Scoped search has one pagination coordinate system. `ScopeSearch` owns the
-global total, offset, truncation flag, and continuation offset; each
-`ScopedSearchDocument` carries only its logical address, depth, canonical
-Markdown render descriptor, optional authored-source context, and globally
-numbered hits. Consumers must never derive a continuation cursor from an
-individual document group. A tldr-only group omits source context unless it
-also carries an authored source span.
+Scoped search has one occurrence-pagination coordinate system. `ScopeSearch`
+owns the global total, offset, truncation flag, and continuation offset; each
+`ScopedSearchDocument` retains globally numbered occurrences, never a local
+cursor. `coverageByDocument` separately accounts for every scanned document,
+including zero-hit and paginated-away documents. Consumers must not infer
+completeness or continuation from retained groups. Each coverage entry keeps
+the primary source context when present, so paginated-away diagnostics still
+validate against the correct source table. A tldr-only group omits
+primary source context unless it carries an authored source span.
+The response also has one 32 MiB aggregate serialized-metadata budget for
+coverage diagnostics and the copied source contexts in retained hit groups;
+per-document diagnostic bounds do not reset that global limit.
 
 Explanation is a separate `QueryExplanation` contract, not an excerpt wrapper.
 `ExplanationQuery` supplies a literal and bounded `ExplanationOptions` (50

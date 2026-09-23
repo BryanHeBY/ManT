@@ -124,7 +124,7 @@ fn assert_invocation_consumers(
         matches!(&hit.outline.node, mant_protocol::OutlineNodeReference::DocumentEntry { id: found_id, path: found_path, .. } if found_id == id && found_path == path)
     );
     assert_eq!(hit.node_source.unwrap().line, source_line);
-    assert_eq!(hit.occurrences[0].matched_text, "OWNEDPAYLOAD");
+    assert_eq!(hit.matched_text, "OWNEDPAYLOAD");
 }
 
 #[test]
