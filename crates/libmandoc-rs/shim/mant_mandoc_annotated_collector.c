@@ -1,6 +1,7 @@
 /* Active terminal labels; no historical formatter event stream is retained. */
 #include "config.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,8 +9,10 @@
 
 #include "mandoc.h"
 #include "roff.h"
+#include "mdoc.h"
 #include "tbl.h"
 #include "out.h"
+#include "tag.h"
 #include "term.h"
 
 #include "mant_mandoc_annotated_collector.h"
@@ -240,6 +243,148 @@ charge_mutations(struct mant_annotated_collector *collector, uint64_t amount)
 	return mant_structured_charge(session, &session->annotation_mutations,
 	    amount, session->limits->max_annotation_mutations, 29,
 	    MANT_STRUCTURED_STAGE_RENDER);
+}
+
+/* Iterate the HEAD in the same child/sibling order as roff.c::deroff(),
+ * without using the C stack for arbitrarily deep inline macro trees. */
+static const struct roff_node *
+heading_next(struct mant_annotated_collector *collector,
+    const struct roff_node *root, const struct roff_node *node)
+{
+	if (node->string == NULL && node->child != NULL)
+		return node->child;
+	while (node != root) {
+		if (node->next != NULL)
+			return node->next;
+		node = node->parent;
+		if (!charge_work(collector, 1))
+			return NULL;
+		if (node == NULL) {
+			fail_relation(collector, 0, 1);
+			return NULL;
+		}
+	}
+	return NULL;
+}
+
+/* Preserve deroff()'s leading escape/whitespace and trailing rules exactly.
+ * The first nonempty leaf uses strndup(cp, sz); later leaves use %*s, which
+ * is a minimum width and therefore retains their original trailing bytes. */
+static int
+heading_leaf(struct mant_annotated_collector *collector, const char *string,
+    size_t *start, size_t *trimmed_end, size_t *full_end)
+{
+	size_t length, offset, end;
+
+	for (length = 0; string[length] != '\0'; length++)
+		if (!charge_work(collector, 1))
+			return 0;
+	for (offset = 0; offset < length; offset++) {
+		if (!charge_work(collector, 1))
+			return 0;
+		if (string[offset] == '\\' && offset + 1 < length &&
+		    strchr(" %&0^|~", string[offset + 1]) != NULL)
+			offset++;
+		else if (!isspace((unsigned char)string[offset]))
+			break;
+	}
+	end = length;
+	if (end > offset && string[end - 1] == '\\')
+		end--;
+	while (end > offset) {
+		if (!charge_work(collector, 1))
+			return 0;
+		if (!isspace((unsigned char)string[end - 1]))
+			break;
+		end--;
+	}
+	*start = offset;
+	*trimmed_end = end;
+	*full_end = length;
+	return 1;
+}
+
+static int
+copy_heading_phrase(struct mant_annotated_collector *collector,
+    struct mant_annotated_mark *mark, const struct roff_node *head)
+{
+	const struct roff_node *node;
+	struct structured_session *session = collector->session;
+	uint8_t *phrase;
+	uint64_t length = 0, part;
+	size_t start, trimmed_end, full_end, used = 0;
+	int first = 1;
+
+	if (head == NULL)
+		return 1;
+	for (node = head; node != NULL;
+	    node = heading_next(collector, head, node)) {
+		if (!charge_work(collector, 1))
+			return 0;
+		if (node->string == NULL)
+			continue;
+		if (!heading_leaf(collector, node->string, &start,
+		    &trimmed_end, &full_end))
+			return 0;
+		if (trimmed_end == start)
+			continue;
+		part = first ? trimmed_end - start : full_end - start + 1;
+		if (part > session->limits->max_content_bytes ||
+		    length > session->limits->max_content_bytes - part) {
+			mant_structured_set_failure(session, MANT_STRUCTURED_BUDGET,
+			    MANT_STRUCTURED_STAGE_RENDER, 10,
+			    part > UINT64_MAX - length ? UINT64_MAX : length + part,
+			    session->limits->max_content_bytes);
+			return 0;
+		}
+		length += part;
+		first = 0;
+	}
+	if (session->status != MANT_STRUCTURED_OK || length == 0)
+		return session->status == MANT_STRUCTURED_OK;
+	phrase = mant_structured_allocate(session, length, 0,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (phrase == NULL)
+		return 0;
+	first = 1;
+	for (node = head; node != NULL;
+	    node = heading_next(collector, head, node)) {
+		if (!charge_work(collector, 1))
+			goto failure;
+		if (node->string == NULL)
+			continue;
+		if (!heading_leaf(collector, node->string, &start,
+		    &trimmed_end, &full_end))
+			goto failure;
+		if (trimmed_end == start)
+			continue;
+		if (!first)
+			phrase[used++] = ' ';
+		part = first ? trimmed_end - start : full_end - start;
+		if (!charge_work(collector, part))
+			goto failure;
+		memcpy(phrase + used, node->string + start, (size_t)part);
+		used += part;
+		first = 0;
+	}
+	if (session->status != MANT_STRUCTURED_OK)
+		goto failure;
+	if (!charge_work(collector, length))
+		goto failure;
+	if (!mant_structured_valid_utf8(phrase, (size_t)length)) {
+		free(phrase);
+		return 1;
+	}
+	if (!mant_structured_charge(session, &session->content_bytes,
+	    length, session->limits->max_content_bytes, 10,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		goto failure;
+	mark->name = phrase;
+	mark->name_length = length;
+	return 1;
+failure:
+	free(phrase);
+	return 0;
 }
 
 static struct annotated_column *
@@ -599,7 +744,13 @@ add_mark(struct mant_annotated_collector *collector,
 		    collector->session->result->source_count);
 		return 0;
 	}
-	if (kind == MANT_ANNOTATED_MARK_ANCHOR) {
+	if (kind == MANT_ANNOTATED_MARK_HEADING) {
+		/* roff.c::deroff() is also the pinned structured heading-evidence
+		 * rule.  Read the HEAD, never the BLOCK's subsequent BODY. */
+		if (!copy_heading_phrase(collector, mark,
+		    node == NULL ? NULL : node->head))
+			return 0;
+	} else if (kind == MANT_ANNOTATED_MARK_ANCHOR) {
 		mark->flags |= MANT_ANNOTATED_MARK_FINAL_POINT_UNVERIFIED;
 		/* tag.c::tag_put()/tag_move_id() own the final NUL-terminated
 		 * spelling; a moved .Tg keeps its authored source separately. */
@@ -618,6 +769,8 @@ add_mark(struct mant_annotated_collector *collector,
 		if (mark->name == NULL)
 			return 0;
 		mark->name_length = name_length;
+		if (mant_tag_is_manual(node->tag))
+			mark->flags |= MANT_ANNOTATED_MARK_MANUAL_TARGET;
 	} else if (kind == MANT_ANNOTATED_MARK_LINK) {
 		/* The macro identifies the kind; .Mt uses each operand as its
 		 * authored origin.  Copy the destination while the parsed tree is
@@ -796,6 +949,9 @@ push_node(struct mant_annotated_collector *collector,
 		    MANT_ANNOTATED_MARK_HEADING, parent, 0, NULL);
 		if (key == 0)
 			return 0;
+		if (node->tok == MAN_SS || node->tok == MDOC_Ss)
+			collector->marks[key - 1].flags |=
+			    MANT_ANNOTATED_MARK_SUBSECTION;
 		collector->active_heading = key;
 		collector->active_owner = key;
 		if (node->tok == MAN_SH || node->tok == MDOC_Sh)
@@ -804,10 +960,35 @@ push_node(struct mant_annotated_collector *collector,
 	    (node->tok == MAN_TP || node->tok == MAN_IP ||
 	    node->tok == MAN_TQ ||
 	    node->tok == MDOC_It)) {
+		const struct roff_node *bl;
+		int definition;
+
+		/* man_term.c::pre_TP/post_TP present HEAD as a named term.
+		 * mdoc_term.c::termp_it_pre uses Bl's validated list type;
+		 * bullet/enum/column heads are not definition declarations. */
+		definition = node->tok == MAN_TP || node->tok == MAN_TQ;
+		if (node->tok == MDOC_It) {
+			bl = node->parent == NULL ? NULL : node->parent->parent;
+			if (bl != NULL && bl->tok == MDOC_Bl && bl->norm != NULL)
+				switch (bl->norm->Bl.type) {
+				case LIST_tag:
+				case LIST_hang:
+				case LIST_diag:
+				case LIST_inset:
+				case LIST_ohang:
+					definition = 1;
+					break;
+				default:
+					break;
+				}
+		}
 		key = add_mark(collector, node, node,
 		    MANT_ANNOTATED_MARK_OWNER, collector->active_owner, 0, NULL);
 		if (key == 0)
 			return 0;
+		if (definition)
+			collector->marks[key - 1].flags |=
+			    MANT_ANNOTATED_MARK_DEFINITION;
 		collector->active_owner = key;
 		frame->owner_mark = key;
 	} else if (node->type == ROFFT_BLOCK &&
@@ -1274,6 +1455,14 @@ flush_advances(struct mant_annotated_collector *collector, int proven_gap)
 			label = collector->skipped[index - leading];
 		else if (can_map && label.role == MANT_ANNOTATED_BODY)
 			label.role = MANT_ANNOTATED_LAYOUT;
+		/* An emitted field blank with no glyph origin or authored
+		 * attribution is formatter spacing.  It remains visible on the
+		 * surface, but cannot interrupt a logical text join. */
+		if (label.role == MANT_ANNOTATED_BODY &&
+		    label.owner == 0 && label.link == 0 && label.source == 0 &&
+		    label.glyph_origin == 0 && label.style == 0 &&
+		    label.flags == 0)
+			label.role = MANT_ANNOTATED_LAYOUT;
 		if (column != NULL && label.glyph_origin != 0)
 			edge = origin_edge(column, label.glyph_origin);
 		else
@@ -1430,7 +1619,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 
 	(void)p;
 	if (collector == NULL || event == NULL ||
-	    collector->session->status != MANT_STRUCTURED_OK)
+	    collector->session->status != MANT_STRUCTURED_OK ||
+	    mant_mandoc_output_active_failed())
 		return;
 	if (!charge_work(collector, 1))
 		return;
@@ -1572,7 +1762,10 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 				    (slot->origin != collector->pending_origin ||
 				    event->reason != TERM_COLLECT_TEXT)) {
 					slot->authored_space = 0;
-					slot->layout_space = 0;
+				/* bufferc() can traverse a previously written
+				 * HORIZ/FIELD blank without replacing it.  The
+				 * cell remains formatter layout even after its
+				 * logical origin is no longer current. */
 				}
 			}
 		}

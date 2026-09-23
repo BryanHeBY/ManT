@@ -53,6 +53,9 @@ struct mant_annotated_selection_part {
 
 #define MANT_ANNOTATED_MARK_AUTHORED (1U << 0)
 #define MANT_ANNOTATED_MARK_FINAL_POINT_UNVERIFIED (1U << 1)
+#define MANT_ANNOTATED_MARK_MANUAL_TARGET (1U << 2)
+#define MANT_ANNOTATED_MARK_SUBSECTION (1U << 3)
+#define MANT_ANNOTATED_MARK_DEFINITION (1U << 4)
 
 enum mant_annotated_point_kind {
 	MANT_ANNOTATED_POINT_NONE = 0,
@@ -79,7 +82,8 @@ struct mant_annotated_mark {
 	uint32_t table_column;
 	uint32_t table_position_present;
 	uint64_t table_offset;
-	/* Owned UTF-8 only for ANCHOR.  Empty for other mark kinds. */
+	/* Owned UTF-8 target spelling for ANCHOR, optional deroff() authored
+	 * phrase for HEADING.  Empty for other mark kinds. */
 	const uint8_t *name;
 	uint64_t name_length;
 	/* Owned decoded destination for a link; authoring source remains above. */

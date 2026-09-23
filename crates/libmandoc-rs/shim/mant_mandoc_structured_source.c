@@ -625,7 +625,8 @@ mant_structured_validate_input(struct structured_session *session)
 	}
 	session->inputs = input->sources.ptr;
 	root_format = session->inputs[input->root_input - 1].format;
-	if (root_format != MANT_FORMAT_MAN && root_format != MANT_FORMAT_MDOC)
+	if (root_format != MANT_FORMAT_MAN && root_format != MANT_FORMAT_MDOC &&
+	    !(session->annotated_mode && root_format == MANT_FORMAT_AUTO))
 		return 0;
 	for (i = 0; i < input->sources.count; i++) {
 		source = session->inputs + i;

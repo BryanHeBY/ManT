@@ -20,6 +20,26 @@ impl<'a> InputStorage<'a> {
         format: InputFormat,
         limits: &Limits,
     ) -> Result<Self, NativeStructuredError> {
+        Self::new_with_auto(root, bundle, format, limits, false)
+    }
+
+    #[cfg(feature = "annotated")]
+    pub(super) fn new_annotated(
+        root: &str,
+        bundle: &'a SourceBundle,
+        format: InputFormat,
+        limits: &Limits,
+    ) -> Result<Self, NativeStructuredError> {
+        Self::new_with_auto(root, bundle, format, limits, true)
+    }
+
+    fn new_with_auto(
+        root: &str,
+        bundle: &'a SourceBundle,
+        format: InputFormat,
+        limits: &Limits,
+        allow_auto: bool,
+    ) -> Result<Self, NativeStructuredError> {
         let invalid = || NativeStructuredError {
             status: STATUS_INVALID_INPUT,
             stage: 1,
@@ -40,6 +60,7 @@ impl<'a> InputStorage<'a> {
         let format = match format {
             InputFormat::Man => FORMAT_MAN,
             InputFormat::Mdoc => FORMAT_MDOC,
+            InputFormat::Auto if allow_auto => 0,
             InputFormat::Auto => return Err(invalid()),
         };
         let source_count = u64::try_from(bundle.sources().count()).map_err(|_| invalid())?;

@@ -149,6 +149,12 @@ mant_mandoc_output_current_operation(void)
 	    active_output->operation;
 }
 
+int
+mant_mandoc_output_active_failed(void)
+{
+	return active_output != NULL && active_output->status != 0;
+}
+
 void
 mant_mandoc_output_utf8(int codepoint)
 {

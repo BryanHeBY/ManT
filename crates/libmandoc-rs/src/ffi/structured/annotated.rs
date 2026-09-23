@@ -3,7 +3,8 @@
 use super::super::guard::NativeSessionGuard;
 use super::raw::{DiagnosticView, MetadataView, ProvenanceView, SourceView, SpanView};
 use super::{
-    FailureView, InputStorage, STATUS_OK, STATUS_REENTRANT, STATUS_RELATION, SliceView, raw_limits,
+    FORMAT_MAN, FORMAT_MDOC, FailureView, InputStorage, STATUS_OK, STATUS_REENTRANT,
+    STATUS_RELATION, SliceView, raw_limits,
 };
 use crate::annotated::{
     AnnotatedDiagnostic, AnnotatedDisplayPoint, AnnotatedDocument, AnnotatedError, AnnotatedLabel,
@@ -258,7 +259,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 7
+        mant_annotated_abi_version() == 10
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -572,8 +573,8 @@ pub(crate) fn render_annotated(
         return Err(invalid_result());
     }
     let limits = raw_limits(options);
-    let storage =
-        InputStorage::new(root, bundle, format, &limits).map_err(|error| from_native(&error))?;
+    let storage = InputStorage::new_annotated(root, bundle, format, &limits)
+        .map_err(|error| from_native(&error))?;
     let input = storage.view(width, super::PROFILE_UTF8);
     let mut pointer = std::ptr::null_mut();
     let mut failure = FailureView::default();
@@ -785,7 +786,11 @@ fn transfer(
         charge(mark.target_b.len)?;
     }
     let metadata = view.metadata;
-    if metadata.reserved != 0 || metadata.reserved_bytes != [0; 3] || metadata.has_body > 1 {
+    if (metadata.macroset != FORMAT_MAN && metadata.macroset != FORMAT_MDOC)
+        || metadata.reserved != 0
+        || metadata.reserved_bytes != [0; 3]
+        || metadata.has_body > 1
+    {
         return Err(invalid_result());
     }
     let metadata = AnnotatedMetadata {
@@ -851,6 +856,7 @@ fn transfer(
     let mut sources = reserve(source_views.len())?;
     for (index, source) in source_views.iter().enumerate() {
         if source.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
+            || source.format != metadata.macroset
             || source.reserved != 0
             || source.reserved_bytes != [0; 7]
             || source.hash_present > 1
@@ -925,7 +931,10 @@ fn transfer(
             || mark.source as usize > sources.len()
             || mark.reserved != 0
             || mark.point_reserved != 0
-            || mark.flags & !1 != 0
+            || mark.flags & !0b1_1101 != 0
+            || (mark.flags & 4 != 0 && mark.kind != 4)
+            || (mark.flags & 8 != 0 && mark.kind != 1)
+            || (mark.flags & 16 != 0 && mark.kind != 2)
         {
             return Err(invalid_result());
         }
@@ -999,15 +1008,19 @@ fn transfer(
             selection_count: mark.selection_count,
             point,
             native_table_position,
-            name: if mark.kind == 4 {
-                Some(copy_string(
+            name: if mark.kind == 4 || mark.kind == 1 && mark.name_length != 0 {
+                let name = copy_string(
                     handle,
                     super::BytesView {
                         ptr: mark.name,
                         len: mark.name_length,
                     },
                     limits.max_content_bytes,
-                )?)
+                )?;
+                if name.is_empty() {
+                    return Err(invalid_result());
+                }
+                Some(name)
             } else {
                 if !mark.name.is_null() || mark.name_length != 0 {
                     return Err(invalid_result());

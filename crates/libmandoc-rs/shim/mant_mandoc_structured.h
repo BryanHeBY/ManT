@@ -84,6 +84,7 @@ enum mant_structured_identity_kind {
 };
 
 enum mant_structured_format {
+	MANT_FORMAT_AUTO = 0,
 	MANT_FORMAT_MAN = 1,
 	MANT_FORMAT_MDOC = 2,
 	MANT_FORMAT_MARKDOWN = 3

@@ -31,6 +31,9 @@ void mant_mandoc_output_write_op(const void *, size_t,
 void mant_mandoc_output_utf8(int);
 void mant_mandoc_output_utf8_op(int, enum mant_mandoc_output_operation);
 enum mant_mandoc_output_operation mant_mandoc_output_current_operation(void);
+/* Terminal observers may continue after a failed write; do not interpret
+ * their unmatched events as a second, unrelated collector failure. */
+int mant_mandoc_output_active_failed(void);
 size_t mant_mandoc_utf8_width(int);
 const char *mant_mandoc_ctype_locale(void);
 void mant_mandoc_output_end(void);

@@ -30,6 +30,50 @@ fn render(input: &[u8], format: InputFormat) -> AnnotatedDocument {
 }
 
 #[test]
+fn auto_format_uses_the_native_parser_choice_for_man_and_mdoc() {
+    // Pinned read.c::choose_parser scans the primary input for .TH/.Dd;
+    // mparse_result returns that parser's macroset. Both exact inputs were
+    // run through the fixed CVS -Tutf8 -O width=78 reference first.
+    let man = render(b".TH AUTO 1\n.SH NAME\nauto \\- man\n", InputFormat::Auto);
+    assert_eq!(man.metadata.macroset, 1);
+    assert_eq!(man.sources[0].format, 1);
+    assert!(surface(&man).contains("auto - man"));
+
+    let mdoc = render(
+        b".Dd September 24, 2026\n.Dt AUTO 1\n.Os\n.Sh NAME\n.Nm auto\n.Nd mdoc\n",
+        InputFormat::Auto,
+    );
+    assert_eq!(mdoc.metadata.macroset, 2);
+    assert_eq!(mdoc.sources[0].format, 2);
+    assert!(surface(&mdoc).contains("mdoc"));
+}
+
+#[test]
+fn auto_format_reports_the_resolved_macroset_for_includes() {
+    // Pinned read.c::choose_parser selects .TH in the primary input, and
+    // mparse_result returns one macroset for the parser and its .so input.
+    // The exact root and include were run through fixed CVS -Tutf8
+    // -O width=78 before these assertions.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "mant_auto_ref_root.1",
+            b".TH AUTO 1\n.so mant_auto_ref_inc.roff\n".to_vec(),
+        )
+        .unwrap();
+    bundle
+        .insert("mant_auto_ref_inc.roff", b".SH NAME\nincluded\n".to_vec())
+        .unwrap();
+    let page = AnnotatedRenderer::default()
+        .render_bundle("mant_auto_ref_root.1", &bundle, InputFormat::Auto)
+        .unwrap();
+    assert_eq!(page.metadata.macroset, 1);
+    assert_eq!(page.sources.len(), 2);
+    assert!(page.sources.iter().all(|source| source.format == 1));
+    assert!(surface(&page).contains("included"));
+}
+
+#[test]
 fn simple_man_final_cells_keep_only_body_rows() {
     // Pinned man_term.c::print_man_node/term.c::term_vspace and
     // term_ascii.c::utf8_letter: the exact input was run through the fixed

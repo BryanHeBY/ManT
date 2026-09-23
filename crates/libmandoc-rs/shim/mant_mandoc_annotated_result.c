@@ -39,7 +39,7 @@ count_direct_part(struct structured_session *session,
 static uint32_t
 native_join(const struct mant_annotated_run_endpoint *endpoints,
     uint32_t previous_run, uint32_t current_run, uint32_t mark_key,
-    uint32_t mark_kind, uint64_t *spaces)
+    uint32_t mark_kind, int non_layout_gap, uint64_t *spaces)
 {
 	const struct mant_annotated_run_endpoint *prior =
 	    endpoints + previous_run - 1;
@@ -47,6 +47,11 @@ native_join(const struct mant_annotated_run_endpoint *endpoints,
 	    endpoints + current_run - 1;
 
 	*spaces = 0;
+	/* The origin edge is a logical relation, not proof that no other
+	 * content was displayed between the two final runs.  A nested macro
+	 * or another owner can contribute visible output in the gap. */
+	if (non_layout_gap)
+		return MANT_ANNOTATED_JOIN_UNKNOWN;
 	if (prior->last_origin == 0 || current->first_origin == 0 ||
 	    current->first_edge.predecessor_origin != prior->last_origin)
 		return MANT_ANNOTATED_JOIN_UNKNOWN;
@@ -71,7 +76,8 @@ native_join(const struct mant_annotated_run_endpoint *endpoints,
 static void
 write_direct_part(struct mant_annotated_result *result, uint32_t key,
     const struct mant_annotated_display_run *run,
-    const struct mant_annotated_run_endpoint *endpoints)
+    const struct mant_annotated_run_endpoint *endpoints,
+    uint32_t last_non_layout_run)
 {
 	struct mant_annotated_mark *mark;
 	struct mant_annotated_selection_part *part;
@@ -86,6 +92,7 @@ write_direct_part(struct mant_annotated_result *result, uint32_t key,
 	if (mark->selection_count != 0)
 		part->join_before = native_join(endpoints,
 		    (part - 1)->run, run->key, mark->key, mark->kind,
+		    last_non_layout_run > (part - 1)->run,
 		    &part->join_text_len);
 	part->start_byte = 0;
 	part->end_byte = run->byte_count;
@@ -105,7 +112,7 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 	const struct mant_annotated_run_endpoint *endpoints;
 	uint64_t edges = 0, maximum, work, join_bytes = 0;
 	uint32_t endpoint_count;
-	uint32_t index, first = 0;
+	uint32_t index, first = 0, last_non_layout_run = 0;
 
 	if (session == NULL || result == NULL || display == NULL ||
 	    session->status != MANT_STRUCTURED_OK ||
@@ -160,8 +167,12 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 	}
 	for (index = 0; index < display->run_count; index++) {
 		run = display->runs + index;
-		write_direct_part(result, run->label.owner, run, endpoints);
-		write_direct_part(result, run->label.link, run, endpoints);
+		write_direct_part(result, run->label.owner, run, endpoints,
+		    last_non_layout_run);
+		write_direct_part(result, run->label.link, run, endpoints,
+		    last_non_layout_run);
+		if (run->label.role != MANT_ANNOTATED_LAYOUT)
+			last_non_layout_run = run->key;
 	}
 	for (index = 0; index < result->selection_part_count; index++) {
 		struct mant_annotated_selection_part *part =
@@ -277,8 +288,7 @@ valid_common(const struct mant_structured_result *common)
 		if (source->key != i + 1 || source->reserved != 0 ||
 		    source->identity_kind < MANT_IDENTITY_PATH ||
 		    source->identity_kind > MANT_IDENTITY_ANONYMOUS ||
-		    (source->format != MANT_FORMAT_MAN &&
-		    source->format != MANT_FORMAT_MDOC) ||
+		    source->format != metadata->macroset ||
 		    source->coordinate_kind !=
 		    MANT_COORD_NATIVE_NORMALIZED_BYTES ||
 		    !mant_structured_valid_identity_name(source->identity_kind,
@@ -386,7 +396,16 @@ valid_marks(const struct mant_annotated_result *result)
 		    mark->region_kind > MANT_ANNOTATED_REGION_TABLE_CELL ||
 		    mark->title_region > result->mark_count ||
 		    mark->body_region > result->mark_count ||
-		    (mark->flags & ~MANT_ANNOTATED_MARK_AUTHORED) != 0 ||
+		    (mark->flags & ~(MANT_ANNOTATED_MARK_AUTHORED |
+		    MANT_ANNOTATED_MARK_MANUAL_TARGET |
+		    MANT_ANNOTATED_MARK_SUBSECTION |
+		    MANT_ANNOTATED_MARK_DEFINITION)) != 0 ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_MANUAL_TARGET) != 0 &&
+		    mark->kind != MANT_ANNOTATED_MARK_ANCHOR) ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_SUBSECTION) != 0 &&
+		    mark->kind != MANT_ANNOTATED_MARK_HEADING) ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_DEFINITION) != 0 &&
+		    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
 		    mark->reserved != 0 || mark->point_reserved != 0)
 			return 0;
 		switch (mark->point_kind) {
@@ -436,6 +455,13 @@ valid_marks(const struct mant_annotated_result *result)
 			if (mark->name == NULL || mark->name_length == 0 ||
 			    !mant_structured_valid_utf8(mark->name,
 			    mark->name_length))
+				return 0;
+		} else if (mark->kind == MANT_ANNOTATED_MARK_HEADING) {
+			if ((mark->name == NULL) !=
+			    (mark->name_length == 0) ||
+			    (mark->name != NULL &&
+			    !mant_structured_valid_utf8(mark->name,
+			    mark->name_length)))
 				return 0;
 		} else if (mark->name != NULL || mark->name_length != 0)
 			return 0;
@@ -544,6 +570,20 @@ valid_display(const struct mant_annotated_result *result)
 }
 
 static int
+non_layout_between(const struct mant_annotated_display_view *display,
+    uint32_t previous, uint32_t current)
+{
+	uint32_t key;
+
+	/* Each final run can be scanned at most once per direct owner and
+	 * once per direct link because each channel partitions its runs. */
+	for (key = previous + 1; key < current; key++)
+		if (display->runs[key - 1].label.role != MANT_ANNOTATED_LAYOUT)
+			return 1;
+	return 0;
+}
+
+static int
 valid_selection_parts(const struct mant_annotated_result *result)
 {
 	struct mant_annotated_display_view display;
@@ -588,6 +628,7 @@ valid_selection_parts(const struct mant_annotated_result *result)
 			if (part->join_before != (j == 0 ?
 			    MANT_ANNOTATED_JOIN_NONE : native_join(endpoints,
 			    previous, part->run, mark->key, mark->kind,
+			    non_layout_between(&display, previous, part->run),
 			    &spaces)) ||
 			    part->join_text_len != spaces)
 				return 0;
@@ -635,7 +676,7 @@ mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 7;
+	return 10;
 }
 
 uint32_t

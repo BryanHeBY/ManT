@@ -258,7 +258,7 @@ render_session(const struct mant_structured_input_view *input,
 	struct mant_annotated_display_limits display_limits;
 	struct mant_annotated_display_view display_view;
 	uint64_t source_map_bytes;
-	uint32_t status;
+	uint32_t status, i;
 	int options, message_state_saved, mchars_ready, output_active;
 	int annotated_mode = out_annotated != NULL;
 
@@ -328,7 +328,7 @@ render_session(const struct mant_structured_input_view *input,
 	    MPARSE_COMMENT | MPARSE_SO;
 	if (session.inputs[input->root_input - 1].format == MANT_FORMAT_MAN)
 		options |= MPARSE_MAN;
-	else
+	else if (session.inputs[input->root_input - 1].format == MANT_FORMAT_MDOC)
 		options |= MPARSE_MDOC;
 	/* Structured diagnostics are captured by the bounded observer.  Leaving
 	 * the legacy FILE sink disabled prevents an unbounded duplicate stream. */
@@ -364,6 +364,14 @@ render_session(const struct mant_structured_input_view *input,
 	result->width = input->width;
 	if (!mant_structured_copy_metadata(&session, meta))
 		goto native_cleanup;
+	if (annotated_mode && session.inputs[input->root_input - 1].format ==
+	    MANT_FORMAT_AUTO) {
+		/* read.c::choose_parser() selected the macroset during the one
+		 * parse.  Includes share that parser, so all registered sources
+		 * report the resolved format rather than the input sentinel. */
+		for (i = 0; i < result->source_count; i++)
+			result->sources[i].format = result->metadata.macroset;
+	}
 	if (annotated_mode) {
 		annotated = mant_structured_allocate(&session,
 		    sizeof(*annotated), 1, MANT_STRUCTURED_STAGE_RENDER);
