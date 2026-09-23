@@ -40,6 +40,41 @@ table_has_cell_owner(const struct mant_structured_result *result,
 	    result->table_rows[result->table_cells[low].row - 1].table == table;
 }
 
+static uint32_t
+next_fixed_cell(const struct mant_structured_result *result, uint32_t previous)
+{
+	uint32_t index, table;
+
+	for (index = previous; index < result->table_cell_count; index++) {
+		table = result->table_rows[result->table_cells[index].row - 1].table;
+		if (result->tables[table - 1].fixed_view != 0)
+			return index + 1;
+	}
+	return 0;
+}
+
+static uint32_t
+table_cell_for_point(const struct mant_structured_result *result,
+    uint32_t table, uint32_t point)
+{
+	uint32_t owner, low = 0, high = result->table_cell_count, middle;
+
+	owner = result->content_points[point - 1].owner;
+	while (low < high) {
+		middle = low + (high - low) / 2;
+		if (result->table_cells[middle].owner < owner)
+			low = middle + 1;
+		else
+			high = middle;
+	}
+	if (low < result->table_cell_count &&
+	    result->table_cells[low].owner == owner &&
+	    result->table_rows[result->table_cells[low].row - 1].table == table &&
+	    result->table_cells[low].point == point)
+		return low + 1;
+	return 0;
+}
+
 int
 mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 {
@@ -49,7 +84,7 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 	const struct mant_structured_decoration_view *decoration;
 	const struct mant_structured_content_atom_view *atom;
 	const struct mant_structured_content_point_view *point;
-	uint32_t i, previous_view, ordinal, previous_line;
+	uint32_t i, previous_view, ordinal, previous_line, last_fixed_cell;
 	uint32_t placement_ordinal, decoration_ordinal;
 	uint64_t total_columns, scalar_work, start, end;
 
@@ -115,6 +150,7 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 	if (previous_view != result->fixed_view_count)
 		return 0;
 	previous_line = placement_ordinal = 0;
+	last_fixed_cell = 0;
 	scalar_work = 0;
 	for (i = 0; i < result->placement_count; i++) {
 		placement = result->placements + i;
@@ -130,13 +166,13 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 		    placement->column_start > placement->column_end ||
 		    placement->column_end > result->fixed_lines[
 		    placement->line - 1].total_columns ||
-		    placement->scalar_start > placement->scalar_end ||
-		    placement->reserved != 0)
+		    placement->scalar_start > placement->scalar_end)
 			return 0;
 		view = result->fixed_views + result->fixed_lines[
 		    placement->line - 1].view - 1;
 		if (placement->target_kind == MANT_PLACEMENT_CONTENT) {
 			if (placement->atom == 0 ||
+			    placement->cell != 0 ||
 			    placement->atom > result->content_atom_count ||
 			    placement->point != 0 ||
 			    placement->byte_start >= placement->byte_end ||
@@ -189,13 +225,29 @@ mant_structured_fixed_result_valid(const struct mant_structured_result *result)
 			point = result->content_points + placement->point - 1;
 			if (placement->scalar_start != point->scalar_boundary ||
 			    placement->scalar_end != point->scalar_boundary ||
-			    (view->table != 0 && !table_has_cell_owner(result,
+			    (view->table != 0 && placement->cell == 0 &&
+			    !table_has_cell_owner(result,
 			    view->table, point->owner)) ||
 			    (view->table == 0 && point->owner != view->owner))
+				return 0;
+			if (placement->cell != 0) {
+				if (placement->cell != next_fixed_cell(result,
+				    last_fixed_cell) ||
+				    result->table_cells[placement->cell - 1].point !=
+				    placement->point ||
+				    result->table_rows[result->table_cells[
+				    placement->cell - 1].row - 1].table != view->table)
+					return 0;
+				last_fixed_cell = placement->cell;
+			} else if (view->table != 0 &&
+			    table_cell_for_point(result, view->table,
+			    placement->point) != 0)
 				return 0;
 		} else
 			return 0;
 	}
+	if (next_fixed_cell(result, last_fixed_cell) != 0)
+		return 0;
 	previous_line = decoration_ordinal = 0;
 	for (i = 0; i < result->decoration_count; i++) {
 		decoration = result->decorations + i;

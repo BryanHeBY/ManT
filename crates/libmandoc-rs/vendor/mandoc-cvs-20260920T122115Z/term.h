@@ -54,6 +54,7 @@ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
 enum term_collector_op {
 	TERM_COLLECT_NODE,
 	TERM_COLLECT_TABLE_CELL,
+	TERM_COLLECT_TABLE_CELL_POSITION,
 	TERM_COLLECT_OUTPUT,
 	TERM_COLLECT_LOGICAL,
 	TERM_COLLECT_COL_SELECT,
@@ -225,6 +226,7 @@ void		  term_collect_node(struct termp *, const struct roff_node *,
 			enum term_collector_phase);
 void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
 			enum term_collector_phase);
+void		  term_collect_table_cell_position(struct termp *, size_t, size_t);
 void		  term_collect_draw(struct termp *, int, size_t);
 void		  term_collect_endline(struct termp *);
 

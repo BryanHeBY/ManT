@@ -6,6 +6,7 @@
 
 struct roff_node;
 struct tbl_dat;
+struct termp;
 
 int mant_structured_table_enter(struct structured_session *,
     const struct roff_node *);
@@ -13,5 +14,7 @@ void mant_structured_table_leave(struct structured_session *,
     const struct roff_node *);
 void mant_structured_table_cell(struct structured_session *,
     const struct tbl_dat *, int);
+void mant_structured_table_position(struct structured_session *, struct termp *,
+    size_t, size_t);
 
 #endif

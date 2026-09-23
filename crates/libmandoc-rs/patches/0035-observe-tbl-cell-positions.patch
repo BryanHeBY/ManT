@@ -1,0 +1,89 @@
+Subject: observe physical positions of table cells without emitted words
+Upstream-Status: Local embedding (not submitted)
+
+The first printed line in tbl_term.c::term_tbl establishes a physical
+position even for an empty or rule cell. Expose it through the optional
+read-only terminal observer without altering the formatter output.
+
+--- a/tbl_term.c
++++ b/tbl_term.c
+@@ -169,6 +169,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 	int	 uvert;	 /* Number of vertical lines pointing up. */
+ 	int	 fc;	 /* Frame character index in tbl_borders[]. */
+ 	int	 more;	 /* Boolean: there are more columns to print. */
++	int	 firstline; /* First physical line of this span. */
+ 
+ 	/* Inhibit printing of spaces: we do padding ourselves. */
+ 
+@@ -335,6 +336,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 		break;
+ 	}
+ 
++	firstline = 1;
+ 	do {
+ 		/* Print the vertical frame at the start of each row. */
+ 
+@@ -472,6 +474,11 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 				 */
+ 
+ 				tp->tcol++;
++				/* tbl_data() emits no words for empty and rule cells.
++				 * Observe the printed column without changing layout. */
++				if (firstline && sp->pos == TBL_SPAN_DATA)
++					term_collect_table_cell_position(tp, ic,
++					    tp->tcol->offset);
+ 				if (tp->tcol->col < tp->tcol->lastcol)
+ 					term_flushln(tp);
+ 				tp->flags &= ~(TERMP_CENTER | TERMP_RIGHT);
+@@ -580,6 +587,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
+ 		}
+ 		term_collect_endline(tp);
+ 		(*tp->endline)(tp);
++		firstline = 0;
+ 	} while (more);
+ 
+ 	/*
+--- a/term.c
++++ b/term.c
+@@ -124,6 +124,23 @@ term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
+ 	(*p->collector)(p, p->collector_arg, &ev);
+ }
+ 
++void
++term_collect_table_cell_position(struct termp *p, size_t column,
++		size_t offset)
++{
++	struct term_collector_event ev;
++
++	if (p->collector == NULL)
++		return;
++	memset(&ev, 0, sizeof(ev));
++	ev.op = TERM_COLLECT_TABLE_CELL_POSITION;
++	ev.phase = TERM_COLLECT_ENTER;
++	ev.node = p->collector_node;
++	ev.column = column;
++	ev.pos = offset;
++	(*p->collector)(p, p->collector_arg, &ev);
++}
++
+ void
+ term_collect_draw(struct termp *p, int value, size_t width)
+ {
+--- a/term.h
++++ b/term.h
+@@ -54,6 +54,7 @@ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
+ enum term_collector_op {
+ 	TERM_COLLECT_NODE,
+ 	TERM_COLLECT_TABLE_CELL,
++	TERM_COLLECT_TABLE_CELL_POSITION,
+ 	TERM_COLLECT_OUTPUT,
+ 	TERM_COLLECT_LOGICAL,
+ 	TERM_COLLECT_COL_SELECT,
+@@ -225,6 +226,7 @@ void		  term_collect_node(struct termp *, const struct roff_node *,
+ 			enum term_collector_phase);
+ void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
+ 			enum term_collector_phase);
++void		  term_collect_table_cell_position(struct termp *, size_t, size_t);
+ void		  term_collect_draw(struct termp *, int, size_t);
+ void		  term_collect_endline(struct termp *);
+

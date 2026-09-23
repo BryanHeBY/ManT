@@ -333,6 +333,47 @@ mant_structured_table_cell(struct structured_session *session,
 }
 
 void
+mant_structured_table_position(struct structured_session *session,
+    struct termp *p, size_t column, size_t offset)
+{
+	const struct mant_structured_table_cell_view *cell;
+	uint32_t low, high, middle;
+
+	if (session->active_fixed_view == 0)
+		return;
+	if (session->active_table_row == 0 || column > UINT32_MAX) {
+		mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+		    MANT_STRUCTURED_STAGE_RENDER, 0, column, 0);
+		return;
+	}
+	low = session->table_cell_start;
+	high = session->result->table_cell_count + 1;
+	while (low < high) {
+		middle = low + (high - low) / 2;
+		cell = session->result->table_cells + middle - 1;
+		if (cell->column == (uint32_t)column) {
+			if (cell->row != session->active_table_row) {
+				mant_structured_set_failure(session,
+				    MANT_STRUCTURED_RELATION,
+				    MANT_STRUCTURED_STAGE_RENDER, 0,
+				    cell->row, session->active_table_row);
+				return;
+			}
+			mant_structured_fixed_table_point(session, p,
+			    cell->point, cell->key, offset);
+			return;
+		}
+		if (cell->column < (uint32_t)column)
+			low = middle + 1;
+		else
+			high = middle;
+	}
+	mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
+	    MANT_STRUCTURED_STAGE_RENDER, 0, column,
+	    session->active_table_row);
+}
+
+void
 mant_structured_table_leave(struct structured_session *session,
     const struct roff_node *node)
 {

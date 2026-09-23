@@ -24,6 +24,8 @@ void mant_structured_fixed_field(struct structured_session *, struct termp *,
     const struct term_collector_event *, struct structured_token *, uint32_t);
 void mant_structured_fixed_draw(struct structured_session *, struct termp *,
     const struct term_collector_event *);
+void mant_structured_fixed_table_point(struct structured_session *, struct termp *,
+    uint32_t, uint32_t, size_t);
 void mant_structured_fixed_endline(struct structured_session *, struct termp *,
     const struct term_collector_event *);
 void mant_structured_fixed_commit(struct structured_session *,

@@ -495,7 +495,8 @@ struct mant_structured_placement_view {
 	uint32_t key, line, ordinal, target_kind;
 	uint32_t atom, byte_start, byte_end, point;
 	uint32_t scalar_start, scalar_end, column_start, column_end;
-	uint32_t cell_map_kind, cell_map_value, reserved;
+	/* Native table-cell identity for a point placement; zero otherwise. */
+	uint32_t cell_map_kind, cell_map_value, cell;
 };
 struct mant_structured_decoration_view {
 	uint32_t key, line, ordinal, kind;

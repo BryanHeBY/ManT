@@ -769,6 +769,11 @@ mant_structured_observe_terminal(struct termp *p, void *arg,
 		    event->phase == TERM_COLLECT_ENTER);
 		return;
 	}
+	if (event->op == TERM_COLLECT_TABLE_CELL_POSITION) {
+		mant_structured_table_position(session, p, event->column,
+		    event->pos);
+		return;
+	}
 	if (event->op == TERM_COLLECT_LOGICAL) {
 		collect_logical(session, p, event);
 		return;

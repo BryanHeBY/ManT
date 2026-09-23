@@ -125,6 +125,23 @@ term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
 }
 
 void
+term_collect_table_cell_position(struct termp *p, size_t column,
+		size_t offset)
+{
+	struct term_collector_event ev;
+
+	if (p->collector == NULL)
+		return;
+	memset(&ev, 0, sizeof(ev));
+	ev.op = TERM_COLLECT_TABLE_CELL_POSITION;
+	ev.phase = TERM_COLLECT_ENTER;
+	ev.node = p->collector_node;
+	ev.column = column;
+	ev.pos = offset;
+	(*p->collector)(p, p->collector_arg, &ev);
+}
+
+void
 term_collect_draw(struct termp *p, int value, size_t width)
 {
 	collect_emit(p, TERM_COLLECT_DRAW, TERM_COLLECT_ENTER,

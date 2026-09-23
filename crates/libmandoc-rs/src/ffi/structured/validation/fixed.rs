@@ -95,6 +95,17 @@ pub(super) fn validate_fixed(
     }
 
     let mut occupied = Vec::new();
+    let mut cell_point_placements = Vec::new();
+    cell_point_placements
+        .try_reserve_exact(slices.content_points.len())
+        .map_err(alloc_error)?;
+    cell_point_placements.resize(slices.content_points.len(), 0_u8);
+    for cell in slices.table_cells {
+        let table = slices.table_rows[cell.row as usize - 1].table;
+        if slices.tables[table as usize - 1].fixed_view != 0 {
+            cell_point_placements[cell.point as usize - 1] = 1;
+        }
+    }
     let occupied_count = slices
         .placements
         .len()
@@ -104,6 +115,7 @@ pub(super) fn validate_fixed(
         .try_reserve_exact(occupied_count)
         .map_err(alloc_error)?;
     let mut previous_line = 0_u32;
+    let mut previous_cell = 0_u32;
     let mut ordinal = 0_u32;
     let mut scalar_work = 0_u64;
     for (index, placement) in slices.placements.iter().enumerate() {
@@ -124,7 +136,6 @@ pub(super) fn validate_fixed(
             || placement.ordinal != ordinal
             || placement.column_start > placement.column_end
             || placement.scalar_start > placement.scalar_end
-            || placement.reserved != 0
         {
             return Err(relation_error());
         }
@@ -138,6 +149,7 @@ pub(super) fn validate_fixed(
                     .and_then(|key| slices.content_atoms.get(key as usize))
                     .ok_or_else(relation_error)?;
                 if placement.point != 0
+                    || placement.cell != 0
                     || placement.byte_start >= placement.byte_end
                     || (placement.column_start == placement.column_end
                         && placement.cell_map_kind != 2)
@@ -207,8 +219,46 @@ pub(super) fn validate_fixed(
                 {
                     return Err(relation_error());
                 }
+                if view.table != 0
+                    && placement.cell == 0
+                    && cell_point_placements[placement.point as usize - 1] != 0
+                {
+                    return Err(relation_error());
+                }
+                // The private ABI carries the originating cell key only
+                // through handle validation.  Owned/IR geometry keeps the
+                // checked content point rather than a second cell identity.
+                if placement.cell != 0 {
+                    let cell = slices
+                        .table_cells
+                        .get(placement.cell as usize - 1)
+                        .ok_or_else(relation_error)?;
+                    if placement.cell <= previous_cell
+                        || cell.point != placement.point
+                        || slices.table_rows[cell.row as usize - 1].table != view.table
+                    {
+                        return Err(relation_error());
+                    }
+                    previous_cell = placement.cell;
+                    let state = &mut cell_point_placements[placement.point as usize - 1];
+                    if *state == 2 {
+                        return Err(relation_error());
+                    }
+                    if *state == 1 {
+                        *state = 2;
+                    }
+                }
             }
             _ => return Err(relation_error()),
+        }
+    }
+
+    for cell in slices.table_cells {
+        let table = slices.table_rows[cell.row as usize - 1].table;
+        if slices.tables[table as usize - 1].fixed_view != 0
+            && cell_point_placements[cell.point as usize - 1] != 2
+        {
+            return Err(relation_error());
         }
     }
 

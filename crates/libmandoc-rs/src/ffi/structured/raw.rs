@@ -559,7 +559,7 @@ pub(super) struct PlacementView {
     pub(super) column_end: u32,
     pub(super) cell_map_kind: u32,
     pub(super) cell_map_value: u32,
-    pub(super) reserved: u32,
+    pub(super) cell: u32,
 }
 #[repr(C)]
 #[derive(Clone, Copy, Default)]

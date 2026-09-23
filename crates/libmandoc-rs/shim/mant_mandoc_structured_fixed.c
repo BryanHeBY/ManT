@@ -314,7 +314,7 @@ columns(struct structured_session *session, struct termp *p,
 
 static int
 place_point(struct structured_session *session, uint32_t point_key,
-    uint32_t key, uint32_t start)
+    uint32_t key, uint32_t start, uint32_t cell)
 {
 	struct mant_structured_placement_view *placements, *placement;
 	struct mant_structured_fixed_line_view *line;
@@ -351,12 +351,27 @@ place_point(struct structured_session *session, uint32_t point_key,
 	    placements[count - 1].ordinal + 1;
 	placement->target_kind = MANT_PLACEMENT_POINT;
 	placement->point = point_key;
+	placement->cell = cell;
 	placement->scalar_start = point->scalar_boundary;
 	placement->scalar_end = point->scalar_boundary;
 	placement->column_start = start;
 	placement->column_end = start;
 	placement->cell_map_kind = MANT_CELL_MAP_AFFINE;
 	return 1;
+}
+
+void
+mant_structured_fixed_table_point(struct structured_session *session,
+    struct termp *p, uint32_t point, uint32_t cell, size_t offset)
+{
+	uint32_t line, start, end;
+
+	/* tbl_term.c::term_tbl reports the actual first-line cell offset even
+	 * when tbl_data() has no word to emit.  Do not manufacture a glyph. */
+	if (!columns(session, p, offset, 0, &start, &end) ||
+	    (line = open_line(session)) == 0)
+		return;
+	place_point(session, point, line, start, cell);
 }
 
 void
@@ -373,7 +388,7 @@ mant_structured_fixed_points_before_token(struct structured_session *session,
 	    point_key <= session->result->content_point_count; point_key++) {
 		if (session->result->content_points[point_key - 1].root ==
 		    session->fixed_display_root &&
-		    !place_point(session, point_key, line, start))
+		    !place_point(session, point_key, line, start, 0))
 			return;
 	}
 	session->fixed_point_cursor = session->result->content_point_count;
@@ -401,7 +416,7 @@ mant_structured_fixed_sync_points(struct structured_session *session,
 		if (!columns(session, p, position, 0, &start, &end) ||
 		    (key = open_line(session)) == 0)
 			return;
-		if (!place_point(session, point_key, key, start))
+		if (!place_point(session, point_key, key, start, 0))
 			return;
 	}
 	session->fixed_point_cursor = session->result->content_point_count;
@@ -563,7 +578,8 @@ mant_structured_fixed_endline(struct structured_session *session, struct termp *
     const struct term_collector_event *event)
 {
 	struct mant_structured_fixed_line_view *line;
-	uint32_t key, start, end;
+	struct mant_structured_placement_view *placement;
+	uint32_t key, start, end, index;
 
 	if (session->active_fixed_view == 0 ||
 	    (session->active_fixed_display == 0 &&
@@ -573,6 +589,23 @@ mant_structured_fixed_endline(struct structured_session *session, struct termp *
 	    (key = open_line(session)) == 0)
 		return;
 	line = session->result->fixed_lines + key - 1;
+	if (session->active_table_row != 0) {
+		/* A trailing empty cell may start beyond the last printed glyph.
+		 * Preserve its identity at the nearest position that exists in
+		 * this exact native line; never extend the line with phantom space. */
+		for (index = session->result->placement_count; index != 0; index--) {
+			placement = session->result->placements + index - 1;
+			if (placement->line != key)
+				break;
+			if (placement->target_kind == MANT_PLACEMENT_POINT &&
+			    placement->column_start > start) {
+				placement->column_start = start;
+				placement->column_end = start;
+			}
+		}
+		if (line->total_columns > start)
+			line->total_columns = start;
+	}
 	if (line->total_columns < start)
 		line->total_columns = start;
 	if (session->fixed_column_total > MANT_FIXED_MAX_TOTAL_COLUMNS -

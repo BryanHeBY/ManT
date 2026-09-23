@@ -463,7 +463,7 @@ mant_structured_view_offset(uint32_t kind, uint32_t field)
 		FIELD(struct mant_structured_placement_view, column_end),
 		FIELD(struct mant_structured_placement_view, cell_map_kind),
 		FIELD(struct mant_structured_placement_view, cell_map_value),
-		FIELD(struct mant_structured_placement_view, reserved) };
+		FIELD(struct mant_structured_placement_view, cell) };
 	static const size_t decoration[] = {
 		FIELD(struct mant_structured_decoration_view, key),
 		FIELD(struct mant_structured_decoration_view, line),

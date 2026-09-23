@@ -169,6 +169,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 	int	 uvert;	 /* Number of vertical lines pointing up. */
 	int	 fc;	 /* Frame character index in tbl_borders[]. */
 	int	 more;	 /* Boolean: there are more columns to print. */
+	int	 firstline; /* First physical line of this span. */
 
 	/* Inhibit printing of spaces: we do padding ourselves. */
 
@@ -335,6 +336,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 		break;
 	}
 
+	firstline = 1;
 	do {
 		/* Print the vertical frame at the start of each row. */
 
@@ -472,6 +474,11 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 				 */
 
 				tp->tcol++;
+				/* tbl_data() emits no words for empty and rule cells.
+				 * Observe the printed column without changing layout. */
+				if (firstline && sp->pos == TBL_SPAN_DATA)
+					term_collect_table_cell_position(tp, ic,
+					    tp->tcol->offset);
 				if (tp->tcol->col < tp->tcol->lastcol)
 					term_flushln(tp);
 				tp->flags &= ~(TERMP_CENTER | TERMP_RIGHT);
@@ -580,6 +587,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 		}
 		term_collect_endline(tp);
 		(*tp->endline)(tp);
+		firstline = 0;
 	} while (more);
 
 	/*

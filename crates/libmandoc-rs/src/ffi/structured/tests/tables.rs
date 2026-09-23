@@ -150,9 +150,91 @@ fn boxed_table_reuses_cell_atoms_in_native_fixed_geometry() {
             .count(),
         1
     );
+    for cell in &document.table_cells {
+        let point = cell.point.expect("each native cell has a content point");
+        let placement = document
+            .placements
+            .iter()
+            .find(|placement| placement.target_kind == 2 && placement.point == Some(point))
+            .expect("even an empty boxed cell has a physical location");
+        let line = &document.fixed_lines[placement.line as usize - 1];
+        assert!(placement.columns.end <= line.terminal_columns);
+    }
 }
 
 #[test]
+fn fixed_table_rule_and_empty_rows_keep_cell_positions() {
+    // Both exact inputs were run through fixed CVS UTF-8/78 first.
+    // tbl_term.c::term_tbl prints even empty/rule data cells without calling
+    // tbl_word(), so the first printed physical line supplies their point.
+    for (name, input, expected_cells) in [
+        (
+            "empty-row.1",
+            b".TH CELLS 1\n.SH DATA\n.TS\ntab(;);\nr r.\nx;y\n;\n.TE\n".as_slice(),
+            4,
+        ),
+        (
+            "rule-cells.1",
+            b".TH CELLS 1\n.SH DATA\n.TS\ntab(;);\nl l.\nx;y\n\\_;\\=\n;\n.TE\n".as_slice(),
+            6,
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, input.to_vec()).unwrap();
+        let document = render_prelude(name, &bundle, InputFormat::Man, 78, &Limits::default())
+            .expect("native fixed table with empty/rule cells");
+        assert_eq!(document.table_cells.len(), expected_cells);
+        for cell in &document.table_cells {
+            let point = cell.point.expect("table cell point");
+            let placement = document
+                .placements
+                .iter()
+                .find(|placement| placement.target_kind == 2 && placement.point == Some(point))
+                .expect("table cell position in native geometry");
+            let line = &document.fixed_lines[placement.line as usize - 1];
+            assert!(placement.columns.end <= line.terminal_columns);
+        }
+    }
+}
+
+#[test]
+fn fixed_table_spans_and_text_blocks_do_not_duplicate_cell_points() {
+    // Both exact inputs were run through fixed CVS UTF-8/78 first.
+    // tbl_term.c::term_tbl emits a cell-position event only on the first
+    // physical row line and skips columns covered by horizontal spans.
+    for (name, input) in [
+        (
+            "vertical.1",
+            b".TH SPAN 1\n.SH DATA\n.TS\nbox tab(;);\nl l,\n^ l.\na;b\n;c\n.TE\n".as_slice(),
+        ),
+        (
+            "block.1",
+            b".TH SPAN 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\nT{\nfirst\nsecond\nT};right\n.TE\n"
+                .as_slice(),
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, input.to_vec()).unwrap();
+        let document = render_prelude(name, &bundle, InputFormat::Man, 78, &Limits::default())
+            .expect("fixed span/block table survives native validation");
+        for cell in &document.table_cells {
+            let point = cell.point.expect("native cell point");
+            assert_eq!(
+                document
+                    .placements
+                    .iter()
+                    .filter(|placement| placement.target_kind == 2
+                        && placement.point == Some(point))
+                    .count(),
+                1,
+                "{name}: one first-line placement per logical cell"
+            );
+        }
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // Mutate and restore one live handle across the relation matrix.
 fn fixed_table_corruption_is_rejected_before_owned_transfer() {
     let mut bundle = SourceBundle::new();
     bundle
@@ -183,6 +265,12 @@ fn fixed_table_corruption_is_rejected_before_owned_transfer() {
             view.placements.count as usize,
         )
     };
+    let cells = unsafe {
+        std::slice::from_raw_parts(
+            view.table_cells.ptr.cast::<TableCellView>(),
+            view.table_cells.count as usize,
+        )
+    };
     assert_eq!(fixed.len(), 1);
     assert!(!placements.is_empty());
     let mut failure = FailureView::default();
@@ -202,6 +290,56 @@ fn fixed_table_corruption_is_rejected_before_owned_transfer() {
     );
     assert!(copy_structured_document(&handle, &view, &limits).is_err());
     placements[0].byte_end = original_end;
+    let point_placement = placements
+        .iter()
+        .position(|placement| placement.target_kind == 2 && placement.point == cells[0].point)
+        .expect("first cell point placement");
+    let original_point = placements[point_placement].point;
+    placements[point_placement].point = cells[1].point;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "native result check rejects a cell point with the wrong identity"
+    );
+    assert!(
+        copy_structured_document(&handle, &view, &limits).is_err(),
+        "handle-bound validation rejects a duplicated/missing cell point"
+    );
+    placements[point_placement].point = original_point;
+    let second_point_placement = placements
+        .iter()
+        .position(|placement| placement.target_kind == 2 && placement.point == cells[1].point)
+        .expect("second cell point placement");
+    let first = (
+        placements[point_placement].point,
+        placements[point_placement].cell,
+    );
+    let second = (
+        placements[second_point_placement].point,
+        placements[second_point_placement].cell,
+    );
+    placements[point_placement].point = second.0;
+    placements[point_placement].cell = second.1;
+    placements[second_point_placement].point = first.0;
+    placements[second_point_placement].cell = first.1;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "point/cell identities cannot be transposed across physical locations"
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+    placements[point_placement].point = first.0;
+    placements[point_placement].cell = first.1;
+    placements[second_point_placement].point = second.0;
+    placements[second_point_placement].cell = second.1;
+    placements[point_placement].cell = 0;
+    assert_eq!(
+        unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
+        STATUS_RELATION,
+        "a table-cell point cannot masquerade as an unowned anchor"
+    );
+    assert!(copy_structured_document(&handle, &view, &limits).is_err());
+    placements[point_placement].cell = first.1;
     assert_eq!(
         unsafe { mant_structured_result_check(handle.0.as_ptr(), &raw mut failure) },
         STATUS_OK

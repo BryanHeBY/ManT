@@ -151,7 +151,7 @@ fn all_frozen_view_sizes_and_alignments_match() {
     offsets!(20, FixedLineView; key, view, ordinal, total_columns, reserved);
     offsets!(21, PlacementView; key, line, ordinal, target_kind, atom,
         byte_start, byte_end, point, scalar_start, scalar_end, column_start,
-        column_end, cell_map_kind, cell_map_value, reserved);
+        column_end, cell_map_kind, cell_map_value, cell);
     offsets!(22, DecorationView; key, line, ordinal, kind, text, column_start,
         column_end, provenance, reserved);
     offsets!(23, FormView; key, owner, role, first_ref, ref_count, provenance, reserved);
