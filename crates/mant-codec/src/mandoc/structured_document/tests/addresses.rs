@@ -6,6 +6,39 @@ use mant_ir::{
 use std::ops::ControlFlow;
 
 #[test]
+fn literal_display_link_origin_resolves_to_native_inline() {
+    // Exact input was checked with fixed CVS UTF-8/78. Pinned
+    // mdoc_term.c::termp_bd_pre/post keeps the literal display fixed, while
+    // termp_lk_pre emits one linked label and its target in that body.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "literal-link.1",
+            b".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\n.Lk https://example.test label\n.Ed\n"
+                .to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("literal-link.1", &bundle, InputFormat::Mdoc)
+        .expect("literal link lowers to final IR");
+    let mut found = 0;
+    let report = mant_ir::scan_references(
+        &document,
+        mant_ir::ReferenceScanLimits::default(),
+        |occurrence| {
+            let origin = occurrence.location.to_owned().expect("bounded origin");
+            assert!(std::ptr::eq(
+                origin.resolve_link(&document).expect("fixed link resolves"),
+                occurrence.link,
+            ));
+            found += 1;
+            ControlFlow::Continue(())
+        },
+    );
+    assert!(report.complete(), "{report:?}");
+    assert_eq!(found, 1);
+}
+
+#[test]
 fn terminal_tg_after_lists_stays_after_them_in_ir() {
     // Both exact inputs were checked with fixed CVS -T tree.  Pinned
     // mdoc_validate.c::post_tg retains the terminal Tg as its own carrier;

@@ -144,7 +144,9 @@ pub(crate) fn block_children(block: &Block, step: ContentBlockStep) -> Option<&[
 fn resolve_inline_root(block: &Block, root: ContentInlineRoot) -> Option<&[Inline]> {
     match (block, root) {
         (
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. },
+            Block::Paragraph { children, .. }
+            | Block::Preformatted { children, .. }
+            | Block::FixedDisplay { children, .. },
             ContentInlineRoot::Inlines,
         ) => Some(children),
         (
