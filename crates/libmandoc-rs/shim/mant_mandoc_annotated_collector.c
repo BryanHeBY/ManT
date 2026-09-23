@@ -14,6 +14,7 @@
 
 #include "mant_mandoc_annotated_collector.h"
 #include "mant_mandoc_output.h"
+#include "mant_mandoc_structured_link.h"
 #include "mant_mandoc_structured_session.h"
 
 struct annotated_slot {
@@ -34,6 +35,7 @@ struct annotated_column {
 
 struct annotated_frame {
 	const struct roff_node *node;
+	const struct roff_node *saved_link_node;
 	uint32_t saved_owner;
 	uint32_t saved_link;
 	uint32_t saved_heading;
@@ -64,6 +66,7 @@ struct mant_annotated_collector {
 	uint8_t table_prepared;
 	uint32_t active_owner;
 	uint32_t active_link;
+	const struct roff_node *active_link_node;
 	uint32_t active_heading;
 	uint32_t last_top_heading;
 	uint64_t next_origin;
@@ -216,12 +219,89 @@ source_key(const struct roff_node *node)
 	    node->mant_source_key;
 }
 
+static int
+within_node(const struct roff_node *node, const struct roff_node *ancestor)
+{
+	for (; node != NULL; node = node->parent)
+		if (node == ancestor)
+			return 1;
+	return 0;
+}
+
+/* The link macro identifies the occurrence, but only selected terminal
+ * characters belong to its clickable label.  These operand boundaries are
+ * the same ones used by pinned man_html.c::man_MR_pre/man_UR_pre and
+ * mdoc_html.c::mdoc_lk_pre; formatter-generated decoration is not inferred
+ * from a source span or from a contiguous final display interval. */
+static uint32_t
+visible_link(const struct mant_annotated_collector *collector,
+    const struct roff_node *node, enum term_collector_reason reason)
+{
+	const struct roff_node *macro = collector->active_link_node;
+	const struct roff_node *first, *second, *punct, *body, *head;
+
+	if (macro == NULL || collector->active_link == 0)
+		return 0;
+	/* term.c::term_word() inserts an AUTO_SPACE before the first operand.
+	 * man_html.c::man_MR_pre and mdoc_html.c::mdoc_xr_pre open the anchor
+	 * after that separator.  Their terminal pre handlers keep NOSPACE
+	 * between name and section, so no interior auto-space belongs here. */
+	if ((macro->tok == MAN_MR || macro->tok == MDOC_Xr) &&
+	    reason == TERM_COLLECT_AUTO_SPACE)
+		return 0;
+	/* man_term.c::pre_MR and mdoc_term.c::termp_xr_pre emit parentheses
+	 * with term_word(), unlike operands emitted via term_word_node().
+	 * Their logical event has no node, yet HTML keeps them in the anchor. */
+	if (node == NULL)
+		return macro->tok == MAN_MR || macro->tok == MDOC_Xr ?
+		    collector->active_link : 0;
+	switch (macro->tok) {
+	case MAN_MR:
+		/* man_term.c::pre_MR prints name(section), then a separate suffix. */
+		first = macro->child;
+		second = first == NULL ? NULL : first->next;
+		return node == macro || within_node(node, first) ||
+		    within_node(node, second) ? collector->active_link : 0;
+	case MAN_UR:
+	case MAN_MT:
+		/* man_term.c::post_UR prints the target in angle brackets after
+		 * the link body.  An empty body replays the head as the label. */
+		head = macro->head;
+		body = macro->body;
+		if (body != NULL && body->child != NULL)
+			return node != body && within_node(node, body) ?
+			    collector->active_link : 0;
+		return head != NULL && node != head &&
+		    within_node(node, head) ? collector->active_link : 0;
+	case MDOC_Lk:
+		first = macro->child;
+		if (first == NULL)
+			return 0;
+		punct = macro->last;
+		while (punct != first && (punct->flags & NODE_DELIMC) != 0)
+			punct = punct->prev;
+		punct = punct->next;
+		/* mdoc_html.c::mdoc_lk_pre uses the destination as label only
+		 * when there is no description; trailing delimiters are outside. */
+		if (first->next == punct)
+			return within_node(node, first) ? collector->active_link : 0;
+		for (second = first->next; second != punct;
+		    second = second->next)
+			if (within_node(node, second))
+				return collector->active_link;
+		return 0;
+	default:
+		return within_node(node, macro) ? collector->active_link : 0;
+	}
+}
+
 static uint32_t
 add_mark(struct mant_annotated_collector *collector,
     const struct roff_node *node, const struct roff_node *origin,
     uint32_t kind, uint32_t parent, uint32_t region_kind)
 {
 	struct mant_annotated_mark *marks, *mark;
+	const struct roff_node *first, *second;
 	size_t name_length;
 	uint32_t maximum;
 
@@ -278,9 +358,88 @@ add_mark(struct mant_annotated_collector *collector,
 		if (mark->name == NULL)
 			return 0;
 		mark->name_length = name_length;
+	} else if (kind == MANT_ANNOTATED_MARK_LINK) {
+		/* The source node is still the macro; destination text is copied
+		 * while the parsed tree is alive, using the same decoder as the
+		 * existing structured link path. */
+		first = second = NULL;
+		switch (node->tok) {
+		case MAN_UR:
+		case MAN_MT:
+			mark->target_kind = node->tok == MAN_UR ?
+			    MANT_LINK_EXTERNAL : MANT_LINK_EMAIL;
+			first = node->head == NULL ? NULL : node->head->child;
+			break;
+		case MAN_MR:
+		case MDOC_Xr:
+			first = node->child;
+			second = first == NULL ? NULL : first->next;
+			mark->target_kind = second == NULL ?
+			    MANT_LINK_DOCUMENT : MANT_LINK_MANUAL;
+			break;
+		case MDOC_Lk:
+			mark->target_kind = MANT_LINK_EXTERNAL;
+			first = node->child;
+			break;
+		case MDOC_Sx:
+			mark->target_kind = MANT_LINK_SECTION;
+			if (!mant_structured_copy_deroff_target(
+			    collector->session, &mark->target_a, node))
+				goto unsupported_target;
+			break;
+		case MDOC_Mt:
+			/* mdoc_html.c::mdoc_mt_pre creates one HTML anchor per
+			 * operand.  A multi-operand macro cannot be one destination;
+			 * leave it explicitly unresolved until per-child marks exist. */
+			if (node->child == NULL || node->child->next != NULL)
+				break;
+			mark->target_kind = MANT_LINK_EMAIL;
+			first = node->child;
+			break;
+		default:
+			break;
+		}
+		/* A missing operand is not an empty decoded destination.  The
+		 * former yields no .UR/.MT/.Lk/.Xr/.Sx occurrence at all (filtered
+		 * by push_node), except .MR's valid no-href () anchor. */
+		if (node->tok != MDOC_Sx && first == NULL) {
+			mark->target_kind = 0;
+		}
+		if (mark->target_kind != 0 && first != NULL &&
+		    !mant_structured_copy_link_target_allow_empty(
+		    collector->session,
+		    &mark->target_a, first))
+			goto unsupported_target;
+		if (second != NULL) {
+			mark->target_b_present = 1;
+			if (!mant_structured_copy_link_target_allow_empty(
+		    collector->session, &mark->target_b, second))
+				goto unsupported_target;
+		}
+		/* man_html.c::man_MR_pre and mdoc_html.c::mdoc_xr_pre only
+		 * create a destination with nonempty name and section.  A raw
+		 * operand such as \& can decode to empty while remaining a valid
+		 * visible no-href instance.  Lk/UR/MT instead retain href="". */
+		if ((mark->target_kind == MANT_LINK_DOCUMENT ||
+		    mark->target_kind == MANT_LINK_MANUAL) &&
+		    (mark->target_a.len == 0 ||
+		    (mark->target_b_present && mark->target_b.len == 0))) {
+			free((void *)mark->target_a.ptr);
+			free((void *)mark->target_b.ptr);
+			memset(&mark->target_a, 0, sizeof(mark->target_a));
+			memset(&mark->target_b, 0, sizeof(mark->target_b));
+			mark->target_kind = mark->target_b_present = 0;
+		}
 	}
 	collector->metrics.mark_count = collector->mark_count;
 	return mark->key;
+
+unsupported_target:
+	if (collector->session->status == MANT_STRUCTURED_OK)
+		mant_structured_set_failure(collector->session,
+		    MANT_STRUCTURED_UNSUPPORTED, MANT_STRUCTURED_STAGE_RENDER,
+		    0, 0, 0);
+	return 0;
 }
 
 static int
@@ -312,6 +471,7 @@ push_node(struct mant_annotated_collector *collector,
 	frame->node = node;
 	frame->saved_owner = collector->active_owner;
 	frame->saved_link = collector->active_link;
+	frame->saved_link_node = collector->active_link_node;
 	frame->saved_heading = collector->active_heading;
 
 	/* man_macro.c::blk_imp and mdoc_macro.c::blk_full produce a block
@@ -413,12 +573,20 @@ push_node(struct mant_annotated_collector *collector,
 	    (node->tok == MAN_UR || node->tok == MAN_MT ||
 	    node->tok == MAN_MR || node->tok == MDOC_Lk ||
 	    node->tok == MDOC_Xr || node->tok == MDOC_Sx ||
-	    node->tok == MDOC_Mt)) {
+	    node->tok == MDOC_Mt) &&
+	    /* man_html.c::man_UR_pre has no anchor without a head operand;
+	     * mdoc_html.c's Lk/Xr/Sx handlers emit no visible link without a
+	     * child.  .MR differs: its generated () still forms an anchor. */
+	    (node->tok == MAN_MR || node->tok == MDOC_Mt ||
+	    ((node->tok == MAN_UR || node->tok == MAN_MT) ?
+	    node->head != NULL && node->head->child != NULL :
+	    node->child != NULL))) {
 		key = add_mark(collector, node, node,
 		    MANT_ANNOTATED_MARK_LINK, collector->active_link, 0);
 		if (key == 0)
 			return 0;
 		collector->active_link = key;
+		collector->active_link_node = node;
 	}
 	if ((node->flags & NODE_ID) != 0 && node->tag != NULL &&
 	    node->tag[0] != '\0') {
@@ -645,6 +813,7 @@ pop_node(struct mant_annotated_collector *collector,
 	}
 	collector->active_owner = frame->saved_owner;
 	collector->active_link = frame->saved_link;
+	collector->active_link_node = frame->saved_link_node;
 	collector->active_heading = frame->saved_heading;
 	collector->frame_count--;
 }
@@ -865,7 +1034,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		}
 		collector->pending_origin = ++collector->next_origin;
 		collector->pending_owner = collector->active_owner;
-		collector->pending_link = collector->active_link;
+		collector->pending_link = visible_link(collector,
+		    event->node, event->reason);
 		collector->pending_source = source_key(event->node);
 		if (collector->active_cell != NULL &&
 		    collector->pending_source == 0)
@@ -998,7 +1168,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		    MANT_ANNOTATED_BODY ? MANT_ANNOTATED_DIRECT_DRAW :
 		    current_role(collector);
 		collector->letter_label.owner = collector->active_owner;
-		collector->letter_label.link = collector->active_link;
+		collector->letter_label.link = visible_link(collector,
+		    event->node, event->reason);
 		collector->letter_label.source = source_key(event->node);
 		collector->letter_pending = 1;
 		collector->metrics.direct_draws++;
@@ -1143,7 +1314,11 @@ mant_annotated_marks_free(struct mant_annotated_mark *marks, uint32_t count)
 	if (marks == NULL)
 		return;
 	for (index = 0; index < count; index++)
+	{
 		free((void *)marks[index].name);
+		free((void *)marks[index].target_a.ptr);
+		free((void *)marks[index].target_b.ptr);
+	}
 	free(marks);
 }
 

@@ -97,6 +97,16 @@ pub struct AnnotatedMark {
     /// Native tbl column and offset hint, not a final display point.
     pub native_table_position: Option<(u32, u64)>,
     pub name: Option<String>,
+    /// Decoded destination, when this native mark represents one link target.
+    /// A multi-address `.Mt` remains unresolved rather than inventing one.
+    pub link_target: Option<AnnotatedLinkTarget>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnnotatedLinkTarget {
+    pub kind: u32,
+    pub primary: String,
+    pub secondary: Option<String>,
 }
 
 #[repr(u32)]

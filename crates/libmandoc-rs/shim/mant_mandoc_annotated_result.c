@@ -211,6 +211,28 @@ valid_marks(const struct mant_annotated_result *result)
 				return 0;
 		} else if (mark->name != NULL || mark->name_length != 0)
 			return 0;
+		if (mark->kind == MANT_ANNOTATED_MARK_LINK) {
+			if (mark->target_kind > MANT_LINK_SECTION ||
+			    mark->target_b_present > 1 ||
+			    !valid_string(mark->target_a) ||
+			    !valid_string(mark->target_b) ||
+			    (mark->target_kind == 0 &&
+			    (mark->target_a.len != 0 ||
+			    mark->target_b_present != 0)) ||
+			    (mark->target_kind >= MANT_LINK_DOCUMENT &&
+			    mark->target_a.len == 0) ||
+			    (mark->target_b_present !=
+			    (mark->target_kind == MANT_LINK_MANUAL)) ||
+			    (mark->target_b_present != 0 &&
+			    mark->target_b.len == 0) ||
+			    (mark->target_b_present == 0 &&
+			    mark->target_b.len != 0))
+				return 0;
+		} else if (mark->target_kind != 0 ||
+		    mark->target_b_present != 0 || mark->target_a.ptr != NULL ||
+		    mark->target_a.len != 0 || mark->target_b.ptr != NULL ||
+		    mark->target_b.len != 0)
+			return 0;
 		if (mark->line != 0 &&
 		    !mant_structured_source_position_in_maps(
 		    result->common->source_maps,
@@ -287,7 +309,7 @@ mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 3;
+	return 4;
 }
 
 uint32_t
@@ -390,6 +412,8 @@ size_t mant_annotated_offsetof_mark_name(void)
 { return offsetof(struct mant_annotated_mark, name); }
 size_t mant_annotated_offsetof_mark_table_offset(void)
 { return offsetof(struct mant_annotated_mark, table_offset); }
+size_t mant_annotated_offsetof_mark_target_a(void)
+{ return offsetof(struct mant_annotated_mark, target_a); }
 size_t mant_annotated_sizeof_coverage_check(void)
 { return sizeof(struct mant_annotated_coverage_check); }
 size_t mant_annotated_alignof_coverage_check(void)

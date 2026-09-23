@@ -3,6 +3,7 @@
 #define MANT_MANDOC_ANNOTATED_COLLECTOR_H
 
 #include "mant_mandoc_annotated_display.h"
+#include "mant_mandoc_structured.h"
 
 struct structured_session;
 struct termp;
@@ -57,6 +58,11 @@ struct mant_annotated_mark {
 	/* Owned UTF-8 only for ANCHOR.  Empty for other mark kinds. */
 	const uint8_t *name;
 	uint64_t name_length;
+	/* Owned decoded destination for a link; authoring source remains above. */
+	uint32_t target_kind;
+	uint32_t target_b_present;
+	struct mant_bytes_view target_a;
+	struct mant_bytes_view target_b;
 };
 
 struct mant_annotated_collector_metrics {

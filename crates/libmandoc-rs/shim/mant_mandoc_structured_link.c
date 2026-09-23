@@ -262,19 +262,21 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 		used += count;
 	}
 	*length = used;
-	return used != 0;
+	return 1;
 }
 
 static int
 copy_link_target(struct structured_session *session,
-    struct mant_bytes_view *out, const struct roff_node *node)
+    struct mant_bytes_view *out, const struct roff_node *node,
+    int allow_empty)
 {
 	uint8_t *decoded;
 	size_t length, written;
 
-	if (node == NULL || node->type != ROFFT_TEXT || node->string == NULL ||
-	    node->string[0] == '\0')
+	if (node == NULL || node->type != ROFFT_TEXT || node->string == NULL)
 		return 0;
+	if (node->string[0] == '\0')
+		return allow_empty;
 	if (strchr(node->string, '\\') == NULL) {
 		length = strlen(node->string);
 		if (!mant_structured_valid_utf8((const uint8_t *)node->string, length))
@@ -290,6 +292,8 @@ copy_link_target(struct structured_session *session,
 	if (!decode_link_target(node->string, session->result->profile,
 	    NULL, &length))
 		return 0;
+	if (length == 0)
+		return allow_empty;
 	decoded = mant_structured_allocate(session, length, 0,
 	    MANT_STRUCTURED_STAGE_RENDER);
 	if (decoded == NULL)
@@ -305,8 +309,22 @@ copy_link_target(struct structured_session *session,
 	return 1;
 }
 
-static int
-copy_deroff_target(struct structured_session *session,
+int
+mant_structured_copy_link_target(struct structured_session *session,
+    struct mant_bytes_view *out, const struct roff_node *node)
+{
+	return copy_link_target(session, out, node, 0);
+}
+
+int
+mant_structured_copy_link_target_allow_empty(struct structured_session *session,
+    struct mant_bytes_view *out, const struct roff_node *node)
+{
+	return copy_link_target(session, out, node, 1);
+}
+
+int
+mant_structured_copy_deroff_target(struct structured_session *session,
     struct mant_bytes_view *out, const struct roff_node *node)
 {
 	char *target;
@@ -417,12 +435,14 @@ mant_structured_ensure_link(struct structured_session *session,
 	link->target_kind = kind;
 	link->provenance = provenance;
 	if (!(canonical->tok == MDOC_Sx ?
-	    copy_deroff_target(session, &link->target_a, canonical) :
-	    copy_link_target(session, &link->target_a, first)))
+	    mant_structured_copy_deroff_target(session, &link->target_a,
+	    canonical) :
+	    mant_structured_copy_link_target(session, &link->target_a, first)))
 		goto unsupported;
 	if (kind == MANT_LINK_MANUAL) {
 		link->target_b_present = 1;
-		if (!copy_link_target(session, &link->target_b, second))
+		if (!mant_structured_copy_link_target(session,
+		    &link->target_b, second))
 			goto unsupported;
 	}
 	session->result->link_count++;

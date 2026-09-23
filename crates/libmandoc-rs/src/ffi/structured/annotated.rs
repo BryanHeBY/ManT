@@ -6,7 +6,8 @@ use super::{
     FailureView, InputStorage, STATUS_OK, STATUS_REENTRANT, STATUS_RELATION, SliceView, raw_limits,
 };
 use crate::annotated::{
-    AnnotatedDiagnostic, AnnotatedDocument, AnnotatedError, AnnotatedLabel, AnnotatedMark,
+    AnnotatedDiagnostic, AnnotatedDocument, AnnotatedError, AnnotatedLabel, AnnotatedLinkTarget,
+    AnnotatedMark,
     AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow, AnnotatedRun, AnnotatedSource,
     AnnotatedSpan, AnnotationCheckState, AnnotationCoverage, AnnotationCoverageCheck,
     AnnotationCoverageIssue, AnnotationDimension, AnnotationIssueReason, AnnotationProducer,
@@ -84,6 +85,10 @@ struct MarkView {
     table_offset: u64,
     name: *const u8,
     name_length: u64,
+    target_kind: u32,
+    target_b_present: u32,
+    target_a: super::BytesView,
+    target_b: super::BytesView,
 }
 
 #[repr(C)]
@@ -170,6 +175,7 @@ unsafe extern "C" {
     fn mant_annotated_alignof_mark() -> usize;
     fn mant_annotated_offsetof_mark_name() -> usize;
     fn mant_annotated_offsetof_mark_table_offset() -> usize;
+    fn mant_annotated_offsetof_mark_target_a() -> usize;
     fn mant_annotated_sizeof_coverage_check() -> usize;
     fn mant_annotated_alignof_coverage_check() -> usize;
     fn mant_annotated_sizeof_coverage_issue() -> usize;
@@ -225,7 +231,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 3
+        mant_annotated_abi_version() == 4
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -246,6 +252,8 @@ fn check_abi() -> bool {
             && mant_annotated_offsetof_mark_name() == std::mem::offset_of!(MarkView, name)
             && mant_annotated_offsetof_mark_table_offset()
                 == std::mem::offset_of!(MarkView, table_offset)
+            && mant_annotated_offsetof_mark_target_a()
+                == std::mem::offset_of!(MarkView, target_a)
             && mant_annotated_sizeof_coverage_check() == std::mem::size_of::<CoverageCheckView>()
             && mant_annotated_alignof_coverage_check() == std::mem::align_of::<CoverageCheckView>()
             && mant_annotated_sizeof_coverage_issue() == std::mem::size_of::<CoverageIssueView>()
@@ -649,6 +657,8 @@ fn transfer(
     }
     for mark in mark_views {
         charge(mark.name_length)?;
+        charge(mark.target_a.len)?;
+        charge(mark.target_b.len)?;
     }
     let metadata = view.metadata;
     if metadata.reserved != 0 || metadata.reserved_bytes != [0; 3] || metadata.has_body > 1 {
@@ -841,6 +851,57 @@ fn transfer(
                 )?)
             } else {
                 if !mark.name.is_null() || mark.name_length != 0 {
+                    return Err(invalid_result());
+                }
+                None
+            },
+            link_target: if mark.kind == 3 {
+                if mark.target_kind > 5
+                    || mark.target_b_present > 1
+                    || (mark.target_b_present == 1) != (mark.target_kind == 4)
+                {
+                    return Err(invalid_result());
+                }
+                if mark.target_kind == 0 {
+                    if !mark.target_a.ptr.is_null()
+                        || mark.target_a.len != 0
+                        || !mark.target_b.ptr.is_null()
+                        || mark.target_b.len != 0
+                    {
+                        return Err(invalid_result());
+                    }
+                    None
+                } else {
+                    let primary = copy_string(handle, mark.target_a, limits.max_content_bytes)?;
+                    if primary.is_empty() && mark.target_kind >= 3 {
+                        return Err(invalid_result());
+                    }
+                    let secondary = if mark.target_b_present == 1 {
+                        let value = copy_string(handle, mark.target_b, limits.max_content_bytes)?;
+                        if value.is_empty() {
+                            return Err(invalid_result());
+                        }
+                        Some(value)
+                    } else {
+                        if !mark.target_b.ptr.is_null() || mark.target_b.len != 0 {
+                            return Err(invalid_result());
+                        }
+                        None
+                    };
+                    Some(AnnotatedLinkTarget {
+                        kind: mark.target_kind,
+                        primary,
+                        secondary,
+                    })
+                }
+            } else {
+                if mark.target_kind != 0
+                    || mark.target_b_present != 0
+                    || !mark.target_a.ptr.is_null()
+                    || mark.target_a.len != 0
+                    || !mark.target_b.ptr.is_null()
+                    || mark.target_b.len != 0
+                {
                     return Err(invalid_result());
                 }
                 None
