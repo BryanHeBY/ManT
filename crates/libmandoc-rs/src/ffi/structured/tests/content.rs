@@ -59,6 +59,36 @@ fn nofill_lines_follow_native_line_boundaries() {
 }
 
 #[test]
+fn long_nofill_line_transfers_one_affine_placement() {
+    // Exact 10,000-scalar source was checked with fixed CVS UTF-8/78.
+    // man_term.c::print_man_node keeps the full NODE_NOFILL line unwrapped;
+    // adjacent one-column terminal observations are one affine slice of its
+    // logical atom, while cumulative builder work is still charged per glyph.
+    let source = format!(".TH T 1\n.SH D\n.nf\n{}\n.fi\n", "a".repeat(10_000));
+    let mut bundle = SourceBundle::new();
+    bundle.insert("long-nofill.1", source.into_bytes()).unwrap();
+    let document = render_prelude(
+        "long-nofill.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("long fixed line transfers across the checked FFI boundary");
+    assert_eq!(document.fixed_lines.len(), 1);
+    assert_eq!(document.placements.len(), 1);
+    assert_eq!(document.placements[0].scalars, 0..10_000);
+    assert_eq!(document.placements[0].columns, 5..10_005);
+    assert_eq!(
+        (
+            document.placements[0].cell_map_kind,
+            document.placements[0].cell_map_value
+        ),
+        (1, 1)
+    );
+}
+
+#[test]
 fn inline_link_head_and_body_phases_do_not_split_the_surrounding_root() {
     // The exact source was run through the pinned reference first. In
     // `man_term.c::print_man_node`, UR head/body enter/leave phases surround

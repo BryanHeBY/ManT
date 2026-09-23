@@ -3,6 +3,7 @@ use mant_ir::{EntryKind, EntryNameEvidence, EntryOwner, ParameterKind, ResolvedC
 use mant_protocol::{EntryProjection, EvidenceBasis, ExplanationOptions, ExplanationQuery};
 
 mod addresses;
+mod scale_probe;
 
 #[test]
 fn native_tbl_cells_lower_into_one_shared_content_store() {
@@ -178,12 +179,28 @@ fn native_boxed_tbl_reaches_real_narrow_horizontal_buffer() {
     Paragraph::new(narrow.text.lines[row].clone()).render(area, &mut buffer);
     assert_eq!(buffer[(5, 0)].symbol(), "│");
     assert_eq!(buffer[(7, 0)].symbol(), "l");
+    let found = narrow.search("right");
+    assert_eq!(
+        found.len(),
+        1,
+        "authored cell text remains searchable when clipped"
+    );
+    assert_eq!(found[0].row, row);
+    assert!(found[0].start_column >= 12);
+    assert!(
+        narrow.search("│").is_empty(),
+        "native border is not logical text"
+    );
 
     let scrolled = view.render_with_horizontal_offset(12, 9);
     let mut shifted = Buffer::empty(area);
     Paragraph::new(scrolled.text.lines[row].clone()).render(area, &mut shifted);
     assert_eq!(shifted[(0, 0)].symbol(), "f");
     assert_eq!(shifted[(11, 0)].symbol(), "│");
+    assert!(
+        scrolled.text.lines[row].to_string().contains("right"),
+        "horizontal offset reveals the clipped cell occurrence",
+    );
 }
 
 #[test]
@@ -384,6 +401,68 @@ fn native_nofill_long_blank_and_eof_rows_remain_fixed() {
             .unwrap();
         assert_eq!(lines, expected, "{name}");
     }
+}
+
+#[test]
+fn long_nofill_row_preserves_one_logical_run_and_native_columns() {
+    // This exact 10,000-scalar input was checked with fixed CVS UTF-8/78.
+    // man_term.c::print_man_node sets TERMP_BRNEVER for NODE_NOFILL, and
+    // term_newln flushes the entire authored line without wrapping it.
+    let source = format!(".TH T 1\n.SH D\n.nf\n{}\n.fi\n", "a".repeat(10_000));
+    let mut bundle = SourceBundle::new();
+    bundle.insert("long-nofill.1", source.into_bytes()).unwrap();
+    let document = project_native_manual("long-nofill.1", &bundle, InputFormat::Man)
+        .expect("long native no-fill row reaches final IR");
+    let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+        panic!("no-fill row has a fixed view")
+    };
+    let lines = document
+        .content_store
+        .fixed_view(*view)
+        .unwrap()
+        .physical_lines(document.content())
+        .unwrap();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].len(), 10_005);
+    assert!(lines[0].starts_with("     a"));
+    assert!(lines[0].ends_with("aaaa"));
+}
+
+#[test]
+fn nofill_mixed_width_affine_ranges_keep_native_columns() {
+    // Exact input was checked with fixed CVS UTF-8/78. term.c::term_flushln
+    // advances by each glyph's terminal width; adjacent wide scalars share
+    // one affine mapping without merging across the narrow neighbors.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "wide-nofill.1",
+            ".TH T 1\n.SH D\n.nf\nA界界Z\n.fi\n".as_bytes().to_vec(),
+        )
+        .unwrap();
+    let document = project_native_manual("wide-nofill.1", &bundle, InputFormat::Man).unwrap();
+    let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+        panic!("native no-fill is fixed")
+    };
+    let fixed = document.content_store.fixed_view(*view).unwrap();
+    assert_eq!(
+        fixed.physical_lines(document.content()).unwrap(),
+        ["     A界界Z"]
+    );
+    let placements = &fixed.lines[0].placements;
+    assert_eq!(placements.len(), 3);
+    assert_eq!(
+        (placements[0].start_column, placements[0].end_column),
+        (5, 6)
+    );
+    assert_eq!(
+        (placements[1].start_column, placements[1].end_column),
+        (6, 10)
+    );
+    assert_eq!(
+        (placements[2].start_column, placements[2].end_column),
+        (10, 11)
+    );
 }
 
 #[test]
@@ -594,6 +673,76 @@ fn literal_targets_between_and_after_rows_keep_their_structural_position() {
             assert_eq!(anchor, second, "{target}: target precedes second row text");
         }
     }
+}
+
+#[test]
+fn large_native_fixed_table_keeps_one_logical_cell_store() {
+    use std::collections::HashSet;
+    use std::fmt::Write as _;
+
+    // This exact 1,000-row source was run through fixed CVS UTF-8/78 before
+    // the assertion. tbl_term.c::term_tbl repeats the allbox rule between
+    // data rows; its drawing belongs to fixed geometry, not extra cell text.
+    let mut source = ".TH T 1\n.SH DATA\n.TS\nallbox tab(;);\nl l.\n".to_owned();
+    for index in 0..1_000 {
+        writeln!(source, "left_{index};right_{index}").expect("write to String");
+    }
+    source.push_str(".TE\n");
+    let mut bundle = SourceBundle::new();
+    bundle.insert("large-table.1", source.into_bytes()).unwrap();
+    let document = project_native_manual("large-table.1", &bundle, InputFormat::Man)
+        .expect("large supported native table reaches the final IR");
+    let Block::Table {
+        rows,
+        fixed_view: Some(view),
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("allbox table retains native geometry")
+    };
+    assert_eq!(rows.len(), 1_000);
+    assert_eq!(document.content_store.fixed_views.len(), 1);
+    assert_eq!(rows[0].cells.len(), 2);
+    assert_eq!(rows[999].cells.len(), 2);
+    let mut unique_cells = HashSet::new();
+    for text in document
+        .content_store
+        .atoms
+        .iter()
+        .filter_map(|atom| atom.kind.text())
+        .filter(|text| text.starts_with("left_") || text.starts_with("right_"))
+    {
+        assert!(unique_cells.insert(text), "duplicated logical cell {text}");
+    }
+    assert_eq!(unique_cells.len(), 2_000);
+    for expected in ["left_0", "right_0", "left_999", "right_999"] {
+        assert_eq!(
+            document
+                .content_store
+                .atoms
+                .iter()
+                .filter(|atom| atom.kind.text() == Some(expected))
+                .count(),
+            1,
+            "{expected} has one logical occurrence despite fixed placement",
+        );
+    }
+    let lines = document
+        .content_store
+        .fixed_view(*view)
+        .unwrap()
+        .physical_lines(document.content())
+        .unwrap();
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("left_0") && line.contains("right_0"))
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("left_999") && line.contains("right_999"))
+    );
 }
 
 #[test]

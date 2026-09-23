@@ -609,7 +609,34 @@ mant_structured_fixed_commit(struct structured_session *session,
 			    scalar_end - scalar_start);
 			return;
 		}
+		/* Every observed scalar consumes work even when its affine mapping
+		 * extends the preceding slice.  Keep the cumulative budget separate
+		 * from the number of retained placement records. */
+		if (!mant_structured_charge(session,
+		    &session->builder_operations, 1,
+		    session->limits->max_builder_operations, 8,
+		    MANT_STRUCTURED_STAGE_RENDER) ||
+		    !mant_structured_charge(session, &session->relation_edges, 2,
+		    session->limits->max_relation_edges, 30,
+		    MANT_STRUCTURED_STAGE_RENDER))
+			return;
 		count = session->result->placement_count;
+		if (count != 0 && !use->overlay) {
+			placement = session->result->placements + count - 1;
+			if (placement->target_kind == MANT_PLACEMENT_CONTENT &&
+			    placement->cell_map_kind == MANT_CELL_MAP_AFFINE &&
+			    placement->cell_map_value == width &&
+			    placement->line == use->line &&
+			    placement->atom == atom &&
+			    placement->byte_end == byte_start &&
+			    placement->scalar_end == scalar_start &&
+			    placement->column_end == use->start) {
+				placement->byte_end = byte_end;
+				placement->scalar_end = scalar_end;
+				placement->column_end = use->end;
+				continue;
+			}
+		}
 		placements = mant_structured_grow_array(session,
 		    session->result->placements, count,
 		    &session->result->placement_capacity,
@@ -619,14 +646,6 @@ mant_structured_fixed_commit(struct structured_session *session,
 		if (placements == NULL)
 			return;
 		session->result->placements = placements;
-		if (!mant_structured_charge(session,
-		    &session->builder_operations, 1,
-		    session->limits->max_builder_operations, 8,
-		    MANT_STRUCTURED_STAGE_RENDER) ||
-		    !mant_structured_charge(session, &session->relation_edges, 2,
-		    session->limits->max_relation_edges, 30,
-		    MANT_STRUCTURED_STAGE_RENDER))
-			return;
 		placement = placements + count;
 		memset(placement, 0, sizeof(*placement));
 		placement->key = ++session->result->placement_count;
