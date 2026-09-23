@@ -6,6 +6,53 @@ use mant_ir::{
 use std::ops::ControlFlow;
 
 #[test]
+fn terminal_tg_after_lists_stays_after_them_in_ir() {
+    // Both exact inputs were checked with fixed CVS -T tree.  Pinned
+    // mdoc_validate.c::post_tg retains the terminal Tg as its own carrier;
+    // mdoc_html.c::mdoc_tg_pre emits its mark after the preceding list.
+    for (name, source, nested) in [
+        (
+            "list-tail.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Bl -bullet\n.It\nbody\n.El\n.Tg Tail\n".as_slice(),
+            false,
+        ),
+        (
+            "nested-tail.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -bullet\n.It\nouter\n.Bl -bullet\n.It\ninner\n.El\n.Tg Tail\n.El\n".as_slice(),
+            true,
+        ),
+    ] {
+        let mut bundle = SourceBundle::new();
+        bundle.insert(name, source.to_vec()).unwrap();
+        let document = project_native_manual(name, &bundle, InputFormat::Mdoc)
+            .expect("terminal target lowers to IR");
+        let blocks = if nested {
+            let Block::List { items, .. } = &document.sections[0].blocks[0] else {
+                panic!("{name}: outer list retained")
+            };
+            &items[0].blocks
+        } else {
+            &document.sections[0].blocks
+        };
+        let list_index = blocks
+            .iter()
+            .position(|block| matches!(block, Block::List { .. }))
+            .expect("preceding list retained");
+        let anchor_index = blocks
+            .iter()
+            .position(|block| {
+                matches!(block, Block::Paragraph { children, .. }
+                    if children.iter().any(|inline| matches!(inline,
+                        Inline::Anchor { id, fragment_aliases, .. }
+                            if id.as_str() == "tail" && fragment_aliases.iter()
+                                .any(|alias| alias.as_str() == "Tail"))))
+            })
+            .unwrap_or_else(|| panic!("{name}: authored Tail anchor retained: {blocks:#?}"));
+        assert_eq!(anchor_index, list_index + 1, "{name}: {blocks:#?}");
+    }
+}
+
+#[test]
 fn nested_native_links_remain_two_resolvable_ir_occurrences() {
     // Exact input was run through the fixed reference first. Pinned
     // `man_term.c::pre_UR/post_UR` keeps the parent instance around the

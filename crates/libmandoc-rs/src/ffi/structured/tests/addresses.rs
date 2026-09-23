@@ -250,6 +250,101 @@ fn tg_self_target_moving_back_keeps_its_declaration_source() {
 }
 
 #[test]
+fn retained_tg_after_list_keeps_its_structural_position() {
+    // Each exact input was checked with the fixed CVS -T tree reference.
+    // mdoc_validate.c::post_tg keeps a terminal Tg as its own carrier;
+    // mdoc_html.c::mdoc_tg_pre emits it after the preceding list.  A later
+    // body atom may share that position, but a missing atom may not move it
+    // back to the owner's earlier paragraph or heading.
+    for (name, source, list_index, tail_line, following_text) in [
+        (
+            "bullet-tail.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Bl -bullet\n.It\nbody\n.El\n.Tg Tail\n".as_slice(),
+            0,
+            10,
+            None,
+        ),
+        (
+            "bullet-no-before.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -bullet\n.It\nbody\n.El\n.Tg Tail\n".as_slice(),
+            0,
+            9,
+            None,
+        ),
+        (
+            "definition-tail.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Bl -tag\n.It Fl opt\nbody\n.El\n.Tg Tail\n".as_slice(),
+            0,
+            10,
+            None,
+        ),
+        (
+            "nested-tail.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -bullet\n.It\nouter\n.Bl -bullet\n.It\ninner\n.El\n.Tg Tail\n.El\n".as_slice(),
+            1,
+            12,
+            None,
+        ),
+        (
+            "bullet-following.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Bl -bullet\n.It\nbody\n.El\n.Tg Tail\nafter\n".as_slice(),
+            0,
+            10,
+            Some("after"),
+        ),
+        (
+            "definition-following.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\nbefore\n.Bl -tag\n.It Fl opt\nbody\n.El\n.Tg Tail\nafter\n".as_slice(),
+            0,
+            10,
+            Some("after"),
+        ),
+        (
+            "nested-following.1",
+            b".Dd September 23, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -bullet\n.It\nouter\n.Bl -bullet\n.It\ninner\n.El\n.Tg Tail\nafter\n.El\n".as_slice(),
+            1,
+            12,
+            Some("after"),
+        ),
+    ] {
+        let document = fixture(name, source, InputFormat::Mdoc);
+        let anchor = document
+            .anchors
+            .iter()
+            .find(|anchor| anchor.target == "Tail")
+            .expect("terminal Tg remains an authored target");
+        let point = &document.content_points[anchor.point as usize - 1];
+        let block = document
+            .blocks
+            .iter()
+            .find(|block| block.root == Some(point.root))
+            .expect("terminal target has a paragraph block");
+        let list = &document.lists[list_index];
+        let list_block = &document.blocks[list.block as usize - 1];
+        assert_eq!(block.parent, list_block.parent, "{name}: {document:#?}");
+        assert!(block.ordinal > list_block.ordinal, "{name}: {document:#?}");
+        assert_eq!(block.owner, list_block.owner, "{name}: {document:#?}");
+        let OwnedProvenance::Authored { span } =
+            document.provenances[anchor.provenance as usize - 1]
+        else {
+            panic!("{name}: Tail must retain its Tg source");
+        };
+        assert_eq!(
+            document.spans[span as usize - 1].line_columns.unwrap().0,
+            tail_line,
+            "{name}"
+        );
+        let root_text = document
+            .content_atoms
+            .iter()
+            .filter(|atom| atom.root == point.root)
+            .map(|atom| atom.text.as_str())
+            .collect::<String>();
+        assert_eq!(root_text, following_text.unwrap_or_default(), "{name}");
+    }
+}
+
+#[test]
 fn repeated_manual_targets_keep_each_request_source() {
     // The exact source was checked with fixed CVS -T tree. Both Pp nodes
     // retain ID=Same, but their authored requests are distinct Tg nodes.

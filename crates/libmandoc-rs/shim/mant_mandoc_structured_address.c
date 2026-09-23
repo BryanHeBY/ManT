@@ -421,6 +421,17 @@ mant_structured_address_enter_node(struct structured_session *session,
 		owner = context != NULL && context->item != 0 ? context->owner :
 		    session->current_owner != 0 ? session->current_owner :
 		    session->section_owner;
+		/* post_tg() keeps an unclaimed Tg at its own position.  Once a
+		 * list has closed, the owner's last root may precede that list;
+		 * materialize the current zero-width position before finishing the
+		 * owner or a following logical atom can choose a different root. */
+		if (owner != 0 && session->current_root == 0) {
+			if (!mant_structured_open_content_root(session, 0, provenance))
+				return;
+			mant_structured_address_root_opened(session, node, 0);
+			if (session->status != MANT_STRUCTURED_OK)
+				return;
+		}
 		bind_anchor(session, key, owner, session->current_root,
 		    session->current_root == 0);
 		return;
