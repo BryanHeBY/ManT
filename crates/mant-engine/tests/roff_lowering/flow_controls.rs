@@ -45,7 +45,7 @@ fn assert_markdown_literal_rows(query: &mant_ir::ResolvedContent, expected: &str
             walk_block(self, block);
         }
     }
-    let markdown = mant_codec::encode::render_markdown(query);
+    let markdown = mant_codec::encode::render_markdown(query).expect("valid Flow export");
     let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
     let document = reloaded.document.as_ref().unwrap();
     let mut rows = LiteralRows(Vec::new(), document.content());
@@ -452,7 +452,10 @@ fn literal_display_controls_preserve_physical_rows_and_continuation() {
             let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let document = query.document.as_ref().unwrap();
             assert_eq!(
-                literal_flow(document.content(), &document.sections[0].blocks),
+                literal_flow(
+                    document.content(),
+                    &document.flow().unwrap().sections[0].blocks
+                ),
                 expected,
                 "{source}"
             );
@@ -482,7 +485,7 @@ fn literal_continuations_cross_styling_containers_without_phantom_rows() {
         assert_eq!(
             literal_flow(
                 query.document.as_ref().unwrap().content(),
-                &query.document.as_ref().unwrap().sections[0].blocks
+                &query.document.as_ref().unwrap().flow().unwrap().sections[0].blocks
             ),
             "FIRSTSECONDTHIRD",
             "{body}"
@@ -516,7 +519,7 @@ fn styled_literal_breaks_and_eof_keep_exact_content_boundaries() {
         assert_eq!(
             literal_flow(
                 query.document.as_ref().unwrap().content(),
-                &query.document.as_ref().unwrap().sections[0].blocks
+                &query.document.as_ref().unwrap().flow().unwrap().sections[0].blocks
             ),
             expected,
             "{body}"
@@ -573,7 +576,10 @@ fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
                     );
                     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
                     let document = query.document.as_ref().unwrap();
-                    let flow = literal_flow(document.content(), &document.sections[0].blocks);
+                    let flow = literal_flow(
+                        document.content(),
+                        &document.flow().unwrap().sections[0].blocks,
+                    );
                     assert_eq!(flow, expected, "{body}");
                     assert_eq!(
                         flow.matches('\n').count(),

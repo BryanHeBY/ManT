@@ -57,14 +57,23 @@ fn detached_ordered_continuations_keep_pd_for_every_first_paragraph_form() {
                 let text = render_query_text(&query);
                 assert_eq!(blank_rows_before(&text, "AFTER"), pd, "{source}\n{text}");
                 let document = query.document.as_ref().unwrap();
-                let Some(Block::List { items, .. }) = document.sections[0].blocks.first() else {
+                let Some(Block::List { items, .. }) =
+                    document.flow().unwrap().sections[0].blocks.first()
+                else {
                     panic!("missing ordered owner: {document:#?}");
                 };
                 assert_eq!(items.len(), 1);
                 // Inspect the retained original item subtree through the same
                 // renderer; moving the boundary must not detach its content.
                 let mut owned = query.clone();
-                owned.document.as_mut().unwrap().sections[0].blocks = items[0].blocks.clone();
+                owned
+                    .document
+                    .as_mut()
+                    .unwrap()
+                    .flow_mut()
+                    .unwrap()
+                    .sections[0]
+                    .blocks = items[0].blocks.clone();
                 let owned_text = render_query_text(&owned);
                 assert!(owned_text.contains("AFTER"), "{owned_text}");
                 assert!(!owned_text.contains("OUTSIDE"), "{owned_text}");
@@ -95,7 +104,7 @@ fn merged_man_lists_keep_each_resolved_gap_without_a_container_copy() {
             markers[0], markers[1], markers[2]
         );
         let query = load_roff_bytes(source.as_bytes()).unwrap();
-        let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
+        let blocks = &query.document.as_ref().unwrap().flow().unwrap().sections[0].blocks;
         let [Block::List { items, layout, .. }] = blocks.as_slice() else {
             panic!("list grouping changed: {blocks:#?}");
         };

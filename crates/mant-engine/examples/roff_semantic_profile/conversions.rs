@@ -16,11 +16,12 @@ pub(super) struct OrdinalConversion {
 }
 
 pub(super) fn ordinal_conversions(root: &Node, document: &Document) -> Vec<OrdinalConversion> {
+    let flow = document.flow().expect("profile_document checked Flow body");
     let mut candidates = Vec::new();
     collect_source_candidates(root, &mut candidates);
     let mut observed = Vec::new();
-    collect_blocks(&document.blocks, "document", &mut observed);
-    for (index, section) in document.sections.iter().enumerate() {
+    collect_blocks(&flow.blocks, "document", &mut observed);
+    for (index, section) in flow.sections.iter().enumerate() {
         collect_section(section, &format!("section[{index}]"), &mut observed);
     }
     candidates
@@ -323,11 +324,11 @@ mod tests {
     #[test]
     fn source_ledger_rejects_an_overconversion_after_the_terms_disappear() {
         let (report, mut document) = parse("hang");
-        let source = match &document.sections[0].blocks[0] {
+        let source = match &document.flow().unwrap().sections[0].blocks[0] {
             Block::DefinitionList { source, .. } => *source,
             block => panic!("expected retained definition list, got {block:?}"),
         };
-        document.sections[0].blocks[0] = Block::List {
+        document.flow_mut().unwrap().sections[0].blocks[0] = Block::List {
             kind: ListKind::Ordered { start: Some(1) },
             compact: false,
             items: Vec::new(),

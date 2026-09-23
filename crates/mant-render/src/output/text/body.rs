@@ -1,8 +1,10 @@
 //! Plain document bodies: apply source layout without report selection policy.
 
 use super::{blocks, document_label, flow};
-use crate::presentation::{EntryStyleMap, TextPresentation, TextRole};
-use mant_ir::{Block, DocumentBodyRef, ResolvedContent, TldrCommandPart, TldrDocument, TldrOrigin};
+use crate::presentation::{EntryStyleMap, InlinePresentation, TextPresentation, TextRole};
+use mant_ir::{
+    Block, DocumentBodyRef, FixedBody, ResolvedContent, TldrCommandPart, TldrDocument, TldrOrigin,
+};
 
 pub(in crate::output) fn render_located_blocks<'a>(
     blocks: &'a [Block],
@@ -90,6 +92,10 @@ fn render_query_body_with(
                     .inline_text(&heading.content, TextRole::Document)
                 },
             ),
+            DocumentBodyRef::Fixed(_) => decorate(
+                TextRole::Document.into(),
+                &document_label(&query.label, section),
+            ),
         },
     );
     let mut output = flow::Flow::text(title);
@@ -115,9 +121,59 @@ fn render_query_body_with(
                     output.extend(content);
                 }
             }
+            DocumentBodyRef::Fixed(fixed) => {
+                let content = render_fixed_body(fixed, decorate);
+                if !content.is_empty() {
+                    // Only the report shell separates its title from the
+                    // native body. Native rows themselves are never reflowed.
+                    output.gap(1);
+                    output.push_text(content);
+                }
+            }
         }
     }
     output.finish(false)
+}
+
+fn render_fixed_body(
+    fixed: &FixedBody,
+    decorate: &dyn Fn(TextPresentation, &str) -> String,
+) -> String {
+    let surface = &fixed.surface;
+    let mut output = String::with_capacity(
+        surface.text.len() + surface.rows.iter().filter(|row| row.break_after).count(),
+    );
+    for row in &surface.rows {
+        let first = (row.first_run.get() - 1) as usize;
+        let end = first + row.run_count as usize;
+        let mut column = 0;
+        for run in &surface.runs[first..end] {
+            output.extend(std::iter::repeat_n(' ', (run.column - column) as usize));
+            let text = surface
+                .run_text(run.key)
+                .expect("validated Fixed display run has a UTF-8 byte range");
+            let style = TextPresentation {
+                role: TextRole::Body,
+                inline: InlinePresentation {
+                    strong: run.label.style.bold,
+                    emphasis: run.label.style.underline,
+                    link: run.label.link.is_some(),
+                    ..InlinePresentation::default()
+                },
+                matched: false,
+            };
+            output.push_str(&decorate(style, text));
+            column = run.column + run.width;
+        }
+        output.extend(std::iter::repeat_n(
+            ' ',
+            (row.column_count - column) as usize,
+        ));
+        if row.break_after {
+            output.push('\n');
+        }
+    }
+    output
 }
 
 pub(super) fn render_tldr_text(tldr: &TldrDocument) -> String {

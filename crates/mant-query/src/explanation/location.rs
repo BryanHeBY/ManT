@@ -9,11 +9,12 @@ use mant_ir::{Block, Document};
 /// Coordinates are local to this document snapshot, not durable identities.
 #[must_use]
 pub fn resolve_explanation_block<'a>(document: &'a Document, path: &str) -> Option<&'a Block> {
+    let flow = document.flow()?;
     let mut parts = path.split('/').peekable();
     let mut blocks = match parts.next()? {
-        "root" => &document.blocks,
+        "root" => &flow.blocks,
         "sections" => {
-            let mut sections = &document.sections;
+            let mut sections = &flow.sections;
             let mut selected = None;
             while parts.peek().is_some_and(|p| p.starts_with('s')) {
                 let index = index(parts.next()?, 's')?;

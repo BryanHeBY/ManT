@@ -267,9 +267,17 @@ mod tests {
             "# Tools\n\n<!-- mant:entries role=command case=sensitive -->\n- [`target`](target.md): See [body](body.md).\n\n  <!-- mant:domain entries=domain.md roles=command -->\n", None,
         ).unwrap();
         assert!(
-            query.document.as_ref().unwrap().blocks.iter().any(
-                |block| matches!(block, Block::List { items, .. } if items[0].entry.is_some())
-            )
+            query
+                .document
+                .as_ref()
+                .unwrap()
+                .flow()
+                .expect("Markdown Flow body")
+                .blocks
+                .iter()
+                .any(
+                    |block| matches!(block, Block::List { items, .. } if items[0].entry.is_some())
+                )
         );
         let references = document_references(&query).references;
         assert_eq!(references.len(), 3);
@@ -279,8 +287,9 @@ mod tests {
             );
         }
         let document = query.document.as_mut().unwrap();
-        let blocks = std::mem::take(&mut document.blocks);
-        document.blocks = vec![
+        let flow = document.flow_mut().expect("Markdown Flow body");
+        let blocks = std::mem::take(&mut flow.blocks);
+        flow.blocks = vec![
             serde_json::from_value(serde_json::json!({
                 "type": "definition-list", "items": [{"terms": [], "description": [{
                     "type": "table", "rows": [{"cells": [{"blocks": blocks}]}]
@@ -367,15 +376,17 @@ mod tests {
         )
         .unwrap();
         let document = query.document.as_mut().unwrap();
-        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        let flow = document.flow_mut().expect("Markdown Flow body");
+        let Block::Paragraph { children, .. } = &flow.blocks[0] else {
             panic!("paragraph")
         };
         let mant_ir::Inline::Link { occurrence, .. } = &children[0] else {
             panic!("external")
         };
-        let Some(mant_ir::LinkTarget::External { uri }) = document
+        let occurrence = *occurrence;
+        let Some(mant_ir::LinkTarget::External { uri }) = flow
             .content_store
-            .link_mut(*occurrence)
+            .link_mut(occurrence)
             .map(|link| &mut link.target)
         else {
             panic!("external target")

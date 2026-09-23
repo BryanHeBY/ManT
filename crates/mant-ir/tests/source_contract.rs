@@ -25,11 +25,10 @@ fn document_value() -> Value {
             }
         ],
         "rootSource": 1,
-        "contentStore": {
+        "body": {"kind":"flow", "contentStore": {
             "owners": [], "roots": [], "atoms": [], "points": [], "links": []
-        },
+        }, "sections": []},
         "meta": {},
-        "sections": []
     })
 }
 
@@ -231,7 +230,7 @@ fn native_mark_coverage_scopes_cannot_cross_the_flow_document_wire() {
 #[test]
 fn table_cell_source_is_independent_and_checked_at_the_wire_boundary() {
     let mut document = document_value();
-    document["blocks"] = json!([{
+    document["body"]["blocks"] = json!([{
         "type": "table",
         "rows": [{
             "cells": [{
@@ -244,34 +243,34 @@ fn table_cell_source_is_independent_and_checked_at_the_wire_boundary() {
     assert!(validate_document_sources(&parsed).is_ok());
     assert!(mant_ir::document_has_source_spans(&parsed));
 
-    document["blocks"][0]["rows"][0]["cells"][0]["source"]["source"] = json!(3);
+    document["body"]["blocks"][0]["rows"][0]["cells"][0]["source"]["source"] = json!(3);
     assert_document_rejected(document);
 }
 
 #[test]
 fn every_nested_span_is_checked_against_its_selected_source() {
     let mut unknown_key = document_value();
-    unknown_key["heading"] = json!({"content":[], "source":span(3)});
+    unknown_key["body"]["heading"] = json!({"content":[], "source":span(3)});
     assert_document_rejected(unknown_key);
 
     let mut overflow = document_value();
-    overflow["heading"] = json!({"content":[], "source":span(1)});
-    overflow["heading"]["source"]["byteRange"]["end"] = json!(11);
+    overflow["body"]["heading"] = json!({"content":[], "source":span(1)});
+    overflow["body"]["heading"]["source"]["byteRange"]["end"] = json!(11);
     assert_document_rejected(overflow);
 
     let mut inexact_domain = document_value();
-    inexact_domain["heading"] = json!({"content":[], "source":span(2)});
+    inexact_domain["body"]["heading"] = json!({"content":[], "source":span(2)});
     assert_document_rejected(inexact_domain);
 
     let mut incomplete_end = document_value();
-    incomplete_end["heading"] = json!({
+    incomplete_end["body"]["heading"] = json!({
         "content":[],
         "source":{"source":1,"line":1,"column":1,"endLine":2}
     });
     assert_document_rejected(incomplete_end);
 
     let mut anchor = document_value();
-    anchor["blocks"] = json!([{
+    anchor["body"]["blocks"] = json!([{
         "type":"paragraph",
         "children":[{
             "type":"anchor", "id":"target", "ownerSource":{
@@ -287,21 +286,35 @@ fn every_nested_span_is_checked_against_its_selected_source() {
 #[test]
 fn a_valid_but_factually_wrong_source_key_remains_an_oracle_responsibility() {
     let mut root_binding = document_value();
-    root_binding["heading"] = json!({
+    root_binding["body"]["heading"] = json!({
         "content":[],
         "source":{"source":1,"line":1,"column":1}
     });
     let root_document: Document = serde_json::from_value(root_binding).unwrap();
 
     let mut include_binding = document_value();
-    include_binding["heading"] = json!({
+    include_binding["body"]["heading"] = json!({
         "content":[],
         "source":{"source":2,"line":1,"column":1}
     });
     let include_document: Document = serde_json::from_value(include_binding).unwrap();
 
-    let root_span = root_document.heading.unwrap().source.unwrap();
-    let include_span = include_document.heading.unwrap().source.unwrap();
+    let root_span = root_document
+        .flow()
+        .unwrap()
+        .heading
+        .as_ref()
+        .unwrap()
+        .source
+        .unwrap();
+    let include_span = include_document
+        .flow()
+        .unwrap()
+        .heading
+        .as_ref()
+        .unwrap()
+        .source
+        .unwrap();
     assert_ne!(root_span.source, include_span.source);
     assert_eq!(root_span.line, include_span.line);
     assert_eq!(root_span.column, include_span.column);

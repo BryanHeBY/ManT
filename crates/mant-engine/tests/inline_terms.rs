@@ -272,7 +272,7 @@ fn man_format_renders_inline_terms_tight() {
 
 #[test]
 fn markdown_renders_inline_terms_on_the_same_line() {
-    let output = render_markdown(&query());
+    let output = render_markdown(&query()).expect("valid Flow export");
 
     // inline_term=true: term bold + space + description on one line.
     assert!(

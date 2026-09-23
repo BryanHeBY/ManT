@@ -5,7 +5,14 @@ use super::*;
 fn narrow_view_reduces_only_presentation_indent_and_keeps_link_search_copy_cells() {
     let mut bundle = bundle();
     let target = LinkTarget::Section("options".into());
-    bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+    bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Paragraph {
         children: vec![crate::test_content::link(
             mant_ir::LinkTarget::Section {
                 id: "options".into(),
@@ -68,7 +75,14 @@ fn narrow_view_reduces_only_presentation_indent_and_keeps_link_search_copy_cells
 #[test]
 fn rendered_search_finds_literal_options_and_decorates_every_match() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Paragraph {
         children: vec![crate::test_content::text(
             "Use --acls, then repeat --acls.".to_owned(),
         )],
@@ -121,7 +135,14 @@ fn unicode_search_uses_the_same_transform_before_and_after_visual_wrapping() {
         ("İstanbul", "i\u{307}stanbul"),
     ] {
         let mut bundle = bundle();
-        bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Preformatted {
+        bundle
+            .document
+            .as_mut()
+            .unwrap()
+            .flow_mut()
+            .expect("Flow fixture")
+            .sections[0]
+            .blocks = vec![Block::Preformatted {
             children: vec![crate::test_content::text(text.to_owned())],
             language: None,
             layout: LayoutHint::default(),
@@ -151,7 +172,14 @@ fn unicode_search_uses_the_same_transform_before_and_after_visual_wrapping() {
 #[test]
 fn search_matches_one_logical_phrase_across_soft_wrapping() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Paragraph {
         children: vec![crate::test_content::text(
             "alpha searchable phrase omega".to_owned(),
         )],
@@ -180,7 +208,14 @@ fn search_matches_one_logical_phrase_across_soft_wrapping() {
 #[test]
 fn search_preserves_a_space_wrapped_exactly_after_the_row_boundary() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Paragraph {
         children: vec![crate::test_content::text("Relative inset end".to_owned())],
         layout: LayoutHint::default(),
         source: None,
@@ -196,7 +231,14 @@ fn search_preserves_a_space_wrapped_exactly_after_the_row_boundary() {
 #[test]
 fn character_wrapped_code_remains_contiguous_for_search() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Preformatted {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Preformatted {
         children: vec![crate::test_content::text("abcdefghijklmnop".to_owned())],
         language: None,
         layout: LayoutHint::default(),
@@ -218,7 +260,14 @@ fn character_wrapped_code_remains_contiguous_for_search() {
 #[test]
 fn forced_word_splitting_does_not_insert_a_search_space() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Paragraph {
         children: vec![crate::test_content::text("supercalifragilistic".to_owned())],
         layout: LayoutHint::default(),
         source: None,
@@ -263,7 +312,7 @@ fn profile_glyphs_keep_logical_search_and_link_cells_across_wrapping() {
     document.sources[0].identity = SourceIdentity::Anonymous {
         name: "profile-projection".to_owned(),
     };
-    document.sections[0].blocks = vec![Block::Paragraph {
+    document.flow_mut().expect("Flow fixture").sections[0].blocks = vec![Block::Paragraph {
         children: vec![
             left_dash, linked, right_dash, line_break, left_nbsp, nbsp, right_nbsp,
         ],
@@ -272,7 +321,11 @@ fn profile_glyphs_keep_logical_search_and_link_cells_across_wrapping() {
     }];
     crate::test_content::sync_document(document);
     for (key, expected, projected) in [(dash_atom, "—", "--"), (nbsp_atom, "\u{a0}", " ")] {
-        let atom = &mut document.content_store.atoms[(key.get() - 1) as usize];
+        let atom = &mut document
+            .flow_mut()
+            .expect("Flow fixture")
+            .content_store
+            .atoms[(key.get() - 1) as usize];
         match &mut atom.kind {
             mant_ir::ContentAtomKind::Text {
                 text,
@@ -371,14 +424,18 @@ fn projected_scalars_in_one_combining_grapheme_keep_one_visual_hit_region() {
     document.sources[0].identity = SourceIdentity::Anonymous {
         name: "combining-profile-projection".into(),
     };
-    document.sections[0].blocks = vec![Block::Paragraph {
+    document.flow_mut().expect("Flow fixture").sections[0].blocks = vec![Block::Paragraph {
         children: vec![left, linked, right],
         layout: LayoutHint::default(),
         source: None,
     }];
     crate::test_content::sync_document(document);
     for (key, expected, glyphs) in [(dash_atom, "—", "--"), (mark_atom, "\u{0301}", "<?>")] {
-        let atom = &mut document.content_store.atoms[(key.get() - 1) as usize];
+        let atom = &mut document
+            .flow_mut()
+            .expect("Flow fixture")
+            .content_store
+            .atoms[(key.get() - 1) as usize];
         let mant_ir::ContentAtomKind::Text {
             text,
             display_override,
@@ -389,7 +446,8 @@ fn projected_scalars_in_one_combining_grapheme_keep_one_visual_hit_region() {
         assert_eq!(text, expected);
         *display_override = Some(glyphs.into());
     }
-    mant_ir::validate_content_store(&document.content_store).unwrap();
+    mant_ir::validate_content_store(&document.flow_mut().expect("Flow fixture").content_store)
+        .unwrap();
 
     let view = DocumentView::new(&bundle);
     let target = LinkTarget::Section("description".into());

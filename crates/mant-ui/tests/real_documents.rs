@@ -112,7 +112,7 @@ fn empty_cells_and_span_owners_keep_payloads_in_every_terminal_width() {
     .unwrap();
     for output in [
         mant_render::render_query_text(&query),
-        mant_codec::encode::render_markdown(&query),
+        mant_codec::encode::render_markdown(&query).expect("valid Flow manual"),
     ] {
         assert!(output.contains("WIDE |  | RIGHT"), "{output}");
         assert!(output.contains("LEFT |  | END"), "{output}");
@@ -203,6 +203,8 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
     let document = mant_loader::parse_manual_source(&fixture("fedora44/tar.1.zst"))
         .expect("parse Fedora tar fixture");
     let acls_id = document
+        .flow()
+        .expect("parsed Flow body")
         .sections
         .iter()
         .flat_map(section_definitions)
@@ -414,11 +416,12 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
 
 fn collect_document_fragments(document: &Document, output: &mut Vec<ExpectedFragment>) {
     let content = document.content();
-    if let Some(heading) = &document.heading {
+    let flow = document.flow().expect("parsed Flow body");
+    if let Some(heading) = &flow.heading {
         collect_inlines(content, &heading.content, output, false);
     }
-    collect_blocks(content, &document.blocks, output, false);
-    for section in &document.sections {
+    collect_blocks(content, &flow.blocks, output, false);
+    for section in &flow.sections {
         collect_section_fragments(content, section, output);
     }
 }

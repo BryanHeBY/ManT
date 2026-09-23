@@ -14,8 +14,14 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
             manual.as_bytes(),
         )
         .expect("parse filled control boundary fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -44,8 +50,15 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
             manual.as_bytes(),
         )
         .expect("parse display control boundary fixture");
-        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Preformatted { children, .. }] =
+            document.flow().expect("Flow fixture").sections[0]
+                .blocks
+                .as_slice()
+        else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -77,10 +90,13 @@ fn formatter_request_boundaries_execute_inside_nested_mdoc_scopes() {
             manual.as_bytes(),
         )
         .expect("parse nested control boundary fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
             panic!(
                 "{label}: unexpected nested-control blocks: {:#?}",
-                document.sections
+                document.flow().expect("Flow fixture").sections
             );
         };
         assert_eq!(
@@ -102,8 +118,14 @@ fn formatter_request_boundaries_execute_inside_nested_mdoc_scopes() {
             manual.as_bytes(),
         )
         .expect("parse kept control boundary fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -132,8 +154,14 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
             source.as_bytes(),
         )
         .expect("parse leading buffered word-end break");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -154,8 +182,14 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
             source.as_bytes(),
         )
         .expect("parse zero-advance formatter cell");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -169,10 +203,13 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\n.ti 4n\n.Tg mark\n.ti 4n\n.No B\n",
     )
     .expect("parse formatter boundaries around a transparent target");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
         panic!(
             "unexpected target-boundary blocks: {:#?}",
-            document.sections
+            document.flow().expect("Flow fixture").sections
         );
     };
     assert_eq!(
@@ -205,7 +242,7 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
             source.as_bytes(),
         )
         .expect("parse invalid vertical-space operand");
-        let blocks = &document.sections[0].blocks;
+        let blocks = &document.flow().expect("Flow fixture").sections[0].blocks;
         assert_eq!(blocks.len(), 3, "{label}: {blocks:#?}");
         assert!(matches!(
             blocks[0],
@@ -228,8 +265,14 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Eo [\n.No A\n.sp bogus\n.No B\n.Ec\n",
     )
     .expect("parse nested invalid vertical-space operand");
-    let [Block::Paragraph { children, .. }] = nested.sections[0].blocks.as_slice() else {
-        panic!("unexpected nested spacing blocks: {:#?}", nested.sections);
+    let [Block::Paragraph { children, .. }] = nested.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "unexpected nested spacing blocks: {:#?}",
+            nested.flow().expect("Flow fixture").sections
+        );
     };
     assert_eq!(
         inline_text(nested.content(), children),
@@ -245,9 +288,14 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
     let [
         Block::VerticalSpace { lines: 1, .. },
         Block::Paragraph { children, .. },
-    ] = armed.sections[0].blocks.as_slice()
+    ] = armed.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
     else {
-        panic!("unexpected armed spacing blocks: {:#?}", armed.sections);
+        panic!(
+            "unexpected armed spacing blocks: {:#?}",
+            armed.flow().expect("Flow fixture").sections
+        );
     };
     assert_eq!(inline_text(armed.content(), children), "BC", "{children:?}");
 
@@ -272,11 +320,13 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
             Block::VerticalSpace { lines: 1, .. },
             Block::VerticalSpace { lines: 1, .. },
             Block::Paragraph { children, .. },
-        ] = document.sections[0].blocks.as_slice()
+        ] = document.flow().expect("Flow fixture").sections[0]
+            .blocks
+            .as_slice()
         else {
             panic!(
                 "unexpected leading-break spacing blocks: {:#?}",
-                document.sections
+                document.flow().expect("Flow fixture").sections
             );
         };
         assert_eq!(
@@ -305,9 +355,9 @@ fn pending_inline_execution_is_settled_before_structural_owners() {
                 .collect::<Vec<_>>(),
             ["DESCRIPTION", "ITEM", "AFTER", "LAST"],
             "{label}: {:#?}",
-            document.sections
+            document.flow().expect("Flow fixture").sections
         );
-        let blocks = &document.sections[0].blocks;
+        let blocks = &document.flow().expect("Flow fixture").sections[0].blocks;
         let list_index = blocks
             .iter()
             .position(|block| matches!(block, Block::List { .. }))
@@ -364,7 +414,7 @@ fn bare_zero_advance_crosses_only_structures_without_generated_words() {
         assert!(
             visible.contains(expected),
             "{label}: expected {expected:?} in {visible:?}; {:#?}",
-            document.sections
+            document.flow().expect("Flow fixture").sections
         );
         if expected == "BC" {
             assert!(!visible.contains("B C"), "{label}: {visible:?}");
@@ -428,7 +478,10 @@ fn bsd_two_operand_forms_execute_generated_words_and_joiners() {
             source.as_bytes(),
         )
         .expect("parse two-operand Bx fixture");
-        let children = match document.sections[0].blocks.as_slice() {
+        let children = match document.flow().expect("Flow fixture").sections[0]
+            .blocks
+            .as_slice()
+        {
             [Block::Paragraph { children, .. }] if opening.is_empty() => children,
             [Block::Preformatted { children, .. }] => children,
             blocks => panic!("{label}: unexpected blocks: {blocks:#?}"),
@@ -466,8 +519,14 @@ fn bsd_two_operand_forms_execute_generated_words_and_joiners() {
             source.as_bytes(),
         )
         .expect("parse scoped two-operand Bx fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -515,8 +574,14 @@ fn filled_margin_flush_settles_the_current_cell_without_a_hard_break() {
             manual.as_bytes(),
         )
         .expect("parse filled no-break margin fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -572,8 +637,15 @@ fn margin_flush_obeys_current_cell_and_continuation_state() {
             manual.as_bytes(),
         )
         .expect("parse conditional margin flush fixture");
-        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Preformatted { children, .. }] =
+            document.flow().expect("Flow fixture").sections[0]
+                .blocks
+                .as_slice()
+        else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -590,10 +662,13 @@ fn margin_flush_preserves_nested_and_continued_execution() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Eo [\n.No A\n.sp 2\n.No B\n.Ec\n",
     )
     .expect("parse nested vertical-space fixture");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
         panic!(
             "unexpected nested vertical-space blocks: {:#?}",
-            document.sections
+            document.flow().expect("Flow fixture").sections
         );
     };
     assert_eq!(
@@ -607,10 +682,13 @@ fn margin_flush_preserves_nested_and_continued_execution() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No A\\c\n.mc |\n.Tg between-margins\n.mc !\n.No B\n.Ed\n",
     )
     .expect("parse repeated margin flush fixture");
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
         panic!(
             "unexpected repeated-margin blocks: {:#?}",
-            document.sections
+            document.flow().expect("Flow fixture").sections
         );
     };
     assert_eq!(
@@ -641,8 +719,15 @@ fn margin_flush_preserves_nested_and_continued_execution() {
             manual.as_bytes(),
         )
         .expect("parse pending formatter-cell margin fixture");
-        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Preformatted { children, .. }] =
+            document.flow().expect("Flow fixture").sections[0]
+                .blocks
+                .as_slice()
+        else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -668,7 +753,10 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
             manual.as_bytes(),
         )
         .expect("parse generated BSD word fixture");
-        let children = match document.sections[0].blocks.as_slice() {
+        let children = match document.flow().expect("Flow fixture").sections[0]
+            .blocks
+            .as_slice()
+        {
             [Block::Paragraph { children, .. }] if label != "literal" => children,
             [Block::Preformatted { children, .. }] if label == "literal" => children,
             blocks => panic!("{label}: unexpected blocks: {blocks:#?}"),
@@ -704,8 +792,15 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
                 manual.as_bytes(),
             )
             .expect("parse empty BSD operand boundary fixture");
-            let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-                panic!("{operand_label}/{boundary_label}: {:#?}", document.sections);
+            let [Block::Paragraph { children, .. }] =
+                document.flow().expect("Flow fixture").sections[0]
+                    .blocks
+                    .as_slice()
+            else {
+                panic!(
+                    "{operand_label}/{boundary_label}: {:#?}",
+                    document.flow().expect("Flow fixture").sections
+                );
             };
             assert_eq!(
                 inline_text(document.content(), children),
@@ -720,8 +815,14 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.Bx \\p\\c\n.No AFTER LAST\n.Ek\n",
     )
     .expect("parse kept generated BSD word fixture");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("unexpected kept Bx blocks: {:#?}", document.sections);
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "unexpected kept Bx blocks: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
     };
     assert_eq!(
         inline_text(document.content(), children),
@@ -739,6 +840,7 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // Reference-derived no-fill matrix stays together.
 fn no_fill_execution_state_crosses_transparent_requests_only() {
     for (label, request) in [("font", ".ft B"), ("paragraph-distance", ".PD 1")] {
         let manual = format!(".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c\n{request}\nB\n.fi\n");
@@ -747,8 +849,15 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
             manual.as_bytes(),
         )
         .expect("parse transparent no-fill request fixture");
-        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("expected one preformatted block: {:#?}", document.sections);
+        let [Block::Preformatted { children, .. }] =
+            document.flow().expect("Flow fixture").sections[0]
+                .blocks
+                .as_slice()
+        else {
+            panic!(
+                "expected one preformatted block: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -777,7 +886,7 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
             manual.as_bytes(),
         )
         .expect("parse no-fill boundary fixture");
-        let text = document.sections[0]
+        let text = document.flow().expect("Flow fixture").sections[0]
             .blocks
             .iter()
             .map(|block| match block {
@@ -789,9 +898,21 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(text.contains("AX"), "{label}: {:#?}", document.sections);
-        assert!(text.contains('B'), "{label}: {:#?}", document.sections);
-        assert!(!text.contains("AB"), "{label}: {:#?}", document.sections);
+        assert!(
+            text.contains("AX"),
+            "{label}: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
+        assert!(
+            text.contains('B'),
+            "{label}: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
+        assert!(
+            !text.contains("AB"),
+            "{label}: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
     }
 
     let document = parse_manual_bytes(
@@ -799,8 +920,14 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
         b".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c\n.mc |\nB\n.fi\n",
     )
     .expect("parse no-break margin-character fixture");
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one preformatted block: {:#?}", document.sections);
+    let [Block::Preformatted { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "expected one preformatted block: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
     };
     assert_eq!(
         inline_text(document.content(), children),
@@ -813,8 +940,14 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
         b".TH PROBE 1\n.SH DESCRIPTION\n.nf\n\\zX\\c\n.mc |\nB\n.fi\n",
     )
     .expect("parse no-break margin pending-cell fixture");
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one preformatted block: {:#?}", document.sections);
+    let [Block::Preformatted { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "expected one preformatted block: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
     };
     assert_eq!(
         inline_text(document.content(), children),
@@ -832,8 +965,14 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
             manual.as_bytes(),
         )
         .expect("parse filled no-break margin-character fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("expected one paragraph: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "expected one paragraph: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -885,8 +1024,15 @@ fn invisible_continued_no_fill_cells_reach_temporary_and_no_break_flushes() {
             manual.as_bytes(),
         )
         .expect("parse invisible continued no-fill cell");
-        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        let [Block::Preformatted { children, .. }] =
+            document.flow().expect("Flow fixture").sections[0]
+                .blocks
+                .as_slice()
+        else {
+            panic!(
+                "{label}: unexpected blocks: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -910,11 +1056,13 @@ fn no_fill_exit_and_document_end_settle_continued_zero_advance_state() {
         Block::Paragraph {
             children: filled, ..
         },
-    ] = document.sections[0].blocks.as_slice()
+    ] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
     else {
         panic!(
             "expected literal and filled blocks: {:#?}",
-            document.sections
+            document.flow().expect("Flow fixture").sections
         );
     };
     assert_eq!(
@@ -929,8 +1077,14 @@ fn no_fill_exit_and_document_end_settle_continued_zero_advance_state() {
         b".TH PROBE 1\n.SH DESCRIPTION\n.nf\nA\\zX\\c",
     )
     .expect("parse no-fill EOF fixture");
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one preformatted block: {:#?}", document.sections);
+    let [Block::Preformatted { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "expected one preformatted block: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
     };
     assert_eq!(
         inline_text(document.content(), children),
@@ -1014,8 +1168,8 @@ fn semantic_link_identity_executes_zero_advance_controls_without_guessing_displa
             source,
         )
         .expect("parse link identity fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.flow().expect("Flow fixture").sections);
         };
         let target = children.iter().find_map(|inline| link_target(&document, inline));
         match macro_name {
@@ -1049,7 +1203,10 @@ fn zero_advance_treats_every_empty_enclosure_delimiter_as_a_formatter_word() {
             source.as_bytes(),
         )
         .expect("parse empty mdoc enclosure");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
             panic!("{macro_name}: expected one paragraph");
         };
         assert_eq!(

@@ -186,7 +186,8 @@ fn decoded_document_paths_still_respect_the_registered_namespace() {
     ] {
         let query = markdown_content(&format!("[link]({uri})"), None).unwrap();
         let document = query.document.unwrap();
-        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        let flow = document.flow().expect("Markdown Flow body");
+        let Block::Paragraph { children, .. } = &flow.blocks[0] else {
             panic!("paragraph")
         };
         let Inline::Link { occurrence, .. } = &children[0] else {

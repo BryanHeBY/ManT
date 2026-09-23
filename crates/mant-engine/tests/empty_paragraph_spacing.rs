@@ -37,7 +37,7 @@ fn state_only_paragraph_bodies_preserve_executed_distance_and_source() {
                     ".PD {distance}\nALPHA\n.{paragraph}\n.{control}\n.RS\nBETA\n.RE\n.fi"
                 ));
                 assert_eq!(gap(&query), distance, "{paragraph}/{control}/{distance}");
-                let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
+                let blocks = &query.document.as_ref().unwrap().flow().unwrap().sections[0].blocks;
                 if distance > 0 {
                     assert!(
                         blocks.iter().any(|block| matches!(block,
@@ -58,7 +58,7 @@ fn skipped_or_initial_paragraphs_do_not_invent_distance() {
     assert_eq!(gap(&skipped), 0);
     for paragraph in ["PP", "P", "LP"] {
         let initial = load(&format!(".{paragraph}\n.nf\n.RS\nBETA\n.RE\n.fi"));
-        let blocks = &initial.document.as_ref().unwrap().sections[0].blocks;
+        let blocks = &initial.document.as_ref().unwrap().flow().unwrap().sections[0].blocks;
         assert!(
             !blocks
                 .iter()

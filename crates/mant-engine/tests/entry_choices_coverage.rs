@@ -37,7 +37,7 @@ fn every_rejected_position_invalidates_only_the_local_exhaustive_claim() {
         )
         .unwrap();
         let doc = query.document.as_ref().unwrap();
-        let Block::List { items, .. } = &doc.blocks[0] else {
+        let Block::List { items, .. } = &doc.flow().unwrap().blocks[0] else {
             panic!("list")
         };
         assert!(items[0].entry.as_ref().unwrap().value_domain.is_none());
@@ -217,7 +217,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                     let input = make_source(rejected);
                     let query = load_markdown_text(&input, None).unwrap();
                     let doc = query.document.as_ref().unwrap();
-                    let Block::List { items, .. } = &doc.blocks[0] else {
+                    let Block::List { items, .. } = &doc.flow().unwrap().blocks[0] else {
                         panic!("parent list")
                     };
                     assert!(

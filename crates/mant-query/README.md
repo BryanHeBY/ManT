@@ -26,7 +26,8 @@ let document: Document = serde_json::from_value(serde_json::json!({
         "coordinates": { "kind": "decoded-utf8-bytes" }
     }],
     "rootSource": 1,
-    "contentStore": {
+    "meta": {},
+    "body": {"kind": "flow", "contentStore": {
         "owners": [{
             "key": 1, "kind": "section", "roots": [1],
             "provenance": { "kind": "unknown" }
@@ -42,7 +43,6 @@ let document: Document = serde_json::from_value(serde_json::json!({
         "points": [],
         "links": []
     },
-    "meta": {},
     "sections": [{
         "id": "usage",
         "heading": { "content": [{
@@ -51,7 +51,7 @@ let document: Document = serde_json::from_value(serde_json::json!({
         }] },
         "blocks": [],
         "children": []
-    }]
+    }]}
 }))?;
 let content = ResolvedContent {
     label: "demo".to_owned(),

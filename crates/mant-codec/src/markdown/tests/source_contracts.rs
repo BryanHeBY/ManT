@@ -22,10 +22,12 @@ fn thematic_rule_source_gaps_survive_root_section_and_nested_list_lowering() {
             let source = format!("{prefix}{body}\n");
             let parsed = parse_markdown(&source, None).unwrap();
             let document = &parsed.document;
-            let mut blocks = if document.sections.is_empty() {
-                document.blocks.as_slice()
+            let mut blocks = if document.flow().expect("Flow fixture").sections.is_empty() {
+                document.flow().expect("Flow fixture").blocks.as_slice()
             } else {
-                document.sections[0].blocks.as_slice()
+                document.flow().expect("Flow fixture").sections[0]
+                    .blocks
+                    .as_slice()
             };
             while let Some(Block::List { items, .. }) = blocks.first() {
                 blocks = &items[0].blocks;
@@ -50,11 +52,12 @@ fn thematic_rule_source_gaps_survive_root_section_and_nested_list_lowering() {
             };
             assert_eq!(layout.spacing_before_lines, u16::from(blank), "{source}");
             let mut repeated = document.clone();
+            let flow = repeated.flow_mut().expect("Flow fixture");
             super::super::layout::normalize_markdown_layout(
                 &super::super::source::MarkdownSource::new(&source),
                 &mut super::super::content::MarkdownContent::new(),
-                &mut repeated.blocks,
-                &mut repeated.sections,
+                &mut flow.blocks,
+                &mut flow.sections,
             );
             assert_eq!(
                 &repeated, document,
@@ -177,7 +180,12 @@ fn list_tightness_comes_from_direct_parser_items_not_source_substrings() {
                     source: Some(span),
                     ..
                 },
-            ] = parsed.document.blocks.as_slice()
+            ] = parsed
+                .document
+                .flow()
+                .expect("Flow fixture")
+                .blocks
+                .as_slice()
             else {
                 panic!("{:?}", parsed.document)
             };
@@ -243,7 +251,10 @@ fn removing_directives_never_merges_independent_lists_or_roles() {
                     "{source}: {:?}",
                     parsed.document.diagnostics
                 );
-                assert_eq!(parsed.document.blocks.len(), 2);
+                assert_eq!(
+                    parsed.document.flow().expect("Flow fixture").blocks.len(),
+                    2
+                );
                 let index = mant_ir::SemanticIndex::build(&parsed.document);
                 let entries = index.root();
                 assert_eq!(entries.last().unwrap().kind, EntryKind::Value);

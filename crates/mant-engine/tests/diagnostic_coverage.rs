@@ -9,7 +9,8 @@ fn custom_coverage_failure_disables_annotations_without_changing_plain_markdown(
         "# Tool\n\n<!-- mant:entries role=command case=sensitive -->\n- `probe`: Inspect data.\n";
     for impact in [DiagnosticImpact::None, DiagnosticImpact::SemanticCoverage] {
         let mut content = load_markdown_text(source, None).unwrap();
-        let plain = render_markdown_with_options(&content, MarkdownOptions::default());
+        let plain = render_markdown_with_options(&content, MarkdownOptions::default())
+            .expect("valid Flow export");
         content
             .document
             .as_mut()
@@ -29,13 +30,15 @@ fn custom_coverage_failure_disables_annotations_without_changing_plain_markdown(
                 preserve_semantics: true,
                 ..MarkdownOptions::default()
             },
-        );
+        )
+        .expect("valid Flow export");
         assert_eq!(
             exported.contains("mant:entries"),
             impact == DiagnosticImpact::None
         );
         assert_eq!(
-            render_markdown_with_options(&content, MarkdownOptions::default()),
+            render_markdown_with_options(&content, MarkdownOptions::default())
+                .expect("valid Flow export"),
             plain
         );
         if impact == DiagnosticImpact::SemanticCoverage {

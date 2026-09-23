@@ -1,5 +1,5 @@
 //! Operation-local validation derived from one immutable document.
-use crate::{Diagnostic, Document, DocumentIndex, EntryRelationIssue};
+use crate::{Diagnostic, Document, DocumentBodyRef, DocumentIndex, EntryRelationIssue};
 
 /// Complete validation results and index for one borrowed document.
 ///
@@ -12,7 +12,7 @@ use crate::{Diagnostic, Document, DocumentIndex, EntryRelationIssue};
 /// ```compile_fail
 /// fn mutate(document: &mut mant_ir::Document) {
 ///     let checked = mant_ir::DocumentValidation::new(document);
-///     document.blocks.clear();
+///     document.flow_mut().unwrap().blocks.clear();
 ///     assert!(checked.diagnostics().is_empty());
 /// }
 /// ```
@@ -29,7 +29,13 @@ impl<'a> DocumentValidation<'a> {
     #[must_use]
     pub fn new(document: &'a Document) -> Self {
         let index = DocumentIndex::build(document);
-        let relations = crate::entry::relation_issues(document, document.content(), &index);
+        let relations = match document.body() {
+            DocumentBodyRef::Flow(_) => {
+                crate::entry::relation_issues(document, document.content(), &index)
+            }
+            // Fixed owner candidates have no classified EntryKind until R02b.
+            DocumentBodyRef::Fixed(_) => Vec::new(),
+        };
         let diagnostics = super::document::validate_with_index(document, &index, &relations);
         Self {
             document,

@@ -176,7 +176,6 @@ mod tests {
             }],
         );
         let document = Document {
-            heading: None,
             parser: None,
             sources: vec![SourceRecord {
                 key: SourceKey::FIRST,
@@ -189,29 +188,32 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store: fixture.finish(),
+            body: crate::DocumentBody::Flow(crate::FlowBody {
+                content_store: fixture.finish(),
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![Section {
+                    id: "synopsis".into(),
+                    fragment_aliases: Vec::new(),
+                    heading: crate::Heading {
+                        content: Vec::new(),
+                        source: None,
+                    },
+                    spacing_before_lines: 0,
+                    blocks: vec![Block::DefinitionList {
+                        declaration_groups: Vec::new(),
+                        items: vec![command],
+                        compact: true,
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    children: Vec::new(),
+                    source: None,
+                }],
+            }),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![Section {
-                id: "synopsis".into(),
-                fragment_aliases: Vec::new(),
-                heading: crate::Heading {
-                    content: Vec::new(),
-                    source: None,
-                },
-                spacing_before_lines: 0,
-                blocks: vec![Block::DefinitionList {
-                    declaration_groups: Vec::new(),
-                    items: vec![command],
-                    compact: true,
-                    layout: LayoutHint::default(),
-                    source: None,
-                }],
-                children: Vec::new(),
-                source: None,
-            }],
         };
 
         let index = SemanticIndex::build(&document);

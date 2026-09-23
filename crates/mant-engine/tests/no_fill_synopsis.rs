@@ -101,7 +101,7 @@ fn synopsis_body_executes_fill_mode_changes_instead_of_flattening_every_child() 
         text.contains("ALPHA\nBETA SECOND\nGAMMA\n\n\nDELTA"),
         "{text}"
     );
-    let blocks = &content.document.as_ref().unwrap().sections[0].blocks;
+    let blocks = &content.document.as_ref().unwrap().flow().unwrap().sections[0].blocks;
     assert!(
         blocks
             .iter()
@@ -130,7 +130,7 @@ fn literal_display_executes_explicit_fill_switches_and_restores_literal_rows() {
             text.contains("ALPHA\nBETA SECOND\nTHIRD\nGAMMA\n\n\nDELTA\nAFTER"),
             "{text}"
         );
-        let blocks = &content.document.as_ref().unwrap().sections[0].blocks;
+        let blocks = &content.document.as_ref().unwrap().flow().unwrap().sections[0].blocks;
         assert!(matches!(
             blocks.as_slice(),
             [

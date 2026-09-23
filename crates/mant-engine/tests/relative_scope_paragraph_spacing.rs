@@ -37,7 +37,8 @@ fn check(source: &str, expected: &[(&str, u16)]) {
     let document = query.document.as_ref().unwrap();
     let text = render_query_text(&query);
     if source.contains(".IP 1.") {
-        let Some(Block::List { items, .. }) = document.sections[0].blocks.first() else {
+        let Some(Block::List { items, .. }) = document.flow().unwrap().sections[0].blocks.first()
+        else {
             panic!("expected an ordered owner: {document:#?}")
         };
         assert_eq!(items.len(), 1);
@@ -49,8 +50,12 @@ fn check(source: &str, expected: &[(&str, u16)]) {
         }
     }
     for &(token, gap) in expected {
-        let layout = paragraph_layout(document.content(), &document.sections[0].blocks, token)
-            .unwrap_or_else(|| panic!("missing {token}: {document:#?}"));
+        let layout = paragraph_layout(
+            document.content(),
+            &document.flow().unwrap().sections[0].blocks,
+            token,
+        )
+        .unwrap_or_else(|| panic!("missing {token}: {document:#?}"));
         assert_eq!(layout.spacing_before_lines, gap, "{source}\n{text}");
         let rows: Vec<_> = text.lines().collect();
         let index = rows.iter().position(|line| line.trim() == token).unwrap();
@@ -107,9 +112,13 @@ fn a_first_paragraph_in_a_first_relative_scope_does_not_invent_a_predecessor() {
     let query = load_roff_bytes(source.as_bytes()).unwrap();
     let document = query.document.as_ref().unwrap();
     assert_eq!(
-        paragraph_layout(document.content(), &document.sections[0].blocks, "SECOND")
-            .unwrap()
-            .spacing_before_lines,
+        paragraph_layout(
+            document.content(),
+            &document.flow().unwrap().sections[0].blocks,
+            "SECOND"
+        )
+        .unwrap()
+        .spacing_before_lines,
         0
     );
     // The heading owns its own single blank row; this first paragraph must

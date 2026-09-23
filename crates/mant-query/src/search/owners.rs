@@ -266,7 +266,8 @@ mod tests {
             writeln!(source, "- `--flag-{index}`: Payload{index}.").unwrap();
         }
         let query = crate::query_fixture::markdown(&source, None).unwrap();
-        let artifact = mant_codec::encode::render_addressable_markdown(&query);
+        let artifact =
+            mant_codec::encode::render_addressable_markdown(&query).expect("valid Flow fixture");
         let index = OwnerIndex::new(
             &artifact,
             query.document.as_ref().map(mant_ir::Document::content),

@@ -643,7 +643,6 @@ mod tests {
 
     fn document(content_store: crate::ContentStore, blocks: Vec<Block>) -> Document {
         Document {
-            heading: None,
             parser: None,
             sources: vec![SourceRecord {
                 key: SourceKey::FIRST,
@@ -656,12 +655,15 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store,
+            body: crate::DocumentBody::Flow(crate::FlowBody {
+                content_store,
+                heading: None,
+                blocks,
+                sections: Vec::new(),
+            }),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks,
-            sections: Vec::new(),
         }
     }
 
@@ -702,7 +704,7 @@ mod tests {
             kind,
             compact,
             ..
-        } = &rebuilt.blocks[0]
+        } = &rebuilt.flow().unwrap().blocks[0]
         else {
             panic!("ordinary list");
         };

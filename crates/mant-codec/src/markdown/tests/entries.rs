@@ -72,7 +72,8 @@ fn ambiguous_choice_claims_leave_only_independent_open_child_inference() {
 #[test]
 fn shared_ir_validation_rejects_a_producer_choices_claim_without_values() {
     let mut document = parse_markdown("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--color WHEN`: Color policy.\n", None).unwrap().document;
-    let Block::List { items, .. } = &mut document.blocks[0] else {
+    let Block::List { items, .. } = &mut document.flow_mut().expect("Flow fixture").blocks[0]
+    else {
         panic!("definition")
     };
     items[0].entry.as_mut().unwrap().value_domain =
@@ -127,7 +128,7 @@ fn declared_options_reject_arbitrary_bang_prefixed_terms() {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.unsupported-option-prefix")
     }));
     assert!(matches!(
-        &parsed.document.sections[0].blocks[0],
+        &parsed.document.flow().expect("Flow fixture").sections[0].blocks[0],
         Block::List {
             kind: ListKind::Bullet,
             ..
@@ -142,7 +143,10 @@ fn variable_declarations_reject_environment_provider_names_per_item() {
         None,
     )
     .expect("invalid variable remains visible");
-    assert!(matches!(parsed.document.blocks[0], Block::List { .. }));
+    assert!(matches!(
+        parsed.document.flow().expect("Flow fixture").blocks[0],
+        Block::List { .. }
+    ));
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.invalid-entry-name")
             && diagnostic.message.contains("$env:PATH")
@@ -159,7 +163,7 @@ fn malformed_declared_entry_lists_remain_visible_and_report_the_list_location() 
     .expect("rejected declarations are recoverable");
 
     assert!(matches!(
-        parsed.document.sections[0].blocks[0],
+        parsed.document.flow().expect("Flow fixture").sections[0].blocks[0],
         Block::List { .. }
     ));
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
@@ -176,7 +180,7 @@ fn declared_entry_grammar_accepts_blank_lines_delimiters_and_colon_conventions()
     )
     .expect("declared root entries");
     assert!(parsed.document.diagnostics.is_empty());
-    let Block::List { items, .. } = &parsed.document.blocks[0] else {
+    let Block::List { items, .. } = &parsed.document.flow().expect("Flow fixture").blocks[0] else {
         panic!("the next non-empty root list should become semantic entries");
     };
     assert_eq!(
@@ -237,7 +241,12 @@ fn indented_code_does_not_activate_semantic_entry_directives() {
     .expect("indented code remains ordinary Markdown");
     assert!(parsed.document.diagnostics.is_empty());
     assert!(matches!(
-        parsed.document.blocks.as_slice(),
+        parsed
+            .document
+            .flow()
+            .expect("Flow fixture")
+            .blocks
+            .as_slice(),
         [Block::Preformatted { .. }]
     ));
 }
@@ -249,7 +258,10 @@ fn declared_entry_description_requires_a_leading_paragraph_delimiter() {
         None,
     )
     .expect("invalid declared entry remains recoverable");
-    assert!(matches!(parsed.document.blocks[0], Block::List { .. }));
+    assert!(matches!(
+        parsed.document.flow().expect("Flow fixture").blocks[0],
+        Block::List { .. }
+    ));
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.missing-description")
             && diagnostic.message.contains("query")

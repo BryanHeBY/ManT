@@ -161,7 +161,10 @@ pub(crate) fn store() -> ContentStore {
 }
 
 pub(crate) fn sync_document(document: &mut mant_ir::Document) {
-    document.content_store = store();
+    document
+        .flow_mut()
+        .expect("test document has a Flow body")
+        .content_store = store();
 }
 
 pub(crate) fn content() -> mant_ir::ContentContext<'static> {

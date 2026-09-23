@@ -50,7 +50,8 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
                 preserve_anchors,
                 preserve_semantics: true,
             },
-        );
+        )
+        .expect("valid Flow export");
         assert!(markdown.contains("mant:entry"), "{markdown}");
         let reparsed = load_markdown_text(&markdown, None).unwrap();
         let document = reparsed.document.unwrap();
@@ -90,7 +91,9 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
         }
     }
     assert!(
-        !render_markdown_with_options(&query, MarkdownOptions::default()).contains("mant:entry")
+        !render_markdown_with_options(&query, MarkdownOptions::default())
+            .expect("valid Flow export")
+            .contains("mant:entry")
     );
 }
 
@@ -107,7 +110,8 @@ fn unsupported_partial_or_native_owners_keep_content_without_invented_relations(
                 preserve_semantics: true,
                 ..Default::default()
             },
-        );
+        )
+        .expect("valid Flow export");
         assert!(!markdown.contains("mant:entry"));
         assert!(markdown.contains("--"));
     }
@@ -120,7 +124,8 @@ fn unsupported_partial_or_native_owners_keep_content_without_invented_relations(
             preserve_semantics: true,
             ..Default::default()
         },
-    );
+    )
+    .expect("valid Flow export");
     assert!(!markdown.contains("aliasGroups"));
     assert!(markdown.contains("Help."));
 }
@@ -202,7 +207,8 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
                     preserve_anchors,
                     preserve_semantics: true,
                 },
-            );
+            )
+            .expect("valid Flow export");
             assert_eq!(
                 markdown.contains("mant:entry"),
                 supported,
@@ -227,7 +233,8 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
                         preserve_anchors,
                         preserve_semantics: false,
                     },
-                );
+                )
+                .expect("valid Flow export");
                 assert_eq!(markdown, ordinary);
                 assert!(!markdown.contains("mant:entries"));
                 assert!(markdown.contains("Kept body."));

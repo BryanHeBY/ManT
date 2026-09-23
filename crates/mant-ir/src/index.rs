@@ -84,6 +84,13 @@ impl DocumentIndex {
                     builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
                 }
             }
+            DocumentBodyRef::Fixed(_) => {
+                // Fixed marks retain original target spellings; normalization
+                // and collision handling belong to the R02b projection. The
+                // document root itself remains addressable without inventing
+                // semantic section or entry IDs from native mark keys.
+                builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
+            }
         }
         for alias in &document.fragment_aliases {
             builder.register_fragment(alias.clone(), &NodeId::from(DOCUMENT_ROOT_ID), true);
@@ -247,7 +254,6 @@ mod tests {
         let mut fixture = crate::test_support::ContentFixture::body();
         let anchor = fixture.anchor(id.clone());
         let document = Document {
-            heading: None,
             parser: None,
             sources: vec![SourceRecord {
                 key: SourceKey::FIRST,
@@ -260,40 +266,43 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store: fixture.finish(),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: vec![crate::Block::DefinitionList {
-                declaration_groups: Vec::new(),
-                items: vec![DefinitionItem {
-                    source: None,
-                    entry: Some(EntryFacts {
-                        name_bindings: Vec::new(),
-                        alias_groups: Vec::new(),
-                        alias_of: None,
-                        forms: Vec::new(),
-                        id: id.clone(),
-                        kind: EntryKind::Parameter {
-                            parameter_kind: crate::ParameterKind::Option,
+            body: crate::DocumentBody::Flow(crate::FlowBody {
+                content_store: fixture.finish(),
+                heading: None,
+                blocks: vec![crate::Block::DefinitionList {
+                    declaration_groups: Vec::new(),
+                    items: vec![DefinitionItem {
+                        source: None,
+                        entry: Some(EntryFacts {
+                            name_bindings: Vec::new(),
+                            alias_groups: Vec::new(),
+                            alias_of: None,
+                            forms: Vec::new(),
+                            id: id.clone(),
+                            kind: EntryKind::Parameter {
+                                parameter_kind: crate::ParameterKind::Option,
+                            },
+                            case: NameCase::Sensitive,
+                            names: vec!["--help".to_owned()],
+                            value_domain: None,
+                        }),
+                        terms: vec![vec![anchor]],
+                        description: Vec::new(),
+                        layout: crate::DefinitionLayout {
+                            inline_term: false,
+                            spacing_before_lines: None,
+                            ..Default::default()
                         },
-                        case: NameCase::Sensitive,
-                        names: vec!["--help".to_owned()],
-                        value_domain: None,
-                    }),
-                    terms: vec![vec![anchor]],
-                    description: Vec::new(),
-                    layout: crate::DefinitionLayout {
-                        inline_term: false,
-                        spacing_before_lines: None,
-                        ..Default::default()
-                    },
+                    }],
+                    compact: false,
+                    layout: crate::LayoutHint::default(),
+                    source: None,
                 }],
-                compact: false,
-                layout: crate::LayoutHint::default(),
-                source: None,
-            }],
-            sections: Vec::new(),
+                sections: Vec::new(),
+            }),
         };
 
         let index = DocumentIndex::build(&document);
@@ -328,7 +337,6 @@ mod tests {
             source: None,
         });
         let document = Document {
-            heading: None,
             parser: None,
             sources: vec![SourceRecord {
                 key: SourceKey::FIRST,
@@ -341,12 +349,15 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store: fixture.finish(),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![section],
+            body: crate::DocumentBody::Flow(crate::FlowBody {
+                content_store: fixture.finish(),
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![section],
+            }),
         };
 
         let index = DocumentIndex::build(&document);

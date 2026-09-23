@@ -20,9 +20,9 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
     });
     query.label = "query-label-is-not-body".into();
     let document = query.document.as_mut().unwrap();
-    document.sections.clear();
+    document.flow_mut().expect("Flow fixture").sections.clear();
     document.meta.title = Some("metadata-is-not-body".into());
-    document.heading = Some(mant_ir::Heading {
+    document.flow_mut().expect("Flow fixture").heading = Some(mant_ir::Heading {
         content: vec![
             link(
                 "Catalog",
@@ -81,7 +81,14 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
 #[test]
 fn section_labels_do_not_replace_linked_body_heading_content() {
     let mut query = bundle();
-    query.document.as_mut().unwrap().sections[0].heading = mant_ir::Heading {
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .heading = mant_ir::Heading {
         content: vec![
             link(
                 "Heading",

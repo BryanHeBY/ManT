@@ -28,7 +28,7 @@ fn retained_man_paragraph_macro_names_reset_persistent_font_state() {
             u64::try_from(b".TH PROBE 1\n.SH DESCRIPTION\n.ft B\nBEFORE\n.PP\nAFTER\n".len())
                 .unwrap(),
         );
-        let paragraphs = document.sections[0]
+        let paragraphs = document.flow().expect("Flow fixture").sections[0]
             .blocks
             .iter()
             .filter_map(|block| match block {
@@ -108,7 +108,7 @@ fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
         diagnostic.code.as_deref() == Some("manual.unhandled-structural-parts")
             && diagnostic.message.contains("FutureBlock")
     }));
-    let rendered = document.sections[0]
+    let rendered = document.flow().expect("Flow fixture").sections[0]
         .blocks
         .iter()
         .map(|block| match block {

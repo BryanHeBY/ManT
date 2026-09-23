@@ -40,7 +40,10 @@ pub(crate) fn read_full(
         ));
     }
     match execute_query(request, policy, host)? {
-        QueryViewResult::Full(content) => Ok(*content),
+        QueryViewResult::Full(content) => {
+            crate::presentation::admit_fixed_content(&content)?;
+            Ok(*content)
+        }
         _ => Err(Failure::operational(
             "complete document request returned a projected view",
         )),

@@ -7,12 +7,22 @@ use mant_ir::{
     visit::{Visit, walk_inline},
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use std::num::NonZeroU32;
 
-use super::{
-    MarkdownNode, MarkdownOptions, render_addressable_markdown, render_markdown,
-    render_markdown_with_options,
-};
+use super::{MarkdownNode, MarkdownOptions};
 use mant_ir::ResolvedContent;
+
+fn render_markdown(query: &ResolvedContent) -> String {
+    super::render_markdown(query).expect("valid codec fixture")
+}
+
+fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOptions) -> String {
+    super::render_markdown_with_options(query, options).expect("valid codec fixture")
+}
+
+fn render_addressable_markdown(query: &ResolvedContent) -> super::MarkdownArtifact<'_> {
+    super::render_addressable_markdown(query).expect("valid codec fixture")
+}
 
 /// Supply already-parsed content to the document encoder without discovery,
 /// query validation, projection, or report DTOs. Labels here are caller-owned.
@@ -41,7 +51,7 @@ fn large_entry_source_maps_keep_monotonic_exact_ownership() {
     let document = query.document.unwrap();
     let rendered = super::blocks::render_blocks_with_entries(
         document.content(),
-        &document.blocks,
+        &document.flow().expect("Flow fixture").blocks,
         MarkdownOptions {
             preserve_anchors: true,
             ..MarkdownOptions::default()
@@ -72,6 +82,8 @@ fn flattened_table_cells_keep_distinct_exact_root_ranges() {
     let document = query.document.as_ref().unwrap();
     for (needle, other) in [("LEFT", "RIGHT"), ("RIGHT", "LEFT")] {
         let root = document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .atoms
             .iter()
@@ -101,7 +113,8 @@ fn document_export_skips_maps_but_keeps_identical_addressable_bytes() {
     let source = "# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--root`: Root payload.\n\n## Parent\n\n<!-- mant:entries role=option case=sensitive -->\n- `--first`: First payload.\n\n### Child\n\n<!-- mant:entries role=option case=sensitive -->\n- `--second`: Second payload.\n";
     let query = parse_content(source, None).unwrap();
     let mapped = render_addressable_markdown(&query);
-    let plain = super::render_markdown_artifact(&query, MarkdownOptions::ADDRESSABLE, false);
+    let plain = super::render_markdown_artifact(&query, MarkdownOptions::ADDRESSABLE, false)
+        .expect("valid codec fixture");
     assert_eq!(mapped.text(), plain.text());
     assert!(plain.nodes().is_empty());
     assert!(plain.sections.is_empty());
@@ -112,11 +125,11 @@ fn document_export_skips_maps_but_keeps_identical_addressable_bytes() {
     let document = query.document.as_ref().unwrap();
     assert!(std::ptr::eq(
         mapped.sections[0].section,
-        &raw const document.sections[0]
+        &raw const document.flow().expect("Flow fixture").sections[0]
     ));
     assert!(std::ptr::eq(
         mapped.sections[1].section,
-        &raw const document.sections[0].children[0]
+        &raw const document.flow().expect("Flow fixture").sections[0].children[0]
     ));
     let mut entries = 0;
     for mapped in mapped.nodes() {
@@ -161,7 +174,10 @@ fn maps_borrow_owners_from_their_exact_source_snapshot() {
         b_owner.facts().unwrap()
     ));
     let first_document = first.document.as_ref().unwrap();
-    let original = mant_ir::content_entries(first_document.content(), &first_document.blocks);
+    let original = mant_ir::content_entries(
+        first_document.content(),
+        &first_document.flow().expect("Flow fixture").blocks,
+    );
     assert!(std::ptr::eq(
         a_owner.facts().unwrap(),
         original[0].owner().facts().unwrap()
@@ -263,7 +279,6 @@ fn underscore_escaping_is_independent_of_text_segmentation_but_respects_styles()
 
 fn manual(sections: Vec<Section>) -> Document {
     Document {
-        heading: None,
         parser: None,
         sources: vec![SourceRecord {
             key: SourceKey::FIRST,
@@ -276,13 +291,248 @@ fn manual(sections: Vec<Section>) -> Document {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store: crate::test_content::store(),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: crate::test_content::store(),
+            heading: None,
+            blocks: Vec::new(),
+            sections,
+        }),
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: Vec::new(),
-        sections,
     }
+}
+
+#[test]
+fn fixed_body_exports_one_literal_surface_without_flow_projection() {
+    use mant_ir::{
+        DisplayLabel, DisplayRole, DisplayRow, DisplayRun, DisplayStyle, DisplaySurface,
+        DocumentBody, FixedBody,
+    };
+
+    let one = NonZeroU32::new(1).unwrap();
+    let two = NonZeroU32::new(2).unwrap();
+    let mut document = manual(Vec::new());
+    document.body = DocumentBody::Fixed(FixedBody {
+        surface: DisplaySurface {
+            text: "a`b".to_owned(),
+            rows: vec![
+                DisplayRow {
+                    key: one,
+                    first_run: one,
+                    run_count: 1,
+                    column_count: 3,
+                    break_after: true,
+                },
+                DisplayRow {
+                    key: two,
+                    first_run: two,
+                    run_count: 1,
+                    column_count: 2,
+                    break_after: false,
+                },
+            ],
+            runs: vec![
+                DisplayRun {
+                    key: one,
+                    row: one,
+                    column: 2,
+                    width: 1,
+                    byte_start: 0,
+                    byte_count: 1,
+                    label: DisplayLabel {
+                        owner: None,
+                        link: None,
+                        source: None,
+                        style: DisplayStyle {
+                            bold: false,
+                            underline: false,
+                        },
+                        role: DisplayRole::Body,
+                    },
+                },
+                DisplayRun {
+                    key: two,
+                    row: two,
+                    column: 0,
+                    width: 2,
+                    byte_start: 1,
+                    byte_count: 2,
+                    label: DisplayLabel {
+                        owner: None,
+                        link: None,
+                        source: None,
+                        style: DisplayStyle {
+                            bold: false,
+                            underline: false,
+                        },
+                        role: DisplayRole::Body,
+                    },
+                },
+            ],
+        },
+        headings: Vec::new(),
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    });
+    let query = ResolvedContent {
+        label: "fixed".to_owned(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+
+    assert_eq!(render_markdown(&query), "# fixed\n\n```\n  a\n`b\n```");
+    let artifact = render_addressable_markdown(&query);
+    assert_eq!(artifact.text(), render_markdown(&query));
+    assert!(artifact.nodes().is_empty());
+}
+
+#[test]
+fn invalid_fixed_body_is_a_typed_export_error() {
+    use mant_ir::{DisplaySurface, DocumentBody, FixedBody};
+
+    let mut document = manual(Vec::new());
+    document.body = DocumentBody::Fixed(FixedBody {
+        surface: DisplaySurface {
+            text: "orphan".to_owned(),
+            rows: Vec::new(),
+            runs: Vec::new(),
+        },
+        headings: Vec::new(),
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    });
+    let query = ResolvedContent {
+        label: "fixed".to_owned(),
+        address: None,
+        document: Some(document.clone()),
+        tldr: None,
+    };
+    assert!(matches!(
+        super::render_markdown(&query),
+        Err(super::EncodeError::InvalidFixed(_))
+    ));
+    assert!(matches!(
+        super::render_addressable_markdown(&query),
+        Err(super::EncodeError::InvalidFixed(_))
+    ));
+
+    if let DocumentBody::Fixed(fixed) = &mut document.body {
+        fixed.surface.text.clear();
+    }
+    document.sources.clear();
+    let query = ResolvedContent {
+        document: Some(document),
+        ..query
+    };
+    assert!(matches!(
+        super::render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE),
+        Err(super::EncodeError::InvalidFixedSource(_))
+    ));
+}
+
+fn sparse_fixed_query(column_count: u32) -> ResolvedContent {
+    use mant_ir::{
+        DisplayLabel, DisplayRole, DisplayRow, DisplayRun, DisplayStyle, DisplaySurface,
+        DocumentBody, FixedBody,
+    };
+
+    let one = NonZeroU32::new(1).unwrap();
+    let two = NonZeroU32::new(2).unwrap();
+    let label = DisplayLabel {
+        owner: None,
+        link: None,
+        source: None,
+        style: DisplayStyle {
+            bold: false,
+            underline: false,
+        },
+        role: DisplayRole::Body,
+    };
+    let mut document = manual(Vec::new());
+    document.body = DocumentBody::Fixed(FixedBody {
+        surface: DisplaySurface {
+            text: "ab".to_owned(),
+            rows: vec![DisplayRow {
+                key: one,
+                first_run: one,
+                run_count: 2,
+                column_count,
+                break_after: false,
+            }],
+            runs: vec![
+                DisplayRun {
+                    key: one,
+                    row: one,
+                    column: 0,
+                    width: 1,
+                    byte_start: 0,
+                    byte_count: 1,
+                    label,
+                },
+                DisplayRun {
+                    key: two,
+                    row: one,
+                    column: 4,
+                    width: 1,
+                    byte_start: 1,
+                    byte_count: 1,
+                    label,
+                },
+            ],
+        },
+        headings: Vec::new(),
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    });
+    ResolvedContent {
+        label: "fixed".to_owned(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    }
+}
+
+#[test]
+fn fixed_literal_preserves_sparse_and_trailing_columns() {
+    let query = sparse_fixed_query(6);
+    assert_eq!(render_markdown(&query), "# fixed\n\n```\na   b \n```");
+}
+
+#[test]
+fn fixed_literal_preflight_rejects_sparse_expansion_and_artifact_overhead() {
+    use mant_ir::DocumentBody;
+
+    let mut query = sparse_fixed_query(6);
+    let document = query.document.as_ref().unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("Fixed fixture");
+    };
+    assert!(super::render_fixed_artifact_with_limit(&query, document, fixed, false, 100).is_ok());
+
+    query = sparse_fixed_query(90);
+    let document = query.document.as_ref().unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("Fixed fixture");
+    };
+    // The surface alone fits 100 bytes. Its title, separator and fence do not.
+    assert!(matches!(
+        super::render_fixed_artifact_with_limit(&query, document, fixed, false, 100),
+        Err(super::EncodeError::ResourceLimit { maximum: 100 })
+    ));
+
+    query = sparse_fixed_query(u32::MAX);
+    assert!(matches!(
+        super::render_markdown(&query),
+        Err(super::EncodeError::InvalidFixed(_))
+    ));
 }
 
 fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
@@ -329,10 +579,11 @@ fn addressable_markdown_emits_canonical_and_authored_fragments() {
 #[test]
 fn addressable_markdown_emits_document_root_fragments() {
     let mut document = manual(Vec::new());
-    document.blocks = vec![paragraph(vec![crate::test_content::text(
-        "Preface.".to_owned(),
-    )])];
-    document.content_store = crate::test_content::store();
+    document.flow_mut().expect("Flow fixture").blocks =
+        vec![paragraph(vec![crate::test_content::text(
+            "Preface.".to_owned(),
+        )])];
+    document.flow_mut().expect("Flow fixture").content_store = crate::test_content::store();
     document.fragment_aliases = vec!["Mixed.Root".into()];
     let query = ResolvedContent {
         address: None,
@@ -1257,7 +1508,8 @@ fn detached_fragment_export_accepts_ir_beyond_markdown_metadata_limits() {
         format!("<!-- mant:entries role=option case=sensitive -->\n- {head}: Kept body.\n");
     let mut content = parse_content(&source, None).unwrap();
     let document = content.document.as_mut().unwrap();
-    let Block::List { items, .. } = &mut document.blocks[0] else {
+    let Block::List { items, .. } = &mut document.flow_mut().expect("Flow fixture").blocks[0]
+    else {
         panic!("semantic list");
     };
     items[0].entry.as_mut().unwrap().alias_groups = vec![names.clone()];
@@ -1265,11 +1517,15 @@ fn detached_fragment_export_accepts_ir_beyond_markdown_metadata_limits() {
     assert!(!super::semantic::supported(document));
     for preserve_anchors in [false, true] {
         let options = super::MarkdownFragmentOptions { preserve_anchors };
-        let plain = super::render_blocks_fragment(document.content(), &document.blocks, options)
-            .join("\n\n");
+        let plain = super::render_blocks_fragment(
+            document.content(),
+            &document.flow().expect("Flow fixture").blocks,
+            options,
+        )
+        .join("\n\n");
         let located = super::render_located_blocks_fragment(
             document.content(),
-            &document.blocks,
+            &document.flow().expect("Flow fixture").blocks,
             options,
             None,
         )
@@ -1286,7 +1542,7 @@ fn detached_fragment_export_accepts_ir_beyond_markdown_metadata_limits() {
             fragment_aliases: Vec::new(),
             heading: mant_ir::Heading::default(),
             spacing_before_lines: 0,
-            blocks: document.blocks.clone(),
+            blocks: document.flow().expect("Flow fixture").blocks.clone(),
             children: Vec::new(),
             source: None,
         }];

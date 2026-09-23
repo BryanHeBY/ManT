@@ -112,6 +112,8 @@ fn without_line_indentation(output: &str) -> String {
 
 fn first_definition_item(document: &Document) -> &DefinitionItem {
     document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .flat_map(|section| section.blocks.iter())

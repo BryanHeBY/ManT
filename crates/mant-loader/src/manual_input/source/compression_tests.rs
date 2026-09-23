@@ -120,7 +120,7 @@ fn accepts_all_members(encoding: Encoding) {
     visible.visit_document(&document);
     assert!(visible.text.contains("TOKENA"));
     assert!(visible.text.contains("TOKENB"));
-    assert_eq!(document.sections.len(), 2);
+    assert_eq!(document.flow().expect("parsed Flow body").sections.len(), 2);
 }
 
 fn rejects_malformed_members_without_partial_ir(encoding: Encoding) {

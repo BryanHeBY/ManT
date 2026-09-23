@@ -7,9 +7,14 @@ use mant_query::{ProjectionError, build_outline_projection, select_excerpt};
 fn duplicate_section_ids_cannot_redirect_path_selected_entry_metadata() {
     let mut query = load_markdown_text("# Tool\n\n## First\n\n<!-- mant:entries role=command case=sensitive -->\n- `first`: First body.\n\n## Second\n\n<!-- mant:entries role=command case=sensitive -->\n- `second`: Second body.\n", None).unwrap();
     let document = query.document.as_mut().unwrap();
-    document.sections[1].id = document.sections[0].id.clone();
+    let first_id = document.flow().unwrap().sections[0].id.clone();
+    document.flow_mut().unwrap().sections[1].id = first_id;
     let index = mant_ir::SemanticIndex::build(document);
-    assert!(index.section(&document.sections[0].id).is_empty());
+    assert!(
+        index
+            .section(&document.flow().unwrap().sections[0].id)
+            .is_empty()
+    );
     assert_eq!(index.section_at(&[0])[0].names, ["first"]);
     assert_eq!(index.section_at(&[1])[0].names, ["second"]);
     for projection in [
@@ -50,7 +55,14 @@ fn synthetic_root_ids_do_not_hide_conflicting_public_ir_owners() {
             None,
         )
         .unwrap();
-        query.document.as_mut().unwrap().sections[0].id = id.into();
+        query
+            .document
+            .as_mut()
+            .unwrap()
+            .flow_mut()
+            .unwrap()
+            .sections[0]
+            .id = id.into();
         query.tldr = Some(mant_ir::TldrDocument {
             title: "Tool".into(),
             description: vec![],
@@ -106,8 +118,8 @@ fn namespaces_do_not_fall_through_and_duplicate_ids_remain_readable_by_path() {
     )
     .unwrap();
     let document = query.document.as_mut().unwrap();
-    document.sections[0].id = "root".into();
-    document.sections[1].id = "root".into();
+    document.flow_mut().unwrap().sections[0].id = "root".into();
+    document.flow_mut().unwrap().sections[1].id = "root".into();
     let overview = select_excerpt(&query, &[ContentSelector::path("root")]).unwrap();
     assert_eq!(overview.selections[0].outline().path(), "root");
     assert!(matches!(
@@ -220,7 +232,7 @@ fn compact_summary_matches_materialized_counts_without_copying_invalid_forms() {
     for invalid in [false, true] {
         if invalid {
             let mant_ir::Block::List { items, .. } =
-                &mut query.document.as_mut().unwrap().blocks[0]
+                &mut query.document.as_mut().unwrap().flow_mut().unwrap().blocks[0]
             else {
                 panic!("list")
             };

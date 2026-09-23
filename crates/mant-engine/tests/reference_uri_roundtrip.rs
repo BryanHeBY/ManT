@@ -92,7 +92,8 @@ fn copied_typed_targets_survive_real_markdown_parsing_and_export() {
             std::slice::from_ref(&target),
             "copy URI {uri}"
         );
-        let exported = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+        let exported = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE)
+            .expect("valid Flow export");
         let (_, reparsed) = targets(&exported);
         assert_eq!(reparsed, [target], "exported {exported}");
     }

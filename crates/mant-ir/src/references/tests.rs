@@ -39,8 +39,9 @@ fn one_occurrence_spanning_two_roots_has_one_bounded_complete_label() {
         Some(key),
         Provenance::Unknown,
     );
-    document.content_store = builder.finish();
-    document.blocks = [first, second]
+    let flow = document.flow_mut().unwrap();
+    flow.content_store = builder.finish();
+    flow.blocks = [first, second]
         .into_iter()
         .map(|content| crate::Block::Paragraph {
             children: vec![Inline::Link {

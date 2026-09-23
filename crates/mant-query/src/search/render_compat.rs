@@ -29,6 +29,7 @@ pub(super) fn search_with_matcher(
     // reader here; it must never fall through to an empty Flow export.
     match query.document.as_ref().map(mant_ir::Document::body) {
         Some(DocumentBodyRef::Flow(_)) | None => search_flow_with_matcher(query, request, matcher),
+        Some(DocumentBodyRef::Fixed(_)) => Err(SearchError::UnsupportedFixed),
     }
 }
 
@@ -37,7 +38,7 @@ fn search_flow_with_matcher(
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
-    let artifact = render_addressable_markdown(query);
+    let artifact = render_addressable_markdown(query).map_err(SearchError::InvalidFixed)?;
     let markdown = artifact.text();
     let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
     let owners = OwnerIndex::new(

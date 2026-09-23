@@ -17,7 +17,8 @@ fn composite_environment_options_do_not_promote_shell_labels() {
 
     let document = parse_manual_source(&path).expect("lower environment option fixture");
     fs::remove_file(path).expect("remove fixture");
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("definitions");
     };
     assert_eq!(
@@ -50,7 +51,9 @@ fn separates_definition_layout_arguments_from_visible_terms() {
     let document = parse_manual_source(&path).expect("lower definition head roles");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(
@@ -96,7 +99,9 @@ fn line_continuations_do_not_merge_independent_tp_owners() {
     let document = parse_manual_source(&path).expect("lower consecutive TP aliases");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -127,7 +132,9 @@ fn keeps_unrelated_consecutive_tp_definitions_separate() {
 
     let document = parse_manual_source(&path).expect("lower distinct tagged paragraphs");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -159,7 +166,9 @@ fn paragraph_distance_zero_does_not_turn_tp_items_into_aliases() {
 
     let document = parse_manual_source(&path).expect("lower compact tagged paragraphs");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -192,7 +201,9 @@ fn restoring_paragraph_distance_keeps_tp_owners_independent() {
 
     let document = parse_manual_source(&path).expect("lower compact alias group");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -225,7 +236,9 @@ fn head_paragraph_distance_keeps_tp_owners_independent() {
 
     let document = parse_manual_source(&path).expect("lower head-owned compact alias group");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -260,7 +273,9 @@ fn compact_tp_heads_and_preceding_orphan_remain_independent() {
 
     let document = parse_manual_source(&path).expect("lower bounded compact alias group");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 3);
@@ -300,7 +315,9 @@ fn adjacent_compact_tp_runs_keep_all_owner_boundaries() {
 
     let document = parse_manual_source(&path).expect("lower adjacent compact alias groups");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 4);
@@ -352,7 +369,9 @@ fn compact_ip_heads_keep_independent_descriptions() {
     let document = parse_manual_source(&path).expect("lower indented aliases");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -386,7 +405,9 @@ fn headless_ip_macros_continue_the_preceding_definition() {
 
     let document = parse_manual_source(&path).expect("lower headless IP continuations");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -424,7 +445,9 @@ fn tq_terms_share_one_semantic_option_identity() {
 
     let document = parse_manual_source(&path).expect("lower TQ aliases");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 1);
@@ -460,7 +483,9 @@ fn ip_does_not_absorb_unproven_definition_heads() {
 
     let document = parse_manual_source(&path).expect("lower bounded IP definitions");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 4);
@@ -484,7 +509,9 @@ fn expands_mdoc_bsd_lifecycle_and_release_forms() {
     let document = parse_manual_bytes(std::path::Path::new("bsd-lifecycle.7"), source)
         .expect("lower mdoc BSD lifecycle forms");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one BSD lifecycle paragraph");
     };
     assert_eq!(
@@ -500,7 +527,7 @@ fn preserves_mdoc_command_names_in_each_synopsis_form() {
         b".Dd August 19, 2026\n.Dt FIDO2-CRED 1\n.Os\n.Sh NAME\n.Nm fido2-cred\n.Nd make a credential\n.Sh SYNOPSIS\n.Nm\n.Fl M\n.Op Fl i Ar input_file\n.Nm fido2-cred\n.Fl V\n.Nm helper\n.Op Fl q\n",
     )
     .expect("lower mdoc synopsis names");
-    let synopsis = &document.sections[1];
+    let synopsis = &document.flow().unwrap().sections[1];
     let rendered = synopsis
         .blocks
         .iter()
@@ -541,7 +568,7 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
                 items,
                 layout,
                 ..
-            } = &document.sections[0].blocks[0]
+            } = &document.flow().unwrap().sections[0].blocks[0]
             else {
                 panic!("-{style} must recover one ordered list")
             };
@@ -553,7 +580,10 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
             }));
         } else {
             assert!(
-                matches!(document.sections[0].blocks[0], Block::DefinitionList { .. }),
+                matches!(
+                    document.flow().unwrap().sections[0].blocks[0],
+                    Block::DefinitionList { .. }
+                ),
                 "-{style} must retain definition semantics"
             );
         }
@@ -568,7 +598,7 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
 .El\n",
     )
     .expect("lower native mdoc enum");
-    let Block::List { items, .. } = &native.sections[0].blocks[0] else {
+    let Block::List { items, .. } = &native.flow().unwrap().sections[0].blocks[0] else {
         panic!("native enum must remain an ordered list")
     };
     assert!(items.iter().all(|item| {
@@ -592,7 +622,7 @@ fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
     )
     .expect("lower man IP lists and values");
 
-    let options = document.sections[0]
+    let options = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -663,7 +693,7 @@ fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
         kind: ListKind::Ordered { start: Some(9) },
         items,
         ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().unwrap().sections[0].blocks[0]
     else {
         panic!("one source-proven ordinal is an ordered list");
     };
@@ -693,7 +723,8 @@ fn recognizes_tp_enumerations_nested_below_a_definition() {
     )
     .expect("lower nested TP enumeration");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("outer setting remains a definition");
     };
     assert!(items[0].description.iter().any(|block| {
@@ -724,7 +755,7 @@ fn mdoc_definition_layout_uses_the_normalized_list_width() {
     let document = parse_manual_source(&path).expect("lower mdoc definition widths");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let lists = document.sections[0]
+    let lists = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -756,7 +787,7 @@ fn man_optional_arguments_keep_brackets_and_argument_styles() {
             let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let text = mant_render::render_query_text(&query);
             assert!(text.contains(expected), "{source}: {text}");
-            let markdown = mant_codec::encode::render_markdown(&query);
+            let markdown = mant_codec::encode::render_markdown(&query).expect("valid Flow export");
             assert!(markdown.contains("**--"), "{markdown}");
             if requests.contains("FILE") {
                 assert!(markdown.contains("*FILE*"), "{markdown}");
@@ -776,7 +807,8 @@ fn keeps_command_names_in_extended_mdoc_synopsis_terms() {
     )
     .expect("lower extended mdoc synopsis terms");
 
-    let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[1].blocks[0]
+    else {
         panic!("expected synopsis definition list");
     };
     assert_eq!(
@@ -808,7 +840,8 @@ fn preserves_nested_mdoc_spacing_state_in_definition_terms() {
     )
     .expect("lower nested mdoc spacing controls");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected an option definition list");
     };
     assert_eq!(
@@ -831,7 +864,8 @@ Forward a local socket.\n.El\n",
     )
     .expect("lower option forms with a shared description");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected an option definition list");
     };
     assert_eq!(items.len(), 4);
@@ -865,7 +899,8 @@ Convert filenames from the specified encoding.\n\
     )
     .expect("lower distinct options with a shared description");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected an option definition list");
     };
     assert_eq!(items.len(), 2);
@@ -898,7 +933,7 @@ fn generic_callable_terms_are_addressable_without_borrowing_a_later_taxonomy_bod
         items,
         declaration_groups,
         ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().unwrap().sections[0].blocks[0]
     else {
         panic!("expected definition list");
     };
@@ -940,7 +975,7 @@ Will accept only note events.\n",
         items,
         declaration_groups,
         ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().unwrap().sections[0].blocks[0]
     else {
         panic!("expected one definition list");
     };
@@ -964,7 +999,8 @@ Select the archive mode without losing this description.\n\
     )
     .expect("lower an mdoc option with one argument");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected an option definition list");
     };
     assert_eq!(items.len(), 1);
@@ -990,7 +1026,8 @@ fn separates_alternative_terms_in_an_extended_mdoc_definition_head() {
     )
     .expect("lower alternative extended definition terms");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected a definition list");
     };
     assert_eq!(items.len(), 1);
@@ -1023,7 +1060,7 @@ fn unclosed_compact_run_does_not_cross_a_section_boundary() {
 
     let document = parse_manual_source(&path).expect("lower section-bounded compact run");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [first, second] = document.sections.as_slice() else {
+    let [first, second] = document.flow().unwrap().sections.as_slice() else {
         panic!("expected two sections");
     };
     let [
@@ -1074,7 +1111,9 @@ fn tq_continuation_starts_at_the_immediately_preceding_head() {
 
     let document = parse_manual_source(&path).expect("lower bounded TQ definitions");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     assert_eq!(items.len(), 2);
@@ -1115,25 +1154,25 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
     .expect("lower mdoc tag lists with numeric terms");
 
     assert!(matches!(
-        document.sections[0].blocks[0],
+        document.flow().unwrap().sections[0].blocks[0],
         Block::List {
             kind: ListKind::Ordered { start: Some(1) },
             ref items,
             ..
         } if items.len() == 3
     ));
-    let Block::List { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::List { items, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         unreachable!("numbered tag list was asserted above")
     };
     assert!(items.iter().all(|item| {
         matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 1)
     }));
     assert!(matches!(
-        document.sections[0].blocks[1],
+        document.flow().unwrap().sections[0].blocks[1],
         Block::DefinitionList { ref items, .. } if items.len() == 1
     ));
     assert!(matches!(
-        document.sections[0].blocks[2],
+        document.flow().unwrap().sections[0].blocks[2],
         Block::DefinitionList { ref items, .. } if items.len() == 2
     ));
     assert!(
@@ -1171,7 +1210,7 @@ fn keeps_man_ordinal_boundaries_explicit_without_reclassifying_numeric_terms() {
     )
     .expect("lower ordinal boundaries");
 
-    let starts = document.sections[0]
+    let starts = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -1184,7 +1223,7 @@ fn keeps_man_ordinal_boundaries_explicit_without_reclassifying_numeric_terms() {
         .collect::<Vec<_>>();
     assert_eq!(starts, [1, 3, 1, 2]);
     assert!(matches!(
-        document.sections[1].blocks.as_slice(),
+        document.flow().unwrap().sections[1].blocks.as_slice(),
         [Block::List {
             kind: ListKind::Ordered { start: Some(1) },
             items,
@@ -1192,7 +1231,7 @@ fn keeps_man_ordinal_boundaries_explicit_without_reclassifying_numeric_terms() {
         }] if items.len() == 2
     ));
     assert!(matches!(
-        document.sections[2].blocks.as_slice(),
+        document.flow().unwrap().sections[2].blocks.as_slice(),
         [Block::DefinitionList { items, .. }] if items.len() == 4
     ));
 }
@@ -1208,7 +1247,7 @@ fn keeps_each_adjacent_rs_scope_in_the_current_ordinal_item() {
     .expect("lower adjacent relative-indent continuations");
 
     assert!(matches!(
-        document.sections[0].blocks.as_slice(),
+        document.flow().unwrap().sections[0].blocks.as_slice(),
         [
             Block::List {
                 kind: ListKind::Ordered { start: Some(1) },
@@ -1234,7 +1273,8 @@ fn preserves_the_boundary_that_enters_a_compact_mdoc_term() {
     )
     .expect("lower an mdoc spacing transition inside a term");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected a keyword definition list");
     };
     assert_eq!(

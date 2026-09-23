@@ -328,18 +328,20 @@ mod tests {
                 coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: mant_ir::SourceKey::FIRST,
-            content_store: crate::test_content::store(),
             meta: mant_ir::DocumentMeta::default(),
-            heading: Some(mant_ir::Heading {
-                content: vec![Inline::Emphasis {
-                    children: vec![linked],
-                }],
-                source: None,
-            }),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: Vec::new(),
+            body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+                content_store: crate::test_content::store(),
+                heading: Some(mant_ir::Heading {
+                    content: vec![Inline::Emphasis {
+                        children: vec![linked],
+                    }],
+                    source: None,
+                }),
+                blocks: Vec::new(),
+                sections: Vec::new(),
+            }),
         }
     }
 
@@ -381,7 +383,13 @@ mod tests {
     #[test]
     fn contextual_visit_preserves_nested_roles_and_borrowed_link_target() {
         let document = document_with_nested_markup();
-        let nodes = &document.heading.as_ref().expect("heading").content;
+        let nodes = &document
+            .flow()
+            .expect("flow fixture")
+            .heading
+            .as_ref()
+            .expect("heading")
+            .content;
         let mut spans = Vec::new();
         visit_inline_text_with(
             document.content(),

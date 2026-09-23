@@ -11,7 +11,6 @@ use mant_render::{render_excerpt_text, render_outline_markdown, render_outline_t
 
 fn query() -> ResolvedContent {
     let mut document = Document {
-        heading: None,
         parser: None,
         sources: vec![SourceRecord {
             key: SourceKey::FIRST,
@@ -24,21 +23,24 @@ fn query() -> ResolvedContent {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store: mant_ir::ContentStore::default(),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: mant_ir::ContentStore::default(),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        }),
         meta: DocumentMeta {
             manual_section: Some("1".to_owned()),
             ..DocumentMeta::default()
         },
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: Vec::new(),
-        sections: Vec::new(),
     };
     let parent_details = paragraph(&mut document, "parent details", true);
     let child_details = paragraph(&mut document, "child details", false);
     let child_heading = super::heading(&mut document, "Common options");
     let parent_heading = super::heading(&mut document, "OPTIONS");
-    document.sections = vec![Section {
+    document.flow_mut().unwrap().sections = vec![Section {
         id: "options-1".to_owned().into(),
         fragment_aliases: Vec::new(),
         heading: parent_heading,

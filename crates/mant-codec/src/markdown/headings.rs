@@ -1,6 +1,6 @@
 //! Heading identity allocation, nesting and exact local-fragment remapping.
 use mant_ir::{
-    Block, Document, Heading, Inline, Section,
+    Block, Heading, Inline, Section,
     visit::{self, VisitMut},
 };
 use pulldown_cmark::HeadingLevel;
@@ -144,14 +144,13 @@ impl SectionIds {
         self.targets.insert(new.clone(), new);
     }
 
-    pub(super) fn resolve_links(&self, document: &mut Document) {
-        let Document {
+    pub(super) fn resolve_links(&self, flow: &mut mant_ir::FlowBody) {
+        let mant_ir::FlowBody {
             content_store,
             heading,
             blocks,
             sections,
-            ..
-        } = document;
+        } = flow;
         let mut resolver = LocalLinkResolver::new(&self.targets, content_store);
         if let Some(heading) = heading {
             resolver.visit_heading_mut(heading);

@@ -91,20 +91,22 @@ fn confirmed_search_moves_across_a_pre_resolved_document_scope() {
                 parser: None,
                 sources: sources(SourceFormat::Markdown),
                 root_source: SourceKey::FIRST,
-                content_store: crate::test_content::store(),
                 meta: DocumentMeta {
                     title: Some(name.to_owned()),
                     ..DocumentMeta::default()
                 },
-                heading: None,
                 fragment_aliases: Vec::new(),
                 diagnostics: Vec::new(),
-                blocks: vec![AstBlock::Paragraph {
-                    children: vec![crate::test_content::text(text.to_owned())],
-                    layout: LayoutHint::default(),
-                    source: None,
-                }],
-                sections: Vec::new(),
+                body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+                    content_store: crate::test_content::store(),
+                    heading: None,
+                    blocks: vec![AstBlock::Paragraph {
+                        children: vec![crate::test_content::text(text.to_owned())],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    sections: Vec::new(),
+                }),
             }),
             tldr: None,
         };

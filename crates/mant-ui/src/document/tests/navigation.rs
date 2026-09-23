@@ -2,6 +2,7 @@
 use super::*;
 
 #[test]
+#[allow(clippy::too_many_lines)] // Existing navigation matrix grew only Flow accessors.
 fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
     let mut query = bundle();
     let paragraph = |name: &str| Block::Paragraph {
@@ -15,7 +16,14 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         },
         source: None,
     };
-    query.document.as_mut().unwrap().sections[0].blocks = vec![Block::List {
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::List {
         kind: ListKind::Ordered { start: Some(7) },
         compact: false,
         items: vec![
@@ -65,6 +73,8 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         .document
         .as_mut()
         .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
         .blocks
         .push(Block::Paragraph {
             children: vec![crate::test_content::link(
@@ -75,9 +85,22 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
             layout: LayoutHint::default(),
             source: None,
         });
-    query.document.as_mut().unwrap().content_store = crate::test_content::store();
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .content_store = crate::test_content::store();
     let annotated = DocumentView::new(&query);
-    let Block::List { items, .. } = &mut query.document.as_mut().unwrap().sections[0].blocks[0]
+    let Block::List { items, .. } = &mut query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks[0]
     else {
         unreachable!()
     };
@@ -185,7 +208,13 @@ fn width_matrix_keeps_rows_anchors_links_and_search_inside_the_rendered_geometry
 #[test]
 fn authored_fragments_jump_to_their_canonical_target_rows() {
     let mut bundle = bundle();
-    let section = &mut bundle.document.as_mut().expect("document").sections[0];
+    let section = &mut bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0];
     section.fragment_aliases = vec!["Mixed.Section".into()];
     section.blocks.insert(
         0,
@@ -211,9 +240,9 @@ fn authored_fragments_jump_to_their_canonical_target_rows() {
 fn zero_width_target_after_soft_wrap_lands_on_its_visual_row() {
     let mut bundle = bundle();
     let document = bundle.document.as_mut().expect("document");
-    document.heading = None;
-    document.sections.clear();
-    document.blocks = vec![Block::Paragraph {
+    document.flow_mut().expect("Flow fixture").heading = None;
+    document.flow_mut().expect("Flow fixture").sections.clear();
+    document.flow_mut().expect("Flow fixture").blocks = vec![Block::Paragraph {
         children: vec![
             crate::test_content::text("alpha beta "),
             crate::test_content::anchor_with_aliases("after-wrap", vec!["Exact.Target".into()]),
@@ -351,7 +380,14 @@ fn typed_email_links_use_the_shared_mailto_serializer() {
 #[test]
 fn inline_definitions_hang_the_description_and_expose_their_anchor() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
@@ -446,7 +482,14 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         } else {
             content
         };
-        bundle.document.as_mut().unwrap().sections[0].blocks = vec![table(vec![
+        bundle
+            .document
+            .as_mut()
+            .unwrap()
+            .flow_mut()
+            .expect("Flow fixture")
+            .sections[0]
+            .blocks = vec![table(vec![
             cell(vec![paragraph(vec![crate::test_content::text(
                 "NEIGHBOUR",
             )])]),
@@ -480,7 +523,7 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
 fn section_reference_hit_regions_follow_wrapped_link_text() {
     let mut bundle = bundle();
     let document = bundle.document.as_mut().expect("document");
-    document.sections[0].blocks = vec![Block::Paragraph {
+    document.flow_mut().expect("Flow fixture").sections[0].blocks = vec![Block::Paragraph {
         children: vec![
             crate::test_content::text("Read ".to_owned()),
             crate::test_content::link(
@@ -494,15 +537,17 @@ fn section_reference_hit_regions_follow_wrapped_link_text() {
         layout: LayoutHint::default(),
         source: None,
     }];
-    document.sections[0].children.push(Section {
-        id: "details".to_owned().into(),
-        fragment_aliases: Vec::new(),
-        heading: crate::test_content::heading("Details"),
-        spacing_before_lines: 0,
-        blocks: Vec::new(),
-        children: Vec::new(),
-        source: None,
-    });
+    document.flow_mut().expect("Flow fixture").sections[0]
+        .children
+        .push(Section {
+            id: "details".to_owned().into(),
+            fragment_aliases: Vec::new(),
+            heading: crate::test_content::heading("Details"),
+            spacing_before_lines: 0,
+            blocks: Vec::new(),
+            children: Vec::new(),
+            source: None,
+        });
 
     let view = DocumentView::new(&bundle);
     let rendered = view.render(12);
@@ -565,11 +610,15 @@ fn terminal_chrome_keeps_the_manual_section_out_of_the_sidebar_label() {
     let mut bundle = bundle();
     let document = bundle.document.as_mut().expect("document");
     document.meta.manual_section = Some("1".to_owned());
-    document.blocks.push(Block::Paragraph {
-        children: vec![crate::test_content::text("overview".to_owned())],
-        layout: LayoutHint::default(),
-        source: None,
-    });
+    document
+        .flow_mut()
+        .expect("Flow fixture")
+        .blocks
+        .push(Block::Paragraph {
+            children: vec![crate::test_content::text("overview".to_owned())],
+            layout: LayoutHint::default(),
+            source: None,
+        });
 
     let view = DocumentView::new(&bundle);
 
@@ -582,11 +631,11 @@ fn terminal_chrome_keeps_the_manual_section_out_of_the_sidebar_label() {
 fn section_spacing_is_not_coalesced_with_existing_blank_rows() {
     let mut bundle = bundle();
     let document = bundle.document.as_mut().expect("document");
-    document.blocks = vec![Block::VerticalSpace {
+    document.flow_mut().expect("Flow fixture").blocks = vec![Block::VerticalSpace {
         lines: 1,
         source: None,
     }];
-    document.sections[0].spacing_before_lines = 2;
+    document.flow_mut().expect("Flow fixture").sections[0].spacing_before_lines = 2;
 
     let rendered = DocumentView::new(&bundle).render(80);
 

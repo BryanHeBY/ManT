@@ -608,8 +608,14 @@ fn overflowing_navigation_exposes_a_scrollbar() {
 #[test]
 fn overflowing_navigation_reserves_its_final_column_for_the_scrollbar() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0].heading =
-        crate::test_content::heading("A deliberately long option section ending in XYZ");
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .heading = crate::test_content::heading("A deliberately long option section ending in XYZ");
     for (height, reserves_gutter) in [(8, true), (14, false)] {
         let backend = TestBackend::new(80, height);
         let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -702,8 +708,15 @@ fn navigation_scrollbar_click_and_drag_do_not_resize_the_sidebar() {
 #[test]
 fn selected_navigation_titles_wrap_with_a_continuous_background() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0].children[0].heading =
-        crate::test_content::heading("A deliberately long nested section title");
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .children[0]
+        .heading = crate::test_content::heading("A deliberately long nested section title");
     let backend = TestBackend::new(64, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);
@@ -858,7 +871,13 @@ fn content_scrolling_updates_navigation_only_after_the_idle_deadline() {
 #[test]
 fn clicking_a_wrapped_section_reference_opens_its_target() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0]
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
         .blocks
         .insert(
             0,
@@ -879,7 +898,13 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
                 source: None,
             },
         );
-    bundle.document.as_mut().expect("manual").content_store = crate::test_content::store();
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .flow_mut()
+        .expect("Flow fixture")
+        .content_store = crate::test_content::store();
     let backend = TestBackend::new(72, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);
@@ -1010,7 +1035,13 @@ fn clicking_a_relative_markdown_link_preserves_its_source_and_fragment() {
 #[test]
 fn clicking_an_external_link_returns_the_uri_to_the_host() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0]
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
         .blocks
         .insert(
             0,
@@ -1076,7 +1107,13 @@ fn clicking_encoded_invalid_mailto_links_never_reaches_the_host() {
     {
         let label = format!("invalid mail target {index}");
         let mut bundle = navigation_bundle();
-        bundle.document.as_mut().expect("manual").sections[0]
+        bundle
+            .document
+            .as_mut()
+            .expect("manual")
+            .flow_mut()
+            .expect("Flow fixture")
+            .sections[0]
             .blocks
             .insert(
                 0,
@@ -1128,7 +1165,13 @@ fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections(
     );
 
     let mut with_overview = navigation_bundle();
-    with_overview.document.as_mut().expect("document").blocks = vec![AstBlock::Paragraph {
+    with_overview
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .blocks = vec![AstBlock::Paragraph {
         children: vec![crate::test_content::text("Document overview".to_owned())],
         layout: LayoutHint::default(),
         source: None,

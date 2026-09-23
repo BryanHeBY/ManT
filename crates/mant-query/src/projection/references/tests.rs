@@ -96,17 +96,19 @@ fn document(children: Vec<Value>) -> Document {
             coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: mant_ir::SourceKey::FIRST,
-        content_store: builder.finish(),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: builder.finish(),
+            heading: None,
+            blocks: vec![mant_ir::Block::Paragraph {
+                children,
+                layout: mant_ir::LayoutHint::default(),
+                source: None,
+            }],
+            sections: Vec::new(),
+        }),
         meta: mant_ir::DocumentMeta::default(),
-        heading: None,
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: vec![mant_ir::Block::Paragraph {
-            children,
-            layout: mant_ir::LayoutHint::default(),
-            source: None,
-        }],
-        sections: Vec::new(),
     }
 }
 fn link(name: &str, label: &str) -> Value {
@@ -163,8 +165,9 @@ fn separate_root_links() -> Document {
             source: None,
         });
     }
-    document.content_store = builder.finish();
-    document.blocks = blocks;
+    let flow = document.flow_mut().unwrap();
+    flow.content_store = builder.finish();
+    flow.blocks = blocks;
     document
 }
 
@@ -289,7 +292,12 @@ fn occurrence_paging_keeps_duplicates_exact_positions_and_target_fragments() {
     let projected_key = result.records[0].occurrence;
     // The original and response-local keys inhabit distinct domains even
     // when dense remapping happens to assign the same numeric value.
-    let original = document.content_store.link(*original_key).unwrap();
+    let original = document
+        .flow()
+        .unwrap()
+        .content_store
+        .link(*original_key)
+        .unwrap();
     let projected = result
         .content_projection
         .as_ref()
@@ -431,36 +439,40 @@ fn entry_anchor_sharing_identity_is_one_logical_destination_not_ambiguity() {
         local("entry"),
         json!({"type":"anchor","id":"entry","fragmentAliases":["Entry.Alias"]}),
     ]);
-    let anchor = match &mut document.blocks[0] {
+    let anchor = match &mut document.flow_mut().unwrap().blocks[0] {
         mant_ir::Block::Paragraph { children, .. } => children.pop().unwrap(),
         _ => unreachable!(),
     };
-    document.blocks.push(mant_ir::Block::List {
-        kind: mant_ir::ListKind::Bullet,
-        compact: false,
-        items: vec![mant_ir::ListItem {
-            layout: mant_ir::ListItemLayout::default(),
-            source: None,
-            entry: Some(mant_ir::EntryFacts {
-                name_bindings: Vec::new(),
-                alias_groups: Vec::new(),
-                alias_of: None,
-                forms: Vec::new(),
-                id: "entry".into(),
-                kind: mant_ir::EntryKind::Command,
-                case: mant_ir::NameCase::Sensitive,
-                names: Vec::new(),
-                value_domain: None,
-            }),
-            blocks: vec![mant_ir::Block::Paragraph {
-                children: vec![anchor],
-                layout: mant_ir::LayoutHint::default(),
+    document
+        .flow_mut()
+        .unwrap()
+        .blocks
+        .push(mant_ir::Block::List {
+            kind: mant_ir::ListKind::Bullet,
+            compact: false,
+            items: vec![mant_ir::ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
+                entry: Some(mant_ir::EntryFacts {
+                    name_bindings: Vec::new(),
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: Vec::new(),
+                    id: "entry".into(),
+                    kind: mant_ir::EntryKind::Command,
+                    case: mant_ir::NameCase::Sensitive,
+                    names: Vec::new(),
+                    value_domain: None,
+                }),
+                blocks: vec![mant_ir::Block::Paragraph {
+                    children: vec![anchor],
+                    layout: mant_ir::LayoutHint::default(),
+                    source: None,
+                }],
             }],
-        }],
-        layout: mant_ir::LayoutHint::default(),
-        source: None,
-    });
+            layout: mant_ir::LayoutHint::default(),
+            source: None,
+        });
     let result = project_references(&document, None, ReferenceScope::Document, &all());
     assert!(matches!(
         result.records[0].resolution,

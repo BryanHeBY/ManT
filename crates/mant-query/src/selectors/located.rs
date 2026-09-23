@@ -308,8 +308,9 @@ mod selection_tests {
         let query = crate::query_fixture::markdown("# Heading\n\n<!-- mant:entries role=command case=sensitive -->\n- `root-command`: Root.\n\n## Section heading\n\n<!-- mant:entries role=command case=sensitive -->\n- `nested-command`: Child.\n", None).unwrap();
         let document = query.document.unwrap();
         let mut located = Vec::new();
-        collect_selection_root_entries(&document.blocks, &mut located);
-        collect_selection_sections(&document.sections, &mut located);
+        let flow = document.flow().unwrap();
+        collect_selection_root_entries(&flow.blocks, &mut located);
+        collect_selection_sections(&flow.sections, &mut located);
         assert_eq!(located.len(), 3);
         for node in located {
             match node {

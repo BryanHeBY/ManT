@@ -6,9 +6,9 @@ use super::{
 use crate::{ManualPage, ManualRequest};
 use mant_ir::{
     Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Diagnostic,
-    DiagnosticLevel, Document, DocumentAddress, DocumentMeta, Heading, Inline, LayoutHint,
-    MarkdownOrigin, Provenance, Section, SourceCoordinates, SourceFormat, SourceIdentity,
-    SourceKey, SourceRecord, TldrDocument, TldrOrigin,
+    DiagnosticLevel, Document, DocumentAddress, DocumentBody, DocumentMeta, FlowBody, Heading,
+    Inline, LayoutHint, MarkdownOrigin, Provenance, Section, SourceCoordinates, SourceFormat,
+    SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{InputFormat, MAX_DOCUMENT_SELECTOR_CHARS, ScopeTextError};
 use mant_sources::BUILTIN_CONTENT_PRIORITY;
@@ -242,7 +242,6 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
         }
     };
     Document {
-        heading: None,
         parser: None,
         sources: vec![SourceRecord {
             key: SourceKey::FIRST,
@@ -255,7 +254,6 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store: content.finish(),
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: unsupported
@@ -269,20 +267,79 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
             })
             .into_iter()
             .collect(),
-        blocks: Vec::new(),
-        sections: readable
-            .then_some(Section {
-                id: "name-1".to_owned().into(),
-                fragment_aliases: Vec::new(),
-                heading,
-                spacing_before_lines: 0,
-                blocks: Vec::new(),
-                children: Vec::new(),
-                source: None,
-            })
-            .into_iter()
-            .collect(),
+        body: DocumentBody::Flow(FlowBody {
+            heading: None,
+            content_store: content.finish(),
+            blocks: Vec::new(),
+            sections: readable
+                .then_some(Section {
+                    id: "name-1".to_owned().into(),
+                    fragment_aliases: Vec::new(),
+                    heading,
+                    spacing_before_lines: 0,
+                    blocks: Vec::new(),
+                    children: Vec::new(),
+                    source: None,
+                })
+                .into_iter()
+                .collect(),
+        }),
     }
+}
+
+#[test]
+fn fixed_native_body_uses_surviving_surface_not_flow_topology_for_readability() {
+    use mant_ir::{
+        DisplayLabel, DisplayRole, DisplayRow, DisplayRun, DisplayStyle, DisplaySurface, FixedBody,
+    };
+    use std::num::NonZeroU32;
+
+    let key = NonZeroU32::new(1).unwrap();
+    let mut page = document(SourceFormat::Man, false, false);
+    let surface = DisplaySurface {
+        text: "x".to_owned(),
+        rows: vec![DisplayRow {
+            key,
+            first_run: key,
+            run_count: 1,
+            column_count: 1,
+            break_after: false,
+        }],
+        runs: vec![DisplayRun {
+            key,
+            row: key,
+            column: 0,
+            width: 1,
+            byte_start: 0,
+            byte_count: 1,
+            label: DisplayLabel {
+                owner: None,
+                link: None,
+                source: None,
+                style: DisplayStyle {
+                    bold: false,
+                    underline: false,
+                },
+                role: DisplayRole::Body,
+            },
+        }],
+    };
+    surface.validate().unwrap();
+    page.body = DocumentBody::Fixed(FixedBody {
+        surface,
+        headings: Vec::new(),
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    });
+    assert!(super::has_readable_body(&page));
+    if let DocumentBody::Fixed(fixed) = &mut page.body {
+        fixed.surface.text.clear();
+        fixed.surface.rows.clear();
+        fixed.surface.runs.clear();
+    }
+    assert!(!super::has_readable_body(&page));
 }
 
 fn tldr() -> TldrDocument {
@@ -418,6 +475,8 @@ fn unavailable_native_backend_preserves_markdown_precedence_and_tldr_policy() {
     // A Markdown H1 is a visible heading, not native TH/Dt metadata.
     assert_eq!(
         document
+            .flow()
+            .expect("Markdown Flow body")
             .heading
             .as_ref()
             .unwrap()
@@ -795,8 +854,9 @@ fn root_only_native_document_is_readable() {
         None,
         Provenance::Unknown,
     );
-    root_only.content_store = content.finish();
-    root_only.blocks.push(Block::Paragraph {
+    let flow = root_only.flow_mut().expect("manual Flow body");
+    flow.content_store = content.finish();
+    flow.blocks.push(Block::Paragraph {
         children: vec![Inline::Text { content: text }],
         layout: LayoutHint::default(),
         source: None,
@@ -805,8 +865,9 @@ fn root_only_native_document_is_readable() {
 
     let result = load_request(&request(), LoadPolicy::default(), &host).expect("root content");
     let document = result.document.expect("manual");
-    assert!(document.sections.is_empty());
-    assert_eq!(document.blocks.len(), 1);
+    let flow = document.flow().expect("Markdown Flow body");
+    assert!(flow.sections.is_empty());
+    assert_eq!(flow.blocks.len(), 1);
 }
 
 #[test]
@@ -1245,14 +1306,14 @@ Document overview.
     assert_eq!(tldr.examples[0].command, "demo {{path}}");
 
     let document = result.document.expect("document body");
+    let flow = document.flow().expect("Markdown Flow body");
     assert_eq!(document.display_title().as_deref(), Some("Demo"));
     assert_eq!(
-        document.sections[0].heading.plain_text(document.content()),
+        flow.sections[0].heading.plain_text(document.content()),
         "Options"
     );
     assert!(
-        document
-            .blocks
+        flow.blocks
             .iter()
             .any(|block| matches!(block, mant_ir::Block::Paragraph { .. }))
     );

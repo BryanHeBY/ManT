@@ -36,6 +36,8 @@ fn lowers_man_sections_fonts_definitions_and_literal_blocks() {
     assert_eq!(document.root_format(), Some(SourceFormat::Man));
     assert_eq!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .map(|section| section.heading.plain_text(document.content()))
@@ -43,18 +45,23 @@ fn lowers_man_sections_fonts_definitions_and_literal_blocks() {
         vec!["NAME", "OPTIONS"]
     );
     assert!(
-        document.sections[1]
+        document.flow().unwrap().sections[1]
             .blocks
             .iter()
             .any(|block| matches!(block, Block::DefinitionList { .. }))
     );
-    assert!(document.sections[1].blocks.iter().any(|block| matches!(
-        block,
-        Block::DefinitionList { items, .. }
-            if items.iter().any(|item| item.description.iter().any(
-                |description| matches!(description, Block::Preformatted { .. })
+    assert!(
+        document.flow().unwrap().sections[1]
+            .blocks
+            .iter()
+            .any(|block| matches!(
+                block,
+                Block::DefinitionList { items, .. }
+                    if items.iter().any(|item| item.description.iter().any(
+                        |description| matches!(description, Block::Preformatted { .. })
+                    ))
             ))
-    )));
+    );
 }
 
 #[test]
@@ -82,12 +89,12 @@ fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
 
     assert_eq!(document.root_format(), Some(SourceFormat::Mdoc));
     assert_eq!(
-        document.sections[0].children[0]
+        document.flow().unwrap().sections[0].children[0]
             .heading
             .plain_text(document.content()),
         "Details"
     );
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected description paragraph");
     };
     assert!(
@@ -310,7 +317,7 @@ intro\n.Pp\n.Fn alpha\n",
         assert_eq!(anchor_ids(&document), ["display-target"]);
         assert_eq!(visible_document_text(&document).trim(), "DESCRIPTION hello");
         assert!(matches!(
-            document.sections[0].blocks.first(),
+            document.flow().unwrap().sections[0].blocks.first(),
             Some(Block::Preformatted { children, .. })
                 if matches!(children.first(), Some(Inline::Anchor { id, .. }) if id == "display-target")
         ));
@@ -443,9 +450,9 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
     )
     .expect("lower explicit section and subsection targets");
 
-    assert_eq!(document.sections[0].id.as_str(), "heading");
+    assert_eq!(document.flow().unwrap().sections[0].id.as_str(), "heading");
     assert_eq!(
-        document.sections[0]
+        document.flow().unwrap().sections[0]
             .fragment_aliases
             .iter()
             .map(mant_ir::FragmentAlias::as_str)
@@ -453,12 +460,17 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
         ["custom-section"]
     );
     assert_eq!(
-        document.sections[0].heading.plain_text(document.content()),
+        document.flow().unwrap().sections[0]
+            .heading
+            .plain_text(document.content()),
         "HEADING"
     );
-    assert_eq!(document.sections[0].children[0].id.as_str(), "subheading");
     assert_eq!(
-        document.sections[0].children[0]
+        document.flow().unwrap().sections[0].children[0].id.as_str(),
+        "subheading"
+    );
+    assert_eq!(
+        document.flow().unwrap().sections[0].children[0]
             .fragment_aliases
             .iter()
             .map(mant_ir::FragmentAlias::as_str)
@@ -466,7 +478,7 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
         ["custom-subsection"]
     );
     assert_eq!(
-        document.sections[0].children[0]
+        document.flow().unwrap().sections[0].children[0]
             .heading
             .plain_text(document.content()),
         "SUBHEADING"
@@ -513,7 +525,7 @@ fn root_blocks_receive_the_same_navigation_passes_as_sections() {
 See\n.Sx NAME\n.Sh NAME\n.Nm root-section-reference\n.Nd root reference\n",
     )
     .expect("lower a root-level mdoc section reference");
-    assert!(mdoc.blocks.iter().any(|block| {
+    assert!(mdoc.flow().unwrap().blocks.iter().any(|block| {
         matches!(block, Block::Paragraph { children, .. } if children.iter().any(|inline| {
             matches!(link_target(&mdoc, inline), Some(mant_ir::LinkTarget::Section { id }) if id == "name")
         }))
@@ -528,7 +540,7 @@ See\n.Sx NAME\n.Sh NAME\n.Nm root-section-reference\n.Nd root reference\n",
         b".TH ROOT-MANUAL-REFERENCE 1\n.BR printf (3)\n.SH NAME\nroot-manual-reference \\- root reference\n",
     )
     .expect("lower a root-level traditional manual reference");
-    assert!(man.blocks.iter().any(|block| {
+    assert!(man.flow().unwrap().blocks.iter().any(|block| {
         matches!(block, Block::Paragraph { children, .. } if children.iter().any(|inline| {
             matches!(link_target(&man, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(section) }) if name == "printf" && section == "3")
         }))
@@ -555,11 +567,11 @@ fn preserves_targets_moved_to_paragraph_breaks_inside_no_fill_displays() {
         },
         Block::VerticalSpace { lines: 1, .. },
         Block::Preformatted { children, .. },
-    ] = document.sections[0].blocks.as_slice()
+    ] = document.flow().unwrap().sections[0].blocks.as_slice()
     else {
         panic!(
             "literal runs must retain their intervening paragraph request: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(inline_text(document.content(), before), "first line");
@@ -588,7 +600,9 @@ fn retains_unlabelled_mdoc_link_targets_before_trailing_punctuation() {
     )
     .expect("lower an unlabelled mdoc external link");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one external-link paragraph");
     };
     assert_eq!(
@@ -640,7 +654,7 @@ fn recognizes_legacy_sphinx_manual_links_in_roff_inputs() {
 
     let document = parse_manual_source(&path).expect("lower legacy Sphinx references");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let section = &document.sections[0];
+    let section = &document.flow().unwrap().sections[0];
     let paragraph = section
         .blocks
         .iter()
@@ -734,9 +748,9 @@ fn resolves_mdoc_section_references_and_explicit_targets() {
     let document = parse_manual_source(&path).expect("lower navigation mdoc source");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    assert_eq!(document.sections[0].id, "description");
-    assert_eq!(document.sections[1].id, "details");
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    assert_eq!(document.flow().unwrap().sections[0].id, "description");
+    assert_eq!(document.flow().unwrap().sections[1].id, "details");
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected navigation paragraph");
     };
     assert!(children.iter().any(|inline| matches!(
@@ -767,16 +781,21 @@ fn explicit_targets_reserve_the_native_section_namespace() {
     let document = parse_manual_source(&path).expect("lower reserved explicit target");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    assert_eq!(document.sections[0].id, "foo");
-    assert_eq!(document.sections[1].id, "bar-2");
-    assert!(document.sections[0].blocks.iter().any(|block| matches!(
-        block,
-        Block::Paragraph { children, .. }
-            if children.iter().any(|inline| matches!(
-                inline,
-                Inline::Anchor { id, .. } if id == "bar"
+    assert_eq!(document.flow().unwrap().sections[0].id, "foo");
+    assert_eq!(document.flow().unwrap().sections[1].id, "bar-2");
+    assert!(
+        document.flow().unwrap().sections[0]
+            .blocks
+            .iter()
+            .any(|block| matches!(
+                block,
+                Block::Paragraph { children, .. }
+                    if children.iter().any(|inline| matches!(
+                        inline,
+                        Inline::Anchor { id, .. } if id == "bar"
+                    ))
             ))
-    )));
+    );
     assert!(
         document
             .diagnostics
@@ -801,7 +820,7 @@ fn automatic_function_target_survives_a_section_identity_collision() {
     fs::remove_file(path).expect("remove temporary roff fixture");
 
     assert_eq!(
-        document.sections[0].children[0].id,
+        document.flow().unwrap().sections[0].children[0].id,
         "acl-delete-def-file-at"
     );
     assert!(
@@ -836,7 +855,7 @@ gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
     )
     .expect("lower a tbl text block using a document-local macro");
 
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice() else {
         panic!("table content must not escape into a separate paragraph");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
@@ -872,8 +891,11 @@ fn preserves_printable_roff_content_outside_formal_sections() {
         b".TH MANWEB 1\n .SH NAME\nmanweb - browse generated documentation\n.SH SYNOPSIS\n.B manweb\n",
     )
     .expect("lower root prose");
-    let [Block::Paragraph { children, .. }] = document.blocks.as_slice() else {
-        panic!("expected one root paragraph, got {:?}", document.blocks);
+    let [Block::Paragraph { children, .. }] = document.flow().unwrap().blocks.as_slice() else {
+        panic!(
+            "expected one root paragraph, got {:?}",
+            document.flow().unwrap().blocks
+        );
     };
 
     assert_eq!(
@@ -881,7 +903,9 @@ fn preserves_printable_roff_content_outside_formal_sections() {
         " .SH NAME manweb - browse generated documentation"
     );
     assert_eq!(
-        document.sections[0].heading.plain_text(document.content()),
+        document.flow().unwrap().sections[0]
+            .heading
+            .plain_text(document.content()),
         "SYNOPSIS"
     );
 }
@@ -902,6 +926,8 @@ fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
     fs::remove_file(path).expect("remove temporary roff fixture");
 
     let see_also = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .find(|section| section.heading.plain_text(document.content()) == "SEE ALSO")
@@ -912,7 +938,7 @@ fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
     assert!(children.iter().any(|inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }) if name == "printf" && manual_section == "3")));
     assert!(children.iter().any(|inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }) if name == "man" && manual_section == "1")));
 
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("description is a paragraph");
     };
     assert!(children.iter().any(|inline| matches!(link_target(&document, inline), Some(mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }) if name == "printf" && manual_section == "3")));
@@ -940,7 +966,7 @@ fn lowers_modern_groff_manual_uri_and_mail_macros() {
 
     let document = parse_manual_source(&path).expect("lower modern man links");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let section = &document.sections[0];
+    let section = &document.flow().unwrap().sections[0];
     let mut manual = false;
     let mut web = false;
     let mut mail = false;
@@ -1019,7 +1045,7 @@ fn resolves_a_unique_parenthetically_qualified_mdoc_section_reference() {
     let document = parse_manual_source(&path).expect("lower qualified navigation source");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected navigation paragraph");
     };
     assert!(children.iter().any(|inline| matches!(
@@ -1044,7 +1070,7 @@ fn degrades_unresolved_mdoc_section_references_to_text() {
     let document = parse_manual_source(&path).expect("lower unresolved navigation source");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected reference paragraph");
     };
     assert_eq!(inline_text(document.content(), children), "MISSING");

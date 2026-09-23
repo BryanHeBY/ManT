@@ -17,14 +17,14 @@ fn keeps_the_large_release_topology_and_windows_specific_sections() {
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("July 31, 2026"));
     assert_eq!(document.meta.os.as_deref(), Some("User Manual"));
-    assert_eq!(document.sections.len(), 191);
+    assert_eq!(document.flow().unwrap().sections.len(), 191);
     assert!(source_path_ends_with(
         document,
         "windows-releases/rclone.1.zst"
     ));
 
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     assert_eq!(sections.len(), 3_430);
     for title in [
         "rclone completion powershell",

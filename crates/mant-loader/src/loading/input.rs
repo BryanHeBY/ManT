@@ -4,9 +4,10 @@
 use super::parse_manual_bytes;
 use super::{
     InputFormat, LoadError, LoadHost, LoadPolicy, LoadSpec, ManualLoadError, OsStr, Path,
-    ResolvedContent, query_named_document,
+    ResolvedContent, has_readable_body, query_named_document,
 };
 use mant_codec::parse_markdown;
+use mant_ir::DocumentBodyRef;
 
 pub(super) fn load_with(
     spec: LoadSpec<'_>,
@@ -57,7 +58,7 @@ fn query_input_file(
                     detail,
                 })
             })?;
-            if document.sections.is_empty() && document.blocks.is_empty() {
+            if !has_readable_body(&document) {
                 return Err(LoadError::NoReadableContent {
                     name: path.to_owned(),
                 });
@@ -158,12 +159,20 @@ pub fn load_markdown_text(
     );
     let error_path = source_path.clone().unwrap_or_else(|| "stdin".to_owned());
     let parsed = parse_markdown(source, source_path).map_err(|error| LoadError::Markdown {
-        path: error_path,
+        path: error_path.clone(),
         detail: error.to_string(),
     })?;
-    let document_is_empty = parsed.document.heading.is_none()
-        && parsed.document.blocks.is_empty()
-        && parsed.document.sections.is_empty();
+    let document_is_empty = match parsed.document.body() {
+        DocumentBodyRef::Flow(flow) => {
+            flow.heading.is_none() && flow.blocks.is_empty() && flow.sections.is_empty()
+        }
+        DocumentBodyRef::Fixed(_) => {
+            return Err(LoadError::Markdown {
+                path: error_path,
+                detail: "Markdown parser returned a native Fixed body".to_owned(),
+            });
+        }
+    };
     if document_is_empty && parsed.tldr.is_none() {
         return Err(LoadError::EmptyMarkdown {
             label: label.clone(),
@@ -199,7 +208,7 @@ pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
             detail: error.to_string(),
         })
     })?;
-    if document.sections.is_empty() && document.blocks.is_empty() {
+    if !has_readable_body(&document) {
         return Err(LoadError::NoReadableContent {
             name: "stdin".to_owned(),
         });

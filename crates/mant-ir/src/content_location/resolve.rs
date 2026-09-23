@@ -39,7 +39,9 @@ pub(crate) fn resolve_location<'a>(
     if !location.within_limits() {
         return None;
     }
-    let DocumentBodyRef::Flow(flow) = document.body();
+    let DocumentBodyRef::Flow(flow) = document.body() else {
+        return None;
+    };
     let (nodes, path) = match location {
         ContentLocationRef::DocumentHeading { path } => {
             (flow.heading.as_ref()?.content.as_slice(), path)
@@ -71,7 +73,9 @@ pub fn resolve_content_section<'a>(document: &'a Document, path: &[u32]) -> Opti
     if path.is_empty() || path.len() > MAX_CONTENT_DEPTH {
         return None;
     }
-    let DocumentBodyRef::Flow(flow) = document.body();
+    let DocumentBodyRef::Flow(flow) = document.body() else {
+        return None;
+    };
     let mut children = flow.sections;
     let mut selected = None;
     for index in path {
@@ -84,7 +88,9 @@ pub fn resolve_content_section<'a>(document: &'a Document, path: &[u32]) -> Opti
 
 pub(crate) fn content_blocks<'a>(document: &'a Document, sections: &[u32]) -> Option<&'a [Block]> {
     if sections.is_empty() {
-        let DocumentBodyRef::Flow(flow) = document.body();
+        let DocumentBodyRef::Flow(flow) = document.body() else {
+            return None;
+        };
         Some(flow.blocks)
     } else {
         Some(&resolve_content_section(document, sections)?.blocks)

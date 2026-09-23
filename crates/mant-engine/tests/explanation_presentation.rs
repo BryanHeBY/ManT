@@ -303,7 +303,13 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
     explanation.counts.direct_entry.returned = 2;
     for (index, role) in ["command", "configuration-key"].into_iter().enumerate() {
         let mut content = mant_loader::load_markdown_text(&format!("# Tool\n\n<!-- mant:entries role={role} case=sensitive -->\n- `mode`: Original description.\n"),None).unwrap();
-        let mant_ir::Block::List { items, .. } = &mut content.document.as_mut().unwrap().blocks[0]
+        let mant_ir::Block::List { items, .. } = &mut content
+            .document
+            .as_mut()
+            .unwrap()
+            .flow_mut()
+            .unwrap()
+            .blocks[0]
         else {
             unreachable!()
         };

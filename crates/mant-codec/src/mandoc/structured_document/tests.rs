@@ -21,7 +21,7 @@ fn native_tbl_cells_lower_into_one_shared_content_store() {
         .expect("native table lowers to the final private IR consumer");
     let Block::Table {
         rows, fixed_view, ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
     else {
         panic!("first section block is a table")
     };
@@ -30,7 +30,10 @@ fn native_tbl_cells_lower_into_one_shared_content_store() {
     assert_eq!(rows[1].cells.len(), 2);
     assert!(rows[1].cells[1].blocks.is_empty());
     assert!(fixed_view.is_none());
-    assert!(mant_ir::validate_content_store(&document.content_store).is_ok());
+    assert!(
+        mant_ir::validate_content_store(&document.flow().expect("Flow fixture").content_store)
+            .is_ok()
+    );
 }
 
 #[test]
@@ -51,12 +54,14 @@ fn explicit_tbl_geometry_is_not_reflowed_as_a_generic_table() {
         let Block::Table {
             fixed_view: Some(view),
             ..
-        } = &document.sections[0].blocks[0]
+        } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
         else {
             panic!("{layout}: explicit geometry requires native fixed view")
         };
         assert_eq!(
             document
+                .flow()
+                .expect("Flow fixture")
                 .content_store
                 .fixed_view(*view)
                 .unwrap()
@@ -131,11 +136,15 @@ fn native_overstrike_has_one_safe_fixed_row_and_keeps_logical_words() {
         let document = project_native_manual("overstrike.1", &bundle, InputFormat::Man)
             .expect("overstrike reaches final IR");
         assert!(mant_ir::validate_document(&document).is_empty(), "{body}");
-        let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+        let Block::FixedDisplay { view, .. } =
+            &document.flow().expect("Flow fixture").sections[0].blocks[0]
+        else {
             panic!("{body}: fixed display")
         };
         assert_eq!(
             document
+                .flow()
+                .expect("Flow fixture")
                 .content_store
                 .fixed_view(*view)
                 .unwrap()
@@ -176,10 +185,17 @@ fn mixed_width_long_fixed_line_reaches_final_ir_without_prefix_limit() {
     let document = project_native_manual("mixed.1", &bundle, InputFormat::Man)
         .expect("the mixed-width fixed row reaches final IR");
     assert!(mant_ir::validate_document(&document).is_empty());
-    let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+    let Block::FixedDisplay { view, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("long no-fill row has one fixed display")
     };
-    let fixed = document.content_store.fixed_view(*view).unwrap();
+    let fixed = document
+        .flow()
+        .expect("Flow fixture")
+        .content_store
+        .fixed_view(*view)
+        .unwrap();
     assert_eq!(fixed.lines.len(), 1);
     assert_eq!(fixed.lines[0].terminal_columns, 8_705);
     assert_eq!(fixed.lines[0].placements.len(), 5_800);
@@ -202,11 +218,13 @@ fn boxed_tbl_uses_native_physical_rows_and_shared_cell_atoms() {
     let Block::Table {
         fixed_view: Some(key),
         ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
     else {
         panic!("boxed table has native fixed geometry")
     };
     let lines = document
+        .flow()
+        .expect("Flow fixture")
         .content_store
         .fixed_view(*key)
         .unwrap()
@@ -223,6 +241,8 @@ fn boxed_tbl_uses_native_physical_rows_and_shared_cell_atoms() {
     );
     assert_eq!(
         document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .atoms
             .iter()
@@ -282,11 +302,13 @@ fn native_tbl_span_rule_and_alignment_follow_fixed_cvs_geometry() {
         let Block::Table {
             fixed_view: Some(key),
             ..
-        } = &document.sections[0].blocks[0]
+        } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
         else {
             panic!("{name}: table has native fixed geometry")
         };
         let lines = document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .fixed_view(*key)
             .unwrap()
@@ -377,11 +399,13 @@ fn native_boxed_tbl_keeps_styled_cell_content() {
     let Block::Table {
         fixed_view: Some(key),
         ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
     else {
         panic!("styled table has native fixed geometry")
     };
     let lines = document
+        .flow()
+        .expect("Flow fixture")
         .content_store
         .fixed_view(*key)
         .unwrap()
@@ -390,6 +414,8 @@ fn native_boxed_tbl_keeps_styled_cell_content() {
     assert!(lines.iter().any(|line| line.contains("bold   plain")));
     assert!(
         document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .atoms
             .iter()
@@ -424,7 +450,9 @@ fn native_eqn_words_reach_the_final_ir_inline_consumer() {
         .unwrap();
     let document = project_native_manual("eqn.1", &bundle, InputFormat::Man)
         .expect("native equation reaches final IR");
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("inline equation remains in prose")
     };
     let mut text = String::new();
@@ -465,6 +493,8 @@ fn native_eqn_fraction_and_radical_execute_in_both_macrosets() {
         bundle.insert(name, source.as_bytes().to_vec()).unwrap();
         let document = project_native_manual(name, &bundle, format).unwrap();
         let text = document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .atoms
             .iter()
@@ -496,12 +526,14 @@ fn native_nofill_and_literal_display_share_logical_content_with_fixed_rows() {
         bundle.insert(name, source.as_bytes().to_vec()).unwrap();
         let document = project_native_manual(name, &bundle, format)
             .expect("no-fill content reaches the final IR consumer");
-        let blocks = &document.sections[0].blocks;
+        let blocks = &document.flow().expect("Flow fixture").sections[0].blocks;
         assert_eq!(blocks.len(), 3, "{name}");
         let Block::FixedDisplay { view, children, .. } = &blocks[1] else {
             panic!("{name}: middle block is fixed display")
         };
         let lines = document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .fixed_view(*view)
             .unwrap()
@@ -543,7 +575,7 @@ fn native_nofill_long_blank_and_eof_rows_remain_fixed() {
         let mut bundle = SourceBundle::new();
         bundle.insert(name, source.as_bytes().to_vec()).unwrap();
         let document = project_native_manual(name, &bundle, InputFormat::Man).unwrap();
-        let fixed = document.sections[0]
+        let fixed = document.flow().expect("Flow fixture").sections[0]
             .blocks
             .iter()
             .find_map(|block| match block {
@@ -552,6 +584,8 @@ fn native_nofill_long_blank_and_eof_rows_remain_fixed() {
             })
             .expect("no-fill region has a fixed view");
         let lines = document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .fixed_view(fixed)
             .unwrap()
@@ -571,10 +605,14 @@ fn long_nofill_row_preserves_one_logical_run_and_native_columns() {
     bundle.insert("long-nofill.1", source.into_bytes()).unwrap();
     let document = project_native_manual("long-nofill.1", &bundle, InputFormat::Man)
         .expect("long native no-fill row reaches final IR");
-    let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+    let Block::FixedDisplay { view, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("no-fill row has a fixed view")
     };
     let lines = document
+        .flow()
+        .expect("Flow fixture")
         .content_store
         .fixed_view(*view)
         .unwrap()
@@ -599,10 +637,17 @@ fn nofill_mixed_width_affine_ranges_keep_native_columns() {
         )
         .unwrap();
     let document = project_native_manual("wide-nofill.1", &bundle, InputFormat::Man).unwrap();
-    let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+    let Block::FixedDisplay { view, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("native no-fill is fixed")
     };
-    let fixed = document.content_store.fixed_view(*view).unwrap();
+    let fixed = document
+        .flow()
+        .expect("Flow fixture")
+        .content_store
+        .fixed_view(*view)
+        .unwrap();
     assert_eq!(
         fixed.physical_lines(document.content()).unwrap(),
         ["     A界界Z"]
@@ -647,10 +692,17 @@ fn nofill_zero_width_combining_marks_keep_native_byte_order() {
         bundle.insert("combining.1", source.into_bytes()).unwrap();
         let document = project_native_manual("combining.1", &bundle, InputFormat::Man)
             .expect("combining scalar reaches final fixed IR");
-        let Block::FixedDisplay { view, .. } = &document.sections[0].blocks[0] else {
+        let Block::FixedDisplay { view, .. } =
+            &document.flow().expect("Flow fixture").sections[0].blocks[0]
+        else {
             panic!("no-fill line is fixed")
         };
-        let fixed = document.content_store.fixed_view(*view).unwrap();
+        let fixed = document
+            .flow()
+            .expect("Flow fixture")
+            .content_store
+            .fixed_view(*view)
+            .unwrap();
         assert_eq!(
             fixed.physical_lines(document.content()).unwrap(),
             [format!("     {visible}")],
@@ -700,10 +752,14 @@ fn literal_display_keeps_link_occurrence_on_shared_content() {
     bundle.insert("literal-link.1", b".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\n.Lk https://example.test label\nnext\n.Ed\n".to_vec()).unwrap();
     let document = project_native_manual("literal-link.1", &bundle, InputFormat::Mdoc)
         .expect("native literal link reaches final IR");
-    let Block::FixedDisplay { view, children, .. } = &document.sections[0].blocks[0] else {
+    let Block::FixedDisplay { view, children, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("literal display is fixed")
     };
     let lines = document
+        .flow()
+        .expect("Flow fixture")
         .content_store
         .fixed_view(*view)
         .unwrap()
@@ -715,7 +771,15 @@ fn literal_display_keeps_link_occurrence_on_shared_content() {
             .iter()
             .any(|node| matches!(node, Inline::Link { .. }))
     );
-    assert_eq!(document.content_store.links.len(), 1);
+    assert_eq!(
+        document
+            .flow()
+            .expect("Flow fixture")
+            .content_store
+            .links
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -784,7 +848,9 @@ fn nested_literal_display_retains_native_absolute_columns() {
         let mut bundle = SourceBundle::new();
         bundle.insert(name, source.as_bytes().to_vec()).unwrap();
         let document = project_native_manual(name, &bundle, format).unwrap();
-        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        let Block::DefinitionList { items, .. } =
+            &document.flow().expect("Flow fixture").sections[0].blocks[0]
+        else {
             panic!("nested fixed region belongs to a definition")
         };
         let view = items[0]
@@ -796,6 +862,8 @@ fn nested_literal_display_retains_native_absolute_columns() {
             })
             .expect("definition contains fixed display");
         let lines = document
+            .flow()
+            .expect("Flow fixture")
             .content_store
             .fixed_view(view)
             .unwrap()
@@ -822,7 +890,9 @@ fn literal_target_remains_zero_width_at_its_fixed_row() {
         )
         .unwrap();
     let document = project_native_manual("anchor.1", &bundle, InputFormat::Mdoc).unwrap();
-    let Block::FixedDisplay { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::FixedDisplay { children, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("literal target belongs to fixed display")
     };
     assert!(
@@ -864,7 +934,9 @@ fn literal_targets_between_and_after_rows_keep_their_structural_position() {
             format!(".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh D\n.Bd -literal\n{body}.Ed\n");
         bundle.insert("anchor.1", source.into_bytes()).unwrap();
         let document = project_native_manual("anchor.1", &bundle, InputFormat::Mdoc).unwrap();
-        let Block::FixedDisplay { children, .. } = &document.sections[0].blocks[0] else {
+        let Block::FixedDisplay { children, .. } =
+            &document.flow().expect("Flow fixture").sections[0].blocks[0]
+        else {
             panic!("target belongs to literal display")
         };
         assert!(
@@ -922,16 +994,26 @@ fn large_native_fixed_table_keeps_one_logical_cell_store() {
         rows,
         fixed_view: Some(view),
         ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
     else {
         panic!("allbox table retains native geometry")
     };
     assert_eq!(rows.len(), 1_000);
-    assert_eq!(document.content_store.fixed_views.len(), 1);
+    assert_eq!(
+        document
+            .flow()
+            .expect("Flow fixture")
+            .content_store
+            .fixed_views
+            .len(),
+        1
+    );
     assert_eq!(rows[0].cells.len(), 2);
     assert_eq!(rows[999].cells.len(), 2);
     let mut unique_cells = HashSet::new();
     for text in document
+        .flow()
+        .expect("Flow fixture")
         .content_store
         .atoms
         .iter()
@@ -944,6 +1026,8 @@ fn large_native_fixed_table_keeps_one_logical_cell_store() {
     for expected in ["left_0", "right_0", "left_999", "right_999"] {
         assert_eq!(
             document
+                .flow()
+                .expect("Flow fixture")
                 .content_store
                 .atoms
                 .iter()
@@ -954,6 +1038,8 @@ fn large_native_fixed_table_keeps_one_logical_cell_store() {
         );
     }
     let lines = document
+        .flow()
+        .expect("Flow fixture")
         .content_store
         .fixed_view(*view)
         .unwrap()
@@ -984,7 +1070,8 @@ fn native_tbl_layout_rule_omits_ignored_data_text() {
         .unwrap();
     let document = project_native_manual("layout-rule.1", &bundle, InputFormat::Man)
         .expect("layout rule lowers without manufacturing data text");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("table block")
     };
     assert!(matches!(
@@ -1006,7 +1093,10 @@ fn native_tbl_layout_rule_omits_ignored_data_text() {
             .iter()
             .all(|cell| cell.blocks.is_empty() && cell.point.is_some())
     );
-    assert!(mant_ir::validate_content_store(&document.content_store).is_ok());
+    assert!(
+        mant_ir::validate_content_store(&document.flow().expect("Flow fixture").content_store)
+            .is_ok()
+    );
 }
 
 #[test]
@@ -1026,8 +1116,10 @@ fn ascii_overstrike_drops_only_the_unsafe_display_override() {
         .expect("legal ASCII manual retains its native structured result");
     let projection = NativeProseProjection::new(native).expect("native prose projects");
     let document = lower_projection(projection).expect("native prose lowers to document IR");
-    mant_ir::validate_content_store(&document.content_store).unwrap();
+    mant_ir::validate_content_store(&document.flow().expect("Flow fixture").content_store).unwrap();
     let cent = document
+        .flow()
+        .expect("Flow fixture")
         .content_store
         .atoms
         .iter()
@@ -1072,7 +1164,9 @@ Body B.
         .unwrap();
     let document = project_native_manual("c03.1", &bundle, InputFormat::Man)
         .expect("native structure lowers to semantic IR");
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("first structured block is a definition list")
     };
     assert_eq!(items.len(), 1, "each man TP owns its native list block");
@@ -1109,7 +1203,7 @@ Body B.
     );
     assert_eq!(items[0].description.len(), 1);
 
-    let definition_items = document.sections[0]
+    let definition_items = document.flow().expect("Flow fixture").sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -1206,7 +1300,9 @@ fn mdoc_multiple_labels_bind_native_markup_to_exact_forms() {
         .unwrap();
     let document = project_native_manual("labels.1", &bundle, InputFormat::Mdoc)
         .expect("native label evidence lowers to semantic IR");
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("tag list retained")
     };
     let facts = items[0].entry.as_ref().expect("option facts discovered");
@@ -1252,7 +1348,7 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
     let document = project_native_manual("markers.1", &bundle, InputFormat::Man)
         .expect("man marker evidence lowers without text guessing");
     assert!(matches!(
-        &document.sections[0].blocks[0],
+        &document.flow().expect("Flow fixture").sections[0].blocks[0],
         Block::List {
             kind: ListKind::Bullet,
             items,
@@ -1260,11 +1356,11 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
         } if items.len() == 1
     ));
     assert!(matches!(
-        &document.sections[0].blocks[1],
+        &document.flow().expect("Flow fixture").sections[0].blocks[1],
         Block::DefinitionList { items, .. } if items.len() == 1
     ));
     assert!(matches!(
-        &document.sections[0].blocks[2],
+        &document.flow().expect("Flow fixture").sections[0].blocks[2],
         Block::List {
             kind: ListKind::Ordered { start: Some(3) },
             items,
@@ -1272,7 +1368,7 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
         } if items.len() == 2
     ));
     assert!(matches!(
-        &document.sections[0].blocks[3],
+        &document.flow().expect("Flow fixture").sections[0].blocks[3],
         Block::List {
             kind: ListKind::Ordered { start: Some(9) },
             items,
@@ -1280,7 +1376,7 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
         } if items.len() == 1
     ));
     assert!(matches!(
-        &document.sections[0].blocks[4],
+        &document.flow().expect("Flow fixture").sections[0].blocks[4],
         Block::List {
             kind: ListKind::Ordered { start: Some(1) },
             items,
@@ -1288,7 +1384,7 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
         } if items.len() == 1
     ));
     assert!(matches!(
-        &document.sections[0].blocks[5],
+        &document.flow().expect("Flow fixture").sections[0].blocks[5],
         Block::List {
             kind: ListKind::Ordered { start: Some(1) },
             items,
@@ -1296,7 +1392,7 @@ fn man_marker_source_evidence_controls_list_kind_and_sequence_merging() {
         } if items.len() == 1
     ));
     assert!(matches!(
-        &document.sections[0].blocks[6],
+        &document.flow().expect("Flow fixture").sections[0].blocks[6],
         Block::List {
             kind: ListKind::Ordered { start: Some(2) },
             items,
@@ -1321,7 +1417,7 @@ fn tp_width_tq_boundary_and_rs_continuation_survive_lowering() {
         .unwrap();
     let document = project_native_manual("boundaries.1", &bundle, InputFormat::Man)
         .expect("native marker boundaries lower to semantic IR");
-    let blocks = &document.sections[0].blocks;
+    let blocks = &document.flow().expect("Flow fixture").sections[0].blocks;
     assert!(matches!(
         &blocks[0],
         Block::List {
@@ -1376,9 +1472,12 @@ fn nested_rs_list_keeps_outer_ordinal_state_and_item_ownership() {
         kind: ListKind::Ordered { start: Some(1) },
         items,
         ..
-    } = &document.sections[0].blocks[0]
+    } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
     else {
-        panic!("outer ordered list retained: {:#?}", document.sections)
+        panic!(
+            "outer ordered list retained: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        )
     };
     assert_eq!(items.len(), 2);
     assert!(items[0].blocks.iter().any(|block| matches!(
@@ -1406,13 +1505,19 @@ fn independent_mdoc_lists_keep_their_container_boundaries() {
         .unwrap();
     let document = project_native_manual("separate-lists.1", &bundle, InputFormat::Mdoc)
         .expect("authored mdoc containers remain distinct");
-    assert_eq!(document.sections[0].blocks.len(), 2, "{document:#?}");
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[0]
+            .blocks
+            .len(),
+        2,
+        "{document:#?}"
+    );
     assert!(matches!(
-        &document.sections[0].blocks[0],
+        &document.flow().expect("Flow fixture").sections[0].blocks[0],
         Block::List { compact: false, items, .. } if items.len() == 1
     ));
     assert!(matches!(
-        &document.sections[0].blocks[1],
+        &document.flow().expect("Flow fixture").sections[0].blocks[1],
         Block::List { compact: true, items, .. } if items.len() == 1
     ));
 }
@@ -1432,7 +1537,9 @@ fn one_native_form_keeps_hint_evidence_without_widening_names() {
         .unwrap();
     let document = project_native_manual("hint-runs.1", &bundle, InputFormat::Mdoc)
         .expect("multiple hint runs reach EntryFacts");
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("tag list retained")
     };
     let facts = items[0].entry.as_ref().expect("option facts discovered");
@@ -1453,7 +1560,9 @@ fn literal_separator_definition_keeps_its_term() {
         .unwrap();
     let document = project_native_manual("operator.1", &bundle, InputFormat::Man)
         .expect("literal operator lowers as a definition term");
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("definition list retained")
     };
     assert_eq!(
@@ -1477,7 +1586,7 @@ fn shared_declaration_grammar_distinguishes_arguments_from_aliases() {
         .unwrap();
     let document = project_native_manual("form-grammar.1", &bundle, InputFormat::Man)
         .expect("native structural forms use the shared declaration grammar");
-    let items = document.sections[0]
+    let items = document.flow().expect("Flow fixture").sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -1545,7 +1654,9 @@ Nested two.
         .unwrap();
     let document = project_native_manual("c03.1", &bundle, InputFormat::Mdoc)
         .expect("mdoc structure lowers to semantic IR");
-    let Block::DefinitionList { items, compact, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, compact, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("tag list retained")
     };
     assert!(*compact);

@@ -13,11 +13,11 @@ fn lowers_tbl_and_eqn_payloads_into_structured_blocks() {
     fs::remove_file(path).expect("remove temporary roff fixture");
 
     assert!(matches!(
-        document.sections[0].blocks[0],
+        document.flow().unwrap().sections[0].blocks[0],
         Block::Table { ref rows, .. } if rows.len() == 1 && rows[0].cells.len() == 2
     ));
     assert!(matches!(
-        document.sections[1].blocks[0],
+        document.flow().unwrap().sections[1].blocks[0],
         Block::Equation { ref value, .. } if value == "x + width / 2"
     ));
 }
@@ -31,8 +31,11 @@ fn preserves_empty_tbl_rows_and_whole_row_rule_kinds() {
     )
     .expect("lower empty and ruled tbl rows");
     let document = query.document.as_ref().expect("document");
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one table: {:?}", document.sections[0].blocks);
+    let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice() else {
+        panic!(
+            "expected one table: {:?}",
+            document.flow().unwrap().sections[0].blocks
+        );
     };
     assert_eq!(
         rows.iter().map(|row| row.kind.clone()).collect::<Vec<_>>(),
@@ -59,8 +62,11 @@ fn preserves_partial_layout_rule_cells_without_leaking_ignored_payload() {
     )
     .expect("lower a partial tbl layout-rule row");
     let document = query.document.as_ref().expect("document");
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one table: {:?}", document.sections[0].blocks);
+    let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice() else {
+        panic!(
+            "expected one table: {:?}",
+            document.flow().unwrap().sections[0].blocks
+        );
     };
     let [row] = rows.as_slice() else {
         panic!("expected one table row: {rows:?}");
@@ -93,7 +99,7 @@ fn large_tbl_rows_scale_without_changing_their_topology() {
     let document = parse_manual_bytes(std::path::Path::new("table-scale.7"), source.as_bytes())
         .expect("lower large table");
 
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice() else {
         panic!("large tbl input must remain one table");
     };
     assert_eq!(rows.len(), ROW_COUNT);
@@ -119,10 +125,12 @@ fn keeps_inline_equations_in_macro_arguments_and_filled_prose() {
     )
     .expect("lower inline equations");
 
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "expected one definition list: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     let [item] = items.as_slice() else {
@@ -153,7 +161,7 @@ fn normalizes_inline_equations_retained_as_tbl_cell_text() {
     )
     .expect("lower table equations");
 
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected equation table");
     };
     let [left, right] = rows[0].cells.as_slice() else {
@@ -190,7 +198,7 @@ fn preserves_tbl_rows_across_interleaved_comments_and_text_blocks() {
     let document = parse_manual_bytes(std::path::Path::new("commented-table.1"), source)
         .expect("lower commented table");
 
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected a table");
     };
     assert_eq!(rows.len(), 5);
@@ -222,8 +230,11 @@ fn tbl_text_blocks_do_not_promote_physical_source_rows_to_hard_lines() {
             source.as_bytes(),
         )
         .expect("lower table leading-row evidence fixture");
-        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
-            panic!("{label}: expected table: {:#?}", document.sections);
+        let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
+            panic!(
+                "{label}: expected table: {:#?}",
+                document.flow().unwrap().sections
+            );
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("{label}: expected cell paragraph: {:?}", rows[0].cells[0]);
@@ -257,8 +268,11 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
             source.as_bytes(),
         )
         .expect("lower table equation execution fixture");
-        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
-            panic!("{label}: expected table: {:#?}", document.sections);
+        let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
+            panic!(
+                "{label}: expected table: {:#?}",
+                document.flow().unwrap().sections
+            );
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
             panic!("{label}: expected cell paragraph: {:?}", rows[0].cells[0]);
@@ -295,8 +309,8 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
         source,
     )
     .expect("lower equation after an empty leading text-block row");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
-        panic!("expected table: {:#?}", document.sections);
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
+        panic!("expected table: {:#?}", document.flow().unwrap().sections);
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected cell paragraph: {:?}", rows[0].cells[0]);
@@ -328,8 +342,8 @@ fn tbl_equation_code_style_does_not_mutate_roff_font_registers() {
         source,
     )
     .expect("lower equation font-register fixture");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
-        panic!("expected table: {:#?}", document.sections);
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
+        panic!("expected table: {:#?}", document.flow().unwrap().sections);
     };
     for (label, cell) in [
         ("equation", &rows[0].cells[0]),
@@ -352,8 +366,11 @@ fn tbl_equation_code_style_does_not_mutate_roff_font_registers() {
             );
         }
     }
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[1] else {
-        panic!("expected paragraph after table: {:#?}", document.sections);
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[1] else {
+        panic!(
+            "expected paragraph after table: {:#?}",
+            document.flow().unwrap().sections
+        );
     };
     assert!(
         children
@@ -371,7 +388,7 @@ fn keeps_tbl_vertical_span_markers_out_of_visible_cells() {
     )
     .expect("lower vertical table span");
 
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected a table");
     };
     assert_eq!(rows.len(), 4);
@@ -389,7 +406,7 @@ fn preserves_tbl_rows_nested_in_unfilled_mdoc_displays() {
     )
     .expect("lower table nested in an unfilled display");
 
-    let table = document.sections[0]
+    let table = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .find_map(|block| match block {
@@ -400,7 +417,7 @@ fn preserves_tbl_rows_nested_in_unfilled_mdoc_displays() {
     assert_eq!(table.len(), 2);
     assert_eq!(table[0].cells.len(), 2);
     assert!(
-        document.sections[0].blocks.iter().all(
+        document.flow().unwrap().sections[0].blocks.iter().all(
             |block| !matches!(block, Block::Preformatted { children, .. } if children.is_empty())
         ),
         "the surrounding display must not leave an empty placeholder"
@@ -418,7 +435,7 @@ T{\n.Nm\nT}\tMT-Safe\n.TE\n",
     )
     .expect("lower tbl text blocks");
 
-    let Block::Table { rows, .. } = &document.sections[1].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[1].blocks[0] else {
         panic!("expected attributes table");
     };
     let [Block::Paragraph { children, .. }] = rows[1].cells[0].blocks.as_slice() else {
@@ -441,7 +458,7 @@ fn tbl_text_blocks_recover_complete_man_font_requests() {
     )
     .expect("lower alternating man macros inside a tbl text block");
 
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected a structured table");
     };
     let [left, right] = rows[0].cells.as_slice() else {
@@ -512,7 +529,9 @@ fn mixed_table_requests_never_replace_complete_native_cell_content() {
                 let document =
                     parse_manual_bytes(std::path::Path::new("mixed-table.1"), source.as_bytes())
                         .unwrap();
-                let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+                let [Block::Table { rows, .. }] =
+                    document.flow().unwrap().sections[0].blocks.as_slice()
+                else {
                     panic!("table structure must survive {source}")
                 };
                 let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -572,7 +591,8 @@ fn table_text_blocks_recover_complete_inline_macro_semantics() {
         let table_source = format!("{header}\n.TS\nl.\nT{{\n{request}\nT}}\n.TE\n");
         let table =
             parse_manual_bytes(std::path::Path::new("table.1"), table_source.as_bytes()).unwrap();
-        let [Block::Table { rows, .. }] = table.sections[0].blocks.as_slice() else {
+        let [Block::Table { rows, .. }] = table.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("expected table: {table:#?}")
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -592,7 +612,8 @@ fn table_text_blocks_keep_native_request_operands_out_of_visible_content() {
             source.as_bytes(),
         )
         .unwrap();
-        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("expected table: {document:#?}")
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -643,7 +664,8 @@ fn table_source_recovery_defers_formatter_boundaries_to_native_tbl_execution() {
             source.as_bytes(),
         )
         .expect("lower native tbl formatter boundary");
-        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("{label}: expected table: {document:#?}");
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -672,7 +694,7 @@ fn native_table_requests_do_not_disable_safe_recovery_in_adjacent_cells() {
         source,
     )
     .expect("lower independent table cells");
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice() else {
         panic!("expected table: {document:#?}");
     };
     let [left, right] = rows[0].cells.as_slice() else {
@@ -724,7 +746,7 @@ fn empty_and_control_only_table_rows_preserve_execution_and_layout() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl l.\n\\z\tB C\n.TE\n.No AFTER LAST\n",
     )
     .expect("lower per-cell zero-advance boundary");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected table: {document:#?}");
     };
     let [_, right] = rows[0].cells.as_slice() else {
@@ -779,7 +801,7 @@ fn tbl_text_blocks_preserve_the_tiocpkt_control_key_spacing() {
         b".TH TIOCPKT 2const\n.SH DESCRIPTION\n.TS\nl.\nT{\n.BR \\[ha]S / \\[ha]Q .\nT}\n.TE\n",
     )
     .expect("lower the TIOCPKT tbl control-key witness");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected one table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -799,7 +821,7 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
     )
     .expect("lower mdoc operands in table text blocks");
 
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected a structured table");
     };
     let [left, right] = rows[0].cells.as_slice() else {
@@ -841,7 +863,7 @@ fn decodes_named_characters_inside_equations() {
     .expect("lower equation characters");
 
     assert!(matches!(
-        document.sections[0].blocks[0],
+        document.flow().unwrap().sections[0].blocks[0],
         Block::Equation { ref value, .. } if value == "\u{03c0} \u{2212} x"
     ));
 }
@@ -855,7 +877,7 @@ fn lowers_every_mdoc_column_list_cell() {
     )
     .expect("lower mdoc column list");
 
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected column list to lower as a table");
     };
     assert_eq!(rows.len(), 1);
@@ -882,7 +904,7 @@ fn native_tbl_diagnostics_do_not_invent_unparsed_source_cells() {
     )
     .expect("lower unresolved formatter string in a table cell");
 
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected a structured table");
     };
     // CVS tbl consumes the malformed string escape as part of the second

@@ -220,7 +220,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
             .len(),
     );
     let alias = document.meta.alias_target.is_some();
-    let observed = observed_targets(&document);
+    let observed = observed_targets(&document)?;
     let observed_spellings = observed.all_spellings();
     let (missing, matched, used_observed) = if alias {
         (Vec::new(), Vec::new(), BTreeSet::new())
@@ -424,7 +424,7 @@ mod tests {
                     &report,
                     u64::try_from(source.len()).unwrap(),
                 );
-                let observed = super::observed_targets(&document);
+                let observed = super::observed_targets(&document).unwrap();
                 let (missing, matched, used) =
                     match_targets(&native.expected, &observed.occurrences);
                 assert!(!native.expected.is_empty());
@@ -521,7 +521,7 @@ Escape.
         }
         let document =
             super::lower_mandoc_document(path, &report, u64::try_from(source.len()).unwrap());
-        let observed = super::observed_targets(&document);
+        let observed = super::observed_targets(&document).unwrap();
         let (missing, matched, used) = match_targets(&native.expected, &observed.occurrences);
         assert!(
             missing.is_empty(),

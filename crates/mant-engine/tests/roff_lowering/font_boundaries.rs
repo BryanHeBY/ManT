@@ -44,7 +44,7 @@ pub(super) fn assert_style(query: &ResolvedContent, word: &str, expected: u8) {
         styles.found.iter().all(|style| *style == expected),
         "{word}: {:?}\n{}",
         styles.found,
-        mant_codec::encode::render_markdown(query)
+        mant_codec::encode::render_markdown(query).expect("valid Flow export")
     );
 }
 
@@ -64,7 +64,7 @@ fn mdoc_operand_font_escapes_do_not_escape_their_scope() {
             let query = query(&input);
             assert_style(&query, "NEXT", expected);
             assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
-            let markdown = mant_codec::encode::render_markdown(&query);
+            let markdown = mant_codec::encode::render_markdown(&query).expect("valid Flow export");
             // Literal/code projections intentionally carry code presentation,
             // not individual font runs. For prose, check the actual export.
             if input == body {
@@ -128,7 +128,7 @@ fn mdoc_macros_select_fonts_instead_of_adding_to_the_outer_font() {
         let query = query(body);
         assert_style(&query, "WORD", word);
         assert_style(&query, "TAIL", tail);
-        let exported = mant_codec::encode::render_markdown(&query);
+        let exported = mant_codec::encode::render_markdown(&query).expect("valid Flow export");
         let reparsed = mant_loader::load_markdown_text(&exported, None).unwrap();
         assert_style(&reparsed, "WORD", word);
         assert_style(&reparsed, "TAIL", tail);
@@ -230,7 +230,9 @@ fn lets_explicit_fonts_override_an_alternating_macro_default() {
     let document = parse_manual_source(&path).expect("lower alternating font reset");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one definition list");
     };
     let term = items[0]
@@ -283,8 +285,9 @@ fn suppresses_pod_font_requests_around_verbatim_blocks() {
     let document = parse_manual_source(&path).expect("lower Pod::Man verbatim source");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    assert_eq!(document.sections[0].blocks.len(), 1);
-    let Block::Preformatted { children, .. } = &document.sections[0].blocks[0] else {
+    assert_eq!(document.flow().unwrap().sections[0].blocks.len(), 1);
+    let Block::Preformatted { children, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected one preformatted block");
     };
     assert_eq!(
@@ -316,7 +319,7 @@ fn lowers_normalized_mdoc_font_and_author_layout() {
     let document = parse_manual_source(&path).expect("lower normalized mdoc modes");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let authors = &document.sections[0];
+    let authors = &document.flow().unwrap().sections[0];
     let Block::Paragraph { children, .. } = &authors.blocks[0] else {
         panic!("authors are one paragraph");
     };
@@ -325,7 +328,7 @@ fn lowers_normalized_mdoc_font_and_author_layout() {
         "Alice Example\nBob Example Carol Example Dave Example"
     );
 
-    let description = &document.sections[1];
+    let description = &document.flow().unwrap().sections[1];
     let Block::Paragraph { children, .. } = &description.blocks[0] else {
         panic!("font block is a paragraph");
     };
@@ -345,6 +348,8 @@ fn mdoc_author_mode_persists_across_subsections_and_later_sections() {
     .unwrap();
     let document = query.document.as_ref().unwrap();
     let authors = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .find(|section| inline_text(document.content(), &section.heading.content) == "AUTHORS")
@@ -358,6 +363,8 @@ fn mdoc_author_mode_persists_across_subsections_and_later_sections() {
     };
     assert_eq!(inline_text(document.content(), children), "second\nthird");
     let notes = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .find(|section| inline_text(document.content(), &section.heading.content) == "NOTES")
@@ -380,6 +387,8 @@ fn visible_cd_nodes_execute_synopsis_pre_without_fd_post_breaks() {
     let synopsis = query
         .document
         .as_ref()
+        .unwrap()
+        .flow()
         .unwrap()
         .sections
         .iter()
@@ -405,7 +414,7 @@ fn styled_authors_heading_does_not_activate_native_author_splitting() {
     )
     .unwrap();
     let document = query.document.as_ref().unwrap();
-    let section = &query.document.as_ref().unwrap().sections[0];
+    let section = &query.document.as_ref().unwrap().flow().unwrap().sections[0];
     let [Block::Paragraph { children, .. }] = section.blocks.as_slice() else {
         panic!(
             "expected one custom-section paragraph: {:?}",
@@ -460,7 +469,7 @@ fn visible_synopsis_predecessors_end_ft_function_pairing() {
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
-        let section = &query.document.as_ref().unwrap().sections[0];
+        let section = &query.document.as_ref().unwrap().flow().unwrap().sections[0];
         let rows = section
             .blocks
             .iter()
@@ -487,7 +496,7 @@ fn invisible_synopsis_formatter_cells_still_execute_native_newlines() {
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
-        let section = &query.document.as_ref().unwrap().sections[0];
+        let section = &query.document.as_ref().unwrap().flow().unwrap().sections[0];
         assert!(
             matches!(
                 section.blocks.as_slice(),

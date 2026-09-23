@@ -84,6 +84,11 @@ pub fn project_references_with_limits(
     if policy.mode == ReferenceProjectionMode::None {
         return result;
     }
+    // This infallible v0.12 API carries no Fixed reference coordinates. Do not
+    // turn a Fixed page into a complete zero-occurrence Flow inventory.
+    let Some(_flow) = document.flow() else {
+        return result;
+    };
     let mut budget = ReferenceWorkBudget::new(limits.scan);
     let mut targets = BTreeSet::new();
     let mut target_bytes = 0usize;
@@ -368,7 +373,12 @@ fn attach_projection(
     let mut selected = None;
     while admitted + 1 < rejected {
         let candidate = admitted + (rejected - admitted) / 2;
-        let mut builder = ContentProjectionBuilder::new(&document.content_store);
+        let mut builder = ContentProjectionBuilder::new(
+            &document
+                .flow()
+                .expect("Flow reference inventory")
+                .content_store,
+        );
         let included = result
             .records
             .iter()

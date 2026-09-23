@@ -22,7 +22,7 @@ fn unrelated_semantic_looking_sections_do_not_perturb_entry_ids() {
         let parsed = parse_markdown(source, None).expect("semantic ID fixture");
         let entries = mant_ir::content_entries(
             parsed.document.content(),
-            &parsed.document.sections[1].blocks,
+            &parsed.document.flow().expect("Flow fixture").sections[1].blocks,
         );
         entries[0]
             .owner()
@@ -48,7 +48,8 @@ fn preserves_titles_for_every_supported_markdown_link_target() {
         "[section](#target \"section title\") [document](other.md \"document title\") [mail](mailto:user@example.test \"mail title\") [web](https://example.test \"web title\")\n\n## Target\n",
         Some("/docs/tool.md".to_owned()),
     );
-    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+    else {
         panic!("link paragraph");
     };
     let titles = children
@@ -88,7 +89,8 @@ fn markdown_link_components_decode_once_and_validate_before_navigation() {
         ("../other.md", "../other", None),
     ] {
         let document = parse_document(&format!("[LINK]({uri})\n"), None);
-        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+        else {
             panic!("link paragraph")
         };
         assert!(
@@ -110,7 +112,8 @@ fn markdown_link_components_decode_once_and_validate_before_navigation() {
         "#bad%FF",
     ] {
         let document = parse_document(&format!("[LINK]({uri})\n"), None);
-        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+        else {
             panic!("link paragraph")
         };
         assert!(
@@ -136,7 +139,8 @@ fn lowers_hierarchical_markdown_links_into_same_source_document_references() {
         "[Start](Start-Process.md) [Guide](about_Profiles.markdown#examples) [Nested](../other.md)\n",
         Some("/docs/current.md".to_owned()),
     );
-    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+    else {
         panic!("links are a paragraph");
     };
 
@@ -178,7 +182,11 @@ fn document_title_fragments_follow_the_normalized_root_destination() {
     );
 
     let document = parse_document("# Guide {#Empty.Root}\n\n## Details\n\nBody.\n", None);
-    assert!(document.sections[0].fragment_aliases.is_empty());
+    assert!(
+        document.flow().expect("Flow fixture").sections[0]
+            .fragment_aliases
+            .is_empty()
+    );
     assert_eq!(
         document
             .fragment_aliases

@@ -19,8 +19,14 @@ pub(super) struct ProjectionAdmission<'a> {
 impl<'a> ProjectionAdmission<'a> {
     pub(super) fn new(document: Option<&'a Document>) -> Self {
         Self {
-            builder: document
-                .map(|document| ContentProjectionBuilder::new(&document.content_store)),
+            builder: document.map(|document| {
+                ContentProjectionBuilder::new(
+                    &document
+                        .flow()
+                        .expect("Fixed rejected by explanation preflight")
+                        .content_store,
+                )
+            }),
             reserved: 0,
         }
     }
@@ -176,7 +182,12 @@ fn project(
     supports: &[ExplanationSupport],
     evidence: &[&mut ExplanationEvidence],
 ) -> Result<(ContentProjection, mant_ir::ContentKeyRemap), mant_ir::ContentProjectionError> {
-    let mut builder = ContentProjectionBuilder::new(&document.content_store);
+    let mut builder = ContentProjectionBuilder::new(
+        &document
+            .flow()
+            .expect("Fixed rejected by explanation preflight")
+            .content_store,
+    );
     for support in supports {
         match support {
             ExplanationSupport::OwnedEntry { block }

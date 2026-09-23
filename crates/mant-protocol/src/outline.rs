@@ -451,7 +451,35 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
             content_sha256: None,
             coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
         };
-        let mut document = mant_ir::Document {
+        let mut flow = mant_ir::FlowBody {
+            content_store: value
+                .content_projection
+                .as_ref()
+                .map_or_else(mant_ir::ContentStore::default, |projection| {
+                    projection.content_store.clone()
+                }),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        };
+        for selection in &value.selections {
+            match selection {
+                ExcerptSelection::DocumentRoot {
+                    heading, blocks, ..
+                } => {
+                    flow.heading.clone_from(heading);
+                    flow.blocks.extend(blocks.clone());
+                }
+                ExcerptSelection::DocumentSection { section, .. } => {
+                    flow.sections.push(section.clone());
+                }
+                ExcerptSelection::DocumentEntry { entry, .. } => {
+                    flow.blocks.push(entry.clone());
+                }
+                ExcerptSelection::Tldr { .. } => {}
+            }
+        }
+        let document = mant_ir::Document {
             parser: None,
             sources: value
                 .source_context
@@ -461,36 +489,11 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
                 .source_context
                 .as_ref()
                 .map_or(mant_ir::SourceKey::FIRST, |context| context.root_source),
-            content_store: value
-                .content_projection
-                .as_ref()
-                .map_or_else(mant_ir::ContentStore::default, |projection| {
-                    projection.content_store.clone()
-                }),
+            body: mant_ir::DocumentBody::Flow(flow),
             meta: value.meta.clone().unwrap_or_default(),
-            heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: value.diagnostics.clone(),
-            blocks: Vec::new(),
-            sections: Vec::new(),
         };
-        for selection in &value.selections {
-            match selection {
-                ExcerptSelection::DocumentRoot {
-                    heading, blocks, ..
-                } => {
-                    document.heading.clone_from(heading);
-                    document.blocks.extend(blocks.clone());
-                }
-                ExcerptSelection::DocumentSection { section, .. } => {
-                    document.sections.push(section.clone());
-                }
-                ExcerptSelection::DocumentEntry { entry, .. } => {
-                    document.blocks.push(entry.clone());
-                }
-                ExcerptSelection::Tldr { .. } => {}
-            }
-        }
         if value.source_context.is_none() && mant_ir::document_has_source_spans(&document) {
             return Err(serde::de::Error::custom(
                 "source-qualified excerpt content requires a source context",
@@ -498,9 +501,13 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
         }
         crate::document::validate_projected_content(
             value.content_projection.as_ref(),
-            document.heading.as_ref(),
-            &document.blocks,
-            &document.sections,
+            document
+                .flow()
+                .expect("synthetic Flow body")
+                .heading
+                .as_ref(),
+            &document.flow().expect("synthetic Flow body").blocks,
+            &document.flow().expect("synthetic Flow body").sections,
         )
         .map_err(serde::de::Error::custom)?;
         mant_ir::validate_document_sources(&document).map_err(serde::de::Error::custom)?;

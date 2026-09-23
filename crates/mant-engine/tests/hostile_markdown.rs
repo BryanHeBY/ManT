@@ -42,7 +42,7 @@ fn exercise(label: &str, source: &str) {
         }
     };
 
-    let rendered = render_markdown(&query);
+    let rendered = render_markdown(&query).expect("valid Flow export");
     verify_commonmark_topology(label, &query, &rendered);
     let _ = render_query_text(&query);
     let _ = render_query_man(&query);
@@ -86,7 +86,8 @@ fn exercise(label: &str, source: &str) {
         }
     }
 
-    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE)
+        .expect("valid Flow export");
     for (pattern, syntax) in [
         ("a", SearchSyntax::Literal),
         ("—", SearchSyntax::Literal),
@@ -122,7 +123,8 @@ fn verify_sampled_search(label: &str, query: &mant_ir::ResolvedContent) {
     // Markdown or TLDR presentation. Sample from that same coordinate space.
     let sample = query.document.as_ref().and_then(|document| {
         document
-            .content_store
+            .flow()
+            .map(|flow| &flow.content_store)?
             .roots
             .iter()
             .filter_map(|root| document.content().root_logical_text(root.key))
@@ -169,14 +171,14 @@ fn verify_commonmark_topology(label: &str, query: &mant_ir::ResolvedContent, mar
     let tldr_fences = query.tldr.as_ref().map_or(0, |page| page.examples.len());
     assert_eq!(
         actual_headings,
-        1 + tldr_headings + section_count(&document.sections),
+        1 + tldr_headings + section_count(&document.flow().unwrap().sections),
         "{label}: CommonMark headings must correspond exactly to IR headings"
     );
     assert_eq!(
         actual_code_blocks,
         tldr_fences
-            + fenced_block_count(&document.blocks)
-            + section_fenced_block_count(&document.sections),
+            + fenced_block_count(&document.flow().unwrap().blocks)
+            + section_fenced_block_count(&document.flow().unwrap().sections),
         "{label}: every serialized fence must correspond to one IR block"
     );
 }

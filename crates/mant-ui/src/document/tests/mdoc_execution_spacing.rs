@@ -47,7 +47,7 @@ fn display_pp_keeps_independent_space_and_post_gap_target() {
         assert_rows(&query, "ALPHA", "BETA", 2);
         let document = query.document.as_ref().unwrap();
         assert!(mant_ir::validate_document(document).is_empty());
-        let beta = document.sections[0]
+        let beta = document.flow().expect("Flow fixture").sections[0]
             .blocks
             .iter()
             .find_map(|block| match block {

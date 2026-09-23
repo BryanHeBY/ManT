@@ -39,7 +39,18 @@ fn native_fixed_table_scale() {
     eprintln!(
         "final IR rows={rows}, elapsed={:?}, atoms={}, fixed_lines={}",
         start.elapsed(),
-        document.content_store.atoms.len(),
-        document.content_store.fixed_views[0].lines.len()
+        document
+            .flow()
+            .expect("Flow fixture")
+            .content_store
+            .atoms
+            .len(),
+        document
+            .flow()
+            .expect("Flow fixture")
+            .content_store
+            .fixed_views[0]
+            .lines
+            .len()
     );
 }

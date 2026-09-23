@@ -20,13 +20,42 @@ pub use source::{
     SourceRelationError, SourceSpan, TextRange, TextSize,
 };
 
-/// Borrowed primary body arm. The currently shipped document is Flow-only;
-/// callers must match this enum so adding Fixed requires an explicit decision
-/// at each reading boundary rather than treating it as an empty Flow tree.
+/// The one authoritative primary body of a document.
+///
+/// The tagged wire form rejects old top-level Flow fields and cannot carry
+/// both a logical content tree and an annotated native surface.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum DocumentBody {
+    /// Source-neutral logical content and topology.
+    Flow(FlowBody),
+    /// Annotated native output and its validated mark relations.
+    Fixed(crate::FixedBody),
+}
+
+/// The complete owned Flow arm; no second copy lives on [`Document`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FlowBody {
+    /// One authoritative logical content store.
+    pub content_store: crate::ContentStore,
+    /// Optional original visible document heading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heading: Option<Heading>,
+    /// Content before the first section.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocks: Vec<Block>,
+    /// Top-level semantic sections.
+    pub sections: Vec<Section>,
+}
+
+/// Borrowed primary body arm; readers must explicitly handle Fixed.
 #[derive(Debug, Clone, Copy)]
 pub enum DocumentBodyRef<'a> {
-    /// The existing source-neutral logical content tree.
+    /// Source-neutral logical content tree.
     Flow(FlowBodyRef<'a>),
+    /// Annotated native output and validated marks.
+    Fixed(&'a crate::FixedBody),
 }
 
 /// Borrowed fields that together form the one existing Flow body.
@@ -45,8 +74,10 @@ pub struct FlowBodyRef<'a> {
 /// Mutable borrowed primary body arm, used only while constructing Flow IR.
 #[derive(Debug)]
 pub enum DocumentBodyMut<'a> {
-    /// Mutable access to the existing Flow body fields.
+    /// Mutable access to the Flow body fields.
     Flow(FlowBodyMut<'a>),
+    /// Mutable annotated native output and marks.
+    Fixed(&'a mut crate::FixedBody),
 }
 
 /// Mutable borrowing of the current Flow body without a second owned model.
@@ -73,47 +104,63 @@ pub struct Document {
     pub sources: Vec<SourceRecord>,
     /// Source containing the normalized document root.
     pub root_source: SourceKey,
-    /// Single authoritative logical content store for all topology below.
-    pub content_store: crate::ContentStore,
+    /// Exactly one primary content representation.
+    pub body: DocumentBody,
     /// Metadata normalized across all supported source formats.
     pub meta: DocumentMeta,
-    /// Original visible document heading, distinct from native bibliographic metadata.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub heading: Option<Heading>,
     /// Exact source fragments resolving to the normalized document root.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fragment_aliases: Vec<crate::FragmentAlias>,
     /// Recoverable findings retained for callers that need source quality data.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
-    /// Content preceding the first section heading.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub blocks: Vec<Block>,
-    /// Top-level semantic sections in source order.
-    pub sections: Vec<Section>,
 }
 
 impl Document {
+    /// Access the owned Flow body only when this document is Flow.
+    #[must_use]
+    pub const fn flow(&self) -> Option<&FlowBody> {
+        match &self.body {
+            DocumentBody::Flow(flow) => Some(flow),
+            DocumentBody::Fixed(_) => None,
+        }
+    }
+
+    /// Mutably access the owned Flow body only when this document is Flow.
+    #[must_use]
+    pub fn flow_mut(&mut self) -> Option<&mut FlowBody> {
+        match &mut self.body {
+            DocumentBody::Flow(flow) => Some(flow),
+            DocumentBody::Fixed(_) => None,
+        }
+    }
+
     /// Borrow the primary body through an exhaustive arm match.
     #[must_use]
     pub fn body(&self) -> DocumentBodyRef<'_> {
-        DocumentBodyRef::Flow(FlowBodyRef {
-            content_store: &self.content_store,
-            heading: &self.heading,
-            blocks: &self.blocks,
-            sections: &self.sections,
-        })
+        match &self.body {
+            DocumentBody::Flow(flow) => DocumentBodyRef::Flow(FlowBodyRef {
+                content_store: &flow.content_store,
+                heading: &flow.heading,
+                blocks: &flow.blocks,
+                sections: &flow.sections,
+            }),
+            DocumentBody::Fixed(fixed) => DocumentBodyRef::Fixed(fixed),
+        }
     }
 
     /// Mutably borrow the primary body through an exhaustive arm match.
     #[must_use]
     pub fn body_mut(&mut self) -> DocumentBodyMut<'_> {
-        DocumentBodyMut::Flow(FlowBodyMut {
-            content_store: &mut self.content_store,
-            heading: &mut self.heading,
-            blocks: &mut self.blocks,
-            sections: &mut self.sections,
-        })
+        match &mut self.body {
+            DocumentBody::Flow(flow) => DocumentBodyMut::Flow(FlowBodyMut {
+                content_store: &mut flow.content_store,
+                heading: &mut flow.heading,
+                blocks: &mut flow.blocks,
+                sections: &mut flow.sections,
+            }),
+            DocumentBody::Fixed(fixed) => DocumentBodyMut::Fixed(fixed),
+        }
     }
 
     /// Resolve a document-local source key.
@@ -150,17 +197,12 @@ struct DocumentWire {
     parser: Option<ParserInfo>,
     sources: Vec<SourceRecord>,
     root_source: SourceKey,
-    content_store: crate::ContentStore,
+    body: DocumentBody,
     meta: DocumentMeta,
-    #[serde(default)]
-    heading: Option<Heading>,
     #[serde(default)]
     fragment_aliases: Vec<crate::FragmentAlias>,
     #[serde(default)]
     diagnostics: Vec<Diagnostic>,
-    #[serde(default)]
-    blocks: Vec<Block>,
-    sections: Vec<Section>,
 }
 
 impl<'de> Deserialize<'de> for Document {
@@ -173,15 +215,16 @@ impl<'de> Deserialize<'de> for Document {
             parser: wire.parser,
             sources: wire.sources,
             root_source: wire.root_source,
-            content_store: wire.content_store,
+            body: wire.body,
             meta: wire.meta,
-            heading: wire.heading,
             fragment_aliases: wire.fragment_aliases,
             diagnostics: wire.diagnostics,
-            blocks: wire.blocks,
-            sections: wire.sections,
         };
-        crate::validate_content_store(&document.content_store).map_err(serde::de::Error::custom)?;
+        match &document.body {
+            DocumentBody::Flow(flow) => crate::validate_content_store(&flow.content_store)
+                .map_err(serde::de::Error::custom)?,
+            DocumentBody::Fixed(fixed) => fixed.validate().map_err(serde::de::Error::custom)?,
+        }
         crate::validate_document_sources(&document).map_err(serde::de::Error::custom)?;
         Ok(document)
     }
@@ -201,7 +244,7 @@ pub struct ParserInfo {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMeta {
-    /// Native bibliographic title; Markdown visible titles belong to `Document.heading`.
+    /// Native bibliographic title; Markdown visible titles belong to `FlowBody::heading`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -256,4 +299,78 @@ pub struct Section {
 #[allow(clippy::trivially_copy_pass_by_ref)]
 const fn is_zero_u16(value: &u16) -> bool {
     *value == 0
+}
+
+#[cfg(test)]
+mod body_tests {
+    use super::*;
+    use crate::{DisplaySurface, SourceCoordinates, SourceIdentity};
+
+    fn document(body: DocumentBody) -> Document {
+        Document {
+            parser: None,
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "body-wire".to_owned(),
+                },
+                format: SourceFormat::Markdown,
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::DecodedUtf8Bytes,
+            }],
+            root_source: SourceKey::FIRST,
+            body,
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn primary_body_wire_is_tagged_exclusive_and_round_trips() {
+        let flow = document(DocumentBody::Flow(FlowBody {
+            content_store: crate::ContentStore::default(),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        }));
+        let fixed = document(DocumentBody::Fixed(crate::FixedBody {
+            surface: DisplaySurface {
+                text: String::new(),
+                rows: Vec::new(),
+                runs: Vec::new(),
+            },
+            headings: Vec::new(),
+            owners: Vec::new(),
+            links: Vec::new(),
+            anchors: Vec::new(),
+            regions: Vec::new(),
+        }));
+        for (document, kind) in [(flow, "flow"), (fixed, "fixed")] {
+            let wire = serde_json::to_value(&document).unwrap();
+            assert_eq!(wire["body"]["kind"], kind);
+            assert_eq!(serde_json::from_value::<Document>(wire).unwrap(), document);
+        }
+    }
+
+    #[test]
+    fn retired_top_level_and_mixed_body_fields_are_rejected() {
+        let mut wire = serde_json::to_value(document(DocumentBody::Flow(FlowBody {
+            content_store: crate::ContentStore::default(),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        })))
+        .unwrap();
+        let store = wire["body"]["contentStore"].clone();
+        wire["contentStore"] = store;
+        assert!(serde_json::from_value::<Document>(wire.clone()).is_err());
+        wire.as_object_mut().unwrap().remove("contentStore");
+        wire["body"]["surface"] = serde_json::json!({"text":"","rows":[],"runs":[]});
+        assert!(serde_json::from_value::<Document>(wire.clone()).is_err());
+        wire["body"].as_object_mut().unwrap().remove("surface");
+        wire["body"].as_object_mut().unwrap().remove("kind");
+        assert!(serde_json::from_value::<Document>(wire).is_err());
+    }
 }

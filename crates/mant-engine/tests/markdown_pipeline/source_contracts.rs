@@ -41,7 +41,7 @@ fn thematic_rule_rendered_gaps_match_root_section_and_nested_list_sources() {
 #[test]
 fn declared_items_fail_independently_and_bind_only_visible_name_occurrences() {
     let parsed = parse_markdown("<!-- mant:entries role=option case=sensitive -->\n3. `-a, --all`: All.\n4. Invalid prose.\n5. `--last`: Last.\n", None).unwrap();
-    let Block::List { kind, items, .. } = &parsed.document.blocks[0] else {
+    let Block::List { kind, items, .. } = &parsed.document.flow().unwrap().blocks[0] else {
         panic!("ordinary list")
     };
     assert_eq!(*kind, mant_ir::ListKind::Ordered { start: Some(3) });

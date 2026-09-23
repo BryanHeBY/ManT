@@ -70,7 +70,7 @@ fn markdown_semantic_annotation_does_not_change_translated_content_geometry() {
         );
         for query in [&plain, &annotated] {
             let document = query.document.as_ref().unwrap();
-            let blocks = &document.sections[0].blocks;
+            let blocks = &document.flow().expect("Flow fixture").sections[0].blocks;
             let mut baseline: Option<Vec<(usize, String)>> = None;
             for shift in [0, 2, 5] {
                 let mut builder =
@@ -132,7 +132,7 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
         source.push_str("BODY\n.br\nTAIL\n");
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
-        let items = document.sections[0]
+        let items = document.flow().expect("Flow fixture").sections[0]
             .blocks
             .iter()
             .find_map(|block| match block {
@@ -220,7 +220,7 @@ fn nested_literal_display_origins_and_targets_survive_tui_lowering() {
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let before = query.clone();
         let document = query.document.as_ref().unwrap();
-        let blocks = &document.sections[0].blocks;
+        let blocks = &document.flow().expect("Flow fixture").sections[0].blocks;
         let mut builder = DocumentBuilder::new("probe".into(), None, Some(document.content()));
         builder.blocks(blocks, 0);
         for (target, witness) in [("outer-target", "ALPHA"), ("inner-target", "BETA")] {

@@ -93,7 +93,11 @@ pub(crate) fn inspect_system() -> DoctorReport {
 fn inspect_libmandoc(builder: &mut DoctorBuilder) {
     let probe = b".TH MANT-DOCTOR 1\n.SH NAME\nmant-doctor \\- installation probe\n";
     match mant_loader::parse_manual_bytes(Path::new("mant-doctor.1"), probe) {
-        Ok(document) if !document.sections.is_empty() => {
+        Ok(document)
+            if document
+                .flow()
+                .is_some_and(|flow| !flow.sections.is_empty()) =>
+        {
             builder.push(
                 "runtime.libmandoc",
                 DoctorCheckStatus::Ok,

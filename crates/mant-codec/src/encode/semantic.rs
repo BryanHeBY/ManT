@@ -42,10 +42,13 @@ pub(super) fn supported(document: &Document) -> bool {
             visit::walk_block(self, block);
         }
     }
+    let Some(flow) = document.flow() else {
+        return false;
+    };
     let mut check = Check {
         supported: mant_ir::validate_document(document).is_empty()
             && mant_ir::semantics_complete(&document.diagnostics),
-        content: document.content(),
+        content: flow.content_store.content(),
     };
     check.visit_document(document);
     check.supported

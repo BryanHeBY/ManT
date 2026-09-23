@@ -36,8 +36,11 @@ pub(super) fn collect<'a>(
         supports: super::support::SupportIndex::default(),
     };
     if let Some(document) = &content.document {
-        scan.blocks(&document.blocks, None, None, "root");
-        scan.sections(&document.sections, "sections");
+        let flow = document
+            .flow()
+            .expect("Fixed rejected by explanation preflight");
+        scan.blocks(&flow.blocks, None, None, "root");
+        scan.sections(&flow.sections, "sections");
     }
     (scan.candidates, scan.orders, scan.supports)
 }

@@ -1,8 +1,11 @@
 use mant_ir::ResolvedContent;
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, Inline, LayoutHint, Section, SourceCoordinates,
-    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
+    Block, DefinitionItem, DisplayLabel, DisplayRole, DisplayRow, DisplayRun, DisplayStyle,
+    DisplaySurface, Document, DocumentBody, DocumentMeta, FixedBody, FlowBody, Inline, LayoutHint,
+    Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    TldrDocument, TldrOrigin,
 };
+use std::num::NonZeroU32;
 
 use super::{render_query_man, render_query_text};
 
@@ -17,6 +20,147 @@ fn sources(format: SourceFormat) -> Vec<SourceRecord> {
         content_sha256: None,
         coordinates: SourceCoordinates::DecodedUtf8Bytes,
     }]
+}
+
+fn key(value: u32) -> NonZeroU32 {
+    NonZeroU32::new(value).unwrap()
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One complete Fixed surface fixture keeps row/run keys auditable.
+fn fixed_body_reads_exact_native_rows_without_reflow_or_duplicate_title() {
+    // Source-neutral final cells, not a new Flow reconstruction. Pinned CVS
+    // term.c::term_flushln/term_field emits the column gap; a matching no-fill
+    // `a   b` reference was checked before asserting the consumer layout.
+    let fixed = FixedBody {
+        surface: DisplaySurface {
+            text: "alpha  beta中".to_owned(),
+            rows: vec![
+                DisplayRow {
+                    key: key(1),
+                    first_run: key(1),
+                    run_count: 2,
+                    column_count: 13,
+                    break_after: true,
+                },
+                DisplayRow {
+                    key: key(2),
+                    first_run: key(3),
+                    run_count: 0,
+                    column_count: 0,
+                    break_after: true,
+                },
+                DisplayRow {
+                    key: key(3),
+                    first_run: key(3),
+                    run_count: 1,
+                    column_count: 2,
+                    break_after: false,
+                },
+            ],
+            runs: vec![
+                DisplayRun {
+                    key: key(1),
+                    row: key(1),
+                    column: 0,
+                    width: 5,
+                    byte_start: 0,
+                    byte_count: 5,
+                    label: DisplayLabel {
+                        owner: None,
+                        link: None,
+                        source: None,
+                        style: DisplayStyle {
+                            bold: true,
+                            underline: false,
+                        },
+                        role: DisplayRole::Body,
+                    },
+                },
+                DisplayRun {
+                    key: key(2),
+                    row: key(1),
+                    column: 7,
+                    width: 6,
+                    byte_start: 5,
+                    byte_count: 6,
+                    label: DisplayLabel {
+                        owner: None,
+                        link: None,
+                        source: None,
+                        style: DisplayStyle {
+                            bold: false,
+                            underline: false,
+                        },
+                        role: DisplayRole::Body,
+                    },
+                },
+                DisplayRun {
+                    key: key(3),
+                    row: key(3),
+                    column: 0,
+                    width: 2,
+                    byte_start: 11,
+                    byte_count: 3,
+                    label: DisplayLabel {
+                        owner: None,
+                        link: None,
+                        source: None,
+                        style: DisplayStyle {
+                            bold: false,
+                            underline: true,
+                        },
+                        role: DisplayRole::Body,
+                    },
+                },
+            ],
+        },
+        headings: Vec::new(),
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    };
+    fixed.validate().unwrap();
+    let query = ResolvedContent {
+        address: None,
+        label: "demo".to_owned(),
+        document: Some(Document {
+            parser: None,
+            sources: sources(SourceFormat::Man),
+            root_source: SourceKey::FIRST,
+            body: DocumentBody::Fixed(fixed),
+            meta: DocumentMeta {
+                manual_section: Some("1".to_owned()),
+                ..DocumentMeta::default()
+            },
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        }),
+        tldr: None,
+    };
+    let expected = "demo(1)\n\nalpha    beta\n\n中";
+    assert_eq!(render_query_text(&query), expected);
+    assert_eq!(render_query_man(&query), expected);
+    let roles = std::cell::RefCell::new(Vec::new());
+    assert_eq!(
+        super::render_query_text_with(&query, |style, text| {
+            roles.borrow_mut().push((style, text.to_owned()));
+            text.to_owned()
+        }),
+        expected
+    );
+    let roles = roles.into_inner();
+    assert!(
+        roles
+            .iter()
+            .any(|(style, text)| text == "alpha" && style.inline.strong)
+    );
+    assert!(
+        roles
+            .iter()
+            .any(|(style, text)| text == "中" && style.inline.emphasis)
+    );
 }
 
 #[test]
@@ -47,7 +191,6 @@ fn query() -> ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: Some(Document {
-            heading: None,
             parser: None,
             sources: sources(SourceFormat::Man),
             root_source: SourceKey::FIRST,
@@ -57,25 +200,28 @@ fn query() -> ResolvedContent {
             },
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![Section {
-                id: "options-1".to_owned().into(),
-                fragment_aliases: Vec::new(),
-                heading: crate::test_content::heading("OPTIONS"),
-                spacing_before_lines: 0,
-                blocks: vec![paragraph("parent details", true)],
-                children: vec![Section {
-                    id: "common-2".to_owned().into(),
+            body: DocumentBody::Flow(FlowBody {
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![Section {
+                    id: "options-1".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    heading: crate::test_content::heading("Common options"),
-                    spacing_before_lines: 1,
-                    blocks: vec![paragraph("child details", false)],
-                    children: Vec::new(),
+                    heading: crate::test_content::heading("OPTIONS"),
+                    spacing_before_lines: 0,
+                    blocks: vec![paragraph("parent details", true)],
+                    children: vec![Section {
+                        id: "common-2".to_owned().into(),
+                        fragment_aliases: Vec::new(),
+                        heading: crate::test_content::heading("Common options"),
+                        spacing_before_lines: 1,
+                        blocks: vec![paragraph("child details", false)],
+                        children: Vec::new(),
+                        source: None,
+                    }],
                     source: None,
                 }],
-                source: None,
-            }],
-            content_store: crate::test_content::store(),
+                content_store: crate::test_content::store(),
+            }),
         }),
         tldr: None,
     }
@@ -117,14 +263,15 @@ fn text_output_uses_profile_glyphs_without_rewriting_logical_atoms() {
         _ => unreachable!(),
     };
     let document = query.document.as_mut().expect("manual document");
-    document.sections[0].blocks = vec![Block::Paragraph {
+    let flow = document.flow_mut().expect("flow fixture");
+    flow.sections[0].blocks = vec![Block::Paragraph {
         children: vec![left, dash, right],
         layout: LayoutHint::default(),
         source: None,
     }];
-    document.content_store = crate::test_content::store();
+    flow.content_store = crate::test_content::store();
     let root = {
-        let record = &mut document.content_store.atoms[(atom.get() - 1) as usize];
+        let record = &mut flow.content_store.atoms[(atom.get() - 1) as usize];
         let mant_ir::ContentAtomKind::Text {
             text,
             display_override,
@@ -162,14 +309,15 @@ fn text_output_keeps_each_projection_in_a_combining_grapheme() {
     let dash_atom = atom(&dash);
     let mark_atom = atom(&mark);
     let document = query.document.as_mut().expect("manual document");
-    document.sections[0].blocks = vec![Block::Paragraph {
+    let flow = document.flow_mut().expect("flow fixture");
+    flow.sections[0].blocks = vec![Block::Paragraph {
         children: vec![left, dash, mark, right],
         layout: LayoutHint::default(),
         source: None,
     }];
-    document.content_store = crate::test_content::store();
+    flow.content_store = crate::test_content::store();
     for (key, expected, glyphs) in [(dash_atom, "—", "--"), (mark_atom, "\u{0301}", "<?>")] {
-        let record = &mut document.content_store.atoms[(key.get() - 1) as usize];
+        let record = &mut flow.content_store.atoms[(key.get() - 1) as usize];
         let mant_ir::ContentAtomKind::Text {
             text,
             display_override,
@@ -180,7 +328,7 @@ fn text_output_keeps_each_projection_in_a_combining_grapheme() {
         assert_eq!(text, expected);
         *display_override = Some(glyphs.into());
     }
-    mant_ir::validate_content_store(&document.content_store).unwrap();
+    mant_ir::validate_content_store(&flow.content_store).unwrap();
     assert!(render_query_text(&query).contains("X--<?>Y"));
 }
 
@@ -259,7 +407,6 @@ fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
-                heading: None,
                 parser: None,
                 sources: sources(SourceFormat::Man),
                 root_source: SourceKey::FIRST,
@@ -269,17 +416,20 @@ fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
                 },
                 fragment_aliases: Vec::new(),
                 diagnostics: Vec::new(),
-                blocks: Vec::new(),
-                sections: vec![Section {
-                    id: "s-1".to_owned().into(),
-                    fragment_aliases: Vec::new(),
-                    heading: crate::test_content::heading("S"),
-                    spacing_before_lines: 0,
-                    blocks,
-                    children: Vec::new(),
-                    source: None,
-                }],
-                content_store: crate::test_content::store(),
+                body: DocumentBody::Flow(FlowBody {
+                    heading: None,
+                    blocks: Vec::new(),
+                    sections: vec![Section {
+                        id: "s-1".to_owned().into(),
+                        fragment_aliases: Vec::new(),
+                        heading: crate::test_content::heading("S"),
+                        spacing_before_lines: 0,
+                        blocks,
+                        children: Vec::new(),
+                        source: None,
+                    }],
+                    content_store: crate::test_content::store(),
+                }),
             }),
             tldr: None,
         }
@@ -326,7 +476,6 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
         address: None,
         label: "demo".to_owned(),
         document: Some(Document {
-            heading: None,
             parser: None,
             sources: sources(SourceFormat::Man),
             root_source: SourceKey::FIRST,
@@ -336,58 +485,61 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
             },
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![Section {
-                id: "ops".to_owned().into(),
-                fragment_aliases: Vec::new(),
-                heading: crate::test_content::heading("OPERATORS"),
-                spacing_before_lines: 0,
-                blocks: vec![Block::DefinitionList {
-                    declaration_groups: Vec::new(),
-                    compact: false,
-                    layout: LayoutHint::default(),
+            body: DocumentBody::Flow(FlowBody {
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![Section {
+                    id: "ops".to_owned().into(),
+                    fragment_aliases: Vec::new(),
+                    heading: crate::test_content::heading("OPERATORS"),
+                    spacing_before_lines: 0,
+                    blocks: vec![Block::DefinitionList {
+                        declaration_groups: Vec::new(),
+                        compact: false,
+                        layout: LayoutHint::default(),
+                        source: None,
+                        items: vec![
+                            DefinitionItem {
+                                source: None,
+                                entry: None,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: true,
+                                    spacing_before_lines: Some(1),
+                                    ..Default::default()
+                                },
+                                terms: vec![vec![crate::test_content::text("* / %".to_owned())]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![crate::test_content::text(
+                                        "Multiplication, division, and modulus.".to_owned(),
+                                    )],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                            },
+                            DefinitionItem {
+                                source: None,
+                                entry: None,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: true,
+                                    spacing_before_lines: Some(1),
+                                    ..Default::default()
+                                },
+                                terms: vec![vec![crate::test_content::text("space".to_owned())]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![crate::test_content::text(
+                                        "String concatenation.".to_owned(),
+                                    )],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                            },
+                        ],
+                    }],
+                    children: Vec::new(),
                     source: None,
-                    items: vec![
-                        DefinitionItem {
-                            source: None,
-                            entry: None,
-                            layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
-                                spacing_before_lines: Some(1),
-                                ..Default::default()
-                            },
-                            terms: vec![vec![crate::test_content::text("* / %".to_owned())]],
-                            description: vec![Block::Paragraph {
-                                children: vec![crate::test_content::text(
-                                    "Multiplication, division, and modulus.".to_owned(),
-                                )],
-                                layout: LayoutHint::default(),
-                                source: None,
-                            }],
-                        },
-                        DefinitionItem {
-                            source: None,
-                            entry: None,
-                            layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
-                                spacing_before_lines: Some(1),
-                                ..Default::default()
-                            },
-                            terms: vec![vec![crate::test_content::text("space".to_owned())]],
-                            description: vec![Block::Paragraph {
-                                children: vec![crate::test_content::text(
-                                    "String concatenation.".to_owned(),
-                                )],
-                                layout: LayoutHint::default(),
-                                source: None,
-                            }],
-                        },
-                    ],
                 }],
-                children: Vec::new(),
-                source: None,
-            }],
-            content_store: crate::test_content::store(),
+                content_store: crate::test_content::store(),
+            }),
         }),
         tldr: None,
     };
@@ -413,7 +565,6 @@ fn man_format_keeps_inline_definitions_tight() {
         address: None,
         label: "demo".to_owned(),
         document: Some(Document {
-            heading: None,
             parser: None,
             sources: sources(SourceFormat::Man),
             root_source: SourceKey::FIRST,
@@ -423,60 +574,63 @@ fn man_format_keeps_inline_definitions_tight() {
             },
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![Section {
-                id: "ops".to_owned().into(),
-                fragment_aliases: Vec::new(),
-                heading: crate::test_content::heading("OPERATORS"),
-                spacing_before_lines: 0,
-                blocks: vec![Block::DefinitionList {
-                    declaration_groups: Vec::new(),
-                    compact: false,
-                    layout: LayoutHint::default(),
+            body: DocumentBody::Flow(FlowBody {
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![Section {
+                    id: "ops".to_owned().into(),
+                    fragment_aliases: Vec::new(),
+                    heading: crate::test_content::heading("OPERATORS"),
+                    spacing_before_lines: 0,
+                    blocks: vec![Block::DefinitionList {
+                        declaration_groups: Vec::new(),
+                        compact: false,
+                        layout: LayoutHint::default(),
+                        source: None,
+                        items: vec![
+                            DefinitionItem {
+                                source: None,
+                                entry: None,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: true,
+                                    spacing_before_lines: Some(1),
+                                    ..Default::default()
+                                },
+                                terms: vec![vec![crate::test_content::text("&&".to_owned())]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![crate::test_content::text(
+                                        "Logical AND.".to_owned(),
+                                    )],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                            },
+                            DefinitionItem {
+                                source: None,
+                                entry: None,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: false,
+                                    spacing_before_lines: Some(1),
+                                    ..Default::default()
+                                },
+                                terms: vec![vec![crate::test_content::text(
+                                    "--long-option-name".to_owned(),
+                                )]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![crate::test_content::text(
+                                        "A lengthy flag.".to_owned(),
+                                    )],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                            },
+                        ],
+                    }],
+                    children: Vec::new(),
                     source: None,
-                    items: vec![
-                        DefinitionItem {
-                            source: None,
-                            entry: None,
-                            layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
-                                spacing_before_lines: Some(1),
-                                ..Default::default()
-                            },
-                            terms: vec![vec![crate::test_content::text("&&".to_owned())]],
-                            description: vec![Block::Paragraph {
-                                children: vec![crate::test_content::text(
-                                    "Logical AND.".to_owned(),
-                                )],
-                                layout: LayoutHint::default(),
-                                source: None,
-                            }],
-                        },
-                        DefinitionItem {
-                            source: None,
-                            entry: None,
-                            layout: mant_ir::DefinitionLayout {
-                                inline_term: false,
-                                spacing_before_lines: Some(1),
-                                ..Default::default()
-                            },
-                            terms: vec![vec![crate::test_content::text(
-                                "--long-option-name".to_owned(),
-                            )]],
-                            description: vec![Block::Paragraph {
-                                children: vec![crate::test_content::text(
-                                    "A lengthy flag.".to_owned(),
-                                )],
-                                layout: LayoutHint::default(),
-                                source: None,
-                            }],
-                        },
-                    ],
                 }],
-                children: Vec::new(),
-                source: None,
-            }],
-            content_store: crate::test_content::store(),
+                content_store: crate::test_content::store(),
+            }),
         }),
         tldr: None,
     };

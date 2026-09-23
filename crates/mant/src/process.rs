@@ -142,6 +142,7 @@ fn run_paged(
 
 /// Load one full query and hand the normalized document directly to Ratatui.
 #[cfg(feature = "tui")]
+#[allow(clippy::too_many_lines)] // Scope admission adds no new rendering branch.
 fn run_interactive(
     command: Command,
     diagnostics: &mut dyn Write,
@@ -192,7 +193,14 @@ fn run_interactive(
                 Ok(loaded) => loaded,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
-            loaded.into_parts().1.into_iter().map(Arc::new).collect()
+            let queries = loaded.into_parts().1;
+            if let Some(error) = queries
+                .iter()
+                .find_map(|query| presentation::admit_fixed_content(query).err())
+            {
+                return report_failure(&error, diagnostics, diagnostics_color);
+            }
+            queries.into_iter().map(Arc::new).collect()
         }
         QuerySource::ScopeArguments { view: Some(_), .. } => {
             return report_failure(

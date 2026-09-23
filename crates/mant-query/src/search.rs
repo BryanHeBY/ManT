@@ -17,6 +17,8 @@ use plan::{MAX_CONTEXT_LINES, MAX_SEARCH_LIMIT};
 /// Invalid search input, missing logical content, or projection failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SearchError {
+    /// The selected Fixed document requires annotated search support.
+    UnsupportedFixed,
     /// Search pattern contained no bytes.
     EmptyPattern,
     /// Search pattern exceeded the request bound.
@@ -31,11 +33,16 @@ pub enum SearchError {
     ContentProjection,
     /// Regular-expression compilation or execution failed.
     InvalidPattern(String),
+    /// The selected Fixed document has invalid display or source relationships.
+    InvalidFixed(mant_codec::encode::EncodeError),
 }
 
 impl fmt::Display for SearchError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedFixed => {
+                formatter.write_str("Fixed document search is not yet supported")
+            }
             Self::EmptyPattern => formatter.write_str("search pattern must not be empty"),
             Self::PatternTooLong => write!(
                 formatter,
@@ -56,6 +63,7 @@ impl fmt::Display for SearchError {
                 formatter.write_str("search content projection could not be constructed")
             }
             Self::InvalidPattern(message) => write!(formatter, "invalid search pattern: {message}"),
+            Self::InvalidFixed(error) => write!(formatter, "{error}"),
         }
     }
 }

@@ -21,7 +21,8 @@ fn bounds_distinct_tbl_equation_normalization_work() {
             diagnostic.code.as_deref() == Some("manual.inline-equation-budget")
         })
     );
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected equation table");
     };
     assert_eq!(rows.len(), MAX_INLINE_EQUATION_NORMALIZATIONS + 1);
@@ -34,7 +35,7 @@ fn display_equations_preserve_native_eqn_decorators() {
         b".TH EQUATION 1\n.SH DESCRIPTION\n.EQ\nx dot = f(t) bar\ny dotdot bar ~=~ n under\nx vec ~=~ y dyad\n.EN\n",
     )
     .expect("lower decorated equations");
-    let values = document.sections[0]
+    let values = document.flow().expect("Flow fixture").sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -59,7 +60,8 @@ fn tbl_text_block_prefers_native_parse_time_string_expansion() {
         b".TH TBL-EXPANDED-STRING 1\n.ds Aq \\(aq\n.SH DESCRIPTION\n.TS\nl.\nT{\nThere\\*(Aqs\nT}\n.TE\n",
     )
     .expect("lower tbl source with a parse-time string expansion");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     assert_eq!(
@@ -85,7 +87,9 @@ fn tbl_source_recovery_never_replays_a_redefined_macro_outside_native_context() 
             source.as_bytes(),
         )
         .expect("lower a table with a document-local macro override");
-        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        let Block::Table { rows, .. } =
+            &document.flow().expect("Flow fixture").sections[0].blocks[0]
+        else {
             panic!("expected one lowered table");
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -106,7 +110,8 @@ fn tbl_source_recovery_requires_native_direct_call_provenance() {
         b".TH TBL-REDEFINED-MANUAL-REFERENCE 1\n.de MR\nprintf 3\n..\n.SH DESCRIPTION\n.TS\nl.\nT{\n.MR printf 3\nT}\n.TE\n",
     )
     .expect("lower a table with a redefined manual-reference macro");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -126,7 +131,8 @@ fn tbl_source_recovery_does_not_reinterpret_text_after_custom_control_change() {
         b".TH TBL-CUSTOM-CONTROL 1\n.SH DESCRIPTION\n.cc @\n@TS\nl.\nT{\n@MR printf 3\nT}\n@TE\n",
     )
     .expect("lower a table after changing the native control character");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -150,7 +156,9 @@ fn tbl_recovery_marks_empty_user_macros_per_cell_without_degrading_siblings() {
             source.as_bytes(),
         )
         .expect("lower a table with an empty user macro");
-        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        let Block::Table { rows, .. } =
+            &document.flow().expect("Flow fixture").sections[0].blocks[0]
+        else {
             panic!("expected one lowered table");
         };
         let cells = rows[0]
@@ -177,7 +185,8 @@ fn tbl_escape_disabled_cells_keep_escape_spellings_literal() {
         b".TH TBL-EO-LITERAL 1\n.SH DESCRIPTION\n.eo\n.TS\nl.\nT{\n.B TOKEN \\fIITALIC\\fP\nT}\n.TE\n",
     )
     .expect("lower a tbl cell with escape processing disabled");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -200,7 +209,8 @@ fn tbl_native_payload_preserves_escape_transitions_inside_one_cell() {
         b".TH TBL-EO-THEN-EC 1\n.SH DESCRIPTION\n.eo\n.TS\nl.\nT{\nLITERAL \\fIBARE\\fP\n.ec\nACTIVE \\fISTYLED\\fP\nT}\n.TE\n",
     )
     .expect("lower a tbl cell that reenables escape processing");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -227,7 +237,8 @@ fn tbl_source_recovery_preserves_native_whitespace_from_redefined_macro() {
         b".TH TBL-REDEFINED-WHITESPACE 1\n.de B\nA B\n..\n.SH DESCRIPTION\n.TS\nl.\nT{\n.B AB\nT}\n.TE\n",
     )
     .expect("lower a table with a whitespace-producing macro override");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -286,7 +297,8 @@ fn tbl_native_field_count_wins_over_raw_tab_characters() {
         b".TH TBL-EXECUTED-DELIMITER 1\n.SH DESCRIPTION\n.TS\ntab(;);\nl l.\nLEFT\tMID\tGHOST;RIGHT\n.TE\n",
     )
     .expect("lower a table with a non-default tbl delimiter");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     assert_eq!(rows[0].cells.len(), 2);
@@ -308,7 +320,8 @@ fn tbl_comments_use_native_not_lexically_guessed_escape_state() {
         b".TH TBL-UNEXECUTED-ESCAPE 1\n.SH DESCRIPTION\n.de UNUSED\n.ec @\n..\n.TS\nl.\nT{\n.B VISIBLE \\\" HIDDEN_COMMENT\nT}\n.TE\n",
     )
     .expect("lower a table after an uncalled escape-changing macro");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -324,7 +337,8 @@ fn tbl_comment_truncation_precedes_tab_cell_recovery() {
         b".TH TBL-COMMENT-TABS 1\n.SH DESCRIPTION\n.TS\nl l.\nLEFT\tRIGHT \\\" COMMENT\tHIDDEN_CELL\n.TE\n",
     )
     .expect("lower a table with a commented trailing tab field");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     assert_eq!(rows[0].cells.len(), 2);
@@ -348,7 +362,8 @@ fn tbl_text_blocks_recover_complete_inline_macro_semantics() {
         b".Dd September 12, 2026\n.Dt TBLPROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.BR A / B .\nT}\nT{\n.Sm off\n.Em WORD\nT}\nT{\n.Fl Fl help\nT}\nT{\n.sp 1\nSPACED\nT}\n.TE\n",
     )
     .expect("lower a bounded inline tbl recovery witness");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let cells = rows
@@ -368,7 +383,8 @@ fn tbl_source_recovery_never_promotes_roff_comments_to_cells_or_text_blocks() {
         b".TH TBL-INLINE-COMMENT 3\n.SH DESCRIPTION\n.TS\nl l.\nleft\tright\\\" ignored ordinary-cell payload\nT{ \\\" real text-block marker with comment\n.BR linked (3) \\\" ignored text-block payload\nT}\tplain\n.TE\n",
     )
     .expect("lower table comments through the native roff lexical boundary");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let table_text = rows
@@ -396,7 +412,8 @@ fn tbl_source_recovery_uses_a_document_level_ec_escape_change() {
         b".TH TBL-ALTERNATE-ESCAPE-COMMENT 3\n.ec @\n.SH DESCRIPTION\n.TS\nl l.\nleft\tright\t@\" ignored third source cell\n.TE\n.ec\n",
     )
     .expect("lower a table after a native .ec escape change");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let table_text = rows
@@ -420,7 +437,8 @@ fn tbl_inline_recovery_recreates_the_active_document_escape_state() {
         b".Dd September 12, 2026\n.Dt TBL-ALTERNATE-ESCAPE-INLINE 3\n.Os\n.ec @\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.No left@|right\nT}\n.TE\n.ec\n",
     )
     .expect("lower a table cell using its active escape state");
-    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table { rows, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected one lowered table");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {

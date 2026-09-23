@@ -32,7 +32,8 @@ fn classifies_mailto_schemes_without_ascii_case_distinctions() {
         "[mail](MAILTO:user@example.test \"mail title\") [subject](mailto:user@example.test?subject=hello)\n",
         Some("/docs/tool.md".to_owned()),
     );
-    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+    else {
         panic!("link paragraph");
     };
     assert!(matches!(
@@ -61,7 +62,8 @@ fn classifies_mailto_only_after_decoding_and_validating_the_mailbox() {
          [recipients](mailto:user@example.test,second@example.test)\n",
         Some("/docs/tool.md".to_owned()),
     );
-    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+    else {
         panic!("link paragraph");
     };
     let targets = children
@@ -118,6 +120,8 @@ fn heading_attributes_consume_only_an_explicit_id() {
         None,
     );
     let titles = document
+        .flow()
+        .expect("Flow fixture")
         .sections
         .iter()
         .map(|section| {
@@ -145,7 +149,7 @@ fn heading_attributes_consume_only_an_explicit_id() {
         ]
     );
     assert_eq!(
-        document.sections[2]
+        document.flow().expect("Flow fixture").sections[2]
             .fragment_aliases
             .iter()
             .map(mant_ir::FragmentAlias::as_str)
@@ -167,6 +171,8 @@ fn unsupported_math_does_not_leak_markdown_bracket_escapes() {
     );
     assert_eq!(
         document
+            .flow()
+            .expect("Flow fixture")
             .sections
             .iter()
             .map(|section| section.heading.plain_text(document.content()))
@@ -191,7 +197,8 @@ fn markdown_extension_does_not_turn_uri_schemes_or_authorities_into_documents() 
         "C:/manual.md",
     ] {
         let document = parse_document(&format!("[LINK]({uri})\n"), None);
-        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+        else {
             panic!("link paragraph")
         };
         assert!(
@@ -215,8 +222,8 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
 [^note]: footnote body
 ";
     let document = parse_document(markdown, None);
-    assert!(document.sections.is_empty());
-    let blocks = &document.blocks;
+    assert!(document.flow().expect("Flow fixture").sections.is_empty());
+    let blocks = &document.flow().expect("Flow fixture").blocks;
 
     assert!(matches!(
         &blocks[0],
@@ -288,13 +295,19 @@ Document introduction.
 
     assert_eq!(parsed.document.display_title().as_deref(), Some("Demo"));
     assert!(matches!(
-        parsed.document.blocks.as_slice(),
+        parsed.document.flow().expect("Flow fixture").blocks.as_slice(),
         [Block::Paragraph { children, source, .. }]
             if matches!(children.as_slice(), [inline] if inline_text(&parsed.document, inline) == Some("Document introduction."))
                 && source.is_some_and(|span| span.line == 13)
     ));
-    assert_eq!(parsed.document.sections[0].id, "same");
-    assert_eq!(parsed.document.sections[1].id, "same-2");
+    assert_eq!(
+        parsed.document.flow().expect("Flow fixture").sections[0].id,
+        "same"
+    );
+    assert_eq!(
+        parsed.document.flow().expect("Flow fixture").sections[1].id,
+        "same-2"
+    );
 }
 
 #[test]
@@ -312,12 +325,20 @@ Duplicate heading.
 ";
     let document = parse_document(markdown, None);
 
-    assert_eq!(document.sections[0].id, "options");
-    assert_eq!(document.sections[1].id, "options-2");
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[0].id,
+        "options"
+    );
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[1].id,
+        "options-2"
+    );
 
     // The bare `#options` anchor renders on the first section, so an ambiguous
     // link must resolve there rather than to the later disambiguated duplicate.
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("first Options section holds the reference paragraph");
     };
     assert!(
@@ -359,7 +380,8 @@ fn terminal_control_characters_are_masked_with_a_diagnostic() {
             .iter()
             .any(|diagnostic| diagnostic.code.as_deref() == Some("markdown.control-characters"))
     );
-    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+    else {
         panic!("prose survives sanitizing");
     };
     let value = inline_text(document, &children[0]).expect("text inline survives sanitizing");
@@ -387,11 +409,14 @@ Normal manual content.
     );
 
     assert_eq!(
-        document.sections[1].heading.plain_text(document.content()),
+        document.flow().expect("Flow fixture").sections[1]
+            .heading
+            .plain_text(document.content()),
         "TLDR"
     );
     assert_eq!(
-        document.sections[1].id, "tldr-section",
+        document.flow().expect("Flow fixture").sections[1].id,
+        "tldr-section",
         "an ordinary TLDR heading must not shadow the reserved tldr selector"
     );
 }
@@ -404,6 +429,8 @@ fn reserved_selectors_never_shadow_section_ids() {
     );
 
     let ids: Vec<&str> = document
+        .flow()
+        .expect("Flow fixture")
         .sections
         .iter()
         .map(|section| section.id.as_str())

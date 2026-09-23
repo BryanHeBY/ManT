@@ -50,8 +50,8 @@ impl Document {
     /// This does not manufacture a heading for a native manual.
     #[must_use]
     pub fn display_title(&self) -> Option<Cow<'_, str>> {
-        self.heading
-            .as_ref()
+        self.flow()
+            .and_then(|flow| flow.heading.as_ref())
             .and_then(|heading| {
                 self.content()
                     .heading_plain_text(heading)

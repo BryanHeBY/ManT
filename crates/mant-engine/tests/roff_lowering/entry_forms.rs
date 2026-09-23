@@ -73,7 +73,8 @@ fn assert_invocation_consumers(
     use mant_protocol::{EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchSyntax};
     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
-    let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
+    let indexed =
+        &index.section(&query.document.as_ref().unwrap().flow().unwrap().sections[0].id)[0];
     assert_eq!(indexed.names, names);
     assert_eq!(indexed.forms, [form]);
     let outline = mant_query::build_outline_projection(&query, EntryProjection::All, None).unwrap();
@@ -190,7 +191,7 @@ fn incomplete_tag_paragraphs_preserve_visible_terms_at_eof() {
         .unwrap();
         for text in [
             mant_render::render_query_text(&query),
-            mant_codec::encode::render_markdown(&query),
+            mant_codec::encode::render_markdown(&query).expect("valid Flow export"),
         ] {
             assert!(text.contains("--unfinished"), "{tail}: {text}");
             if tail.contains("--first") {
@@ -223,7 +224,9 @@ fn variable_subscripts_must_be_complete_authored_forms() {
         let document = query.document.as_ref().unwrap();
         let index = mant_ir::SemanticIndex::build(document);
         assert!(
-            index.section(&document.sections[0].id)[0].names.is_empty(),
+            index.section(&document.flow().unwrap().sections[0].id)[0]
+                .names
+                .is_empty(),
             "{name}"
         );
         assert!(document.diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")), "{name}: {:?}", document.diagnostics);
@@ -263,7 +266,7 @@ fn option_arguments_never_become_aliases() {
 fn assert_names(source: &str, names: &[&str], missed: &str) {
     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
-    let entries = index.section(&query.document.as_ref().unwrap().sections[0].id);
+    let entries = index.section(&query.document.as_ref().unwrap().flow().unwrap().sections[0].id);
     assert_eq!(entries[0].names, names, "{source}");
     for name in names {
         assert!(

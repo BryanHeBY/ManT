@@ -28,9 +28,9 @@ use mant_ir::DOCUMENT_ROOT_ID;
 use std::{error::Error, fmt};
 
 use mant_ir::{
-    Diagnostic, DiagnosticLevel, Document, DocumentMeta, ParserInfo, Section, SourceCoordinates,
-    SourceFormat, SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
-    validate_document,
+    Diagnostic, DiagnosticLevel, Document, DocumentBody, DocumentMeta, FlowBody, ParserInfo,
+    Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    TldrDocument, TldrOrigin, validate_document,
 };
 #[cfg(test)]
 use pulldown_cmark::Parser;
@@ -272,23 +272,31 @@ fn parse_document_with_entries(
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store,
+        body: DocumentBody::Flow(FlowBody {
+            content_store,
+            heading,
+            blocks: root_blocks,
+            sections,
+        }),
         meta: DocumentMeta::default(),
-        heading,
         fragment_aliases: document_fragment_aliases,
         diagnostics,
-        blocks: root_blocks,
-        sections,
     };
     for (old, new) in metadata::apply(&mut document, declarations.bindings) {
         ids.replace_target(&old, new);
     }
-    entry_diagnostics.extend(crate::producer_identity::outline_identity_diagnostics(
-        &document.blocks,
-        &document.sections,
-        "markdown",
-    ));
-    ids.resolve_links(&mut document);
+    // This producer constructed the Flow arm above; Fixed is never an
+    // alternate lowering route for Markdown source.
+    if let DocumentBody::Flow(flow) = &document.body {
+        entry_diagnostics.extend(crate::producer_identity::outline_identity_diagnostics(
+            &flow.blocks,
+            &flow.sections,
+            "markdown",
+        ));
+    }
+    if let DocumentBody::Flow(flow) = &mut document.body {
+        ids.resolve_links(flow);
+    }
     document.diagnostics.extend(validate_document(&document));
     document
 }

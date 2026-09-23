@@ -89,6 +89,7 @@ pub fn build_outline_with_references(
         });
     }
     if let Some(manual) = &query.document {
+        let flow = manual.flow().ok_or(ProjectionError::UnsupportedFixed)?;
         let content = manual.content();
         // Compact outlines inspect borrowed facts only. Forms and names are
         // materialized exclusively when entry rows are actually requested.
@@ -97,7 +98,7 @@ pub fn build_outline_with_references(
             EntryProjection::None | EntryProjection::Summary
         ))
         .then(|| SemanticIndex::build(manual));
-        if manual.heading.is_some() || !manual.blocks.is_empty() {
+        if flow.heading.is_some() || !flow.blocks.is_empty() {
             let root_entries = index.as_ref().map_or(&[][..], SemanticIndex::root);
             let children = project_entries(
                 root_entries,
@@ -114,7 +115,7 @@ pub fn build_outline_with_references(
                 entry_summary: if index.is_some() {
                     projected_summary(root_entries, &materialized_entries)
                 } else {
-                    borrowed_summary(content, &manual.blocks, &materialized_entries)
+                    borrowed_summary(content, &flow.blocks, &materialized_entries)
                 },
                 children,
             };
@@ -126,7 +127,7 @@ pub fn build_outline_with_references(
         }
         nodes.extend(outline_nodes(
             content,
-            &manual.sections,
+            &flow.sections,
             &[],
             index.as_ref(),
             &materialized_entries,
@@ -169,6 +170,13 @@ fn validate_outline_request(
     root: Option<&ContentSelector>,
     policy: &mant_protocol::ReferenceProjection,
 ) -> Result<(), ProjectionError> {
+    if query
+        .document
+        .as_ref()
+        .is_some_and(|document| document.flow().is_none())
+    {
+        return Err(ProjectionError::UnsupportedFixed);
+    }
     policy
         .validate()
         .map_err(ProjectionError::InvalidReferenceProjection)?;
@@ -209,8 +217,11 @@ fn reference_inventory(
         return Ok(scan(ReferenceScope::Overview));
     }
     let mut located = Vec::new();
-    collect_selection_root_entries(&document.blocks, &mut located);
-    collect_selection_sections(&document.sections, &mut located);
+    let flow = document
+        .flow()
+        .expect("Fixed rejected by outline request validation");
+    collect_selection_root_entries(&flow.blocks, &mut located);
+    collect_selection_sections(&flow.sections, &mut located);
     let index = DocumentSelectorIndex::new(&located);
     let candidate = index.resolve(&query.label, root)?;
     let sections = candidate
@@ -486,6 +497,7 @@ fn find_outline_node<'a>(
     None
 }
 
+#[allow(clippy::too_many_lines)] // Existing selector resolution; body-arm guard adds no new branch.
 fn resolve_outline_root(
     query: &ResolvedContent,
     nodes: &[OutlineNode],
@@ -494,8 +506,11 @@ fn resolve_outline_root(
 ) -> Result<OutlineNode, ProjectionError> {
     let mut located = Vec::new();
     if let Some(manual) = &query.document {
-        collect_selection_root_entries(&manual.blocks, &mut located);
-        collect_selection_sections(&manual.sections, &mut located);
+        let flow = manual
+            .flow()
+            .expect("Fixed rejected by outline request validation");
+        collect_selection_root_entries(&flow.blocks, &mut located);
+        collect_selection_sections(&flow.sections, &mut located);
     }
     let index = DocumentSelectorIndex::new(&located);
     if super::excerpt::selector_matches(selector, &OutlinePath::Tldr, TLDR_ID)
@@ -510,10 +525,11 @@ fn resolve_outline_root(
             });
     }
     if super::excerpt::selector_matches(selector, &OutlinePath::DocumentRoot, DOCUMENT_ROOT_ID)
-        && query
-            .document
-            .as_ref()
-            .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
+        && query.document.as_ref().is_some_and(|document| {
+            document
+                .flow()
+                .is_some_and(|flow| flow.heading.is_some() || !flow.blocks.is_empty())
+        })
     {
         index.validate_synthetic_identity(&query.label, selector, DOCUMENT_ROOT_ID, "root")?;
         return find_outline_node(nodes, &|node| {

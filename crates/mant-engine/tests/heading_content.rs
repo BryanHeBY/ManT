@@ -82,14 +82,30 @@ fn atx_and_setext_headings_preserve_links_styles_and_source_once() {
         let document = query.document.as_ref().unwrap();
         assert!(document.meta.title.is_none());
         assert_eq!(document.display_title().as_deref(), Some("Catalog"));
-        assert!(document.heading.as_ref().unwrap().source.is_some());
+        assert!(
+            document
+                .flow()
+                .unwrap()
+                .heading
+                .as_ref()
+                .unwrap()
+                .source
+                .is_some()
+        );
         assert_eq!(
-            document.sections[0].heading.plain_text(document.content()),
+            document.flow().unwrap().sections[0]
+                .heading
+                .plain_text(document.content()),
             "Get-Item and code"
         );
-        assert!(document.sections[0].heading.source.is_some());
+        assert!(
+            document.flow().unwrap().sections[0]
+                .heading
+                .source
+                .is_some()
+        );
         assert_eq!(links(document).len(), 2);
-        let markdown = render_markdown(&query);
+        let markdown = render_markdown(&query).expect("valid Flow export");
         assert!(markdown.contains("# [Catalog](index.md)"), "{markdown}");
         assert!(
             markdown.contains("**[Get-Item](Get-Item.md)**"),
@@ -120,7 +136,9 @@ fn atx_and_setext_headings_preserve_links_styles_and_source_once() {
 fn extracted_heading_is_readable_without_body_and_keeps_its_own_fragments() {
     let query = load_markdown_text("# [Catalog](index.md) {#Mixed.Target}\n", None).unwrap();
     let document = query.document.as_ref().unwrap();
-    assert!(document.blocks.is_empty() && document.sections.is_empty());
+    assert!(
+        document.flow().unwrap().blocks.is_empty() && document.flow().unwrap().sections.is_empty()
+    );
     assert_eq!(links(document).len(), 1);
     assert_eq!(
         mant_ir::DocumentIndex::build(document)
@@ -159,14 +177,14 @@ fn extracted_heading_is_readable_without_body_and_keeps_its_own_fragments() {
 fn native_section_references_survive_heading_lowering_without_fake_document_heading() {
     let query = load_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd heading reference\n.Sh DESCRIPTION\n.Ss Xr printf 3\nBody.\n").unwrap();
     let document = query.document.as_ref().unwrap();
-    assert!(document.heading.is_none());
+    assert!(document.flow().unwrap().heading.is_none());
     assert_eq!(document.meta.title.as_deref(), Some("PROBE"));
-    let heading = &document.sections[1].children[0].heading;
+    let heading = &document.flow().unwrap().sections[1].children[0].heading;
     assert_eq!(heading.plain_text(document.content()), "printf(3)");
     assert!(
         matches!(&links(document)[0], LinkTarget::Manual { name, manual_section: Some(section) } if name == "printf" && section == "3")
     );
-    let markdown = render_markdown(&query);
+    let markdown = render_markdown(&query).expect("valid Flow export");
     assert!(markdown.contains("man:printf\\(3\\)"), "{markdown}");
     let reparsed = parse_markdown(&markdown, None).unwrap().document;
     assert_eq!(links(&reparsed), links(document));
@@ -216,7 +234,8 @@ fn heading_all_target_kinds_and_local_fragments_round_trip_in_addressable_mode()
     let markdown = mant_codec::encode::render_markdown_with_options(
         &query,
         mant_codec::encode::MarkdownOptions::ADDRESSABLE,
-    );
+    )
+    .expect("valid Flow export");
     let reparsed = parse_markdown(&markdown, None).unwrap().document;
     assert_eq!(links(&reparsed), before, "{markdown}");
     assert!(
@@ -237,10 +256,17 @@ fn heading_targets_do_not_change_ids_or_infer_entries() {
     let two = parse_markdown("# Catalog\n\n## [Topic](two.md)\n", None)
         .unwrap()
         .document;
-    assert_eq!(one.sections[0].id, two.sections[0].id);
     assert_eq!(
-        one.sections[0].heading.plain_text(one.content()),
-        two.sections[0].heading.plain_text(two.content())
+        one.flow().unwrap().sections[0].id,
+        two.flow().unwrap().sections[0].id
+    );
+    assert_eq!(
+        one.flow().unwrap().sections[0]
+            .heading
+            .plain_text(one.content()),
+        two.flow().unwrap().sections[0]
+            .heading
+            .plain_text(two.content())
     );
     let empty = parse_markdown("# Catalog\n\n## [](empty.md)\n", None)
         .unwrap()
@@ -257,15 +283,16 @@ fn heading_targets_do_not_change_ids_or_infer_entries() {
 fn setext_heading_breaks_preserve_inline_structure_in_markdown() {
     let query = load_markdown_text("[First](first.md)  \n[Second](second.md)\n===\n\n[Third](third.md)  \n[Fourth](fourth.md)\n---\n\nBody.\n", None).unwrap();
     let original = query.document.as_ref().unwrap();
-    let markdown = render_markdown(&query);
+    let markdown = render_markdown(&query).expect("valid Flow export");
     let reparsed = parse_markdown(&markdown, None).unwrap().document;
     assert_eq!(
-        reparsed.heading.as_ref().unwrap().content,
-        original.heading.as_ref().unwrap().content,
+        reparsed.flow().unwrap().heading.as_ref().unwrap().content,
+        original.flow().unwrap().heading.as_ref().unwrap().content,
         "{markdown}"
     );
     assert_eq!(
-        reparsed.sections[0].heading.content, original.sections[0].heading.content,
+        reparsed.flow().unwrap().sections[0].heading.content,
+        original.flow().unwrap().sections[0].heading.content,
         "{markdown}"
     );
     assert_eq!(links(&reparsed), links(original));
@@ -301,22 +328,22 @@ fn deep_multiline_headings_keep_hierarchy_and_links_in_portable_markdown() {
         "Second",
     );
     let document = query.document.as_mut().unwrap();
-    document.heading = Some(catalog);
-    document.sections[0].heading = parent;
-    document.sections[0].children[0].heading = Heading {
+    document.flow_mut().unwrap().heading = Some(catalog);
+    document.flow_mut().unwrap().sections[0].heading = parent;
+    document.flow_mut().unwrap().sections[0].children[0].heading = Heading {
         content: vec![first, Inline::LineBreak { atom: break_atom }, second],
         source: None,
     };
-    document.content_store = builder.finish();
-    let markdown = render_markdown(&query);
+    document.flow_mut().unwrap().content_store = builder.finish();
+    let markdown = render_markdown(&query).expect("valid Flow export");
     assert!(
         markdown.contains("### [First](First.md) [Second](Second.md)"),
         "{markdown}"
     );
     let reparsed = parse_markdown(&markdown, None).unwrap().document;
-    assert_eq!(reparsed.sections[0].children.len(), 1);
+    assert_eq!(reparsed.flow().unwrap().sections[0].children.len(), 1);
     assert_eq!(
-        reparsed.sections[0].children[0]
+        reparsed.flow().unwrap().sections[0].children[0]
             .heading
             .plain_text(reparsed.content()),
         "First Second"
@@ -336,7 +363,8 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
             preserve_anchors: false,
         },
     ] {
-        let markdown = mant_codec::encode::render_markdown_with_options(&query, options);
+        let markdown = mant_codec::encode::render_markdown_with_options(&query, options)
+            .expect("valid Flow export");
         assert!(
             markdown.contains("[Catalog](#document-overview)"),
             "{markdown}"
@@ -361,7 +389,11 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
         }
     }
     let plain = load_markdown_text("# Catalog\n\n## Topic\n\nBody.\n", None).unwrap();
-    assert!(!render_markdown(&plain).contains("<a "));
+    assert!(
+        !render_markdown(&plain)
+            .expect("valid Flow export")
+            .contains("<a ")
+    );
 }
 
 #[test]
@@ -371,7 +403,7 @@ fn root_anchor_precedes_the_real_heading_and_never_moves_after_tldr() {
             "<!-- mant:tldr:start -->\n# tool\n\n> Quick help.\n\n- Show help:\n\n`tool --help`\n<!-- mant:tldr:end -->\n\n# [Catalog](#catalog){body}\n"
         );
         let query = load_markdown_text(&source, None).unwrap();
-        let markdown = render_markdown(&query);
+        let markdown = render_markdown(&query).expect("valid Flow export");
         assert!(
             markdown.find("<a id=\"document-overview\"").unwrap()
                 < markdown.find("# [Catalog]").unwrap(),
@@ -429,9 +461,9 @@ fn heading_links_to_inline_anchors_preserve_both_destination_and_occurrence() {
         Provenance::Unknown,
     );
     let document = query.document.as_mut().unwrap();
-    document.heading = Some(catalog);
-    document.content_store = builder.finish();
-    let section = &mut document.sections[0];
+    document.flow_mut().unwrap().heading = Some(catalog);
+    document.flow_mut().unwrap().content_store = builder.finish();
+    let section = &mut document.flow_mut().unwrap().sections[0];
     section.heading = Heading {
         content: vec![spot],
         source: None,
@@ -444,7 +476,7 @@ fn heading_links_to_inline_anchors_preserve_both_destination_and_occurrence() {
         layout: mant_ir::LayoutHint::default(),
         source: None,
     });
-    let markdown = render_markdown(&query);
+    let markdown = render_markdown(&query).expect("valid Flow export");
     assert!(markdown.contains("[Spot](#inline-target)"), "{markdown}");
     assert!(markdown.contains("<a id=\"inline-target\""), "{markdown}");
 }

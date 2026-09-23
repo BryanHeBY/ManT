@@ -14,8 +14,8 @@ fn snapshot(text: &str, addressed: bool) -> Arc<ResolvedContent> {
         origin: MarkdownOrigin::Documents,
     });
     let document = bundle.document.as_mut().expect("document");
-    document.sections.clear();
-    document.blocks = vec![AstBlock::Paragraph {
+    document.flow_mut().expect("Flow fixture").sections.clear();
+    document.flow_mut().expect("Flow fixture").blocks = vec![AstBlock::Paragraph {
         children: vec![crate::test_content::text(text)],
         layout: LayoutHint::default(),
         source: None,

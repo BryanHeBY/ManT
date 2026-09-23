@@ -172,25 +172,27 @@ where
 
     fn document(&mut self, document: &'ir Document) -> Result<(), ReferenceScanStop> {
         self.overview(document)?;
-        self.section_array(&document.sections)
+        let flow = document.flow().ok_or(ReferenceScanStop::InvalidRoot)?;
+        self.section_array(&flow.sections)
     }
 
     fn overview(&mut self, document: &'ir Document) -> Result<(), ReferenceScanStop> {
+        let flow = document.flow().ok_or(ReferenceScanStop::InvalidRoot)?;
         self.charge(0, 1, 0)?;
         if self.options.targets
-            && (document.heading.is_some()
-                || !document.blocks.is_empty()
+            && (flow.heading.is_some()
+                || !flow.blocks.is_empty()
                 || !document.fragment_aliases.is_empty())
         {
             static ROOT: std::sync::LazyLock<crate::NodeId> =
                 std::sync::LazyLock::new(|| crate::NodeId::from(crate::DOCUMENT_ROOT_ID));
             self.target(&ROOT, &document.fragment_aliases, TargetSite::Document)?;
         }
-        if let Some(heading) = &document.heading {
+        if let Some(heading) = &flow.heading {
             self.charge(self.depth(), 1, 0)?;
             self.inlines(&heading.content, Root::DocumentHeading, heading.source)?;
         }
-        self.block_array(&document.blocks)
+        self.block_array(&flow.blocks)
     }
 
     fn section_array(&mut self, sections: &'ir [Section]) -> Result<(), ReferenceScanStop> {

@@ -10,11 +10,11 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
         let doc = query.document.as_mut().unwrap();
         assert!(doc.diagnostics.is_empty(), "{:?}", doc.diagnostics);
         if definition_owner {
-            let Block::List { items, .. } = &mut doc.blocks[1] else {
+            let Block::List { items, .. } = &mut doc.flow_mut().unwrap().blocks[1] else {
                 panic!("list")
             };
             let item = items.pop().unwrap();
-            doc.blocks[1] = Block::DefinitionList {
+            doc.flow_mut().unwrap().blocks[1] = Block::DefinitionList {
                 declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
                     source: None,
@@ -43,7 +43,8 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
         assert_eq!(doc, &copied);
         assert!(mant_ir::validate_document(&copied).is_empty());
         if !definition_owner {
-            let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+            let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE)
+                .expect("valid Flow export");
             assert!(
                 markdown.contains("<a id=\"option-help\"></a>"),
                 "{markdown}"
@@ -61,11 +62,13 @@ fn missing_ids_and_identity_collisions_remain_diagnostics() {
             .iter()
             .any(|d| d.code.as_deref() == Some("ir.dangling-section-link"))
     );
-    doc.blocks.push(doc.blocks[1].clone());
-    doc.sections.push(mant_ir::Section {
+    let repeated = doc.flow().unwrap().blocks[1].clone();
+    doc.flow_mut().unwrap().blocks.push(repeated);
+    let heading = doc.flow().unwrap().heading.as_ref().unwrap().clone();
+    doc.flow_mut().unwrap().sections.push(mant_ir::Section {
         id: "option-help".into(),
         fragment_aliases: vec!["Mixed.Target".into()],
-        heading: doc.heading.as_ref().unwrap().clone(),
+        heading,
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
@@ -83,6 +86,8 @@ fn missing_ids_and_identity_collisions_remain_diagnostics() {
         );
     }
     let target = doc
+        .flow_mut()
+        .unwrap()
         .content_store
         .links
         .iter_mut()

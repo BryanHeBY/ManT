@@ -8,7 +8,7 @@ fn document() -> Document {
     serde_json::from_value(serde_json::json!({
         "sources": [{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],
         "rootSource": 1, "meta": {},
-        "contentStore": {
+        "body": {"kind":"flow", "contentStore": {
             "owners":[{"key":1,"kind":"document","roots":[1,2],"provenance":{"kind":"unknown"}}],
             "roots":[
                 {"key":1,"owner":1,"kind":"heading","atoms":[1],"points":[],"provenance":{"kind":"unknown"}},
@@ -25,7 +25,7 @@ fn document() -> Document {
             ]
         },
         "heading": {"content": [{"type":"link", "occurrence":1, "children": [{"type":"code", "content":{"atom":1,"bytes":{"start":0,"end":7}}}]}]},
-        "sections": [{"id":"topic", "heading":{"content":[{"type":"link", "occurrence":2, "children":[{"type":"emphasis", "children":[{"type":"text", "content":{"atom":2,"bytes":{"start":0,"end":5}}}]}]}]}, "blocks":[], "children":[]}]
+        "sections": [{"id":"topic", "heading":{"content":[{"type":"link", "occurrence":2, "children":[{"type":"emphasis", "children":[{"type":"text", "content":{"atom":2,"bytes":{"start":0,"end":5}}}]}]}]}, "blocks":[], "children":[]}]}
     })).unwrap()
 }
 
@@ -42,16 +42,24 @@ fn headings_are_authoritative_visited_once_and_rebuild_after_serde() {
     let mut doc = document();
     assert_eq!(doc.display_title().as_deref(), Some("Catalog"));
     assert!(doc.meta.title.is_none());
-    assert_eq!(doc.sections[0].heading.plain_text(doc.content()), "Topic");
+    assert_eq!(
+        doc.flow().unwrap().sections[0]
+            .heading
+            .plain_text(doc.content()),
+        "Topic"
+    );
     assert!(DocumentIndex::build(&doc).contains(mant_ir::DOCUMENT_ROOT_ID));
     assert!(mant_ir::validate_document(&doc).is_empty());
     let mut links = Links::default();
     links.visit_document(&doc);
     assert_eq!(links.0, 2);
-    let Inline::Link { occurrence, .. } = doc.heading.as_ref().unwrap().content[0] else {
+    let Inline::Link { occurrence, .. } = doc.flow().unwrap().heading.as_ref().unwrap().content[0]
+    else {
         unreachable!();
     };
     let LinkTarget::Document { name, .. } = &mut doc
+        .flow_mut()
+        .unwrap()
         .content_store
         .link_mut(occurrence)
         .expect("heading occurrence is retained")
@@ -64,13 +72,13 @@ fn headings_are_authoritative_visited_once_and_rebuild_after_serde() {
     assert_eq!(restored, doc);
     assert_eq!(DocumentIndex::build(&restored), DocumentIndex::build(&doc));
     assert!(
-        matches!(restored.content_store.link(occurrence).map(|link| &link.target), Some(LinkTarget::Document {name, ..}) if name=="other")
+        matches!(restored.flow().unwrap().content_store.link(occurrence).map(|link| &link.target), Some(LinkTarget::Document {name, ..}) if name=="other")
     );
 }
 
 #[test]
 fn obsolete_plain_section_titles_and_unknown_heading_fields_are_rejected() {
-    let mut value = serde_json::to_value(&document().sections[0]).unwrap();
+    let mut value = serde_json::to_value(&document().flow().unwrap().sections[0]).unwrap();
     value.as_object_mut().unwrap().remove("heading");
     value["title"] = "Topic".into();
     assert!(serde_json::from_value::<Section>(value).is_err());

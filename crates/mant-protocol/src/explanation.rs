@@ -446,22 +446,28 @@ pub(crate) fn validate_explanation_sources<'a>(
         root_source: source_context
             .as_ref()
             .map_or(mant_ir::SourceKey::FIRST, |context| context.root_source),
-        content_store: content_projection
-            .map_or_else(mant_ir::ContentStore::default, |projection| {
-                projection.content_store.clone()
-            }),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: content_projection
+                .map_or_else(mant_ir::ContentStore::default, |projection| {
+                    projection.content_store.clone()
+                }),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        }),
         meta: mant_ir::DocumentMeta::default(),
-        heading: None,
         fragment_aliases: Vec::new(),
         diagnostics: diagnostics.to_vec(),
-        blocks: Vec::new(),
-        sections: Vec::new(),
     };
     for support in supports {
         match support {
             ExplanationSupport::OwnedEntry { block }
             | ExplanationSupport::DeclarationGroup { block, .. } => {
-                document.blocks.push(block.clone());
+                document
+                    .flow_mut()
+                    .expect("synthetic Flow body")
+                    .blocks
+                    .push(block.clone());
             }
             ExplanationSupport::ContainedDeclarationGroup { .. } => {}
         }
@@ -470,20 +476,33 @@ pub(crate) fn validate_explanation_sources<'a>(
         if let Some(ExplanationContent::Entry { block } | ExplanationContent::Block { block }) =
             &evidence.content
         {
-            document.blocks.push(block.clone());
+            document
+                .flow_mut()
+                .expect("synthetic Flow body")
+                .blocks
+                .push(block.clone());
         }
         for form in evidence.entry.iter().flat_map(|entry| entry.forms.iter()) {
-            document.blocks.push(mant_ir::Block::Paragraph {
-                children: form.clone(),
-                layout: mant_ir::LayoutHint::default(),
-                source: None,
-            });
+            document
+                .flow_mut()
+                .expect("synthetic Flow body")
+                .blocks
+                .push(mant_ir::Block::Paragraph {
+                    children: form.clone(),
+                    layout: mant_ir::LayoutHint::default(),
+                    source: None,
+                });
         }
     }
     if source_context.is_none() && mant_ir::document_has_source_spans(&document) {
         return Err("source-qualified explanation content requires a source context".to_owned());
     }
-    crate::document::validate_projected_content(content_projection, None, &document.blocks, &[])?;
+    crate::document::validate_projected_content(
+        content_projection,
+        None,
+        &document.flow().expect("synthetic Flow body").blocks,
+        &[],
+    )?;
     match source_context {
         Some(_) => mant_ir::validate_document_sources(&document).map_err(|error| error.to_string()),
         None => Ok(()),

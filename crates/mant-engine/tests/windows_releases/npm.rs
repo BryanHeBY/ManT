@@ -11,10 +11,10 @@ fn keeps_the_nested_npm_manual_and_windows_build_requirements() {
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("June 2026"));
     assert_eq!(document.meta.os.as_deref(), Some("NPM@11.17.0"));
-    assert_eq!(document.sections.len(), 1);
+    assert_eq!(document.flow().unwrap().sections.len(), 1);
 
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     assert_eq!(sections.len(), 14);
     for title in ["Synopsis", "Dependencies", "Directories", "Developer Usage"] {
         assert!(

@@ -4,6 +4,8 @@ use std::{error::Error, fmt};
 /// Failure to derive an addressable view from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectionError {
+    /// The selected Fixed document requires annotated projection support.
+    UnsupportedFixed,
     /// Neither an authoritative document nor a quick reference is available.
     MissingContent {
         /// Requested document label.
@@ -54,6 +56,9 @@ pub struct SelectorCandidate {
 impl fmt::Display for ProjectionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedFixed => {
+                formatter.write_str("Fixed document projection is not yet supported")
+            }
             Self::MissingContent { document } => {
                 write!(formatter, "document '{document}' has no available content")
             }

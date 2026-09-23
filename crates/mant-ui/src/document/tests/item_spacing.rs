@@ -33,7 +33,7 @@ fn row(lines: &[String], token: &str) -> usize {
 fn native_pd_two_zero_two_matches_text_and_tui_item_boundaries() {
     let query = mant_loader::load_roff_bytes(b".TH GAPS 1\n.SH DESCRIPTION\nBEFORE\n.PD 2\n.IP 1. 4\nFIRST\n.PD 0\n.IP 2. 4\nSECOND\n.PD 2\n.IP 3. 4\nTHIRD\n").unwrap();
     let document = query.document.as_ref().unwrap();
-    let Block::List { items, .. } = document.sections[0]
+    let Block::List { items, .. } = document.flow().expect("Flow fixture").sections[0]
         .blocks
         .iter()
         .find(|block| matches!(block, Block::List { .. }))
@@ -128,8 +128,8 @@ fn nonparagraph_body_keeps_item_gap_before_the_whole_marker() {
     assert_eq!(builder.lines[5].spans[0].content, "CODE");
     let mut query = bundle();
     let document = query.document.as_mut().unwrap();
-    document.sections.clear();
-    document.blocks = blocks;
+    document.flow_mut().expect("Flow fixture").sections.clear();
+    document.flow_mut().expect("Flow fixture").blocks = blocks;
     let text = mant_render::render_query_text(&query);
     assert_eq!(text, "demo\n\nBEFORE\n\n\n\n-\n  CODE");
 }

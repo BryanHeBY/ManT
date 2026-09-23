@@ -10,11 +10,22 @@ use mant_protocol::{
 #[cfg(test)]
 mod tests;
 
+#[allow(clippy::too_many_lines)] // Existing scoped assembly; body-arm guard adds no new branch.
 pub(crate) fn explain(
     input: crate::QueryScopeView<'_>,
     query: &mant_protocol::ExplanationQuery,
 ) -> Result<ScopeExplanation, crate::ScopeExecutionError> {
     super::validate_explanation_query(query).map_err(crate::ScopeExecutionError::Explanation)?;
+    if input.iter().any(|(_, content)| {
+        content
+            .document
+            .as_ref()
+            .is_some_and(|document| document.flow().is_none())
+    }) {
+        return Err(crate::ScopeExecutionError::Explanation(
+            super::ExplanationError::UnsupportedFixed,
+        ));
+    }
     let mut plans = Vec::new();
     let mut sources = Vec::new();
     let mut failures = Vec::new();

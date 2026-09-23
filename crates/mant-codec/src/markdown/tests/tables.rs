@@ -34,11 +34,15 @@ fn main() {}
 
     assert_eq!(document.root_format(), Some(SourceFormat::Markdown));
     assert_eq!(document.display_title().as_deref(), Some("Tool"));
-    assert_eq!(document.blocks.len(), 2);
-    assert_eq!(document.sections.len(), 1);
-    assert_eq!(document.sections[0].id, "options");
+    assert_eq!(document.flow().expect("Flow fixture").blocks.len(), 2);
+    assert_eq!(document.flow().expect("Flow fixture").sections.len(), 1);
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[0].id,
+        "options"
+    );
 
-    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().expect("Flow fixture").blocks[0]
+    else {
         panic!("intro is a paragraph");
     };
     assert!(
@@ -51,7 +55,7 @@ fn main() {}
     ));
 
     assert!(matches!(
-        &document.blocks[1],
+        &document.flow().expect("Flow fixture").blocks[1],
         Block::Paragraph { children, .. }
             if children.iter().any(|inline| matches!(
                 link_target(&document, inline),
@@ -62,7 +66,7 @@ fn main() {}
             )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak { .. }))
     ));
 
-    let options = &document.sections[0];
+    let options = &document.flow().expect("Flow fixture").sections[0];
     assert!(matches!(
         &options.blocks[0],
         Block::List { kind: ListKind::Bullet, items, .. }

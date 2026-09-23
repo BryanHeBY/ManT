@@ -50,9 +50,9 @@ fn empty_and_rule_cells_keep_typed_reveal_points_when_columns_stack() {
     document.sources[0].identity = SourceIdentity::Anonymous {
         name: "ui-table-points".to_owned(),
     };
-    document.content_store = builder.finish();
-    document.sections.clear();
-    document.blocks = vec![Block::Table {
+    document.flow_mut().expect("Flow fixture").content_store = builder.finish();
+    document.flow_mut().expect("Flow fixture").sections.clear();
+    document.flow_mut().expect("Flow fixture").blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![
             TableRow {
@@ -167,9 +167,9 @@ fn origin_preserving_stack_keeps_empty_and_rule_cell_points() {
         document.sources[0].identity = SourceIdentity::Anonymous {
             name: "ui-origin-table-points".to_owned(),
         };
-        document.content_store = builder.finish();
-        document.sections.clear();
-        document.blocks = vec![Block::Table {
+        document.flow_mut().expect("Flow fixture").content_store = builder.finish();
+        document.flow_mut().expect("Flow fixture").sections.clear();
+        document.flow_mut().expect("Flow fixture").blocks = vec![Block::Table {
             fixed_view: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -186,7 +186,7 @@ fn origin_preserving_stack_keeps_empty_and_rule_cell_points() {
         }];
         assert!(mant_ir::validate_document(document).is_empty());
         assert!(mant_ir::geometry::table_requires_origin_preserving_stack(
-            match &document.blocks[0] {
+            match &document.flow_mut().expect("Flow fixture").blocks[0] {
                 Block::Table { rows, .. } => rows,
                 _ => unreachable!(),
             },
@@ -271,9 +271,9 @@ fn nested_table_point_follows_right_aligned_payload_not_parent_cell_boundary() {
     document.sources[0].identity = SourceIdentity::Anonymous {
         name: "ui-nested-table-points".to_owned(),
     };
-    document.content_store = builder.finish();
-    document.sections.clear();
-    document.blocks = vec![Block::Table {
+    document.flow_mut().expect("Flow fixture").content_store = builder.finish();
+    document.flow_mut().expect("Flow fixture").sections.clear();
+    document.flow_mut().expect("Flow fixture").blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![
             TableRow {
@@ -365,7 +365,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         };
         let mut query = bundle();
         let document = query.document.as_mut().unwrap();
-        document.blocks = vec![Block::Table {
+        document.flow_mut().expect("Flow fixture").blocks = vec![Block::Table {
             fixed_view: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -377,7 +377,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
             },
             source: None,
         }];
-        document.sections.clear();
+        document.flow_mut().expect("Flow fixture").sections.clear();
         let view = DocumentView::new(&query);
         let rendered = view.render((expected_column + 20).max(80));
         let expected_column = usize::from(expected_column);
@@ -411,7 +411,14 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
         layout: LayoutHint::default(),
         source: None,
     };
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -475,7 +482,14 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
         source: None,
     };
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![
             TableRow {
@@ -524,7 +538,14 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
         }],
     };
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![
             data("BEFORE"),
@@ -568,7 +589,14 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
 #[test]
 fn partial_rule_cells_remain_visible_beside_text_cells() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -622,7 +650,14 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
 #[test]
 fn stacked_partial_rule_cells_are_not_dropped() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -690,7 +725,14 @@ fn rule_rows_do_not_split_table_wide_column_measurement() {
         source: None,
     };
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![
             TableRow {

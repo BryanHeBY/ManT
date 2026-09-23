@@ -421,14 +421,28 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                     layout: LayoutHint::default(),
                     source: None,
                 };
-                document.document.as_mut().unwrap().sections[0].blocks = vec![
+                document
+                    .document
+                    .as_mut()
+                    .unwrap()
+                    .flow_mut()
+                    .expect("Flow fixture")
+                    .sections[0]
+                    .blocks = vec![
                     definition,
                     space.clone(),
                     continuation.clone(),
                     paragraph("Outside."),
                 ];
                 let before = DocumentView::new(&document).render(width).text.to_string();
-                let blocks = &mut document.document.as_mut().unwrap().sections[0].blocks;
+                let blocks = &mut document
+                    .document
+                    .as_mut()
+                    .unwrap()
+                    .flow_mut()
+                    .expect("Flow fixture")
+                    .sections[0]
+                    .blocks;
                 blocks.drain(1..3);
                 let Block::DefinitionList { items, .. } = &mut blocks[0] else {
                     unreachable!()
@@ -491,7 +505,14 @@ fn preformatted_character_wrapping_preserves_significant_spaces() {
 #[test]
 fn indented_continuation_without_spacing_follows_its_lead_row() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![
         paragraph("alternate object database"),
         Block::Paragraph {
             children: vec![crate::test_content::text(
@@ -559,7 +580,14 @@ fn code_surfaces_fill_the_document_width_after_the_body_indent() {
 #[test]
 fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::List {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::List {
         kind: ListKind::Bullet,
         compact: true,
         items: vec![ListItem {
@@ -596,7 +624,14 @@ fn adjacent_blocks_add_only_explicit_vertical_space() {
         source: None,
     };
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![
         paragraph("before"),
         Block::Preformatted {
             children: vec![crate::test_content::text("display".to_owned())],
@@ -637,7 +672,14 @@ fn ordered_list_markers_saturate_instead_of_overflowing() {
         layout: LayoutHint::default(),
         source: None,
     };
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::List {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::List {
         kind: ListKind::Ordered {
             start: Some(u64::MAX),
         },

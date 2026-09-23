@@ -33,6 +33,8 @@
         "ls"
       ]
     },
+    "body": {
+      "kind": "flow",
     "sections": [
       {
         "id": "section-0",
@@ -681,6 +683,7 @@
           }
         }
       ]
+    }
     }
   },
   "tldr": {

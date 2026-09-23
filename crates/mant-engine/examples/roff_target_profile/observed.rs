@@ -20,7 +20,10 @@ struct OwnerContext<'a> {
     source_line: u32,
 }
 
-pub(super) fn observed_targets(document: &Document) -> ObservedTargets {
+pub(super) fn observed_targets(document: &Document) -> Result<ObservedTargets, String> {
+    let flow = document
+        .flow()
+        .ok_or_else(|| "Flow target profiler does not accept Fixed bodies".to_owned())?;
     let mut observed = ObservedTargets::default();
     let content = document.content();
     let root_position = SectionPosition {
@@ -42,7 +45,7 @@ pub(super) fn observed_targets(document: &Document) -> ObservedTargets {
     );
     collect_blocks(
         content,
-        &document.blocks,
+        &flow.blocks,
         &mut observed,
         root_position,
         "document",
@@ -53,7 +56,7 @@ pub(super) fn observed_targets(document: &Document) -> ObservedTargets {
         },
     );
     let mut next_section_ordinal = 0;
-    for (index, section) in document.sections.iter().enumerate() {
+    for (index, section) in flow.sections.iter().enumerate() {
         collect_section(
             content,
             section,
@@ -62,7 +65,7 @@ pub(super) fn observed_targets(document: &Document) -> ObservedTargets {
             &mut next_section_ordinal,
         );
     }
-    observed
+    Ok(observed)
 }
 
 fn record_observed(

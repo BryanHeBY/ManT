@@ -642,6 +642,8 @@ mod tests {
             mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
         assert!(violations(&profile(&native.document.root, &document)).is_empty());
         let atom = document
+            .flow_mut()
+            .unwrap()
             .content_store
             .atoms
             .iter_mut()
@@ -655,7 +657,7 @@ mod tests {
             items,
             declaration_groups,
             ..
-        } = &mut document.sections[0].blocks[0]
+        } = &mut document.flow_mut().unwrap().sections[0].blocks[0]
         else {
             panic!("definition list")
         };
@@ -868,7 +870,7 @@ mod tests {
                     .unwrap();
             let original = profile(&native.document.root, &document);
             assert!(violations(&original).is_empty(), "{source}\n{original}");
-            for block in &mut document.sections[0].blocks {
+            for block in &mut document.flow_mut().unwrap().sections[0].blocks {
                 if let Block::DefinitionList {
                     declaration_groups, ..
                 } = block
@@ -928,7 +930,7 @@ mod tests {
         assert!(violations(&original).is_empty(), "{original}");
         let Block::DefinitionList {
             declaration_groups, ..
-        } = &mut document.sections[0].blocks[0]
+        } = &mut document.flow_mut().unwrap().sections[0].blocks[0]
         else {
             panic!("definitions")
         };
@@ -964,7 +966,7 @@ mod tests {
         );
         let Block::DefinitionList {
             declaration_groups, ..
-        } = &mut document.sections[0].blocks[0]
+        } = &mut document.flow_mut().unwrap().sections[0].blocks[0]
         else {
             panic!()
         };
@@ -992,7 +994,7 @@ mod tests {
         assert_eq!(valid["unexpectedGroups"], json!([]));
         let Block::DefinitionList {
             declaration_groups, ..
-        } = &mut document.sections[0].blocks[0]
+        } = &mut document.flow_mut().unwrap().sections[0].blocks[0]
         else {
             panic!()
         };
@@ -1008,7 +1010,7 @@ mod tests {
         );
         let Block::DefinitionList {
             declaration_groups, ..
-        } = &mut document.sections[0].blocks[0]
+        } = &mut document.flow_mut().unwrap().sections[0].blocks[0]
         else {
             panic!()
         };

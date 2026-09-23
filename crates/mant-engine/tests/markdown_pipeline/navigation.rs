@@ -30,11 +30,11 @@ Root body.
         None,
     );
 
-    assert_eq!(document.sections[0].id, "entry-owner");
-    assert_eq!(document.sections[1].id, "path-owner");
-    assert_eq!(document.sections[2].children[0].id, "child");
-    assert_eq!(document.sections[3].id, "explicit-root");
-    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+    assert_eq!(document.flow().unwrap().sections[0].id, "entry-owner");
+    assert_eq!(document.flow().unwrap().sections[1].id, "path-owner");
+    assert_eq!(document.flow().unwrap().sections[2].children[0].id, "child");
+    assert_eq!(document.flow().unwrap().sections[3].id, "explicit-root");
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().blocks[0] else {
         panic!("document preface contains source links");
     };
     let targets = children
@@ -53,7 +53,7 @@ Root body.
         "renamed explicit IDs remain valid Markdown link aliases"
     );
     assert_eq!(
-        document.sections[0]
+        document.flow().unwrap().sections[0]
             .fragment_aliases
             .iter()
             .map(mant_ir::FragmentAlias::as_str)

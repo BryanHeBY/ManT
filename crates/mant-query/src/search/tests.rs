@@ -16,6 +16,27 @@ fn request(pattern: &str) -> SearchQuery {
 }
 
 #[test]
+fn fixed_body_is_not_reported_as_a_complete_empty_flow_search() {
+    let mut query = crate::query_fixture::markdown("# Demo\n\nneedle\n", None).unwrap();
+    query.document.as_mut().unwrap().body = mant_ir::DocumentBody::Fixed(mant_ir::FixedBody {
+        surface: mant_ir::DisplaySurface {
+            text: String::new(),
+            rows: Vec::new(),
+            runs: Vec::new(),
+        },
+        headings: Vec::new(),
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    });
+    assert_eq!(
+        search_query(&query, &request("needle")),
+        Err(SearchError::UnsupportedFixed)
+    );
+}
+
+#[test]
 fn styled_hit_keeps_the_canonical_render_position() {
     let query =
         crate::query_fixture::markdown("# Demo\n\nBefore **access control** after.\n", None)

@@ -218,7 +218,9 @@ fn enclosure_parts_have_one_owner_even_when_empty_or_reparented() {
         (".Eo (\n.Mt first@example.com\n.Ec )", "(first@example.com)"),
     ] {
         let document = mdoc(body);
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] =
+            document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("{document:?}")
         };
         assert_eq!(
@@ -232,7 +234,8 @@ fn enclosure_parts_have_one_owner_even_when_empty_or_reparented() {
     }
     for (body, expected) in [(".Op", "[]"), (".Pq", "()"), (".Oo\n.Oc", "[]")] {
         let document = mdoc(&format!(".TS\nl.\nT{{\n{body}\nT}}\n.TE"));
-        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("{document:?}")
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -255,7 +258,9 @@ fn fo_counts_operands_without_counting_controls_or_targets() {
         (".Fa int\n.Tg anchor\n.Fa char", "probe(int, char)"),
     ] {
         let document = mdoc(&format!(".Fo probe\n{body}\n.Fc"));
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] =
+            document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("{document:?}")
         };
         assert_eq!(
@@ -274,7 +279,9 @@ fn fo_counts_operands_without_counting_controls_or_targets() {
         }
     }
     let document = mdoc(".Fa int size_t");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("{document:?}")
     };
     assert_eq!(inline_text(document.content(), children), "int size_t");

@@ -2,7 +2,8 @@
 
 use mant_ir::{
     Block, ContentContext, ContentProjection, ContentStore, Diagnostic, Document as IrDocument,
-    DocumentMeta, Heading, ParserInfo, Section, SourceKey, SourceRecord, validate_source_table,
+    DocumentBody, DocumentMeta, Heading, ParserInfo, Section, SourceKey, SourceRecord,
+    validate_source_table,
     visit::{self, Visit},
 };
 use schemars::JsonSchema;
@@ -95,24 +96,16 @@ pub struct DocumentResponse {
     /// Source table and root identity, flattened as `sources`/`rootSource`.
     #[serde(flatten)]
     pub source_context: SourceContext,
-    /// Authoritative logical content referenced by all retained IR below.
-    pub content_store: ContentStore,
+    /// Exactly one authoritative Flow or Fixed primary body.
+    pub body: DocumentBody,
     /// Source-neutral document metadata.
     pub meta: DocumentMeta,
-    /// Original visible heading; independent from bibliographic metadata.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub heading: Option<mant_ir::Heading>,
     /// Exact source fragments resolving to the normalized document root.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fragment_aliases: Vec<mant_ir::FragmentAlias>,
     /// Recoverable parsing and validation findings.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
-    /// Content preceding the first section.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub blocks: Vec<Block>,
-    /// Top-level semantic sections in source order.
-    pub sections: Vec<Section>,
 }
 
 #[derive(Deserialize)]
@@ -126,33 +119,33 @@ struct DocumentResponseWire {
     pub producer: Producer,
     #[serde(flatten)]
     pub source_context: SourceContext,
-    pub content_store: ContentStore,
+    pub body: DocumentBody,
     pub meta: DocumentMeta,
-    #[serde(default)]
-    pub heading: Option<mant_ir::Heading>,
     #[serde(default)]
     pub fragment_aliases: Vec<mant_ir::FragmentAlias>,
     #[serde(default)]
     pub diagnostics: Vec<Diagnostic>,
-    #[serde(default)]
-    pub blocks: Vec<Block>,
-    pub sections: Vec<Section>,
 }
 
 impl<'de> Deserialize<'de> for DocumentResponse {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let response = DocumentResponseWire::deserialize(deserializer)?;
         let document: IrDocument = response.clone().into();
-        mant_ir::validate_content_store(&document.content_store)
-            .map_err(serde::de::Error::custom)?;
-        validate_content_context(
-            document.content(),
-            &document.content_store,
-            document.heading.as_ref(),
-            &document.blocks,
-            &document.sections,
-        )
-        .map_err(serde::de::Error::custom)?;
+        match &document.body {
+            DocumentBody::Flow(flow) => {
+                mant_ir::validate_content_store(&flow.content_store)
+                    .map_err(serde::de::Error::custom)?;
+                validate_content_context(
+                    document.content(),
+                    &flow.content_store,
+                    flow.heading.as_ref(),
+                    &flow.blocks,
+                    &flow.sections,
+                )
+                .map_err(serde::de::Error::custom)?;
+            }
+            DocumentBody::Fixed(fixed) => fixed.validate().map_err(serde::de::Error::custom)?,
+        }
         // Complete documents, unlike excerpt/explanation projections, must
         // account for every non-opportunity atom exactly once. Reuse the IR
         // coverage rule without imposing it on partial response envelopes.
@@ -196,13 +189,15 @@ pub(crate) fn validate_projection_sources(
         parser: None,
         sources: source_context.map_or_else(Vec::new, |context| context.sources.clone()),
         root_source: source_context.map_or(SourceKey::FIRST, |context| context.root_source),
-        content_store: projection.content_store.clone(),
+        body: DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: projection.content_store.clone(),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        }),
         meta: DocumentMeta::default(),
-        heading: None,
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: Vec::new(),
-        sections: Vec::new(),
     };
     if source_context.is_none() && mant_ir::document_has_source_spans(&document) {
         return Err("source-qualified content projection requires a source context".to_owned());
@@ -428,13 +423,10 @@ impl From<&IrDocument> for DocumentResponse {
             schema: DocumentSchema::V0Dot12,
             producer: Producer::for_document(document),
             source_context: SourceContext::from(document),
-            content_store: document.content_store.clone(),
+            body: document.body.clone(),
             meta: document.meta.clone(),
-            heading: document.heading.clone(),
             fragment_aliases: document.fragment_aliases.clone(),
             diagnostics: document.diagnostics.clone(),
-            blocks: document.blocks.clone(),
-            sections: document.sections.clone(),
         }
     }
 }
@@ -448,13 +440,10 @@ impl From<DocumentResponse> for IrDocument {
             }),
             sources: document.source_context.sources,
             root_source: document.source_context.root_source,
-            content_store: document.content_store,
+            body: document.body,
             meta: document.meta,
-            heading: document.heading,
             fragment_aliases: document.fragment_aliases,
             diagnostics: document.diagnostics,
-            blocks: document.blocks,
-            sections: document.sections,
         }
     }
 }

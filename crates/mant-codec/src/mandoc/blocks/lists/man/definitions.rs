@@ -602,7 +602,9 @@ mod tests {
                 source.as_bytes(),
             )
             .unwrap();
-            let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            let Block::DefinitionList { items, .. } =
+                &document.flow().expect("Flow fixture").sections[0].blocks[0]
+            else {
                 panic!("literal {mark:?} must retain its authored tag");
             };
             assert_eq!(
@@ -622,7 +624,7 @@ mod tests {
             )
             .unwrap();
             assert!(
-                matches!(&document.sections[0].blocks[0], Block::List { kind: mant_ir::ListKind::Bullet, items, .. } if items.len() == 1),
+                matches!(&document.flow().expect("Flow fixture").sections[0].blocks[0], Block::List { kind: mant_ir::ListKind::Bullet, items, .. } if items.len() == 1),
                 "{mark:?}"
             );
         }
@@ -643,7 +645,7 @@ mod tests {
                 source.as_bytes(),
             )
             .unwrap();
-            let items: Vec<&DefinitionItem> = document.sections[0]
+            let items: Vec<&DefinitionItem> = document.flow().expect("Flow fixture").sections[0]
                 .blocks
                 .iter()
                 .filter_map(|block| match block {

@@ -52,8 +52,8 @@ fn parses_the_real_bash_backed_shell_manual() {
     assert!(source_path_ends_with(document, "fedora44/sh.1.zst"));
 
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
-    assert_eq!(document.sections.len(), 38);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
+    assert_eq!(document.flow().unwrap().sections.len(), 38);
     for title in ["NAME", "SHELL GRAMMAR", "REDIRECTION", "FUNCTIONS"] {
         assert!(
             sections
@@ -75,7 +75,7 @@ fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     let set = sections
         .iter()
         .flat_map(|section| index.section(&section.id))
@@ -124,7 +124,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     let aliases = sections
         .iter()
         .filter(|section| {
@@ -181,7 +181,7 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     let entries = sections
         .iter()
         .flat_map(|section| all_entries(index.section(&section.id)))
@@ -226,7 +226,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     let readline = sections
         .iter()
         .find(|section| section.heading.plain_text(document.content()) == "Readline Variables")
@@ -298,7 +298,7 @@ fn preserves_compact_invocations_without_borrowing_the_next_description() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     let aliases = ["--init-file", "--rcfile"];
     let entries = aliases.map(|alias| {
         sections

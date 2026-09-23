@@ -226,24 +226,26 @@ fn table_cell_and_root_semantic_owner_positions_agree_with_scanner() {
     };
     for table in [false, true] {
         if table {
-            let blocks = std::mem::take(&mut query.document.as_mut().unwrap().blocks);
-            query.document.as_mut().unwrap().blocks = vec![mant_ir::Block::Table {
-                fixed_view: None,
-                rows: vec![mant_ir::TableRow {
-                    kind: mant_ir::TableRowKind::Data,
-                    cells: vec![mant_ir::TableCell {
-                        kind: mant_ir::TableCellKind::Text,
-                        blocks,
-                        point: None,
-                        column_span: 1,
-                        row_span: 1,
-                        alignment: None,
-                        source: None,
+            let blocks =
+                std::mem::take(&mut query.document.as_mut().unwrap().flow_mut().unwrap().blocks);
+            query.document.as_mut().unwrap().flow_mut().unwrap().blocks =
+                vec![mant_ir::Block::Table {
+                    fixed_view: None,
+                    rows: vec![mant_ir::TableRow {
+                        kind: mant_ir::TableRowKind::Data,
+                        cells: vec![mant_ir::TableCell {
+                            kind: mant_ir::TableCellKind::Text,
+                            blocks,
+                            point: None,
+                            column_span: 1,
+                            row_span: 1,
+                            alignment: None,
+                            source: None,
+                        }],
                     }],
-                }],
-                layout: mant_ir::LayoutHint::default(),
-                source: None,
-            }];
+                    layout: mant_ir::LayoutHint::default(),
+                    source: None,
+                }];
         }
         let outline =
             build_outline_with_references(&query, EntryProjection::All, None, &policy).unwrap();

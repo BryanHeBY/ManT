@@ -6,7 +6,7 @@ fn text_inline(document: &mut mant_ir::Document, value: &str, heading: bool) -> 
         ContentOwnerKey, ContentOwnerKind, ContentRef, ContentRoot, ContentRootKey,
         ContentRootKind, ContentStyle, Provenance,
     };
-    let store = &mut document.content_store;
+    let store = &mut document.flow_mut().unwrap().content_store;
     let owner = ContentOwnerKey::new(u32::try_from(store.owners.len() + 1).unwrap()).unwrap();
     let root = ContentRootKey::new(u32::try_from(store.roots.len() + 1).unwrap()).unwrap();
     let atom = ContentAtomKey::new(u32::try_from(store.atoms.len() + 1).unwrap()).unwrap();

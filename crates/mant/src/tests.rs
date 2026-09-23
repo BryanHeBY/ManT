@@ -658,11 +658,12 @@ fn invoke_with_terminal_output(
 #[test]
 fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exact() {
     let mut document = semantic_markdown();
-    let heading = document.heading.as_mut().expect("fixture heading");
+    let flow = document.flow_mut().expect("fixture Flow body");
+    let heading = flow.heading.as_mut().expect("fixture heading");
     let Inline::Text { content } = &mut heading.content[0] else {
         panic!("plain fixture heading");
     };
-    let atom = &mut document.content_store.atoms[(content.atom.get() - 1) as usize];
+    let atom = &mut flow.content_store.atoms[(content.atom.get() - 1) as usize];
     let mant_ir::ContentAtomKind::Text { text, .. } = &mut atom.kind else {
         panic!("text fixture atom");
     };
@@ -712,7 +713,6 @@ fn manual_with_option(explainable: bool) -> Document {
     }
     let name = section(&mut content, "name-1", "NAME", "demo - a test", Vec::new());
     Document {
-        heading: None,
         parser: None,
         sources: vec![SourceRecord {
             key: SourceKey::FIRST,
@@ -725,15 +725,18 @@ fn manual_with_option(explainable: bool) -> Document {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store: content.finish(),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: content.finish(),
+            heading: None,
+            blocks: Vec::new(),
+            sections: vec![name, options],
+        }),
         meta: DocumentMeta {
             manual_section: Some("1".to_owned()),
             ..DocumentMeta::default()
         },
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: Vec::new(),
-        sections: vec![name, options],
     }
 }
 

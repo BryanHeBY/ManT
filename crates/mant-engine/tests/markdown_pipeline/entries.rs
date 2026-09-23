@@ -15,7 +15,7 @@ fn annotates_explicit_option_lists_without_rewriting_their_heads() {
         None,
     );
 
-    let options = &document.sections[0];
+    let options = &document.flow().unwrap().sections[0];
     let Block::List { items, .. } = &options.blocks[0] else {
         panic!("explicit option list remains an ordinary list");
     };
@@ -73,7 +73,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     let Block::List {
         items: option_items,
         ..
-    } = &parsed.document.sections[0].blocks[0]
+    } = &parsed.document.flow().unwrap().sections[0].blocks[0]
     else {
         panic!("declared options should become definitions");
     };
@@ -174,7 +174,14 @@ fn declared_entries_expose_every_protocol_semantic_role() {
         (EntryKind::Value, "always"),
         (EntryKind::Term, "exit status"),
     ];
-    for (section, (role, name)) in parsed.document.sections.iter().zip(expected) {
+    for (section, (role, name)) in parsed
+        .document
+        .flow()
+        .unwrap()
+        .sections
+        .iter()
+        .zip(expected)
+    {
         let [Block::List { items, .. }] = section.blocks.as_slice() else {
             panic!("declared {role:?} list should become definitions");
         };
@@ -208,6 +215,8 @@ fn declared_non_option_code_spans_are_atomic_names() {
 
     let identities = parsed
         .document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .flat_map(|section| &section.blocks)
@@ -252,7 +261,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
     .expect("dotted semantic options");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let Block::List { items, .. } = &parsed.document.sections[0].blocks[0] else {
+    let Block::List { items, .. } = &parsed.document.flow().unwrap().sections[0].blocks[0] else {
         panic!("declared options should become definitions");
     };
     assert_eq!(
@@ -572,7 +581,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
     .expect("rejected declaration diagnostics");
 
     assert!(matches!(
-        parsed.document.sections[0].blocks[0],
+        parsed.document.flow().unwrap().sections[0].blocks[0],
         Block::List { .. }
     ));
     assert_eq!(parsed.document.diagnostics.len(), 3);
@@ -614,7 +623,7 @@ fn declared_entry_directive_does_not_skip_an_intervening_construct() {
     )
     .expect("invalid directive placement remains recoverable");
     assert!(matches!(
-        parsed.document.sections[0].blocks[0],
+        parsed.document.flow().unwrap().sections[0].blocks[0],
         Block::List { .. }
     ));
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
@@ -957,7 +966,7 @@ fn declared_negated_dash_options_preserve_their_executable_spelling() {
     .expect("negated dash semantic options");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let Block::List { items, .. } = &parsed.document.sections[0].blocks[0] else {
+    let Block::List { items, .. } = &parsed.document.flow().unwrap().sections[0].blocks[0] else {
         panic!("declared options should become definitions");
     };
     assert_eq!(

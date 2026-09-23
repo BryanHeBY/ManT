@@ -13,6 +13,11 @@ where
         document: &'ir Document,
         scope: ReferenceScope<'_>,
     ) -> Result<(), ReferenceScanStop> {
+        // This API exposes Flow `ContentLocation`s. Fixed links have display
+        // slices, not fabricated Flow roots; R02b adds their own scanner.
+        if document.flow().is_none() {
+            return Err(ReferenceScanStop::InvalidRoot);
+        }
         match scope {
             ReferenceScope::Document => self.document(document),
             ReferenceScope::Overview => self.overview(document),

@@ -148,7 +148,14 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
         let mut content = load_markdown_text(
             "<!-- mant:entries role=command case=sensitive -->\n- `run`: Read TOKEN here.\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: CHILD.\n", None,
         ).unwrap();
-        let Block::List { items, .. } = &mut content.document.as_mut().unwrap().blocks[0] else {
+        let Block::List { items, .. } = &mut content
+            .document
+            .as_mut()
+            .unwrap()
+            .flow_mut()
+            .unwrap()
+            .blocks[0]
+        else {
             panic!("list")
         };
         let parent = &mut items[0];
@@ -160,7 +167,7 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
             facts.forms.clear();
         }
         let document = content.document.as_ref().unwrap();
-        let Block::List { items, .. } = &document.blocks[0] else {
+        let Block::List { items, .. } = &document.flow().unwrap().blocks[0] else {
             unreachable!()
         };
         let owner = EntryOwner::List(&items[0]);

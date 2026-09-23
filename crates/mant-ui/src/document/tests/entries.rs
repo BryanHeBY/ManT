@@ -105,7 +105,9 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
         content.document.as_ref().unwrap().diagnostics
     );
     let document = content.document.as_mut().unwrap();
-    let Block::List { items, .. } = &mut document.sections[0].blocks[0] else {
+    let Block::List { items, .. } =
+        &mut document.flow_mut().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("list")
     };
     let item = &mut items[0];
@@ -251,7 +253,14 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
         },
     };
     let mut bundle = bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![
             definition("-E", "Run the preprocessor.", None),

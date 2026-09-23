@@ -165,6 +165,12 @@ impl ReferenceNavigation {
         if self.source_owner_counts.is_empty() {
             return;
         }
+        let Some(flow) = document.flow() else {
+            // Fixed owner marks are not yet classified into Flow entry IDs.
+            // Do not certify a source-owner census by walking an empty tree.
+            self.limited = true;
+            return;
+        };
         let Some(mut budget) = self.remaining_budget.take() else {
             return;
         };
@@ -173,14 +179,14 @@ impl ReferenceNavigation {
             budget: &mut budget,
         };
         let checked = (|| {
-            if document.heading.is_some()
-                || !document.blocks.is_empty()
+            if flow.heading.is_some()
+                || !flow.blocks.is_empty()
                 || !document.fragment_aliases.is_empty()
             {
                 census.count(ROOT_ID, 0)?;
             }
             census.entries(index.root(), 0)?;
-            census.sections(&document.sections, index, &mut Vec::new())
+            census.sections(&flow.sections, index, &mut Vec::new())
         })();
         self.source_owners_verified = checked.is_ok();
         self.limited |= checked.is_err();

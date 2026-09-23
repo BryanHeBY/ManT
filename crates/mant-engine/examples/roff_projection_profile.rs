@@ -106,10 +106,10 @@ fn profile_request(line: &str) -> Result<Value, String> {
         tldr: None,
     };
 
-    let expected = projection_topology(&document);
-    let markdown = render_markdown(&query);
+    let expected = projection_topology(&document)?;
+    let markdown = render_markdown(&query).map_err(|error| error.to_string())?;
     let reparsed = parse_markdown(&markdown, None).map_err(|error| error.to_string())?;
-    let observed = projection_topology(&reparsed.document);
+    let observed = projection_topology(&reparsed.document)?;
     let mut violations = compare_topology("full", &expected, &observed);
     let excerpt_checks = check_section_excerpts(&query, &document, &mut violations)?;
 
@@ -140,20 +140,17 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("request.{field} must be a non-empty string"))
 }
 
-fn projection_topology(document: &Document) -> ProjectionTopology {
+fn projection_topology(document: &Document) -> Result<ProjectionTopology, String> {
+    let flow = document
+        .flow()
+        .ok_or_else(|| "Flow projection profiler does not accept Fixed bodies".to_owned())?;
     let mut topology = ProjectionTopology::default();
     let content = document.content();
-    collect_blocks(
-        content,
-        &document.blocks,
-        &[],
-        &mut Vec::new(),
-        &mut topology,
-    );
-    collect_sections(content, &document.sections, &[], &mut topology);
-    collect_entity_blocks(content, &document.blocks, &mut topology.entity_spellings);
-    collect_entity_sections(content, &document.sections, &mut topology.entity_spellings);
-    topology
+    collect_blocks(content, &flow.blocks, &[], &mut Vec::new(), &mut topology);
+    collect_sections(content, &flow.sections, &[], &mut topology);
+    collect_entity_blocks(content, &flow.blocks, &mut topology.entity_spellings);
+    collect_entity_sections(content, &flow.sections, &mut topology.entity_spellings);
+    Ok(topology)
 }
 
 fn collect_entity_sections(
@@ -569,8 +566,11 @@ fn check_section_excerpts(
     document: &Document,
     violations: &mut Vec<String>,
 ) -> Result<usize, String> {
+    let flow = document
+        .flow()
+        .ok_or_else(|| "Flow excerpt profiler does not accept Fixed bodies".to_owned())?;
     let mut sections = Vec::new();
-    flatten_sections(document.content(), &document.sections, &[], &mut sections);
+    flatten_sections(document.content(), &flow.sections, &[], &mut sections);
     let indexes = sample_indexes(sections.len());
     for index in &indexes {
         let (coordinates, section) = &sections[*index];
@@ -587,19 +587,21 @@ fn check_section_excerpts(
         let markdown = render_excerpt_markdown(&excerpt);
         let reparsed = parse_markdown(&markdown, None).map_err(|error| error.to_string())?;
         let expected_document = Document {
-            heading: None,
             sources: document.sources.clone(),
             root_source: document.root_source,
-            content_store: document.content_store.clone(),
+            body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+                content_store: flow.content_store.clone(),
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![(*section).clone()],
+            }),
             meta: document.meta.clone(),
             parser: document.parser.clone(),
             fragment_aliases: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![(*section).clone()],
             diagnostics: Vec::new(),
         };
-        let expected = projection_topology(&expected_document);
-        let observed = projection_topology(&reparsed.document);
+        let expected = projection_topology(&expected_document)?;
+        let observed = projection_topology(&reparsed.document)?;
         violations.extend(compare_topology(
             &format!("excerpt {selector}"),
             &expected,
@@ -679,9 +681,14 @@ mod tests {
         )
         .unwrap()
         .document;
-        document.sections[1].heading = mant_ir::Heading::default();
+        document.flow_mut().unwrap().sections[1].heading = mant_ir::Heading::default();
         let mut selected = Vec::new();
-        flatten_sections(document.content(), &document.sections, &[], &mut selected);
+        flatten_sections(
+            document.content(),
+            &document.flow().unwrap().sections,
+            &[],
+            &mut selected,
+        );
         let coordinates: Vec<_> = selected.iter().map(|(path, _)| path.clone()).collect();
         assert_eq!(coordinates, [vec![1], vec![2, 1], vec![3]]);
         let query = ResolvedContent {

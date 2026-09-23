@@ -27,6 +27,8 @@ fn keeps_the_analyzer_options_checkers_and_archive_metadata() {
     ));
     assert_eq!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .map(|section| section.heading.plain_text(document.content()))

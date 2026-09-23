@@ -5,7 +5,7 @@ use mant_render::render_query_text;
 
 fn item(query: &mant_ir::ResolvedContent) -> &DefinitionItem {
     let Block::DefinitionList { items, .. } =
-        &query.document.as_ref().unwrap().sections[0].blocks[0]
+        &query.document.as_ref().unwrap().flow().unwrap().sections[0].blocks[0]
     else {
         panic!("expected definition list")
     };

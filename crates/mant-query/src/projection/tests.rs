@@ -18,43 +18,63 @@ fn inline(
     root_kind: ContentRootKind,
     literal: bool,
 ) -> Inline {
-    let owner =
-        ContentOwnerKey::new(u32::try_from(document.content_store.owners.len() + 1).unwrap())
-            .unwrap();
-    let root = ContentRootKey::new(u32::try_from(document.content_store.roots.len() + 1).unwrap())
-        .unwrap();
-    let atom = ContentAtomKey::new(u32::try_from(document.content_store.atoms.len() + 1).unwrap())
-        .unwrap();
-    document.content_store.owners.push(ContentOwner {
-        key: owner,
-        kind: owner_kind,
-        roots: vec![root],
-        provenance: Provenance::Unknown,
-    });
-    document.content_store.roots.push(ContentRoot {
-        key: root,
-        owner,
-        kind: root_kind,
-        atoms: vec![atom],
-        points: Vec::new(),
-        provenance: Provenance::Unknown,
-    });
-    document.content_store.atoms.push(ContentAtom {
-        key: atom,
-        root,
-        owner,
-        kind: ContentAtomKind::Text {
-            text: value.to_owned(),
-            display_override: None,
-        },
-        style: ContentStyle {
-            literal,
-            ..ContentStyle::default()
-        },
-        role: None,
-        link: None,
-        provenance: Provenance::Unknown,
-    });
+    let owner = ContentOwnerKey::new(
+        u32::try_from(document.flow().unwrap().content_store.owners.len() + 1).unwrap(),
+    )
+    .unwrap();
+    let root = ContentRootKey::new(
+        u32::try_from(document.flow().unwrap().content_store.roots.len() + 1).unwrap(),
+    )
+    .unwrap();
+    let atom = ContentAtomKey::new(
+        u32::try_from(document.flow().unwrap().content_store.atoms.len() + 1).unwrap(),
+    )
+    .unwrap();
+    document
+        .flow_mut()
+        .unwrap()
+        .content_store
+        .owners
+        .push(ContentOwner {
+            key: owner,
+            kind: owner_kind,
+            roots: vec![root],
+            provenance: Provenance::Unknown,
+        });
+    document
+        .flow_mut()
+        .unwrap()
+        .content_store
+        .roots
+        .push(ContentRoot {
+            key: root,
+            owner,
+            kind: root_kind,
+            atoms: vec![atom],
+            points: Vec::new(),
+            provenance: Provenance::Unknown,
+        });
+    document
+        .flow_mut()
+        .unwrap()
+        .content_store
+        .atoms
+        .push(ContentAtom {
+            key: atom,
+            root,
+            owner,
+            kind: ContentAtomKind::Text {
+                text: value.to_owned(),
+                display_override: None,
+            },
+            style: ContentStyle {
+                literal,
+                ..ContentStyle::default()
+            },
+            role: None,
+            link: None,
+            provenance: Provenance::Unknown,
+        });
     let content = ContentRef {
         atom,
         bytes: ContentByteRange {
@@ -92,7 +112,6 @@ fn section(document: &mut Document, id: &str, title: &str) -> Section {
 
 fn query() -> ResolvedContent {
     let mut document = Document {
-        heading: None,
         parser: None,
         sources: vec![SourceRecord {
             key: SourceKey::FIRST,
@@ -105,15 +124,18 @@ fn query() -> ResolvedContent {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store: ContentStore::default(),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: ContentStore::default(),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        }),
         meta: DocumentMeta {
             manual_section: Some("1".to_owned()),
             ..DocumentMeta::default()
         },
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: Vec::new(),
-        sections: Vec::new(),
     };
     let name = section(&mut document, "name-1", "NAME");
     let mut options = section(&mut document, "options-2", "OPTIONS");
@@ -122,7 +144,7 @@ fn query() -> ResolvedContent {
         section(&mut document, "other-4", "Other options"),
     ];
     let files = section(&mut document, "files-5", "FILES");
-    document.sections = vec![name, options, files];
+    document.flow_mut().unwrap().sections = vec![name, options, files];
     ResolvedContent {
         address: None,
         label: "demo".to_owned(),
@@ -142,6 +164,45 @@ fn tldr() -> TldrDocument {
         source_path: "/tldr/pages/common/demo.md".to_owned(),
         origin: TldrOrigin::TldrPages,
     }
+}
+
+#[test]
+fn fixed_body_does_not_masquerade_as_an_empty_flow_projection() {
+    let mut query = query();
+    query.document.as_mut().unwrap().body = mant_ir::DocumentBody::Fixed(mant_ir::FixedBody {
+        surface: mant_ir::DisplaySurface {
+            text: String::new(),
+            rows: Vec::new(),
+            runs: Vec::new(),
+        },
+        headings: Vec::new(),
+        owners: Vec::new(),
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    });
+    assert_eq!(
+        build_outline(&query),
+        Err(ProjectionError::UnsupportedFixed)
+    );
+    assert_eq!(
+        select_excerpt(&query, &[ContentSelector::path("root")]),
+        Err(ProjectionError::UnsupportedFixed)
+    );
+    assert!(matches!(
+        super::select_explanation(&query, "needle"),
+        Err(crate::ExplanationError::UnsupportedFixed)
+    ));
+    let inventory = super::project_references(
+        query.document.as_ref().unwrap(),
+        None,
+        mant_ir::ReferenceScope::Document,
+        &mant_protocol::ReferenceProjection::default(),
+    );
+    assert!(matches!(
+        inventory.coverage.status,
+        mant_protocol::ReferenceCoverageStatus::NotScanned {}
+    ));
 }
 
 fn definition(
@@ -243,13 +304,15 @@ fn query_with_semantic_entries() -> ResolvedContent {
         &["--"],
         Vec::new(),
     );
-    document.sections[1].blocks.push(Block::DefinitionList {
-        declaration_groups: Vec::new(),
-        items: vec![local_forward, marker],
-        compact: true,
-        layout: LayoutHint::default(),
-        source: None,
-    });
+    document.flow_mut().unwrap().sections[1]
+        .blocks
+        .push(Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            items: vec![local_forward, marker],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        });
     query
 }
 
@@ -409,7 +472,7 @@ fn every_projected_entry_path_round_trips_through_read_and_explain() {
         &["operate-and-get-next (C-o)"],
         description,
     );
-    document.sections[1].children[0]
+    document.flow_mut().unwrap().sections[1].children[0]
         .blocks
         .push(Block::DefinitionList {
             declaration_groups: Vec::new(),
@@ -500,13 +563,15 @@ fn outline_root_preserves_identity_excludes_siblings_and_rejects_names() {
         &["-L path"],
         Vec::new(),
     );
-    document.sections[2].blocks.push(Block::DefinitionList {
-        declaration_groups: Vec::new(),
-        items: vec![entry],
-        compact: true,
-        layout: LayoutHint::default(),
-        source: None,
-    });
+    document.flow_mut().unwrap().sections[2]
+        .blocks
+        .push(Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            items: vec![entry],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        });
     let error = build_outline_projection(
         &query,
         EntryProjection::All,
@@ -530,7 +595,7 @@ fn explicit_section_ids_are_independent_from_semantic_explanations() {
         )],
         source: None,
     };
-    document.sections[0] = Section {
+    document.flow_mut().unwrap().sections[0] = Section {
         id: "force".into(),
         fragment_aliases: Vec::new(),
         heading,
@@ -547,13 +612,15 @@ fn explicit_section_ids_are_independent_from_semantic_explanations() {
         &["force"],
         Vec::new(),
     );
-    document.sections[1].blocks.push(Block::DefinitionList {
-        declaration_groups: Vec::new(),
-        items: vec![entry],
-        compact: true,
-        layout: LayoutHint::default(),
-        source: None,
-    });
+    document.flow_mut().unwrap().sections[1]
+        .blocks
+        .push(Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            items: vec![entry],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        });
 
     let excerpt =
         select_excerpt(&query, &[ContentSelector::id("force")]).expect("exact section ID");
@@ -642,7 +709,7 @@ fn addresses_document_content_before_the_first_heading_as_root() {
         ContentRootKind::Body,
         false,
     )];
-    document.blocks.push(Block::Paragraph {
+    document.flow_mut().unwrap().blocks.push(Block::Paragraph {
         children,
         layout: LayoutHint::default(),
         source: None,
@@ -733,35 +800,37 @@ fn structural_paths_take_precedence_over_colliding_entry_ids() {
         ContentRootKind::Term,
         true,
     )]];
-    document.sections[1].blocks.push(Block::DefinitionList {
-        declaration_groups: Vec::new(),
-        items: vec![DefinitionItem {
-            source: None,
-            entry: Some(EntryFacts {
-                name_bindings: Vec::new(),
-                alias_groups: Vec::new(),
-                alias_of: None,
-                forms: Vec::new(),
-                id: "3".into(),
-                kind: EntryKind::Parameter {
-                    parameter_kind: mant_ir::ParameterKind::Option,
+    document.flow_mut().unwrap().sections[1]
+        .blocks
+        .push(Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            items: vec![DefinitionItem {
+                source: None,
+                entry: Some(EntryFacts {
+                    name_bindings: Vec::new(),
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: Vec::new(),
+                    id: "3".into(),
+                    kind: EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
+                    names: vec!["-3".to_owned()],
+                    value_domain: None,
+                }),
+                terms,
+                description: Vec::new(),
+                layout: mant_ir::DefinitionLayout {
+                    inline_term: false,
+                    spacing_before_lines: None,
+                    ..Default::default()
                 },
-                case: NameCase::Sensitive,
-                names: vec!["-3".to_owned()],
-                value_domain: None,
-            }),
-            terms,
-            description: Vec::new(),
-            layout: mant_ir::DefinitionLayout {
-                inline_term: false,
-                spacing_before_lines: None,
-                ..Default::default()
-            },
-        }],
-        compact: true,
-        layout: LayoutHint::default(),
-        source: None,
-    });
+            }],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        });
 
     let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::path("3")])
         .expect("section path wins");

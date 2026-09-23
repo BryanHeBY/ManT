@@ -28,9 +28,12 @@ pub(super) fn validate_with_index(
     index: &DocumentIndex,
     relations: &[crate::EntryRelationIssue],
 ) -> Vec<Diagnostic> {
-    // This exhaustive match is the body admission boundary. Adding Fixed
-    // requires a native-surface validator; it cannot inherit Flow's empty walk.
-    let DocumentBodyRef::Flow(flow) = document.body();
+    let DocumentBodyRef::Flow(flow) = document.body() else {
+        let DocumentBodyRef::Fixed(fixed) = document.body() else {
+            unreachable!("all document body arms were matched")
+        };
+        return validate_fixed_document(document, fixed);
+    };
     let mut diagnostics = Vec::new();
 
     for source in document
@@ -187,6 +190,33 @@ pub(super) fn validate_with_index(
     }
 
     diagnostics.extend(relations.iter().map(crate::EntryRelationIssue::diagnostic));
+    diagnostics
+}
+
+fn validate_fixed_document(document: &Document, fixed: &crate::FixedBody) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    if let Err(error) = fixed.validate() {
+        diagnostics.push(invariant("ir.invalid-fixed-body", error.to_string()));
+    }
+    if let Err(error) = crate::validate_document_sources(document) {
+        diagnostics.push(invariant("ir.invalid-source-relation", error.to_string()));
+    }
+    for source in document
+        .diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.source)
+        .chain(fixed.source_spans())
+    {
+        validate_source_span(&mut diagnostics, source);
+    }
+    for alias in &document.fragment_aliases {
+        if alias.is_empty() || alias.chars().any(|c| c.is_control() || c.is_whitespace()) {
+            diagnostics.push(invariant(
+                "ir.invalid-fragment-alias",
+                "document root fragment alias must not be empty or contain whitespace".to_owned(),
+            ));
+        }
+    }
     diagnostics
 }
 
@@ -873,7 +903,6 @@ mod tests {
         blocks: Vec<Block>,
     ) -> Document {
         Document {
-            heading: None,
             parser: None,
             sources: vec![SourceRecord {
                 key: SourceKey::FIRST,
@@ -886,13 +915,51 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store,
+            body: crate::DocumentBody::Flow(crate::FlowBody {
+                content_store,
+                heading: None,
+                blocks,
+                sections,
+            }),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks,
-            sections,
         }
+    }
+
+    #[test]
+    fn invalid_fixed_target_is_a_document_invariant_not_trusted_content() {
+        let mut document = document(Vec::new(), Vec::new());
+        document.body = crate::DocumentBody::Fixed(crate::FixedBody {
+            surface: crate::DisplaySurface {
+                text: String::new(),
+                rows: Vec::new(),
+                runs: Vec::new(),
+            },
+            headings: Vec::new(),
+            owners: Vec::new(),
+            links: vec![crate::LinkMark {
+                key: std::num::NonZeroU32::new(1).unwrap(),
+                target: LinkTarget::External {
+                    uri: "https://unsafe host".to_owned(),
+                },
+                label: crate::TextSelection {
+                    parts: Vec::new(),
+                    joins: Vec::new(),
+                },
+                source: None,
+            }],
+            anchors: Vec::new(),
+            regions: Vec::new(),
+        });
+        assert!(
+            validate_document(&document)
+                .iter()
+                .any(|diagnostic| { diagnostic.code.as_deref() == Some("ir.invalid-fixed-body") })
+        );
+        assert!(
+            serde_json::from_value::<Document>(serde_json::to_value(document).unwrap()).is_err()
+        );
     }
 
     #[test]

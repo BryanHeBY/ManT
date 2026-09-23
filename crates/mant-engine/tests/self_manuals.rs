@@ -96,9 +96,9 @@ fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
         let block: mant_ir::Block = serde_json::from_value(value.clone()).unwrap();
         let mut document = load_markdown_text("Body.", None).unwrap().document.unwrap();
-        document.blocks = vec![block.clone()];
+        document.flow_mut().unwrap().blocks = vec![block.clone()];
         let store = protocol_owner_example_store(value["type"] == "definition-list");
-        document.content_store = store.clone();
+        document.flow_mut().unwrap().content_store = store.clone();
         assert!(mant_ir::validate_document(&document).is_empty(), "{label}");
         let roundtrip: mant_ir::Block =
             serde_json::from_str(&serde_json::to_string(&block).unwrap()).unwrap();
@@ -124,10 +124,13 @@ fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
                 "decodedByteLength":0,
                 "coordinates":{"kind":"decoded-utf8-bytes"}
             }],
-            "rootSource":1, "contentStore":store, "meta":{}, "sections":[], "blocks":[value.clone()]
+            "rootSource":1, "body":{"kind":"flow", "contentStore":store, "sections":[], "blocks":[value.clone()]}, "meta":{}
         });
         let response: mant_protocol::DocumentResponse = serde_json::from_value(envelope).unwrap();
-        assert_eq!(response.blocks, [block]);
+        let mant_ir::DocumentBody::Flow(flow) = response.body else {
+            panic!("fixture response must retain its Flow body");
+        };
+        assert_eq!(flow.blocks, [block]);
 
         for field in ["identity", "inlineTerm", "spacingBeforeLines"] {
             let mut invalid = value.clone();
@@ -224,11 +227,13 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
 
     assert_eq!(document.display_title().as_deref(), Some("mant"));
     assert!(
-        !document.sections.is_empty(),
+        !document.flow().unwrap().sections.is_empty(),
         "{name} has a navigable outline"
     );
     assert_eq!(
-        document.sections[0].heading.plain_text(document.content()),
+        document.flow().unwrap().sections[0]
+            .heading
+            .plain_text(document.content()),
         "Name",
         "{name} begins its manual body with a conventional Name section"
     );
@@ -286,7 +291,7 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         [ExcerptSelection::Tldr { outline, document, .. }]
             if outline.path() == "0" && document.origin == TldrOrigin::Embedded
     ));
-    let markdown = render_markdown(&query);
+    let markdown = render_markdown(&query).expect("valid Flow export");
     assert!(!markdown.contains("<a "));
     assert!(
         !markdown.contains("tldr-pages · CC BY 4.0"),
@@ -441,6 +446,8 @@ fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
     );
     assert!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .any(|section| section.heading.plain_text(document.content())
@@ -472,7 +479,9 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
         let document = query.document.as_ref().expect("reference manual body");
         assert_eq!(document.display_title().as_deref(), Some(title), "{name}");
         assert_eq!(
-            document.sections[0].heading.plain_text(document.content()),
+            document.flow().unwrap().sections[0]
+                .heading
+                .plain_text(document.content()),
             "Name",
             "{name}"
         );
@@ -483,6 +492,8 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
         );
         assert!(
             document
+                .flow()
+                .unwrap()
                 .sections
                 .iter()
                 .any(|section| section.heading.plain_text(document.content()) == "See Also"),

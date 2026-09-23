@@ -642,7 +642,7 @@ mod tests {
                 source.as_bytes(),
             )
             .unwrap();
-            let first = document.sections[0]
+            let first = document.flow().expect("Flow fixture").sections[0]
                 .blocks
                 .iter()
                 .find_map(|block| match block {
@@ -711,7 +711,7 @@ mod tests {
             std::path::Path::new("ordinal-state.1"),
             b".TH STATE 1\n.SH DESCRIPTION\n.PD 0\n.IP 1.\nFIRST\n.PD 2\n.IP 2.\nSECOND\n.PP\nBOUNDARY\n.IP 3.\nTHIRD\n",
         ).unwrap();
-        let lists: Vec<_> = document.sections[0]
+        let lists: Vec<_> = document.flow().expect("Flow fixture").sections[0]
             .blocks
             .iter()
             .filter_map(|block| match block {
@@ -733,7 +733,9 @@ mod tests {
             b".TH BRACKETED-IP-INDEX 5\n.SH DESCRIPTION\n.IP [0] 5\nZERO\n.IP [1]\nONE\n",
         )
         .expect("parse bracketed indices");
-        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        let Block::DefinitionList { items, .. } =
+            &document.flow().expect("Flow fixture").sections[0].blocks[0]
+        else {
             panic!("bracketed IP labels must not be rewritten as decimal list markers");
         };
         assert_eq!(

@@ -122,7 +122,9 @@ fn invalid_form_association_falls_back_without_hiding_any_source() {
     let mut query = mant_loader::load_markdown_text(
         "# Demo\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- [`command`](command.md): Description.\n", None).unwrap();
     let document = query.document.as_mut().unwrap();
-    let Block::List { items, .. } = &mut document.sections[0].blocks[0] else {
+    let Block::List { items, .. } =
+        &mut document.flow_mut().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("expected list")
     };
     items[0].entry.as_mut().unwrap().forms[0].parts[0].path = vec![999];
@@ -163,7 +165,14 @@ fn hidden_or_invalid_form_owner_uses_body_fallback_not_section_badge() {
     );
 
     let mut invalid = original;
-    let Block::List { items, .. } = &mut invalid.document.as_mut().unwrap().sections[0].blocks[0]
+    let Block::List { items, .. } = &mut invalid
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks[0]
     else {
         panic!("expected list")
     };
@@ -182,7 +191,14 @@ fn hidden_or_invalid_form_owner_uses_body_fallback_not_section_badge() {
 fn hidden_owner_cannot_lend_its_badge_to_an_unrelated_visible_same_id() {
     let mut query = mant_loader::load_markdown_text(
         "# Demo\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- [`first`](first.md): First.\n- `second`: Unlinked.\n", None).unwrap();
-    let Block::List { items, .. } = &mut query.document.as_mut().unwrap().sections[0].blocks[0]
+    let Block::List { items, .. } = &mut query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks[0]
     else {
         panic!("expected list")
     };
@@ -228,7 +244,13 @@ fn hidden_owner_cannot_lend_its_badge_to_an_unrelated_visible_same_id() {
 #[test]
 fn limited_associated_inventory_never_claims_a_single_target_is_unique() {
     let mut query = bundle();
-    query.document.as_mut().unwrap().heading = Some(mant_ir::Heading {
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .heading = Some(mant_ir::Heading {
         content: (0..1001)
             .map(|_| document_link("same", Some("part")))
             .collect(),
@@ -249,7 +271,14 @@ fn limited_associated_inventory_never_claims_a_single_target_is_unique() {
 #[test]
 fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
     let mut query = bundle();
-    query.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Paragraph {
         children: vec![
             document_link("first", None),
             crate::test_content::text(" then "),
@@ -320,15 +349,15 @@ fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
 fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stacking() {
     let mut query = bundle();
     let document = query.document.as_mut().unwrap();
-    document.heading = Some(mant_ir::Heading {
+    document.flow_mut().expect("Flow fixture").heading = Some(mant_ir::Heading {
         content: vec![document_link("ROOTLINK", None)],
         source: None,
     });
-    document.sections[0].heading = mant_ir::Heading {
+    document.flow_mut().expect("Flow fixture").sections[0].heading = mant_ir::Heading {
         content: vec![document_link("HEADLINK", None)],
         source: None,
     };
-    document.sections[0].blocks = vec![
+    document.flow_mut().expect("Flow fixture").sections[0].blocks = vec![
         linked_block("日本 e\u{301}\tbefore before before ", "BODYLINK"),
         Block::List {
             kind: mant_ir::ListKind::Bullet,
@@ -395,7 +424,14 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
 #[test]
 fn bounded_inventory_exposes_truncation_without_removing_body_links() {
     let mut query = bundle();
-    query.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Paragraph {
         children: (0..1002).map(|_| document_link("x", None)).collect(),
         layout: LayoutHint::default(),
         source: None,
@@ -413,8 +449,14 @@ fn bounded_inventory_exposes_truncation_without_removing_body_links() {
 #[test]
 fn empty_only_reference_keeps_a_reveal_location_without_manufactured_text() {
     let mut query = bundle();
-    query.document.as_mut().unwrap().sections[0].blocks =
-        vec![linked_block("", ""), paragraph("AFTER")];
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![linked_block("", ""), paragraph("AFTER")];
     let view = DocumentView::new(&query);
     let rendered = view.render(80);
     assert_eq!(view.references.len(), 1);
@@ -429,7 +471,14 @@ fn empty_only_reference_keeps_a_reveal_location_without_manufactured_text() {
 fn definition_term_and_run_in_description_keep_separate_source_origins() {
     for inline_term in [false, true] {
         let mut query = bundle();
-        query.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
+        query
+            .document
+            .as_mut()
+            .unwrap()
+            .flow_mut()
+            .expect("Flow fixture")
+            .sections[0]
+            .blocks = vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
                 terms: vec![vec![
@@ -467,10 +516,31 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
 #[test]
 fn duplicate_invalid_owner_ids_do_not_duplicate_or_misassign_references() {
     let mut query = bundle();
-    query.document.as_mut().unwrap().sections[0].blocks = vec![linked_block("", "FIRST")];
-    let mut second = query.document.as_ref().unwrap().sections[0].clone();
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![linked_block("", "FIRST")];
+    let mut second = query
+        .document
+        .as_ref()
+        .unwrap()
+        .flow()
+        .expect("Flow fixture")
+        .sections[0]
+        .clone();
     second.blocks = vec![linked_block("", "SECOND")];
-    query.document.as_mut().unwrap().sections.push(second);
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections
+        .push(second);
     let view = DocumentView::new(&query);
     assert_eq!(view.references.len(), 2);
     assert_eq!(

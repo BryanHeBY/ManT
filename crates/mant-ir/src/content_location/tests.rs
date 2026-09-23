@@ -6,7 +6,7 @@ use serde_json::json;
 fn document() -> Document {
     serde_json::from_value(json!({
         "parser":null,"sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],"rootSource":1,"meta":{},
-        "contentStore": {
+        "body": {"kind":"flow", "contentStore": {
             "owners":[{"key":1,"kind":"content","roots":[1,2,3,4],"provenance":{"kind":"unknown"}}],
             "roots":[
                 {"key":1,"owner":1,"kind":"heading","atoms":[],"points":[],"provenance":{"kind":"unknown"}},
@@ -29,7 +29,7 @@ fn document() -> Document {
         "blocks":[{"type":"definition-list","items":[{
             "entry":null,"terms":[[{"type":"link","occurrence":2,"children":[{"type":"code","content":{"atom":1,"bytes":{"start":0,"end":5}}}]}]],
             "description":[{"type":"paragraph","children":[{"type":"text","content":{"atom":2,"bytes":{"start":0,"end":4}}}]}]
-        }]}],"sections":[{"id":"part","heading":{"content":[{"type":"text","content":{"atom":3,"bytes":{"start":0,"end":4}}}]},"blocks":[],"children":[]}]
+        }]}],"sections":[{"id":"part","heading":{"content":[{"type":"text","content":{"atom":3,"bytes":{"start":0,"end":4}}}]},"blocks":[],"children":[]}]}
     })).unwrap()
 }
 
@@ -286,7 +286,7 @@ fn shared_block_resolver_preserves_response_pair_depth_contract() {
 #[test]
 fn entry_local_mapping_checks_the_combined_path_before_fixed_scratch_growth() {
     let mut document = document();
-    let Block::DefinitionList { items, .. } = &document.blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().blocks[0] else {
         unreachable!();
     };
     let term = items[0].terms[0].clone();
@@ -323,7 +323,7 @@ fn entry_local_mapping_checks_the_combined_path_before_fixed_scratch_growth() {
             ContentBlockStep::Block { index: 0 },
         ]);
     }
-    document.blocks = vec![block];
+    document.flow_mut().unwrap().blocks = vec![block];
     let owner = EntryOwnerLocationRef {
         sections: &[],
         blocks: &path,

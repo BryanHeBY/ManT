@@ -24,7 +24,7 @@ fn lowers_documented_mdoc_delimiters_and_common_roff_characters() {
     let document = parse_manual_source(&path).expect("lower delimiter and character source");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let description = document.sections[0]
+    let description = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .map(|block| match block {
@@ -49,7 +49,9 @@ fn lowers_documented_mdoc_delimiters_and_common_roff_characters() {
         );
     }
 
-    let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[1].blocks.as_slice()
+    else {
         panic!("expected one special-character paragraph");
     };
     assert_eq!(
@@ -70,7 +72,9 @@ unknown=\\[future-glyph]\n",
     )
     .expect("lower named characters");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one character paragraph");
     };
     assert_eq!(
@@ -90,7 +94,9 @@ fn lowers_documented_groff_caron_spellings_missing_from_mandoc() {
     )
     .expect("lower groff caron characters");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one character paragraph");
     };
     assert_eq!(inline_text(document.content(), children), "Čč Šš Žž");
@@ -104,7 +110,9 @@ fn lowers_historical_single_character_escapes_through_the_pinned_catalog() {
     )
     .expect("lower historical single-character escape forms");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one character paragraph");
     };
     assert_eq!(inline_text(document.content(), children), "`left´right _");
@@ -119,7 +127,9 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     let document = parse_manual_bytes(std::path::Path::new("unicode.7"), source.as_bytes())
         .expect("lower raw and escaped Unicode");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one Unicode paragraph");
     };
     let rendered = inline_text(document.content(), children);

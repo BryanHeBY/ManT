@@ -9,11 +9,12 @@ mod mapped;
 mod semantic;
 mod source_map;
 
-use std::ops::Range;
+use std::{error::Error, fmt, ops::Range};
 
 use mant_ir::{
-    ContentContext, ContentRootKey, EntryOwner, InlineView, OutlinePath, Section, SourceSpan,
-    TldrCommandPart, TldrDocument, TldrOrigin,
+    ContentContext, ContentRootKey, Document, DocumentBody, EntryOwner, FixedBody, FixedBodyError,
+    InlineView, OutlinePath, Section, SourceRelationError, SourceSpan, TldrCommandPart,
+    TldrDocument, TldrOrigin,
 };
 
 use self::{
@@ -61,16 +62,60 @@ impl MarkdownOptions {
 }
 
 /// Render a complete query as clean Markdown without a trailing newline.
-#[must_use]
-pub fn render_markdown(query: &ResolvedContent) -> String {
+///
+/// # Errors
+/// Returns a typed error if an in-memory Fixed body has invalid display or
+/// source relationships; it never exports a placeholder as a successful page.
+pub fn render_markdown(query: &ResolvedContent) -> Result<String, EncodeError> {
     render_markdown_with_options(query, MarkdownOptions::default())
 }
 
 /// Render a complete query using explicit presentation-only options.
-#[must_use]
-pub fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOptions) -> String {
-    render_markdown_artifact(query, options, false).into_text()
+///
+/// # Errors
+/// Returns a typed error if an in-memory Fixed body is invalid.
+pub fn render_markdown_with_options(
+    query: &ResolvedContent,
+    options: MarkdownOptions,
+) -> Result<String, EncodeError> {
+    Ok(render_markdown_artifact(query, options, false)?.into_text())
 }
+
+/// A hard invalid-result boundary for exporting an in-memory Fixed document.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EncodeError {
+    /// The native surface or its mark relationships are malformed.
+    InvalidFixed(FixedBodyError),
+    /// A source-qualified Fixed relationship is not closed by the document.
+    InvalidFixedSource(SourceRelationError),
+    /// Fixed row/run bytes cannot be represented by the validated surface.
+    InvalidFixedSurface(&'static str),
+    /// A Fixed Markdown artifact would exceed its bounded derived-output budget.
+    ResourceLimit {
+        /// Maximum permitted derived artifact bytes.
+        maximum: usize,
+    },
+}
+
+impl fmt::Display for EncodeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidFixed(error) => write!(formatter, "invalid Fixed body: {error}"),
+            Self::InvalidFixedSource(error) => write!(formatter, "invalid Fixed source: {error}"),
+            Self::InvalidFixedSurface(reason) => {
+                write!(formatter, "invalid Fixed surface: {reason}")
+            }
+            Self::ResourceLimit { maximum } => {
+                write!(
+                    formatter,
+                    "Fixed Markdown export exceeds the {maximum}-byte resource limit"
+                )
+            }
+        }
+    }
+}
+
+impl Error for EncodeError {}
 
 /// Canonical Markdown bytes and coordinates borrowing their exact source snapshot.
 ///
@@ -228,8 +273,12 @@ pub enum MarkdownNode<'src> {
 }
 
 /// Encode canonical addressable bytes with exact, source-bound node coordinates.
-#[must_use]
-pub fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownArtifact<'_> {
+///
+/// # Errors
+/// Returns a typed error if an in-memory Fixed body is invalid.
+pub fn render_addressable_markdown(
+    query: &ResolvedContent,
+) -> Result<MarkdownArtifact<'_>, EncodeError> {
     render_markdown_artifact(query, MarkdownOptions::ADDRESSABLE, true)
 }
 
@@ -237,13 +286,23 @@ fn render_markdown_artifact(
     query: &ResolvedContent,
     mut options: MarkdownOptions,
     track: bool,
-) -> MarkdownArtifact<'_> {
+) -> Result<MarkdownArtifact<'_>, EncodeError> {
+    if let Some(document) = &query.document {
+        match &document.body {
+            DocumentBody::Fixed(fixed) => {
+                return render_fixed_artifact(query, document, fixed, track);
+            }
+            DocumentBody::Flow(_) => {}
+        }
+    }
     let heading_links = query.document.as_ref().is_some_and(|document| {
-        document
-            .heading
+        let Some(flow) = document.flow() else {
+            return false;
+        };
+        flow.heading
             .as_ref()
             .is_some_and(|heading| heading_has_local_link(document.content(), heading))
-            || section_headings_have_local_links(document.content(), &document.sections)
+            || section_headings_have_local_links(document.content(), &flow.sections)
     });
     options.preserve_semantics &=
         !heading_links && query.document.as_ref().is_some_and(semantic::supported);
@@ -259,7 +318,8 @@ fn render_markdown_artifact(
     if let Some(heading) = query
         .document
         .as_ref()
-        .and_then(|document| document.heading.as_ref())
+        .and_then(|document| document.flow())
+        .and_then(|flow| flow.heading.as_ref())
     {
         if options.preserve_anchors {
             output.push(&inline::html_anchors(
@@ -302,11 +362,17 @@ fn render_markdown_artifact(
     }
 
     if let Some(document) = &query.document {
+        let flow = match &document.body {
+            DocumentBody::Flow(flow) => flow,
+            DocumentBody::Fixed(fixed) => {
+                return render_fixed_artifact(query, document, fixed, track);
+            }
+        };
         let content = document.content();
-        if !document.blocks.is_empty()
-            || (document.heading.is_none() && !document.fragment_aliases.is_empty())
+        if !flow.blocks.is_empty()
+            || (flow.heading.is_none() && !document.fragment_aliases.is_empty())
         {
-            let start = if options.preserve_anchors && document.heading.is_none() {
+            let start = if options.preserve_anchors && flow.heading.is_none() {
                 output
                     .push(&inline::html_anchors(
                         DOCUMENT_ROOT_ID,
@@ -317,20 +383,282 @@ fn render_markdown_artifact(
                 output.text.len()
             };
             output.begin_root(start);
-            let rendered = render_blocks_with_entries(content, &document.blocks, options, track);
+            let rendered = render_blocks_with_entries(content, &flow.blocks, options, track);
             output.push_scope(rendered, None, None);
         }
-        render_artifact_sections(
-            content,
-            &mut output,
-            &document.sections,
-            &[],
-            None,
-            2,
-            options,
-        );
+        render_artifact_sections(content, &mut output, &flow.sections, &[], None, 2, options);
     }
-    output.finish()
+    Ok(output.finish())
+}
+
+// Fixed has no logical roots or Markdown-addressable semantic nodes.  Keep
+// its native row order and terminal columns in one literal body rather than
+// pretending it is an empty Flow tree.
+fn render_fixed_artifact<'a>(
+    query: &'a ResolvedContent,
+    document: &Document,
+    fixed: &FixedBody,
+    track: bool,
+) -> Result<MarkdownArtifact<'a>, EncodeError> {
+    render_fixed_artifact_with_limit(query, document, fixed, track, MAX_FIXED_MARKDOWN_BYTES)
+}
+
+// This limit also bounds the temporary surface and fence strings. It is a
+// derived-artifact budget, independent of the native capture byte budget:
+// sparse terminal columns can expand a small run arena into many spaces.
+const MAX_FIXED_MARKDOWN_BYTES: usize = 64 * 1024 * 1024;
+
+fn render_fixed_artifact_with_limit<'a>(
+    query: &'a ResolvedContent,
+    document: &Document,
+    fixed: &FixedBody,
+    track: bool,
+    maximum: usize,
+) -> Result<MarkdownArtifact<'a>, EncodeError> {
+    fixed.validate().map_err(EncodeError::InvalidFixed)?;
+    mant_ir::validate_document_sources(document).map_err(EncodeError::InvalidFixedSource)?;
+    preflight_fixed_inputs(query, maximum)?;
+    let plan = fixed_surface_plan(fixed, maximum)?;
+    let title = heading(1, &query.label);
+    let tldr_blocks = query.tldr.as_ref().map(render_tldr);
+    let artifact_bytes = fixed_artifact_bytes(&title, tldr_blocks.as_deref(), plan, maximum)?;
+    let mut output = ArtifactBuilder {
+        track,
+        ..ArtifactBuilder::default()
+    };
+    output
+        .text
+        .try_reserve_exact(artifact_bytes)
+        .map_err(|_| EncodeError::ResourceLimit { maximum })?;
+    output.push(&title);
+    if let Some(blocks) = tldr_blocks {
+        for (index, block) in blocks.into_iter().enumerate() {
+            let range = output.push(&block);
+            if index == 0 {
+                output.begin_tldr(range.start);
+            }
+        }
+        output.push("---");
+    }
+    let text = fixed_surface_text(fixed, plan, maximum)?;
+    output.push(&inline::fenced_code(&text, None));
+    Ok(output.finish())
+}
+
+#[derive(Clone, Copy)]
+struct FixedSurfacePlan {
+    bytes: usize,
+    fence_width: usize,
+    boundary_newline: usize,
+}
+
+fn charge_fixed(total: &mut usize, amount: usize, maximum: usize) -> Result<(), EncodeError> {
+    *total = total
+        .checked_add(amount)
+        .ok_or(EncodeError::ResourceLimit { maximum })?;
+    if *total > maximum {
+        return Err(EncodeError::ResourceLimit { maximum });
+    }
+    Ok(())
+}
+
+fn preflight_fixed_inputs(query: &ResolvedContent, maximum: usize) -> Result<(), EncodeError> {
+    // CommonMark escaping expands one input byte by at most five bytes (`&`
+    // becomes `&amp;`). Per-block slack covers headings, fences and joins.
+    // This guard runs before rendering caller-owned TLDR and label strings.
+    let mut upper = 64usize;
+    let mut input = |value: &str, slack: usize| -> Result<(), EncodeError> {
+        let bytes = value
+            .len()
+            .checked_mul(5)
+            .and_then(|bytes| bytes.checked_add(slack))
+            .ok_or(EncodeError::ResourceLimit { maximum })?;
+        charge_fixed(&mut upper, bytes, maximum)
+    };
+    input(&query.label, 4)?;
+    if let Some(tldr) = &query.tldr {
+        input("", 64)?;
+        for line in &tldr.description {
+            input(line, 4)?;
+        }
+        if let Some(information) = &tldr.more_information {
+            input(information, 64)?;
+        }
+        for example in &tldr.examples {
+            input(&example.description, 64)?;
+            input(&example.command, 16)?;
+            for part in &example.command_parts {
+                let value = match part {
+                    TldrCommandPart::Text { value } | TldrCommandPart::Placeholder { value } => {
+                        value
+                    }
+                };
+                input(value, 4)?;
+            }
+        }
+        if tldr.origin == TldrOrigin::TldrPages {
+            input(&tldr.platform, 40)?;
+            input(&tldr.language, 4)?;
+        }
+    }
+    Ok(())
+}
+
+fn fixed_surface_plan(fixed: &FixedBody, maximum: usize) -> Result<FixedSurfacePlan, EncodeError> {
+    fn invalid(reason: &'static str) -> EncodeError {
+        EncodeError::InvalidFixedSurface(reason)
+    }
+    let surface = &fixed.surface;
+    let mut bytes = 0usize;
+    let mut longest_ticks = 0usize;
+    let mut active_ticks = 0usize;
+    let mut last_byte = None;
+    for row in &surface.rows {
+        let first =
+            usize::try_from(row.first_run.get() - 1).map_err(|_| invalid("run index overflow"))?;
+        let end = first
+            .checked_add(usize::try_from(row.run_count).map_err(|_| invalid("run count overflow"))?)
+            .ok_or_else(|| invalid("run count overflow"))?;
+        let runs = surface
+            .runs
+            .get(first..end)
+            .ok_or_else(|| invalid("missing display runs"))?;
+        let mut column = 0_u32;
+        for run in runs {
+            let gap = run
+                .column
+                .checked_sub(column)
+                .ok_or_else(|| invalid("overlapping display runs"))?;
+            charge_fixed(&mut bytes, gap as usize, maximum)?;
+            if gap > 0 {
+                active_ticks = 0;
+            }
+            let text = surface
+                .run_text(run.key)
+                .ok_or_else(|| invalid("invalid display text range"))?;
+            charge_fixed(&mut bytes, text.len(), maximum)?;
+            for byte in text.bytes() {
+                if byte == b'`' {
+                    active_ticks = active_ticks.saturating_add(1);
+                    longest_ticks = longest_ticks.max(active_ticks);
+                } else {
+                    active_ticks = 0;
+                }
+            }
+            last_byte = text.as_bytes().last().copied();
+            column = run
+                .column
+                .checked_add(run.width)
+                .ok_or_else(|| invalid("column overflow"))?;
+        }
+        let trailing = row
+            .column_count
+            .checked_sub(column)
+            .ok_or_else(|| invalid("row width mismatch"))?;
+        charge_fixed(&mut bytes, trailing as usize, maximum)?;
+        if trailing > 0 {
+            active_ticks = 0;
+            last_byte = Some(b' ');
+        }
+        if row.break_after {
+            charge_fixed(&mut bytes, 1, maximum)?;
+            active_ticks = 0;
+            last_byte = Some(b'\n');
+        }
+    }
+    Ok(FixedSurfacePlan {
+        bytes,
+        fence_width: longest_ticks.saturating_add(1).max(3),
+        boundary_newline: usize::from(last_byte != Some(b'\n')),
+    })
+}
+
+fn fixed_artifact_bytes(
+    title: &str,
+    tldr_blocks: Option<&[String]>,
+    plan: FixedSurfacePlan,
+    maximum: usize,
+) -> Result<usize, EncodeError> {
+    let mut bytes = 0usize;
+    charge_fixed(&mut bytes, title.len(), maximum)?;
+    if let Some(blocks) = tldr_blocks {
+        for block in blocks.iter().filter(|block| !block.is_empty()) {
+            charge_fixed(&mut bytes, 2, maximum)?;
+            charge_fixed(&mut bytes, block.len(), maximum)?;
+        }
+        charge_fixed(&mut bytes, 5, maximum)?; // "\n\n---"
+    }
+    charge_fixed(&mut bytes, 2, maximum)?; // separator before literal
+    charge_fixed(
+        &mut bytes,
+        plan.fence_width
+            .checked_mul(2)
+            .ok_or(EncodeError::ResourceLimit { maximum })?,
+        maximum,
+    )?;
+    charge_fixed(&mut bytes, 1, maximum)?; // newline after opening fence
+    charge_fixed(&mut bytes, plan.bytes, maximum)?;
+    charge_fixed(&mut bytes, plan.boundary_newline, maximum)?;
+    Ok(bytes)
+}
+
+fn fixed_surface_text(
+    fixed: &FixedBody,
+    plan: FixedSurfacePlan,
+    maximum: usize,
+) -> Result<String, EncodeError> {
+    fn invalid(reason: &'static str) -> EncodeError {
+        EncodeError::InvalidFixedSurface(reason)
+    }
+    let surface = &fixed.surface;
+    let mut text = String::new();
+    text.try_reserve_exact(plan.bytes)
+        .map_err(|_| EncodeError::ResourceLimit { maximum })?;
+    for row in &surface.rows {
+        let first =
+            usize::try_from(row.first_run.get() - 1).map_err(|_| invalid("run index overflow"))?;
+        let end = first
+            .checked_add(usize::try_from(row.run_count).map_err(|_| invalid("run count overflow"))?)
+            .ok_or_else(|| invalid("run count overflow"))?;
+        let runs = surface
+            .runs
+            .get(first..end)
+            .ok_or_else(|| invalid("missing display runs"))?;
+        let mut column = 0_u32;
+        for run in runs {
+            let gap = run
+                .column
+                .checked_sub(column)
+                .ok_or_else(|| invalid("overlapping display runs"))?;
+            text.extend(std::iter::repeat_n(' ', gap as usize));
+            let start =
+                usize::try_from(run.byte_start).map_err(|_| invalid("byte offset overflow"))?;
+            let count =
+                usize::try_from(run.byte_count).map_err(|_| invalid("byte count overflow"))?;
+            let end = start
+                .checked_add(count)
+                .ok_or_else(|| invalid("byte range overflow"))?;
+            text.push_str(
+                surface
+                    .text
+                    .get(start..end)
+                    .ok_or_else(|| invalid("invalid display text range"))?,
+            );
+            column = run
+                .column
+                .checked_add(run.width)
+                .ok_or_else(|| invalid("column overflow"))?;
+        }
+        let trailing = row
+            .column_count
+            .checked_sub(column)
+            .ok_or_else(|| invalid("row width mismatch"))?;
+        text.extend(std::iter::repeat_n(' ', trailing as usize));
+        if row.break_after {
+            text.push('\n');
+        }
+    }
+    Ok(text)
 }
 
 #[derive(Default)]

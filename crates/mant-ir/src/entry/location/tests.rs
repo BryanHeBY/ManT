@@ -223,8 +223,6 @@ fn borrowed_locations_and_semantic_index_share_root_and_section_owners() {
     transparent.entry = None;
     let blocks = vec![definitions(vec![transparent])];
     let document = crate::Document {
-        content_store: fixture.finish(),
-        heading: None,
         parser: None,
         sources: vec![crate::SourceRecord {
             key: crate::SourceKey::FIRST,
@@ -240,24 +238,31 @@ fn borrowed_locations_and_semantic_index_share_root_and_section_owners() {
         meta: crate::DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: blocks.clone(),
-        sections: vec![crate::Section {
-            id: "section".into(),
-            heading: crate::Heading {
-                content: Vec::new(),
+        body: crate::DocumentBody::Flow(crate::FlowBody {
+            content_store: fixture.finish(),
+            heading: None,
+            blocks: blocks.clone(),
+            sections: vec![crate::Section {
+                id: "section".into(),
+                heading: crate::Heading {
+                    content: Vec::new(),
+                    source: None,
+                },
+                fragment_aliases: Vec::new(),
+                spacing_before_lines: 0,
+                blocks,
+                children: Vec::new(),
                 source: None,
-            },
-            fragment_aliases: Vec::new(),
-            spacing_before_lines: 0,
-            blocks,
-            children: Vec::new(),
-            source: None,
-        }],
+            }],
+        }),
     };
     let index = crate::SemanticIndex::build(&document);
     for (section, blocks) in [
-        (None, document.blocks.as_slice()),
-        (Some(&[1][..]), document.sections[0].blocks.as_slice()),
+        (None, document.flow().unwrap().blocks.as_slice()),
+        (
+            Some(&[1][..]),
+            document.flow().unwrap().sections[0].blocks.as_slice(),
+        ),
     ] {
         for entry in content_entry_locations(blocks) {
             let path = crate::OutlinePath::nested_entry(section, entry.indices()).unwrap();

@@ -7,7 +7,10 @@ fn zero_advance_crosses_alternating_man_macro_arguments() {
         b".TH ZERO-ADVANCE 1\n.SH DESCRIPTION\n.BR A\\zX B\n",
     )
     .expect("parse alternating man font scope");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
         panic!("expected one paragraph");
     };
 
@@ -24,8 +27,14 @@ fn zero_advance_projects_implicit_words_and_generated_op_brackets_in_output_orde
         b".TH ZERO-ADVANCE 1\n.SH DESCRIPTION\nA\\zX\nB\n.OP A\\zX B\n.OP A\\zX\n",
     )
     .expect("parse zero-advance formatter boundaries");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one paragraph: {:#?}", document.sections[0].blocks);
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "expected one paragraph: {:#?}",
+            document.flow().expect("Flow fixture").sections[0].blocks
+        );
     };
 
     // CVS term.c inserts the filled-word blank before the next glyph, which
@@ -70,10 +79,13 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
             source,
         )
         .expect("parse cross-scope zero-advance fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
             panic!(
                 "{label}: expected one paragraph: {:#?}",
-                document.sections[0].blocks
+                document.flow().expect("Flow fixture").sections[0].blocks
             );
         };
         assert_eq!(

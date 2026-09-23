@@ -41,8 +41,9 @@ use libmandoc_rs::{
     ParseOptions, ParseReport, Parser,
 };
 use mant_ir::{
-    Diagnostic, DiagnosticLevel, Document, DocumentMeta, ParserInfo, SourceCoordinates,
-    SourceFormat, SourceIdentity, SourceKey, SourceRecord, SourceSpan, validate_document,
+    Diagnostic, DiagnosticLevel, Document, DocumentBody, DocumentMeta, FlowBody, ParserInfo,
+    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, SourceSpan,
+    validate_document,
 };
 
 use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
@@ -154,7 +155,6 @@ fn lower_mandoc_document_with_source(
         &mut diagnostics,
     );
     let mut document = Document {
-        heading: None,
         parser: Some(ParserInfo {
             name: "libmandoc".to_owned(),
             version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
@@ -173,7 +173,12 @@ fn lower_mandoc_document_with_source(
             coordinates: SourceCoordinates::NativeNormalizedBytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store,
+        body: DocumentBody::Flow(FlowBody {
+            content_store,
+            heading: None,
+            blocks: root_blocks,
+            sections,
+        }),
         meta: DocumentMeta {
             title: normalize_metadata(parsed.metadata.title.as_deref()),
             manual_section: normalize_metadata(parsed.metadata.section.as_deref()),
@@ -188,8 +193,6 @@ fn lower_mandoc_document_with_source(
         },
         fragment_aliases: Vec::new(),
         diagnostics,
-        blocks: root_blocks,
-        sections,
     };
     document.diagnostics.extend(validate_document(&document));
     document

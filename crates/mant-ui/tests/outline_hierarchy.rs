@@ -131,6 +131,8 @@ fn both_git_sources_preserve_root_sections_and_real_subsections_in_ir_and_outlin
         let view = DocumentView::new(&content);
         for title in ROOT_TITLES {
             let section = document
+                .flow()
+                .expect("fixture Flow body")
                 .sections
                 .iter()
                 .find(|section| section.heading.plain_text(document.content()) == title)
@@ -142,6 +144,8 @@ fn both_git_sources_preserve_root_sections_and_real_subsections_in_ir_and_outlin
             assert_eq!(node.parent_id, None, "{fixture}: {title}");
         }
         let environment = document
+            .flow()
+            .expect("fixture Flow body")
             .sections
             .iter()
             .find(|section| {

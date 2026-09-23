@@ -56,7 +56,7 @@ fn nested_display_offsets_compose_and_restore_for_each_mode() {
                         .message
                         .contains("nested displays are not portable")
                 }));
-                let blocks = &document.sections[1].blocks;
+                let blocks = &document.flow().unwrap().sections[1].blocks;
                 let beta = blocks
                     .iter()
                     .find(|block| match block {
@@ -217,7 +217,7 @@ fn nested_display_does_not_absorb_adjacent_list_or_table_geometry() {
             for (token, column) in [("ALPHA", 2), ("BETA", 5), ("GAMMA", 2), ("AFTER", 0)] {
                 assert_column(&text, token, column);
             }
-            let blocks = &content.document.as_ref().unwrap().sections[1].blocks;
+            let blocks = &content.document.as_ref().unwrap().flow().unwrap().sections[1].blocks;
             if payload.starts_with(".Bl") {
                 assert!(blocks.iter().any(|block| matches!(block, Block::List { layout, .. } if layout.indent_columns == 2)));
                 assert!(text.contains("LISTWORD"));
@@ -255,7 +255,7 @@ fn first_child_displays_inherit_only_real_predecessors_across_parent_scopes() {
                             "{source}\n{text}"
                         );
                     }
-                    let block = content.document.as_ref().unwrap().sections[0]
+                    let block = content.document.as_ref().unwrap().flow().unwrap().sections[0]
                         .blocks
                         .iter()
                         .find(|block| match block {

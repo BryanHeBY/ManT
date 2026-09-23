@@ -175,6 +175,7 @@ impl ContentBackend for Document {
     fn store(&self) -> Option<&ContentStore> {
         match self.body() {
             DocumentBodyRef::Flow(flow) => Some(flow.content_store),
+            DocumentBodyRef::Fixed(_) => None,
         }
     }
 }
@@ -982,7 +983,8 @@ mod tests {
                 "coordinates": {"kind": "decoded-utf8-bytes"}
             }],
             "rootSource": 1,
-            "contentStore": {
+            "meta": {},
+            "body": {"kind":"flow", "contentStore": {
                 "owners": [{"key": 1, "kind": "content", "roots": [1], "provenance": {"kind": "unknown"}}],
                 "roots": [{"key": 1, "owner": 1, "kind": "heading", "atoms": [1], "points": [], "provenance": {"kind": "unknown"}}],
                 "atoms": [{"key": 1, "root": 1, "owner": 1, "kind": "text", "text": "index", "link": 1, "provenance": {"kind": "unknown"}}],
@@ -995,13 +997,12 @@ mod tests {
                     "provenance": {"kind": "unknown"}
                 }]
             },
-            "meta": {},
             "heading": {"content": [{
                 "type": "link",
                 "occurrence": 1,
                 "children": [{"type": "text", "content": {"atom": 1, "bytes": {"start": 0, "end": 5}}}]
             }]},
-            "sections": []
+            "sections": []}
         }))
         .unwrap();
         let content = document.content();
@@ -1023,7 +1024,7 @@ mod tests {
             content.plain_text(link.children()).expect("valid content"),
             "index"
         );
-        let heading = &document.heading.as_ref().unwrap().content;
+        let heading = &document.flow().unwrap().heading.as_ref().unwrap().content;
         assert_eq!(
             content.plain_text(heading).expect("valid content"),
             crate::inline_plain_text(content, heading)

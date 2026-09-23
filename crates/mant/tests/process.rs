@@ -16,6 +16,8 @@ fn plain_document_heading(value: &serde_json::Value) -> String {
         serde_json::from_value(value["document"].clone()).expect("valid document");
     let document: mant_ir::Document = response.into();
     document
+        .flow()
+        .expect("document Flow body")
         .heading
         .as_ref()
         .expect("document heading")
@@ -1242,7 +1244,7 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
     );
     assert!(value.get("tldr").is_none());
     assert_eq!(
-        value["document"]["sections"][0]["blocks"][0]["items"][0]["entry"]["names"][0],
+        value["document"]["body"]["sections"][0]["blocks"][0]["items"][0]["entry"]["names"][0],
         "--help"
     );
 }

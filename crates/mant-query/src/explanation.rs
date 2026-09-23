@@ -23,6 +23,8 @@ use mant_protocol::{EvidenceBasis, ExplanationQuery, QueryExplanation};
 /// Invalid explanation request or missing readable source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExplanationError {
+    /// The selected Fixed document requires annotated explanation support.
+    UnsupportedFixed,
     /// Empty, overlong, or control-bearing literal.
     Entry(mant_protocol::ScopeTextError),
     /// Result count is outside 1..=256.
@@ -35,6 +37,9 @@ pub enum ExplanationError {
 impl std::fmt::Display for ExplanationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::UnsupportedFixed => {
+                f.write_str("Fixed document explanation is not yet supported")
+            }
             Self::Entry(mant_protocol::ScopeTextError::Empty) => {
                 f.write_str("explanation entry must not be empty")
             }
@@ -103,11 +108,19 @@ fn collection_plan<'a>(
     if content.document.is_none() && content.tldr.is_none() {
         return Err(ExplanationError::MissingContent);
     }
+    if content
+        .document
+        .as_ref()
+        .is_some_and(|document| document.flow().is_none())
+    {
+        return Err(ExplanationError::UnsupportedFixed);
+    }
     let mut located = Vec::new();
     if let Some(document) = &content.document {
         let content = document.content();
-        collect_root_entries(content, &document.blocks, &mut located);
-        collect_sections(content, &document.sections, &[], &[], &mut located);
+        let flow = document.flow().expect("Fixed rejected above");
+        collect_root_entries(content, &flow.blocks, &mut located);
+        collect_sections(content, &flow.sections, &[], &[], &mut located);
     }
     let validation = content
         .document

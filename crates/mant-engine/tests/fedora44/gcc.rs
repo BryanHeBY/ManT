@@ -13,7 +13,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("gcc");
     let content = document.content();
     assert_eq!(document.root_format(), Some(SourceFormat::Man));
-    assert_eq!(document.sections.len(), 10);
+    assert_eq!(document.flow().unwrap().sections.len(), 10);
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.os.as_deref(), Some("gcc-16"));
 

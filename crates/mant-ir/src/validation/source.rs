@@ -19,8 +19,6 @@ use crate::{
 /// relation in the document references an unknown or incompatible source.
 pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelationError> {
     validate_source_table(&document.sources, document.root_source)?;
-    let DocumentBodyRef::Flow(flow) = document.body();
-    let store = flow.content_store;
 
     for diagnostic in &document.diagnostics {
         if let Some(span) = diagnostic.source {
@@ -33,18 +31,63 @@ pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelati
                     key.get()
                 )));
             }
-            Some(
-                CoverageScope::Section { .. }
-                | CoverageScope::Owner { .. }
-                | CoverageScope::Region { .. },
-            ) => {
-                return Err(relation(
-                    "native mark coverage scope cannot be attached to a Flow document",
-                ));
-            }
+            Some(CoverageScope::Section { key }) => match document.body() {
+                DocumentBodyRef::Fixed(fixed)
+                    if fixed.headings.get((key.get() - 1) as usize).is_some() => {}
+                DocumentBodyRef::Flow(_) => {
+                    return Err(relation(
+                        "native mark coverage scope cannot be attached to a Flow document",
+                    ));
+                }
+                DocumentBodyRef::Fixed(_) => {
+                    return Err(relation("coverage scope references unknown native section"));
+                }
+            },
+            Some(CoverageScope::Owner { key }) => match document.body() {
+                DocumentBodyRef::Fixed(fixed)
+                    if fixed.owners.get((key.get() - 1) as usize).is_some() => {}
+                DocumentBodyRef::Flow(_) => {
+                    return Err(relation(
+                        "native mark coverage scope cannot be attached to a Flow document",
+                    ));
+                }
+                DocumentBodyRef::Fixed(_) => {
+                    return Err(relation("coverage scope references unknown native owner"));
+                }
+            },
+            Some(CoverageScope::Region { key }) => match document.body() {
+                DocumentBodyRef::Fixed(fixed)
+                    if fixed.regions.get((key.get() - 1) as usize).is_some() => {}
+                DocumentBodyRef::Flow(_) => {
+                    return Err(relation(
+                        "native mark coverage scope cannot be attached to a Flow document",
+                    ));
+                }
+                DocumentBodyRef::Fixed(_) => {
+                    return Err(relation("coverage scope references unknown native region"));
+                }
+            },
             Some(CoverageScope::Document | CoverageScope::Source { .. }) | None => {}
         }
     }
+    let DocumentBodyRef::Flow(flow) = document.body() else {
+        let DocumentBodyRef::Fixed(fixed) = document.body() else {
+            unreachable!("all document body arms were matched")
+        };
+        for key in fixed.source_keys() {
+            if document.source_record(key).is_none() {
+                return Err(relation(format!(
+                    "fixed body references unknown SourceKey {}",
+                    key.get()
+                )));
+            }
+        }
+        for span in fixed.source_spans() {
+            validate_relation_span(document, span)?;
+        }
+        return Ok(());
+    };
+    let store = flow.content_store;
     for provenance in store
         .owners
         .iter()
@@ -82,8 +125,6 @@ pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelati
 /// Return whether any document diagnostic or content node retains a source span.
 #[must_use]
 pub fn document_has_source_spans(document: &Document) -> bool {
-    let DocumentBodyRef::Flow(flow) = document.body();
-    let store = flow.content_store;
     if document
         .diagnostics
         .iter()
@@ -91,6 +132,13 @@ pub fn document_has_source_spans(document: &Document) -> bool {
     {
         return true;
     }
+    let DocumentBodyRef::Flow(flow) = document.body() else {
+        let DocumentBodyRef::Fixed(fixed) = document.body() else {
+            unreachable!("all document body arms were matched")
+        };
+        return fixed.source_spans().next().is_some();
+    };
+    let store = flow.content_store;
     if store
         .owners
         .iter()
@@ -346,7 +394,9 @@ impl<'ir> Visit<'ir> for SourceRelationCollector<'_> {
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
         if let Inline::Anchor { point, .. } = inline {
-            let DocumentBodyRef::Flow(flow) = self.document.body();
+            let DocumentBodyRef::Flow(flow) = self.document.body() else {
+                unreachable!("Flow-only inline walk cannot visit a Fixed body")
+            };
             let store = flow.content_store;
             let source = store
                 .point(*point)

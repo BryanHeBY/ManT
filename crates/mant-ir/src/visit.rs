@@ -1,8 +1,9 @@
 //! Reusable traversal over normalized document IR.
 
 use crate::{
-    Block, DefinitionItem, Document, DocumentBodyMut, DocumentBodyRef, Heading, Inline, ListItem,
-    Section, TableCell, TableRow,
+    AnchorMark, Block, DefinitionItem, DisplayRow, DisplayRun, Document, DocumentBodyMut,
+    DocumentBodyRef, FixedBody, Heading, HeadingMark, Inline, LinkMark, ListItem, OwnerMark,
+    RegionMark, Section, TableCell, TableRow,
 };
 
 /// Read-only depth-first traversal with overridable hooks.
@@ -15,6 +16,32 @@ pub trait Visit<'ir> {
     fn visit_document(&mut self, document: &'ir Document) {
         walk_document(self, document);
     }
+
+    /// Visit a Fixed body through its native surface and mark tables.
+    fn visit_fixed_body(&mut self, fixed: &'ir FixedBody) {
+        walk_fixed_body(self, fixed);
+    }
+
+    /// Visit one final physical row.
+    fn visit_display_row(&mut self, _row: &'ir DisplayRow) {}
+
+    /// Visit one final run of visible bytes.
+    fn visit_display_run(&mut self, _run: &'ir DisplayRun) {}
+
+    /// Visit one native section mark.
+    fn visit_heading_mark(&mut self, _mark: &'ir HeadingMark) {}
+
+    /// Visit one native owner mark.
+    fn visit_owner_mark(&mut self, _mark: &'ir OwnerMark) {}
+
+    /// Visit one native link occurrence mark.
+    fn visit_link_mark(&mut self, _mark: &'ir LinkMark) {}
+
+    /// Visit one native anchor declaration mark.
+    fn visit_anchor_mark(&mut self, _mark: &'ir AnchorMark) {}
+
+    /// Visit one native region mark.
+    fn visit_region_mark(&mut self, _mark: &'ir RegionMark) {}
 
     /// Visit a section, descending into its blocks and children by default.
     fn visit_section(&mut self, section: &'ir Section) {
@@ -57,6 +84,35 @@ where
                 visitor.visit_section(section);
             }
         }
+        DocumentBodyRef::Fixed(fixed) => visitor.visit_fixed_body(fixed),
+    }
+}
+
+/// Walk every authoritative Fixed surface row/run and native mark once.
+pub fn walk_fixed_body<'ir, V>(visitor: &mut V, fixed: &'ir FixedBody)
+where
+    V: Visit<'ir> + ?Sized,
+{
+    for row in &fixed.surface.rows {
+        visitor.visit_display_row(row);
+    }
+    for run in &fixed.surface.runs {
+        visitor.visit_display_run(run);
+    }
+    for mark in &fixed.headings {
+        visitor.visit_heading_mark(mark);
+    }
+    for mark in &fixed.owners {
+        visitor.visit_owner_mark(mark);
+    }
+    for mark in &fixed.links {
+        visitor.visit_link_mark(mark);
+    }
+    for mark in &fixed.anchors {
+        visitor.visit_anchor_mark(mark);
+    }
+    for mark in &fixed.regions {
+        visitor.visit_region_mark(mark);
     }
 }
 
@@ -176,6 +232,32 @@ pub trait VisitMut {
         walk_document_mut(self, document);
     }
 
+    /// Visit and mutate one Fixed body explicitly.
+    fn visit_fixed_body_mut(&mut self, fixed: &mut FixedBody) {
+        walk_fixed_body_mut(self, fixed);
+    }
+
+    /// Mutate one final physical row.
+    fn visit_display_row_mut(&mut self, _row: &mut DisplayRow) {}
+
+    /// Mutate one final run.
+    fn visit_display_run_mut(&mut self, _run: &mut DisplayRun) {}
+
+    /// Mutate one native section mark.
+    fn visit_heading_mark_mut(&mut self, _mark: &mut HeadingMark) {}
+
+    /// Mutate one native owner mark.
+    fn visit_owner_mark_mut(&mut self, _mark: &mut OwnerMark) {}
+
+    /// Mutate one native link mark.
+    fn visit_link_mark_mut(&mut self, _mark: &mut LinkMark) {}
+
+    /// Mutate one native anchor mark.
+    fn visit_anchor_mark_mut(&mut self, _mark: &mut AnchorMark) {}
+
+    /// Mutate one native region mark.
+    fn visit_region_mark_mut(&mut self, _mark: &mut RegionMark) {}
+
     /// Visit a section mutably, descending into its blocks and children by default.
     fn visit_section_mut(&mut self, section: &mut Section) {
         walk_section_mut(self, section);
@@ -217,6 +299,35 @@ where
                 visitor.visit_section_mut(section);
             }
         }
+        DocumentBodyMut::Fixed(fixed) => visitor.visit_fixed_body_mut(fixed),
+    }
+}
+
+/// Walk every mutable Fixed surface row/run and mark once.
+pub fn walk_fixed_body_mut<V>(visitor: &mut V, fixed: &mut FixedBody)
+where
+    V: VisitMut + ?Sized,
+{
+    for row in &mut fixed.surface.rows {
+        visitor.visit_display_row_mut(row);
+    }
+    for run in &mut fixed.surface.runs {
+        visitor.visit_display_run_mut(run);
+    }
+    for mark in &mut fixed.headings {
+        visitor.visit_heading_mark_mut(mark);
+    }
+    for mark in &mut fixed.owners {
+        visitor.visit_owner_mark_mut(mark);
+    }
+    for mark in &mut fixed.links {
+        visitor.visit_link_mark_mut(mark);
+    }
+    for mark in &mut fixed.anchors {
+        visitor.visit_anchor_mark_mut(mark);
+    }
+    for mark in &mut fixed.regions {
+        visitor.visit_region_mark_mut(mark);
     }
 }
 

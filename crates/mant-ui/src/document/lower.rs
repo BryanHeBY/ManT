@@ -7,7 +7,9 @@ use super::{
     tldr_style,
 };
 use mant_ir::geometry::{compose_origin, coordinate, padding};
-use mant_ir::{ContentContext, ContentPointKey, ContentRootKey, FixedLineKey, PlacementTarget};
+use mant_ir::{
+    ContentContext, ContentPointKey, ContentRootKey, FixedBody, FixedLineKey, PlacementTarget,
+};
 
 mod fixed;
 mod lists;
@@ -112,6 +114,44 @@ impl<'a> DocumentBuilder<'a> {
         self.resolve_pending_anchors();
         self.pending_gap = mant_ir::geometry::GapPlan::default();
         self.lines.push(line);
+    }
+
+    /// Read final native rows without introducing Flow layout or viewport wraps.
+    pub(super) fn native_fixed_rows(&mut self, fixed: &FixedBody) {
+        for row in &fixed.surface.rows {
+            let first = (row.first_run.get() - 1) as usize;
+            let end = first + row.run_count as usize;
+            let mut spans = Vec::new();
+            let mut column = 0;
+            for run in &fixed.surface.runs[first..end] {
+                if run.column > column {
+                    spans.push(Span::raw(" ".repeat((run.column - column) as usize)));
+                }
+                spans.push(Span::styled(
+                    fixed
+                        .surface
+                        .run_text(run.key)
+                        .expect("validated Fixed run")
+                        .to_owned(),
+                    Style::default(),
+                ));
+                column = run.column + run.width;
+            }
+            if row.column_count > column {
+                spans.push(Span::raw(" ".repeat((row.column_count - column) as usize)));
+            }
+            self.push(LogicalLine {
+                indent: 0,
+                continuation_indent: 0,
+                spans,
+                glyph_projections: Vec::new(),
+                surface: LineSurface::Fixed,
+                wrap_mode: WrapMode::NoWrap,
+                table_row: None,
+                links: Vec::new(),
+                reference_marks: Vec::new(),
+            });
+        }
     }
 
     fn resolve_pending_anchors(&mut self) {

@@ -60,12 +60,12 @@ fn terminal_tg_after_lists_stays_after_them_in_ir() {
         let document = project_native_manual(name, &bundle, InputFormat::Mdoc)
             .expect("terminal target lowers to IR");
         let blocks = if nested {
-            let Block::List { items, .. } = &document.sections[0].blocks[0] else {
+            let Block::List { items, .. } = &document.flow().expect("Flow fixture").sections[0].blocks[0] else {
                 panic!("{name}: outer list retained")
             };
             &items[0].blocks
         } else {
-            &document.sections[0].blocks
+            &document.flow().expect("Flow fixture").sections[0].blocks
         };
         let list_index = blocks
             .iter()
@@ -293,9 +293,16 @@ fn authored_heading_phrase_drives_section_identity_and_sx_resolution() {
     let document = project_native_manual("heading-sx.1", &bundle, InputFormat::Mdoc)
         .expect("authored heading evidence lowers");
 
-    assert_eq!(document.sections[0].id.as_str(), "white-space");
     assert_eq!(
-        document.sections[0].heading.plain_text(document.content()),
+        document.flow().expect("Flow fixture").sections[0]
+            .id
+            .as_str(),
+        "white-space"
+    );
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[0]
+            .heading
+            .plain_text(document.content()),
         "WhiteSpace"
     );
     let mut links = Vec::new();
@@ -338,8 +345,18 @@ fn ambiguous_and_missing_sx_occurrences_downgrade_without_dangling_links() {
     let document = project_native_manual("ambiguous-sx.1", &bundle, InputFormat::Mdoc)
         .expect("unresolved section occurrences downgrade atomically");
 
-    assert_eq!(document.sections[0].id.as_str(), "duplicate");
-    assert_eq!(document.sections[1].id.as_str(), "duplicate-2");
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[0]
+            .id
+            .as_str(),
+        "duplicate"
+    );
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[1]
+            .id
+            .as_str(),
+        "duplicate-2"
+    );
     let report =
         mant_ir::scan_references(&document, mant_ir::ReferenceScanLimits::default(), |_| {
             panic!("an ambiguous or missing Sx must not remain a link")
@@ -357,7 +374,7 @@ fn ambiguous_and_missing_sx_occurrences_downgrade_without_dangling_links() {
         "{:#?}",
         document.diagnostics
     );
-    let visible = document.sections[1]
+    let visible = document.flow().expect("Flow fixture").sections[1]
         .blocks
         .iter()
         .map(|block| match block {
@@ -483,7 +500,12 @@ fn authored_target_collision_keeps_alias_and_unique_internal_id() {
         .unwrap();
     let document = project_native_manual("target-collision.1", &bundle, InputFormat::Mdoc)
         .expect("authored target collision receives a unique normalized identity");
-    assert_eq!(document.sections[0].id.as_str(), "mixed-target");
+    assert_eq!(
+        document.flow().expect("Flow fixture").sections[0]
+            .id
+            .as_str(),
+        "mixed-target"
+    );
     let anchors = anchor_identities(&document);
     assert!(
         anchors.contains(&("mixed-target-2".to_owned(), vec!["Mixed.Target".to_owned()])),
@@ -543,7 +565,9 @@ fn nested_empty_mdoc_item_retains_its_explicit_target() {
         .unwrap();
     let document = project_native_manual("nested-target.1", &bundle, InputFormat::Mdoc)
         .expect("nested empty target lowers through the native path");
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &document.flow().expect("Flow fixture").sections[0].blocks[0]
+    else {
         panic!("outer definition list retained")
     };
     let Block::List { items: nested, .. } = &items[0].description[0] else {

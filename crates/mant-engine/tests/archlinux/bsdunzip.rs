@@ -14,7 +14,7 @@ fn distinct_option_heads_do_not_borrow_the_following_mdoc_description() {
     let document = archlinux_manual("bsdunzip");
     let content = document.content();
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     let description = sections
         .into_iter()
         .find(|section| section.heading.plain_text(content) == "DESCRIPTION")

@@ -254,8 +254,9 @@ impl DocumentView {
                         mant_ir::SourceIdentity::Anonymous { name } if name == "test"
                     )
                 })
+                && let Some(flow) = document.flow_mut()
             {
-                document.content_store = crate::test_content::store();
+                flow.content_store = crate::test_content::store();
             }
             fixture
         };
@@ -275,7 +276,8 @@ impl DocumentView {
         let top_level_count = bundle
             .document
             .as_ref()
-            .map_or(0, |document| document.sections.len());
+            .and_then(mant_ir::Document::flow)
+            .map_or(0, |flow| flow.sections.len());
         let terminal_label = bundle.document.as_ref().map_or_else(
             || bundle.label.clone(),
             |document| {
@@ -288,7 +290,8 @@ impl DocumentView {
         let section_count = bundle
             .document
             .as_ref()
-            .map_or(0, |document| count_sections(&document.sections));
+            .and_then(mant_ir::Document::flow)
+            .map_or(0, |flow| count_sections(&flow.sections));
 
         if let Some(tldr) = &bundle.tldr {
             let document_gap = u16::from(
@@ -305,43 +308,47 @@ impl DocumentView {
             references.check_source_owners(document, &semantic_index);
             builder.entry_styles =
                 Some(Arc::new(mant_render::EntryStyleMap::for_document(document)));
-            if document.heading.is_some()
-                || !document.blocks.is_empty()
-                || !document.fragment_aliases.is_empty()
-            {
-                let entries = semantic_index.root();
-                builder.anchor(NavNode {
-                    id: ROOT_ID.to_owned(),
-                    target_id: ROOT_ID.to_owned(),
-                    title: "OVERVIEW".to_owned(),
-                    full_title: None,
-                    depth: 0,
-                    kind: NavKind::Root,
-                    has_children: !entries.is_empty(),
-                    is_last: document.sections.is_empty(),
-                    parent_id: None,
-                });
-                for alias in &document.fragment_aliases {
-                    builder
-                        .anchors
-                        .entry(alias.to_string())
-                        .or_insert(builder.lines.len());
+            if let Some(flow) = document.flow() {
+                if flow.heading.is_some()
+                    || !flow.blocks.is_empty()
+                    || !document.fragment_aliases.is_empty()
+                {
+                    let entries = semantic_index.root();
+                    builder.anchor(NavNode {
+                        id: ROOT_ID.to_owned(),
+                        target_id: ROOT_ID.to_owned(),
+                        title: "OVERVIEW".to_owned(),
+                        full_title: None,
+                        depth: 0,
+                        kind: NavKind::Root,
+                        has_children: !entries.is_empty(),
+                        is_last: flow.sections.is_empty(),
+                        parent_id: None,
+                    });
+                    for alias in &document.fragment_aliases {
+                        builder
+                            .anchors
+                            .entry(alias.to_string())
+                            .or_insert(builder.lines.len());
+                    }
+                    builder.entry_group(ROOT_ID, ROOT_ID, entries, 1, flow.sections.is_empty());
+                    if let Some(heading) = &flow.heading {
+                        builder.heading(heading, 0);
+                    }
+                    builder.blocks(&flow.blocks, 0);
                 }
-                builder.entry_group(ROOT_ID, ROOT_ID, entries, 1, document.sections.is_empty());
-                if let Some(heading) = &document.heading {
-                    builder.heading(heading, 0);
+                let section_count = flow.sections.len();
+                for (index, section) in flow.sections.iter().enumerate() {
+                    builder.section_with_position(
+                        section,
+                        &semantic_index,
+                        0,
+                        index + 1 == section_count,
+                        None,
+                    );
                 }
-                builder.blocks(&document.blocks, 0);
-            }
-            let section_count = document.sections.len();
-            for (index, section) in document.sections.iter().enumerate() {
-                builder.section_with_position(
-                    section,
-                    &semantic_index,
-                    0,
-                    index + 1 == section_count,
-                    None,
-                );
+            } else if let mant_ir::DocumentBody::Fixed(fixed) = &document.body {
+                builder.native_fixed_rows(fixed);
             }
         }
 

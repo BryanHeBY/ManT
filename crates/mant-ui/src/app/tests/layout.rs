@@ -112,7 +112,13 @@ fn multirow_fixed_selection_copies_complete_intermediate_physical_rows() {
     use mant_ir::{Decoration, DecorationKey, DecorationKind, FixedLine, FixedLineKey, Provenance};
 
     let mut bundle = fixed_bundle();
-    let store = &mut bundle.document.as_mut().unwrap().content_store;
+    let store = &mut bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .content_store;
     store.fixed_views[0].lines.push(FixedLine {
         key: FixedLineKey::new(3).unwrap(),
         terminal_columns: 37,
@@ -157,7 +163,13 @@ fn fixed_point_and_rule_only_line_reveal_on_the_real_narrow_terminal_buffer() {
     use mant_ir::{Decoration, DecorationKey, DecorationKind, FixedLine, FixedLineKey, Provenance};
 
     let mut bundle = fixed_bundle();
-    let store = &mut bundle.document.as_mut().unwrap().content_store;
+    let store = &mut bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .content_store;
     // CVS tbl_term.c::term_tbl emits whole-row rules without visiting data
     // cells, so the line key must reveal the physical row on its own.
     store.fixed_views[0].lines.push(FixedLine {
@@ -221,9 +233,14 @@ fn nested_fixed_display_in_table_cell_keeps_line_and_point_locations() {
     // no-fill display; the cell wrapper must not discard fixed identities.
     let mut bundle = fixed_bundle();
     let document = bundle.document.as_mut().unwrap();
-    let fixed = document.blocks.remove(0);
-    document.content_store.owners[0].kind = mant_ir::ContentOwnerKind::TableCell;
-    document.blocks = vec![AstBlock::Table {
+    let fixed = document.flow_mut().expect("Flow fixture").blocks.remove(0);
+    document
+        .flow_mut()
+        .expect("Flow fixture")
+        .content_store
+        .owners[0]
+        .kind = mant_ir::ContentOwnerKind::TableCell;
+    document.flow_mut().expect("Flow fixture").blocks = vec![AstBlock::Table {
         fixed_view: None,
         rows: vec![TableRow {
             kind: TableRowKind::Data,
@@ -331,7 +348,7 @@ fn successful_page_change_cancels_splitter_timer_but_failed_candidate_retains_it
 #[test]
 fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("document").sections[0].blocks = vec![
+    bundle.document.as_mut().expect("document").flow_mut().expect("Flow fixture").sections[0].blocks = vec![
         AstBlock::Paragraph {
             children: vec![crate::test_content::text("A long paragraph before the example repeats enough words to wrap very differently when the content pane changes width. ".repeat(8))],
             layout: LayoutHint::default(),
@@ -559,8 +576,15 @@ fn clicking_the_sidebar_selects_and_reclicking_a_branch_collapses_it() {
 #[test]
 fn full_outline_labels_mode_wraps_every_visible_title() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0].children[0].heading =
-        crate::test_content::heading("A deliberately long nested section title");
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .children[0]
+        .heading = crate::test_content::heading("A deliberately long nested section title");
     let backend = TestBackend::new(64, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);

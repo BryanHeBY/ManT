@@ -5,7 +5,14 @@ use std::sync::Arc;
 #[test]
 fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
+    bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![AstBlock::Paragraph {
         children: vec![crate::test_content::link(
             mant_ir::LinkTarget::Manual {
                 name: "printf".into(),
@@ -36,12 +43,24 @@ fn invalid_loaded_fragments_preserve_source_session_history_selection_and_tabs()
         let source = manual_bundle("source", "1");
         let mut target = manual_bundle("target", "1");
         if ambiguous {
-            let mut duplicate = target.document.as_ref().unwrap().sections[0].clone();
+            let mut duplicate = target
+                .document
+                .as_ref()
+                .unwrap()
+                .flow()
+                .expect("Flow fixture")
+                .sections[0]
+                .clone();
             duplicate.id = "other".into();
             duplicate.fragment_aliases = vec!["shared".into()];
             let document = target.document.as_mut().unwrap();
-            document.sections[0].fragment_aliases = vec!["shared".into()];
-            document.sections.push(duplicate);
+            document.flow_mut().expect("Flow fixture").sections[0].fragment_aliases =
+                vec!["shared".into()];
+            document
+                .flow_mut()
+                .expect("Flow fixture")
+                .sections
+                .push(duplicate);
         }
         let mut app = App::new(&source);
         app.selected = 3;
@@ -84,9 +103,23 @@ fn invalid_loaded_fragments_preserve_source_session_history_selection_and_tabs()
 #[test]
 fn same_spelled_duplicate_targets_are_not_first_match_navigation() {
     let mut bundle = manual_bundle("duplicate", "1");
-    let mut duplicate = bundle.document.as_ref().unwrap().sections[0].clone();
+    let mut duplicate = bundle
+        .document
+        .as_ref()
+        .unwrap()
+        .flow()
+        .expect("Flow fixture")
+        .sections[0]
+        .clone();
     duplicate.children.clear();
-    bundle.document.as_mut().unwrap().sections.push(duplicate);
+    bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections
+        .push(duplicate);
     let mut app = App::new(&bundle);
     app.session.content_scroll = 7;
     assert!(!app.jump_to_anchor("options"));
@@ -98,7 +131,13 @@ fn same_spelled_duplicate_targets_are_not_first_match_navigation() {
 fn a_real_tldr_fragment_does_not_silently_jump_to_the_quick_reference_panel() {
     let mut bundle = reference_bundle();
     bundle.tldr = tldr_bundle().tldr;
-    bundle.document.as_mut().unwrap().sections[0]
+    bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
         .fragment_aliases
         .push("tldr".into());
     let mut app = App::new(&bundle);
@@ -183,7 +222,14 @@ fn direct_and_picker_copy_keep_encoded_native_topics_distinct_from_sections() {
 #[test]
 fn malformed_reference_copy_reports_failure_without_repairing_the_address() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
+    bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![AstBlock::Paragraph {
         children: vec![crate::test_content::link(
             mant_ir::LinkTarget::Manual {
                 name: "bad\nname".into(),

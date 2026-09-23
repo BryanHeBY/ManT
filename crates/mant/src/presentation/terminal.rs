@@ -159,14 +159,19 @@ pub(super) fn terminal_excerpt(excerpt: &QueryExcerpt) -> QueryExcerpt {
 }
 
 fn sanitize_terminal_document_headings(document: &mut mant_ir::Document) {
+    let Some(flow) = document.flow_mut() else {
+        // Fixed glyphs were normalized by the native display sink; no Flow
+        // heading atoms exist to sanitize or remap.
+        return;
+    };
     let mut atoms = HashSet::new();
-    if let Some(heading) = &document.heading {
+    if let Some(heading) = &flow.heading {
         collect_heading_atoms(heading, &mut atoms);
     }
-    for section in &document.sections {
+    for section in &flow.sections {
         collect_section_heading_atoms(section, &mut atoms);
     }
-    let original = sanitize_terminal_atoms(&mut document.content_store, &atoms);
+    let original = sanitize_terminal_atoms(&mut flow.content_store, &atoms);
     remap_document_content_refs(document, &original);
 }
 
@@ -273,7 +278,9 @@ fn remap_document_content_refs(
 ) {
     use mant_ir::visit::VisitMut as _;
     ContentRefRemap { original }.visit_document_mut(document);
-    remap_link_label_refs(&mut document.content_store, original);
+    if let Some(flow) = document.flow_mut() {
+        remap_link_label_refs(&mut flow.content_store, original);
+    }
 }
 
 struct ContentRefRemap<'a> {
@@ -364,6 +371,7 @@ pub(super) fn render_full_query(
     query: &ResolvedContent,
     options: RenderOptions,
 ) -> Result<String, Failure> {
+    super::admit_fixed_content(query)?;
     let RenderOptions {
         format,
         pretty,
@@ -374,13 +382,14 @@ pub(super) fn render_full_query(
     match format {
         QueryFormat::Markdown => {
             let terminal_copy = output_terminal.then(|| terminal_content(query));
-            Ok(mant_codec::encode::render_markdown_with_options(
+            mant_codec::encode::render_markdown_with_options(
                 terminal_copy.as_ref().unwrap_or(query),
                 mant_codec::encode::MarkdownOptions {
                     preserve_anchors,
                     ..Default::default()
                 },
-            ))
+            )
+            .map_err(Failure::operational)
         }
         QueryFormat::Text => Ok(mant_render::render_query_text_with(query, |style, text| {
             super::content::decorate(style, text, options.color)
@@ -410,8 +419,8 @@ mod tests {
     use super::sanitize_terminal_document_headings;
     use mant_ir::{
         ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Document,
-        DocumentMeta, Heading, Inline, LinkTarget, Provenance, SourceCoordinates, SourceFormat,
-        SourceIdentity, SourceKey, SourceRecord,
+        DocumentBody, DocumentMeta, FlowBody, Heading, Inline, LinkTarget, Provenance,
+        SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
     };
 
     #[test]
@@ -449,19 +458,21 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store: builder.finish(),
-            meta: DocumentMeta::default(),
-            heading: Some(Heading {
-                content: vec![Inline::Link {
-                    occurrence,
-                    children: vec![Inline::Text { content }],
-                }],
-                source: None,
+            body: DocumentBody::Flow(FlowBody {
+                content_store: builder.finish(),
+                heading: Some(Heading {
+                    content: vec![Inline::Link {
+                        occurrence,
+                        children: vec![Inline::Text { content }],
+                    }],
+                    source: None,
+                }),
+                blocks: Vec::new(),
+                sections: Vec::new(),
             }),
+            meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: Vec::new(),
         };
 
         sanitize_terminal_document_headings(&mut document);
@@ -469,6 +480,8 @@ mod tests {
         let document_content = document.content();
         assert_eq!(
             document
+                .flow()
+                .expect("fixture Flow body")
                 .heading
                 .as_ref()
                 .unwrap()
@@ -479,6 +492,7 @@ mod tests {
             document_content.occurrence_plain_text(occurrence).unwrap(),
             "safe\u{fffd}title"
         );
-        mant_ir::validate_content_store(&document.content_store).unwrap();
+        mant_ir::validate_content_store(&document.flow().expect("fixture Flow body").content_store)
+            .unwrap();
     }
 }

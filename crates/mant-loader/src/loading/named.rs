@@ -361,7 +361,7 @@ fn load_manual(
             name: requested_name.to_owned(),
             detail,
         })?;
-    if document.sections.is_empty() && document.blocks.is_empty() {
+    if !super::has_readable_body(&document) {
         let diagnostics = document
             .diagnostics
             .iter()

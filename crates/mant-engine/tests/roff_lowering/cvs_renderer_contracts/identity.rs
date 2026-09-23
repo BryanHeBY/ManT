@@ -14,6 +14,8 @@ fn executed_heading_keeps_authored_navigation_identity() {
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower executed heading");
     let document = query.document.as_ref().expect("lowered document");
     let section = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .find(|section| section.id.as_str() == "next-section")
@@ -49,6 +51,8 @@ fn executed_heading_display_cannot_shadow_an_authored_navigation_title() {
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower colliding headings");
     let document = query.document.as_ref().expect("lowered document");
     let headings = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .map(|section| {
@@ -157,9 +161,18 @@ fn sx_authored_escape_cannot_collapse_into_a_display_equivalent_heading() {
 
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower authored Sx escape");
     let document = query.document.as_ref().expect("lowered document");
-    assert!(document.sections.iter().any(|section| section.id == "ac"));
     assert!(
         document
+            .flow()
+            .unwrap()
+            .sections
+            .iter()
+            .any(|section| section.id == "ac")
+    );
+    assert!(
+        document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .any(|section| section.id == "a-zbc")
@@ -183,7 +196,7 @@ fn nested_heading_author_modes_execute_without_losing_inline_adjacency() {
     assert!(native.contains("“\nAlice”"), "native terminal: {native:?}");
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower nested An heading");
     let document = query.document.as_ref().unwrap();
-    let heading = &document.sections[1].heading.content;
+    let heading = &document.flow().unwrap().sections[1].heading.content;
     assert!(
         heading
             .iter()
@@ -206,7 +219,7 @@ fn heading_wrappers_remove_only_the_structural_bold_layer() {
         "CVS heading did not combine bold and underline: {native:?}"
     );
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower linked headings");
-    let markdown = mant_codec::encode::render_markdown(&query);
+    let markdown = mant_codec::encode::render_markdown(&query).expect("valid Flow export");
     assert!(markdown.contains("## *TARGET*"), "{markdown}");
     assert!(
         markdown.contains("## [*Label*](https://example.org)"),

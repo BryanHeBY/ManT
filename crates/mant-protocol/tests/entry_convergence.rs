@@ -33,8 +33,8 @@ fn wire_document_rejects_partial_or_uncovered_atoms() {
         Provenance::Unknown,
     );
     let mut payload = document(&definition());
-    payload["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
-    payload["blocks"] = serde_json::to_value([Block::Paragraph {
+    payload["body"]["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
+    payload["body"]["blocks"] = serde_json::to_value([Block::Paragraph {
         children: vec![Inline::Text { content: first }],
         layout: LayoutHint::default(),
         source: None,
@@ -42,16 +42,16 @@ fn wire_document_rejects_partial_or_uncovered_atoms() {
     .unwrap();
     let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
     let mut hidden = payload.clone();
-    hidden["blocks"] = json!([]);
+    hidden["body"]["blocks"] = json!([]);
     assert!(serde_json::from_value::<DocumentResponse>(hidden).is_err());
     let mut duplicated = payload.clone();
-    let leaf = duplicated["blocks"][0]["children"][0].clone();
-    duplicated["blocks"][0]["children"]
+    let leaf = duplicated["body"]["blocks"][0]["children"][0].clone();
+    duplicated["body"]["blocks"][0]["children"]
         .as_array_mut()
         .unwrap()
         .push(leaf);
     assert!(serde_json::from_value::<DocumentResponse>(duplicated).is_err());
-    payload["blocks"][0]["children"][0]["content"]["bytes"]["end"] = json!(2);
+    payload["body"]["blocks"][0]["children"][0]["content"]["bytes"]["end"] = json!(2);
     assert!(serde_json::from_value::<DocumentResponse>(payload).is_err());
 }
 
@@ -103,8 +103,8 @@ fn wire_document_rejects_nested_link_wrappers() {
         )
         .unwrap();
     let mut payload = document(&definition());
-    payload["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
-    payload["blocks"] = serde_json::to_value([Block::Paragraph {
+    payload["body"]["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
+    payload["body"]["blocks"] = serde_json::to_value([Block::Paragraph {
         children: vec![
             Inline::Link {
                 occurrence: outer,
@@ -124,11 +124,11 @@ fn wire_document_rejects_nested_link_wrappers() {
     }])
     .unwrap();
     let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
-    let inner_wrapper = payload["blocks"][0]["children"]
+    let inner_wrapper = payload["body"]["blocks"][0]["children"]
         .as_array_mut()
         .unwrap()
         .remove(1);
-    payload["blocks"][0]["children"][0]["children"]
+    payload["body"]["blocks"][0]["children"][0]["children"]
         .as_array_mut()
         .unwrap()
         .push(inner_wrapper);
@@ -164,23 +164,24 @@ fn complete_wire_document_rejects_root_atoms_reordered_across_paragraphs() {
         Provenance::Unknown,
     );
     let mut payload = document(&definition());
-    payload["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
-    payload["blocks"] = serde_json::to_value([first, second].map(|content| Block::Paragraph {
-        children: vec![Inline::Text { content }],
-        layout: LayoutHint::default(),
-        source: None,
-    }))
-    .unwrap();
+    payload["body"]["contentStore"] = serde_json::to_value(builder.finish()).unwrap();
+    payload["body"]["blocks"] =
+        serde_json::to_value([first, second].map(|content| Block::Paragraph {
+            children: vec![Inline::Text { content }],
+            layout: LayoutHint::default(),
+            source: None,
+        }))
+        .unwrap();
     let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
-    payload["blocks"].as_array_mut().unwrap().swap(0, 1);
+    payload["body"]["blocks"].as_array_mut().unwrap().swap(0, 1);
     assert!(serde_json::from_value::<DocumentResponse>(payload).is_err());
 }
 
 fn document(item: &Value) -> Value {
     json!({"schema":"mant.document/v0.12","producer":{"name":"test","version":"0"},
         "sources":[{"key":1,"identity":{"kind":"anonymous","name":"test"},"format":"markdown","decodedByteLength":0,"coordinates":{"kind":"decoded-utf8-bytes"}}],
-        "rootSource":1,"contentStore":empty_content_store(),"meta":{},"sections":[],
-        "blocks":[{"type":"definition-list","items":[item]}]})
+        "rootSource":1,"meta":{},"body":{"kind":"flow","contentStore":empty_content_store(),"sections":[],
+        "blocks":[{"type":"definition-list","items":[item]}]}})
 }
 
 #[test]
@@ -241,11 +242,11 @@ fn document_and_query_envelopes_reject_legacy_nested_facts() {
 #[test]
 fn source_context_rejects_unknown_and_out_of_range_nested_spans() {
     let mut unknown = document(&definition());
-    unknown["blocks"][0]["source"] = json!({"source":2,"line":1,"column":1});
+    unknown["body"]["blocks"][0]["source"] = json!({"source":2,"line":1,"column":1});
     assert!(serde_json::from_value::<DocumentResponse>(unknown).is_err());
 
     let mut out_of_range = document(&definition());
-    out_of_range["blocks"][0]["source"] =
+    out_of_range["body"]["blocks"][0]["source"] =
         json!({"source":1,"byteRange":{"start":0,"end":1},"line":1,"column":1});
     assert!(serde_json::from_value::<DocumentResponse>(out_of_range).is_err());
 
@@ -317,13 +318,14 @@ fn query_list_kinds_reject_legacy_or_inapplicable_start() {
         json!({"kind":"ordered","start":0}),
     ] {
         let mut payload = document(&definition());
-        payload["blocks"] = json!([{"type":"list","kind":kind,"items":[]}]);
+        payload["body"]["blocks"] = json!([{"type":"list","kind":kind,"items":[]}]);
         let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
-        payload["blocks"][0]["start"] = Value::Null;
+        payload["body"]["blocks"][0]["start"] = Value::Null;
         assert!(serde_json::from_value::<DocumentResponse>(payload).is_err());
     }
     let mut payload = document(&definition());
-    payload["blocks"] = json!([{"type":"list","kind":{"kind":"bullet","start":null},"items":[]}]);
+    payload["body"]["blocks"] =
+        json!([{"type":"list","kind":{"kind":"bullet","start":null},"items":[]}]);
     assert!(
         serde_json::from_value::<QueryBundle>(
             json!({"schema":"mant.query/v0.12","label":"test","document":payload})

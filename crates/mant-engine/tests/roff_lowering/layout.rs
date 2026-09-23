@@ -65,7 +65,9 @@ fn unclosed_compact_run_stays_separate_and_resets_at_indent_scope() {
 
     let document = parse_manual_source(&path).expect("lower unclosed compact alias group");
     fs::remove_file(path).expect("remove temporary roff fixture");
-    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::DefinitionList { items, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one outer definition list");
     };
     assert_eq!(items.len(), 3);
@@ -122,7 +124,9 @@ fn preserves_man_synopsis_flow_and_alternating_fonts() {
     let document = parse_manual_source(&path).expect("lower man synopsis");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one synopsis paragraph");
     };
     assert_eq!(
@@ -170,7 +174,9 @@ fn preserves_man_sy_heads_with_body_content_and_inline_fonts() {
     )
     .expect("lower SY heads");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one synopsis paragraph");
     };
     assert_eq!(
@@ -182,7 +188,9 @@ fn preserves_man_sy_heads_with_body_content_and_inline_fonts() {
         Some(Inline::Strong { children }) if inline_text(document.content(), children) == "getent"
     ));
 
-    let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[1].blocks.as_slice()
+    else {
         panic!("expected one description paragraph");
     };
     assert_eq!(
@@ -218,10 +226,12 @@ fn keeps_man_synopsis_lines_together_inside_no_fill_examples() {
     )
     .expect("lower synopsis inside example");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "no-fill synopsis must remain one preformatted block: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -251,10 +261,12 @@ second line\n\
     )
     .expect("lower no-fill blank row");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "no-fill display must remain preformatted: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -284,10 +296,12 @@ second line\n\
     )
     .expect("lower no-fill zero-width row");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "no-fill display must remain preformatted: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -320,10 +334,12 @@ second line\n\
     )
     .expect("lower font block inside literal display");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "literal display must remain one preformatted block: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -356,10 +372,12 @@ second line\n\
     )
     .expect("lower literal display inside literal font block");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "fonted literal display must remain preformatted: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -393,7 +411,7 @@ third line\n\
     )
     .expect("lower nested literal display");
 
-    let texts = document.sections[0]
+    let texts = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .map(|block| {
@@ -426,10 +444,12 @@ second line\n\
     )
     .expect("lower no-fill blank run");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "no-fill display must remain preformatted: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -471,7 +491,7 @@ fn distinguishes_filled_source_wrapping_from_indented_output_lines() {
         Block::Paragraph {
             children: prose, ..
         },
-    ] = document.sections[0].blocks.as_slice()
+    ] = document.flow().unwrap().sections[0].blocks.as_slice()
     else {
         panic!("expected synopsis and prose paragraphs");
     };
@@ -516,11 +536,11 @@ continuation\n\
         Block::Preformatted {
             children: literal, ..
         },
-    ] = document.sections[0].blocks.as_slice()
+    ] = document.flow().unwrap().sections[0].blocks.as_slice()
     else {
         panic!(
             "expected one filled and one no-fill block: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -544,8 +564,13 @@ The next line.\n",
     )
     .expect("lower a horizontally spaced continued line");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one paragraph: {:?}", document.sections[0].blocks);
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
+        panic!(
+            "expected one paragraph: {:?}",
+            document.flow().unwrap().sections[0].blocks
+        );
     };
     assert_eq!(
         inline_text(document.content(), children),
@@ -576,7 +601,8 @@ fn preserves_man_paragraph_distance_between_indented_paragraphs() {
     let document = parse_manual_source(&path).expect("lower paragraph distance");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [Block::DefinitionList { items, compact, .. }] = document.sections[0].blocks.as_slice()
+    let [Block::DefinitionList { items, compact, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
     else {
         panic!("expected one definition list");
     };
@@ -611,7 +637,7 @@ fn does_not_duplicate_explicit_space_before_a_transparent_indent() {
         Block::Paragraph { .. },
         Block::VerticalSpace { lines: 1, .. },
         Block::Paragraph { layout, .. },
-    ] = document.sections[0].blocks.as_slice()
+    ] = document.flow().unwrap().sections[0].blocks.as_slice()
     else {
         panic!("expected prose, one explicit gap, and indented prose");
     };
@@ -659,7 +685,7 @@ fn relative_indent_does_not_invent_paragraph_distance() {
             layout: second_description,
             ..
         },
-    ] = document.sections[0].blocks.as_slice()
+    ] = document.flow().unwrap().sections[0].blocks.as_slice()
     else {
         panic!("expected two terms followed by their indented descriptions");
     };
@@ -706,7 +732,7 @@ fn relative_indent_preserves_child_owned_paragraph_distance() {
     fs::remove_file(path).expect("remove temporary roff fixture");
 
     let [Block::Paragraph { .. }, Block::Paragraph { layout, .. }] =
-        document.sections[0].blocks.as_slice()
+        document.flow().unwrap().sections[0].blocks.as_slice()
     else {
         panic!("expected outer prose and one explicitly separated nested paragraph");
     };
@@ -730,7 +756,9 @@ fn propagates_nested_no_space_and_preserves_prefix_content() {
     )
     .expect("lower nested no-space macros");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one no-space paragraph");
     };
     assert_eq!(
@@ -747,7 +775,9 @@ fn temporary_indent_discards_its_operand_but_retains_the_line_boundary() {
     )
     .expect("lower temporary indentation requests");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one examples paragraph");
     };
     assert_eq!(
@@ -777,7 +807,7 @@ fn lowers_normalized_ordered_lists_and_literal_displays() {
     fs::remove_file(path).expect("remove temporary roff fixture");
 
     assert!(matches!(
-        document.sections[0].blocks[0],
+        document.flow().unwrap().sections[0].blocks[0],
         Block::List {
             kind: mant_ir::ListKind::Ordered { .. },
             compact: true,
@@ -785,7 +815,7 @@ fn lowers_normalized_ordered_lists_and_literal_displays() {
         }
     ));
     assert!(matches!(
-        document.sections[0].blocks[1],
+        document.flow().unwrap().sections[0].blocks[1],
         Block::Preformatted { layout, .. } if layout.indent_columns == 6
     ));
 }
@@ -801,7 +831,7 @@ fn keeps_relative_indent_references_inside_man_ip_enumerations() {
     )
     .expect("lower numbered IP references");
 
-    let notes = &document.sections[0];
+    let notes = &document.flow().unwrap().sections[0];
     let [
         Block::List {
             kind: ListKind::Ordered { start: Some(1) },
@@ -829,7 +859,7 @@ T{\nT}@T{\nCore\nT}@T{\nProduction-grade, first-class\nT}\n.TE\n";
     let document = parse_manual_bytes(std::path::Path::new("empty-table-cell.7"), source)
         .expect("lower a row beginning with an empty text block");
 
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice() else {
         panic!("expected one table");
     };
     let [row] = rows.as_slice() else {
@@ -881,7 +911,8 @@ fn carries_mdoc_spacing_state_into_display_lines() {
     )
     .expect("lower display-scoped mdoc spacing controls");
 
-    let Block::Preformatted { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Preformatted { children, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected one display line");
     };
     assert_eq!(inline_text(document.content(), children), "name:uid:gid");
@@ -896,7 +927,8 @@ fn carries_mdoc_spacing_state_across_list_item_boundaries() {
     )
     .expect("lower list-scoped mdoc spacing controls");
 
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("expected a command definition list");
     };
     assert_eq!(
@@ -916,7 +948,7 @@ fn carries_mdoc_spacing_state_out_of_nested_synopsis_enclosures() {
     )
     .expect("lower nested synopsis spacing transitions");
 
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected synopsis paragraph");
     };
     assert_eq!(
@@ -936,10 +968,12 @@ fn adjacent_no_fill_regions_scale_without_changing_their_topology() {
     let document = parse_manual_bytes(std::path::Path::new("no-fill-scale.7"), source.as_bytes())
         .expect("lower adjacent no-fill regions");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Preformatted { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!(
             "adjacent regions must remain one preformatted block: {:?}",
-            document.sections[0].blocks
+            document.flow().unwrap().sections[0].blocks
         );
     };
     assert_eq!(
@@ -980,7 +1014,7 @@ fn preserves_man_paragraph_and_heading_distance_as_one_layout_model() {
     let document = parse_manual_source(&path).expect("lower vertical layout");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [first, next, final_section] = document.sections.as_slice() else {
+    let [first, next, final_section] = document.flow().unwrap().sections.as_slice() else {
         panic!("expected three top-level sections");
     };
     assert_eq!(first.spacing_before_lines, 0);
@@ -1016,7 +1050,7 @@ fn preserves_mdoc_paragraph_and_heading_distance() {
     let document = parse_manual_source(&path).expect("lower mdoc vertical layout");
     fs::remove_file(path).expect("remove temporary roff fixture");
 
-    let [first] = document.sections.as_slice() else {
+    let [first] = document.flow().unwrap().sections.as_slice() else {
         panic!("expected one top-level section");
     };
     assert_eq!(first.spacing_before_lines, 1);

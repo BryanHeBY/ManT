@@ -14,7 +14,7 @@ pub(super) fn query(body: &str) -> ResolvedContent {
 pub(super) fn assert_flow(body: &str, expected: &str) {
     let query = query(body);
     let document = query.document.as_ref().unwrap();
-    let blocks = &document.sections[1].blocks;
+    let blocks = &document.flow().unwrap().sections[1].blocks;
     let inlines = match &blocks[0] {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => children,
         Block::DefinitionList { items, .. } => &items[0].terms[0],
@@ -29,7 +29,7 @@ pub(super) fn assert_flow(body: &str, expected: &str) {
         unindent(&mant_render::render_query_text(&query)).contains(expected),
         "{body}"
     );
-    let markdown = mant_codec::encode::render_markdown(&query);
+    let markdown = mant_codec::encode::render_markdown(&query).expect("valid Flow export");
     let reparsed = mant_loader::load_markdown_text(&markdown, None).unwrap();
     assert!(
         unindent(&mant_render::render_query_text(&reparsed)).contains(expected),
@@ -181,7 +181,7 @@ fn invisible_targets_preserve_pending_joins_and_source_ownership() {
     );
     let Block::Paragraph {
         children, source, ..
-    } = &document.sections[1].blocks[0]
+    } = &document.flow().unwrap().sections[1].blocks[0]
     else {
         panic!("expected paragraph")
     };
@@ -197,7 +197,7 @@ fn real_breaks_reset_joins_but_source_continuations_do_not() {
     assert_flow(".No x\\c\n.Em y", "xy");
     let query = query(".No x Ap\n.Pp\n.No y");
     let document = query.document.as_ref().unwrap();
-    let paragraphs = document.sections[1]
+    let paragraphs = document.flow().unwrap().sections[1]
         .blocks
         .iter()
         .filter(|block| !matches!(block, Block::VerticalSpace { .. }))
@@ -225,7 +225,9 @@ fn preserves_complete_mdoc_include_directives() {
     )
     .expect("lower mdoc include");
 
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one include paragraph");
     };
     assert_eq!(
@@ -247,7 +249,7 @@ fn retains_punctuation_after_implicit_mdoc_enclosures() {
     )
     .expect("lower punctuation after an implicit enclosure");
 
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &document.flow().unwrap().sections[0].blocks[0] else {
         panic!("expected one paragraph");
     };
     assert_eq!(
@@ -287,7 +289,7 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
     )
     .expect("lower explicit mdoc blocks");
 
-    let function = &document.sections[1];
+    let function = &document.flow().unwrap().sections[1];
     let [
         Block::Paragraph {
             children: declaration,
@@ -307,7 +309,9 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
     )));
     assert!(anchor_ids(&document).iter().any(|id| id == "audit-open"));
 
-    let [Block::Paragraph { children, .. }] = document.sections[2].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[2].blocks.as_slice()
+    else {
         panic!("expected one enclosure paragraph");
     };
     assert_eq!(
@@ -333,7 +337,9 @@ fn preserves_the_complete_libbsd_library_identity() {
         b".Dd August 19, 2026\n.Dt LIBBSD 3bsd\n.Os\n.Sh LIBRARY\n.Lb libbsd\n",
     )
     .expect("lower libbsd library declaration");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one library paragraph");
     };
 
@@ -351,7 +357,9 @@ fn joins_the_final_mdoc_bibliography_authors() {
 .Rs\n.%A Bentley, J.L.\n.%A McIlroy, M.D.\n.%T Engineering a Sort Function\n.Re\n",
     )
     .expect("lower mdoc bibliography");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one bibliography paragraph");
     };
 
@@ -373,7 +381,9 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
     )
     .expect("lower mdoc generated punctuation");
 
-    let [Block::Paragraph { children: name, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Paragraph { children: name, .. }] =
+        document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
         panic!("expected one NAME paragraph");
     };
     assert_eq!(
@@ -381,7 +391,7 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
         "function-punctuation — test generated punctuation"
     );
 
-    let synopsis = document.sections[1]
+    let synopsis = document.flow().unwrap().sections[1]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -398,7 +408,7 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
         ]
     );
     assert_eq!(
-        document.sections[1]
+        document.flow().unwrap().sections[1]
             .blocks
             .iter()
             .filter(|block| matches!(block, Block::VerticalSpace { lines: 1, .. }))
@@ -411,7 +421,7 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
             children: description,
             ..
         },
-    ] = document.sections[2].blocks.as_slice()
+    ] = document.flow().unwrap().sections[2].blocks.as_slice()
     else {
         panic!("expected one DESCRIPTION paragraph");
     };
@@ -433,7 +443,7 @@ fn preserves_mdoc_synopsis_declaration_units() {
     )
     .expect("lower mdoc synopsis declarations");
 
-    let rendered = document.sections[0]
+    let rendered = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -453,7 +463,7 @@ fn preserves_mdoc_synopsis_declaration_units() {
         ]
     );
     assert_eq!(
-        document.sections[0]
+        document.flow().unwrap().sections[0]
             .blocks
             .iter()
             .filter(|block| matches!(block, Block::VerticalSpace { lines: 1, .. }))

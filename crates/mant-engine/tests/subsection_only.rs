@@ -22,6 +22,8 @@ fn root_level_subsections_lower_into_visible_sections() {
     let document = parse_manual_source(&fixture_path()).expect("lower subsection-only fixture");
 
     let titles: Vec<String> = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .map(|section| section.heading.plain_text(document.content()))
@@ -34,6 +36,8 @@ fn root_level_subsections_lower_into_visible_sections() {
 
     assert!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .all(|section| !section.blocks.is_empty()),

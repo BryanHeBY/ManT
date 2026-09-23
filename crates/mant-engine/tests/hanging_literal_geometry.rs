@@ -73,7 +73,7 @@ fn nofill_hanging_geometry_is_preserved_in_ir_not_added_by_the_renderer() {
     let query =
         load_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.nf\n.HP 4\nFIRST\nSECOND\n.fi\nAFTER\n")
             .unwrap();
-    let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
+    let blocks = &query.document.as_ref().unwrap().flow().unwrap().sections[0].blocks;
     let [
         Block::Preformatted { layout: first, .. },
         Block::Preformatted { layout: second, .. },

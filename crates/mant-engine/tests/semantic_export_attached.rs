@@ -28,6 +28,7 @@ fn export(query: &mant_ir::ResolvedContent) -> String {
             ..Default::default()
         },
     )
+    .expect("valid Flow export")
 }
 
 #[test]
@@ -104,7 +105,7 @@ fn incompatible_item_policies_fall_back_without_misleading_annotations() {
     .unwrap();
     let mut inferred_facts = facts(inferred.document.as_ref().unwrap()).pop().unwrap();
     let doc = query.document.as_mut().unwrap();
-    let mant_ir::Block::List { items, .. } = &mut doc.blocks[0] else {
+    let mant_ir::Block::List { items, .. } = &mut doc.flow_mut().unwrap().blocks[0] else {
         panic!("list")
     };
     inferred_facts.id = items[1].entry.as_ref().unwrap().id.clone();

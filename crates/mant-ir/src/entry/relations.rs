@@ -389,7 +389,6 @@ mod tests {
 
     fn document(content_store: crate::ContentStore, items: Vec<DefinitionItem>) -> Document {
         Document {
-            heading: None,
             parser: None,
             sources: vec![SourceRecord {
                 key: SourceKey::FIRST,
@@ -402,18 +401,21 @@ mod tests {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store,
+            body: crate::DocumentBody::Flow(crate::FlowBody {
+                content_store,
+                heading: None,
+                blocks: vec![Block::DefinitionList {
+                    declaration_groups: Vec::new(),
+                    items,
+                    compact: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+                sections: Vec::new(),
+            }),
             meta: DocumentMeta::default(),
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            sections: Vec::new(),
-            blocks: vec![Block::DefinitionList {
-                declaration_groups: Vec::new(),
-                items,
-                compact: true,
-                layout: LayoutHint::default(),
-                source: None,
-            }],
         }
     }
 
@@ -489,7 +491,7 @@ mod tests {
         let decoded: Document =
             serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
         assert_eq!(doc, decoded);
-        let Block::DefinitionList { items, .. } = &decoded.blocks[0] else {
+        let Block::DefinitionList { items, .. } = &decoded.flow().unwrap().blocks[0] else {
             panic!("definitions");
         };
         assert_eq!(items[0].description, body);

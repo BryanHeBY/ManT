@@ -34,6 +34,13 @@ pub fn select_excerpt(
     query: &ResolvedContent,
     selectors: &[ContentSelector],
 ) -> Result<QueryExcerpt, ProjectionError> {
+    if query
+        .document
+        .as_ref()
+        .is_some_and(|document| document.flow().is_none())
+    {
+        return Err(ProjectionError::UnsupportedFixed);
+    }
     if selectors.is_empty() {
         return Err(ProjectionError::EmptySelection);
     }
@@ -54,9 +61,10 @@ pub fn select_excerpt(
     }
     let mut located = Vec::new();
     if let Some(manual) = &query.document {
+        let flow = manual.flow().ok_or(ProjectionError::UnsupportedFixed)?;
         let content = manual.content();
-        collect_root_entries(content, &manual.blocks, &mut located);
-        collect_sections(content, &manual.sections, &[], &[], &mut located);
+        collect_root_entries(content, &flow.blocks, &mut located);
+        collect_sections(content, &flow.sections, &[], &[], &mut located);
     }
     let index = DocumentSelectorIndex::new(&located);
 
@@ -103,6 +111,7 @@ pub fn select_excerpt(
         });
     }
     if let (true, Some(document)) = (document_root_selected, query.document.as_ref()) {
+        let flow = document.flow().ok_or(ProjectionError::UnsupportedFixed)?;
         // Response topology remains owned here; `project_selections` remaps all
         // retained keys into one closed response-local store before return.
         selections.push(ExcerptSelection::DocumentRoot {
@@ -114,8 +123,8 @@ pub fn select_excerpt(
                     title: DOCUMENT_ROOT_TITLE.to_owned(),
                 },
             },
-            heading: document.heading.clone(),
-            blocks: document.blocks.clone(),
+            heading: flow.heading.clone(),
+            blocks: flow.blocks.clone(),
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
@@ -157,7 +166,10 @@ fn project_selections(
     document: &mant_ir::Document,
     selections: &mut [ExcerptSelection],
 ) -> Result<ContentProjection, ProjectionError> {
-    let mut builder = ContentProjectionBuilder::new(&document.content_store);
+    let flow = document
+        .flow()
+        .expect("Fixed rejected by excerpt preflight");
+    let mut builder = ContentProjectionBuilder::new(&flow.content_store);
     for selection in selections.iter() {
         match selection {
             ExcerptSelection::Tldr { .. } => {}
@@ -228,10 +240,11 @@ fn resolve_excerpt_candidates<'a>(
             continue;
         }
         if selector_matches(selector, &OutlinePath::DocumentRoot, DOCUMENT_ROOT_ID)
-            && query
-                .document
-                .as_ref()
-                .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
+            && query.document.as_ref().is_some_and(|document| {
+                document
+                    .flow()
+                    .is_some_and(|flow| flow.heading.is_some() || !flow.blocks.is_empty())
+            })
         {
             index.validate_synthetic_identity(&query.label, selector, DOCUMENT_ROOT_ID, "root")?;
             document_root_selected = true;

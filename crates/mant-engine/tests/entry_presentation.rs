@@ -52,6 +52,8 @@ fn explicit_presentation_fixture_has_all_roles_without_diagnostics() {
     );
     let index = mant_ir::SemanticIndex::build(document);
     let kinds: std::collections::BTreeSet<_> = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .flat_map(|s| index.section(&s.id))
@@ -97,7 +99,7 @@ fn singular_command_headings_share_the_plural_semantic_contract() {
         let content = load_roff_bytes(source.as_bytes()).unwrap();
         let document = content.document.as_ref().unwrap();
         let index = mant_ir::SemanticIndex::build(document);
-        let entry = &index.section(&document.sections[0].id)[0];
+        let entry = &index.section(&document.flow().unwrap().sections[0].id)[0];
         assert_eq!(entry.kind, mant_ir::EntryKind::Command, "{heading}");
         assert_eq!(entry.names, ["find-new"]);
         assert_eq!(entry.id.as_str(), "command-find-new");

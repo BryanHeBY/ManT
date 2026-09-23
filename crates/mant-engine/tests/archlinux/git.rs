@@ -16,7 +16,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
     let document = archlinux_manual("git");
     let content = document.content();
     common::assert_section_topology("archlinux/git", document, GIT_SECTIONS);
-    assert_eq!(document.sections.len(), 24);
+    assert_eq!(document.flow().unwrap().sections.len(), 24);
 
     let environment = common::section(document, "ENVIRONMENT VARIABLES");
     assert!(

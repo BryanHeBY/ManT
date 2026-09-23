@@ -88,7 +88,12 @@ fn lower_projection(
         }),
         sources: projection.sources().to_vec(),
         root_source: projection.root_source(),
-        content_store,
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store,
+            heading: None,
+            blocks: root_blocks,
+            sections,
+        }),
         meta: DocumentMeta {
             title: metadata.title().map(ToOwned::to_owned),
             manual_section: metadata.section().map(ToOwned::to_owned),
@@ -99,18 +104,19 @@ fn lower_projection(
             names: metadata.name().map(ToOwned::to_owned).into_iter().collect(),
             alias_target: metadata.alias_target().map(ToOwned::to_owned),
         },
-        heading: None,
         fragment_aliases: Vec::new(),
         diagnostics: lower_diagnostics(&projection),
-        blocks: root_blocks,
-        sections,
     };
     document
         .diagnostics
         .extend_from_slice(addresses.diagnostics());
-    let discovery =
-        crate::definitions::manual_discovery_diagnostics(document.content(), &document.sections);
-    document.diagnostics.extend(discovery);
+    if let mant_ir::DocumentBody::Flow(flow) = &document.body {
+        let discovery = crate::definitions::manual_discovery_diagnostics(
+            flow.content_store.content(),
+            &flow.sections,
+        );
+        document.diagnostics.extend(discovery);
+    }
     document.diagnostics.extend(validate_document(&document));
     Ok(document)
 }

@@ -259,7 +259,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
     // own ManT's logical alias metadata.  Classify the source identity from
     // the normal indexed-page path, which is also the path whose IR we audit.
     let is_alias = document.meta.alias_target.is_some();
-    let (observed, observed_topology) = ir_profile(&document);
+    let (observed, observed_topology) = ir_profile(&document)?;
     let violations = if is_alias {
         Vec::new()
     } else {
@@ -835,7 +835,10 @@ fn mdoc_definition_is_recoverable_ordinal_list(node: &Node) -> bool {
     count > 0
 }
 
-fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
+fn ir_profile(document: &Document) -> Result<(IrStructure, IrTopology), String> {
+    let flow = document
+        .flow()
+        .ok_or_else(|| "Flow structure profiler does not accept Fixed bodies".to_owned())?;
     let mut profile = IrStructure {
         unresolved_section_references: document
             .diagnostics
@@ -846,14 +849,8 @@ fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
     };
     let mut topology = IrTopology::default();
     let content = document.content();
-    collect_blocks(
-        content,
-        &document.blocks,
-        false,
-        &mut profile,
-        &mut topology,
-    );
-    for section in &document.sections {
+    collect_blocks(content, &flow.blocks, false, &mut profile, &mut topology);
+    for section in &flow.sections {
         collect_section(content, section, &mut profile, &mut topology);
     }
     topology.lists.sort_by_key(|list| list.source_line);
@@ -863,7 +860,7 @@ fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
             equation_context_order(equation.context),
         )
     });
-    (profile, topology)
+    Ok((profile, topology))
 }
 
 fn collect_section(
@@ -1641,7 +1638,7 @@ mod tests {
             ".Sh NAME\n.Nm audit\n.Nd heading link probe\n",
             ".Sh DESCRIPTION\n.Ss Eo\n.Xr printf 3\nReference\n.Ec\n.Pp\nVisible body.\n",
         ));
-        let (observed, topology) = super::ir_profile(&document);
+        let (observed, topology) = super::ir_profile(&document).unwrap();
         assert_eq!(expected.manual_links, 1);
         assert_eq!(observed.manual_links, 1);
         assert!(
@@ -1649,10 +1646,10 @@ mod tests {
                 .is_empty()
         );
 
-        let heading = &mut document.sections[1].children[0].heading;
+        let heading = &mut document.flow_mut().unwrap().sections[1].children[0].heading;
         // Preserve the words, but remove the typed link: topology must notice.
         heading.content = without_links(std::mem::take(&mut heading.content));
-        let (mutated, topology) = super::ir_profile(&document);
+        let (mutated, topology) = super::ir_profile(&document).unwrap();
         let violations =
             super::compare_structure(&expected, &mutated, &expected_topology, &topology);
         assert!(
@@ -1670,7 +1667,7 @@ mod tests {
             ));
             assert_eq!(expected.max_relative_indent_depth, 1, "{argument}");
             assert_eq!(expected.positive_relative_indent_scopes, 0, "{argument}");
-            let (observed, topology) = super::ir_profile(&document);
+            let (observed, topology) = super::ir_profile(&document).unwrap();
             assert_eq!(observed.max_indent_columns, 0, "{argument}");
             assert!(
                 super::compare_structure(&expected, &observed, &expected_topology, &topology)
@@ -1686,18 +1683,18 @@ mod tests {
                 ".TH AUDIT 1\n.SH BODY\n{scopes}.PP\nVisible body.\n.RE\n"
             ));
             assert_eq!(expected.positive_relative_indent_scopes, 1, "{scopes}");
-            let (observed, topology) = super::ir_profile(&document);
+            let (observed, topology) = super::ir_profile(&document).unwrap();
             assert!(observed.max_indent_columns > 0, "{scopes}");
             assert!(
                 super::compare_structure(&expected, &observed, &expected_topology, &topology)
                     .is_empty()
             );
-            for block in &mut document.sections[0].blocks {
+            for block in &mut document.flow_mut().unwrap().sections[0].blocks {
                 if let super::Block::Paragraph { layout, .. } = block {
                     layout.indent_columns = 0;
                 }
             }
-            let (mutated, topology) = super::ir_profile(&document);
+            let (mutated, topology) = super::ir_profile(&document).unwrap();
             assert_eq!(mutated.max_indent_columns, 0);
             let violations =
                 super::compare_structure(&expected, &mutated, &expected_topology, &topology);
@@ -1726,7 +1723,7 @@ mod tests {
             ".Dd September 12, 2026\n.Dt AUDIT 1\n.Os\n.Sh BODY\n",
             ".Bl -tag -width Ds\n.It 1.\nFirst.\n.It 2.\nSecond.\n.El\n"
         ));
-        let (observed, observed_topology) = super::ir_profile(&document);
+        let (observed, observed_topology) = super::ir_profile(&document).unwrap();
         assert_eq!(topology.lists[0].kind, super::ListTopologyKind::Generic);
         assert!(
             super::compare_structure(&expected, &observed, &topology, &observed_topology)

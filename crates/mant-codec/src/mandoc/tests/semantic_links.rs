@@ -25,10 +25,13 @@ fn zero_advance_crosses_empty_enclosures_and_atomic_mdoc_output() {
             source,
         )
         .expect("parse zero-advance atomic output");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
             panic!(
                 "{label}: expected one paragraph: {:#?}",
-                document.sections[0].blocks
+                document.flow().expect("Flow fixture").sections[0].blocks
             );
         };
         assert_eq!(
@@ -46,8 +49,14 @@ fn bsd_reference_executes_suppressed_font_operands_before_generated_text() {
         b".Dd September 12, 2026\n.Dt BSD-FONT 1\n.Os\n.Sh DESCRIPTION\n.Bx \\fB\n.Li \\fPZ\n.Bx \\fB-devel\n.Li \\fPZ\n",
     )
     .expect("parse Bx formatter-state fixture");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one paragraph: {:#?}", document.sections[0].blocks);
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "expected one paragraph: {:#?}",
+            document.flow().expect("Flow fixture").sections[0].blocks
+        );
     };
 
     // CVS mdoc_validate.c appends generated BSD after source argument
@@ -104,8 +113,14 @@ fn bsd_reference_replacements_execute_complete_hidden_word_state() {
             source.as_bytes(),
         )
         .expect("parse Bx hidden execution fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!(
+                "{label}: expected one paragraph: {:#?}",
+                document.flow().expect("Flow fixture").sections
+            );
         };
         assert_eq!(
             inline_text(document.content(), children),
@@ -119,8 +134,14 @@ fn bsd_reference_replacements_execute_complete_hidden_word_state() {
         b".Dd September 12, 2026\n.Dt BSD-STATE 1\n.Os\n.Sh DESCRIPTION\n.Bx \\fB-devel\\p\n.Li \\fPZ\n",
     )
     .expect("parse styled Bx hidden execution fixture");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one paragraph: {:#?}", document.sections);
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "expected one paragraph: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
     };
     assert_eq!(
         inline_text(document.content(), children),
@@ -143,8 +164,14 @@ fn bsd_reference_replacement_preserves_boundaries_and_exact_arity() {
         b".Dd September 12, 2026\n.Dt BSD-STATE 1\n.Os\n.Sh DESCRIPTION\n.No A\n.Bx \\fB\n.Li \\fPZ\n.No A\n.Bx \\p\n.No Z\n.Bx -alpha \"\"\n.Bx 4.3 Tahoe\n",
     )
     .expect("parse Bx replacement boundary fixture");
-    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("expected one paragraph: {:#?}", document.sections);
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!(
+            "expected one paragraph: {:#?}",
+            document.flow().expect("Flow fixture").sections
+        );
     };
 
     assert_eq!(
@@ -181,7 +208,10 @@ fn mail_and_link_labels_share_the_zero_advance_stream() {
             source,
         )
         .expect("parse link formatter-state fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
             panic!("{label}: expected one paragraph");
         };
         assert_eq!(
@@ -232,10 +262,13 @@ fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
             source,
         )
         .expect("parse semantic link formatter-state fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [1]
+        .blocks
+        .as_slice() else {
             panic!(
                 "{label}: expected one description paragraph: {:#?}",
-                document.sections
+                document.flow().expect("Flow fixture").sections
             );
         };
         assert_eq!(
@@ -256,10 +289,13 @@ fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk \\fBhttps://example.org label\n.Li \\fPZ\n",
     )
     .expect("parse hidden link URI controls");
-    let [Block::Paragraph { children, .. }] = link_controls.sections[1].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] = link_controls.flow().expect("Flow fixture").sections
+        [1]
+    .blocks
+    .as_slice() else {
         panic!(
             "expected one description paragraph: {:#?}",
-            link_controls.sections
+            link_controls.flow().expect("Flow fixture").sections
         );
     };
     assert!(
@@ -272,10 +308,13 @@ fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Mt \\fB a@example.org\n.Li \\fPZ\n",
     )
     .expect("parse hidden mail operand controls");
-    let [Block::Paragraph { children, .. }] = mail_controls.sections[1].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] = mail_controls.flow().expect("Flow fixture").sections
+        [1]
+    .blocks
+    .as_slice() else {
         panic!(
             "expected one description paragraph: {:#?}",
-            mail_controls.sections
+            mail_controls.flow().expect("Flow fixture").sections
         );
     };
     assert!(
@@ -318,10 +357,13 @@ fn semantic_links_choose_visible_output_after_executing_operands() {
             source,
         )
         .expect("parse semantic link execution fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [1]
+        .blocks
+        .as_slice() else {
             panic!(
                 "{label}: expected one description paragraph: {:#?}",
-                document.sections
+                document.flow().expect("Flow fixture").sections
             );
         };
         assert_eq!(
@@ -372,10 +414,13 @@ fn control_only_link_labels_keep_their_structural_font_scope() {
         b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org \\fB\n.Li \\fPZ\n",
     )
     .expect("parse control-only Lk label");
-    let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+    let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[1]
+        .blocks
+        .as_slice()
+    else {
         panic!(
             "expected one description paragraph: {:#?}",
-            document.sections
+            document.flow().expect("Flow fixture").sections
         );
     };
     assert_eq!(
@@ -437,10 +482,13 @@ fn semantic_links_execute_hidden_word_boundaries_and_native_delimiters() {
             source,
         )
         .expect("parse semantic link boundary fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections
+            [1]
+        .blocks
+        .as_slice() else {
             panic!(
                 "{label}: expected one description paragraph: {:#?}",
-                document.sections
+                document.flow().expect("Flow fixture").sections
             );
         };
         assert_eq!(
@@ -485,8 +533,8 @@ fn semantic_link_continuations_preserve_literal_rows() {
             source,
         )
         .expect("parse literal semantic link continuation");
-        let [Block::Preformatted { children, .. }] = document.sections[1].blocks.as_slice() else {
-            panic!("{label}: expected one literal display: {:#?}", document.sections);
+        let [Block::Preformatted { children, .. }] = document.flow().expect("Flow fixture").sections[1].blocks.as_slice() else {
+            panic!("{label}: expected one literal display: {:#?}", document.flow().expect("Flow fixture").sections);
         };
         assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
     }
@@ -526,7 +574,7 @@ fn semantic_link_compaction_preserves_layout_and_final_execution_boundaries() {
             source,
         )
         .expect("parse semantic link layout fixture");
-        let blocks = &document.sections[0].blocks;
+        let blocks = &document.flow().expect("Flow fixture").sections[0].blocks;
         let [block] = blocks.as_slice() else {
             panic!("{label}: expected one flow block: {blocks:#?}");
         };
@@ -556,8 +604,8 @@ fn empty_operands_are_words_before_generated_semantic_punctuation() {
             source,
         )
         .expect("parse semantic empty word fixture");
-        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
-            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        let [Block::Paragraph { children, .. }] = document.flow().expect("Flow fixture").sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.flow().expect("Flow fixture").sections);
         };
         assert_eq!(inline_text(document.content(), children), expected, "{label}: {children:?}");
         if label == "link-label" {

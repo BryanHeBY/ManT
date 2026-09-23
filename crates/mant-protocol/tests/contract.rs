@@ -197,20 +197,21 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
     let manual = query.document.as_ref().expect("manual document");
     assert_eq!(manual.source_context.sources[0].format, SourceFormat::Man);
     let document: mant_ir::Document = manual.clone().into();
+    let flow = document.flow().expect("fixture has a Flow body");
     assert_eq!(
         document
             .content()
-            .heading_plain_text(&document.sections[0].heading)
+            .heading_plain_text(&flow.sections[0].heading)
             .expect("fixture heading resolves"),
         "NAME"
     );
-    assert_eq!(document.sections[1].id, "options-1");
+    assert_eq!(flow.sections[1].id, "options-1");
     assert!(matches!(
-        &document.sections[0].blocks[0],
+        &flow.sections[0].blocks[0],
         Block::Paragraph { children, .. }
             if matches!(&children[0], Inline::Strong { .. })
     ));
-    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+    let Block::Paragraph { children, .. } = &flow.sections[0].blocks[0] else {
         panic!("NAME starts with a paragraph");
     };
     assert!(children.iter().any(|inline| matches!(
@@ -229,7 +230,7 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
             if matches!(link.target(), mant_ir::LinkTarget::Section { id } if id == "options-1")
     )));
     assert!(matches!(
-        &document.sections[1].blocks[0],
+        &flow.sections[1].blocks[0],
         Block::Paragraph { children, .. }
             if matches!(&children[0], Inline::Anchor { id, .. } if id == "all-option")
     ));

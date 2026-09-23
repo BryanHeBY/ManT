@@ -9,8 +9,8 @@ use ratatui::{
 fn document(children: Vec<Inline>) -> ResolvedContent {
     let mut bundle = bundle();
     let doc = bundle.document.as_mut().unwrap();
-    doc.sections.clear();
-    doc.blocks = vec![Block::Paragraph {
+    doc.flow_mut().expect("Flow fixture").sections.clear();
+    doc.flow_mut().expect("Flow fixture").blocks = vec![Block::Paragraph {
         children,
         layout: LayoutHint::default(),
         source: None,
@@ -135,7 +135,13 @@ fn tabs_expand_after_source_link_ranges_and_empty_links_remain_empty() {
 #[test]
 fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
     let mut query = document(vec![]);
-    query.document.as_mut().unwrap().blocks = vec![Block::DefinitionList {
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .blocks = vec![Block::DefinitionList {
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {

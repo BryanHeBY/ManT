@@ -119,7 +119,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
         &report.document.root,
         &document,
         report.diagnostics.len(),
-    );
+    )?;
     profile["mode"] = mode.into();
     if let Some(queries) = request.get("queries") {
         let queries = queries.as_array().ok_or("queries must be an array")?;
@@ -144,7 +144,10 @@ fn profile_document(
     native_root: &Node,
     document: &Document,
     parser_diagnostics: usize,
-) -> Value {
+) -> Result<Value, String> {
+    if document.flow().is_none() {
+        return Err("Flow semantic profiler does not accept Fixed bodies".to_owned());
+    }
     let entries = entry_records(document);
     let ordinal_entries = entries
         .iter()
@@ -195,7 +198,7 @@ fn profile_document(
         document,
     );
 
-    json!({
+    Ok(json!({
         "schema": PROFILE_SCHEMA,
         "id": id,
         "entries": entries,
@@ -221,7 +224,7 @@ fn profile_document(
             "ir": document.diagnostics.len(),
         },
         "violations": violations,
-    })
+    }))
 }
 
 fn collect_violations(
@@ -281,18 +284,19 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
 }
 
 fn ordinal_definition_candidates(document: &Document) -> Vec<DefinitionCandidate> {
+    let flow = document.flow().expect("profile_document checked Flow body");
     let mut candidates = Vec::new();
     let content = document.content();
     collect_definition_candidates(
         content,
-        &document.blocks,
+        &flow.blocks,
         None,
         None,
         0,
         "document",
         &mut candidates,
     );
-    for (index, section) in document.sections.iter().enumerate() {
+    for (index, section) in flow.sections.iter().enumerate() {
         collect_section_definition_candidates(
             content,
             section,
@@ -304,10 +308,11 @@ fn ordinal_definition_candidates(document: &Document) -> Vec<DefinitionCandidate
 }
 
 fn entry_records(document: &Document) -> Vec<EntryRecord> {
+    let flow = document.flow().expect("profile_document checked Flow body");
     let index = SemanticIndex::build(document);
     let mut output = Vec::new();
     collect_entries(index.root(), None, None, 0, 0, &mut output);
-    for section in &document.sections {
+    for section in &flow.sections {
         collect_section_entries(document.content(), section, &index, &mut output);
     }
     output
@@ -561,10 +566,11 @@ fn note_like_title(title: &str) -> bool {
 }
 
 fn value_domain_violations(document: &Document) -> Vec<String> {
+    let flow = document.flow().expect("profile_document checked Flow body");
     let mut violations = Vec::new();
     let index = SemanticIndex::build(document);
     check_value_domains(index.root(), "document", &mut violations);
-    for section in &document.sections {
+    for section in &flow.sections {
         check_section_value_domains(section, &index, &mut violations);
     }
     violations
@@ -675,11 +681,12 @@ mod tests {
             &parsed,
             u64::try_from(source.len()).unwrap(),
         );
-        let clean = super::profile_document("probe", &parsed.document.root, &document, 0);
+        let clean = super::profile_document("probe", &parsed.document.root, &document, 0).unwrap();
         assert_eq!(clean["semanticViolations"], serde_json::json!([]));
         assert_eq!(clean["semanticsComplete"], true);
 
-        let mant_ir::Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0]
+        let mant_ir::Block::DefinitionList { items, .. } =
+            &mut document.flow_mut().unwrap().sections[0].blocks[0]
         else {
             panic!("definition owner");
         };
@@ -687,7 +694,7 @@ mod tests {
         // The same finding can be present in producer diagnostics and shared
         // validation. It must be reported once, not misclassified as bad JSON.
         document.diagnostics = mant_ir::validate_document(&document);
-        let failed = super::profile_document("probe", &parsed.document.root, &document, 0);
+        let failed = super::profile_document("probe", &parsed.document.root, &document, 0).unwrap();
         assert_eq!(failed["semanticsComplete"], false);
         assert_eq!(failed["semanticViolations"].as_array().unwrap().len(), 1);
         assert_eq!(failed["violations"], failed["semanticViolations"]);
@@ -741,7 +748,8 @@ mod tests {
             &parsed,
             u64::try_from(source.len()).unwrap(),
         );
-        let profile = super::profile_document("probe", &parsed.document.root, &document, 0);
+        let profile =
+            super::profile_document("probe", &parsed.document.root, &document, 0).unwrap();
 
         assert_eq!(profile["ordinalEntries"], serde_json::json!([]));
         assert_eq!(profile["ordinalDefinitions"], serde_json::json!([]));

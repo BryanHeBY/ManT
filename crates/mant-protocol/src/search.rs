@@ -225,7 +225,7 @@ fn validate_search_page(value: &QuerySearch) -> Result<(), &'static str> {
     if usize::try_from(value.returned).ok() != Some(value.matches.len()) {
         return Err("search returned count does not match retained hits");
     }
-    let end = value.offset.saturating_add(value.returned);
+    let end = checked_page_end(value.offset, value.returned)?;
     if (value.returned != 0 && end > value.total)
         || (value.returned == 0 && value.offset < value.total)
     {
@@ -236,15 +236,39 @@ fn validate_search_page(value: &QuerySearch) -> Result<(), &'static str> {
         return Err("search pagination metadata is inconsistent");
     }
     for (index, hit) in value.matches.iter().enumerate() {
-        let expected = value
-            .offset
-            .saturating_add(u32::try_from(index).unwrap_or(u32::MAX))
-            .saturating_add(1);
+        let expected = checked_ordinal(value.offset, index)?;
         if hit.ordinal != expected {
             return Err("search hit ordinal disagrees with pagination order");
         }
     }
     Ok(())
+}
+
+fn checked_page_end(offset: u32, returned: u32) -> Result<u32, &'static str> {
+    offset
+        .checked_add(returned)
+        .ok_or("search pagination metadata overflows")
+}
+
+fn checked_ordinal(offset: u32, index: usize) -> Result<u32, &'static str> {
+    offset
+        .checked_add(u32::try_from(index).map_err(|_| "search ordinal overflows")?)
+        .and_then(|ordinal| ordinal.checked_add(1))
+        .ok_or("search ordinal overflows")
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::{checked_ordinal, checked_page_end};
+
+    #[test]
+    fn page_arithmetic_never_saturates_into_a_plausible_response() {
+        assert_eq!(checked_page_end(u32::MAX - 1, 1), Ok(u32::MAX));
+        assert!(checked_page_end(u32::MAX, 1).is_err());
+        assert_eq!(checked_ordinal(u32::MAX - 1, 0), Ok(u32::MAX));
+        assert!(checked_ordinal(u32::MAX, 0).is_err());
+        assert!(checked_ordinal(0, usize::MAX).is_err());
+    }
 }
 
 /// One rendered line group containing one or more exact occurrences.

@@ -38,7 +38,7 @@ fn hierarchy_bundle() -> ResolvedContent {
         origin: MarkdownOrigin::Documents,
     });
     let document = bundle.document.as_mut().expect("manual");
-    let mut owner = document.sections[0].clone();
+    let mut owner = document.flow_mut().expect("Flow fixture").sections[0].clone();
     owner.id = "owner".into();
     owner.heading = mant_ir::Heading {
         content: vec![crate::test_content::link(
@@ -72,7 +72,7 @@ fn hierarchy_bundle() -> ResolvedContent {
         children: Vec::new(),
         source: None,
     };
-    document.sections = vec![owner, next];
+    document.flow_mut().expect("Flow fixture").sections = vec![owner, next];
     bundle
 }
 

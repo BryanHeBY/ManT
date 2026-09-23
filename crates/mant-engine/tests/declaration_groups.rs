@@ -444,34 +444,48 @@ fn invalid_group_heads_and_overlapping_ranges_are_not_semantically_complete() {
     for empty_head in [false, true] {
         let mut content = load_roff_bytes(source.as_bytes()).unwrap();
         let document = content.document.as_mut().unwrap();
-        let mant_ir::Block::DefinitionList {
-            items,
-            declaration_groups,
-            ..
-        } = &mut document.sections[0].blocks[0]
-        else {
-            panic!("definition list")
-        };
         if empty_head {
-            let atom = items[0].terms[0]
-                .iter()
-                .find_map(first_inline_atom)
-                .expect("original head has text");
-            let root = document.content_store.atom(atom).unwrap().root;
-            let owner = document.content_store.root(root).unwrap().owner;
+            let atom = match &document.flow().unwrap().sections[0].blocks[0] {
+                mant_ir::Block::DefinitionList { items, .. } => items[0].terms[0]
+                    .iter()
+                    .find_map(first_inline_atom)
+                    .expect("original head has text"),
+                _ => panic!("definition list"),
+            };
+            let root = document
+                .flow()
+                .unwrap()
+                .content_store
+                .atom(atom)
+                .unwrap()
+                .root;
+            let owner = document
+                .flow()
+                .unwrap()
+                .content_store
+                .root(root)
+                .unwrap()
+                .owner;
             let point = mant_ir::ContentPointKey::new(
-                u32::try_from(document.content_store.points.len() + 1).unwrap(),
+                u32::try_from(document.flow().unwrap().content_store.points.len() + 1).unwrap(),
             )
             .unwrap();
-            document.content_store.points.push(mant_ir::ContentPoint {
-                key: point,
-                root,
-                owner,
-                boundary: mant_ir::PointBoundary::BetweenAtoms { atom_boundary: 0 },
-                scalar_boundary: 0,
-                provenance: mant_ir::Provenance::Unknown,
-            });
             document
+                .flow_mut()
+                .unwrap()
+                .content_store
+                .points
+                .push(mant_ir::ContentPoint {
+                    key: point,
+                    root,
+                    owner,
+                    boundary: mant_ir::PointBoundary::BetweenAtoms { atom_boundary: 0 },
+                    scalar_boundary: 0,
+                    provenance: mant_ir::Provenance::Unknown,
+                });
+            document
+                .flow_mut()
+                .unwrap()
                 .content_store
                 .roots
                 .iter_mut()
@@ -479,8 +493,19 @@ fn invalid_group_heads_and_overlapping_ranges_are_not_semantically_complete() {
                 .unwrap()
                 .points
                 .push(point);
+            let mant_ir::Block::DefinitionList { items, .. } =
+                &mut document.flow_mut().unwrap().sections[0].blocks[0]
+            else {
+                panic!("definition list")
+            };
             items[0].terms = vec![vec![mant_ir::Inline::anchor(point, "only-anchor")]];
         } else {
+            let mant_ir::Block::DefinitionList {
+                declaration_groups, ..
+            } = &mut document.flow_mut().unwrap().sections[0].blocks[0]
+            else {
+                panic!("definition list")
+            };
             declaration_groups.push(declaration_groups[0]);
         }
         let response = explain_query(

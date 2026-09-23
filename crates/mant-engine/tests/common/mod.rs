@@ -183,7 +183,7 @@ pub fn collect_sections<'a>(sections: &'a [Section], output: &mut Vec<&'a Sectio
 
 pub fn section<'a>(document: &'a Document, title: &str) -> &'a Section {
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     sections
         .into_iter()
         .find(|section| section.heading.plain_text(document.content()) == title)
@@ -228,7 +228,7 @@ pub fn assert_gcc_synopsis_layout(document: &Document) {
 }
 
 pub fn document_blocks(document: &Document) -> Vec<&Block> {
-    document_blocks_from_sections(&document.sections)
+    document_blocks_from_sections(&document.flow().unwrap().sections)
 }
 
 pub fn document_blocks_from_sections(sections: &[Section]) -> Vec<&Block> {
@@ -356,7 +356,11 @@ pub fn assert_bounded_vertical_spacing(document: &Document, fixture: &str) {
         }
     }
 
-    assert_sections(document.content(), &document.sections, fixture);
+    assert_sections(
+        document.content(),
+        &document.flow().unwrap().sections,
+        fixture,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -629,7 +633,7 @@ fn block_text(content: ContentContext<'_>, block: &Block) -> String {
 // ---------------------------------------------------------------------------
 
 pub fn visit_document_inlines(document: &Document, visitor: &mut impl FnMut(&Inline)) {
-    visit_section_inlines(&document.sections, visitor);
+    visit_section_inlines(&document.flow().unwrap().sections, visitor);
 }
 
 fn visit_section_inlines(sections: &[Section], visitor: &mut impl FnMut(&Inline)) {
@@ -712,6 +716,8 @@ pub fn assert_section_topology(name: &str, document: &Document, expected_titles:
     );
 
     let section_titles: Vec<String> = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .map(|section| section.heading.plain_text(document.content()))
@@ -719,7 +725,7 @@ pub fn assert_section_topology(name: &str, document: &Document, expected_titles:
     assert_eq!(section_titles, expected_titles, "fixture {name}");
 
     let mut sections = Vec::new();
-    collect_sections(&document.sections, &mut sections);
+    collect_sections(&document.flow().unwrap().sections, &mut sections);
     assert!(
         sections
             .iter()

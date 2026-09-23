@@ -20,7 +20,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     .expect("query contract")
     .into();
 
-    let markdown = render_markdown(&query);
+    let markdown = render_markdown(&query).expect("valid Flow fixture");
     assert!(markdown.starts_with("# ls\n"));
     assert!(markdown.contains("## TLDR"));
     assert!(markdown.contains("## NAME"));
@@ -34,7 +34,8 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     assert!(!markdown.contains("<a "));
     assert!(!markdown.contains("mant.query/v0.12"));
 
-    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE)
+        .expect("valid Flow fixture");
     assert!(addressable.contains("[OPTIONS](#options-1)"));
     assert!(addressable.contains("<a id=\"options-1\"></a>\n\n## OPTIONS"));
     assert!(addressable.contains("<a id=\"all-option\"></a>"));

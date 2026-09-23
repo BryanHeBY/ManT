@@ -98,7 +98,9 @@ fn enclosure_spacing_preserves_option_forms_names_and_explanation_sources() {
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_direct_names(&query, &["-x"], "-x [arg] tail");
         let document = query.document.as_ref().unwrap();
-        let mant_ir::Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        let mant_ir::Block::DefinitionList { items, .. } =
+            &document.flow().unwrap().sections[0].blocks[0]
+        else {
             panic!("expected definition")
         };
         assert_eq!(items[0].source.unwrap().line, 7);

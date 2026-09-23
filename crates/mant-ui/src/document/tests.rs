@@ -1,11 +1,42 @@
 use mant_ir::{
-    DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, LayoutHint, ListItem, NameCase,
-    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, TableCell, TableRow,
-    TldrDocument, TldrExample,
+    DefinitionItem, Document, DocumentBody, DocumentMeta, EntryFacts, EntryKind, FlowBody,
+    LayoutHint, ListItem, NameCase, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey,
+    SourceRecord, TableCell, TableRow, TldrDocument, TldrExample,
 };
 use unicode_width::UnicodeWidthStr;
 
 use super::*;
+
+#[test]
+fn fixed_reader_preserves_native_column_gaps_without_reflow() {
+    // Pinned CVS term.c::term_flushln/term_field emits the gap in a no-fill
+    // `a   b` field. This fixture tests only the final surface reader.
+    let fixed: mant_ir::FixedBody = serde_json::from_value(serde_json::json!({
+        "surface": {
+            "text": "ab",
+            "rows": [{"key": 1, "firstRun": 1, "runCount": 2, "columnCount": 5, "breakAfter": false}],
+            "runs": [
+                {"key": 1, "row": 1, "column": 0, "width": 1, "byteStart": 0, "byteCount": 1,
+                 "label": {"style": {"bold": false, "underline": false}, "role": "body"}},
+                {"key": 2, "row": 1, "column": 4, "width": 1, "byteStart": 1, "byteCount": 1,
+                 "label": {"style": {"bold": false, "underline": false}, "role": "body"}}
+            ]
+        },
+        "headings": [], "owners": [], "links": [], "anchors": [], "regions": []
+    }))
+    .expect("valid final surface");
+    let mut builder = lower::DocumentBuilder::new("demo".to_owned(), None, None);
+    builder.native_fixed_rows(&fixed);
+    let line = &builder.lines[0];
+    assert_eq!(line.wrap_mode, WrapMode::NoWrap);
+    assert_eq!(
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>(),
+        "a   b"
+    );
+}
 
 fn styled_inline_lines_with_targets(
     nodes: &[Inline],
@@ -52,27 +83,29 @@ fn bundle() -> ResolvedContent {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store: crate::test_content::store(),
             meta: DocumentMeta::default(),
-            heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![Section {
-                id: "description".to_owned().into(),
-                fragment_aliases: Vec::new(),
-                heading: crate::test_content::heading("Description"),
-                spacing_before_lines: 0,
-                blocks: vec![Block::Paragraph {
-                    children: vec![crate::test_content::text(
-                        "a deliberately long sentence".to_owned(),
-                    )],
-                    layout: LayoutHint::default(),
+            body: DocumentBody::Flow(FlowBody {
+                content_store: crate::test_content::store(),
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![Section {
+                    id: "description".to_owned().into(),
+                    fragment_aliases: Vec::new(),
+                    heading: crate::test_content::heading("Description"),
+                    spacing_before_lines: 0,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![crate::test_content::text(
+                            "a deliberately long sentence".to_owned(),
+                        )],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    children: Vec::new(),
                     source: None,
                 }],
-                children: Vec::new(),
-                source: None,
-            }],
+            }),
         }),
         tldr: None,
     };
@@ -97,7 +130,7 @@ fn geometry_bundle() -> ResolvedContent {
         origin: TldrOrigin::Embedded,
     });
     let document = bundle.document.as_mut().expect("document");
-    document.sections[0].blocks = vec![
+    document.flow_mut().expect("Flow fixture").sections[0].blocks = vec![
         Block::Paragraph {
             children: vec![
                 crate::test_content::text("Read 多语言 documentation in ".to_owned()),
@@ -150,15 +183,17 @@ fn geometry_bundle() -> ResolvedContent {
             source: None,
         },
     ];
-    document.sections[0].children.push(Section {
-        id: "details".to_owned().into(),
-        fragment_aliases: Vec::new(),
-        heading: crate::test_content::heading("Details"),
-        spacing_before_lines: 0,
-        blocks: vec![paragraph("Nothing is lost after resizing.")],
-        children: Vec::new(),
-        source: None,
-    });
+    document.flow_mut().expect("Flow fixture").sections[0]
+        .children
+        .push(Section {
+            id: "details".to_owned().into(),
+            fragment_aliases: Vec::new(),
+            heading: crate::test_content::heading("Details"),
+            spacing_before_lines: 0,
+            blocks: vec![paragraph("Nothing is lost after resizing.")],
+            children: Vec::new(),
+            source: None,
+        });
     crate::test_content::sync_document(document);
     bundle
 }
@@ -408,7 +443,14 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
         alignment: None,
         source: None,
     };
-    bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
+    bundle
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
+        .blocks = vec![Block::Table {
         fixed_view: None,
         rows: vec![
             TableRow {

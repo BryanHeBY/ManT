@@ -53,7 +53,6 @@ fn query() -> ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: Some(Document {
-            heading: None,
             parser: None,
             sources: vec![SourceRecord {
                 key: SourceKey::FIRST,
@@ -66,15 +65,18 @@ fn query() -> ResolvedContent {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store: builder.finish(),
+            body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+                content_store: builder.finish(),
+                heading: None,
+                blocks: Vec::new(),
+                sections: vec![name, options, files],
+            }),
             meta: DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()
             },
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections: vec![name, options, files],
         }),
         tldr: None,
     }
@@ -115,20 +117,22 @@ fn document() -> Document {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store: builder.finish(),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: builder.finish(),
+            heading: None,
+            sections: Vec::new(),
+            blocks: vec![mant_ir::Block::Paragraph {
+                children: vec![Inline::Link {
+                    occurrence,
+                    children: vec![Inline::Text { content: label }],
+                }],
+                layout: mant_ir::LayoutHint::default(),
+                source: None,
+            }],
+        }),
         meta: DocumentMeta::default(),
-        heading: None,
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        sections: Vec::new(),
-        blocks: vec![mant_ir::Block::Paragraph {
-            children: vec![Inline::Link {
-                occurrence,
-                children: vec![Inline::Text { content: label }],
-            }],
-            layout: mant_ir::LayoutHint::default(),
-            source: None,
-        }],
     }
 }
 fn all() -> ReferenceProjection {

@@ -62,7 +62,7 @@ fn dragonfly_gdb_restriction_bullets_are_not_semantic_terms() {
     let document = bsd_manual("dragonfly-gdb");
     let index = mant_ir::SemanticIndex::build(document);
     let mut sections = Vec::new();
-    common::collect_sections(&document.sections, &mut sections);
+    common::collect_sections(&document.flow().unwrap().sections, &mut sections);
     for section in sections {
         check(index.section(&section.id));
     }

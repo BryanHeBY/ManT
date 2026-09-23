@@ -15,7 +15,8 @@ fn decoded_empty_table_cells_do_not_recover_control_spelling_as_content() {
     // where IGNORE/font/motion controls successfully emit no visible glyph.
     for payload in [r"\&", r"\fB", r"\h'0'"] {
         let document = man(&format!(".TS\nl l l.\nLEFT\t{payload}\tRIGHT\n.TE"));
-        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("table: {document:?}")
         };
         assert_eq!(rows[0].cells.len(), 3);
@@ -33,7 +34,8 @@ fn decoded_empty_table_cells_do_not_recover_control_spelling_as_content() {
 fn escaped_literal_backslash_cells_are_not_decoded_a_second_time() {
     for payload in [r"\e&", r"\\&"] {
         let document = man(&format!(".TS\nl l l.\nLEFT\t{payload}\tRIGHT\n.TE"));
-        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("table: {document:?}")
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
@@ -58,7 +60,7 @@ fn horizontal_spans_keep_following_cells_in_the_same_logical_column() {
     };
     for rendered in [
         mant_render::render_query_text(&query),
-        mant_codec::encode::render_markdown(&query),
+        mant_codec::encode::render_markdown(&query).expect("valid Flow export"),
     ] {
         assert!(rendered.contains("TOPSPAN |  | RIGHT"), "{rendered}");
         assert!(rendered.contains("LEFT | MIDDLE | END"), "{rendered}");
@@ -74,7 +76,7 @@ fn adjacent_tables_remain_distinct_but_layout_restarts_do_not_split() {
         let [
             Block::Table { rows: first, .. },
             Block::Table { rows: second, .. },
-        ] = document.sections[0].blocks.as_slice()
+        ] = document.flow().unwrap().sections[0].blocks.as_slice()
         else {
             panic!("separate tables: {document:?}")
         };
@@ -101,7 +103,8 @@ fn table_rule_cells_never_resurrect_suppressed_source_payload() {
         ("l", r"\="),
     ] {
         let document = man(&format!(".TS\nl {layout} l.\nLEFT\t{payload}\tRIGHT\n.TE"));
-        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice()
+        else {
             panic!("table: {document:?}")
         };
         assert_eq!(rows[0].cells.len(), 3);
@@ -117,7 +120,7 @@ fn table_rule_cells_never_resurrect_suppressed_source_payload() {
         }
     }
     let document = man(".TS\nl.\n\\&_\n.TE");
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+    let [Block::Table { rows, .. }] = document.flow().unwrap().sections[0].blocks.as_slice() else {
         panic!("table")
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
@@ -131,7 +134,7 @@ fn layout_only_rule_rows_retain_each_column_strength() {
     let document = man(
         ".TS\n_\nl.\nSINGLE\n.TE\n.TS\n=\nl.\nDOUBLE\n.TE\n.TS\n_ =\nl l.\nLEFT\tRIGHT\n.TE\n.TS\n_.\nIGNORED\n.TE\n.TS\n=.\nIGNORED\n.TE\n.TS\n_ =.\nLEFT\tRIGHT\n.TE",
     );
-    let tables = document.sections[0]
+    let tables = document.flow().unwrap().sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {

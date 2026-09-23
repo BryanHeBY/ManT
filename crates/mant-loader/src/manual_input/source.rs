@@ -449,6 +449,8 @@ mod tests {
 
         assert!(
             document
+                .flow()
+                .expect("parsed manual uses Flow")
                 .sections
                 .iter()
                 .any(|section| section.heading.plain_text(document.content()) == "NAME")

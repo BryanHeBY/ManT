@@ -19,7 +19,6 @@ fn paragraph(children: Vec<Inline>) -> Block {
 
 fn manual() -> Document {
     Document {
-        heading: None,
         parser: None,
         sources: vec![SourceRecord {
             key: SourceKey::FIRST,
@@ -32,12 +31,15 @@ fn manual() -> Document {
             coordinates: SourceCoordinates::DecodedUtf8Bytes,
         }],
         root_source: SourceKey::FIRST,
-        content_store: mant_ir::ContentStore::default(),
+        body: mant_ir::DocumentBody::Flow(mant_ir::FlowBody {
+            content_store: mant_ir::ContentStore::default(),
+            heading: None,
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        }),
         meta: DocumentMeta::default(),
         fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
-        blocks: Vec::new(),
-        sections: Vec::new(),
     }
 }
 
@@ -62,7 +64,7 @@ fn section(
 fn renders_tldr_before_manual_and_resolves_placeholders() {
     let mut document = manual();
     let name = section(&mut document, "NAME", Vec::new(), Vec::new());
-    document.sections.push(name);
+    document.flow_mut().unwrap().sections.push(name);
     let query = ResolvedContent {
         address: None,
         label: "ls".to_owned(),
@@ -85,7 +87,7 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
         }),
     };
 
-    let markdown = render_markdown(&query);
+    let markdown = render_markdown(&query).expect("valid Flow export");
     assert!(markdown.starts_with("# ls\n\n## TLDR"));
     assert!(markdown.find("## TLDR") < markdown.find("## NAME"));
     assert!(markdown.contains("```sh\nls --all\n```"));
@@ -113,10 +115,10 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
 fn renders_and_selects_content_before_the_first_heading() {
     let mut document = manual();
     let guide = section(&mut document, "GUIDE", Vec::new(), Vec::new());
-    document.sections.push(guide);
+    document.flow_mut().unwrap().sections.push(guide);
     document.sources[0].format = SourceFormat::Markdown;
     let preface = super::text_inline(&mut document, "Document preface.", false);
-    document.blocks = vec![paragraph(vec![preface])];
+    document.flow_mut().unwrap().blocks = vec![paragraph(vec![preface])];
     let query = ResolvedContent {
         address: None,
         label: "guide.md".to_owned(),
@@ -124,11 +126,12 @@ fn renders_and_selects_content_before_the_first_heading() {
         tldr: None,
     };
 
-    let markdown = render_markdown(&query);
+    let markdown = render_markdown(&query).expect("valid Flow export");
     assert!(markdown.contains("# guide.md\n\nDocument preface.\n\n## GUIDE"));
     assert!(!markdown.contains("<a "));
 
-    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE)
+        .expect("valid Flow export");
     assert!(addressable.contains("<a id=\"document-overview\"></a>\n\nDocument preface."));
 
     let outline = build_outline(&query).expect("Markdown outline");
@@ -148,9 +151,9 @@ fn uses_markdown_document_title_without_changing_its_logical_label() {
     let mut document = manual();
     document.sources[0].format = SourceFormat::Markdown;
     let title = super::heading(&mut document, "Actual Doc Title");
-    document.heading = Some(title);
+    document.flow_mut().unwrap().heading = Some(title);
     let body = super::text_inline(&mut document, "body", false);
-    document.blocks = vec![paragraph(vec![body])];
+    document.flow_mut().unwrap().blocks = vec![paragraph(vec![body])];
     let query = ResolvedContent {
         address: None,
         label: "filename.md".to_owned(),
@@ -158,7 +161,11 @@ fn uses_markdown_document_title_without_changing_its_logical_label() {
         tldr: None,
     };
 
-    assert!(render_markdown(&query).starts_with("# Actual Doc Title\n\nbody"));
+    assert!(
+        render_markdown(&query)
+            .expect("valid Flow export")
+            .starts_with("# Actual Doc Title\n\nbody")
+    );
     let outline = render_outline_markdown(&build_outline(&query).expect("outline"));
     assert!(
         outline.starts_with("# Actual Doc Title outline"),
@@ -194,7 +201,7 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
                 vec![paragraph(vec![parent_details])],
                 vec![child],
             );
-            document.sections.push(parent);
+            document.flow_mut().unwrap().sections.push(parent);
             document.meta.manual_section = Some("1".to_owned());
             document
         }),

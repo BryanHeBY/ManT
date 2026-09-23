@@ -8,9 +8,9 @@ use std::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ir::{
-    Block as AstBlock, DefinitionItem, Document, DocumentMeta, EntryFacts, EntryKind, LayoutHint,
-    NameCase, ResolvedContent, Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey,
-    SourceRecord, TldrDocument, TldrOrigin,
+    Block as AstBlock, DefinitionItem, Document, DocumentBody, DocumentMeta, EntryFacts, EntryKind,
+    FlowBody, LayoutHint, NameCase, ResolvedContent, Section, SourceCoordinates, SourceFormat,
+    SourceIdentity, SourceKey, SourceRecord, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     CatalogSchema, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin,
@@ -234,26 +234,28 @@ fn fixed_bundle() -> ResolvedContent {
                 coordinates: mant_ir::SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
-            content_store: store,
             meta: DocumentMeta::default(),
-            heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: vec![AstBlock::FixedDisplay {
-                children: vec![
-                    Inline::Text { content: prefix },
-                    Inline::Text { content: wide },
-                    Inline::Link {
-                        occurrence,
-                        children: vec![Inline::Text { content: label }],
-                    },
-                    Inline::anchor(point, "fixed-end"),
-                ],
-                view: FixedViewKey::FIRST,
-                layout: LayoutHint::default(),
-                source: None,
-            }],
-            sections: Vec::new(),
+            body: DocumentBody::Flow(FlowBody {
+                content_store: store,
+                heading: None,
+                blocks: vec![AstBlock::FixedDisplay {
+                    children: vec![
+                        Inline::Text { content: prefix },
+                        Inline::Text { content: wide },
+                        Inline::Link {
+                            occurrence,
+                            children: vec![Inline::Text { content: label }],
+                        },
+                        Inline::anchor(point, "fixed-end"),
+                    ],
+                    view: FixedViewKey::FIRST,
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+                sections: Vec::new(),
+            }),
         }),
         tldr: None,
     }
@@ -335,13 +337,15 @@ fn navigation_bundle() -> ResolvedContent {
             parser: None,
             sources: sources(SourceFormat::Man),
             root_source: SourceKey::FIRST,
-            content_store: crate::test_content::store(),
             meta: DocumentMeta::default(),
-            heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
-            blocks: Vec::new(),
-            sections,
+            body: DocumentBody::Flow(FlowBody {
+                content_store: crate::test_content::store(),
+                heading: None,
+                blocks: Vec::new(),
+                sections,
+            }),
         }),
         tldr: None,
     }
@@ -349,7 +353,13 @@ fn navigation_bundle() -> ResolvedContent {
 
 fn reflow_navigation_bundle() -> ResolvedContent {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("document").sections = (0..24)
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections = (0..24)
         .map(|index| Section {
             id: format!("section-{index}").into(),
             fragment_aliases: Vec::new(),
@@ -707,7 +717,13 @@ fn question_mark_opens_and_closes_keyboard_help() {
 #[test]
 fn clicking_a_manual_reference_requests_the_exact_page() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0]
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .flow_mut()
+        .expect("Flow fixture")
+        .sections[0]
         .blocks
         .insert(
             0,

@@ -53,6 +53,8 @@ Gamma.
     let document = parse_document(markdown, None);
 
     let ids: Vec<&str> = document
+        .flow()
+        .unwrap()
         .sections
         .iter()
         .map(|section| section.id.as_str())

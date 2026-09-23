@@ -16,6 +16,21 @@ use terminal::{
     terminal_search,
 };
 
+pub(crate) fn admit_fixed_content(query: &mant_ir::ResolvedContent) -> Result<(), Failure> {
+    if let Some(document) = &query.document
+        && matches!(document.body(), mant_ir::DocumentBodyRef::Fixed(_))
+        && let Some(problem) = mant_ir::validate_document(document).into_iter().next()
+    {
+        // Public in-memory IR can bypass the strict wire decoder. Check it
+        // before consumers expand native columns or emit terminal bytes.
+        return Err(Failure::operational(format!(
+            "invalid fixed document: {}",
+            problem.message
+        )));
+    }
+    Ok(())
+}
+
 /// Physical destination characteristics that may affect terminal safety only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum OutputTarget {

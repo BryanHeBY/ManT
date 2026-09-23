@@ -21,7 +21,7 @@ fn test_inline(
     literal: bool,
 ) -> Inline {
     let value = value.into();
-    let store = &mut document.content_store;
+    let store = &mut document.flow_mut().unwrap().content_store;
     let root = ContentRootKey::new(u32::try_from(store.roots.len() + 1).unwrap()).unwrap();
     store
         .owners
@@ -47,7 +47,7 @@ fn inline_in_root(
     value: String,
     literal: bool,
 ) -> Inline {
-    let store = &mut document.content_store;
+    let store = &mut document.flow_mut().unwrap().content_store;
     let owner = store.root(root).unwrap().owner;
     let atom = ContentAtomKey::new(u32::try_from(store.atoms.len() + 1).unwrap()).unwrap();
     store
@@ -90,6 +90,8 @@ fn rewrite_inline(document: &mut Document, inline: &Inline, value: &str) -> Inli
         panic!("synthetic term is code")
     };
     let atom = document
+        .flow_mut()
+        .unwrap()
         .content_store
         .atoms
         .iter_mut()
@@ -115,6 +117,8 @@ fn add_wrapper_style(document: &mut Document, inline: &Inline, strong: bool, emp
         panic!("synthetic leaf")
     };
     let atom = document
+        .flow_mut()
+        .unwrap()
         .content_store
         .atoms
         .iter_mut()
@@ -125,13 +129,20 @@ fn add_wrapper_style(document: &mut Document, inline: &Inline, strong: bool, emp
 }
 
 fn fixture_owner(document: &Document) -> ContentOwnerKey {
-    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+    else {
         panic!("definition fixture")
     };
     let Inline::Code { content } = &items[0].terms[0][0] else {
         panic!("first fixture term")
     };
-    document.content_store.atom(content.atom).unwrap().owner
+    document
+        .flow()
+        .unwrap()
+        .content_store
+        .atom(content.atom)
+        .unwrap()
+        .owner
 }
 
 fn content_block(evidence: &ExplanationEvidence) -> &Block {
@@ -283,15 +294,21 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
     let mut forms = Vec::new();
     let mut bindings = Vec::new();
     let mut spellings = Vec::new();
-    let owner =
-        ContentOwnerKey::new(u32::try_from(document.content_store.owners.len() + 1).unwrap())
-            .unwrap();
-    document.content_store.owners.push(ContentOwner {
-        key: owner,
-        kind: ContentOwnerKind::DefinitionItem,
-        roots: Vec::new(),
-        provenance: Provenance::Unknown,
-    });
+    let owner = ContentOwnerKey::new(
+        u32::try_from(document.flow().unwrap().content_store.owners.len() + 1).unwrap(),
+    )
+    .unwrap();
+    document
+        .flow_mut()
+        .unwrap()
+        .content_store
+        .owners
+        .push(ContentOwner {
+            key: owner,
+            kind: ContentOwnerKind::DefinitionItem,
+            roots: Vec::new(),
+            provenance: Provenance::Unknown,
+        });
     for name in 0..names {
         let spelling = format!("name{name}");
         let mut occurrences = Vec::new();
@@ -319,7 +336,7 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
         });
         spellings.push(spelling);
     }
-    document.sections[0].blocks = vec![Block::DefinitionList {
+    document.flow_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             terms,
@@ -347,6 +364,7 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // Existing fixture grew only Flow accessors.
 fn split_occurrences_follow_authored_form_order_not_term_indices() {
     let mut content = synthetic(1, 1);
     let document = content.document.as_mut().unwrap();
@@ -362,15 +380,25 @@ fn split_occurrences_follow_authored_form_order_not_term_indices() {
     else {
         unreachable!()
     };
-    let ending_root = document.content_store.atom(ending_ref.atom).unwrap().root;
+    let ending_root = document
+        .flow()
+        .unwrap()
+        .content_store
+        .atom(ending_ref.atom)
+        .unwrap()
+        .root;
     document
+        .flow_mut()
+        .unwrap()
         .content_store
         .roots
         .iter_mut()
         .find(|record| record.key == ending_root)
         .unwrap()
         .kind = ContentRootKind::Body;
-    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &mut document.flow_mut().unwrap().sections[0].blocks[0]
+    else {
         unreachable!()
     };
     let item = &mut items[0];
@@ -448,8 +476,14 @@ fn split_occurrences_follow_authored_form_order_not_term_indices() {
 #[test]
 fn case_insensitive_names_keep_authored_spelling_and_identity_names_its_field() {
     let mut content = synthetic(1, 1);
-    let Block::DefinitionList { items, .. } =
-        &mut content.document.as_mut().unwrap().sections[0].blocks[0]
+    let Block::DefinitionList { items, .. } = &mut content
+        .document
+        .as_mut()
+        .unwrap()
+        .flow_mut()
+        .unwrap()
+        .sections[0]
+        .blocks[0]
     else {
         unreachable!()
     };
@@ -543,13 +577,17 @@ fn all_budget_sizes_keep_locations_resolvable_and_account_for_new_payload() {
 fn matched_facts_and_body_survive_when_expanded_form_metadata_does_not_fit() {
     let mut content = synthetic(1, 1);
     let document = content.document.as_mut().unwrap();
-    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &mut document.flow_mut().unwrap().sections[0].blocks[0]
+    else {
         unreachable!()
     };
     let item = &mut items[0];
     let original = item.terms[0].remove(0);
     let expanded = rewrite_inline(document, &original, &format!("name0 {}", "填".repeat(400)));
-    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &mut document.flow_mut().unwrap().sections[0].blocks[0]
+    else {
         unreachable!()
     };
     let item = &mut items[0];
@@ -578,7 +616,9 @@ fn matched_facts_and_body_survive_when_expanded_form_metadata_does_not_fit() {
 fn a_fragment_limit_never_returns_half_a_name_occurrence() {
     let mut content = synthetic(1, 1);
     let document = content.document.as_mut().unwrap();
-    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &mut document.flow_mut().unwrap().sections[0].blocks[0]
+    else {
         panic!("definition")
     };
     let original = items[0].terms[0].remove(0);
@@ -586,10 +626,18 @@ fn a_fragment_limit_never_returns_half_a_name_occurrence() {
     let Inline::Code { content: first_ref } = first else {
         unreachable!()
     };
-    let root = document.content_store.atom(first_ref.atom).unwrap().root;
+    let root = document
+        .flow()
+        .unwrap()
+        .content_store
+        .atom(first_ref.atom)
+        .unwrap()
+        .root;
     let mut fragments = vec![Inline::Code { content: first_ref }];
     fragments.extend((1..33).map(|_| inline_in_root(document, root, "é".into(), true)));
-    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0] else {
+    let Block::DefinitionList { items, .. } =
+        &mut document.flow_mut().unwrap().sections[0].blocks[0]
+    else {
         panic!("definition")
     };
     let item = &mut items[0];

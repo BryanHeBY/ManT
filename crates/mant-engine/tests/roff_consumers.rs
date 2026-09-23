@@ -14,15 +14,19 @@ fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
     // This cross-crate corpus check must actually execute in a source checkout;
     // published unit tests do not include this integration-test file.
     let document = mant_loader::parse_manual_source(&source).expect("lower vendored mandoc manual");
-    assert!(document.sections.len() > 5);
+    assert!(document.flow().unwrap().sections.len() > 5);
     assert!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .any(|section| section.heading.plain_text(document.content()) == "DESCRIPTION")
     );
     assert!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .all(|section| !section.blocks.is_empty() || !section.children.is_empty())

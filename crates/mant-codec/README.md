@@ -4,7 +4,7 @@ In-memory source decoding and portable Markdown encoding for `ManT`'s semantic I
 
 ```rust
 let parsed = mant_codec::parse_markdown("## Example\n\nHello.\n", None)?;
-assert_eq!(parsed.document.sections.len(), 1);
+assert_eq!(parsed.document.flow().expect("Markdown Flow body").sections.len(), 1);
 # Ok::<(), mant_codec::MarkdownParseError>(())
 ```
 

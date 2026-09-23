@@ -179,7 +179,18 @@ impl ContentFixture {
 pub(crate) fn document_from_legacy_json(mut value: Value) -> crate::Document {
     let mut wire = LegacyWireContent::new();
     wire.lower_value(&mut value, None, ContentStyle::default());
-    value["contentStore"] = serde_json::to_value(wire.builder.finish()).unwrap();
+    let mut body = serde_json::Map::new();
+    body.insert("kind".to_owned(), Value::String("flow".to_owned()));
+    body.insert(
+        "contentStore".to_owned(),
+        serde_json::to_value(wire.builder.finish()).unwrap(),
+    );
+    for field in ["heading", "blocks", "sections"] {
+        if let Some(value) = value.as_object_mut().unwrap().remove(field) {
+            body.insert(field.to_owned(), value);
+        }
+    }
+    value["body"] = Value::Object(body);
     serde_json::from_value(value).unwrap()
 }
 

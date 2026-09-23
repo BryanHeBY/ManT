@@ -5,7 +5,9 @@ use crate::{
 };
 #[cfg(feature = "roff")]
 use crate::{parse_manual_bytes, parse_manual_page, parse_manual_source};
-use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
+use mant_ir::{
+    Document, DocumentAddress, DocumentBodyRef, MarkdownOrigin, ResolvedContent, TldrDocument,
+};
 use mant_protocol::{CatalogQuery, DocumentCatalog, InputFormat};
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 use std::{
@@ -35,3 +37,12 @@ use spec::{
     RegisteredSelection, RegisteredSelectionGroup, read_capped_utf8,
 };
 pub use spec::{LoadPolicy, LoadSpec, MAX_MARKDOWN_BYTES, validate_load_spec};
+
+fn has_readable_body(document: &Document) -> bool {
+    match document.body() {
+        DocumentBodyRef::Flow(flow) => !flow.sections.is_empty() || !flow.blocks.is_empty(),
+        // Fixed rows are already final device output. A body with no visible
+        // bytes is not readable; do not pretend it is an empty Flow tree.
+        DocumentBodyRef::Fixed(fixed) => !fixed.surface.text.is_empty(),
+    }
+}

@@ -25,21 +25,21 @@ impl SemanticIndex {
     /// Build the semantic index from finalized facts on either content shape.
     #[must_use]
     pub fn build(document: &Document) -> Self {
+        // Native owner marks are candidates, not classified semantic entries.
+        // R02b supplies their evidence-backed EntryKind and bindings; an empty
+        // Flow tree must never be manufactured for this Fixed branch.
+        let Some(flow) = document.flow() else {
+            return Self::default();
+        };
         let content = document.content();
         let mut owner_locations = BTreeMap::new();
-        let root = entries_with_locations(
-            content,
-            &document.blocks,
-            &[],
-            &[],
-            &[],
-            &mut owner_locations,
-        );
+        let root =
+            entries_with_locations(content, &flow.blocks, &[], &[], &[], &mut owner_locations);
         let mut sections = BTreeMap::new();
         let mut section_paths = BTreeMap::new();
         collect_section_entries(
             content,
-            &document.sections,
+            &flow.sections,
             &[],
             &mut sections,
             &mut section_paths,

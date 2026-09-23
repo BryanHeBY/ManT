@@ -136,7 +136,7 @@ fn named_roff_bullets_are_lists_but_literal_operator_definitions_survive() {
             kind: mant_ir::ListKind::Bullet,
             items,
             ..
-        } = &document.sections[0].blocks[0]
+        } = &document.flow().unwrap().sections[0].blocks[0]
         else {
             panic!("bullet list")
         };
@@ -164,7 +164,7 @@ fn explicit_tp_and_ip_bullets_keep_equivalent_rendered_layout() {
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         (
             mant_render::render_query_text(&query),
-            mant_codec::encode::render_markdown(&query),
+            mant_codec::encode::render_markdown(&query).expect("valid Flow export"),
         )
     });
     assert_eq!(outputs[0], outputs[1]);

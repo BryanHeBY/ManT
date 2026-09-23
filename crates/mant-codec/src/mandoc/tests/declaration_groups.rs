@@ -13,11 +13,13 @@ fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_li
             declaration_groups,
             ..
         },
-    ] = body_closed.sections[0].blocks.as_slice()
+    ] = body_closed.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
     else {
         panic!(
             "expected one definition list: {:#?}",
-            body_closed.sections[0].blocks
+            body_closed.flow().expect("Flow fixture").sections[0].blocks
         );
     };
     assert_eq!(items.len(), 3);
@@ -35,7 +37,7 @@ fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_li
         b".TH PROBE 1\n.SH OPTIONS\n.de XX\n.TP\n.B --alpha\n.TP\n.B --beta\nSHARED DESCRIPTION.\n..\n.XX\n.PP\nSEPARATOR.\n.XX\n",
     )
     .expect("parse two macro-expanded declaration lists");
-    let lists = split_macro.sections[0]
+    let lists = split_macro.flow().expect("Flow fixture").sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {
@@ -78,7 +80,7 @@ fn declaration_witnesses_keep_tq_groups_across_repeated_macro_expansions() {
         b".TH PROBE 1\n.SH OPTIONS\n.de XX\n.TP\n.B -a\n.TQ\n.B --alpha\n.TP\n.B --beta\nSHARED BODY.\n.PP\nSEPARATOR.\n.TP\n.B -a\n.TQ\n.B --alpha\n.TP\n.B --beta\nSHARED BODY.\n..\n.XX\n",
     )
     .expect("parse repeated TQ macro expansion");
-    let lists = repeated_tq.sections[0]
+    let lists = repeated_tq.flow().expect("Flow fixture").sections[0]
         .blocks
         .iter()
         .filter_map(|block| match block {

@@ -112,9 +112,19 @@ fn item(store: &mut ContentStore, name: &str, payload: &str, entry: bool) -> Lis
 fn query(annotated: bool) -> ResolvedContent {
     let mut query = load_markdown_text("# Example\n", None).unwrap();
     let document = query.document.as_mut().unwrap();
-    let intro = item(&mut document.content_store, "intro", "FIRST", false);
-    let run = item(&mut document.content_store, "run", "SECOND", annotated);
-    document.blocks = vec![Block::List {
+    let intro = item(
+        &mut document.flow_mut().unwrap().content_store,
+        "intro",
+        "FIRST",
+        false,
+    );
+    let run = item(
+        &mut document.flow_mut().unwrap().content_store,
+        "run",
+        "SECOND",
+        annotated,
+    );
+    document.flow_mut().unwrap().blocks = vec![Block::List {
         kind: ListKind::Ordered { start: Some(7) },
         compact: false,
         items: vec![intro, run],
@@ -137,8 +147,8 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
         render_query_text(&self::query(false))
     );
     assert_eq!(
-        render_markdown(&query),
-        render_markdown(&self::query(false))
+        render_markdown(&query).expect("valid Flow export"),
+        render_markdown(&self::query(false)).expect("valid Flow export")
     );
     let outline = build_outline_projection(
         &query,
@@ -204,8 +214,13 @@ fn excerpt_ordinals_preserve_unknown_zero_and_saturated_source_starts() {
     for start in [None, Some(0), Some(7), Some(u64::MAX)] {
         let mut query = query(true);
         let document = query.document.as_mut().unwrap();
-        let last = item(&mut document.content_store, "last", "THIRD", true);
-        let Block::List { kind, items, .. } = &mut document.blocks[0] else {
+        let last = item(
+            &mut document.flow_mut().unwrap().content_store,
+            "last",
+            "THIRD",
+            true,
+        );
+        let Block::List { kind, items, .. } = &mut document.flow_mut().unwrap().blocks[0] else {
             unreachable!()
         };
         *kind = ListKind::Ordered { start };
@@ -239,8 +254,13 @@ fn excerpt_ordinals_preserve_unknown_zero_and_saturated_source_starts() {
 fn nested_ordinary_owners_share_semantic_paths_without_losing_parent_content() {
     let mut query = query(true);
     let document = query.document.as_mut().unwrap();
-    let child = item(&mut document.content_store, "child", "CHILD", true);
-    let Block::List { items, .. } = &mut document.blocks[0] else {
+    let child = item(
+        &mut document.flow_mut().unwrap().content_store,
+        "child",
+        "CHILD",
+        true,
+    );
+    let Block::List { items, .. } = &mut document.flow_mut().unwrap().blocks[0] else {
         unreachable!()
     };
     items[1].blocks.push(Block::List {
@@ -299,7 +319,7 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
     for table in [false, true] {
         let mut query = query(true);
         let document = query.document.as_mut().unwrap();
-        let ordinary = document.blocks.remove(0);
+        let ordinary = document.flow_mut().unwrap().blocks.remove(0);
         let content = if table {
             serde_json::json!({"type": "table", "rows": [{"cells": [{"blocks": [ordinary]}]}]})
         } else {
@@ -310,7 +330,7 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
             "items": [{"terms": [], "description": [content]}]
         }))
         .unwrap();
-        document.blocks.push(transparent);
+        document.flow_mut().unwrap().blocks.push(transparent);
         let outline = build_outline_projection(
             &query,
             EntryProjection::All,
@@ -355,6 +375,7 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // Existing end-to-end fixture grew only Flow accessors.
 fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
     use mant_ir::visit::{VisitMut, walk_definition_item_mut, walk_list_item_mut};
     struct StripFacts;
@@ -371,7 +392,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
     for wrapped in [false, true] {
         let mut query = query(false);
         let document = query.document.as_mut().unwrap();
-        let store = &mut document.content_store;
+        let store = &mut document.flow_mut().unwrap().content_store;
         let mut parent = item(store, "parent", "BEFORE", true);
         parent.blocks.push(Block::List {
             kind: ListKind::Bullet,
@@ -433,7 +454,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
             layout: LayoutHint::default(),
             source: None,
         };
-        document.blocks = if wrapped {
+        document.flow_mut().unwrap().blocks = if wrapped {
             vec![Block::List {
                 kind: ListKind::Bullet,
                 compact: false,
@@ -450,11 +471,14 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
             vec![table]
         };
         let text = render_query_text(&query);
-        let markdown = render_markdown(&query);
+        let markdown = render_markdown(&query).expect("valid Flow export");
         assert_table_search_owners(&query);
         StripFacts.visit_document_mut(query.document.as_mut().unwrap());
         assert_eq!(text, render_query_text(&query));
-        assert_eq!(markdown, render_markdown(&query));
+        assert_eq!(
+            markdown,
+            render_markdown(&query).expect("valid Flow export")
+        );
     }
 }
 

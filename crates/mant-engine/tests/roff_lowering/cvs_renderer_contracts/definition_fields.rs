@@ -136,7 +136,7 @@ fn invisible_formatter_fields_still_own_their_empty_word_boundary() {
         let query = mant_loader::load_roff_bytes(source.as_bytes())
             .expect("lower invisible no-break field");
         let document = query.document.as_ref().expect("lowered document");
-        let paragraph = document.sections[1]
+        let paragraph = document.flow().unwrap().sections[1]
             .blocks
             .iter()
             .find_map(|block| match block {
@@ -219,12 +219,16 @@ fn repeated_authored_section_titles_remain_ambiguous() {
     let document = query.document.as_ref().expect("lowered document");
     assert!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .any(|section| section.id == "details")
     );
     assert!(
         document
+            .flow()
+            .unwrap()
             .sections
             .iter()
             .any(|section| section.id == "details-2")
