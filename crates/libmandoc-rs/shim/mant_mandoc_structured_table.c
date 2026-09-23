@@ -112,8 +112,8 @@ append_table(struct structured_session *session, const struct roff_node *node,
 		return 0;
 	tables = mant_structured_grow_array(session, session->result->tables,
 	    session->result->table_count, &session->result->table_capacity,
-	    mant_structured_limit_u32(session->limits->max_blocks),
-	    sizeof(*tables), session->limits->max_builder_allocated_bytes, 12,
+	    mant_structured_limit_u32(session->limits->max_tables),
+	    sizeof(*tables), session->limits->max_builder_allocated_bytes, 17,
 	    MANT_STRUCTURED_STAGE_RENDER);
 	if (tables == NULL)
 		return 0;
@@ -180,8 +180,8 @@ mant_structured_table_enter(struct structured_session *session,
 	    session->active_table - 1].fixed_view;
 	rows = mant_structured_grow_array(session, session->result->table_rows,
 	    session->result->table_row_count, &session->result->table_row_capacity,
-	    mant_structured_limit_u32(session->limits->max_blocks), sizeof(*rows),
-	    session->limits->max_builder_allocated_bytes, 12,
+	    mant_structured_limit_u32(session->limits->max_table_rows), sizeof(*rows),
+	    session->limits->max_builder_allocated_bytes, 18,
 	    MANT_STRUCTURED_STAGE_RENDER);
 	if (rows == NULL)
 		return 0;
@@ -247,9 +247,9 @@ mant_structured_table_enter(struct structured_session *session,
 		    session->result->table_cells,
 		    session->result->table_cell_count,
 		    &session->result->table_cell_capacity,
-		    mant_structured_limit_u32(session->limits->max_owners),
+		    mant_structured_limit_u32(session->limits->max_table_cells),
 		    sizeof(*cells), session->limits->max_builder_allocated_bytes,
-		    11, MANT_STRUCTURED_STAGE_RENDER);
+		    19, MANT_STRUCTURED_STAGE_RENDER);
 		if (cells == NULL)
 			return 0;
 		session->result->table_cells = cells;

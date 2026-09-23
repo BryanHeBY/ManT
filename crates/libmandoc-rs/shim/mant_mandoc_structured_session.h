@@ -150,6 +150,8 @@ struct structured_session {
 	uint64_t token_total;
 	uint64_t projection_live_bytes;
 	uint64_t projection_peak_bytes;
+	uint64_t fixed_use_live_bytes;
+	uint64_t fixed_use_peak_bytes;
 	struct structured_column *columns;
 	uint32_t column_count;
 	uint32_t column_capacity;

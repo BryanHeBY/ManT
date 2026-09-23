@@ -73,6 +73,36 @@ fn controlled_builder_failure_and_budget_exhaustion_recover() {
 }
 
 #[test]
+fn fixed_table_allocation_failures_release_active_token_sidecars() {
+    // Exact source checked with fixed CVS UTF-8/78. tbl_term.c::term_tbl
+    // flushes buffered authored cells and direct borders; injected failures
+    // can interrupt before the current token retires. Run this matrix under
+    // a leak sanitizer to audit the native cleanup path as well as recovery.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "box.1",
+            b".TH T 1\n.SH DATA\n.TS\nbox tab(;);\nl l.\nleft;right\nempty;\n.TE\n".to_vec(),
+        )
+        .unwrap();
+    let mut failures = 0;
+    for successful_allocations in 0..128 {
+        unsafe { mant_structured_test_fail_after(successful_allocations) };
+        match render_prelude("box.1", &bundle, InputFormat::Man, 78, &Limits::default()) {
+            Ok(document) => assert_eq!(document.table_cells.len(), 4),
+            Err(error) => {
+                assert_eq!(error.status, STATUS_BUILDER_ALLOC, "{error:?}");
+                failures += 1;
+            }
+        }
+    }
+    assert!(failures > 0);
+    let recovered = render_prelude("box.1", &bundle, InputFormat::Man, 78, &Limits::default())
+        .expect("the next complete fixed-table call recovers");
+    assert_eq!(recovered.table_cells.len(), 4);
+}
+
+#[test]
 fn c04_evidence_budget_kind_survives_failure_mapping_and_recovers() {
     // The exact two-target input was run through the fixed reference first;
     // pinned tag.c moves each ID to its following paragraph. The generated

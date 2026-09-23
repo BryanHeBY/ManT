@@ -256,7 +256,7 @@ static void
 retire_token(struct structured_session *session, uint32_t key)
 {
 	struct structured_token *token;
-	uint64_t projection_bytes;
+	uint64_t projection_bytes, fixed_use_bytes;
 
 	if (key == 0 || key > session->token_slot_count ||
 	    key == session->pending_token)
@@ -269,6 +269,12 @@ retire_token(struct structured_session *session, uint32_t key)
 		session->projection_live_bytes -= projection_bytes;
 	else
 		session->projection_live_bytes = 0;
+	fixed_use_bytes = (uint64_t)token->fixed_use_capacity *
+	    sizeof(*token->fixed_uses);
+	if (fixed_use_bytes <= session->fixed_use_live_bytes)
+		session->fixed_use_live_bytes -= fixed_use_bytes;
+	else
+		session->fixed_use_live_bytes = 0;
 	free(token->projection_bytes);
 	free(token->projection_survived);
 	free(token->fixed_uses);
@@ -276,6 +282,9 @@ retire_token(struct structured_session *session, uint32_t key)
 	token->projection_survived = NULL;
 	token->projection_capacity = 0;
 	token->projection_length = 0;
+	token->fixed_uses = NULL;
+	token->fixed_use_capacity = 0;
+	token->fixed_use_count = 0;
 	token->active = 0;
 	token->next_free = session->free_token;
 	session->free_token = key;
@@ -967,7 +976,8 @@ mant_structured_buffer_release(struct structured_session *session,
 		    sizeof(*session->link_identities) +
 		    (uint64_t)session->token_capacity * sizeof(*session->tokens) +
 		    (uint64_t)session->column_capacity * sizeof(*session->columns) +
-		    session->projection_peak_bytes;
+		    session->projection_peak_bytes +
+		    session->fixed_use_peak_bytes;
 		if (slots == UINT64_MAX || slots >
 		    (UINT64_MAX - sidecar_bytes) / sizeof(struct structured_slot))
 			sidecar_bytes = UINT64_MAX;
@@ -987,6 +997,7 @@ mant_structured_buffer_release(struct structured_session *session,
 	for (token = 0; token < session->token_slot_count; token++) {
 		free(session->tokens[token].projection_bytes);
 		free(session->tokens[token].projection_survived);
+		free(session->tokens[token].fixed_uses);
 	}
 	free(session->tokens);
 }

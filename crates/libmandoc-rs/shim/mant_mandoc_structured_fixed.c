@@ -470,7 +470,8 @@ record_use(struct structured_session *session, struct structured_token *token,
     uint32_t line, uint32_t start, uint32_t end)
 {
 	struct structured_fixed_use *uses, *use;
-	uint32_t count;
+	uint32_t count, old_capacity;
+	uint64_t added_bytes;
 
 	count = token->fixed_use_count;
 	if (count != 0 && token->fixed_uses[count - 1].line == line) {
@@ -481,6 +482,7 @@ record_use(struct structured_session *session, struct structured_token *token,
 			use->end = end;
 		return;
 	}
+	old_capacity = token->fixed_use_capacity;
 	uses = mant_structured_grow_array(session, token->fixed_uses, count,
 	    &token->fixed_use_capacity,
 	    mant_structured_limit_u32(session->limits->max_placements),
@@ -489,6 +491,11 @@ record_use(struct structured_session *session, struct structured_token *token,
 	if (uses == NULL)
 		return;
 	token->fixed_uses = uses;
+	added_bytes = (uint64_t)(token->fixed_use_capacity - old_capacity) *
+	    sizeof(*uses);
+	session->fixed_use_live_bytes += added_bytes;
+	if (session->fixed_use_peak_bytes < session->fixed_use_live_bytes)
+		session->fixed_use_peak_bytes = session->fixed_use_live_bytes;
 	use = uses + count;
 	memset(use, 0, sizeof(*use));
 	use->line = line;
@@ -609,15 +616,12 @@ mant_structured_fixed_commit(struct structured_session *session,
 			    scalar_end - scalar_start);
 			return;
 		}
-		/* Every observed scalar consumes work even when its affine mapping
-		 * extends the preceding slice.  Keep the cumulative budget separate
-		 * from the number of retained placement records. */
+		/* Every observed scalar consumes builder work even when its affine
+		 * mapping extends the preceding slice.  Relation edges, unlike work,
+		 * only count records actually retained in the result graph. */
 		if (!mant_structured_charge(session,
 		    &session->builder_operations, 1,
 		    session->limits->max_builder_operations, 8,
-		    MANT_STRUCTURED_STAGE_RENDER) ||
-		    !mant_structured_charge(session, &session->relation_edges, 2,
-		    session->limits->max_relation_edges, 30,
 		    MANT_STRUCTURED_STAGE_RENDER))
 			return;
 		count = session->result->placement_count;
@@ -646,6 +650,10 @@ mant_structured_fixed_commit(struct structured_session *session,
 		if (placements == NULL)
 			return;
 		session->result->placements = placements;
+		if (!mant_structured_charge(session, &session->relation_edges, 2,
+		    session->limits->max_relation_edges, 30,
+		    MANT_STRUCTURED_STAGE_RENDER))
+			return;
 		placement = placements + count;
 		memset(placement, 0, sizeof(*placement));
 		placement->key = ++session->result->placement_count;

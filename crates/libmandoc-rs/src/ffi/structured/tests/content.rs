@@ -89,6 +89,31 @@ fn long_nofill_line_transfers_one_affine_placement() {
 }
 
 #[test]
+fn affine_line_charges_actual_edges_but_each_scalar_operation() {
+    // Exact 10,000-scalar source was checked with fixed CVS UTF-8/78.
+    // term.c::term_field emits each glyph; the retained affine placement
+    // has one graph relation, while the executed work remains cumulative.
+    let source = format!(".TH T 1\n.SH D\n.nf\n{}\n.fi\n", "a".repeat(10_000));
+    let mut bundle = SourceBundle::new();
+    bundle.insert("edge-line.1", source.into_bytes()).unwrap();
+    let accepted = Limits {
+        max_relation_edges: 200,
+        ..Limits::default()
+    };
+    let document = render_prelude("edge-line.1", &bundle, InputFormat::Man, 78, &accepted)
+        .expect("one affine placement must not spend ten thousand graph edges");
+    assert_eq!(document.placements.len(), 1);
+
+    let rejected = Limits {
+        max_builder_operations: 200,
+        ..Limits::default()
+    };
+    let error = render_prelude("edge-line.1", &bundle, InputFormat::Man, 78, &rejected)
+        .expect_err("the terminal scalar work still exceeds the operation budget");
+    assert_eq!((error.status, error.limit_kind), (STATUS_BUDGET, 8));
+}
+
+#[test]
 fn inline_link_head_and_body_phases_do_not_split_the_surrounding_root() {
     // The exact source was run through the pinned reference first. In
     // `man_term.c::print_man_node`, UR head/body enter/leave phases surround

@@ -36,6 +36,96 @@ fn simple_table_retains_data_and_empty_cell_roots() {
 }
 
 #[test]
+fn table_count_budgets_are_independent_and_recover() {
+    // Exact two-table, three-row, six-cell input was checked with fixed CVS
+    // UTF-8/78. tbl_term.c::term_tbl executes each table and row; these
+    // assertions concern only the collector's separate result budgets.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "limits.1",
+            b".TH T 1\n.SH D\n.TS\ntab(;);\nl l.\na;b\nc;d\n.TE\n.TS\ntab(;);\nl l.\ne;f\n.TE\n"
+                .to_vec(),
+        )
+        .unwrap();
+    for (limits, kind, observed) in [
+        (
+            Limits {
+                max_tables: 1,
+                ..Limits::default()
+            },
+            17,
+            2,
+        ),
+        (
+            Limits {
+                max_table_rows: 1,
+                ..Limits::default()
+            },
+            18,
+            2,
+        ),
+        (
+            Limits {
+                max_table_cells: 1,
+                ..Limits::default()
+            },
+            19,
+            2,
+        ),
+    ] {
+        let error = render_prelude("limits.1", &bundle, InputFormat::Man, 78, &limits)
+            .expect_err("the dedicated table budget must reject its second object");
+        assert_eq!(error.status, STATUS_BUDGET, "{error:?}");
+        assert_eq!(
+            (error.limit_kind, error.observed, error.allowed),
+            (kind, observed, 1)
+        );
+    }
+    let recovered = render_prelude(
+        "limits.1",
+        &bundle,
+        InputFormat::Man,
+        78,
+        &Limits::default(),
+    )
+    .expect("a subsequent complete table render recovers");
+    assert_eq!(
+        (
+            recovered.tables.len(),
+            recovered.table_rows.len(),
+            recovered.table_cells.len()
+        ),
+        (2, 3, 6)
+    );
+}
+
+#[test]
+fn table_count_budgets_accept_exact_boundary() {
+    // This exact one-cell table was checked with fixed CVS UTF-8/78.
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert("one.1", b".TH T 1\n.SH D\n.TS\nl.\nx\n.TE\n".to_vec())
+        .unwrap();
+    let limits = Limits {
+        max_tables: 1,
+        max_table_rows: 1,
+        max_table_cells: 1,
+        ..Limits::default()
+    };
+    let document = render_prelude("one.1", &bundle, InputFormat::Man, 78, &limits)
+        .expect("one table, row, and cell fit their exact dedicated limits");
+    assert_eq!(
+        (
+            document.tables.len(),
+            document.table_rows.len(),
+            document.table_cells.len()
+        ),
+        (1, 1, 1)
+    );
+}
+
+#[test]
 fn boxed_table_reuses_cell_atoms_in_native_fixed_geometry() {
     // Exact UTF-8/78 input was run through the fixed CVS reference first.
     // tbl_term.c::term_tbl emits native frame rows and cell placements;

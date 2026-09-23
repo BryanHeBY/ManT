@@ -83,8 +83,9 @@ reproducible with the ignored `native_fixed_table_scale` test and
 `MANT_C05_ROWS`/`MANT_C05_PHASE`. The earlier per-scalar placement version
 measured 333–347/467–488 ms and 173/234 MiB at 20,000 rows. Adjacent affine
 placements were then coalesced: the same content, cells and physical rows
-remain, while builder-operation and relation-edge work are still charged for
-each terminal scalar. A separate 10,000-character no-fill line had previously
+remain. Builder operations are still charged for each terminal scalar;
+relation edges are charged only for retained placements. A separate
+10,000-character no-fill line had previously
 failed checked-result validation because per-character placement prefixes
 exhausted its bounded scan; fixed CVS renders it as one 10,005-column row,
 and the corrected native and final-IR tests now accept it. The 20,000-row
@@ -123,5 +124,9 @@ the start-of-work binary. The regression is real for this workload, but the
 cost breakdown and an equivalent new-path large-page comparison still need
 a separate performance investigation before the S1 exit can be signed off.
 
-No independent C05 cross-review is recorded here. The current result is a C05
-implementation checkpoint, not an S1 approval.
+Independent N/F/S C05 review of `aa211f73..97cb0840` found native fixed-view,
+resource-budget, and consumer gaps. The subsequent resource repairs enforce
+the dedicated table/row/cell limits, release active fixed-use sidecars on
+failure, and include their peak capacity in the sidecar probe. The remaining
+findings are tracked as C05 follow-up work; this checkpoint is not an S1
+approval.
