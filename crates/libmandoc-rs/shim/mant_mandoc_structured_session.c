@@ -455,6 +455,10 @@ render_session(const struct mant_structured_input_view *input,
 			if (!mant_annotated_collector_account_display(
 			    session.annotated_collector))
 				goto native_cleanup;
+			if (display_finished &&
+			    !mant_annotated_collector_finish_points(
+			    session.annotated_collector, &display_view))
+				goto native_cleanup;
 			if (!display_finished) {
 				uint32_t kind = 0;
 				uint64_t observed = 0, allowed = 0;

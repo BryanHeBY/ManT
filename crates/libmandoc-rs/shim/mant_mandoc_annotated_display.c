@@ -687,6 +687,22 @@ mant_annotated_display_endpoints(const struct mant_annotated_display *display,
 }
 
 int
+mant_annotated_display_checkpoint(const struct mant_annotated_display *display,
+    uint32_t pending_advances, struct mant_annotated_display_checkpoint *point)
+{
+	if (display == NULL || point == NULL || display->finished ||
+	    display->status != MANT_ANNOTATED_DISPLAY_OK ||
+	    display->pending_need != 0 ||
+	    display->cursor > display->limits.max_row_columns ||
+	    pending_advances > display->limits.max_row_columns - display->cursor)
+		return 0;
+	point->row_before = display->row_count;
+	point->column = display->cursor + pending_advances;
+	point->active = display->row_touched || point->column != 0;
+	return 1;
+}
+
+int
 mant_annotated_display_finish(struct mant_annotated_display *display,
     struct mant_annotated_display_view *view)
 {

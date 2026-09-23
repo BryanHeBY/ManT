@@ -54,6 +54,12 @@ struct mant_annotated_selection_part {
 #define MANT_ANNOTATED_MARK_AUTHORED (1U << 0)
 #define MANT_ANNOTATED_MARK_FINAL_POINT_UNVERIFIED (1U << 1)
 
+enum mant_annotated_point_kind {
+	MANT_ANNOTATED_POINT_NONE = 0,
+	MANT_ANNOTATED_POINT_ROW_COLUMN = 1,
+	MANT_ANNOTATED_POINT_DOCUMENT_END = 2
+};
+
 struct mant_annotated_mark {
 	uint32_t key;
 	uint32_t kind;
@@ -85,6 +91,12 @@ struct mant_annotated_mark {
 	 * Only direct owner and link labels are indexed; ancestors are not copied. */
 	uint32_t selection_first;
 	uint32_t selection_count;
+	/* Final body-only zero-width point.  ROW_COLUMN uses a one-based row;
+	 * DOCUMENT_END uses the final physical row count and column zero. */
+	uint32_t point_kind;
+	uint32_t point_row;
+	uint32_t point_column;
+	uint32_t point_reserved;
 };
 
 struct mant_annotated_collector_metrics {
@@ -113,6 +125,8 @@ void mant_annotated_collector_get_marks(
 void mant_annotated_collector_take_marks(
 	struct mant_annotated_collector *,
 	struct mant_annotated_mark **, uint32_t *);
+int mant_annotated_collector_finish_points(struct mant_annotated_collector *,
+	const struct mant_annotated_display_view *);
 void mant_annotated_marks_free(struct mant_annotated_mark *, uint32_t);
 void mant_annotated_collector_free(struct mant_annotated_collector *);
 

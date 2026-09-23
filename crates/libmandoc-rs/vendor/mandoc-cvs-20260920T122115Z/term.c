@@ -107,6 +107,35 @@ term_collect_node(struct termp *p, const struct roff_node *n,
 	p->collector_node = saved;
 }
 
+/* A tag or item position is a deferred buffer gap, not the location of
+ * NODE_ENTER.  The observer must follow the buffer through term_field(). */
+static void
+term_collect_point(struct termp *p, const struct roff_node *n,
+		enum term_collector_op op)
+{
+	const struct roff_node *saved;
+
+	if (p->collector == NULL)
+		return;
+	saved = p->collector_node;
+	p->collector_node = n;
+	collect_emit(p, op, TERM_COLLECT_ENTER, TERM_COLLECT_NONE,
+	    p->col, p->tcol->col, p->viscol, 0, 0, TERMFONT_NONE);
+	p->collector_node = saved;
+}
+
+void
+term_collect_tag_point(struct termp *p, const struct roff_node *n)
+{
+	term_collect_point(p, n, TERM_COLLECT_TAG_POINT);
+}
+
+void
+term_collect_owner_point(struct termp *p, const struct roff_node *n)
+{
+	term_collect_point(p, n, TERM_COLLECT_OWNER_POINT);
+}
+
 void
 term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
 		enum term_collector_phase phase)

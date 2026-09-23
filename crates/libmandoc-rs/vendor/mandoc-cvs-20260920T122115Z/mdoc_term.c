@@ -341,8 +341,10 @@ print_mdoc_node(DECL_ARGS)
 	npair.ppair = pair;
 
 	if (n->flags & NODE_ID && n->tok != MDOC_Pp &&
-	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK))
+	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK)) {
+		term_collect_tag_point(p, n);
 		term_tag_write(n, p->line);
+	}
 
 	/*
 	 * Keeps only work until the end of a line.  If a keep was
@@ -655,8 +657,11 @@ termp_it_pre(DECL_ARGS)
 
 	if (n->type == ROFFT_BLOCK) {
 		print_bvspace(p, n->parent->parent, n);
-		if (n->flags & NODE_ID)
+		term_collect_owner_point(p, n);
+		if (n->flags & NODE_ID) {
+			term_collect_tag_point(p, n);
 			term_tag_write(n, p->line);
+		}
 		return 1;
 	}
 
@@ -1596,8 +1601,10 @@ static int
 termp_pp_pre(DECL_ARGS)
 {
 	term_vspace(p);
-	if (n->flags & NODE_ID)
+	if (n->flags & NODE_ID) {
+		term_collect_tag_point(p, n);
 		term_tag_write(n, p->line);
+	}
 	return 0;
 }
 

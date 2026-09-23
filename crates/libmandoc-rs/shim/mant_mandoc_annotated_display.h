@@ -113,6 +113,15 @@ struct mant_annotated_display_view {
 	uint64_t peak_allocated_bytes;
 };
 
+/* An unresolved location in the native device, before final row sealing.
+ * `row_before` counts already sealed body rows; `active` selects their
+ * in-progress successor.  It is not a public DisplayPoint. */
+struct mant_annotated_display_checkpoint {
+	uint32_t row_before;
+	uint32_t column;
+	uint32_t active;
+};
+
 struct mant_annotated_display *mant_annotated_display_new(
 	const struct mant_annotated_display_limits *,
 	mant_annotated_display_width, void *);
@@ -123,6 +132,8 @@ int mant_annotated_display_write(struct mant_annotated_display *,
 int mant_annotated_display_write_join(struct mant_annotated_display *,
 	const void *, size_t, struct mant_annotated_display_label,
 	struct mant_annotated_display_edge);
+int mant_annotated_display_checkpoint(const struct mant_annotated_display *,
+	uint32_t, struct mant_annotated_display_checkpoint *);
 const struct mant_annotated_run_endpoint *mant_annotated_display_endpoints(
 	const struct mant_annotated_display *, uint32_t *);
 int mant_annotated_display_finish(struct mant_annotated_display *,

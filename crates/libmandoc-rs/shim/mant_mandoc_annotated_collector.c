@@ -27,6 +27,8 @@ struct annotated_slot {
 	uint8_t occupied;
 	uint8_t authored_space;
 	uint8_t layout_space;
+	uint32_t first_point;
+	uint64_t skipped_visual;
 };
 
 struct annotated_column {
@@ -39,6 +41,10 @@ struct annotated_column {
 	uint32_t separator_link;
 	struct mant_annotated_display_edge last_origin_edge;
 	uint32_t pending_join;
+	uint32_t skip_start;
+	uint64_t skipped_visual;
+	uint32_t skip_cell_width;
+	uint8_t skipping;
 };
 
 struct annotated_frame {
@@ -48,6 +54,14 @@ struct annotated_frame {
 	uint32_t saved_link;
 	uint32_t saved_heading;
 	uint64_t saved_link_epoch;
+	uint32_t owner_mark;
+	uint32_t anchor_mark;
+};
+
+struct annotated_point_state {
+	struct mant_annotated_display_checkpoint checkpoint;
+	uint32_t next;
+	uint8_t state; /* 0 absent, 1 active buffer gap, 2 captured. */
 };
 
 struct annotated_cell {
@@ -66,6 +80,9 @@ struct mant_annotated_collector {
 	struct mant_annotated_mark *marks;
 	uint32_t mark_count;
 	uint32_t mark_capacity;
+	struct annotated_point_state *points;
+	uint32_t point_capacity;
+	uint32_t pending_point_count;
 	struct annotated_cell *cells;
 	uint32_t cell_capacity;
 	uint32_t cell_count;
@@ -98,7 +115,9 @@ struct mant_annotated_collector {
 	uint32_t advance_role;
 	uint32_t skipped_column;
 	uint32_t letter_column;
+	uint32_t letter_pos;
 	uint8_t letter_pending;
+	uint8_t letter_from_field;
 	uint8_t in_header;
 	uint8_t in_footer;
 	uint8_t footer_drained;
@@ -306,6 +325,121 @@ discard_range(struct mant_annotated_collector *collector,
 		discard_slot(collector, column, column->slots + index);
 }
 
+static int
+capture_point_slot(struct mant_annotated_collector *collector,
+    struct annotated_slot *slot,
+    struct mant_annotated_display_checkpoint checkpoint)
+{
+	struct annotated_point_state *state;
+	uint32_t key, next;
+
+	for (key = slot->first_point; key != 0; key = next) {
+		if (key > collector->mark_count ||
+		    collector->pending_point_count == 0) {
+			fail_relation(collector, key, collector->mark_count);
+			return 0;
+		}
+		state = collector->points + key - 1;
+		if (state->state != 1) {
+			fail_relation(collector, state->state, 1);
+			return 0;
+		}
+		next = state->next;
+		state->checkpoint = checkpoint;
+		state->next = 0;
+		state->state = 2;
+		collector->pending_point_count--;
+	}
+	slot->first_point = 0;
+	return 1;
+}
+
+static int
+capture_point_range(struct mant_annotated_collector *collector,
+    struct annotated_column *column, size_t first, size_t end)
+{
+	struct mant_annotated_display_checkpoint checkpoint;
+	size_t index;
+
+	if (collector->pending_point_count == 0 ||
+	    first >= column->capacity)
+		return 1;
+	if (end > column->capacity)
+		end = column->capacity;
+	if (end <= first)
+		return 1;
+	/* BUFFER_RESET/COL_FREE can cover capacity, not just live slots.
+	 * Charge every inspected gap to the same cumulative work budget as
+	 * collector events, even when a pending point belongs to another col. */
+	if (!charge_work(collector, end - first))
+		return 0;
+	if (!mant_annotated_display_checkpoint(collector->display, 0,
+	    &checkpoint)) {
+		fail_relation(collector, first, end);
+		return 0;
+	}
+	for (index = first; index < end; index++)
+		if (!capture_point_slot(collector, column->slots + index,
+		    checkpoint))
+			return 0;
+	return 1;
+}
+
+static void
+arm_point(struct mant_annotated_collector *collector, struct termp *p,
+    const struct term_collector_event *event)
+{
+	struct annotated_frame *frame;
+	struct annotated_point_state *state;
+	struct annotated_column *column;
+	struct annotated_slot *slot;
+	uint32_t key;
+
+	if (collector->frame_count == 0 ||
+	    collector->frames[collector->frame_count - 1].node != event->node) {
+		fail_relation(collector, collector->frame_count, 1);
+		return;
+	}
+	frame = collector->frames + collector->frame_count - 1;
+	key = event->op == TERM_COLLECT_TAG_POINT ?
+	    frame->anchor_mark : frame->owner_mark;
+	/* tag.c::tag_put() leaves `tag` NULL for an unchanged implicit
+	 * heading ID; term_tag_write() falls back to the first child string.
+	 * R01 AnchorMarks cover only stored target declarations, as push_node()
+	 * does, so this real pager-tag event has no exposed mark to locate. */
+	if (key == 0 && event->op == TERM_COLLECT_TAG_POINT &&
+	    event->node->tag == NULL)
+		return;
+	if (key == 0 || key > collector->mark_count) {
+		fail_relation(collector, key, collector->mark_count);
+		return;
+	}
+	state = collector->points + key - 1;
+	if (state->state != 0) {
+		fail_relation(collector, state->state, 0);
+		return;
+	}
+	if ((p->flags & TERMP_NOBUF) != 0 ||
+	    (event->pos == 0 && p->tcol->lastcol == 0) ||
+	    event->pos < event->end) {
+		if (!mant_annotated_display_checkpoint(collector->display,
+		    collector->advance_count, &state->checkpoint)) {
+			fail_relation(collector, event->pos, event->end);
+			return;
+		}
+		state->state = 2;
+		return;
+	}
+	column = column_at(collector, event->column);
+	if (column == NULL ||
+	    (slot = slot_at(collector, column, event->pos)) == NULL)
+		return;
+	state->next = slot->first_point;
+	slot->first_point = key;
+	state->state = 1;
+	collector->pending_point_count++;
+}
+
 static uint32_t
 current_role(const struct mant_annotated_collector *collector)
 {
@@ -415,6 +549,7 @@ add_mark(struct mant_annotated_collector *collector,
     const struct roff_node *link_operand)
 {
 	struct mant_annotated_mark *marks, *mark;
+	struct annotated_point_state *points;
 	const struct roff_node *first, *second;
 	size_t name_length;
 	uint32_t maximum;
@@ -430,8 +565,17 @@ add_mark(struct mant_annotated_collector *collector,
 	if (marks == NULL)
 		return 0;
 	collector->marks = marks;
+	points = mant_structured_grow_array(collector->session,
+	    collector->points, collector->mark_count,
+	    &collector->point_capacity, maximum, sizeof(*points),
+	    collector->session->limits->max_builder_allocated_bytes, 9,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (points == NULL)
+		return 0;
+	collector->points = points;
 	mark = marks + collector->mark_count;
 	memset(mark, 0, sizeof(*mark));
+	memset(points + collector->mark_count, 0, sizeof(*points));
 	mark->key = ++collector->mark_count;
 	mark->kind = kind;
 	mark->parent = parent;
@@ -636,6 +780,7 @@ push_node(struct mant_annotated_collector *collector,
 	frame->saved_link_node = collector->active_link_node;
 	frame->saved_heading = collector->active_heading;
 	frame->saved_link_epoch = collector->active_link_epoch;
+	frame->owner_mark = frame->anchor_mark = 0;
 
 	/* man_macro.c::blk_imp and mdoc_macro.c::blk_full produce a block
 	 * with distinct HEAD/BODY scopes.  Their terminal traversal emits
@@ -662,6 +807,7 @@ push_node(struct mant_annotated_collector *collector,
 		if (key == 0)
 			return 0;
 		collector->active_owner = key;
+		frame->owner_mark = key;
 	} else if (node->type == ROFFT_BLOCK &&
 	    (node->tok == MDOC_Bl || node->tok == MDOC_Bd)) {
 		region_kind = node->tok == MDOC_Bl ?
@@ -768,10 +914,12 @@ push_node(struct mant_annotated_collector *collector,
 		const struct roff_node *origin =
 		    node->mant_manual_target_source == NULL ? node :
 		    node->mant_manual_target_source;
-		if (add_mark(collector, node, origin,
+		key = add_mark(collector, node, origin,
 		    MANT_ANNOTATED_MARK_ANCHOR,
-		    collector->active_owner, 0, NULL) == 0)
+		    collector->active_owner, 0, NULL);
+		if (key == 0)
 			return 0;
+		frame->anchor_mark = key;
 	}
 	return 1;
 }
@@ -1133,6 +1281,78 @@ flush_advances(struct mant_annotated_collector *collector, int proven_gap)
 	return 1;
 }
 
+/* term.c::term_field reports FIELD_PLACE before calling p->advance(vbl).
+ * Only the following LETTER sink can know which skipped blank cells really
+ * reached the device.  Resolve buffer gaps after those advances and before
+ * the glyph, collapsing discarded skip cells onto the last visible column. */
+static int
+capture_field_points(struct mant_annotated_collector *collector,
+    uint16_t emitted_advances)
+{
+	struct mant_annotated_display_checkpoint checkpoint, at;
+	struct annotated_column *column;
+	uint64_t total_cells, emitted_cells, prefix, cells;
+	uint32_t index;
+
+	if (!collector->letter_from_field ||
+	    collector->letter_column >= collector->column_capacity)
+		return 1;
+	column = collector->columns + collector->letter_column;
+	if (!mant_annotated_display_checkpoint(collector->display, 0,
+	    &checkpoint)) {
+		fail_relation(collector, collector->letter_pos, 0);
+		return 0;
+	}
+	if (column->skipping) {
+		if (column->skip_cell_width == 0 ||
+		    column->skipped_visual % column->skip_cell_width != 0 ||
+		    column->skip_start > collector->letter_pos) {
+			fail_relation(collector, column->skipped_visual,
+			    column->skip_cell_width);
+			return 0;
+		}
+		/* FIELD_SKIP events paid for the first traversal; resolving their
+		 * final device gaps is a second, separately charged traversal. */
+		if (!charge_work(collector,
+		    collector->letter_pos - column->skip_start))
+			return 0;
+		total_cells = column->skipped_visual /
+		    column->skip_cell_width;
+		emitted_cells = total_cells < emitted_advances ?
+		    total_cells : emitted_advances;
+		if (emitted_cells > checkpoint.column) {
+			fail_relation(collector, emitted_cells, checkpoint.column);
+			return 0;
+		}
+		prefix = 0;
+		for (index = column->skip_start;
+		    index < collector->letter_pos; index++) {
+			if (index >= column->capacity) {
+				fail_relation(collector, index, column->capacity);
+				return 0;
+			}
+			at = checkpoint;
+			at.column = checkpoint.column - (uint32_t)emitted_cells +
+			    (uint32_t)(prefix < emitted_cells ? prefix : emitted_cells);
+			if (!capture_point_slot(collector,
+			    column->slots + index, at))
+				return 0;
+			cells = column->slots[index].skipped_visual /
+			    column->skip_cell_width;
+			prefix += cells;
+			column->slots[index].skipped_visual = 0;
+		}
+		column->skipping = 0;
+		column->skipped_visual = 0;
+		column->skip_cell_width = 0;
+	}
+	if (!capture_point_slot(collector,
+	    column->slots + collector->letter_pos, checkpoint))
+		return 0;
+	collector->letter_from_field = 0;
+	return 1;
+}
+
 static void
 record_field_skip(struct mant_annotated_collector *collector,
     struct termp *p, const struct term_collector_event *event)
@@ -1207,6 +1427,10 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			(void)prepare_table_span(collector, event->node);
 		else if (event->phase == TERM_COLLECT_LEAVE)
 			pop_node(collector, event->node);
+		return;
+	case TERM_COLLECT_TAG_POINT:
+	case TERM_COLLECT_OWNER_POINT:
+		arm_point(collector, p, event);
 		return;
 	case TERM_COLLECT_TABLE_CELL:
 		if (event->column < collector->column_capacity)
@@ -1336,8 +1560,6 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		}
 		return;
 	case TERM_COLLECT_FIELD_PLACE:
-		if (!flush_advances(collector, 1))
-			return;
 		if (collector->letter_pending) {
 			fail_relation(collector, event->pos, event->column);
 			return;
@@ -1348,6 +1570,15 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			return;
 		}
 		column = collector->columns + event->column;
+		if (column->skipping) {
+			size_t cell_width = (*p->getwidth)(p, ' ');
+
+			if (cell_width == 0 || cell_width > UINT32_MAX) {
+				fail_relation(collector, cell_width, UINT32_MAX);
+				return;
+			}
+			column->skip_cell_width = cell_width;
+		}
 		slot = column->slots + event->pos;
 		if (!slot->occupied || slot->value != event->value) {
 			fail_relation(collector, event->value, slot->value);
@@ -1363,7 +1594,9 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_label.flags = slot->flags;
 		collector->letter_edge = origin_edge(column, slot->origin);
 		collector->letter_column = event->column;
+		collector->letter_pos = event->pos;
 		collector->letter_pending = 1;
+		collector->letter_from_field = 1;
 		collector->metrics.field_placements++;
 		return;
 	case TERM_COLLECT_DIRECT:
@@ -1397,6 +1630,7 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		    collector->letter_label.glyph_origin);
 		collector->letter_column = event->column;
 		collector->letter_pending = 1;
+		collector->letter_from_field = 0;
 		return;
 	case TERM_COLLECT_DRAW:
 		if (collector->letter_pending) {
@@ -1415,9 +1649,27 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_edge = (struct mant_annotated_display_edge){0};
 		collector->letter_column = event->column;
 		collector->letter_pending = 1;
+		collector->letter_from_field = 0;
 		collector->metrics.direct_draws++;
 		return;
 	case TERM_COLLECT_FIELD_SKIP:
+		column = column_at(collector, event->column);
+		if (column == NULL ||
+		    (slot = slot_at(collector, column, event->pos)) == NULL)
+			return;
+		if (!column->skipping) {
+			column->skip_start = event->pos;
+			column->skipped_visual = 0;
+			column->skipping = 1;
+		}
+		if (event->pos < column->skip_start ||
+		    event->visual > UINT64_MAX - column->skipped_visual) {
+			fail_relation(collector, event->pos,
+			    column->skip_start);
+			return;
+		}
+		slot->skipped_visual = event->visual;
+		column->skipped_visual += event->visual;
 		record_field_skip(collector, p, event);
 		return;
 	case TERM_COLLECT_BUFFER_CONSUME:
@@ -1451,7 +1703,38 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 						join_unknown(column);
 				}
 			}
-			discard_range(collector, column, index, end);
+			if (event->op == TERM_COLLECT_BUFFER_TRUNCATE) {
+				uint32_t head = 0, key, next;
+				for (size_t cell = index; cell < end; cell++) {
+					for (key = column->slots[cell].first_point;
+					    key != 0; key = next) {
+						next = collector->points[key - 1].next;
+						collector->points[key - 1].next = head;
+						head = key;
+					}
+					column->slots[cell].first_point = 0;
+				}
+				discard_range(collector, column, index, end);
+				if (head != 0) {
+					slot = slot_at(collector, column, event->pos);
+					if (slot == NULL)
+						return;
+					slot->first_point = head;
+				}
+			} else {
+				size_t point_end = event->op ==
+				    TERM_COLLECT_BUFFER_RESET &&
+				    end < column->capacity ? end + 1 : end;
+				if (!capture_point_range(collector, column,
+				    index, point_end))
+					return;
+				discard_range(collector, column, index, end);
+				if (event->op == TERM_COLLECT_BUFFER_RESET &&
+				    end < column->capacity)
+					column->slots[end].first_point = 0;
+			}
+			column->skipping = 0;
+			column->skipped_visual = 0;
 		}
 		if (event->op == TERM_COLLECT_BUFFER_RESET)
 			collector->pending_origin = collector->pending_owner =
@@ -1461,6 +1744,9 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		if (event->column >= collector->column_capacity)
 			return;
 		column = collector->columns + event->column;
+		if (!capture_point_range(collector, column, 0,
+		    column->capacity))
+			return;
 		collector->live_slots -= column->live;
 		collector->slot_bytes -=
 		    (uint64_t)column->capacity * sizeof(*column->slots);
@@ -1481,6 +1767,7 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 	struct mant_annotated_display_edge edge = {0};
 	struct annotated_column *column;
 	enum mant_mandoc_output_operation operation;
+	uint16_t emitted_advances;
 	int written;
 
 	if (collector == NULL ||
@@ -1511,9 +1798,16 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 		collector->advance_count++;
 		return 1;
 	}
-	if (operation != MANT_OUTPUT_ADVANCE &&
-	    !flush_advances(collector, 0))
-		return 0;
+	emitted_advances = collector->advance_count;
+	if (operation != MANT_OUTPUT_ADVANCE) {
+		if (!flush_advances(collector,
+		    operation == MANT_OUTPUT_LETTER &&
+		    collector->letter_from_field))
+			return 0;
+		if (operation == MANT_OUTPUT_LETTER &&
+		    !capture_field_points(collector, emitted_advances))
+			return 0;
+	}
 	if (operation == MANT_OUTPUT_LETTER) {
 		if (!collector->letter_pending) {
 			fail_relation(collector, operation, 0);
@@ -1582,6 +1876,58 @@ mant_annotated_collector_take_marks(
 	}
 }
 
+int
+mant_annotated_collector_finish_points(struct mant_annotated_collector *collector,
+    const struct mant_annotated_display_view *display)
+{
+	struct mant_annotated_mark *mark;
+	struct annotated_point_state *state;
+	uint32_t index;
+
+	if (collector == NULL || display == NULL ||
+	    collector->pending_point_count != 0) {
+		if (collector != NULL)
+			fail_relation(collector, collector->pending_point_count, 0);
+		return 0;
+	}
+	/* This pass visits every mark, including those without point state. */
+	if (!charge_work(collector, collector->mark_count))
+		return 0;
+	for (index = 0; index < collector->mark_count; index++) {
+		mark = collector->marks + index;
+		state = collector->points + index;
+		if (state->state == 0) {
+			if (mark->kind == MANT_ANNOTATED_MARK_ANCHOR) {
+				fail_relation(collector, mark->key, 0);
+				return 0;
+			}
+			continue;
+		}
+		if (state->state != 2 || state->next != 0 ||
+		    state->checkpoint.row_before > display->row_count) {
+			fail_relation(collector, mark->key, display->row_count);
+			return 0;
+		}
+		if (state->checkpoint.row_before == display->row_count) {
+			mark->point_kind = MANT_ANNOTATED_POINT_DOCUMENT_END;
+			mark->point_row = display->row_count;
+		} else {
+			const struct mant_annotated_display_row *row =
+			    display->rows + state->checkpoint.row_before;
+			mark->point_kind = MANT_ANNOTATED_POINT_ROW_COLUMN;
+			mark->point_row = state->checkpoint.row_before + 1;
+			/* A trailing native advance may be trimmed by finish_row().
+			 * In that case the final zero-width boundary is row end. */
+			mark->point_column = state->checkpoint.active ?
+			    state->checkpoint.column : 0;
+			if (mark->point_column > row->column_count)
+				mark->point_column = row->column_count;
+		}
+		mark->flags &= ~MANT_ANNOTATED_MARK_FINAL_POINT_UNVERIFIED;
+	}
+	return 1;
+}
+
 void
 mant_annotated_marks_free(struct mant_annotated_mark *marks, uint32_t count)
 {
@@ -1608,6 +1954,7 @@ mant_annotated_collector_free(struct mant_annotated_collector *collector)
 	for (index = 0; index < collector->column_capacity; index++)
 		free(collector->columns[index].slots);
 	mant_annotated_marks_free(collector->marks, collector->mark_count);
+	free(collector->points);
 	free(collector->cells);
 	free(collector->frames);
 	free(collector->columns);

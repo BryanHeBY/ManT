@@ -241,15 +241,25 @@ not a fictitious run:
 {"kind":"tldr","path":"0","startByte":0,"endByte":4}
 {"kind":"fixed","parts":[{"run":9,"startByte":0,"endByte":4},{"run":10,"startByte":0,"endByte":2}]}
 {"kind":"fixed-point","at":{"kind":"run-boundary","run":9,"byte":4}}
+{"kind":"fixed-point","at":{"kind":"row-column","row":8,"column":0}}
 {"kind":"fixed-point","at":{"kind":"document-end","rowCount":0}}
 ```
 
 These addresses are snapshot-relative and explicitly discriminated. A Fixed
-term does not masquerade as `EntryInlineRoot::Term`; arbitrary runs or links
-are not `--node` structural nodes. Form/name bindings require exact surviving
-visible spelling. Deserialize validates body exclusivity, UTF-8 boundaries,
-key closure and density, zero-width points, source-qualified references and
-all cross-mark relations. Old top-level `contentStore`/`blocks`/`sections`,
+`row-column` point names an actual final body row and terminal-column boundary
+(including row end); it does not borrow a neighboring run's UTF-8 bytes. The
+existing `run-boundary` cannot represent a blank row, a visible gap, or an
+anchor whose original glyph was later covered. A trailing point with no next
+body row uses `document-end`, never an earlier owner's last run. Empty table
+cell offsets remain native layout hints until independently bound to a final
+row in the subsequent cell-position unit.
+
+A Fixed term does not masquerade as `EntryInlineRoot::Term`; arbitrary runs
+or links are not `--node` structural nodes. Form/name bindings require exact
+surviving visible spelling. Deserialize validates body exclusivity, UTF-8
+boundaries, key closure and density, zero-width points, source-qualified
+references and all cross-mark relations. Old top-level
+`contentStore`/`blocks`/`sections`,
 mixed bodies, unknown discriminants and dangling slices are rejected on the
 wire, not accepted as an empty document.
 For the primary `Document`, `body.kind` is required and exactly `flow` or

@@ -123,11 +123,21 @@ pub struct AnnotatedMark {
     /// Half-open range in `AnnotatedDocument::selection_parts`.
     pub selection_first: u32,
     pub selection_count: u32,
+    /// Native final body position, independently of authored provenance.
+    pub point: Option<AnnotatedDisplayPoint>,
     /// Native tbl column and offset hint, not a final display point.
     pub native_table_position: Option<(u32, u64)>,
     pub name: Option<String>,
     /// Decoded destination, when this native mark represents one link target.
     pub link_target: Option<AnnotatedLinkTarget>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnotatedDisplayPoint {
+    /// One-based final body row and zero-based terminal-column boundary.
+    RowColumn { row: u32, column: u32 },
+    /// Final body end, including an entirely empty surface.
+    DocumentEnd { row_count: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

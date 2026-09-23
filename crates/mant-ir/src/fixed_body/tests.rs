@@ -196,6 +196,23 @@ fn rejects_wrong_join_density_parent_and_point() {
     let mut body = sample_body();
     body.anchors[0].at = DisplayPoint::DocumentEnd { row_count: 0 };
     assert!(body.validate().is_err());
+
+    let mut body = sample_body();
+    body.anchors[0].at = DisplayPoint::RowColumn {
+        row: key(1),
+        column: 2,
+    };
+    body.validate().unwrap(); // A device boundary can lie inside a wide cell.
+    body.anchors[0].at = DisplayPoint::RowColumn {
+        row: key(1),
+        column: 4,
+    };
+    assert!(body.validate().is_err());
+    body.anchors[0].at = DisplayPoint::RowColumn {
+        row: key(2),
+        column: 0,
+    };
+    assert!(body.validate().is_err());
 }
 
 #[test]

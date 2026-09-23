@@ -14624,6 +14624,34 @@
             ]
           },
           {
+            "description": "Native terminal-column boundary in an actual final body row. It remains valid in a blank cell or gap with no run to borrow.",
+            "type": "object",
+            "properties": {
+              "column": {
+                "description": "Zero-based device-column boundary, including row end.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "row-column"
+              },
+              "row": {
+                "description": "One-based final body row key.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "row",
+              "column"
+            ]
+          },
+          {
             "description": "Document end when no run can carry a point, including zero rows.",
             "type": "object",
             "properties": {

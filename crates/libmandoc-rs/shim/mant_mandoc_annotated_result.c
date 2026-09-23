@@ -362,9 +362,16 @@ static int
 valid_marks(const struct mant_annotated_result *result)
 {
 	const struct mant_annotated_mark *mark;
+	struct mant_annotated_display_view display;
 	uint32_t i;
 
 	if ((result->mark_count != 0) != (result->marks != NULL))
+		return 0;
+	if (!mant_annotated_display_finish(result->display, &display))
+		return 0;
+	/* valid_marks() precedes valid_display(): reject an inconsistent
+	 * finished view before resolving a RowColumn against its row array. */
+	if ((display.row_count != 0) != (display.rows != NULL))
 		return 0;
 	for (i = 0; i < result->mark_count; i++) {
 		mark = result->marks + i;
@@ -379,10 +386,34 @@ valid_marks(const struct mant_annotated_result *result)
 		    mark->region_kind > MANT_ANNOTATED_REGION_TABLE_CELL ||
 		    mark->title_region > result->mark_count ||
 		    mark->body_region > result->mark_count ||
-		    (mark->flags & ~(MANT_ANNOTATED_MARK_AUTHORED |
-		    MANT_ANNOTATED_MARK_FINAL_POINT_UNVERIFIED)) != 0 ||
-		    mark->reserved != 0)
+		    (mark->flags & ~MANT_ANNOTATED_MARK_AUTHORED) != 0 ||
+		    mark->reserved != 0 || mark->point_reserved != 0)
 			return 0;
+		switch (mark->point_kind) {
+		case MANT_ANNOTATED_POINT_NONE:
+			if (mark->point_row != 0 || mark->point_column != 0 ||
+			    mark->kind == MANT_ANNOTATED_MARK_ANCHOR)
+				return 0;
+			break;
+		case MANT_ANNOTATED_POINT_ROW_COLUMN:
+			if ((mark->kind != MANT_ANNOTATED_MARK_ANCHOR &&
+			    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
+			    mark->point_row == 0 ||
+			    mark->point_row > display.row_count ||
+			    mark->point_column >
+			    display.rows[mark->point_row - 1].column_count)
+				return 0;
+			break;
+		case MANT_ANNOTATED_POINT_DOCUMENT_END:
+			if ((mark->kind != MANT_ANNOTATED_MARK_ANCHOR &&
+			    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
+			    mark->point_row != display.row_count ||
+			    mark->point_column != 0)
+				return 0;
+			break;
+		default:
+			return 0;
+		}
 		if (mark->kind == MANT_ANNOTATED_MARK_REGION &&
 		    mark->region_kind == MANT_ANNOTATED_REGION_TABLE_CELL) {
 			if (mark->table_position_present != 1 ||
@@ -601,7 +632,7 @@ mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 6;
+	return 7;
 }
 
 uint32_t
@@ -715,6 +746,8 @@ size_t mant_annotated_offsetof_mark_target_a(void)
 { return offsetof(struct mant_annotated_mark, target_a); }
 size_t mant_annotated_offsetof_mark_selection_first(void)
 { return offsetof(struct mant_annotated_mark, selection_first); }
+size_t mant_annotated_offsetof_mark_point_kind(void)
+{ return offsetof(struct mant_annotated_mark, point_kind); }
 size_t mant_annotated_sizeof_selection_part(void)
 { return sizeof(struct mant_annotated_selection_part); }
 size_t mant_annotated_alignof_selection_part(void)

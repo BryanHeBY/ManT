@@ -187,6 +187,14 @@ pub enum DisplayPoint {
         /// Run-relative UTF-8 byte boundary.
         byte: u64,
     },
+    /// Native terminal-column boundary in an actual final body row.  It
+    /// remains valid in a blank cell or gap with no run to borrow.
+    RowColumn {
+        /// One-based final body row key.
+        row: NonZeroU32,
+        /// Zero-based device-column boundary, including row end.
+        column: u32,
+    },
     /// Document end when no run can carry a point, including zero rows.
     DocumentEnd {
         /// Exact number of final physical rows.
@@ -574,6 +582,15 @@ impl DisplaySurface {
                     .map_err(|_| FixedBodyError("display point byte overflow"))?;
                 if !text.is_char_boundary(byte) {
                     return Err(FixedBodyError("display point is not a UTF-8 boundary"));
+                }
+            }
+            DisplayPoint::RowColumn { row, column } => {
+                let row = self
+                    .rows
+                    .get((row.get() - 1) as usize)
+                    .ok_or(FixedBodyError("display point references missing row"))?;
+                if column > row.column_count {
+                    return Err(FixedBodyError("display point exceeds final row columns"));
                 }
             }
             DisplayPoint::DocumentEnd { row_count } => {

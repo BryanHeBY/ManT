@@ -1,0 +1,138 @@
+Subject: observe native tag and item display points
+Upstream-Status: Local embedding (not submitted)
+
+Report read-only terminal positions at the four real term_tag_write()
+calls, after their respective fill/no-fill and vertical-space handling.
+Also report the item start after man(7)/mdoc(7) item pre-handlers perform
+their native spacing, even when an empty item has no NODE_ID.  These are
+unresolved buffer gaps; the embedding must follow the native field and
+post-device result before publishing a zero-width display point.  No
+formatter output or pager tag behavior changes.
+
+--- a/man_term.c
++++ b/man_term.c
+@@ -519,6 +519,7 @@ pre_IP(DECL_ARGS)
+ 	switch (n->type) {
+ 	case ROFFT_BLOCK:
+ 		print_bvspace(p, n, mt->pardist);
++		term_collect_owner_point(p, n);
+ 		return 1;
+ 	case ROFFT_HEAD:
+ 		p->flags |= TERMP_NOBREAK;
+@@ -593,6 +594,7 @@ pre_TP(DECL_ARGS)
+ 	case ROFFT_BLOCK:
+ 		if (n->tok == MAN_TP)
+ 			print_bvspace(p, n, mt->pardist);
++		term_collect_owner_point(p, n);
+ 		return 1;
+ 	case ROFFT_HEAD:
+ 		p->flags |= TERMP_NOBREAK | TERMP_BRTRSP;
+@@ -933,8 +935,10 @@ print_man_node(DECL_ARGS)
+ 		p->flags &= ~TERMP_BRNEVER;
+ 	}
+ 
+-	if (n->flags & NODE_ID)
++	if (n->flags & NODE_ID) {
++		term_collect_tag_point(p, n);
+ 		term_tag_write(n, p->line);
++	}
+ 
+ 	switch (n->type) {
+ 	case ROFFT_TEXT:
+--- a/mdoc_term.c
++++ b/mdoc_term.c
+@@ -341,8 +341,10 @@ print_mdoc_node(DECL_ARGS)
+ 	npair.ppair = pair;
+ 
+ 	if (n->flags & NODE_ID && n->tok != MDOC_Pp &&
+-	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK))
++	    (n->tok != MDOC_It || n->type != ROFFT_BLOCK)) {
++		term_collect_tag_point(p, n);
+ 		term_tag_write(n, p->line);
++	}
+ 
+ 	/*
+ 	 * Keeps only work until the end of a line.  If a keep was
+@@ -655,8 +657,11 @@ termp_it_pre(DECL_ARGS)
+ 
+ 	if (n->type == ROFFT_BLOCK) {
+ 		print_bvspace(p, n->parent->parent, n);
+-		if (n->flags & NODE_ID)
++		term_collect_owner_point(p, n);
++		if (n->flags & NODE_ID) {
++			term_collect_tag_point(p, n);
+ 			term_tag_write(n, p->line);
++		}
+ 		return 1;
+ 	}
+ 
+@@ -1596,8 +1601,10 @@ static int
+ termp_pp_pre(DECL_ARGS)
+ {
+ 	term_vspace(p);
+-	if (n->flags & NODE_ID)
++	if (n->flags & NODE_ID) {
++		term_collect_tag_point(p, n);
+ 		term_tag_write(n, p->line);
++	}
+ 	return 0;
+ }
+ 
+--- a/term.c
++++ b/term.c
+@@ -107,6 +107,35 @@ term_collect_node(struct termp *p, const struct roff_node *n,
+ 	p->collector_node = saved;
+ }
+ 
++/* A tag or item position is a deferred buffer gap, not the location of
++ * NODE_ENTER.  The observer must follow the buffer through term_field(). */
++static void
++term_collect_point(struct termp *p, const struct roff_node *n,
++		enum term_collector_op op)
++{
++	const struct roff_node *saved;
++
++	if (p->collector == NULL)
++		return;
++	saved = p->collector_node;
++	p->collector_node = n;
++	collect_emit(p, op, TERM_COLLECT_ENTER, TERM_COLLECT_NONE,
++	    p->col, p->tcol->col, p->viscol, 0, 0, TERMFONT_NONE);
++	p->collector_node = saved;
++}
++
++void
++term_collect_tag_point(struct termp *p, const struct roff_node *n)
++{
++	term_collect_point(p, n, TERM_COLLECT_TAG_POINT);
++}
++
++void
++term_collect_owner_point(struct termp *p, const struct roff_node *n)
++{
++	term_collect_point(p, n, TERM_COLLECT_OWNER_POINT);
++}
++
+ void
+ term_collect_table_cell(struct termp *p, const struct tbl_dat *cell,
+ 		enum term_collector_phase phase)
+--- a/term.h
++++ b/term.h
+@@ -53,6 +53,8 @@ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
+  */
+ enum term_collector_op {
+ 	TERM_COLLECT_NODE,
++	TERM_COLLECT_TAG_POINT,
++	TERM_COLLECT_OWNER_POINT,
+ 	TERM_COLLECT_TABLE_CELL,
+ 	TERM_COLLECT_TABLE_CELL_POSITION,
+ 	TERM_COLLECT_OUTPUT,
+@@ -225,6 +227,8 @@ void		  term_end(struct termp *);
+ void		  term_setcollector(struct termp *, term_collector, void *);
+ void		  term_collect_node(struct termp *, const struct roff_node *,
+ 			enum term_collector_phase);
++void		  term_collect_tag_point(struct termp *, const struct roff_node *);
++void		  term_collect_owner_point(struct termp *, const struct roff_node *);
+ void		  term_collect_table_cell(struct termp *, const struct tbl_dat *,
+ 			enum term_collector_phase);
+ void		  term_collect_table_cell_position(struct termp *, size_t, size_t);

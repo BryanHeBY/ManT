@@ -112,6 +112,7 @@ size_t mant_annotated_offsetof_mark_name(void);
 size_t mant_annotated_offsetof_mark_table_offset(void);
 size_t mant_annotated_offsetof_mark_target_a(void);
 size_t mant_annotated_offsetof_mark_selection_first(void);
+size_t mant_annotated_offsetof_mark_point_kind(void);
 size_t mant_annotated_sizeof_selection_part(void);
 size_t mant_annotated_alignof_selection_part(void);
 size_t mant_annotated_offsetof_selection_part_end_byte(void);

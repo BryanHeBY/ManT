@@ -519,6 +519,7 @@ pre_IP(DECL_ARGS)
 	switch (n->type) {
 	case ROFFT_BLOCK:
 		print_bvspace(p, n, mt->pardist);
+		term_collect_owner_point(p, n);
 		return 1;
 	case ROFFT_HEAD:
 		p->flags |= TERMP_NOBREAK;
@@ -593,6 +594,7 @@ pre_TP(DECL_ARGS)
 	case ROFFT_BLOCK:
 		if (n->tok == MAN_TP)
 			print_bvspace(p, n, mt->pardist);
+		term_collect_owner_point(p, n);
 		return 1;
 	case ROFFT_HEAD:
 		p->flags |= TERMP_NOBREAK | TERMP_BRTRSP;
@@ -933,8 +935,10 @@ print_man_node(DECL_ARGS)
 		p->flags &= ~TERMP_BRNEVER;
 	}
 
-	if (n->flags & NODE_ID)
+	if (n->flags & NODE_ID) {
+		term_collect_tag_point(p, n);
 		term_tag_write(n, p->line);
+	}
 
 	switch (n->type) {
 	case ROFFT_TEXT:

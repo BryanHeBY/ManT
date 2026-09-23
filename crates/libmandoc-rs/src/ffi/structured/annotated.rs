@@ -6,9 +6,9 @@ use super::{
     FailureView, InputStorage, STATUS_OK, STATUS_REENTRANT, STATUS_RELATION, SliceView, raw_limits,
 };
 use crate::annotated::{
-    AnnotatedDiagnostic, AnnotatedDocument, AnnotatedError, AnnotatedLabel, AnnotatedLinkTarget,
-    AnnotatedMark, AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow, AnnotatedRun,
-    AnnotatedSelectionPart, AnnotatedSource, AnnotatedSpan, AnnotatedTextJoin,
+    AnnotatedDiagnostic, AnnotatedDisplayPoint, AnnotatedDocument, AnnotatedError, AnnotatedLabel,
+    AnnotatedLinkTarget, AnnotatedMark, AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow,
+    AnnotatedRun, AnnotatedSelectionPart, AnnotatedSource, AnnotatedSpan, AnnotatedTextJoin,
     AnnotationCheckState, AnnotationCoverage, AnnotationCoverageCheck, AnnotationCoverageIssue,
     AnnotationDimension, AnnotationIssueReason, AnnotationProducer, AnnotationScope,
 };
@@ -90,6 +90,10 @@ struct MarkView {
     target_b: super::BytesView,
     selection_first: u32,
     selection_count: u32,
+    point_kind: u32,
+    point_row: u32,
+    point_column: u32,
+    point_reserved: u32,
 }
 
 #[repr(C)]
@@ -191,6 +195,7 @@ unsafe extern "C" {
     fn mant_annotated_offsetof_mark_table_offset() -> usize;
     fn mant_annotated_offsetof_mark_target_a() -> usize;
     fn mant_annotated_offsetof_mark_selection_first() -> usize;
+    fn mant_annotated_offsetof_mark_point_kind() -> usize;
     fn mant_annotated_sizeof_selection_part() -> usize;
     fn mant_annotated_alignof_selection_part() -> usize;
     fn mant_annotated_offsetof_selection_part_end_byte() -> usize;
@@ -252,7 +257,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 6
+        mant_annotated_abi_version() == 7
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -276,6 +281,8 @@ fn check_abi() -> bool {
             && mant_annotated_offsetof_mark_target_a() == std::mem::offset_of!(MarkView, target_a)
             && mant_annotated_offsetof_mark_selection_first()
                 == std::mem::offset_of!(MarkView, selection_first)
+            && mant_annotated_offsetof_mark_point_kind()
+                == std::mem::offset_of!(MarkView, point_kind)
             && mant_annotated_sizeof_selection_part() == std::mem::size_of::<SelectionPartView>()
             && mant_annotated_alignof_selection_part() == std::mem::align_of::<SelectionPartView>()
             && mant_annotated_offsetof_selection_part_end_byte()
@@ -854,9 +861,35 @@ fn transfer(
             || mark.owner >= mark.key
             || mark.source as usize > sources.len()
             || mark.reserved != 0
+            || mark.point_reserved != 0
+            || mark.flags & !1 != 0
         {
             return Err(invalid_result());
         }
+        let point = match mark.point_kind {
+            0 if mark.point_row == 0 && mark.point_column == 0 && mark.kind != 4 => None,
+            1 if (mark.kind == 2 || mark.kind == 4) && mark.point_row != 0 => {
+                let row = rows
+                    .get(usize::try_from(mark.point_row - 1).map_err(|_| invalid_result())?)
+                    .ok_or_else(invalid_result)?;
+                if mark.point_column > row.column_count {
+                    return Err(invalid_result());
+                }
+                Some(AnnotatedDisplayPoint::RowColumn {
+                    row: mark.point_row,
+                    column: mark.point_column,
+                })
+            }
+            2 if (mark.kind == 2 || mark.kind == 4)
+                && mark.point_row == view.display.row_count
+                && mark.point_column == 0 =>
+            {
+                Some(AnnotatedDisplayPoint::DocumentEnd {
+                    row_count: mark.point_row,
+                })
+            }
+            _ => return Err(invalid_result()),
+        };
         let native_table_position = if mark.kind == 5 && mark.region_kind == 9 {
             if mark.table_position_present != 1
                 || mark.parent == 0
@@ -895,6 +928,7 @@ fn transfer(
             flags: mark.flags,
             selection_first: mark.selection_first,
             selection_count: mark.selection_count,
+            point,
             native_table_position,
             name: if mark.kind == 4 {
                 Some(copy_string(
