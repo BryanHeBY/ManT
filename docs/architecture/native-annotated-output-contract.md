@@ -270,10 +270,15 @@ fields would otherwise be ignored.
 
 ## Search and response coordinates
 
-`scope=visible` searches validated Flow content or surviving Fixed selections
-with known `TextJoin`s. It never starts by exporting whole-document Markdown.
-One match is one occurrence even if it projects to several runs or rows;
-independent cells and unknown joins block a fabricated cross-boundary match.
+For R02a, `scope=visible` retains Flow/TLDR's current canonical Markdown
+visible-text extractor and matcher, including matches across Flow roots when
+both ends belong to the same renderer owner. A whole match need not fit one
+logical root, and synthetic visible separators must not be assigned a false
+authored address. Matches spanning different owners, or lying only in an
+unpresentable synthetic separator, remain filtered as today. Fixed searches
+surviving selections with known `TextJoin`s instead. One match is one
+occurrence even if it projects to several runs or rows; independent cells and
+unknown joins block a fabricated cross-boundary match.
 `scope=markdown` searches bytes of the exact user-exportable artifact. Flow
 keeps its current exporter; Fixed uses the same safe-length literal fence
 exporter as R03. Fence-only hits are valid Markdown coordinates without a
@@ -289,8 +294,9 @@ Flow, Fixed, TLDR and cross-document scope. Search units have deterministic
 document/selection order; resize, run styling and viewport offset do not
 change pagination. `total` is exact only after a complete scan; scanning,
 counter overflow or required-fragment budget failure is an error, not a
-saturated count or silently truncated match. The Markdown artifact is built
-only for a requested export/Markdown search and then released.
+saturated count or silently truncated match. Fixed builds the Markdown
+artifact only for a requested export/Markdown search and then releases it;
+R02a's Flow/TLDR visible matcher still uses its canonical Markdown render.
 
 Example: a Fixed word split across `r7[5,8)` and `r8[0,3)` with a proven soft
 join returns one visible occurrence and two display slices. A search for the
@@ -334,15 +340,44 @@ search never joins two table cells just because literal bytes are adjacent.
 
 The v0.12 search request keeps existing fields but replaces `SearchHit`
 line groups with occurrence-shaped `matches`. The mandatory coordinate is
-one tagged `location` object. `visible-flow` contains a `flow` or `tldr`
-content address above; `visible-fixed` contains a response-local `unit`
-closed by a bounded content projection plus a unit-relative UTF-8 range;
+one tagged `location` object. Both `visible-flow` and `visible-fixed` contain
+a response-local `unit` and a unit-relative half-open UTF-8 byte range;
 `markdown-artifact` contains export UTF-8 bytes and one-based line/column.
 `displaySlices` are subordinate locations, not a substitute for the
-authoritative range. The bounded projection contains response-local UTF-8
-fragments and explicit join facts; each fragment's original row/run range is
-navigation metadata checked against the snapshot by the producer. A reader
-can reconstruct and validate the matched unit without fetching that snapshot.
+authoritative range. Each visible unit is closed by a bounded, ordered
+projection of exact UTF-8 fragments and explicit join facts. The unit text
+is the concatenation of fragment text and exact join text, with no inferred
+separator. The occurrence range must be nonempty, UTF-8 aligned, within that
+unit, and equal to `matchedText`; a reader can check this without fetching
+the original snapshot. Only retained occurrences require projected units;
+count-only scans and zero-hit pages do not materialize a fake unit or copy
+the whole visible document into the response.
+
+For `visible-flow`, each fragment's source is tagged `flow` with a complete
+`ContentLocation` and root-relative byte range, `tldr` with its own path and
+range, or `render-derived` for visible bytes whose exact Flow/TLDR origin
+cannot be proved. Flow and TLDR source ranges must resolve within the
+response-local projection; a Markdown parse transformation or synthetic
+block separator must never masquerade as authored root bytes. Exact
+separator text between fragments is represented once by a
+`render-separator` join with its exact UTF-8 `text`, not by a duplicate
+fragment and not by Fixed's ASCII-space-only `AuthoredSeparator`.
+`render-derived` fragments cover transformations within a rendered root.
+A same-owner match across Flow roots may therefore occupy one unit with
+several typed fragments and an exact render-separator join. For the Flow
+source `# Demo\n\nalpha\n\nbeta\n`, the unit below validates the single
+`alpha\nbeta` occurrence at `[0,10)`; the canonical visible extractor has
+already collapsed the paragraph boundary to one newline:
+
+```json
+{"contentProjection":{"fragments":[{"key":1,"text":"alpha","source":{"kind":"flow","location":{"kind":"content","sections":[],"blocks":[{"kind":"block","index":0}],"root":{"kind":"inlines"},"path":[0]},"startByte":0,"endByte":5}},{"key":2,"text":"beta","source":{"kind":"flow","location":{"kind":"content","sections":[],"blocks":[{"kind":"block","index":1}],"root":{"kind":"inlines"},"path":[0]},"startByte":0,"endByte":4}}],"units":[{"key":1,"fragments":[1,2],"joins":[{"kind":"render-separator","text":"\n"}]}]},"location":{"kind":"visible-flow","unit":1,"startByte":0,"endByte":10},"matchedText":"alpha\nbeta"}
+```
+
+The current matcher still rejects a match that
+crosses the TLDR-to-manual owner boundary; the wire's capacity to describe
+both source kinds does not authorize a new match. For `visible-fixed`, each
+fragment's original row/run range is navigation metadata checked against
+the snapshot by the producer, and joins retain the native `TextJoin` rules.
 A complete response also carries `label`, optional source/meta context,
 `semanticsComplete`, bounded coverage diagnostics and an exact
 `coverageDetailsOmitted` count. The following
@@ -358,8 +393,8 @@ values refer to separate miniature snapshots, not to the `Demo` artifact:
 
 The old `SearchHit.occurrences` grouping, three nullable occurrence
 coordinates (`root`/`logical`/`markdown`) and line-group ordinal are rejected,
-not reinterpreted. A TLDR-only visible hit has a `visible-flow` location
-containing a `tldr` address and no primary `SourceContext`. A Markdown-only
+not reinterpreted. A TLDR-only visible hit has a `visible-flow` unit with
+`tldr` fragment sources and no primary `SourceContext`. A Markdown-only
 hit on the `Demo` artifact's opening fence would have an export byte range
 and zero `displaySlices`; the example above illustrates its shape, not the
 literal offset in `Demo`. A partially overprinted `--help` head whose final
@@ -391,6 +426,9 @@ still paginates by the old line-group unit. Either migrate those entry points
 in the same runnable unit or keep the new wire private until their atomic
 switch; R02b's Fixed sample then uses the same count core. R00 approves an
 unpublished wire rewrite, not two concurrent v0.12 contracts.
+The Flow/TLDR visible-unit closure above is a P0 contract-evidence correction
+for the existing same-owner matcher, not a claim that the new search DTO or
+projection has been connected in product code.
 
 ## Stage gates, module and patch ownership
 
