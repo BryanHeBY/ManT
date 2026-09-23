@@ -879,6 +879,45 @@ mod tests {
     use crate::{ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Provenance};
 
     #[test]
+    fn wide_nested_link_intervals_validate_and_snapshot_with_linear_work() {
+        const LINKS: usize = 8_000;
+        let mut builder = ContentStoreBuilder::new();
+        let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);
+        let root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+        let links = (0..LINKS)
+            .map(|_| {
+                builder.push_link(
+                    owner,
+                    crate::LinkTarget::External {
+                        uri: "https://example.test".into(),
+                    },
+                    None,
+                    Provenance::Unknown,
+                )
+            })
+            .collect::<Vec<_>>();
+        for link in links.iter().chain(links.iter().rev()) {
+            let _ = builder.push_text(
+                root,
+                "x".into(),
+                None,
+                ContentStyle::default(),
+                None,
+                Some(*link),
+                Provenance::Unknown,
+            );
+        }
+        let source = builder.finish();
+        crate::validate_content_store(&source).unwrap();
+        let mut projection = ContentProjectionBuilder::new(&source);
+        projection.include_root(root).unwrap();
+        let (snapshot, _) = projection.snapshot().unwrap();
+        crate::validate_content_store(&snapshot.content_store).unwrap();
+        assert_eq!(snapshot.content_store.links.len(), LINKS);
+        assert!(projection.snapshot_work < MAX_PROJECTION_STEPS);
+    }
+
+    #[test]
     fn selecting_one_root_does_not_copy_unrelated_siblings_of_its_owner() {
         let mut builder = ContentStoreBuilder::new();
         let owner = builder.push_owner(ContentOwnerKind::Content, Provenance::Unknown);

@@ -194,6 +194,50 @@ fn unrelated_visible_gaps_still_fail() {
 }
 
 #[test]
+fn nested_links_must_fit_the_global_bounds_of_each_same_root_gap() {
+    let mut builder = ContentStoreBuilder::new();
+    let (owner, first_root) = owner_and_root(&mut builder);
+    let other_root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let outer = builder.push_link(
+        owner,
+        LinkTarget::External {
+            uri: "https://outer.test".into(),
+        },
+        None,
+        Provenance::Unknown,
+    );
+    let inner = builder.push_link(
+        owner,
+        LinkTarget::External {
+            uri: "https://inner.test".into(),
+        },
+        None,
+        Provenance::Unknown,
+    );
+    // The inner occurrence starts and ends outside the two outer atoms in
+    // global execution order, although only one inner atom lies between
+    // those atoms in first_root. A root-only interval check would miss it.
+    for (root, link) in [
+        (other_root, inner),
+        (first_root, outer),
+        (first_root, inner),
+        (first_root, outer),
+        (other_root, inner),
+    ] {
+        let _ = builder.push_text(
+            root,
+            "x".into(),
+            None,
+            ContentStyle::default(),
+            None,
+            Some(link),
+            Provenance::Unknown,
+        );
+    }
+    assert!(validate_content_store(builder.content_store()).is_err());
+}
+
+#[test]
 fn detaching_a_link_prevalidates_every_atom_and_keeps_dense_identity() {
     let mut builder = ContentStoreBuilder::new();
     let (owner, root) = owner_and_root(&mut builder);

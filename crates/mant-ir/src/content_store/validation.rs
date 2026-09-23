@@ -1,8 +1,11 @@
-use std::{collections::HashMap, error::Error, fmt};
+use std::{error::Error, fmt};
 
 use crate::LinkTarget;
 
-use super::{ContentAtomKind, ContentStore, LinkLabelPart, PointBoundary};
+use super::{
+    ContentAtomKey, ContentAtomKind, ContentRootKey, ContentStore, LinkLabelPart,
+    LinkOccurrenceKey, PointBoundary,
+};
 
 /// Structural error in a document or response-local content store.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -232,32 +235,11 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
     }
 
     let mut linked_parts = vec![0_u8; store.atoms.len()];
-    let mut root_positions = vec![usize::MAX; store.atoms.len()];
-    for root in &store.roots {
-        for (position, atom) in root.atoms.iter().enumerate() {
-            root_positions[atom.index().expect("validated atom key fits usize")] = position;
-        }
-    }
-    let link_bounds = store
-        .links
-        .iter()
-        .map(|link| {
-            let atom = |part: &LinkLabelPart| match part {
-                LinkLabelPart::Content { content } => content.atom,
-                LinkLabelPart::HardBreak { atom } => *atom,
-            };
-            link.label
-                .first()
-                .zip(link.label.last())
-                .map(|(first, last)| (atom(first), atom(last)))
-        })
-        .collect::<Vec<_>>();
     for link in &store.links {
         if store.owner(link.owner).is_none() {
             return invalid("link occurrence references an unknown owner");
         }
         let mut previous = None;
-        let mut previous_by_root = HashMap::new();
         for part in &link.label {
             let atom = match part {
                 LinkLabelPart::Content { content } => {
@@ -296,40 +278,6 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
             {
                 return invalid("link label atoms must follow retained execution order");
             }
-            let current_index =
-                root_positions[atom.index().expect("validated atom key fits usize")];
-            if let Some((previous_index, previous_key)) =
-                previous_by_root.insert(record.root, (current_index, atom))
-            {
-                let root = store.root(record.root).expect("label root resolved");
-                if previous_index >= current_index
-                    || root.atoms[previous_index + 1..current_index]
-                        .iter()
-                        .any(|key| {
-                            let Some(gap) = store.atom(*key) else {
-                                return true;
-                            };
-                            if matches!(gap.kind, ContentAtomKind::BreakOpportunity {}) {
-                                return false;
-                            }
-                            let Some(nested) = gap.link else {
-                                return true;
-                            };
-                            let Some((first, last)) = nested
-                                .index()
-                                .and_then(|index| link_bounds.get(index))
-                                .and_then(|bounds| *bounds)
-                            else {
-                                return true;
-                            };
-                            nested == link.key || first <= previous_key || last >= atom
-                        })
-                {
-                    return invalid(
-                        "same-root link label parts may be separated only by nested links or break opportunities",
-                    );
-                }
-            }
             previous = Some(atom);
         }
     }
@@ -338,6 +286,97 @@ pub fn validate_content_store(store: &ContentStore) -> Result<(), ContentStoreEr
         (atom.link.is_some() && count != 1) || (atom.link.is_none() && count != 0)
     }) {
         return invalid("linked atoms and occurrence label parts must correspond exactly once");
+    }
+    validate_link_nesting(store)
+}
+
+fn validate_link_nesting(store: &ContentStore) -> Result<(), ContentStoreError> {
+    struct ActiveLink {
+        link: LinkOccurrenceKey,
+        end: usize,
+        previous: ContentAtomKey,
+        nested_bounds: Option<(ContentAtomKey, ContentAtomKey)>,
+    }
+
+    let mut global_bounds: Vec<Option<(ContentAtomKey, ContentAtomKey)>> =
+        vec![None; store.links.len()];
+    for atom in &store.atoms {
+        if let Some(link) = atom.link {
+            let slot = &mut global_bounds[link.index().expect("validated link key")];
+            if let Some((_, last)) = slot {
+                *last = atom.key;
+            } else {
+                *slot = Some((atom.key, atom.key));
+            }
+        }
+    }
+    let mut bounds: Vec<Option<(ContentRootKey, usize, usize)>> = vec![None; store.links.len()];
+    let mut active: Vec<ActiveLink> = Vec::new();
+    for root in &store.roots {
+        // Compute per-root intervals once. Dense link keys make the scratch
+        // table reusable across roots without clearing all links each time.
+        for (position, key) in root.atoms.iter().enumerate() {
+            if let Some(link) = store.atom(*key).expect("validated root atom").link {
+                let slot = &mut bounds[link.index().expect("validated link key")];
+                if let Some((seen_root, _, last)) = slot
+                    && *seen_root == root.key
+                {
+                    *last = position;
+                } else {
+                    *slot = Some((root.key, position, position));
+                }
+            }
+        }
+        active.clear();
+        for (position, key) in root.atoms.iter().enumerate() {
+            let atom = store.atom(*key).expect("validated root atom");
+            if matches!(atom.kind, ContentAtomKind::BreakOpportunity {}) {
+                continue;
+            }
+            match atom.link {
+                Some(link) if active.last().is_some_and(|frame| frame.link == link) => {
+                    let frame = active.last_mut().expect("matching frame exists");
+                    if let Some((first, last)) = frame.nested_bounds.take()
+                        && (first <= frame.previous || last >= atom.key)
+                    {
+                        return invalid("nested link bounds cross the enclosing label gap");
+                    }
+                    frame.previous = atom.key;
+                }
+                Some(link) => {
+                    let (_, first, last) = bounds[link.index().expect("validated link key")]
+                        .expect("link atom has interval");
+                    if first != position || active.last().is_some_and(|frame| last >= frame.end) {
+                        return invalid("same-root link intervals must be properly nested");
+                    }
+                    active.push(ActiveLink {
+                        link,
+                        end: last,
+                        previous: atom.key,
+                        nested_bounds: None,
+                    });
+                }
+                None if !active.is_empty() => {
+                    return invalid(
+                        "link occurrence is interrupted by unrelated visible content within one root",
+                    );
+                }
+                None => {}
+            }
+            if let Some(finished) = active.pop_if(|frame| frame.end == position)
+                && let Some(parent) = active.last_mut()
+            {
+                let (first, last) = global_bounds[finished.link.index().unwrap()]
+                    .expect("active link has global bounds");
+                parent.nested_bounds = Some(
+                    parent
+                        .nested_bounds
+                        .map_or((first, last), |(minimum, maximum)| {
+                            (minimum.min(first), maximum.max(last))
+                        }),
+                );
+            }
+        }
     }
     Ok(())
 }

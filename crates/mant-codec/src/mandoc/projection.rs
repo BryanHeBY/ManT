@@ -5,7 +5,7 @@
 //! structured document remains the sole body owner and every projected leaf
 //! is only a typed key into that document.
 
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 
 use libmandoc_rs::structured::{
     self, ContentAtomKey, ContentAtomKind, ContentOwnerKind, ContentRootKey, ContentRootKind,
@@ -545,29 +545,6 @@ fn validate_links(
     document: &StructuredDocument,
     roots: &[NativeProseRoot],
 ) -> Result<(), NativeProjectionError> {
-    let mut link_bounds = vec![None; document.links().len()];
-    for link in document.links() {
-        let label = document
-            .link_label(link)
-            .ok_or(NativeProjectionError::InvalidRelation(
-                "link label range is invalid",
-            ))?;
-        let part_atom = |part: &structured::LinkLabelPart| match part {
-            structured::LinkLabelPart::Content(reference) => reference.atom(),
-            structured::LinkLabelPart::HardBreak(atom) => *atom,
-        };
-        let first = label.first().map(part_atom);
-        let last = label.last().map(part_atom);
-        let index = one_based_index(link.key().get(), "link occurrence key")?;
-        let slot = link_bounds
-            .get_mut(index)
-            .ok_or(NativeProjectionError::InvalidRelation(
-                "link occurrence key exceeds link table",
-            ))?;
-        *slot = first
-            .zip(last)
-            .map(|(first, last)| (first.get(), last.get()));
-    }
     for link in document.links() {
         provenance_key(document, link.provenance())?;
         let label = document
@@ -580,7 +557,6 @@ fn validate_links(
                 "link label must not be empty",
             ));
         }
-        let mut previous_by_root = HashMap::new();
         for part in label {
             let atom_key = match part {
                 structured::LinkLabelPart::Content(reference) => reference.atom(),
@@ -606,72 +582,127 @@ fn validate_links(
                     "link label does not resolve to its linked owner atom",
                 ));
             }
-            if let Some((previous, previous_key)) =
-                previous_by_root.insert(atom.root(), (atom.ordinal(), atom_key))
-            {
-                validate_link_gap(
-                    document,
-                    roots,
-                    &link_bounds,
-                    link.key(),
-                    (previous, previous_key),
-                    (atom.ordinal(), atom_key),
-                    atom.root(),
-                )?;
+        }
+    }
+    validate_nested_links(document, roots)
+}
+
+fn global_link_bounds(
+    document: &StructuredDocument,
+) -> Result<Vec<Option<(ContentAtomKey, ContentAtomKey)>>, NativeProjectionError> {
+    let mut global_bounds: Vec<Option<(ContentAtomKey, ContentAtomKey)>> =
+        vec![None; document.links().len()];
+    for atom in document.content_atoms() {
+        if let Some(link) = atom.link() {
+            let index = one_based_index(link.get(), "link occurrence key")?;
+            let slot =
+                global_bounds
+                    .get_mut(index)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "unknown atom link occurrence",
+                    ))?;
+            if let Some((_, last)) = slot {
+                *last = atom.key();
+            } else {
+                *slot = Some((atom.key(), atom.key()));
             }
         }
     }
-    Ok(())
+    Ok(global_bounds)
 }
 
-fn validate_link_gap(
+fn validate_nested_links(
     document: &StructuredDocument,
     roots: &[NativeProseRoot],
-    link_bounds: &[Option<(u32, u32)>],
-    link: LinkOccurrenceKey,
-    previous: (u32, ContentAtomKey),
-    current: (u32, ContentAtomKey),
-    root_key: ContentRootKey,
 ) -> Result<(), NativeProjectionError> {
-    let root = roots
-        .get(one_based_index(root_key.get(), "link label root key")?)
-        .ok_or(NativeProjectionError::InvalidRelation(
-            "link label references an unknown root",
-        ))?;
-    let gap_start = usize::try_from(previous.0)
-        .ok()
-        .and_then(|ordinal| ordinal.checked_add(1));
-    let gap_end = usize::try_from(current.0).ok();
-    let gap = gap_start
-        .zip(gap_end)
-        .and_then(|(start, end)| (start <= end).then_some(start..end))
-        .and_then(|range| root.leaves.get(range))
-        .ok_or(NativeProjectionError::InvalidRelation(
-            "link label atom order is invalid within its root",
-        ))?;
-    if gap.iter().any(|leaf| {
-        let record = document
-            .content_atom(leaf.atom())
-            .expect("projected roots contain validated native atoms");
-        if matches!(record.kind(), structured::ContentAtomKind::BreakOpportunity) {
-            return false;
+    struct ActiveLink {
+        link: LinkOccurrenceKey,
+        end: usize,
+        previous: ContentAtomKey,
+        nested_bounds: Option<(ContentAtomKey, ContentAtomKey)>,
+    }
+
+    let global_bounds = global_link_bounds(document)?;
+    let mut bounds: Vec<Option<(ContentRootKey, usize, usize)>> =
+        vec![None; document.links().len()];
+    let mut active: Vec<ActiveLink> = Vec::new();
+    for root in roots {
+        for (position, leaf) in root.leaves.iter().enumerate() {
+            let atom = document
+                .content_atom(leaf.atom())
+                .expect("projected roots contain validated native atoms");
+            if let Some(link) = atom.link() {
+                let index = one_based_index(link.get(), "link occurrence key")?;
+                let slot = bounds
+                    .get_mut(index)
+                    .ok_or(NativeProjectionError::InvalidRelation(
+                        "unknown atom link occurrence",
+                    ))?;
+                if let Some((seen_root, _, last)) = slot
+                    && *seen_root == root.key
+                {
+                    *last = position;
+                } else {
+                    *slot = Some((root.key, position, position));
+                }
+            }
         }
-        let Some(nested) = record.link() else {
-            return true;
-        };
-        let Some((first, last)) = nested
-            .get()
-            .checked_sub(1)
-            .and_then(|index| link_bounds.get(index as usize))
-            .and_then(|bounds| *bounds)
-        else {
-            return true;
-        };
-        nested == link || first <= previous.1.get() || last >= current.1.get()
-    }) {
-        return Err(NativeProjectionError::InvalidRelation(
-            "link occurrence is interrupted by unrelated visible content within one root",
-        ));
+        active.clear();
+        for (position, leaf) in root.leaves.iter().enumerate() {
+            let atom = document
+                .content_atom(leaf.atom())
+                .expect("projected roots contain validated native atoms");
+            if matches!(atom.kind(), structured::ContentAtomKind::BreakOpportunity) {
+                continue;
+            }
+            match atom.link() {
+                Some(link) if active.last().is_some_and(|frame| frame.link == link) => {
+                    let frame = active.last_mut().expect("matching frame exists");
+                    if let Some((first, last)) = frame.nested_bounds.take()
+                        && (first <= frame.previous || last >= atom.key())
+                    {
+                        return Err(NativeProjectionError::InvalidRelation(
+                            "nested link bounds cross the enclosing label gap",
+                        ));
+                    }
+                    frame.previous = atom.key();
+                }
+                Some(link) => {
+                    let index = one_based_index(link.get(), "link occurrence key")?;
+                    let (_, first, last) = bounds[index].expect("link atom has interval");
+                    if first != position || active.last().is_some_and(|frame| last >= frame.end) {
+                        return Err(NativeProjectionError::InvalidRelation(
+                            "same-root link intervals must be properly nested",
+                        ));
+                    }
+                    active.push(ActiveLink {
+                        link,
+                        end: last,
+                        previous: atom.key(),
+                        nested_bounds: None,
+                    });
+                }
+                None if !active.is_empty() => {
+                    return Err(NativeProjectionError::InvalidRelation(
+                        "link occurrence is interrupted by unrelated visible content within one root",
+                    ));
+                }
+                None => {}
+            }
+            if let Some(finished) = active.pop_if(|frame| frame.end == position)
+                && let Some(parent) = active.last_mut()
+            {
+                let index = one_based_index(finished.link.get(), "link occurrence key")?;
+                let (first, last) = global_bounds[index].expect("active link has global bounds");
+                parent.nested_bounds = Some(
+                    parent
+                        .nested_bounds
+                        .map_or((first, last), |(minimum, maximum)| {
+                            (minimum.min(first), maximum.max(last))
+                        }),
+                );
+            }
+        }
     }
     Ok(())
 }
