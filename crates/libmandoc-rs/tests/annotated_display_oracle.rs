@@ -49,6 +49,27 @@ fn auto_format_uses_the_native_parser_choice_for_man_and_mdoc() {
 }
 
 #[test]
+#[cfg(feature = "render")]
+fn collector_preserves_patched_verbatim_font_wrap() {
+    // The exact input was run through the fixed CVS reference first. In
+    // pristine mandoc.c::mandoc_font, \f[V] is not a recognized font; the
+    // approved Pandoc-font patch accepts it, so roff.c continues scanning
+    // later hyphens and term.c::term_fill may break at that native point.
+    let source = b".TH T 1\n.SH DESCRIPTION\nNote that if you are changing an encryption password using\n\\f[V]--password-command\\f[R] then this will be called once to decrypt\nthe config using the old password and then again to read the new\npassword to re-encrypt the config.\n";
+    let mut bundle = SourceBundle::new();
+    bundle.insert("t.1", source.to_vec()).unwrap();
+    let raw = libmandoc_rs::Renderer::new(libmandoc_rs::RenderFormat::Utf8)
+        .render_bundle("t.1", &bundle)
+        .unwrap();
+    let annotated = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle, InputFormat::Auto)
+        .unwrap();
+    let line = "     Note that if you are changing an encryption password using --password-";
+    assert!(raw.output.lines().any(|actual| actual == line));
+    assert!(surface(&annotated).lines().any(|actual| actual == line));
+}
+
+#[test]
 fn auto_format_reports_the_resolved_macroset_for_includes() {
     // Pinned read.c::choose_parser selects .TH in the primary input, and
     // mparse_result returns one macroset for the parser and its .so input.
