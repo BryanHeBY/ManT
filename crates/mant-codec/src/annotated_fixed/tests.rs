@@ -864,6 +864,14 @@ fn malformed_public_mark_role_flags_are_rejected_before_projection() {
     assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
     let mut owner = malformed_anchor(1, 0);
     owner.kind = 2;
+    owner.flags = 256; // Lexical eligibility still needs a definition owner.
+    assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
+    let mut owner = malformed_anchor(1, 0);
+    owner.kind = 2;
+    owner.flags = 16 | 256 | 32; // A head cannot claim lexical and Fl roles.
+    assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
+    let mut owner = malformed_anchor(1, 0);
+    owner.kind = 2;
     owner.flags = 16; // An operand cannot exist without its native role.
     owner.name = Some("-a".to_owned());
     assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
@@ -981,6 +989,102 @@ fn native_head_roles_promote_only_complete_visible_names() {
         fixed.owners[2].entry.as_ref().unwrap().kind,
         EntryKind::Term
     );
+    assert!(validate_document(&document).is_empty());
+}
+
+#[test]
+fn complete_man_tp_option_uses_shared_lexical_rule_without_promoting_other_terms() {
+    // This exact input first ran pinned CVS -Tutf8. man_macro.c::blk_imp
+    // creates distinct TP HEAD/BODY scopes; man_term.c::pre_TP/post_TP
+    // prints the full head before the body, using term.c::term_word/flushln.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --save\nbody\n.TP\n.B {+\nbody\n.TP\n.B FILE\nbody\n.TP\n.B -1\nnumber body\n.TP\n.B --save=FILE\nassignment body\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!("annotated output must use Fixed");
+    };
+    assert_eq!(fixed.owners.len(), 5);
+    assert!(
+        fixed
+            .owners
+            .iter()
+            .all(|owner| owner.head_role == Some(OwnerHeadRole::Lexical))
+    );
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["--save"]);
+    assert_eq!(
+        fixed.owners[0].entry.as_ref().unwrap().forms,
+        [fixed.owners[0].head.clone()]
+    );
+    assert_eq!(
+        fixed.owners[0].entry.as_ref().unwrap().kind,
+        EntryKind::Parameter {
+            parameter_kind: ParameterKind::Option
+        }
+    );
+    for owner in &fixed.owners[1..] {
+        assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+    }
+    assert!(validate_document(&document).is_empty());
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let result = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "--save".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(result.total, 1);
+    assert_eq!(result.evidence[0].entry.as_ref().unwrap().names, ["--save"]);
+    result.validate_references().unwrap();
+}
+
+#[test]
+fn emphasized_native_heads_do_not_gain_lexical_option_eligibility() {
+    // Both exact inputs first ran pinned CVS -Tutf8. man_term.c::pre_I and
+    // mdoc_term.c::termp_under_pre select underline; those presentation
+    // choices are not the conservative sole-B hint on a man TP/TQ head.
+    let man = b".TH T 1\n.SH OPTIONS\n.TP\n.B --save\nbody\n.TP\n.I --save\nitalic body\n";
+    let document = project_annotated_manual("t.1", &bundle(man), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Lexical));
+    assert_eq!(fixed.owners[1].head_role, None);
+    assert_eq!(
+        fixed.owners[1].entry.as_ref().unwrap().kind,
+        EntryKind::Term
+    );
+    assert!(validate_document(&document).is_empty());
+
+    // This exact input also ran pinned CVS. term.c::term_word executes the
+    // embedded font escape after man_term.c::pre_B, so the final head is
+    // underlined rather than a plain bold declaration candidate.
+    let escaped = b".TH T 1\n.SH OPTIONS\n.TP\n.B \\fI--save\\fP\nbody\n";
+    let document = project_annotated_manual("t.1", &bundle(escaped), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    assert_eq!(fixed.owners[0].head_role, None);
+    assert_eq!(
+        fixed.owners[0].entry.as_ref().unwrap().kind,
+        EntryKind::Term
+    );
+    assert!(validate_document(&document).is_empty());
+
+    let mdoc = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Ar -a\narg body\n.It Em --save\nem body\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(mdoc), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    for owner in &fixed.owners {
+        assert_eq!(owner.head_role, None);
+        assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+    }
     assert!(validate_document(&document).is_empty());
 }
 

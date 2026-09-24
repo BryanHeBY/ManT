@@ -1001,6 +1001,27 @@ owner_head_role(const struct roff_node *owner,
 	return 0;
 }
 
+/* man_macro.c::blk_imp keeps TP/TQ HEAD distinct.  man_term.c::pre_B and
+ * pre_I select different presentation fonts, not semantic kinds.  This
+ * deliberately conservative candidate hint accepts one plain B word only;
+ * Rust still checks the complete final spelling before classification. */
+static int
+owner_lexical_head(const struct roff_node *owner)
+{
+	const struct roff_node *head, *first;
+
+	if (owner->tok != MAN_TP && owner->tok != MAN_TQ)
+		return 0;
+	head = owner->head;
+	first = head == NULL ? NULL : head->child;
+	return first != NULL && first->tok == MAN_B &&
+	    first->next == NULL && first->child != NULL &&
+	    first->child->type == ROFFT_TEXT &&
+	    first->child->string != NULL &&
+	    strchr(first->child->string, '\\') == NULL &&
+	    first->child->next == NULL;
+}
+
 /* mdoc_term.c::termp_fl_pre emits its own dash before the Fl operand;
  * termp_ns_pre may then glue a different macro's glyphs to it.  Preserve a
  * deliberately simple authored operand while the AST lives.  Rust must still
@@ -1172,6 +1193,8 @@ push_node(struct mant_annotated_collector *collector,
 		if (definition) {
 			if (node->tok == MDOC_It)
 				head_role = owner_head_role(node, &role_node);
+			else if (owner_lexical_head(node))
+				head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
 			collector->marks[key - 1].flags |=
 			    MANT_ANNOTATED_MARK_DEFINITION |
 			    head_role;

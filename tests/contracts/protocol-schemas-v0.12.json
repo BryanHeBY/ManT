@@ -16818,6 +16818,11 @@
             "description": "An mdoc `Ic` or `Cm` literal command head.",
             "type": "string",
             "const": "literal"
+          },
+          {
+            "description": "A native declaration head whose authored syntax permits conservative\nwhole-token lexical classification; no name is implied by this hint.",
+            "type": "string",
+            "const": "lexical"
           }
         ]
       },

@@ -260,6 +260,9 @@ pub enum OwnerHeadRole {
     Environment,
     /// An mdoc `Ic` or `Cm` literal command head.
     Literal,
+    /// A native declaration head whose authored syntax permits conservative
+    /// whole-token lexical classification; no name is implied by this hint.
+    Lexical,
 }
 
 /// One native candidate owner, not a fabricated semantic entry.
@@ -337,6 +340,17 @@ impl FixedBody {
         let binding_matches = match (owner.head_role, entry.kind, binding.evidence) {
             (_, EntryKind::Term, EntryNameEvidence::Lexical) => {
                 only_name == &form
+                    && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
+            }
+            (
+                Some(OwnerHeadRole::Lexical),
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                EntryNameEvidence::Lexical,
+            ) => {
+                only_name == &form
+                    && crate::lexical_option_token(only_name)
                     && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
             }
             (

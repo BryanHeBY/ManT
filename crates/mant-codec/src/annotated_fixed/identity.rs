@@ -370,10 +370,10 @@ impl KeyMap {
             // Public owned results can be constructed without crossing the
             // FFI checker. Keep role evidence closed at this boundary too.
             let allowed_flags = match mark.kind {
-                1 => 0b1001,      // authored heading and subsection
-                2 => 0b1111_0001, // authored owner, definition and one head role
-                4 => 0b0101,      // authored anchor and manual target
-                3 | 5 => 0b0001,  // authored link or region
+                1 => 0b1001,        // authored heading and subsection
+                2 => 0b1_1111_0001, // authored owner, definition and one head role
+                4 => 0b0101,        // authored anchor and manual target
+                3 | 5 => 0b0001,    // authored link or region
                 _ => unreachable!(),
             };
             if mark.flags & !allowed_flags != 0 {
@@ -382,8 +382,8 @@ impl KeyMap {
                 ));
             }
             if mark.kind == 2
-                && mark.flags & 0b1110_0000 != 0
-                && (mark.flags & 16 == 0 || (mark.flags & 0b1110_0000).count_ones() != 1)
+                && mark.flags & 0b1_1110_0000 != 0
+                && (mark.flags & 16 == 0 || (mark.flags & 0b1_1110_0000).count_ones() != 1)
             {
                 return Err(AnnotatedProjectionError::Relation(
                     "native owner has invalid head role flags",

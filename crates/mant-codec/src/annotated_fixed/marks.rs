@@ -149,11 +149,12 @@ pub(super) fn project_owner(
         } else {
             OwnerRole::Other
         },
-        head_role: match mark.flags & 0b1110_0000 {
+        head_role: match mark.flags & 0b1_1110_0000 {
             0 => None,
             32 => Some(OwnerHeadRole::Option),
             64 => Some(OwnerHeadRole::Environment),
             128 => Some(OwnerHeadRole::Literal),
+            256 => Some(OwnerHeadRole::Lexical),
             _ => {
                 return Err(AnnotatedProjectionError::Relation(
                     "invalid native head role",

@@ -250,6 +250,19 @@ fn native_head_identity(
     owner: &OwnerMark,
     form: &str,
 ) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
+    // man_macro.c::blk_imp establishes a real TP/TQ head even without mdoc
+    // markup. A complete surviving token can use the same source-neutral
+    // option spelling rule; an argument suffix or incomplete join cannot.
+    if owner.head_role == Some(OwnerHeadRole::Lexical) && mant_ir::lexical_option_token(form) {
+        return Some((
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            },
+            EntryNameEvidence::Lexical,
+            form.to_owned(),
+            owner.head.clone(),
+        ));
+    }
     let leading = form.trim_start();
     let start = form.len() - leading.len();
     let role_prefix = owner.head_role_prefix.as_deref()?;
@@ -271,7 +284,7 @@ fn native_head_identity(
             EntryKind::EnvironmentVariable,
             crate::definitions::environment_variable_alias(role_prefix)?,
         ),
-        OwnerHeadRole::Literal => return None,
+        OwnerHeadRole::Literal | OwnerHeadRole::Lexical => return None,
     };
     let end = start.checked_add(name.len())?;
     let occurrence = fixed.selection_subrange(&owner.head, start..end)?;

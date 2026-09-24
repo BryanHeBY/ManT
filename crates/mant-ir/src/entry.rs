@@ -23,7 +23,8 @@ pub(crate) use relations::relation_issues;
 pub use relations::{EntryRelationIssue, EntryRelationIssueKind, entry_relation_issues};
 pub use syntax::{
     contains_additional_environment_assignment, environment_variable_alias,
-    environment_variable_body, is_option_name_body, native_option_token, option_prefix,
+    environment_variable_body, is_option_name_body, lexical_option_token, native_option_token,
+    option_prefix,
 };
 pub use view::EntryOwnerView;
 pub use walk::visit_child_entries;

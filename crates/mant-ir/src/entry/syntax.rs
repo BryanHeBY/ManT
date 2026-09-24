@@ -23,6 +23,23 @@ pub fn option_prefix(token: &str) -> Option<&str> {
     is_option_name_body(body).then_some(candidate)
 }
 
+/// A complete ordinary option token in an independently established
+/// declaration head. Unlike an authored `Fl` role, spelling alone does not
+/// license a negative number or a token with an attached argument.
+#[must_use]
+pub fn lexical_option_token(token: &str) -> bool {
+    if token.starts_with('-')
+        && !token.starts_with("--")
+        && token
+            .chars()
+            .nth(1)
+            .is_some_and(|character| character.is_ascii_digit())
+    {
+        return false;
+    }
+    option_prefix(token) == Some(token)
+}
+
 /// Complete spelling licensed by an independently proved native option head.
 /// The extra two-character case preserves a single punctuation operand.
 #[must_use]

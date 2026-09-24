@@ -565,3 +565,58 @@ fn fixed_partial_name_requires_native_prefix_and_exact_surviving_slice() {
     facts.name_bindings[0].occurrences = facts.forms.clone();
     assert!(forged.validate().is_err());
 }
+
+#[test]
+fn lexical_option_facts_require_the_native_role_and_complete_head_binding() {
+    let mut body = body_with_run("--save", 6);
+    body.surface.runs[0].label.owner = Some(key(1));
+    let head = selection(&[(0, 6)], Vec::new());
+    body.owners.push(OwnerMark {
+        key: key(1),
+        id: NodeId::from("lexical-option"),
+        parent: None,
+        section: None,
+        role: OwnerRole::Definition,
+        head_role: Some(OwnerHeadRole::Lexical),
+        head_role_prefix: None,
+        entry: Some(EntryFacts {
+            id: NodeId::from("lexical-option"),
+            kind: EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            },
+            case: NameCase::Sensitive,
+            names: vec!["--save".to_owned()],
+            forms: vec![head.clone()],
+            name_bindings: vec![crate::EntryNameBinding {
+                name: 0,
+                occurrences: vec![head.clone()],
+                evidence: EntryNameEvidence::Lexical,
+            }],
+            alias_groups: Vec::new(),
+            alias_of: None,
+            value_domain: None,
+        }),
+        head,
+        direct_body: selection(&[], Vec::new()),
+        empty_point: None,
+        source: None,
+    });
+    body.validate().unwrap();
+    serde_json::from_value::<FixedBody>(serde_json::to_value(&body).unwrap()).unwrap();
+
+    let mut forged = body.clone();
+    forged.owners[0].head_role = None;
+    assert!(forged.validate().is_err());
+    forged = body.clone();
+    forged.owners[0].entry.as_mut().unwrap().names = vec!["--sav".to_owned()];
+    assert!(forged.validate().is_err());
+    forged = body.clone();
+    forged.owners[0].entry.as_mut().unwrap().name_bindings[0].occurrences =
+        vec![selection(&[(0, 5)], Vec::new())];
+    assert!(forged.validate().is_err());
+    forged = body;
+    forged.owners[0].entry.as_mut().unwrap().name_bindings[0].evidence =
+        EntryNameEvidence::NativeMarkup;
+    assert!(forged.validate().is_err());
+    assert!(serde_json::from_value::<FixedBody>(serde_json::to_value(forged).unwrap()).is_err());
+}
