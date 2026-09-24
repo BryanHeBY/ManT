@@ -4,8 +4,8 @@ use super::{
     walk::{owner_child_step, visit_child_entry_locations},
 };
 use crate::{
-    Block, ContentContext, ContentReadError, Document, DocumentBodyRef, EntryKind, EntryOwner,
-    FixedBody, Inline, InlineView, NameCase, NodeId, OwnerMark,
+    Block, ContentContext, ContentReadError, Document, DocumentBodyRef, EntryOwner, FixedBody,
+    Inline, InlineView, NodeId,
 };
 use std::{collections::BTreeMap, num::NonZeroU32};
 
@@ -76,9 +76,9 @@ impl SemanticIndex {
     }
 
     fn build_fixed(fixed: &FixedBody) -> Self {
-        // The final surface is authoritative. Only a native Definition owner
-        // with one fully recoverable, nonblank head can become a conservative
-        // Term; owner keys and parent edges never invent another Flow tree.
+        // The final surface is authoritative. Only validated semantic facts
+        // attached to its native owner become entries; owner keys and parent
+        // edges never invent another Flow tree.
         let mut result = Self::default();
         let mut heading_paths = Vec::<Vec<usize>>::with_capacity(fixed.headings.len());
         let mut heading_child_counts = vec![0usize; fixed.headings.len() + 1];
@@ -106,7 +106,11 @@ impl SemanticIndex {
             let parent = owner
                 .parent
                 .and_then(|key| nearest_entry[key.get() as usize]);
-            let Some(form) = fixed.owner_complete_form(owner) else {
+            let Some(facts) = fixed.validated_entry(owner) else {
+                nearest_entry[owner.key.get() as usize] = parent;
+                continue;
+            };
+            let Some(entry) = fixed_entry(fixed, facts) else {
                 nearest_entry[owner.key.get() as usize] = parent;
                 continue;
             };
@@ -143,7 +147,7 @@ impl SemanticIndex {
                 parent,
                 child_count: 0,
                 entry_indices,
-                entry: Some(fixed_entry(owner, form)),
+                entry: Some(entry),
             });
             nearest_entry[owner.key.get() as usize] = Some(index);
         }
@@ -229,19 +233,27 @@ struct FixedCandidate {
     entry: Option<SemanticEntry>,
 }
 
-fn fixed_entry(owner: &OwnerMark, form: String) -> SemanticEntry {
-    SemanticEntry {
-        id: owner.id.clone(),
-        kind: EntryKind::Term,
-        names: vec![form.clone()],
-        alias_groups: Vec::new(),
-        alias_of: None,
-        case: NameCase::Sensitive,
-        forms: vec![form],
+fn fixed_entry(
+    fixed: &FixedBody,
+    facts: &crate::EntryFacts<crate::TextSelection>,
+) -> Option<SemanticEntry> {
+    let forms = facts
+        .forms
+        .iter()
+        .map(|form| fixed.selection_text(form))
+        .collect::<Option<Vec<_>>>()?;
+    Some(SemanticEntry {
+        id: facts.id.clone(),
+        kind: facts.kind,
+        names: facts.names.clone(),
+        alias_groups: facts.alias_groups.clone(),
+        alias_of: facts.alias_of.clone(),
+        case: facts.case,
+        forms,
         document_targets: Vec::new(),
         children: Vec::new(),
-        value_domain: None,
-    }
+        value_domain: facts.value_domain.clone(),
+    })
 }
 
 fn has_alias_of(entry: &SemanticEntry) -> bool {

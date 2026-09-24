@@ -14,10 +14,11 @@ use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{
     AnchorMark, CoverageScope, Diagnostic, DiagnosticImpact, DiagnosticLevel, DisplayLabel,
     DisplayPoint, DisplayRole, DisplayRow, DisplayRun, DisplayStyle, DisplaySurface, Document,
-    DocumentBody, DocumentMeta, FixedBody, FragmentAlias, HeadingMark, LinkMark, LinkTarget,
-    NodeId, OutputSlice, OwnerMark, OwnerRole, ParserInfo, RegionKind, RegionMark,
-    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, SourceSpan, TextJoin,
-    TextSelection, validate_document, validate_document_sources,
+    DocumentBody, DocumentMeta, EntryFacts, EntryKind, EntryNameBinding, EntryNameEvidence,
+    FixedBody, FragmentAlias, HeadingMark, LinkMark, LinkTarget, NameCase, NodeId, OutputSlice,
+    OwnerMark, OwnerRole, ParserInfo, RegionKind, RegionMark, SourceCoordinates, SourceFormat,
+    SourceIdentity, SourceKey, SourceRecord, SourceSpan, TextJoin, TextSelection,
+    validate_document, validate_document_sources,
 };
 
 /// A native render failure or a relation that cannot be represented honestly
@@ -165,7 +166,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         rows,
         runs,
     };
-    let fixed = FixedBody {
+    let mut fixed = FixedBody {
         surface,
         headings,
         owners,
@@ -173,6 +174,34 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         anchors,
         regions,
     };
+    // The checked native head is a borrowed display selection, not a
+    // reconstructed Flow term. Keep its initial conservative identity in the
+    // document so serialization and index rebuilding cannot diverge.
+    let entries = fixed
+        .owners
+        .iter()
+        .map(|owner| {
+            let form = fixed.owner_complete_form(owner)?;
+            Some(EntryFacts {
+                name_bindings: vec![EntryNameBinding {
+                    name: 0,
+                    occurrences: vec![owner.head.clone()],
+                    evidence: EntryNameEvidence::Lexical,
+                }],
+                alias_groups: Vec::new(),
+                alias_of: None,
+                forms: vec![owner.head.clone()],
+                id: owner.id.clone(),
+                kind: EntryKind::Term,
+                case: NameCase::Sensitive,
+                names: vec![form],
+                value_domain: None,
+            })
+        })
+        .collect::<Vec<_>>();
+    for (owner, entry) in fixed.owners.iter_mut().zip(entries) {
+        owner.entry = entry;
+    }
     fixed.validate().map_err(|error| {
         AnnotatedProjectionError::RelationDetail(format!("invalid projected Fixed body: {error}"))
     })?;

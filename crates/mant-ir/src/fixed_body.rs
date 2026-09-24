@@ -10,7 +10,10 @@ use std::{fmt, num::NonZeroU32};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{FragmentAlias, LinkTarget, NodeId, SourceKey, SourceSpan};
+use crate::{
+    EntryFacts, EntryKind, EntryNameEvidence, FragmentAlias, LinkTarget, NameCase, NodeId,
+    SourceKey, SourceSpan,
+};
 
 // Match the existing native fixed-display geometry ceiling. A small UTF-8
 // arena must not authorize an unbounded sparse row when a consumer expands
@@ -260,6 +263,10 @@ pub struct OwnerMark {
     pub section: Option<NonZeroU32>,
     /// Native owner kind before classification.
     pub role: OwnerRole,
+    /// Checked semantic facts referring only to this owner's final display
+    /// selections. The display surface remains the sole text owner.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<EntryFacts<TextSelection>>,
     /// Direct visible head, possibly empty.
     pub head: TextSelection,
     /// Direct visible body, excluding child owners.
@@ -287,6 +294,63 @@ impl OwnerMark {
 }
 
 impl FixedBody {
+    /// Borrow only the current conservative Fixed facts whose form, name and
+    /// lexical binding close against this owner's surviving native head.
+    /// Recheck at read time: an in-memory `Document` can be changed after its
+    /// deserialization guard ran.
+    pub(crate) fn validated_entry<'a>(
+        &self,
+        owner: &'a OwnerMark,
+    ) -> Option<&'a EntryFacts<TextSelection>> {
+        let entry = owner.entry.as_ref()?;
+        let form = self.owner_complete_form(owner)?;
+        let [only_form] = entry.forms.as_slice() else {
+            return None;
+        };
+        let [only_name] = entry.names.as_slice() else {
+            return None;
+        };
+        let [binding] = entry.name_bindings.as_slice() else {
+            return None;
+        };
+        (entry.id == owner.id
+            && entry.kind == EntryKind::Term
+            && entry.case == NameCase::Sensitive
+            && only_form == &owner.head
+            && only_name == &form
+            && binding.name == 0
+            && binding.evidence == EntryNameEvidence::Lexical
+            && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
+            && entry.alias_groups.is_empty()
+            && entry.alias_of.is_none()
+            && entry.value_domain.is_none())
+        .then_some(entry)
+    }
+
+    /// Project a checked final-display selection into logical text without
+    /// copying the surface into a second stored body.
+    #[must_use]
+    pub fn selection_text(&self, selection: &TextSelection) -> Option<String> {
+        if selection.joins.len() != selection.parts.len().saturating_sub(1) {
+            return None;
+        }
+        let mut text = String::new();
+        for (index, part) in selection.parts.iter().enumerate() {
+            if index != 0 {
+                match &selection.joins[index - 1] {
+                    TextJoin::DirectContact => {}
+                    TextJoin::AuthoredSeparator(separator) => text.push_str(separator),
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                }
+            }
+            let run = self.surface.run_text(part.run)?;
+            let start = usize::try_from(part.start_byte).ok()?;
+            let end = usize::try_from(part.end_byte).ok()?;
+            text.push_str(run.get(start..end)?);
+        }
+        Some(text)
+    }
+
     /// Read one complete surviving definition head without inferring bytes
     /// from neighboring rows, owners or unknown native joins.
     #[must_use]
@@ -294,20 +358,7 @@ impl FixedBody {
         if !owner.has_complete_form() {
             return None;
         }
-        let mut form = String::new();
-        for (index, part) in owner.head.parts.iter().enumerate() {
-            if index != 0 {
-                match &owner.head.joins[index - 1] {
-                    TextJoin::DirectContact => {}
-                    TextJoin::AuthoredSeparator(separator) => form.push_str(separator),
-                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
-                }
-            }
-            let run = self.surface.run_text(part.run)?;
-            let start = usize::try_from(part.start_byte).ok()?;
-            let end = usize::try_from(part.end_byte).ok()?;
-            form.push_str(run.get(start..end)?);
-        }
+        let form = self.selection_text(&owner.head)?;
         (!form.trim().is_empty()).then_some(form)
     }
 }

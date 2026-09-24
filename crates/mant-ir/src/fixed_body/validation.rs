@@ -292,6 +292,9 @@ impl FixedBody {
             reference(owner.section, self.headings.len())?;
             validate_selection(&owner.head)?;
             validate_selection(&owner.direct_body)?;
+            if owner.entry.is_some() && self.validated_entry(owner).is_none() {
+                return Err(FixedBodyError("invalid fixed entry facts"));
+            }
             if selections_overlap(&owner.head, &owner.direct_body) {
                 return Err(FixedBodyError("owner head and direct body overlap"));
             }

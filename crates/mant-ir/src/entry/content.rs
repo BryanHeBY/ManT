@@ -142,11 +142,11 @@ pub enum EntryNameEvidence {
 /// A name's occurrences in the owner's displayed forms.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct EntryNameBinding {
+pub struct EntryNameBinding<Form = EntryForm> {
     /// Zero-based index in `EntryFacts.names`, not a global identity.
     pub name: usize,
     /// One or more complete occurrences, each represented by ordered slices.
-    pub occurrences: Vec<EntryForm>,
+    pub occurrences: Vec<Form>,
     /// Evidence available to the producer.
     pub evidence: EntryNameEvidence,
 }

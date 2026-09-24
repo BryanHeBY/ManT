@@ -106,7 +106,7 @@ impl DocumentIndex {
                 }
                 builder.section_stack.clear();
                 for owner in &fixed.owners {
-                    if fixed.owner_complete_form(owner).is_none() {
+                    if fixed.validated_entry(owner).is_none() {
                         continue;
                     }
                     if let Some(section) = owner.section

@@ -4,16 +4,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::{EntryForm, EntryKind, EntryNameBinding, NodeId, ValueDomain};
 
-/// Facts attached to one ordinary or term-and-description item.
+/// Facts attached to one authoritative Flow or Fixed content owner.
 ///
 /// Facts never replace content. Indexes validate their references against that
-/// owner and can omit rejected fields without deleting or reparenting it.
+/// owner and can omit rejected fields without deleting or reparenting it. The
+/// form parameter keeps each body's checked reference shape explicit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct EntryFacts {
+#[serde(
+    rename_all = "camelCase",
+    deny_unknown_fields,
+    bound(deserialize = "Form: Deserialize<'de>")
+)]
+pub struct EntryFacts<Form = EntryForm> {
     /// Exact name occurrences within explicit displayed forms.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub name_bindings: Vec<EntryNameBinding>,
+    pub name_bindings: Vec<EntryNameBinding<Form>>,
     /// Explicit disjoint equivalence groups. Empty means unknown equivalence.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub alias_groups: Vec<Vec<String>>,
@@ -22,7 +27,7 @@ pub struct EntryFacts {
     pub alias_of: Option<NodeId>,
     /// Ordered owner-relative references; empty means unrecorded, not fallback.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub forms: Vec<EntryForm>,
+    pub forms: Vec<Form>,
     /// Unique document-local owner identity. No extra inline anchor is required.
     pub id: NodeId,
     /// Source-neutral category, including parameter syntax families.

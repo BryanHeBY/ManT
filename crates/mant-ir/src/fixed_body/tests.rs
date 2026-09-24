@@ -92,6 +92,7 @@ fn sample_body() -> FixedBody {
             parent: None,
             section: Some(key(1)),
             role: OwnerRole::Definition,
+            entry: None,
             head: empty_selection(),
             direct_body: empty_selection(),
             empty_point: Some(DisplayPoint::RunBoundary {

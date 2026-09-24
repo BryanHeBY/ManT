@@ -2345,7 +2345,7 @@
         ]
       },
       "EntryFacts": {
-        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
+        "description": "Facts attached to one authoritative Flow or Fixed content owner.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it. The\nform parameter keeps each body's checked reference shape explicit.",
         "type": "object",
         "properties": {
           "aliasGroups": {
@@ -6403,7 +6403,7 @@
         ]
       },
       "EntryFacts": {
-        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
+        "description": "Facts attached to one authoritative Flow or Fixed content owner.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it. The\nform parameter keeps each body's checked reference shape explicit.",
         "type": "object",
         "properties": {
           "aliasGroups": {
@@ -15562,7 +15562,7 @@
         ]
       },
       "EntryFacts": {
-        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
+        "description": "Facts attached to one authoritative Flow or Fixed content owner.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it. The\nform parameter keeps each body's checked reference shape explicit.",
         "type": "object",
         "properties": {
           "aliasGroups": {
@@ -15610,6 +15610,84 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryNameBinding"
+            }
+          },
+          "names": {
+            "description": "Documented names. Derived selectors use only the validated complete set.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "valueDomain": {
+            "description": "Explicit local or cross-document value space; never copied into content.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "case",
+          "names"
+        ]
+      },
+      "EntryFacts2": {
+        "description": "Facts attached to one authoritative Flow or Fixed content owner.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it. The\nform parameter keeps each body's checked reference shape explicit.",
+        "type": "object",
+        "properties": {
+          "aliasGroups": {
+            "description": "Explicit disjoint equivalence groups. Empty means unknown equivalence.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "aliasOf": {
+            "description": "A declared same-document relationship, never inherited content.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case": {
+            "description": "Lookup policy; binding validation still requires exact visible spelling.",
+            "$ref": "#/$defs/NameCase"
+          },
+          "forms": {
+            "description": "Ordered owner-relative references; empty means unrecorded, not fallback.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TextSelection"
+            }
+          },
+          "id": {
+            "description": "Unique document-local owner identity. No extra inline anchor is required.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "kind": {
+            "description": "Source-neutral category, including parameter syntax families.",
+            "$ref": "#/$defs/EntryKind"
+          },
+          "nameBindings": {
+            "description": "Exact name occurrences within explicit displayed forms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryNameBinding2"
             }
           },
           "names": {
@@ -15830,6 +15908,35 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "occurrences",
+          "evidence"
+        ]
+      },
+      "EntryNameBinding2": {
+        "description": "A name's occurrences in the owner's displayed forms.",
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "description": "Evidence available to the producer.",
+            "$ref": "#/$defs/EntryNameEvidence"
+          },
+          "name": {
+            "description": "Zero-based index in `EntryFacts.names`, not a global identity.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "occurrences": {
+            "description": "One or more complete occurrences, each represented by ordered slices.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TextSelection"
             }
           }
         },
@@ -16707,6 +16814,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/DisplayPoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry": {
+            "description": "Checked semantic facts referring only to this owner's final display\nselections. The display surface remains the sole text owner.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EntryFacts2"
               },
               {
                 "type": "null"
@@ -20716,7 +20834,7 @@
         ]
       },
       "EntryFacts": {
-        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
+        "description": "Facts attached to one authoritative Flow or Fixed content owner.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it. The\nform parameter keeps each body's checked reference shape explicit.",
         "type": "object",
         "properties": {
           "aliasGroups": {

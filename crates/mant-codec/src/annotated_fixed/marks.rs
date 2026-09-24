@@ -149,6 +149,7 @@ pub(super) fn project_owner(
         } else {
             OwnerRole::Other
         },
+        entry: None,
         head,
         direct_body,
         empty_point,

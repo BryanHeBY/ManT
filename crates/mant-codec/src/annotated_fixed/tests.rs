@@ -878,6 +878,33 @@ fn real_man_body_enters_one_fixed_surface_with_dense_typed_keys() {
         fixed.owner_complete_form(&fixed.owners[0]),
         Some("term".to_owned())
     );
+    let facts = fixed.owners[0].entry.as_ref().expect("native owner facts");
+    assert_eq!(facts.forms, [fixed.owners[0].head.clone()]);
+    assert_eq!(facts.names, ["term"]);
+    let rebuilt: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert_eq!(
+        mant_ir::SemanticIndex::build(&rebuilt).section("d")[0].names,
+        ["term"]
+    );
+    let mut forged_memory = document.clone();
+    let DocumentBody::Fixed(forged_fixed) = &mut forged_memory.body else {
+        unreachable!("cloned Fixed document changed body kind");
+    };
+    forged_fixed.owners[0].entry.as_mut().unwrap().names[0] = "unseen".into();
+    assert!(
+        mant_ir::SemanticIndex::build(&forged_memory)
+            .section("d")
+            .is_empty()
+    );
+    assert!(
+        DocumentIndex::build(&forged_memory)
+            .get(fixed.owners[0].id.as_str())
+            .is_none()
+    );
+    let mut forged = serde_json::to_value(&document).unwrap();
+    forged["body"]["owners"][0]["entry"]["names"][0] = serde_json::json!("unseen");
+    assert!(serde_json::from_value::<mant_ir::Document>(forged).is_err());
     assert!(
         DocumentIndex::build(&document)
             .get(fixed.owners[0].id.as_str())

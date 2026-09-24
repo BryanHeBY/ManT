@@ -33,7 +33,9 @@ impl<'a> DocumentValidation<'a> {
             DocumentBodyRef::Flow(_) => {
                 crate::entry::relation_issues(document, document.content(), &index)
             }
-            // Fixed owner candidates have no classified EntryKind until R02b.
+            // Fixed currently validates its conservative head facts in the
+            // surface/mark boundary. Explicit relation traversal is still a
+            // Flow-only policy until the shared-owner R04 migration lands.
             DocumentBodyRef::Fixed(_) => Vec::new(),
         };
         let diagnostics = super::document::validate_with_index(document, &index, &relations);
