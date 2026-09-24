@@ -1,7 +1,7 @@
 //! Global classification precedes pagination; source reports stay in BFS order.
 use super::{
-    collection_plan,
     materialize::{Budget, omitted, outcome},
+    plan::DocumentPlan,
 };
 use mant_protocol::{
     EvidenceCounts, EvidenceOrder, ScopeExplanation, ScopedExplanation, ScopedQueryFailure,
@@ -16,21 +16,11 @@ pub(crate) fn explain(
     query: &mant_protocol::ExplanationQuery,
 ) -> Result<ScopeExplanation, crate::ScopeExecutionError> {
     super::validate_explanation_query(query).map_err(crate::ScopeExecutionError::Explanation)?;
-    if input.iter().any(|(_, content)| {
-        content
-            .document
-            .as_ref()
-            .is_some_and(|document| document.flow().is_none())
-    }) {
-        return Err(crate::ScopeExecutionError::Explanation(
-            super::ExplanationError::UnsupportedFixed,
-        ));
-    }
     let mut plans = Vec::new();
     let mut sources = Vec::new();
     let mut failures = Vec::new();
     for (source, content) in input.iter() {
-        match collection_plan(content, query.entry.trim()) {
+        match DocumentPlan::collect(content, query.entry.trim()) {
             Ok(plan) => {
                 sources.push(source);
                 plans.push(plan);
@@ -65,20 +55,24 @@ pub(crate) fn explain(
             ));
         }
     }
-    let page = super::page::materialize(&plans, &selection, &mut budget);
+    let page = super::page::materialize(&plans, &selection, query.entry.trim(), &mut budget)
+        .map_err(crate::ScopeExecutionError::Explanation)?;
     let mut evidence = page.evidence;
     let mut supports = page.pools;
     let projections = page.projections;
     let mut content_projections = Vec::with_capacity(plans.len());
     for (index, plan) in plans.iter().enumerate() {
-        content_projections.push(super::projection::attach_scoped(
-            plan.content.document.as_ref(),
-            &mut supports[index].values,
-            &mut evidence,
-            index,
-            &mut budget,
-            projections[index].reserved(),
-        ));
+        content_projections.push(match plan {
+            DocumentPlan::Flow(flow) => super::projection::attach_scoped(
+                flow.content.document.as_ref(),
+                &mut supports[index].values,
+                &mut evidence,
+                index,
+                &mut budget,
+                projections[index].reserved(),
+            ),
+            DocumentPlan::Fixed(_) => None,
+        });
     }
     let mut copy_omitted = vec![false; plans.len()];
     for result in &evidence {
@@ -86,7 +80,7 @@ pub(crate) fn explain(
     }
     let mut truncation = mant_protocol::ExplanationTruncation::default();
     let documents = plans
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(index, plan)| {
             let report = source_report(
@@ -121,16 +115,16 @@ pub(crate) fn explain(
 }
 
 fn ordered_candidates(
-    plans: &[super::plan::CollectionPlan<'_>],
+    plans: &[DocumentPlan<'_>],
 ) -> Vec<((mant_protocol::EvidenceClass, usize, usize), usize)> {
     let mut order = plans
         .iter()
         .enumerate()
         .flat_map(|(doc, plan)| {
-            plan.candidates
-                .iter()
-                .enumerate()
-                .map(move |(index, c)| ((c.class(), doc, c.order), index))
+            (0..plan.len()).map(move |index| {
+                let (class, order) = plan.class_order(index);
+                ((class, doc, order), index)
+            })
         })
         .collect::<Vec<_>>();
     order.sort_unstable_by_key(|(key, _)| *key);
@@ -138,38 +132,38 @@ fn ordered_candidates(
 }
 
 fn source_report(
-    plan: super::plan::CollectionPlan<'_>,
+    plan: &DocumentPlan<'_>,
     source: &mant_protocol::ScopedDocument,
     counts: EvidenceCounts,
     copy_omitted: bool,
     supports: Vec<mant_protocol::ExplanationSupport>,
     content_projection: Option<mant_ir::ContentProjection>,
 ) -> ScopedExplanation {
-    let total = u32::try_from(plan.candidates.len()).expect("bounded candidates");
+    let total = u32::try_from(plan.len()).expect("bounded candidates");
     let returned = mant_protocol::EvidenceClass::ALL
         .into_iter()
         .map(|c| counts.get(c).returned)
         .sum();
-    let mut truncation = plan.truncation;
+    let mut truncation = plan.truncation();
     truncation.content = copy_omitted;
+    let content = plan.content();
+    let diagnostics = plan.diagnostics();
     ScopedExplanation {
         supports,
         content_projection,
         address: source.address.clone(),
         depth: source.depth,
-        label: plan.content.label.clone(),
-        source_context: plan
-            .content
+        label: content.label.clone(),
+        source_context: content
             .document
             .as_ref()
             .map(mant_protocol::SourceContext::from),
-        producer: plan
-            .content
+        producer: content
             .document
             .as_ref()
             .map(mant_protocol::Producer::for_document),
-        semantics_complete: crate::projection::semantics_complete(&plan.diagnostics),
-        diagnostics: plan.diagnostics,
+        semantics_complete: crate::projection::semantics_complete(&diagnostics),
+        diagnostics,
         outcome: outcome(total),
         total,
         returned,

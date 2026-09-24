@@ -32,7 +32,12 @@ pub(super) fn response(
             ));
         }
     }
-    let mut page = super::page::materialize(std::slice::from_ref(&plan), &selection, &mut budget);
+    let plans = [super::plan::DocumentPlan::Flow(plan)];
+    let super::plan::DocumentPlan::Flow(plan) = &plans[0] else {
+        unreachable!("single-document Flow plan")
+    };
+    let mut page = super::page::materialize(&plans, &selection, &query.entry, &mut budget)
+        .expect("Flow page materialization is infallible");
     let mut evidence = page
         .evidence
         .into_iter()
@@ -80,7 +85,7 @@ pub(super) fn response(
             next_offset: (end < total).then_some(end),
             truncation,
             semantics_complete: crate::projection::semantics_complete(&plan.diagnostics),
-            diagnostics: plan.diagnostics,
+            diagnostics: plan.diagnostics.clone(),
             evidence,
         },
         used,

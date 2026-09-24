@@ -154,6 +154,238 @@ pub(super) fn plan<'a>(
 }
 
 impl FixedPlan<'_> {
+    fn owner(&self, candidate: &FixedCandidate) -> Result<&OwnerMark, ExplanationError> {
+        self.fixed
+            .owners
+            .get((candidate.key.get() - 1) as usize)
+            .ok_or(ExplanationError::InvalidFixed)
+    }
+
+    pub(super) fn prepare(
+        &self,
+        candidate: &FixedCandidate,
+        ordinal: u32,
+        requested: &str,
+        budget: &mut Budget,
+    ) -> Result<ExplanationEvidence, ExplanationError> {
+        let owner = self.owner(candidate)?;
+        let selected = self
+            .indexed
+            .get(&candidate.key)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        let entry = self
+            .index
+            .entry_at(&selected.path)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        let (name_match, form_match, id_match, path_match) = selected.matched;
+        let outline = trail(&self.reader, &self.index, &self.indexed, owner, selected)?;
+        let [_expected] = entry.forms.as_slice() else {
+            return Err(ExplanationError::InvalidFixed);
+        };
+        let mut evidence_bases = Vec::new();
+        let mut match_details_omitted = false;
+        if name_match {
+            let basis = EvidenceBasis::Name {
+                matches: vec![ExplanationNameMatch {
+                    name: requested.to_owned(),
+                    occurrences: Vec::new(),
+                }],
+            };
+            if budget.take(&basis) {
+                evidence_bases.push(basis);
+            } else {
+                match_details_omitted = true;
+            }
+        }
+        if form_match {
+            let basis = EvidenceBasis::Form {
+                matches: vec![ExplanationFormMatch {
+                    source_form_index: 0,
+                    text: requested.to_owned(),
+                    occurrences: Vec::new(),
+                }],
+            };
+            if budget.take(&basis) {
+                evidence_bases.push(basis);
+            } else {
+                match_details_omitted = true;
+            }
+        }
+        if id_match || path_match {
+            let mut fields = Vec::new();
+            if id_match {
+                fields.push(ExplanationIdentityField::Id);
+            }
+            if path_match {
+                fields.push(ExplanationIdentityField::Path);
+            }
+            evidence_bases.push(EvidenceBasis::Identity { fields });
+        }
+        Ok(ExplanationEvidence {
+            support: None,
+            support_omitted: false,
+            class: EvidenceClass::DirectEntry,
+            ordinal,
+            outline,
+            block_path: None,
+            source: owner.source,
+            bases: evidence_bases,
+            previews: Vec::new(),
+            previews_omitted: false,
+            entry: None,
+            content: None,
+            details_omitted: true,
+            match_details_omitted,
+            name_bindings_omitted: false,
+            content_omitted: true,
+        })
+    }
+
+    pub(super) fn copy_body(
+        &self,
+        candidate: &FixedCandidate,
+        record: &mut ExplanationEvidence,
+        budget: &mut Budget,
+    ) -> Result<(), ExplanationError> {
+        let minimum = ExplanationContent::FixedOwner {
+            key: candidate.key,
+            reading_body: ExplanationFixedSelection {
+                parts: Vec::new(),
+                joins: Vec::new(),
+            },
+        };
+        if !budget.fits(&minimum) {
+            record.content_omitted = true;
+            return Ok(());
+        }
+        let owner = self.owner(candidate)?;
+        let body_parts = self
+            .reader
+            .owner_body_parts(owner.key)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        let body_selection = if body_parts.iter().map(|part| part.slice).eq(owner
+            .direct_body
+            .parts
+            .iter()
+            .copied())
+        {
+            owner.direct_body.clone()
+        } else {
+            // A union of direct, nested-owner and transparent-region selections
+            // has no single native logical-join chain. Do not invent searchable
+            // continuity: the presentation reads physical rows, not these joins.
+            TextSelection {
+                parts: body_parts.iter().map(|part| part.slice).collect(),
+                joins: vec![mant_ir::TextJoin::HardBoundary; body_parts.len().saturating_sub(1)],
+            }
+        };
+        record.content = selection(self.fixed, &body_selection, budget.0).and_then(|body| {
+            let content = ExplanationContent::FixedOwner {
+                key: owner.key,
+                reading_body: body,
+            };
+            budget.take(&content).then_some(content)
+        });
+        record.content_omitted = record.content.is_none();
+        Ok(())
+    }
+
+    pub(super) fn finish_optional(
+        &self,
+        candidate: &FixedCandidate,
+        record: &mut ExplanationEvidence,
+        budget: &mut Budget,
+    ) -> Result<(), ExplanationError> {
+        let owner = self.owner(candidate)?;
+        let selected = self
+            .indexed
+            .get(&candidate.key)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        let entry = self
+            .index
+            .entry_at(&selected.path)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        let [expected] = entry.forms.as_slice() else {
+            return Err(ExplanationError::InvalidFixed);
+        };
+        let form = selection(self.fixed, &owner.head, budget.0);
+        if form
+            .as_ref()
+            .is_some_and(|form| form.complete_text().as_deref() != Some(expected.as_str()))
+        {
+            return Err(ExplanationError::InvalidFixed);
+        }
+        let name = entry.names.first().ok_or(ExplanationError::InvalidFixed)?;
+        let (start_scalar, end_scalar) = name_span(expected, name)?;
+        record.entry = form.and_then(|form| {
+            let occurrence = ExplanationOccurrence {
+                source_occurrence_index: 0,
+                forms: Vec::new(),
+                fixed_forms: vec![ExplanationFixedFormRange {
+                    form_index: 0,
+                    start_scalar,
+                    end_scalar,
+                }],
+                content: Vec::new(),
+            };
+            let entry = ExplanationEntry {
+                kind: entry.kind,
+                case: entry.case,
+                names: entry.names.clone(),
+                forms: Vec::new(),
+                fixed_forms: vec![form],
+                name_bindings: vec![ExplanationNameBinding {
+                    name_index: 0,
+                    occurrences: vec![occurrence],
+                }],
+                alias_groups: Vec::new(),
+                alias_of: None,
+                value_domain: None,
+            };
+            budget.take(&entry).then_some(entry)
+        });
+        record.details_omitted = record.entry.is_none();
+        let name_occurrence = record
+            .entry
+            .as_ref()
+            .and_then(|entry| entry.name_bindings.first())
+            .and_then(|binding| binding.occurrences.first())
+            .cloned();
+        for basis in &mut record.bases {
+            let Some(occurrence) = &name_occurrence else {
+                if matches!(
+                    basis,
+                    EvidenceBasis::Name { .. } | EvidenceBasis::Form { .. }
+                ) {
+                    record.match_details_omitted = true;
+                }
+                continue;
+            };
+            let mut with_position = basis.clone();
+            match &mut with_position {
+                EvidenceBasis::Name { matches } => {
+                    matches[0].occurrences.push(occurrence.clone());
+                }
+                EvidenceBasis::Form { matches } => {
+                    let mut complete = occurrence.clone();
+                    complete.fixed_forms[0].start_scalar = 0;
+                    complete.fixed_forms[0].end_scalar = expected.chars().count() as u64;
+                    matches[0].occurrences.push(complete);
+                }
+                EvidenceBasis::Identity { .. } => continue,
+                _ => return Err(ExplanationError::InvalidFixed),
+            }
+            if budget.take_growth(basis, &with_position) {
+                *basis = with_position;
+            } else {
+                record.match_details_omitted = true;
+            }
+        }
+        let (name_match, form_match, _, _) = selected.matched;
+        record.match_details_omitted |= record.details_omitted && (name_match || form_match);
+        Ok(())
+    }
+
     pub(super) fn materialize(
         &self,
         candidate: &FixedCandidate,
@@ -161,28 +393,31 @@ impl FixedPlan<'_> {
         requested: &str,
         budget: &mut Budget,
     ) -> Result<ExplanationEvidence, ExplanationError> {
-        let owner = self
-            .fixed
-            .owners
-            .get((candidate.key.get() - 1) as usize)
-            .ok_or(ExplanationError::InvalidFixed)?;
-        let matched = self
-            .indexed
-            .get(&candidate.key)
-            .ok_or(ExplanationError::InvalidFixed)?
-            .matched;
-        materialize_owner(
-            self.fixed,
-            &self.reader,
-            &self.index,
-            &self.indexed,
-            owner,
-            ordinal,
-            requested,
-            matched,
-            budget,
-        )
+        // Preserve the standalone Fixed response's historical copy order.
+        // Scoped pages call these stages separately so all selected direct
+        // bodies can precede optional entry metadata under a shared budget.
+        let mut record = self.prepare(candidate, ordinal, requested, budget)?;
+        self.finish_optional(candidate, &mut record, budget)?;
+        self.copy_body(candidate, &mut record, budget)?;
+        Ok(record)
     }
+}
+
+fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError> {
+    let start_byte = if name == expected {
+        0
+    } else {
+        expected.len() - expected.trim_start().len()
+    };
+    let end_byte = start_byte
+        .checked_add(name.len())
+        .ok_or(ExplanationError::InvalidFixed)?;
+    if expected.get(start_byte..end_byte) != Some(name) {
+        return Err(ExplanationError::InvalidFixed);
+    }
+    let start_scalar = expected[..start_byte].chars().count() as u64;
+    let end_scalar = start_scalar + name.chars().count() as u64;
+    Ok((start_scalar, end_scalar))
 }
 
 fn collect_indexed(
@@ -238,194 +473,6 @@ fn add_entries(
         }
         add_entries(index, &entry.children, section, &indices, requested, result);
     }
-}
-
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)] // One owner atomically closes its evidence and content budget.
-fn materialize_owner(
-    fixed: &FixedBody,
-    reader: &FixedSectionReader<'_>,
-    index: &SemanticIndex,
-    indexed: &BTreeMap<NonZeroU32, IndexedOwner>,
-    owner: &OwnerMark,
-    ordinal: u32,
-    requested: &str,
-    matched: (bool, bool, bool, bool),
-    budget: &mut Budget,
-) -> Result<ExplanationEvidence, ExplanationError> {
-    let selected = indexed
-        .get(&owner.key)
-        .ok_or(ExplanationError::InvalidFixed)?;
-    let entry = index
-        .entry_at(&selected.path)
-        .ok_or(ExplanationError::InvalidFixed)?;
-    let (name_match, form_match, id_match, path_match) = matched;
-    let outline = trail(reader, index, indexed, owner, selected)?;
-    let [expected] = entry.forms.as_slice() else {
-        return Err(ExplanationError::InvalidFixed);
-    };
-    // Match facts are self-contained even when the optional owner excerpt
-    // cannot fit. Charge them before entry metadata and its display bindings.
-    let mut evidence_bases = Vec::new();
-    let mut match_details_omitted = false;
-    if name_match {
-        let basis = EvidenceBasis::Name {
-            matches: vec![ExplanationNameMatch {
-                name: requested.to_owned(),
-                occurrences: Vec::new(),
-            }],
-        };
-        if budget.take(&basis) {
-            evidence_bases.push(basis);
-        } else {
-            match_details_omitted = true;
-        }
-    }
-    if form_match {
-        let basis = EvidenceBasis::Form {
-            matches: vec![ExplanationFormMatch {
-                source_form_index: 0,
-                text: requested.to_owned(),
-                occurrences: Vec::new(),
-            }],
-        };
-        if budget.take(&basis) {
-            evidence_bases.push(basis);
-        } else {
-            match_details_omitted = true;
-        }
-    }
-    let form = selection(fixed, &owner.head, budget.0);
-    if form
-        .as_ref()
-        .is_some_and(|form| form.complete_text().as_deref() != Some(expected.as_str()))
-    {
-        return Err(ExplanationError::InvalidFixed);
-    }
-    let name = entry.names.first().ok_or(ExplanationError::InvalidFixed)?;
-    let start_byte = if name == expected {
-        0
-    } else {
-        expected.len() - expected.trim_start().len()
-    };
-    let end_byte = start_byte
-        .checked_add(name.len())
-        .ok_or(ExplanationError::InvalidFixed)?;
-    if expected.get(start_byte..end_byte) != Some(name.as_str()) {
-        return Err(ExplanationError::InvalidFixed);
-    }
-    let start_scalar = expected[..start_byte].chars().count() as u64;
-    let end_scalar = start_scalar + name.chars().count() as u64;
-    let retained_entry = form.and_then(|form| {
-        let occurrence = ExplanationOccurrence {
-            source_occurrence_index: 0,
-            forms: Vec::new(),
-            fixed_forms: vec![ExplanationFixedFormRange {
-                form_index: 0,
-                start_scalar,
-                end_scalar,
-            }],
-            content: Vec::new(),
-        };
-        let entry = ExplanationEntry {
-            kind: entry.kind,
-            case: entry.case,
-            names: entry.names.clone(),
-            forms: Vec::new(),
-            fixed_forms: vec![form],
-            name_bindings: vec![ExplanationNameBinding {
-                name_index: 0,
-                occurrences: vec![occurrence],
-            }],
-            alias_groups: Vec::new(),
-            alias_of: None,
-            value_domain: None,
-        };
-        budget.take(&entry).then_some(entry)
-    });
-    let details_omitted = retained_entry.is_none();
-    let name_occurrence = retained_entry
-        .as_ref()
-        .and_then(|entry| entry.name_bindings.first())
-        .and_then(|binding| binding.occurrences.first())
-        .cloned();
-    for basis in &mut evidence_bases {
-        let Some(occurrence) = &name_occurrence else {
-            match_details_omitted = true;
-            continue;
-        };
-        let mut with_position = basis.clone();
-        match &mut with_position {
-            EvidenceBasis::Name { matches } => matches[0].occurrences.push(occurrence.clone()),
-            EvidenceBasis::Form { matches } => {
-                let mut complete = occurrence.clone();
-                complete.fixed_forms[0].start_scalar = 0;
-                complete.fixed_forms[0].end_scalar = expected.chars().count() as u64;
-                matches[0].occurrences.push(complete);
-            }
-            _ => unreachable!("only charged matches precede identity"),
-        }
-        if budget.take_growth(basis, &with_position) {
-            *basis = with_position;
-        } else {
-            match_details_omitted = true;
-        }
-    }
-    if id_match || path_match {
-        let mut fields = Vec::new();
-        if id_match {
-            fields.push(ExplanationIdentityField::Id);
-        }
-        if path_match {
-            fields.push(ExplanationIdentityField::Path);
-        }
-        evidence_bases.push(EvidenceBasis::Identity { fields });
-    }
-    let body_parts = reader
-        .owner_body_parts(owner.key)
-        .ok_or(ExplanationError::InvalidFixed)?;
-    let body_selection = if body_parts.iter().map(|part| part.slice).eq(owner
-        .direct_body
-        .parts
-        .iter()
-        .copied())
-    {
-        owner.direct_body.clone()
-    } else {
-        // A union of direct, nested-owner and transparent-region selections
-        // has no single native logical-join chain. Do not invent searchable
-        // continuity: the presentation reads physical rows, not these joins.
-        TextSelection {
-            parts: body_parts.iter().map(|part| part.slice).collect(),
-            joins: vec![mant_ir::TextJoin::HardBoundary; body_parts.len().saturating_sub(1)],
-        }
-    };
-    let content = selection(fixed, &body_selection, budget.0).and_then(|body| {
-        let content = ExplanationContent::FixedOwner {
-            key: owner.key,
-            reading_body: body,
-        };
-        budget.take(&content).then_some(content)
-    });
-    let content_omitted = content.is_none();
-    Ok(ExplanationEvidence {
-        support: None,
-        support_omitted: false,
-        class: EvidenceClass::DirectEntry,
-        ordinal,
-        outline,
-        block_path: None,
-        source: owner.source,
-        bases: evidence_bases,
-        previews: Vec::new(),
-        previews_omitted: false,
-        entry: retained_entry,
-        content,
-        details_omitted,
-        match_details_omitted: match_details_omitted
-            || details_omitted && (name_match || form_match),
-        name_bindings_omitted: false,
-        content_omitted,
-    })
 }
 
 fn selection(
@@ -935,5 +982,167 @@ mod tests {
                 "child text"
             ]
         );
+    }
+
+    #[test]
+    fn scoped_fixed_flow_and_tldr_share_one_candidate_page_and_source_index() {
+        use mant_ir::{DocumentAddress, MarkdownOrigin};
+        use mant_protocol::{
+            DocumentScope, DocumentTraversal, ExplanationOptions, ResolvedDocumentScope,
+            ScopedDocument,
+        };
+
+        let mut documents = vec![
+            fixture(),
+            crate::query_fixture::markdown(
+                "# OPTIONS\n\n<!-- mant:entries role=term case=sensitive -->\n- `printf(3)`: Flow body.\n",
+                None,
+            )
+            .unwrap(),
+            crate::query_fixture::markdown(
+                "<!-- mant:tldr:start -->\n# Short\n\n> Quick reference.\n<!-- mant:tldr:end -->\n",
+                None,
+            )
+            .unwrap(),
+        ];
+        documents[2].document = None;
+        let sources = ["fixed", "flow", "tldr"]
+            .into_iter()
+            .map(|path| ScopedDocument {
+                address: DocumentAddress::Markdown {
+                    path: path.into(),
+                    origin: MarkdownOrigin::Documents,
+                },
+                depth: 0,
+                root_indices: vec![],
+                reached_from: vec![],
+            })
+            .collect::<Vec<_>>();
+        for (source, content) in sources.iter().zip(&mut documents) {
+            content.address = Some(source.address.clone());
+        }
+        let graph = ResolvedDocumentScope {
+            reference_limits: Vec::new(),
+            query: DocumentScope {
+                documents: vec![],
+                traversal: DocumentTraversal::default(),
+            },
+            documents: sources,
+            edges: vec![],
+            frontier: vec![],
+            unresolved: vec![],
+        };
+        let input = crate::QueryScopeView::new(&graph, &documents).unwrap();
+        let mut query = ExplanationQuery {
+            entry: "printf(3)".into(),
+            options: ExplanationOptions {
+                limit: 1,
+                ..ExplanationOptions::default()
+            },
+        };
+        let first = super::super::scoped::explain(input, &query).unwrap();
+        assert_eq!(first.total, 2);
+        assert_eq!(first.evidence[0].document_index, 0);
+        assert_eq!(first.evidence[0].evidence.ordinal, 0);
+        assert!(matches!(
+            first.evidence[0].evidence.content,
+            Some(ExplanationContent::FixedOwner { .. })
+        ));
+        assert!(first.documents[0].content_projection.is_none());
+        assert!(first.documents[0].source_context.is_some());
+        assert!(first.documents[2].source_context.is_none());
+        assert_eq!(first.documents[2].total, 0);
+        assert_eq!(first.next_offset, Some(1));
+        let decoded: mant_protocol::ScopeExplanation =
+            serde_json::from_value(serde_json::to_value(&first).unwrap()).unwrap();
+        assert_eq!(decoded.evidence[0].document_index, 0);
+
+        query.options.offset = 1;
+        let second = super::super::scoped::explain(input, &query).unwrap();
+        assert_eq!(second.total, 2);
+        assert_eq!(second.evidence[0].document_index, 1);
+        assert_eq!(second.evidence[0].evidence.ordinal, 1);
+        assert_eq!(second.next_offset, None);
+        serde_json::from_value::<mant_protocol::ScopeExplanation>(
+            serde_json::to_value(&second).unwrap(),
+        )
+        .unwrap();
+
+        query.options.offset = 0;
+        query.options.limit = 2;
+        let together = super::super::scoped::explain(input, &query).unwrap();
+        assert_eq!(
+            together
+                .evidence
+                .iter()
+                .map(|record| record.document_index)
+                .collect::<Vec<_>>(),
+            [0, 1]
+        );
+        assert!(together.documents[0].content_projection.is_none());
+        assert!(together.documents[1].content_projection.is_some());
+        serde_json::from_value::<mant_protocol::ScopeExplanation>(
+            serde_json::to_value(&together).unwrap(),
+        )
+        .unwrap();
+
+        documents[0].document.as_mut().unwrap().sources.clear();
+        let input = crate::QueryScopeView::new(&graph, &documents).unwrap();
+        query.options.offset = 0;
+        let failed = super::super::scoped::explain(input, &query).unwrap();
+        assert_eq!(failed.failures.len(), 1);
+        assert_eq!(failed.total, 1);
+        assert_eq!(failed.documents.len(), 2);
+        assert_eq!(failed.evidence[0].document_index, 0);
+    }
+
+    #[test]
+    fn scoped_budget_reserves_all_fixed_match_facts_before_any_body_or_entry() {
+        let documents = [fixture(), fixture()];
+        let plans = documents
+            .iter()
+            .map(|content| {
+                let document = content.document.as_ref().unwrap();
+                let mant_ir::DocumentBodyRef::Fixed(fixed) = document.body() else {
+                    unreachable!()
+                };
+                super::super::plan::DocumentPlan::Fixed(
+                    super::plan(content, document, fixed, "printf(3)").unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let name = EvidenceBasis::Name {
+            matches: vec![ExplanationNameMatch {
+                name: "printf(3)".into(),
+                occurrences: Vec::new(),
+            }],
+        };
+        let form = EvidenceBasis::Form {
+            matches: vec![ExplanationFormMatch {
+                source_form_index: 0,
+                text: "printf(3)".into(),
+                occurrences: Vec::new(),
+            }],
+        };
+        let bytes = 2
+            * (serde_json::to_vec(&name).unwrap().len() + serde_json::to_vec(&form).unwrap().len());
+        let mut budget = Budget(bytes);
+        let page = super::super::page::materialize(
+            &plans,
+            &[(0, 0, 0), (1, 0, 1)],
+            "printf(3)",
+            &mut budget,
+        )
+        .unwrap();
+        assert_eq!(budget.0, 0);
+        assert_eq!(page.evidence.len(), 2);
+        for (index, record) in page.evidence.iter().enumerate() {
+            assert_eq!(record.document_index, index);
+            assert_eq!(record.evidence.bases, [name.clone(), form.clone()]);
+            assert!(record.evidence.entry.is_none());
+            assert!(record.evidence.content.is_none());
+            assert!(record.evidence.details_omitted);
+            assert!(record.evidence.content_omitted);
+        }
     }
 }

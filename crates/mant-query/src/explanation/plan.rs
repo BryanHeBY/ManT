@@ -1,5 +1,5 @@
 //! Borrowed collection state: bounded priority retention before any body copy.
-use super::{Candidate, LocatedNode};
+use super::{Candidate, LocatedNode, fixed};
 use mant_ir::{Diagnostic, ResolvedContent};
 use mant_protocol::{
     EvidenceBasis, EvidenceClass, ExplanationTruncation, MAX_EXPLANATION_CANDIDATES,
@@ -23,6 +23,75 @@ impl CollectionPlan<'_> {
             .as_ref()
             .expect("evidence candidate belongs to a document")
             .content()
+    }
+}
+
+/// One readable source in a scoped request. Both bodies contribute to the
+/// same class-first page and debit the same response-copy budget.
+pub(super) enum DocumentPlan<'a> {
+    Flow(CollectionPlan<'a>),
+    Fixed(fixed::FixedPlan<'a>),
+}
+
+impl<'a> DocumentPlan<'a> {
+    pub(super) fn collect(
+        content: &'a ResolvedContent,
+        requested: &str,
+    ) -> Result<Self, super::ExplanationError> {
+        if let Some(document) = &content.document
+            && let mant_ir::DocumentBodyRef::Fixed(fixed) = document.body()
+        {
+            return fixed::plan(content, document, fixed, requested).map(Self::Fixed);
+        }
+        super::collection_plan(content, requested).map(Self::Flow)
+    }
+
+    pub(super) fn content(&self) -> &'a ResolvedContent {
+        match self {
+            Self::Flow(plan) => plan.content,
+            Self::Fixed(plan) => plan.content,
+        }
+    }
+
+    pub(super) fn len(&self) -> usize {
+        match self {
+            Self::Flow(plan) => plan.candidates.len(),
+            Self::Fixed(plan) => plan.candidates.len(),
+        }
+    }
+
+    pub(super) fn class_order(&self, index: usize) -> (EvidenceClass, usize) {
+        match self {
+            Self::Flow(plan) => {
+                let candidate = &plan.candidates[index];
+                (candidate.class(), candidate.order)
+            }
+            Self::Fixed(_) => (EvidenceClass::DirectEntry, index),
+        }
+    }
+
+    pub(super) fn diagnostics(&self) -> Vec<Diagnostic> {
+        match self {
+            Self::Flow(plan) => plan.diagnostics.clone(),
+            Self::Fixed(plan) => plan
+                .content
+                .document
+                .as_ref()
+                .expect("Fixed plan has a document")
+                .diagnostics
+                .clone(),
+        }
+    }
+
+    pub(super) fn truncation(&self) -> ExplanationTruncation {
+        match self {
+            Self::Flow(plan) => plan.truncation,
+            Self::Fixed(plan) => ExplanationTruncation {
+                candidates: plan.truncated,
+                relations: false,
+                content: false,
+            },
+        }
     }
 }
 impl Candidate<'_> {
