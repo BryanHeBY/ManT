@@ -26,6 +26,10 @@ struct mant_annotated_result {
 };
 
 int mant_annotated_result_is_valid(const struct mant_annotated_result *);
+/* One native join rule is shared by selection construction and validation. */
+uint32_t mant_annotated_native_join(
+	const struct mant_annotated_run_endpoint *, uint32_t, uint32_t,
+	uint32_t, uint32_t, int, uint64_t *);
 int mant_annotated_build_selection_parts(struct structured_session *,
 	struct mant_annotated_result *,
 	const struct mant_annotated_display_view *);

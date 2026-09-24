@@ -233,6 +233,8 @@ fn selected_native_sources(
         owned.push(crate_dir.join("shim/mant_mandoc_annotated_coverage.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_annotated_display.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_annotated_result.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_selection.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_validate.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_address.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_structured_builder.c"));
