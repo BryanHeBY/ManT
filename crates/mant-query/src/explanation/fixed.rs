@@ -669,9 +669,14 @@ impl FixedPlan<'_> {
         if entry.forms.len() != selections.len() {
             return Err(ExplanationError::InvalidFixed);
         }
-        let name_positions = fixed_name_positions(entry)?;
-        record.name_bindings_omitted =
-            entry.names.len() > mant_protocol::MAX_EXPLANATION_NAME_BINDINGS;
+        let name_positions = fixed_name_positions(self.fixed, owner, entry)?;
+        let truncated_names = name_positions
+            .iter()
+            .map(|positions| positions.len() > mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+            .collect::<Vec<_>>();
+        record.name_bindings_omitted = entry.names.len()
+            > mant_protocol::MAX_EXPLANATION_NAME_BINDINGS
+            || truncated_names.iter().any(|&truncated| truncated);
         let mut forms = Vec::with_capacity(selections.len());
         let mut bindings = Vec::with_capacity(
             entry
@@ -685,20 +690,38 @@ impl FixedPlan<'_> {
                 count.checked_add(source.parts.len())
             })
             .unwrap_or(usize::MAX);
-        let binding_positions = entry
-            .names
-            .len()
-            .min(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS);
-        let match_positions = record
-            .bases
+        let binding_positions = name_positions
             .iter()
-            .filter(|basis| {
-                matches!(
-                    basis,
-                    EvidenceBasis::Name { .. } | EvidenceBasis::Form { .. }
-                )
+            .take(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS)
+            .map(|positions| {
+                positions
+                    .len()
+                    .min(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
             })
-            .count();
+            .sum::<usize>();
+        let match_positions = record.bases.iter().try_fold(0usize, |count, basis| {
+            let added = match basis {
+                EvidenceBasis::Name { matches } => {
+                    matches.iter().try_fold(0usize, |sum, matched| {
+                        let index = entry
+                            .names
+                            .iter()
+                            .position(|name| name == &matched.name)
+                            .ok_or(ExplanationError::InvalidFixed)?;
+                        Ok::<usize, ExplanationError>(sum.saturating_add(
+                            name_positions.get(index).map_or(0, |positions| {
+                                positions
+                                    .len()
+                                    .min(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+                            }),
+                        ))
+                    })?
+                }
+                EvidenceBasis::Form { matches } => matches.len(),
+                _ => 0,
+            };
+            Ok::<usize, ExplanationError>(count.saturating_add(added))
+        })?;
         let mut complete = retained_fixed_positions(record)
             .saturating_add(form_parts)
             .saturating_add(binding_positions)
@@ -719,24 +742,32 @@ impl FixedPlan<'_> {
             forms.push(form);
         }
         if complete {
-            for (index, (form_index, start_scalar, end_scalar)) in name_positions
+            for (index, positions) in name_positions
                 .into_iter()
                 .take(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS)
                 .enumerate()
             {
                 bindings.push(ExplanationNameBinding {
                     name_index: u32::try_from(index).map_err(|_| ExplanationError::InvalidFixed)?,
-                    occurrences: vec![ExplanationOccurrence {
-                        source_occurrence_index: 0,
-                        forms: Vec::new(),
-                        fixed_forms: vec![ExplanationFixedFormRange {
-                            form_index: u32::try_from(form_index)
-                                .map_err(|_| ExplanationError::InvalidFixed)?,
-                            start_scalar,
-                            end_scalar,
-                        }],
-                        content: Vec::new(),
-                    }],
+                    occurrences: positions
+                        .into_iter()
+                        .enumerate()
+                        .take(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+                        .map(|(ordinal, (form_index, start_scalar, end_scalar))| {
+                            Ok(ExplanationOccurrence {
+                                source_occurrence_index: u32::try_from(ordinal)
+                                    .map_err(|_| ExplanationError::InvalidFixed)?,
+                                forms: Vec::new(),
+                                fixed_forms: vec![ExplanationFixedFormRange {
+                                    form_index: u32::try_from(form_index)
+                                        .map_err(|_| ExplanationError::InvalidFixed)?,
+                                    start_scalar,
+                                    end_scalar,
+                                }],
+                                content: Vec::new(),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, ExplanationError>>()?,
                 });
             }
         }
@@ -777,7 +808,12 @@ impl FixedPlan<'_> {
                             .position(|name| name == &matched.name)
                             .ok_or(ExplanationError::InvalidFixed)?;
                         if let Some(binding) = details.name_bindings.get(index) {
-                            matched.occurrences.push(binding.occurrences[0].clone());
+                            if truncated_names.get(index) == Some(&true) {
+                                record.match_details_omitted = true;
+                            }
+                            matched
+                                .occurrences
+                                .extend(binding.occurrences.iter().cloned());
                         } else {
                             record.match_details_omitted = true;
                         }
@@ -948,27 +984,77 @@ fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError>
 }
 
 fn fixed_name_positions(
+    fixed: &FixedBody,
+    owner: &OwnerMark,
     entry: &mant_ir::SemanticEntry,
-) -> Result<Vec<(usize, u64, u64)>, ExplanationError> {
-    if entry.forms.len() == 1 && entry.names.len() > 1 {
+) -> Result<Vec<Vec<(usize, u64, u64)>>, ExplanationError> {
+    if entry.kind == mant_ir::EntryKind::Term && entry.names.is_empty() {
+        return Ok(Vec::new());
+    }
+    if entry.forms.len() == 1 {
         let form = &entry.forms[0];
-        let aliases =
-            mant_ir::literal_option_aliases(form).ok_or(ExplanationError::InvalidFixed)?;
-        if aliases.len() != entry.names.len() {
-            return Err(ExplanationError::InvalidFixed);
-        }
-        return aliases
-            .into_iter()
-            .zip(&entry.names)
-            .map(|((name, range), expected)| {
-                if &name != expected {
+        let names = if owner.head_role == Some(mant_ir::OwnerHeadRole::Lexical)
+            && owner.head_role_prefix.is_none()
+            && matches!(
+                entry.kind,
+                mant_ir::EntryKind::Parameter {
+                    parameter_kind: mant_ir::ParameterKind::Option
+                }
+            ) {
+            Some(fixed.lexical_component_names(owner).map_or_else(
+                || mant_ir::literal_option_names(form),
+                |components| {
+                    components
+                        .into_iter()
+                        .map(|(name, _, range)| (name, range))
+                        .collect()
+                },
+            ))
+        } else if owner.head_role == Some(mant_ir::OwnerHeadRole::Option)
+            && owner.head_components.len() > 1
+        {
+            fixed.option_component_names(owner).map(|components| {
+                components
+                    .into_iter()
+                    .map(|(name, _, range)| (name, range))
+                    .collect()
+            })
+        } else {
+            None
+        };
+        if let Some(names) = names {
+            let mut cursor = 0usize;
+            let mut scalar = 0u64;
+            let mut positions = vec![Vec::new(); entry.names.len()];
+            let indices = entry
+                .names
+                .iter()
+                .enumerate()
+                .map(|(index, name)| (name.as_str(), index))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            for (name, range) in names {
+                let index = *indices
+                    .get(name.as_str())
+                    .ok_or(ExplanationError::InvalidFixed)?;
+                if range.start < cursor || form.get(range.clone()) != Some(name.as_str()) {
                     return Err(ExplanationError::InvalidFixed);
                 }
-                let start = form[..range.start].chars().count() as u64;
-                let end = start + name.chars().count() as u64;
-                Ok((0, start, end))
-            })
-            .collect();
+                for character in form[cursor..range.start].chars() {
+                    scalar += 1;
+                    cursor += character.len_utf8();
+                }
+                let start = scalar;
+                for character in form[range.clone()].chars() {
+                    scalar += 1;
+                    cursor += character.len_utf8();
+                }
+                positions[index].push((0, start, scalar));
+            }
+            if positions.iter().any(Vec::is_empty) {
+                return Err(ExplanationError::InvalidFixed);
+            }
+            return Ok(positions);
+        }
     }
     if entry.forms.len() != entry.names.len() {
         return Err(ExplanationError::InvalidFixed);
@@ -980,7 +1066,7 @@ fn fixed_name_positions(
         .enumerate()
         .map(|(index, (form, name))| {
             let (start, end) = name_span(form, name)?;
-            Ok((index, start, end))
+            Ok(vec![(index, start, end)])
         })
         .collect()
 }
@@ -1408,7 +1494,7 @@ mod tests {
                     preceding_owner: None,
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
-                    head_role: None,
+                    head_role: Some(mant_ir::OwnerHeadRole::Lexical),
                     head_role_prefix: None,
                     head_components: Vec::new(),
                     entry: None,

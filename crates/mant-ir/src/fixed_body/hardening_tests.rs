@@ -59,6 +59,121 @@ fn selection(parts: &[(u64, u64)], joins: Vec<TextJoin>) -> TextSelection {
 }
 
 #[test]
+fn mdoc_option_components_bind_names_inside_one_parameterized_form() {
+    // This exact `.It Fl a , Fl b Ar file` input ran pinned CVS -Tutf8
+    // first. mdoc_macro.c::blk_full retains both Fl nodes and the Ar operand
+    // in one HEAD; mdoc_term.c::termp_fl_pre prints each option separately.
+    let mut body = body_with_run("-a, -b file", 11);
+    let first = body.surface.runs[0].clone();
+    let lengths = [2_u64, 2, 2, 1, 4];
+    let mut offset = 0_u64;
+    body.surface.runs = lengths
+        .into_iter()
+        .enumerate()
+        .map(|(index, length)| {
+            let run = DisplayRun {
+                key: key(u32::try_from(index + 1).unwrap()),
+                column: u32::try_from(offset).unwrap(),
+                width: u32::try_from(length).unwrap(),
+                byte_start: offset,
+                byte_count: length,
+                label: DisplayLabel {
+                    owner: Some(key(1)),
+                    role: DisplayRole::Body,
+                    ..first.label.clone()
+                },
+                ..first.clone()
+            };
+            offset += length;
+            run
+        })
+        .collect();
+    body.surface.rows[0].run_count = 5;
+    let part = |run| OutputSlice {
+        run: key(run),
+        start_byte: 0,
+        end_byte: lengths[(run - 1) as usize],
+    };
+    let head = TextSelection {
+        parts: (1..=5).map(part).collect(),
+        joins: vec![TextJoin::DirectContact; 4],
+    };
+    let component = |run| TextSelection {
+        parts: vec![part(run)],
+        joins: Vec::new(),
+    };
+    let source = |column| SourceSpan {
+        source: SourceKey::FIRST,
+        line: 6,
+        column,
+        byte_range: None,
+        end_line: None,
+        end_column: None,
+    };
+    let owner = OwnerMark {
+        key: key(1),
+        id: crate::NodeId::from("native-owner-1"),
+        parent: None,
+        preceding_owner: None,
+        section: None,
+        role: OwnerRole::Definition,
+        head_role: Some(OwnerHeadRole::Option),
+        head_role_prefix: Some("-a".to_owned()),
+        head_components: [1, 3]
+            .into_iter()
+            .map(|run| OwnerHeadComponent {
+                role: OwnerHeadRole::Option,
+                selection: component(run),
+                source: Some(source(if run == 1 { 5 } else { 14 })),
+            })
+            .collect(),
+        entry: None,
+        head: head.clone(),
+        direct_body: TextSelection {
+            parts: Vec::new(),
+            joins: Vec::new(),
+        },
+        empty_point: None,
+        source: Some(source(1)),
+    };
+    body.owners.push(owner);
+    assert!(body.option_component_forms(&body.owners[0]).is_none());
+    assert_eq!(
+        body.option_component_names(&body.owners[0])
+            .unwrap()
+            .iter()
+            .map(|(name, _, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        ["-a", "-b"]
+    );
+    body.owners[0].entry = Some(crate::EntryFacts {
+        name_bindings: [1, 3]
+            .into_iter()
+            .enumerate()
+            .map(|(name, run)| crate::EntryNameBinding {
+                name,
+                occurrences: vec![component(run)],
+                evidence: crate::EntryNameEvidence::NativeMarkup,
+            })
+            .collect(),
+        alias_groups: Vec::new(),
+        alias_of: None,
+        forms: vec![head],
+        id: body.owners[0].id.clone(),
+        kind: crate::EntryKind::Parameter {
+            parameter_kind: crate::ParameterKind::Option,
+        },
+        case: crate::NameCase::Sensitive,
+        names: vec!["-a".to_owned(), "-b".to_owned()],
+        value_domain: None,
+    });
+    body.validate().unwrap();
+    body.owners[0].entry.as_mut().unwrap().name_bindings[1].occurrences = vec![component(1)];
+    assert!(body.validated_entry(&body.owners[0]).is_none());
+    assert!(body.validate().is_err());
+}
+
+#[test]
 fn fixed_surface_rejects_controls_but_keeps_combining_text() {
     let combining = body_with_run("e\u{301}", 1);
     combining.validate().unwrap();

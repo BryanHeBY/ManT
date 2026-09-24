@@ -506,6 +506,146 @@ mod tests {
     }
 
     #[test]
+    fn native_tp_width_is_not_a_label_or_reading_group_boundary() {
+        // Exact input ran pinned CVS -Ttree first. man_macro.c::blk_imp
+        // retains the same-line width in HEAD, while man_term.c::pre_TP
+        // prints only children from the first NODE_LINE onward.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".TH T 1\n.SH OPTIONS\n.TP 4\n.B -a\n.TQ\n.B --all\nShared description.\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        let owners = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 2)
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 2);
+        assert!(owners.iter().all(|owner| owner.flags & 256 != 0));
+        assert_eq!(owners[1].preceding_owner, owners[0].key);
+        let heads = owners
+            .iter()
+            .map(|owner| direct_mark_text(&page, &page.marks[(owner.title_region - 1) as usize]))
+            .collect::<Vec<_>>();
+        assert_eq!(heads, ["-a", "--all"]);
+    }
+
+    #[test]
+    fn native_bi_and_plain_ip_heads_are_candidates_without_width_names() {
+        // Both exact inputs ran pinned CVS -Ttree first. man_term.c::pre_TP
+        // traverses the BI macro's two styled operands; pre_IP prints only
+        // the first text operand and treats the second as layout width.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".TH T 1\n.SH OPTIONS\n.TP\n.BI --output= FILE\nOutput description.\n".to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        let owner = page.marks.iter().find(|mark| mark.kind == 2).unwrap();
+        assert_ne!(owner.flags & 256, 0);
+        let component = page.marks.iter().find(|mark| mark.kind == 6).unwrap();
+        assert_eq!(direct_mark_text(&page, component), "--output=");
+
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".TH T 1\n.SH OPTIONS\n.IP --alpha 4\nAlpha description.\n.IP item 4\nItem description.\n.IP 1 4\nNumeric description.\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        let owners = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 2)
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 3);
+        assert_eq!(
+            owners
+                .iter()
+                .map(|owner| owner.flags & 16 != 0)
+                .collect::<Vec<_>>(),
+            [true, true, false]
+        );
+        assert!(owners.iter().all(|owner| owner.name.is_none()));
+        let heads = owners
+            .iter()
+            .map(|owner| direct_mark_text(&page, &page.marks[(owner.title_region - 1) as usize]))
+            .collect::<Vec<_>>();
+        assert_eq!(heads, ["--alpha", "item", "1"]);
+    }
+
+    #[test]
+    fn native_alternating_font_component_keeps_only_the_bold_operand() {
+        // Both exact inputs ran pinned CVS -Ttree first. man_term.c::
+        // pre_alternate() emits each child directly without a nested NODE
+        // event, and TERMP_NOSPACE joins the operands in final display.
+        for operand in ["FILE", "-x"] {
+            let mut bundle = SourceBundle::new();
+            let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.BI --foo {operand}\nDescription.\n");
+            bundle.insert("t.1", input.into_bytes()).unwrap();
+            let page = AnnotatedRenderer::default()
+                .render_bundle("t.1", &bundle, InputFormat::Man)
+                .unwrap();
+            let components = page
+                .marks
+                .iter()
+                .filter(|mark| mark.kind == 6)
+                .collect::<Vec<_>>();
+            assert_eq!(components.len(), 1);
+            assert_eq!(direct_mark_text(&page, components[0]), "--foo");
+            let owner = page.marks.iter().find(|mark| mark.kind == 2).unwrap();
+            assert_eq!(
+                direct_mark_text(&page, &page.marks[(owner.title_region - 1) as usize]),
+                format!("--foo{operand}")
+            );
+        }
+    }
+
+    #[test]
+    fn native_italic_and_roman_labels_do_not_claim_lexical_evidence() {
+        // Both exact inputs ran pinned CVS -Ttree first. man_term.c::pre_I
+        // and bare R do not create a bold declaration; pre_IP still prints
+        // italic-only and one-letter list labels as ordinary presentation.
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", b".TH T 1\n.SH OPTIONS\n.TP\n.I --italic\nDescription.\n.TP\n.R --roman\nDescription.\n".to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        assert!(
+            page.marks
+                .iter()
+                .filter(|mark| mark.kind == 2)
+                .all(|owner| owner.flags & 256 == 0)
+        );
+
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", b".TH T 1\n.SH OPTIONS\n.IP \\fI--italic\\fP 4\nDescription.\n.IP o 4\nBullet-like.\n".to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        assert!(
+            page.marks
+                .iter()
+                .filter(|mark| mark.kind == 2)
+                .all(|owner| owner.flags & (16 | 256) == 0)
+        );
+    }
+
+    #[test]
     fn native_multiword_command_component_keeps_internal_space_not_leading_padding() {
         // Exact input ran pinned CVS -Tutf8 first. term.c::term_word()
         // inserts AUTO_SPACE before each operand; mdoc_term.c renders the

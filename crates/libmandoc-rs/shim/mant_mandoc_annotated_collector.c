@@ -57,6 +57,8 @@ struct annotated_frame {
 	const struct roff_node *node;
 	const struct roff_node *saved_link_node;
 	const struct roff_node *last_direct_man_node;
+	const struct roff_node *alternate_child;
+	const struct roff_node *alternate_next_child;
 	uint32_t saved_owner;
 	uint32_t saved_head_component;
 	uint32_t saved_link;
@@ -66,6 +68,7 @@ struct annotated_frame {
 	uint32_t anchor_mark;
 	uint32_t region_mark;
 	uint32_t last_direct_man_owner;
+	uint32_t alternate_child_index;
 };
 
 struct annotated_point_state {
@@ -1012,6 +1015,73 @@ head_text_has_glyph(const char *text)
 	return 0;
 }
 
+/* A man HEAD text node may carry inline font escapes, whereas the formatter
+ * only presents the final glyphs. This is a broad declaration candidate, not
+ * a name parser. In particular an italic/roman-only label is typography,
+ * and a one-letter IP label is commonly a list marker. */
+static int
+man_text_declaration_candidate(struct mant_annotated_collector *collector,
+    const char *text, int reject_single_letter, int *recognized)
+{
+	const char *cursor, *next, *sequence;
+	enum mandoc_esc escape;
+	int size, first_glyph = 0, glyph_count = 0, weak_style = 0;
+	int glyph;
+
+	*recognized = 0;
+	if (text == NULL)
+		return 1;
+	if (!charge_work(collector, strlen(text)))
+		return 0;
+	for (cursor = text; *cursor != '\0' && glyph_count < 2; ) {
+		if (*cursor != '\\')
+			glyph = (unsigned char)*cursor++;
+		else {
+			next = cursor + 1;
+			escape = mandoc_escape(&next, &sequence, &size);
+			cursor = next;
+			switch (escape) {
+			case ESCAPE_IGNORE:
+			case ESCAPE_NOSPACE:
+				continue;
+			case ESCAPE_FONTBOLD:
+			case ESCAPE_FONTCB:
+			case ESCAPE_FONTBI:
+				if (glyph_count == 0)
+					weak_style = 0;
+				continue;
+			case ESCAPE_FONT:
+			case ESCAPE_FONTROMAN:
+			case ESCAPE_FONTITALIC:
+			case ESCAPE_FONTCI:
+			case ESCAPE_FONTPREV:
+				if (glyph_count == 0)
+					weak_style = 1;
+				continue;
+			case ESCAPE_SPECIAL:
+				if (size != 1 || sequence[0] != '-')
+					return 1;
+				glyph = '-';
+				break;
+			default:
+				return 1;
+			}
+		}
+		if (isspace((unsigned char)glyph))
+			continue;
+		if (first_glyph == 0)
+			first_glyph = glyph;
+		glyph_count++;
+	}
+	if (weak_style || (reject_single_letter && glyph_count < 2))
+		return 1;
+	if ((first_glyph >= 'a' && first_glyph <= 'z') ||
+	    (first_glyph >= 'A' && first_glyph <= 'Z') ||
+	    first_glyph == '-' || first_glyph == '_')
+		*recognized = 1;
+	return 1;
+}
+
 /* mdoc_macro.c::blk_full() closes the It HEAD before terminal traversal.
  * Freeze the first significant authored head macro while that native tree
  * remains alive; final bold glyphs alone cannot distinguish Fl/Ev/Ic/Cm
@@ -1090,19 +1160,56 @@ copy_tp_lexical_head(struct mant_annotated_collector *collector,
 		return 1;
 	head = owner->head;
 	first = head == NULL ? NULL : head->child;
-	/* man_macro.c::blk_imp can place PD before the next-line B in this
-	 * HEAD. man_term.c::pre_TP executes PD through print_man_node(),
-	 * but pre_PD changes only pardist and emits no head glyph. Keep the
-	 * formatter traversal intact while selecting the sole visible label. */
+	/* man_macro.c::blk_imp retains the TP/TQ same-line width operands in
+	 * HEAD, but man_term.c::pre_TP prints only from the first NODE_LINE
+	 * child. Do not let layout arguments become declaration evidence. */
+	while (first != NULL && (first->flags & NODE_LINE) == 0) {
+		if (!charge_work(collector, 1))
+			return 0;
+		first = first->next;
+	}
+	/* A next-line PD changes paragraph distance without printing a label;
+	 * the following next-line macro remains the actual HEAD candidate. */
 	while (first != NULL && first->tok == MAN_PD) {
 		if (!charge_work(collector, 1))
 			return 0;
 		first = first->next;
 	}
-	if (first == NULL || first->tok != MAN_B || first->next != NULL ||
-	    first->child == NULL || first->child->type != ROFFT_TEXT ||
-	    first->child->string == NULL || first->child->next != NULL)
+	if (first == NULL)
 		return 1;
+	/* pre_B and pre_alternate with a bold first operand provide a lexical
+	 * label boundary. I/R and italic/roman-first alternate macros do not.
+	 * Raw HEAD text is admitted only by its conservative visible prefix. */
+	if (first->type == ROFFT_TEXT)
+		return man_text_declaration_candidate(collector, first->string,
+		    0, recognized);
+	if (first->tok != MAN_B && first->tok != MAN_BI &&
+	    first->tok != MAN_BR && first->tok != MAN_SB)
+		return 1;
+	if (first->tok == MAN_BR) {
+		/* A roman operand remains a literal head even if the first bold
+		 * operand is empty; the shared spelling rule selects its name. */
+		*recognized = 1;
+		return 1;
+	}
+	if (first->tok == MAN_BI) {
+		/* man_term.c::pre_alternate() can print an empty first bold
+		 * operand followed by an italic/roman label. The visible word
+		 * alone must not inherit a bold declaration role. */
+		if (first->child == NULL || first->child->type != ROFFT_TEXT ||
+		    first->child->string == NULL)
+			return 1;
+		if (!charge_work(collector, strlen(first->child->string)))
+			return 0;
+		*recognized = head_text_has_glyph(first->child->string);
+		return 1;
+	}
+	if (first->tok != MAN_B || first->next != NULL ||
+	    first->child == NULL || first->child->type != ROFFT_TEXT ||
+	    first->child->string == NULL || first->child->next != NULL) {
+		*recognized = 1;
+		return 1;
+	}
 	text = first->child->string;
 	if (!charge_work(collector, strlen(text)))
 		return 0;
@@ -1131,13 +1238,12 @@ copy_tp_lexical_head(struct mant_annotated_collector *collector,
 		if (prefix_valid)
 			candidate[length++] = glyph;
 	}
+	*recognized = first_glyph != 0;
 	if (first_glyph != '-') {
 		/* The sole plain B still marks a lexical TP/TQ term even when
 		 * its spelling is not an option. Rust keeps FILE and prose as Term. */
-		*recognized = 1;
 		return 1;
 	}
-	*recognized = 1;
 	/* After the first authored whitespace, a font escape belongs to the
 	 * operand, not the option prefix. A second raw option-looking spelling
 	 * instead leaves the whole HEAD to the shared Rust alias grammar. */
@@ -1244,6 +1350,28 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
 	return 1;
 }
 
+/* man_term.c::pre_IP prints only the first HEAD text node; the second is
+ * layout width. A plain first operand can be a declaration candidate, but
+ * italic-only, numbered, bullet, and one-letter list labels are not names. */
+static int
+ip_head_declaration_candidate(struct mant_annotated_collector *collector,
+    const struct roff_node *owner, int *recognized)
+{
+	const struct roff_node *first;
+
+	*recognized = 0;
+	first = owner->head == NULL ? NULL : owner->head->child;
+	if (first == NULL || first->type != ROFFT_TEXT || first->string == NULL)
+		return 1;
+	/* A bold escape begins the stricter IP prefix grammar above. If that
+	 * parser rejected the authored font transition or suffix, do not re-enter
+	 * through the generic plain-label candidate path. */
+	if (strncmp(first->string, "\\fB", 3) == 0)
+		return 1;
+	return man_text_declaration_candidate(collector, first->string, 1,
+	    recognized);
+}
+
 /* mdoc_term.c::termp_fl_pre emits its generated dash before traversing the
  * child text; man_term.c::pre_B keeps its own children in the same macro
  * frame.  Native syntax is evidence only: C never splits declaration forms. */
@@ -1261,11 +1389,83 @@ head_component_role(const struct roff_node *node)
 	case MDOC_Cm:
 		return MANT_ANNOTATED_MARK_HEAD_LITERAL;
 	case MAN_B:
-	case MAN_BR:
+	case MAN_SB:
 		return MANT_ANNOTATED_MARK_HEAD_LEXICAL;
 	default:
 		return 0;
 	}
+}
+
+/* man_term.c::pre_alternate() emits each TEXT child directly with
+ * term_word_node(), without a child NODE_ENTER event. Mark only the bold
+ * operand as lexical evidence; its italic/roman neighbour remains visible
+ * in the complete HEAD but cannot itself establish an option name. */
+static int
+alternate_bold_slot(int token, uint32_t index)
+{
+	switch (token) {
+	case MAN_BI:
+	case MAN_BR:
+		return index % 2 == 0;
+	case MAN_IB:
+	case MAN_RB:
+		return index % 2 != 0;
+	default:
+		return 0;
+	}
+}
+
+static int
+select_alternate_component(struct mant_annotated_collector *collector,
+    const struct roff_node *word)
+{
+	struct annotated_frame *frame;
+	struct mant_annotated_mark *parent_mark;
+	const struct roff_node *child;
+	uint32_t index, parent, key;
+
+	if (word == NULL || collector->frame_count == 0)
+		return 1;
+	frame = collector->frames + collector->frame_count - 1;
+	if (frame->node->type != ROFFT_ELEM ||
+	    (!alternate_bold_slot(frame->node->tok, 0) &&
+	    !alternate_bold_slot(frame->node->tok, 1)) ||
+	    word->parent != frame->node || word == frame->alternate_child)
+		return 1;
+	child = frame->alternate_next_child;
+	index = frame->alternate_child_index;
+	while (child != NULL && child != word) {
+		if (!charge_work(collector, 1))
+			return 0;
+		child = child->next;
+		index++;
+	}
+	if (child == NULL || index == UINT32_MAX) {
+		fail_relation(collector, index, 0);
+		return 0;
+	}
+	frame->alternate_child = child;
+	frame->alternate_next_child = child->next;
+	frame->alternate_child_index = index + 1;
+	collector->active_head_component = 0;
+	if (!alternate_bold_slot(frame->node->tok, index) ||
+	    collector->active_owner == 0)
+		return 1;
+	parent = collector->active_owner;
+	parent_mark = collector->marks + parent - 1;
+	if (parent_mark->kind != MANT_ANNOTATED_MARK_REGION ||
+	    parent_mark->region_kind != MANT_ANNOTATED_REGION_OWNER_TERM ||
+	    parent_mark->parent == 0 ||
+	    (collector->marks[parent_mark->parent - 1].flags &
+	    MANT_ANNOTATED_MARK_DEFINITION) == 0)
+		return 1;
+	key = add_mark(collector, word, word,
+	    MANT_ANNOTATED_MARK_HEAD_COMPONENT, parent, 0, NULL);
+	if (key == 0)
+		return 0;
+	collector->marks[key - 1].flags |= MANT_ANNOTATED_MARK_HEAD_LEXICAL;
+	collector->active_head_component = key;
+	return 1;
 }
 
 /* mdoc_term.c::termp_fl_pre emits its own dash before the Fl operand;
@@ -1387,6 +1587,9 @@ push_node(struct mant_annotated_collector *collector,
 	frame->owner_mark = frame->anchor_mark = frame->region_mark = 0;
 	frame->last_direct_man_node = NULL;
 	frame->last_direct_man_owner = 0;
+	frame->alternate_child = NULL;
+	frame->alternate_next_child = node->child;
+	frame->alternate_child_index = 0;
 
 	/* man_macro.c::blk_imp and mdoc_macro.c::blk_full produce a block
 	 * with distinct HEAD/BODY scopes.  Their terminal traversal emits
@@ -1444,6 +1647,9 @@ push_node(struct mant_annotated_collector *collector,
 		if (node->tok == MAN_IP &&
 		    !copy_ip_option_prefix(collector,
 		    collector->marks + key - 1, node, &definition))
+			return 0;
+		if (node->tok == MAN_IP && !definition &&
+		    !ip_head_declaration_candidate(collector, node, &definition))
 			return 0;
 		if (definition) {
 			if (node->tok == MDOC_It)
@@ -2245,6 +2451,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			join_hard(collector->columns + event->column);
 		return;
 	case TERM_COLLECT_LOGICAL:
+		if (!select_alternate_component(collector, event->node))
+			return;
 		/* term.c::endline() writes .mc independently of the field.  Even
 		 * Unicode margin escapes must not become authored join evidence. */
 		if (collector->in_margin) {

@@ -358,23 +358,10 @@ impl FixedBody {
                 }
                 previous_component = Some(component);
             }
-            // Both selections are already ordered. A single merge checks all
-            // component slices against the owner HEAD without rescanning its
-            // prefix for every native macro instance.
-            let mut components = owner
-                .head_components
-                .iter()
-                .flat_map(|component| component.selection.parts.iter())
-                .peekable();
-            for part in &owner.head.parts {
-                if components
-                    .peek()
-                    .is_some_and(|candidate| **candidate == *part)
-                {
-                    components.next();
-                }
-            }
-            if components.peek().is_some() {
+            // The source-backed component must occupy a contiguous HEAD
+            // interval with the same internal joins, not merely reuse some
+            // later glyph parts or replace a generated separator.
+            if super::component_part_ranges(&owner.head, &owner.head_components).is_none() {
                 return Err(FixedBodyError("head component escapes owner head"));
             }
             if owner.entry.is_some() && self.validated_entry(owner).is_none() {

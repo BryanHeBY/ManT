@@ -104,15 +104,19 @@
         },
         {
           "query": "--set",
-          "review": "Pinned CVS prints line-10 --set=KEY,VALUE as one literal operand; its comma is inside the assignment value and proves no complete alias.",
-          "expected": [],
-          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+          "review": "Pinned CVS prints line-10 --set=KEY,VALUE as one literal operand; the leading --set is a name, while the comma remains inside its argument and proves no second alias.",
+          "expected": [
+            {"source": {"line": 9, "column": 2}, "kind": "option", "names": ["--set"], "forms": ["--set=KEY,VALUE"], "emptyDescription": false, "bodyIncludes": ["assignment body"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
         },
         {
           "query": "-z",
-          "review": "Pinned CVS line-13 TP/B is one literal -z, prose head, not two complete option spellings; an incomplete alias group does not promote a name.",
-          "expected": [],
-          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+          "review": "Pinned CVS line-13 TP/B is one literal -z, prose head; the leading -z is a name, but the following prose is not a second alias.",
+          "expected": [
+            {"source": {"line": 12, "column": 2}, "kind": "option", "names": ["-z"], "forms": ["-z, prose"], "emptyDescription": false, "bodyIncludes": ["ordinary label body"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
         }
       ]
     },
@@ -459,9 +463,9 @@
       "queries": [
         {
           "query": "-c",
-          "review": "Pinned CVS man_macro.c::blk_imp and man_term.c::pre_TP preserve the line-156 inline-font HEAD and its own BODY. The Fixed annotator conservatively keeps this typography-only head as Term rather than claiming a native option role; its exact complete label remains directly addressable.",
+          "review": "Pinned CVS man_macro.c::blk_imp and man_term.c::pre_TP preserve the line-156 inline-font HEAD and its own BODY. The native TP label plus final visible -c spelling establish one option name without changing the complete form or body.",
           "expected": [
-            {"source": {"line": 156, "column": 2}, "kind": "term", "names": ["-c"], "forms": ["-c"], "emptyDescription": false, "bodyIncludes": ["Take the first argument as a command"]}
+            {"source": {"line": 156, "column": 2}, "kind": "option", "names": ["-c"], "forms": ["-c"], "emptyDescription": false, "bodyIncludes": ["Take the first argument as a command"]}
           ],
           "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 1}
         },

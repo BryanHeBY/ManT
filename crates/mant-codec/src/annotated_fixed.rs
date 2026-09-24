@@ -208,6 +208,27 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         .owners
         .iter()
         .map(|owner| {
+            if let Some(components) = fixed.lexical_component_names(owner) {
+                let (names, name_bindings) = group_bindings(
+                    components
+                        .into_iter()
+                        .map(|(name, selection, _)| (name, selection)),
+                    EntryNameEvidence::Lexical,
+                );
+                return Some(EntryFacts {
+                    name_bindings,
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: vec![owner.head.clone()],
+                    id: owner.id.clone(),
+                    kind: EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
+                    names,
+                    value_domain: None,
+                });
+            }
             if let Some(forms) = fixed.option_component_forms(owner) {
                 let names = forms.iter().map(|(name, _)| name.clone()).collect();
                 let (head_forms, name_bindings) = forms
@@ -229,6 +250,27 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                     alias_groups: Vec::new(),
                     alias_of: None,
                     forms: head_forms,
+                    id: owner.id.clone(),
+                    kind: EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
+                    names,
+                    value_domain: None,
+                });
+            }
+            if let Some(components) = fixed.option_component_names(owner) {
+                let (names, name_bindings) = group_bindings(
+                    components
+                        .into_iter()
+                        .map(|(name, selection, _)| (name, selection)),
+                    EntryNameEvidence::NativeMarkup,
+                );
+                return Some(EntryFacts {
+                    name_bindings,
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: vec![owner.head.clone()],
                     id: owner.id.clone(),
                     kind: EntryKind::Parameter {
                         parameter_kind: ParameterKind::Option,
@@ -260,41 +302,37 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                     value_domain: None,
                 });
             };
-            // man_macro.c::blk_imp keeps a TP/TQ HEAD intact, while
-            // man_term.c::pre_B prints this one literal operand as one form.
-            // The shared spelling rule only extracts complete aliases; each
-            // name still needs its own checked final-display sub-selection.
-            if owner.head_role == Some(OwnerHeadRole::Lexical)
-                && owner.head_role_prefix.is_none()
-                && let Some(found) = mant_ir::literal_option_aliases(&form)
-            {
-                let mut names = Vec::with_capacity(found.len());
-                let mut name_bindings = Vec::with_capacity(found.len());
+            // man_macro.c::blk_imp keeps the original man HEAD intact, and
+            // man_term.c::pre_TP/pre_IP select its visible label. A complete
+            // form may also contain arguments, so bind only the shared
+            // grammar's exact name ranges to final-display sub-selections.
+            if owner.head_role == Some(OwnerHeadRole::Lexical) && owner.head_role_prefix.is_none() {
+                let found = mant_ir::literal_option_names(&form);
+                let mut occurrences = Vec::with_capacity(found.len());
                 for (name, range) in found {
                     let occurrence = fixed.selection_subrange(&owner.head, range)?;
                     if fixed.selection_text(&occurrence).as_deref() != Some(name.as_str()) {
                         return None;
                     }
-                    name_bindings.push(EntryNameBinding {
-                        name: names.len(),
-                        occurrences: vec![occurrence],
-                        evidence: EntryNameEvidence::Lexical,
-                    });
-                    names.push(name);
+                    occurrences.push((name, occurrence));
                 }
-                return Some(EntryFacts {
-                    name_bindings,
-                    alias_groups: Vec::new(),
-                    alias_of: None,
-                    forms: vec![owner.head.clone()],
-                    id: owner.id.clone(),
-                    kind: EntryKind::Parameter {
-                        parameter_kind: ParameterKind::Option,
-                    },
-                    case: NameCase::Sensitive,
-                    names,
-                    value_domain: None,
-                });
+                let (names, name_bindings) =
+                    group_bindings(occurrences, EntryNameEvidence::Lexical);
+                if !names.is_empty() {
+                    return Some(EntryFacts {
+                        name_bindings,
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: EntryKind::Parameter {
+                            parameter_kind: ParameterKind::Option,
+                        },
+                        case: NameCase::Sensitive,
+                        names,
+                        value_domain: None,
+                    });
+                }
             }
             let identity = native_head_identity(&fixed, owner, &form);
             // The parser-alive .IP hint is intentionally a broad candidate:
@@ -315,19 +353,23 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                     owner.head.clone(),
                 )
             });
+            let named = kind != EntryKind::Term || owner.head_role.is_some();
             Some(EntryFacts {
-                name_bindings: vec![EntryNameBinding {
-                    name: 0,
-                    occurrences: vec![occurrence],
-                    evidence,
-                }],
+                name_bindings: named
+                    .then_some(EntryNameBinding {
+                        name: 0,
+                        occurrences: vec![occurrence],
+                        evidence,
+                    })
+                    .into_iter()
+                    .collect(),
                 alias_groups: Vec::new(),
                 alias_of: None,
                 forms: vec![owner.head.clone()],
                 id: owner.id.clone(),
                 kind,
                 case: NameCase::Sensitive,
-                names: vec![name],
+                names: named.then_some(name).into_iter().collect(),
                 value_domain: None,
             })
         })
@@ -366,9 +408,31 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     Ok(document)
 }
 
-/// Reuse the Flow declaration grammar only where a native role and checked
-/// final-display slice prove the exact name. The rest of the head remains a
-/// form; a layout gap or unselected authored separator cannot become a name.
+/// Stable name order with every distinct native occurrence retained.
+fn group_bindings(
+    found: impl IntoIterator<Item = (String, TextSelection)>,
+    evidence: EntryNameEvidence,
+) -> (Vec<String>, Vec<EntryNameBinding<TextSelection>>) {
+    let mut indices: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut names = Vec::new();
+    let mut bindings: Vec<EntryNameBinding<TextSelection>> = Vec::new();
+    for (name, occurrence) in found {
+        if let Some(&index) = indices.get(&name) {
+            bindings[index].occurrences.push(occurrence);
+        } else {
+            let index = names.len();
+            indices.insert(name.clone(), index);
+            names.push(name);
+            bindings.push(EntryNameBinding {
+                name: index,
+                occurrences: vec![occurrence],
+                evidence,
+            });
+        }
+    }
+    (names, bindings)
+}
+
 fn native_head_identity(
     fixed: &FixedBody,
     owner: &OwnerMark,

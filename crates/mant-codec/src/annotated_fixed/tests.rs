@@ -19,6 +19,75 @@ fn bundle(input: &[u8]) -> SourceBundle {
     bundle
 }
 
+#[test]
+fn native_man_declarations_keep_legacy_option_names() {
+    for (label, input) in [
+        ("width", b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--width=NUMBER\"\nWidth description.\n".as_slice()),
+        ("output", b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"--output=\" FILE\nOutput description.\n".as_slice()),
+        ("set", b".TH T 1\n.SH OPTIONS\n.TP\n.B --set=KEY,VALUE\nSet description.\n".as_slice()),
+        ("ip", b".TH T 1\n.SH OPTIONS\n.IP --plain 4\nPlain description.\n".as_slice()),
+        ("tar", b".TH T 1\n.SH OPTIONS\n.TP\n\\fB\\-f\\fR, \\fB\\-\\-file\\fR=\\fIARCHIVE\\fR\nArchive description.\n".as_slice()),
+        ("bi-operand", b".TH T 1\n.SH OPTIONS\n.TP\n.BI --foo FILE\nbody\n".as_slice()),
+        ("bi-option-operand", b".TH T 1\n.SH OPTIONS\n.TP\n.BI --foo -x\nbody\n".as_slice()),
+        ("br-alias", b".TH T 1\n.SH OPTIONS\n.TP\n.BR -a , --all\nbody\n".as_slice()),
+        ("duplicate", b".TH T 1\n.SH OPTIONS\n.TP\n.B \"-a, -a\"\nbody\n".as_slice()),
+        ("spaced-slash", b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a / \\-\\-all\nBODY\n".as_slice()),
+        ("plain-term", b".TH T 1\n.SH OPTIONS\n.TP\n.B FILE\nbody\n".as_slice()),
+        ("italic-term", b".TH T 1\n.SH OPTIONS\n.TP\n.I --save\nitalic body\n".as_slice()),
+        ("empty-bold", b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\" --foo\nDescription.\n".as_slice()),
+        ("empty-bold-roman", b".TH T 1\n.SH OPTIONS\n.TP\n.BR \"\" --foo\nDescription.\n".as_slice()),
+    ] {
+        let old = crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap();
+        let new = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        if label == "duplicate" {
+            let query = ExplanationQuery {
+                entry: "-a".into(),
+                options: ExplanationOptions::default(),
+            };
+            let old_result = mant_query::explain_query(&mant_ir::ResolvedContent {
+                address: None, label: "T(1)".into(), document: Some(old.clone()), tldr: None,
+            }, &query).unwrap();
+            let new_result = mant_query::explain_query(&mant_ir::ResolvedContent {
+                address: None, label: "T(1)".into(), document: Some(new.clone()), tldr: None,
+            }, &query).unwrap();
+            assert_eq!(
+                new_result.evidence[0].entry.as_ref().unwrap().name_bindings[0].occurrences.len(),
+                old_result.evidence[0].entry.as_ref().unwrap().name_bindings[0].occurrences.len(),
+            );
+        }
+        let old = mant_ir::SemanticIndex::build(&old)
+            .section("options")
+            .iter()
+            .map(|entry| (entry.names.clone(), entry.forms.clone()))
+            .collect::<Vec<_>>();
+        let new = mant_ir::SemanticIndex::build(&new)
+            .section("options")
+            .iter()
+            .map(|entry| (entry.names.clone(), entry.forms.clone()))
+            .collect::<Vec<_>>();
+        assert_eq!(new, old, "{label}");
+    }
+}
+
+#[test]
+fn tp_layout_width_keeps_the_next_line_label_and_tq_reading_group() {
+    // Exact input ran pinned CVS -Ttree and -Tutf8 first. man_term.c::pre_TP
+    // skips the same-line width operand and prints the NODE_LINE label;
+    // TQ extends the TP head without replacing its shared body.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP 4\n.B -a\n.TQ\n.B --all\nShared description.\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    assert_eq!(fixed.owners.len(), 2);
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["-a"]);
+    assert_eq!(fixed.owners[1].entry.as_ref().unwrap().names, ["--all"]);
+    assert_eq!(fixed.owners[1].preceding_owner, Some(fixed.owners[0].key));
+    let index = mant_ir::SemanticIndex::build(&document);
+    assert!(index.fixed_reading_group(fixed.owners[0].key).is_some());
+    assert!(validate_document(&document).is_empty());
+}
+
 fn native_query(input: &[u8], width: u32) -> mant_ir::ResolvedContent {
     let page = AnnotatedRenderer::new(width)
         .unwrap()
@@ -1540,6 +1609,151 @@ fn native_head_components_index_distinct_mdoc_options_without_guessing_styled_te
 }
 
 #[test]
+fn parameterized_mdoc_head_keeps_each_native_option_name_in_one_form() {
+    // The exact source ran pinned CVS -Tutf8 first. mdoc_macro.c::blk_full
+    // keeps both Fl nodes and Ar in one HEAD, and mdoc_term.c::termp_fl_pre
+    // prints both option names before the styled operand.
+    let input = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Fl b Ar file\nShared description.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    let owner = &fixed.owners[0];
+    let entry = owner.entry.as_ref().expect("source-backed Fl names");
+    assert_eq!(entry.names, ["-a", "-b"]);
+    assert_eq!(entry.forms, [owner.head.clone()]);
+    assert_eq!(
+        fixed.selection_text(&entry.forms[0]).as_deref(),
+        Some("-a, -b file")
+    );
+    assert!(entry.alias_groups.is_empty());
+    assert_eq!(entry.name_bindings.len(), 2);
+    for (name, binding) in entry.names.iter().zip(&entry.name_bindings) {
+        assert_eq!(binding.evidence, mant_ir::EntryNameEvidence::NativeMarkup);
+        assert_eq!(binding.occurrences.len(), 1);
+        assert_eq!(
+            fixed.selection_text(&binding.occurrences[0]).as_deref(),
+            Some(name.as_str())
+        );
+    }
+    assert!(validate_document(&document).is_empty());
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    for name in ["-a", "-b"] {
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.total, 1, "{name}");
+        let details = result.evidence[0].entry.as_ref().unwrap();
+        assert_eq!(details.names, ["-a", "-b"]);
+        assert_eq!(details.fixed_forms.len(), 1);
+        assert_eq!(
+            details.fixed_forms[0].complete_text().as_deref(),
+            Some("-a, -b file")
+        );
+        let binding = &details.name_bindings[usize::from(name == "-b")];
+        assert_eq!(
+            binding.occurrences[0].fixed_forms[0]
+                .resolve(&details.fixed_forms)
+                .as_deref(),
+            Some(name)
+        );
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
+fn repeated_mdoc_option_keeps_two_native_occurrences() {
+    // Exact input ran pinned CVS -Tutf8 first. mdoc_macro.c::blk_full
+    // retains both Fl nodes; mdoc_term.c::termp_fl_pre prints both names.
+    let input = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Fl a Ar file\nShared description.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    let entry = fixed.owners[0].entry.as_ref().unwrap();
+    assert_eq!(entry.names, ["-a"]);
+    assert_eq!(entry.forms, [fixed.owners[0].head.clone()]);
+    assert_eq!(entry.name_bindings[0].occurrences.len(), 2);
+    assert!(
+        entry.name_bindings[0]
+            .occurrences
+            .iter()
+            .all(|selection| fixed.selection_text(selection).as_deref() == Some("-a"))
+    );
+    assert!(validate_document(&document).is_empty());
+    let result = mant_query::explain_query(
+        &mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        },
+        &ExplanationQuery {
+            entry: "-a".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(result.total, 1);
+    assert_eq!(
+        result.evidence[0].entry.as_ref().unwrap().name_bindings[0]
+            .occurrences
+            .len(),
+        2
+    );
+    result.validate_references().unwrap();
+}
+
+#[test]
+fn repeated_fixed_name_occurrences_obey_response_cap() {
+    // Exact generated TP/B input ran pinned CVS -Tutf8 first. One native
+    // HEAD prints all 33 occurrences; response policy retains at most 32.
+    let label = std::iter::repeat_n("-a", 33).collect::<Vec<_>>().join(", ");
+    let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nbody\n");
+    let document =
+        project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    let entry = fixed.owners[0].entry.as_ref().unwrap();
+    assert_eq!(entry.names, ["-a"]);
+    assert_eq!(entry.name_bindings[0].occurrences.len(), 33);
+    let result = mant_query::explain_query(
+        &mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        },
+        &ExplanationQuery {
+            entry: "-a".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let evidence = &result.evidence[0];
+    assert!(evidence.name_bindings_omitted);
+    assert!(evidence.match_details_omitted);
+    assert_eq!(
+        evidence.entry.as_ref().unwrap().name_bindings[0]
+            .occurrences
+            .len(),
+        32
+    );
+    result.validate_references().unwrap();
+}
+
+#[test]
 fn many_native_head_components_keep_bounded_explanation_bindings() {
     use std::fmt::Write as _;
     // This generated exact 33-Fl line ran pinned CVS -Tutf8 width=78 first. Each Fl
@@ -1606,9 +1820,16 @@ fn complete_man_tp_option_uses_shared_lexical_rule_without_promoting_other_terms
             parameter_kind: ParameterKind::Option
         }
     );
-    for owner in &fixed.owners[1..] {
+    for owner in &fixed.owners[1..4] {
         assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
     }
+    assert_eq!(fixed.owners[4].entry.as_ref().unwrap().names, ["--save"]);
+    assert_eq!(
+        fixed.owners[4].entry.as_ref().unwrap().kind,
+        EntryKind::Parameter {
+            parameter_kind: ParameterKind::Option
+        }
+    );
     assert!(validate_document(&document).is_empty());
     let resolved = mant_ir::ResolvedContent {
         address: None,
@@ -1624,8 +1845,13 @@ fn complete_man_tp_option_uses_shared_lexical_rule_without_promoting_other_terms
         },
     )
     .unwrap();
-    assert_eq!(result.total, 1);
-    assert_eq!(result.evidence[0].entry.as_ref().unwrap().names, ["--save"]);
+    assert_eq!(result.total, 2);
+    assert!(
+        result
+            .evidence
+            .iter()
+            .all(|evidence| evidence.entry.as_ref().unwrap().names == ["--save"])
+    );
     result.validate_references().unwrap();
 }
 
@@ -1696,19 +1922,24 @@ fn one_native_man_head_keeps_alias_names_bound_to_one_complete_form() {
         }
     }
 
-    // The exact negative heads also ran pinned CVS. Their visible commas do
-    // not prove a second complete option declaration.
-    for label in ["--set=KEY,VALUE", "-a, text"] {
+    // The exact heads also ran pinned CVS. Their visible commas do not prove
+    // another name, but the leading option remains a valid declaration.
+    for (label, name) in [("--set=KEY,VALUE", "--set"), ("-a, text", "-a")] {
         let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nBODY\n");
         let document =
             project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap();
         let DocumentBody::Fixed(fixed) = &document.body else {
             unreachable!();
         };
+        let entry = fixed.owners[0].entry.as_ref().unwrap();
         assert_eq!(
-            fixed.owners[0].entry.as_ref().unwrap().kind,
-            EntryKind::Term
+            entry.kind,
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option
+            }
         );
+        assert_eq!(entry.names, [name]);
+        assert_eq!(entry.forms, [fixed.owners[0].head.clone()]);
         assert!(validate_document(&document).is_empty());
     }
 }
@@ -1809,7 +2040,13 @@ fn escaped_dash_man_hint_rejects_unproved_escapes_and_names() {
         (r"\-x\&foo", None, EntryKind::Term),
         (r"\-1", Some(OwnerHeadRole::Lexical), EntryKind::Term),
         (r"\-x.", Some(OwnerHeadRole::Lexical), EntryKind::Term),
-        (r"\-a, text", Some(OwnerHeadRole::Lexical), EntryKind::Term),
+        (
+            r"\-a, text",
+            Some(OwnerHeadRole::Lexical),
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            },
+        ),
     ] {
         let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nbody\n");
         let document =
@@ -2205,11 +2442,11 @@ fn man_tp_styled_operands_and_punctuation_keep_native_head_classification() {
         ),
         (
             b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a / \\-\\-all\nBODY\n".as_slice(),
-            Some(vec!["-a", "--all"]),
+            Some(vec!["-a"]),
         ),
         (
             b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a , text\nBODY\n".as_slice(),
-            None,
+            Some(vec!["-a"]),
         ),
     ] {
         let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
@@ -2218,11 +2455,7 @@ fn man_tp_styled_operands_and_punctuation_keep_native_head_classification() {
         };
         let owner = &fixed.owners[0];
         assert_eq!(owner.head_role_prefix, None);
-        if let Some(names) = expected_names {
-            assert_eq!(owner.entry.as_ref().unwrap().names, names);
-        } else {
-            assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
-        }
+        assert_eq!(owner.entry.as_ref().unwrap().names, expected_names.unwrap());
         assert!(validate_document(&document).is_empty());
     }
 }

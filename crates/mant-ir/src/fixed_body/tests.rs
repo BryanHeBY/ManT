@@ -24,6 +24,7 @@ fn borrowed_entry_view_requires_the_mark_in_its_own_fixed_body() {
     };
     let owner = &mut body.owners[0];
     owner.head = head.clone();
+    owner.head_role = Some(OwnerHeadRole::Lexical);
     owner.entry = Some(crate::EntryFacts {
         name_bindings: vec![crate::EntryNameBinding {
             name: 0,

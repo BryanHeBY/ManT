@@ -344,7 +344,165 @@ impl OwnerMark {
     }
 }
 
+/// Map each native component to a contiguous HEAD part interval. A component
+/// may leave unrelated HEAD glyphs outside its interval, but cannot skip a
+/// part or substitute a different join inside its own visible spelling.
+fn component_part_ranges(
+    head: &TextSelection,
+    components: &[OwnerHeadComponent],
+) -> Option<Vec<Range<usize>>> {
+    let mut ranges = Vec::with_capacity(components.len());
+    let mut cursor = 0;
+    for component in components {
+        let first = component.selection.parts.first()?;
+        while head.parts.get(cursor).is_some_and(|part| part != first) {
+            cursor += 1;
+        }
+        let end = cursor.checked_add(component.selection.parts.len())?;
+        if head.parts.get(cursor..end)? != component.selection.parts
+            || head.joins.get(cursor..end.saturating_sub(1))? != component.selection.joins
+        {
+            return None;
+        }
+        ranges.push(cursor..end);
+        cursor = end;
+    }
+    Some(ranges)
+}
+
+fn group_name_occurrences(
+    found: impl IntoIterator<Item = (String, TextSelection)>,
+) -> Vec<(String, Vec<TextSelection>)> {
+    let mut indices: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut grouped: Vec<(String, Vec<TextSelection>)> = Vec::new();
+    for (name, selection) in found {
+        if let Some(&index) = indices.get(&name) {
+            grouped[index].1.push(selection);
+        } else {
+            indices.insert(name.clone(), grouped.len());
+            grouped.push((name, vec![selection]));
+        }
+    }
+    grouped
+}
+
 impl FixedBody {
+    /// Read option spellings only from authored bold operands of an
+    /// alternating-font man HEAD. man_term.c::pre_alternate prints adjacent
+    /// operands without inserting a space; their final glyphs alone cannot
+    /// recover the boundary between a name and an italic argument.
+    #[must_use]
+    pub fn lexical_component_names(
+        &self,
+        owner: &OwnerMark,
+    ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
+        if owner.head_role != Some(OwnerHeadRole::Lexical)
+            || owner.head_role_prefix.is_some()
+            || owner.head_components.is_empty()
+            || self.owner_complete_form(owner).is_none()
+        {
+            return None;
+        }
+        let ranges = component_part_ranges(&owner.head, &owner.head_components)?;
+        let byte_ranges = self.component_byte_ranges(&owner.head, &ranges)?;
+        let mut names = Vec::new();
+        for (component, outer) in owner.head_components.iter().zip(byte_ranges) {
+            if component.role != OwnerHeadRole::Lexical || component.source.is_none() {
+                return None;
+            }
+            let text = self.selection_text(&component.selection)?;
+            for (name, inner) in crate::literal_option_names(&text) {
+                let selection = self.selection_subrange(&component.selection, inner.clone())?;
+                if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
+                    return None;
+                }
+                names.push((
+                    name,
+                    selection,
+                    outer.start + inner.start..outer.start + inner.end,
+                ));
+            }
+        }
+        (!names.is_empty()).then_some(names)
+    }
+
+    /// Bind each source-backed `Fl` macro to its own final glyphs without
+    /// requiring those names to cover the entire HEAD.  mdoc_macro.c::
+    /// blk_full() keeps `Ar` operands in the same It HEAD, and mdoc_term.c::
+    /// termp_fl_pre() still prints every distinct Fl invocation.  The
+    /// complete HEAD remains one form; these components prove names, not
+    /// separate forms or alias relationships.
+    #[must_use]
+    pub fn option_component_names(
+        &self,
+        owner: &OwnerMark,
+    ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
+        if owner.head_role != Some(OwnerHeadRole::Option)
+            || owner.head_components.len() < 2
+            || self.owner_complete_form(owner).is_none()
+        {
+            return None;
+        }
+        let ranges = component_part_ranges(&owner.head, &owner.head_components)?;
+        let byte_ranges = self.component_byte_ranges(&owner.head, &ranges)?;
+        let mut names = Vec::with_capacity(owner.head_components.len());
+        for (component, range) in owner.head_components.iter().zip(byte_ranges) {
+            if component.role != OwnerHeadRole::Option
+                || component.selection.parts.is_empty()
+                || component.source.is_none()
+            {
+                return None;
+            }
+            let text = self.selection_text(&component.selection)?;
+            if !crate::native_option_token(&text) {
+                return None;
+            }
+            names.push((text, component.selection.clone(), range));
+        }
+        Some(names)
+    }
+
+    fn component_byte_ranges(
+        &self,
+        head: &TextSelection,
+        part_ranges: &[std::ops::Range<usize>],
+    ) -> Option<Vec<std::ops::Range<usize>>> {
+        let mut output = Vec::with_capacity(part_ranges.len());
+        let mut offset = 0usize;
+        let mut component = 0usize;
+        let mut start = 0usize;
+        for (index, part) in head.parts.iter().enumerate() {
+            if index != 0 {
+                offset = offset.checked_add(match &head.joins[index - 1] {
+                    TextJoin::DirectContact => 0,
+                    TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text) => {
+                        text.len()
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                })?;
+            }
+            if part_ranges
+                .get(component)
+                .is_some_and(|range| range.start == index)
+            {
+                start = offset;
+            }
+            let run = self.surface.run_text(part.run)?;
+            let text = run.get(
+                usize::try_from(part.start_byte).ok()?..usize::try_from(part.end_byte).ok()?,
+            )?;
+            offset = offset.checked_add(text.len())?;
+            if part_ranges
+                .get(component)
+                .is_some_and(|range| range.end == index + 1)
+            {
+                output.push(start..offset);
+                component += 1;
+            }
+        }
+        (component == part_ranges.len()).then_some(output)
+    }
+
     /// Return multiple exact option declarations only when distinct native
     /// `Fl` macro instances cover every non-separator glyph in one complete
     /// definition HEAD. Typography or punctuation alone never creates names.
@@ -440,10 +598,30 @@ impl FixedBody {
         let [only_form] = entry.forms.as_slice() else {
             return None;
         };
-        if entry.names.len() > 1 {
+        if entry.kind == EntryKind::Term && owner.head_role.is_none() {
+            let valid = entry.id == owner.id
+                && entry.case == NameCase::Sensitive
+                && entry.alias_groups.is_empty()
+                && entry.alias_of.is_none()
+                && entry.value_domain.is_none()
+                && only_form == &owner.head
+                && entry.names.is_empty()
+                && entry.name_bindings.is_empty();
+            return valid.then_some(entry);
+        }
+        if owner.head_role == Some(OwnerHeadRole::Option)
+            && owner.head_components.len() > 1
+            && self.option_component_names(owner).is_some()
+        {
             return self
-                .validated_literal_aliases(owner, entry, &form, only_form)
+                .validated_component_names(owner, entry, only_form)
                 .then_some(entry);
+        }
+        if entry.names.len() > 1 {
+            return (self.validated_lexical_component_names(owner, entry, only_form)
+                || self.validated_literal_names(owner, entry, &form, only_form)
+                || self.validated_component_names(owner, entry, only_form))
+            .then_some(entry);
         }
         let [only_name] = entry.names.as_slice() else {
             return None;
@@ -463,10 +641,8 @@ impl FixedBody {
                 },
                 EntryNameEvidence::Lexical,
             ) => {
-                owner.head_role_prefix.is_none()
-                    && only_name == &form
-                    && crate::lexical_option_token(only_name)
-                    && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
+                self.validated_lexical_component_names(owner, entry, only_form)
+                    || self.validated_literal_names(owner, entry, &form, only_form)
             }
             (
                 Some(OwnerHeadRole::Option | OwnerHeadRole::Lexical),
@@ -629,19 +805,24 @@ impl FixedBody {
     /// Close every lexical alias against the same original HEAD and one
     /// exact, surviving display sub-selection. The syntax cannot stand in for
     /// the native role or for a missing glyph range.
-    fn validated_literal_aliases(
+    fn validated_literal_names(
         &self,
         owner: &OwnerMark,
         entry: &EntryFacts<TextSelection>,
         form: &str,
         only_form: &TextSelection,
     ) -> bool {
-        let Some(aliases) = (owner.head_role == Some(OwnerHeadRole::Lexical)
-            && owner.head_role_prefix.is_none())
-        .then(|| crate::literal_option_aliases(form))
-        .flatten() else {
+        if owner.head_role != Some(OwnerHeadRole::Lexical) || owner.head_role_prefix.is_some() {
             return false;
-        };
+        }
+        let mut found = Vec::new();
+        for (name, range) in crate::literal_option_names(form) {
+            let Some(selection) = self.selection_subrange(&owner.head, range) else {
+                return false;
+            };
+            found.push((name, selection));
+        }
+        let grouped = group_name_occurrences(found);
         entry.id == owner.id
             && entry.kind
                 == EntryKind::Parameter {
@@ -652,16 +833,91 @@ impl FixedBody {
             && entry.alias_of.is_none()
             && entry.value_domain.is_none()
             && only_form == &owner.head
-            && entry.names.len() == aliases.len()
-            && entry.name_bindings.len() == aliases.len()
-            && aliases.iter().enumerate().all(|(index, (name, range))| {
-                entry.names[index] == *name
-                    && entry.name_bindings[index].name == index
-                    && entry.name_bindings[index].evidence == EntryNameEvidence::Lexical
-                    && self.selection_subrange(&owner.head, range.clone()).as_ref()
-                        == entry.name_bindings[index].occurrences.first()
-                    && entry.name_bindings[index].occurrences.len() == 1
-            })
+            && entry.names.len() == grouped.len()
+            && entry.name_bindings.len() == grouped.len()
+            && grouped
+                .iter()
+                .enumerate()
+                .all(|(index, (name, occurrences))| {
+                    entry.names[index] == *name
+                        && entry.name_bindings[index].name == index
+                        && entry.name_bindings[index].evidence == EntryNameEvidence::Lexical
+                        && entry.name_bindings[index].occurrences == *occurrences
+                })
+    }
+
+    fn validated_lexical_component_names(
+        &self,
+        owner: &OwnerMark,
+        entry: &EntryFacts<TextSelection>,
+        only_form: &TextSelection,
+    ) -> bool {
+        let Some(names) = self.lexical_component_names(owner) else {
+            return false;
+        };
+        let grouped = group_name_occurrences(
+            names
+                .into_iter()
+                .map(|(name, selection, _)| (name, selection)),
+        );
+        entry.id == owner.id
+            && entry.kind
+                == EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                }
+            && entry.case == NameCase::Sensitive
+            && entry.alias_groups.is_empty()
+            && entry.alias_of.is_none()
+            && entry.value_domain.is_none()
+            && only_form == &owner.head
+            && entry.names.len() == grouped.len()
+            && entry.name_bindings.len() == grouped.len()
+            && grouped
+                .iter()
+                .enumerate()
+                .all(|(index, (name, occurrences))| {
+                    entry.names[index] == *name
+                        && entry.name_bindings[index].name == index
+                        && entry.name_bindings[index].evidence == EntryNameEvidence::Lexical
+                        && entry.name_bindings[index].occurrences == *occurrences
+                })
+    }
+
+    fn validated_component_names(
+        &self,
+        owner: &OwnerMark,
+        entry: &EntryFacts<TextSelection>,
+        only_form: &TextSelection,
+    ) -> bool {
+        let Some(names) = self.option_component_names(owner) else {
+            return false;
+        };
+        let grouped = group_name_occurrences(
+            names
+                .into_iter()
+                .map(|(name, selection, _)| (name, selection)),
+        );
+        entry.id == owner.id
+            && entry.kind
+                == EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                }
+            && entry.case == NameCase::Sensitive
+            && entry.alias_groups.is_empty()
+            && entry.alias_of.is_none()
+            && entry.value_domain.is_none()
+            && only_form == &owner.head
+            && entry.names.len() == grouped.len()
+            && entry.name_bindings.len() == grouped.len()
+            && grouped
+                .iter()
+                .enumerate()
+                .all(|(index, (name, occurrences))| {
+                    entry.names[index] == *name
+                        && entry.name_bindings[index].name == index
+                        && entry.name_bindings[index].evidence == EntryNameEvidence::NativeMarkup
+                        && entry.name_bindings[index].occurrences == *occurrences
+                })
     }
 
     /// Project a checked final-display selection into logical text without
