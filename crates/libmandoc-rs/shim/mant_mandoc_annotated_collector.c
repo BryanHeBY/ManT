@@ -1487,10 +1487,10 @@ flush_advances(struct mant_annotated_collector *collector, int proven_gap)
 	return 1;
 }
 
-/* term.c::term_field reports FIELD_PLACE before calling p->advance(vbl).
- * Only the following LETTER sink can know which skipped blank cells really
- * reached the device.  Resolve buffer gaps after those advances and before
- * the glyph, collapsing discarded skip cells onto the last visible column. */
+/* term.c::term_field calls p->advance(vbl) before reporting FIELD_PLACE,
+ * but the sink retains those blanks until the following LETTER.  Resolve
+ * buffer gaps after they reach the device and before the glyph, collapsing
+ * discarded skip cells onto the last visible column. */
 static int
 capture_field_points(struct mant_annotated_collector *collector,
     uint16_t emitted_advances)
@@ -1803,7 +1803,10 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_label.link = slot->link;
 		collector->letter_label.source = slot->source;
 		collector->letter_label.flags = slot->flags;
-		collector->letter_edge = origin_edge(column, slot->origin);
+		/* term.c::term_field() called p->advance(vbl) before FIELD_PLACE,
+		 * but the sink still retains those blanks.  Bind the edge after
+		 * LETTER flushes them and updates the origin. */
+		collector->letter_edge = (struct mant_annotated_display_edge){0};
 		collector->letter_column = event->column;
 		collector->letter_pos = event->pos;
 		collector->letter_pending = 1;
@@ -1979,12 +1982,13 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 	struct annotated_column *column;
 	enum mant_mandoc_output_operation operation;
 	uint16_t emitted_advances;
-	int written;
+	int from_field, written;
 
 	if (collector == NULL ||
 	    collector->session->status != MANT_STRUCTURED_OK)
 		return 0;
 	operation = mant_mandoc_output_current_operation();
+	from_field = collector->letter_from_field;
 	label.role = current_role(collector);
 	/* With no FIELD_SKIP, term_field()'s advance is its own vbl
 	 * indentation (or endline margin spacing), never buffer text. */
@@ -2025,7 +2029,22 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 			return 0;
 		}
 		label = collector->letter_label;
-		edge = collector->letter_edge;
+		if (from_field) {
+			if (collector->letter_column >=
+			    collector->column_capacity) {
+				fail_relation(collector,
+				    collector->letter_column,
+				    collector->column_capacity);
+				return 0;
+			}
+			column = collector->columns +
+			    collector->letter_column;
+			/* The pending field blanks were emitted and committed above.
+			 * Join the current glyph to that final predecessor, not to
+			 * the predecessor seen at FIELD_PLACE. */
+			edge = origin_edge(column, label.glyph_origin);
+		} else
+			edge = collector->letter_edge;
 		collector->letter_pending = 0;
 		if ((label.role == MANT_ANNOTATED_BODY ||
 		    label.role == MANT_ANNOTATED_DIRECT_DRAW) &&

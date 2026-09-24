@@ -56,6 +56,63 @@ fn selection_joins(page: &AnnotatedDocument, key: u32) -> Vec<(AnnotatedTextJoin
         .collect()
 }
 
+fn assert_proven_field_text(page: &AnnotatedDocument, key: u32, expected: &str) {
+    let joins = selection_joins(page, key);
+    assert_eq!(selected_text(page, key), expected);
+    assert!(
+        joins
+            .iter()
+            .all(|(join, _)| *join != AnnotatedTextJoin::Unknown),
+        "field word separator lost its predecessor: {joins:?}"
+    );
+}
+
+#[test]
+fn field_placement_joins_after_committing_pending_spaces() {
+    // Each exact input first ran on pinned CVS -Tutf8 at width 78.  In
+    // term.c::term_field, p->advance(vbl) emits deferred blanks before
+    // p->letter; the collector must bind the glyph edge after that advance.
+    let plain = render(b".TH T 1\n.SH DESCRIPTION\nalpha beta gamma\n.TP\n.B --foo\nfoo body\n");
+    let heading = plain.marks.iter().find(|mark| mark.kind == 1).unwrap();
+    assert_proven_field_text(&plain, heading.body_region, "alpha beta gamma");
+
+    let styled = render(b".TH T 1\n.SH DESCRIPTION\nalpha\\fBbeta\\fP gamma\n");
+    let heading = styled.marks.iter().find(|mark| mark.kind == 1).unwrap();
+    assert_proven_field_text(&styled, heading.body_region, "alphabeta gamma");
+
+    let linked = render(b".TH T 1\n.SH DESCRIPTION\n.UR https://example.test\nalpha beta\n.UE\n");
+    let link = linked.marks.iter().find(|mark| mark.kind == 3).unwrap();
+    assert_proven_field_text(&linked, link.key, "alpha beta");
+
+    let nofill = render(b".TH T 1\n.SH DESCRIPTION\n.nf\nalpha beta\ngamma delta\n.fi\n");
+    let heading = nofill.marks.iter().find(|mark| mark.kind == 1).unwrap();
+    assert_proven_field_text(&nofill, heading.body_region, "alpha betagamma delta");
+    assert!(
+        selection_joins(&nofill, heading.body_region)
+            .iter()
+            .any(|(join, _)| *join == AnnotatedTextJoin::HardBoundary)
+    );
+
+    let table =
+        render(b".TH T 1\n.SH DESCRIPTION\n.TS\ntab(;);\nl l.\nalpha beta;gamma delta\n.TE\n");
+    for cell in table
+        .marks
+        .iter()
+        .filter(|mark| mark.kind == 5 && mark.region_kind == 9)
+    {
+        let expected = if cell.native_table_position.unwrap().0 == 0 {
+            "alpha beta"
+        } else {
+            "gamma delta"
+        };
+        assert_proven_field_text(&table, cell.key, expected);
+    }
+
+    let definition = render(b".TH T 1\n.SH DESCRIPTION\n.TP\n.B alpha beta\nbody\n");
+    let owner = definition.marks.iter().find(|mark| mark.kind == 2).unwrap();
+    assert_proven_field_text(&definition, owner.title_region, "alpha beta");
+}
+
 #[test]
 fn soft_wrap_keeps_the_exact_consumed_separator_count() {
     // Both exact inputs first ran on pinned CVS -Tutf8/-Ttree at width 20.

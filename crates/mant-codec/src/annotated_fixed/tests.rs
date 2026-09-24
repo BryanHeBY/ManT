@@ -1,8 +1,12 @@
 use libmandoc_rs::annotated::{
-    AnnotatedDocument, AnnotatedMark, AnnotatedMetadata, AnnotationCoverage,
+    AnnotatedDocument, AnnotatedMark, AnnotatedMetadata, AnnotatedRenderer, AnnotationCoverage,
 };
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{DisplayRole, DocumentBody, DocumentIndex, LinkTarget, OwnerRole, validate_document};
+use mant_protocol::{
+    EvidenceClass, ExplanationOptions, ExplanationQuery, SearchCase, SearchQuery, SearchScope,
+    SearchSyntax,
+};
 
 use super::{lower_annotated_document, project_annotated_manual};
 
@@ -10,6 +14,114 @@ fn bundle(input: &[u8]) -> SourceBundle {
     let mut bundle = SourceBundle::new();
     bundle.insert("t.1", input.to_vec()).unwrap();
     bundle
+}
+
+fn native_query(input: &[u8], width: u32) -> mant_ir::ResolvedContent {
+    let page = AnnotatedRenderer::new(width)
+        .unwrap()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(lower_annotated_document(page).unwrap()),
+        tldr: None,
+    }
+}
+
+fn visible_total(query: &mant_ir::ResolvedContent, pattern: &str) -> u32 {
+    mant_query::search_query(
+        query,
+        &SearchQuery {
+            pattern: pattern.to_owned(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap()
+    .total
+}
+
+#[test]
+fn native_word_spaces_reach_fixed_visible_search() {
+    // The exact input first ran on the pinned CVS -Tutf8 reference.  In
+    // term.c::term_field, deferred word spaces are emitted before the next
+    // glyph; the fixed visible query must retain that proven text relation.
+    let input = b".TH T 1\n.SH DESCRIPTION\nalpha beta gamma\n.TP\n.B --foo\nfoo body\n";
+    let query = native_query(input, 78);
+    for pattern in ["alpha", "alpha beta", "foo body"] {
+        assert_eq!(visible_total(&query, pattern), 1, "missing {pattern:?}");
+    }
+}
+
+#[test]
+fn native_joins_preserve_cross_style_link_cell_and_wrap_search_boundaries() {
+    // Each exact source first ran on pinned CVS -Tutf8 at its stated width.
+    // term.c::term_field emits pending spaces before letters, while
+    // term_flushln distinguishes a soft wrap from a literal hard line.
+    let styled = native_query(b".TH T 1\n.SH DESCRIPTION\nalpha\\fBbeta\\fP gamma\n", 78);
+    assert_eq!(visible_total(&styled, "alphabeta"), 1);
+    assert_eq!(visible_total(&styled, "beta gamma"), 1);
+
+    let linked = native_query(
+        b".TH T 1\n.SH DESCRIPTION\n.UR https://example.test\nalpha beta\n.UE\n",
+        78,
+    );
+    assert_eq!(visible_total(&linked, "alpha beta"), 1);
+
+    let nofill = native_query(
+        b".TH T 1\n.SH DESCRIPTION\n.nf\nalpha beta\ngamma delta\n.fi\n",
+        78,
+    );
+    assert_eq!(visible_total(&nofill, "alpha beta"), 1);
+    assert_eq!(visible_total(&nofill, "gamma delta"), 1);
+    assert_eq!(visible_total(&nofill, "beta gamma"), 0);
+
+    let table = native_query(
+        b".TH T 1\n.SH DESCRIPTION\n.TS\ntab(;);\nl l.\nalpha beta;gamma delta\n.TE\n",
+        78,
+    );
+    assert_eq!(visible_total(&table, "alpha beta"), 1);
+    assert_eq!(visible_total(&table, "gamma delta"), 1);
+    assert_eq!(visible_total(&table, "beta gamma"), 0);
+
+    let wrapped = native_query(b".TH T 1\n.SH DESCRIPTION\nalpha beta gamma delta\n", 20);
+    assert_eq!(visible_total(&wrapped, "beta gamma"), 1);
+}
+
+#[test]
+fn native_multiword_definition_head_reaches_fixed_explain() {
+    // The exact input first ran on pinned CVS -Tutf8.  term.c::term_field
+    // flushes the head's word blank before the next glyph; a verified form
+    // must retain both words rather than downgrade their join to Unknown.
+    let input = b".TH T 1\n.SH DESCRIPTION\n.TP\n.B alpha beta\nbody\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let query = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let result = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "alpha beta".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert!(
+        result
+            .evidence
+            .iter()
+            .any(|item| item.class == EvidenceClass::DirectEntry),
+        "multiword native head was not indexed: {result:?}"
+    );
 }
 
 fn malformed_marks(marks: Vec<AnnotatedMark>) -> AnnotatedDocument {
