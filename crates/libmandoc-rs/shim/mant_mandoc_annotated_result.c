@@ -10,6 +10,7 @@
 _Static_assert(MAN_TP == 382, "annotated MAN_TP token changed");
 _Static_assert(MAN_TQ == 383, "annotated MAN_TQ token changed");
 _Static_assert(MAN_IP == 387, "annotated MAN_IP token changed");
+_Static_assert(MAN_RS == 401, "annotated MAN_RS token changed");
 
 static int
 man_reading_family(uint32_t token)
@@ -418,14 +419,18 @@ valid_marks(const struct mant_annotated_result *result)
 		    (mark->source == 0 && mark->line != 0) ||
 		    (((mark->flags & MANT_ANNOTATED_MARK_AUTHORED) != 0) !=
 		    (mark->line != 0)) ||
-		    mark->region_kind > MANT_ANNOTATED_REGION_MARGIN ||
+		    mark->region_kind >
+		    MANT_ANNOTATED_REGION_HANGING_CONTINUATION ||
 		    mark->title_region > result->mark_count ||
 		    mark->body_region > result->mark_count ||
 		    (mark->flags & ~(MANT_ANNOTATED_MARK_AUTHORED |
 		    MANT_ANNOTATED_MARK_MANUAL_TARGET |
 		    MANT_ANNOTATED_MARK_SUBSECTION |
 		    MANT_ANNOTATED_MARK_DEFINITION |
+		    MANT_ANNOTATED_MARK_HANGING_CANDIDATE |
 		    MANT_ANNOTATED_MARK_HEAD_ROLE_MASK)) != 0 ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_HANGING_CANDIDATE) != 0 &&
+		    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_MANUAL_TARGET) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_ANCHOR) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_SUBSECTION) != 0 &&
@@ -441,7 +446,49 @@ valid_marks(const struct mant_annotated_result *result)
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) - 1)) != 0)) ||
 		    mark->point_reserved != 0)
 			return 0;
-		if (mark->preceding_owner != 0) {
+		if (mark->kind == MANT_ANNOTATED_MARK_OWNER &&
+		    (mark->flags & MANT_ANNOTATED_MARK_HANGING_CANDIDATE) != 0 &&
+		    (mark->parent == 0 || mark->preceding_owner != 0 ||
+		    mark->title_region == 0 || mark->body_region == 0 ||
+		    result->marks[mark->parent - 1].kind !=
+		    MANT_ANNOTATED_MARK_REGION ||
+		    result->marks[mark->parent - 1].region_kind !=
+		    MANT_ANNOTATED_REGION_HEADING_BODY ||
+		    (((mark->flags & MANT_ANNOTATED_MARK_DEFINITION) != 0) !=
+		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_LEXICAL) != 0)) ||
+		    (mark->flags & (MANT_ANNOTATED_MARK_HEAD_OPTION |
+		    MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT |
+		    MANT_ANNOTATED_MARK_HEAD_LITERAL)) != 0))
+			return 0;
+		if (mark->kind == MANT_ANNOTATED_MARK_REGION &&
+		    mark->region_kind ==
+		    MANT_ANNOTATED_REGION_HANGING_CONTINUATION) {
+			const struct mant_annotated_mark *candidate;
+
+			if (mark->preceding_owner == 0 ||
+			    mark->preceding_owner >= mark->key ||
+			    mark->parent == 0 || mark->owner != 0 ||
+			    mark->token != MAN_RS ||
+			    mark->title_region != 0 || mark->body_region != 0 ||
+			    result->marks[mark->parent - 1].kind !=
+			    MANT_ANNOTATED_MARK_REGION ||
+			    result->marks[mark->parent - 1].region_kind !=
+			    MANT_ANNOTATED_REGION_HEADING_BODY)
+				return 0;
+			candidate = result->marks + mark->preceding_owner - 1;
+			if (candidate->kind != MANT_ANNOTATED_MARK_OWNER ||
+			    candidate->parent != mark->parent ||
+			    (candidate->flags &
+			    (MANT_ANNOTATED_MARK_HANGING_CANDIDATE |
+			    MANT_ANNOTATED_MARK_DEFINITION |
+			    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
+			    (MANT_ANNOTATED_MARK_HANGING_CANDIDATE |
+			    MANT_ANNOTATED_MARK_DEFINITION |
+			    MANT_ANNOTATED_MARK_HEAD_LEXICAL) ||
+			    candidate->title_region == 0 ||
+			    candidate->body_region == 0)
+				return 0;
+		} else if (mark->preceding_owner != 0) {
 			const struct mant_annotated_mark *preceding;
 			int family = man_reading_family(mark->token);
 

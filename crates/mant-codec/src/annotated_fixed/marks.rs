@@ -119,6 +119,58 @@ pub(super) fn project_owner(
             source: mark_source(component)?,
         });
     }
+    let direct_body = project_owner_body(page, mark, body_regions)?;
+    let empty_point = if head.parts.is_empty() && direct_body.parts.is_empty() {
+        Some(point(mark.point.ok_or(
+            AnnotatedProjectionError::Relation("empty owner has no final point"),
+        )?)?)
+    } else {
+        None
+    };
+    Ok(OwnerMark {
+        key: keys.required(mark.key, 2)?,
+        id: identities.owner(mark.key)?,
+        parent: keys.nearest(mark.parent, 2)?,
+        preceding_owner: project_owner_predecessor(page, keys, mark)?,
+        hanging_candidate: mark.flags & 512 != 0,
+        hanging_continuation: None,
+        hanging_nested_head: None,
+        section: keys.nearest(mark.parent, 1)?,
+        role: if mark.flags & 16 != 0 {
+            OwnerRole::Definition
+        } else {
+            OwnerRole::Other
+        },
+        head_role: match mark.flags & 0b1_1110_0000 {
+            0 => None,
+            32 => Some(OwnerHeadRole::Option),
+            64 => Some(OwnerHeadRole::Environment),
+            128 => Some(OwnerHeadRole::Literal),
+            256 => Some(OwnerHeadRole::Lexical),
+            _ => {
+                return Err(AnnotatedProjectionError::Relation(
+                    "invalid native head role",
+                ));
+            }
+        },
+        head_role_prefix: mark.name.clone(),
+        head_components,
+        entry: None,
+        head,
+        direct_body,
+        empty_point,
+        source: mark_source(mark)?,
+    })
+}
+
+/// Merge a native owner's direct `BODY` regions without inferring joins across
+/// separate upstream nodes. Their display order, not source order, governs
+/// the one owned selection.
+fn project_owner_body(
+    page: &AnnotatedDocument,
+    mark: &AnnotatedMark,
+    body_regions: &[u32],
+) -> Result<TextSelection> {
     if body_regions.last().copied() != Some(mark.body_region) {
         return Err(AnnotatedProjectionError::Relation(
             "owner body pointer is not its latest direct body",
@@ -157,44 +209,7 @@ pub(super) fn project_owner(
         direct_body.parts.push(part);
         previous = Some((region, index));
     }
-    let empty_point = if head.parts.is_empty() && direct_body.parts.is_empty() {
-        Some(point(mark.point.ok_or(
-            AnnotatedProjectionError::Relation("empty owner has no final point"),
-        )?)?)
-    } else {
-        None
-    };
-    Ok(OwnerMark {
-        key: keys.required(mark.key, 2)?,
-        id: identities.owner(mark.key)?,
-        parent: keys.nearest(mark.parent, 2)?,
-        preceding_owner: project_owner_predecessor(page, keys, mark)?,
-        section: keys.nearest(mark.parent, 1)?,
-        role: if mark.flags & 16 != 0 {
-            OwnerRole::Definition
-        } else {
-            OwnerRole::Other
-        },
-        head_role: match mark.flags & 0b1_1110_0000 {
-            0 => None,
-            32 => Some(OwnerHeadRole::Option),
-            64 => Some(OwnerHeadRole::Environment),
-            128 => Some(OwnerHeadRole::Literal),
-            256 => Some(OwnerHeadRole::Lexical),
-            _ => {
-                return Err(AnnotatedProjectionError::Relation(
-                    "invalid native head role",
-                ));
-            }
-        },
-        head_role_prefix: mark.name.clone(),
-        head_components,
-        entry: None,
-        head,
-        direct_body,
-        empty_point,
-        source: mark_source(mark)?,
-    })
+    Ok(direct_body)
 }
 
 fn project_owner_predecessor(
@@ -356,6 +371,16 @@ pub(super) fn project_region(
         key: keys.required(mark.key, 5)?,
         parent: keys.nearest(mark.parent, 5)?,
         owner: keys.nearest(mark.owner, 2)?,
+        continuation_of: if mark.region_kind == 12 {
+            keys.lookup(mark.preceding_owner, 2)?
+        } else {
+            if mark.preceding_owner != 0 {
+                return Err(AnnotatedProjectionError::Relation(
+                    "non-continuation region has predecessor",
+                ));
+            }
+            None
+        },
         section: keys.nearest(mark.parent, 1)?,
         kind: match mark.region_kind {
             10 => RegionKind::Unsectioned,
@@ -369,6 +394,7 @@ pub(super) fn project_region(
             8 => RegionKind::Equation,
             9 => RegionKind::TableCell,
             11 => RegionKind::Margin,
+            12 => RegionKind::HangingContinuation,
             _ => {
                 return Err(AnnotatedProjectionError::Relation(
                     "unknown native region kind",

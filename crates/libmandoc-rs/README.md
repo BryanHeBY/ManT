@@ -384,7 +384,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 41 ordered patches in `patches/series`. The following group contains
+the 42 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -489,6 +489,8 @@ The remaining patches implement the synchronous embedding boundary:
 - `0041-track-diagnostic-coordinate-origin.patch` distinguishes authored
   columns from user-macro and other reparsed text, preserving source identity
   without assigning generated columns to an authored line.
+- `0042-retain-elided-paragraph-boundary.patch` keeps the executed PP/P/LP
+  boundary on children moved out of the first section paragraph by validation.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

@@ -340,7 +340,7 @@ fn fixed_owner_readability(fixed: &FixedBody) -> (Vec<bool>, Vec<bool>) {
         ) {
             continue;
         }
-        if let Some(owner) = region.owner {
+        if let Some(owner) = region.continuation_of.or(region.owner) {
             has_body_parts[owner.get() as usize] |= !region.selection.parts.is_empty();
             if region.kind != RegionKind::Margin {
                 readable[owner.get() as usize] |=

@@ -298,6 +298,46 @@ impl FixedBody {
             earlier(owner.parent, owner.key)?;
             earlier(owner.preceding_owner, owner.key)?;
             reference(owner.section, self.headings.len())?;
+            if owner.hanging_candidate {
+                if owner.hanging_continuation.is_some()
+                    && (owner.role != super::OwnerRole::Definition
+                        || owner.head_role != Some(super::OwnerHeadRole::Lexical))
+                {
+                    return Err(FixedBodyError("upgraded hanging owner lacks native role"));
+                }
+                if owner.hanging_continuation.is_none() && owner.entry.is_some() {
+                    return Err(FixedBodyError("unupgraded hanging owner has entry facts"));
+                }
+            } else if owner.hanging_continuation.is_some() || owner.hanging_nested_head.is_some() {
+                return Err(FixedBodyError("noncandidate owner has hanging relation"));
+            }
+            if let Some(head_key) = owner.hanging_nested_head {
+                let continuation = owner
+                    .hanging_continuation
+                    .and_then(|key| self.regions.get((key.get() - 1) as usize))
+                    .ok_or(FixedBodyError("nested hanging head has no continuation"))?;
+                let head = self
+                    .regions
+                    .get((head_key.get() - 1) as usize)
+                    .ok_or(FixedBodyError("nested hanging head does not resolve"))?;
+                let nested = head
+                    .owner
+                    .and_then(|key| self.owners.get((key.get() - 1) as usize))
+                    .ok_or(FixedBodyError("nested hanging head has no owner"))?;
+                if continuation.kind != super::RegionKind::HangingContinuation
+                    || continuation.continuation_of != Some(owner.key)
+                    || head.kind != super::RegionKind::OwnerHead
+                    || head.parent != Some(continuation.key)
+                    || head.section != owner.section
+                    || nested.key == owner.key
+                    || nested.section != owner.section
+                    || nested.parent != owner.parent
+                    || nested.role != super::OwnerRole::Definition
+                    || nested.head != head.selection
+                {
+                    return Err(FixedBodyError("invalid nested hanging head proof"));
+                }
+            }
             if let Some(preceding_key) = owner.preceding_owner {
                 // Native C/FFI prove the IP or TP/TQ sibling family and
                 // flow epoch. Typed IR retains only that asserted relation:
@@ -412,15 +452,77 @@ impl FixedBody {
             reference(anchor.section, self.headings.len())?;
             self.surface.validate_point(anchor.at)?;
         }
+        let mut owner_head_parents = vec![None; self.owners.len() + 1];
+        let mut owner_head_keys = vec![None; self.owners.len() + 1];
+        let mut owner_head_seen = vec![false; self.owners.len() + 1];
+        for region in &self.regions {
+            if region.kind == super::RegionKind::OwnerHead
+                && let Some(owner) = region.owner
+            {
+                let index = owner.get() as usize;
+                let seen = owner_head_seen
+                    .get_mut(index)
+                    .ok_or(FixedBodyError("owner head references missing owner"))?;
+                if std::mem::replace(seen, true) {
+                    return Err(FixedBodyError("owner has duplicate head regions"));
+                }
+                owner_head_parents[index] = region.parent;
+                owner_head_keys[index] = Some(region.key);
+            }
+        }
+        for owner in self.owners.iter().filter(|owner| owner.hanging_candidate) {
+            let head = owner_head_keys[owner.key.get() as usize]
+                .and_then(|key: NonZeroU32| self.regions.get((key.get() - 1) as usize))
+                .ok_or(FixedBodyError("hanging candidate has no owner head"))?;
+            if head.selection != owner.head {
+                return Err(FixedBodyError("hanging candidate head selection differs"));
+            }
+        }
         for (index, region) in self.regions.iter().enumerate() {
             dense_key(region.key, index)?;
             earlier(region.parent, region.key)?;
             reference(region.owner, self.owners.len())?;
             reference(region.section, self.headings.len())?;
+            if let Some(parent) = region.parent
+                && self.regions[(parent.get() - 1) as usize].section != region.section
+            {
+                return Err(FixedBodyError("region crosses a section boundary"));
+            }
             if let Some(owner) = region.owner
                 && self.owners[(owner.get() - 1) as usize].section != region.section
             {
                 return Err(FixedBodyError("region and owner have different sections"));
+            }
+            match (region.kind, region.continuation_of) {
+                (super::RegionKind::HangingContinuation, Some(candidate)) => {
+                    let owner = self
+                        .owners
+                        .get((candidate.get() - 1) as usize)
+                        .ok_or(FixedBodyError("continuation owner does not resolve"))?;
+                    let parent = region
+                        .parent
+                        .and_then(|key| self.regions.get((key.get() - 1) as usize))
+                        .ok_or(FixedBodyError("continuation has no heading body"))?;
+                    if region.owner.is_some()
+                        || region.section.is_none()
+                        || !owner.hanging_candidate
+                        || owner.hanging_continuation != Some(region.key)
+                        || owner.role != super::OwnerRole::Definition
+                        || owner.section != region.section
+                        || parent.kind != super::RegionKind::HeadingBody
+                        || parent.section != region.section
+                        || owner_head_parents[candidate.get() as usize] != region.parent
+                    {
+                        return Err(FixedBodyError("invalid hanging continuation relation"));
+                    }
+                }
+                (super::RegionKind::HangingContinuation, None) => {
+                    return Err(FixedBodyError("continuation has no definition owner"));
+                }
+                (_, Some(_)) => {
+                    return Err(FixedBodyError("non-continuation has a definition relation"));
+                }
+                (_, None) => {}
             }
             validate_selection(&region.selection)?;
             if let Some(point) = region.empty_point {

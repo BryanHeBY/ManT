@@ -51,6 +51,7 @@ fn fixture() -> ResolvedContent {
         key: key(1),
         parent: None,
         owner: None,
+        continuation_of: None,
         section: None,
         kind: RegionKind::Literal,
         selection: TextSelection {

@@ -118,6 +118,15 @@ DTO fragments retain native physical row, checked terminal column/width and
 final style. Text/ANSI/Markdown presentation uses those physical coordinates,
 including blank rows, never `TextJoin` as a layout instruction.
 
+For man(7) hanging paragraphs, the native first-paragraph boundary and the
+executed positive `.RS` offset establish a presentation candidate and an
+ownerless continuation region. The candidate and continuation keep a checked
+bidirectional relation; neither reparents the displayed RS subtree. A complete
+head declaration and a non-table description are required before the candidate
+becomes a query entry. Owner reading follows the continuation's native region
+descendants (including literal content and nested owners) once, while section
+reading still sees those same final-display slices once.
+
 ## Safe output and overwritten marks
 
 The exact pinned paths for R01 are `term.c::term_field/encode1/term_flushln`,

@@ -266,6 +266,9 @@ fn empty_display_and_inline_equations_keep_final_region_points() {
     // Both exact inputs ran on pinned CVS -Ttree/-Thtml/-Tutf8 -O width=78.
     // eqn_term.c::term_eqn calls eqn_box() directly: an empty box emits no
     // glyph and may remain inline between surrounding authored words.
+    // roff.c::roff_eqndelim() reparses the inline delimiters as synthetic
+    // .EQ/.EN; read.c::mparse_buf_r() retains source identity but not an
+    // authored line/column for that generated equation node.
     let standalone = render(
         b".TH X 1\n.SH D\nbefore\n.EQ\n.EN\nafter\n",
         InputFormat::Man,
@@ -293,11 +296,16 @@ fn empty_display_and_inline_equations_keep_final_region_points() {
         b".TH X 1\n.SH D\n.EQ\ndelim $$\n.EN\nbefore $$ after\n",
         InputFormat::Man,
     );
-    let region = inline
+    let equations = inline
         .marks
         .iter()
-        .find(|mark| mark.kind == 5 && mark.region_kind == 8 && mark.line == 6)
-        .unwrap();
+        .filter(|mark| mark.kind == 5 && mark.region_kind == 8)
+        .collect::<Vec<_>>();
+    assert_eq!(equations.len(), 2);
+    assert_eq!(equations[0].line, 3);
+    let region = equations[1];
+    assert_eq!((region.source, region.line, region.column), (1, 0, 0));
+    assert_eq!(region.flags & 1, 0);
     assert_eq!(region.selection_count, 0);
     let (before_row, before_col) = text_column(&inline, "before");
     let (after_row, after_col) = text_column(&inline, "after");

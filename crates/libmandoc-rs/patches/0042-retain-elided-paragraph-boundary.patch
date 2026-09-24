@@ -1,0 +1,39 @@
+Subject: retain executed paragraph boundary when validation unwraps it
+Upstream-Status: Local embedding (not submitted)
+
+man_validate.c::post_SH removes the first nonempty PP/P/LP block under a
+section after relocating its children.  Preserve that executed paragraph
+token on each relocated child so the annotated presentation reader can
+identify the whole paragraph without guessing from final screen adjacency.
+The discriminator is the original PP, P, or LP token: all three share
+man_term.c::pre_PP(), and the reader groups only siblings bearing that same
+executed paragraph boundary.
+
+diff --git a/man_validate.c b/man_validate.c
+index 2def7375..be848ca0 100644
+--- a/man_validate.c
++++ b/man_validate.c
+@@ -343,7 +343,11 @@ post_SH(CHKARGS)
+ 
+ 	if ((nc->tok == MAN_LP || nc->tok == MAN_PP || nc->tok == MAN_P) &&
+ 	    nc->body->child != NULL) {
++		/* The first paragraph after SH/SS is unwrapped below.  Keep its
++		 * executed boundary on each surviving child so downstream
++		 * presentation grouping does not infer it from screen adjacency. */
+ 		while (nc->body->last != NULL) {
++			nc->body->last->mant_elided_par_tok = nc->tok;
+ 			man->next = ROFF_NEXT_CHILD;
+ 			roff_node_relink(man, nc->body->last);
+ 			man->last = n;
+diff --git a/roff.h b/roff.h
+index ce85dd80..c1c9bfe8 100644
+--- a/roff.h
++++ b/roff.h
+@@ -531,6 +531,7 @@ struct	roff_node {
+ 	uint32_t	  mant_source_key; /* Embedding result-local source. */
+ 	unsigned char	  mant_coordinate_origin; /* Authored or reparse. */
+ 	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
++	enum roff_tok	  mant_elided_par_tok; /* Child of elided SH paragraph. */
+ 	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
+ 	int		  flags;
+ #define	NODE_VALID	 (1 << 0)  /* Has been validated. */

@@ -95,6 +95,109 @@ pub fn literal_option_names(form: &str) -> Vec<(String, Range<usize>)> {
     names
 }
 
+/// Require an inferred PP/RS head to be complete declaration syntax, not
+/// merely to start with an option-looking word. The native continuation
+/// proves presentation ownership; this source-neutral rule prevents ordinary
+/// prose in that same paragraph from becoming an entry. It follows the
+/// bounded bare-argument rule of Flow's `is_option_head` without treating
+/// visual adjacency as an alias or reconstructing roff markup.
+#[must_use]
+pub fn is_complete_hanging_option_head(form: &str) -> bool {
+    let names = literal_option_names(form);
+    let Some((_, first)) = names.first() else {
+        return false;
+    };
+    if !form[..first.start]
+        .chars()
+        .all(|character| character.is_whitespace() || matches!(character, '[' | '{' | '('))
+    {
+        return false;
+    }
+    for pair in names.windows(2) {
+        let [(previous, previous_range), (next, next_range)] = pair else {
+            unreachable!()
+        };
+        let Some(gap) = form.get(previous_range.end..next_range.start) else {
+            return false;
+        };
+        let gap = gap.trim();
+        if gap.is_empty() || gap == "or" {
+            if previous.len() != 2 || !previous.starts_with('-') || !next.starts_with("--") {
+                return false;
+            }
+        } else if let Some(prefix) = gap.strip_suffix([',', '|', '/']) {
+            if !hanging_argument_tail(prefix) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    names
+        .last()
+        .and_then(|(_, range)| form.get(range.end..))
+        .is_some_and(hanging_argument_tail)
+}
+
+fn hanging_argument_tail(value: &str) -> bool {
+    let mut tail = value.trim();
+    if !tail.is_empty()
+        && tail
+            .chars()
+            .all(|character| matches!(character, ']' | '}' | ')'))
+    {
+        return true;
+    }
+    if tail.starts_with([',', '|', '/']) {
+        return false;
+    }
+    if let Some(attached) = tail.strip_prefix('=') {
+        let Some(token) = attached.split_whitespace().next() else {
+            return false;
+        };
+        if token.is_empty() || token.chars().any(char::is_control) {
+            return false;
+        }
+        tail = attached[token.len()..].trim_start();
+    }
+    let mut bare = 0usize;
+    let mut closers = Vec::new();
+    for token in tail.split_whitespace() {
+        let inside = !closers.is_empty();
+        for character in token.chars() {
+            if let Some(closer) = match character {
+                '[' => Some(']'),
+                '{' => Some('}'),
+                '<' => Some('>'),
+                '(' => Some(')'),
+                _ => None,
+            } {
+                if closers.len() == 64 {
+                    return false;
+                }
+                closers.push(closer);
+            } else if matches!(character, ']' | '}' | '>' | ')') && closers.pop() != Some(character)
+            {
+                return false;
+            }
+        }
+        if inside || token.starts_with(['[', '{', '<', '(']) || token == "..." {
+            continue;
+        }
+        if token.starts_with('/')
+            || token
+                .chars()
+                .all(|character| character.is_alphanumeric() || matches!(character, '_' | '-'))
+                && !token.starts_with('-')
+        {
+            bare += 1;
+        } else {
+            return false;
+        }
+    }
+    closers.is_empty() && bare <= 1
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
     Name,
@@ -175,7 +278,31 @@ fn pattern_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>
 
 #[cfg(test)]
 mod tests {
-    use super::literal_option_names;
+    use super::{is_complete_hanging_option_head, literal_option_names};
+
+    #[test]
+    fn hanging_heads_require_complete_declaration_syntax() {
+        // Each spelling was first executed in a minimal PP/B/RS input with
+        // pinned CVS -Tutf8. The formatter keeps the whole PP presentation
+        // head; this source-neutral rule alone decides whether it is a name.
+        for accepted in [
+            "--git-dir",
+            "--output FILE",
+            "--git-dir=path",
+            "-a, --all",
+            "--foo [=FILE]",
+        ] {
+            assert!(is_complete_hanging_option_head(accepted), "{accepted}");
+        }
+        for rejected in [
+            "--git-dir intervening text",
+            "--foo --bar",
+            "-a / --all",
+            "ordinary prose",
+        ] {
+            assert!(!is_complete_hanging_option_head(rejected), "{rejected}");
+        }
+    }
 
     #[test]
     fn names_remain_separate_from_attached_values_and_unproved_aliases() {

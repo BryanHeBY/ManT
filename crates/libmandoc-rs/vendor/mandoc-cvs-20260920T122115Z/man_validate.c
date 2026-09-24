@@ -343,7 +343,11 @@ post_SH(CHKARGS)
 
 	if ((nc->tok == MAN_LP || nc->tok == MAN_PP || nc->tok == MAN_P) &&
 	    nc->body->child != NULL) {
+		/* The first paragraph after SH/SS is unwrapped below.  Keep its
+		 * executed boundary on each surviving child so downstream
+		 * presentation grouping does not infer it from screen adjacency. */
 		while (nc->body->last != NULL) {
+			nc->body->last->mant_elided_par_tok = nc->tok;
 			man->next = ROFF_NEXT_CHILD;
 			roff_node_relink(man, nc->body->last);
 			man->last = n;

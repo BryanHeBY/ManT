@@ -123,6 +123,7 @@ fn ownership(
                         | RegionKind::Literal
                         | RegionKind::TableCell
                         | RegionKind::Equation
+                        | RegionKind::HangingContinuation
                 )
         );
         if !body_kind || piece.display_role != DisplayRole::Body || piece.section != section {

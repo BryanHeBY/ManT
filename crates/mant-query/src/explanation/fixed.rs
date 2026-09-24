@@ -983,11 +983,13 @@ fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError>
     Ok((start_scalar, end_scalar))
 }
 
+type FixedNamePositions = Vec<Vec<(usize, u64, u64)>>;
+
 fn fixed_name_positions(
     fixed: &FixedBody,
     owner: &OwnerMark,
     entry: &mant_ir::SemanticEntry,
-) -> Result<Vec<Vec<(usize, u64, u64)>>, ExplanationError> {
+) -> Result<FixedNamePositions, ExplanationError> {
     if entry.kind == mant_ir::EntryKind::Term && entry.names.is_empty() {
         return Ok(Vec::new());
     }
@@ -1492,6 +1494,9 @@ mod tests {
                     id: NodeId::from("owner-printf"),
                     parent: None,
                     preceding_owner: None,
+                    hanging_candidate: false,
+                    hanging_continuation: None,
+                    hanging_nested_head: None,
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
                     head_role: Some(mant_ir::OwnerHeadRole::Lexical),
@@ -1508,6 +1513,9 @@ mod tests {
                     id: NodeId::from("owner-empty"),
                     parent: None,
                     preceding_owner: None,
+                    hanging_candidate: false,
+                    hanging_continuation: None,
+                    hanging_nested_head: None,
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
                     head_role: None,

@@ -297,6 +297,21 @@ pub struct OwnerMark {
     /// flow boundary. This is reading-context evidence, not owned body text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preceding_owner: Option<NonZeroU32>,
+    /// The native PP presentation candidate bit. It is not itself semantic
+    /// evidence; an explicit, readable RS relation and complete head are
+    /// required before this owner may carry an entry.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hanging_candidate: bool,
+    /// Direct checked key of the ownerless RS region, when that candidate was
+    /// upgraded by a positive native indentation. Direct text or an enclosed
+    /// definition head must separately prove readable description content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hanging_continuation: Option<NonZeroU32>,
+    /// Direct native `OwnerHead` child of the continuation, when an `RS` body
+    /// consists of a nested definition rather than directly emitted text.
+    /// This is structural description evidence, not another text owner.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hanging_nested_head: Option<NonZeroU32>,
     /// Enclosing section, if known.
     pub section: Option<NonZeroU32>,
     /// Native owner kind before classification.
@@ -344,6 +359,11 @@ impl OwnerMark {
     }
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde's skip callback takes &T.
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 /// Map each native component to a contiguous HEAD part interval. A component
 /// may leave unrelated HEAD glyphs outside its interval, but cannot skip a
 /// part or substitute a different join inside its own visible spelling.
@@ -387,8 +407,54 @@ fn group_name_occurrences(
 }
 
 impl FixedBody {
+    /// Check one PP/RS declaration against its direct native continuation,
+    /// without scanning unrelated owners or regions. The paragraph head must
+    /// be complete syntax; a textless RS qualifies only with a checked nested
+    /// definition head, not merely a table or empty layout scope.
+    #[must_use]
+    pub fn hanging_declaration_ready(&self, owner: &OwnerMark) -> bool {
+        let Some(region) = owner
+            .hanging_continuation
+            .and_then(|key| self.regions.get((key.get() - 1) as usize))
+        else {
+            return false;
+        };
+        let nested_head_ready = owner
+            .hanging_nested_head
+            .and_then(|key| self.regions.get((key.get() - 1) as usize))
+            .is_some_and(|head| {
+                head.kind == RegionKind::OwnerHead
+                    && head.parent == Some(region.key)
+                    && head.section == owner.section
+                    && head.owner.is_some_and(|nested| {
+                        nested != owner.key
+                            && self
+                                .owners
+                                .get((nested.get() - 1) as usize)
+                                .is_some_and(|child| {
+                                    child.section == owner.section
+                                        && child.parent == owner.parent
+                                        && child.role == OwnerRole::Definition
+                                        && child.head == head.selection
+                                })
+                    })
+            });
+        owner.hanging_candidate
+            && owner.role == OwnerRole::Definition
+            && owner.head_role == Some(OwnerHeadRole::Lexical)
+            && region.kind == RegionKind::HangingContinuation
+            && region.continuation_of == Some(owner.key)
+            && region.owner.is_none()
+            && region.section == owner.section
+            && (owner.hanging_nested_head.is_none() || nested_head_ready)
+            && (!region.selection.parts.is_empty() || nested_head_ready)
+            && self
+                .owner_complete_form(owner)
+                .is_some_and(|form| crate::is_complete_hanging_option_head(&form))
+    }
+
     /// Read option spellings only from authored bold operands of an
-    /// alternating-font man HEAD. man_term.c::pre_alternate prints adjacent
+    /// alternating-font man `HEAD`. `man_term.c::pre_alternate` prints adjacent
     /// operands without inserting a space; their final glyphs alone cannot
     /// recover the boundary between a name and an italic argument.
     #[must_use]
@@ -427,10 +493,10 @@ impl FixedBody {
     }
 
     /// Bind each source-backed `Fl` macro to its own final glyphs without
-    /// requiring those names to cover the entire HEAD.  mdoc_macro.c::
-    /// blk_full() keeps `Ar` operands in the same It HEAD, and mdoc_term.c::
-    /// termp_fl_pre() still prints every distinct Fl invocation.  The
-    /// complete HEAD remains one form; these components prove names, not
+    /// requiring those names to cover the entire `HEAD`.
+    /// `mdoc_macro.c::blk_full()` keeps `Ar` operands in the same `It` `HEAD`,
+    /// and `mdoc_term.c::termp_fl_pre()` prints every distinct `Fl` invocation.
+    /// The complete `HEAD` remains one form; these components prove names, not
     /// separate forms or alias relationships.
     #[must_use]
     pub fn option_component_names(
@@ -557,11 +623,19 @@ impl FixedBody {
     /// lexical binding close against this owner's surviving native head.
     /// Recheck at read time: an in-memory `Document` can be changed after its
     /// deserialization guard ran.
+    #[allow(clippy::too_many_lines)] // One read-time closure of all entry fact variants.
     pub(crate) fn validated_entry<'a>(
         &self,
         owner: &'a OwnerMark,
     ) -> Option<&'a EntryFacts<TextSelection>> {
         let entry = owner.entry.as_ref()?;
+        if owner.hanging_candidate {
+            if !self.hanging_declaration_ready(owner) {
+                return None;
+            }
+        } else if owner.hanging_continuation.is_some() || owner.hanging_nested_head.is_some() {
+            return None;
+        }
         if entry.forms.len() > 1 {
             let forms = self.option_component_forms(owner)?;
             let valid = entry.id == owner.id
@@ -1136,6 +1210,8 @@ pub enum RegionKind {
     Equation,
     /// Generated physical-line margin glyph, outside semantic heads/titles.
     Margin,
+    /// Native paragraph or indented block continuing an earlier definition.
+    HangingContinuation,
 }
 
 /// One native region without a parallel text buffer.
@@ -1148,6 +1224,10 @@ pub struct RegionMark {
     pub parent: Option<NonZeroU32>,
     /// Owning native candidate, when present.
     pub owner: Option<NonZeroU32>,
+    /// Earlier definition whose reading body includes this ownerless native
+    /// region. This is not a new owner or a transfer of source ownership.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_of: Option<NonZeroU32>,
     /// Enclosing native section, including ownerless table and literal regions.
     pub section: Option<NonZeroU32>,
     /// Region family.

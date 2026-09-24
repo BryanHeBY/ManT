@@ -7,13 +7,17 @@
 use crate::{InputFormat, SourceBundle};
 
 /// Pinned roff.h discriminators for authored man(7) definition macros.
-/// The native build asserts these values against `MAN_TP`, `MAN_TQ`, and `MAN_IP`.
+/// The native build asserts these values against `MAN_TP`, `MAN_TQ`,
+/// `MAN_IP`, and `MAN_RS`.
 #[doc(hidden)]
 pub const MAN_TP_TOKEN: u32 = 382;
 #[doc(hidden)]
 pub const MAN_TQ_TOKEN: u32 = 383;
 #[doc(hidden)]
 pub const MAN_IP_TOKEN: u32 = 387;
+/// Pinned `MAN_RS` discriminator; checked against the native region relation.
+#[doc(hidden)]
+pub const MAN_RS_TOKEN: u32 = 401;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnotatedMetadata {
@@ -825,6 +829,224 @@ mod tests {
             assert!(page.text.contains("--macro-generated"), "{call}");
             assert!(page.text.contains("Description."), "{call}");
             assert!(page.text.contains("label"), "{call}");
+        }
+    }
+
+    fn assert_native_hanging_case(
+        input: &str,
+        expected_candidate: bool,
+        expected_continuation: bool,
+        head_text: &str,
+        head_line: u32,
+    ) {
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", input.as_bytes().to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        assert!(page.text.contains("--git-dir"), "{input}");
+        assert!(
+            page.text.contains("Description.") || page.text.contains("Set repository directory."),
+            "{input}"
+        );
+        let candidates = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 2 && mark.flags & 512 != 0)
+            .collect::<Vec<_>>();
+        assert_eq!(candidates.len(), usize::from(expected_candidate), "{input}");
+        let continuations = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 5 && mark.region_kind == 12)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            continuations.len(),
+            usize::from(expected_continuation),
+            "{input}"
+        );
+        if let Some(owner) = candidates.first() {
+            assert_eq!(owner.source, 1, "{input}");
+            assert_eq!(owner.line, head_line, "{input}");
+            let head = &page.marks[(owner.title_region - 1) as usize];
+            assert_eq!(head.region_kind, 3, "{input}");
+            assert!(direct_mark_text(&page, head).contains(head_text), "{input}");
+            let body = &page.marks[(owner.body_region - 1) as usize];
+            assert_eq!(body.region_kind, 4, "{input}");
+            assert_eq!(body.selection_count, 0, "{input}");
+            if let Some(continuation) = continuations.first() {
+                assert_eq!(continuation.preceding_owner, owner.key, "{input}");
+                assert_eq!(continuation.parent, owner.parent, "{input}");
+                assert_eq!(continuation.owner, 0, "{input}");
+                assert!(
+                    direct_mark_text(&page, continuation).contains("Description.")
+                        || direct_mark_text(&page, continuation)
+                            .contains("Set repository directory."),
+                    "{input}"
+                );
+                assert_eq!(owner.flags & (16 | 256), 16 | 256, "{input}");
+            } else {
+                assert_eq!(owner.flags & (16 | 256), 0, "{input}");
+            }
+        }
+    }
+
+    #[test]
+    fn native_paragraph_aliases_keep_hanging_presentation_boundaries() {
+        // Each exact input ran pinned CVS -Ttree and -Tutf8 before these
+        // assertions. man_validate.c::post_SH unwraps the first PP/P/LP;
+        // all three execute man_term.c::pre_PP. man_term.c::pre_RS computes
+        // the effective device indent after its BLOCK flush.
+        let cases = [
+            (
+                ".TH T 1\n.SH OPTIONS\n.PP\n.B --git-dir\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                4,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.LP\n.B --git-dir\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                4,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.P\n.B --git-dir\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                4,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\nintro\n.PP\n.B --git-dir\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                5,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\nintro\n.LP\n.B --git-dir\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                5,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\nintro\n.P\n.B --git-dir\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                5,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.PP\n\\fB--git-dir\\fR\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                4,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.PP\n.B --git-dir\nextra prose\n.RS 4\nDescription.\n.RE\n",
+                true,
+                true,
+                "extra prose",
+                4,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.PP\n.B --git-dir\n.RS 0\nDescription.\n.RE\n",
+                true,
+                false,
+                "--git-dir",
+                4,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.LP\n.B --git-dir\n.RS 0\nDescription.\n.RE\n",
+                true,
+                false,
+                "--git-dir",
+                4,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.P\n.B --git-dir\n.RS 0\nDescription.\n.RE\n",
+                true,
+                false,
+                "--git-dir",
+                4,
+            ),
+        ];
+        for (input, candidate, continuation, head, line) in cases {
+            assert_native_hanging_case(input, candidate, continuation, head, line);
+        }
+    }
+
+    #[test]
+    fn native_implicit_first_paragraph_only_hands_off_to_direct_rs() {
+        // Each exact input ran pinned CVS -Ttree and -Tutf8. The first SH
+        // BODY paragraph shares the section epoch; the removed .br changes
+        // that epoch before B, and cannot become an inferred head.
+        let cases = [
+            (
+                ".TH T 1\n.SH OPTIONS\n.B --git-dir=<path>\n.RS 4\nSet repository directory.\n.RE\n",
+                true,
+                true,
+                "--git-dir",
+                3,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\nintro\n.B --git-dir=<path>\n.RS 4\nSet repository directory.\n.RE\n",
+                true,
+                true,
+                "intro",
+                3,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.br\n.B --git-dir=<path>\n.RS 4\nSet repository directory.\n.RE\n",
+                false,
+                false,
+                "--git-dir",
+                0,
+            ),
+        ];
+        for (input, candidate, continuation, head, line) in cases {
+            assert_native_hanging_case(input, candidate, continuation, head, line);
+        }
+    }
+
+    #[test]
+    fn native_hanging_alternating_font_keeps_only_the_bold_head_component() {
+        // Both exact inputs ran pinned CVS -Tutf8 first: man_term.c::
+        // pre_alternate() renders --foo in bold and FILE in italic without
+        // nested child NODE events. The PP candidate is not a Definition
+        // until pre_RS BODY has computed its positive device indent.
+        for paragraph in [".PP\n", ""] {
+            let input = format!(
+                ".TH T 1\n.SH OPTIONS\n{paragraph}.BI --foo FILE\n.RS 4\nDescription.\n.RE\n"
+            );
+            let mut bundle = SourceBundle::new();
+            bundle.insert("t.1", input.into_bytes()).unwrap();
+            let page = AnnotatedRenderer::default()
+                .render_bundle("t.1", &bundle, InputFormat::Man)
+                .unwrap();
+            let owner = page
+                .marks
+                .iter()
+                .find(|mark| mark.kind == 2 && mark.flags & 512 != 0)
+                .expect("whole PP or implicit first paragraph presentation");
+            let head = &page.marks[(owner.title_region - 1) as usize];
+            assert_eq!(direct_mark_text(&page, head), "--fooFILE");
+            let components = page
+                .marks
+                .iter()
+                .filter(|mark| mark.kind == 6 && mark.parent == head.key)
+                .collect::<Vec<_>>();
+            assert_eq!(components.len(), 1);
+            assert_eq!(direct_mark_text(&page, components[0]), "--foo");
+            assert_ne!(components[0].flags & 256, 0);
+            assert!(page.marks.iter().any(|mark| mark.kind == 5
+                && mark.region_kind == 12
+                && mark.preceding_owner == owner.key));
         }
     }
 

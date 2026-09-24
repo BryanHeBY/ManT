@@ -127,6 +127,9 @@ fn sample_body() -> FixedBody {
             id: crate::NodeId::from("native-owner-1"),
             parent: None,
             preceding_owner: None,
+            hanging_candidate: false,
+            hanging_continuation: None,
+            hanging_nested_head: None,
             section: Some(key(1)),
             role: OwnerRole::Definition,
             head_role: None,
@@ -180,6 +183,7 @@ fn sample_body() -> FixedBody {
             key: key(1),
             parent: None,
             owner: Some(key(1)),
+            continuation_of: None,
             section: Some(key(1)),
             kind: RegionKind::OwnerHead,
             selection: empty_selection(),
@@ -194,6 +198,229 @@ fn region_section_must_match_its_native_owner() {
     let mut body = sample_body();
     body.regions[0].section = None;
     assert!(body.validate().is_err());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One fixture exercises direct, nested and forged RS relations.
+fn hanging_continuation_keeps_a_checked_ownerless_relation() {
+    // The exact TP -> PP -> RS input ran pinned CVS -Ttree/-Tutf8 first.
+    // man_macro.c::blk_exp keeps RS inside PP after the TP; man_term.c::
+    // pre_RS prints its body at an independent offset rather than moving it
+    // into TP. The Fixed relation therefore references, but does not own, it.
+    let mut body = sample_body();
+    body.surface.runs[1].label.owner = None;
+    body.owners[0].hanging_candidate = true;
+    body.owners[0].hanging_continuation = Some(key(3));
+    body.owners[0].hanging_nested_head = None;
+    body.owners[0].head_role = Some(OwnerHeadRole::Lexical);
+    body.regions = vec![
+        RegionMark {
+            key: key(1),
+            parent: None,
+            owner: None,
+            continuation_of: None,
+            section: Some(key(1)),
+            kind: RegionKind::HeadingBody,
+            selection: empty_selection(),
+            empty_point: Some(DisplayPoint::RunBoundary {
+                run: key(1),
+                byte: 0,
+            }),
+            source: None,
+        },
+        RegionMark {
+            key: key(2),
+            parent: Some(key(1)),
+            owner: Some(key(1)),
+            continuation_of: None,
+            section: Some(key(1)),
+            kind: RegionKind::OwnerHead,
+            selection: empty_selection(),
+            empty_point: Some(DisplayPoint::DocumentEnd { row_count: 1 }),
+            source: None,
+        },
+        RegionMark {
+            key: key(3),
+            parent: Some(key(1)),
+            owner: None,
+            continuation_of: Some(key(1)),
+            section: Some(key(1)),
+            kind: RegionKind::HangingContinuation,
+            selection: TextSelection {
+                parts: vec![OutputSlice {
+                    run: key(2),
+                    start_byte: 0,
+                    end_byte: 3,
+                }],
+                joins: Vec::new(),
+            },
+            empty_point: None,
+            source: None,
+        },
+    ];
+    body.validate().unwrap();
+    let reader = crate::FixedSectionReader::new(&body).unwrap();
+    assert_eq!(
+        reader
+            .owner_body_parts(key(1))
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>(),
+        "界"
+    );
+    assert_eq!(
+        reader
+            .subtree_parts(key(1))
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>(),
+        "a界"
+    );
+
+    let mut invalid = body.clone();
+    invalid.regions[2].owner = Some(key(1));
+    assert!(invalid.validate().is_err());
+    invalid = body.clone();
+    invalid.regions[2].continuation_of = None;
+    assert!(invalid.validate().is_err());
+    invalid = body.clone();
+    invalid.regions[2].parent = Some(key(2));
+    assert!(invalid.validate().is_err());
+    invalid = body.clone();
+    invalid.regions[2].kind = RegionKind::Literal;
+    assert!(invalid.validate().is_err());
+    invalid = body.clone();
+    invalid.owners[0].head = TextSelection {
+        parts: vec![OutputSlice {
+            run: key(1),
+            start_byte: 0,
+            end_byte: 1,
+        }],
+        joins: Vec::new(),
+    };
+    invalid.owners[0].empty_point = None;
+    assert!(
+        invalid.validate().is_err(),
+        "candidate head must match its region"
+    );
+    invalid = body.clone();
+    let mut duplicate_head = invalid.regions[1].clone();
+    duplicate_head.key = key(4);
+    invalid.regions.push(duplicate_head);
+    assert!(
+        invalid.validate().is_err(),
+        "candidate cannot have two heads"
+    );
+
+    // The RS direct selection may be empty while its native region subtree
+    // still contains a table. This is readable presentation, not sufficient
+    // evidence to upgrade the hanging candidate to a semantic entry.
+    let mut table = body.clone();
+    table.regions[2].selection = empty_selection();
+    table.regions[2].empty_point = Some(DisplayPoint::RunBoundary {
+        run: key(2),
+        byte: 0,
+    });
+    table.regions.push(RegionMark {
+        key: key(4),
+        parent: Some(key(3)),
+        owner: None,
+        continuation_of: None,
+        section: Some(key(1)),
+        kind: RegionKind::TableSpan,
+        selection: TextSelection {
+            parts: vec![OutputSlice {
+                run: key(2),
+                start_byte: 0,
+                end_byte: 3,
+            }],
+            joins: Vec::new(),
+        },
+        empty_point: None,
+        source: None,
+    });
+    table.validate().unwrap();
+    let mut wrong_section = table.clone();
+    wrong_section.regions[3].section = None;
+    assert!(
+        wrong_section.validate().is_err(),
+        "child region cannot cross sections"
+    );
+    assert_eq!(
+        crate::FixedSectionReader::new(&table)
+            .unwrap()
+            .owner_body_parts(key(1))
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>(),
+        "界"
+    );
+    assert!(!table.hanging_declaration_ready(&table.owners[0]));
+
+    // A nested TP's own HEAD region retains the enclosing RS region as its
+    // parent even though its typed owner has no earlier enclosing owner.
+    let mut nested = body.clone();
+    nested.surface.runs[1].label.owner = Some(key(2));
+    nested.regions[2].selection = empty_selection();
+    nested.regions[2].empty_point = Some(DisplayPoint::RunBoundary {
+        run: key(2),
+        byte: 0,
+    });
+    let mut child = nested.owners[0].clone();
+    child.key = key(2);
+    child.id = crate::NodeId::from("native-owner-2");
+    child.hanging_candidate = false;
+    child.hanging_continuation = None;
+    child.hanging_nested_head = None;
+    child.head_role = None;
+    child.head = table.regions[3].selection.clone();
+    child.empty_point = None;
+    nested.owners.push(child);
+    nested.regions.push(RegionMark {
+        key: key(4),
+        parent: Some(key(3)),
+        owner: Some(key(2)),
+        continuation_of: None,
+        section: Some(key(1)),
+        kind: RegionKind::OwnerHead,
+        selection: table.regions[3].selection.clone(),
+        empty_point: None,
+        source: None,
+    });
+    nested.owners[0].hanging_nested_head = Some(key(4));
+    nested.validate().unwrap();
+    assert_eq!(
+        crate::FixedSectionReader::new(&nested)
+            .unwrap()
+            .owner_body_parts(key(1))
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>(),
+        "界"
+    );
+    let mut forged = nested.clone();
+    forged.owners[0].hanging_nested_head = Some(key(2));
+    assert!(forged.validate().is_err(), "proof must be under its RS");
+    forged = nested.clone();
+    forged.owners[1].role = OwnerRole::Other;
+    assert!(
+        forged.validate().is_err(),
+        "proof must identify a definition"
+    );
+    forged = nested.clone();
+    forged.regions[3].selection = empty_selection();
+    forged.regions[3].empty_point = Some(DisplayPoint::RunBoundary {
+        run: key(2),
+        byte: 0,
+    });
+    assert!(
+        forged.validate().is_err(),
+        "proof must match nested owner head"
+    );
 }
 
 #[test]

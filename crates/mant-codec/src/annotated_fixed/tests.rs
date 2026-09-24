@@ -475,6 +475,374 @@ fn native_mdoc_nested_owner_and_literal_are_in_complete_reading_view() {
 }
 
 #[test]
+fn native_man_pp_rs_continuation_is_read_once_under_its_definition() {
+    // This exact input ran pinned CVS -Ttree/-Tutf8 before this assertion.
+    // man_validate.c removes the leading PP but records its execution on B;
+    // man_macro.c::blk_exp keeps a separate RS, and man_term.c::pre_RS
+    // offsets its body without moving the text into that B declaration.
+    let input = b".TH T 1\n.SH OPTIONS\n.PP\n.B --git-dir\n.RS 4\nCONTINUATION\n.RE\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert!(validate_document(&document).is_empty());
+    let owner = fixed
+        .owners
+        .iter()
+        .find(|owner| {
+            owner
+                .entry
+                .as_ref()
+                .is_some_and(|entry| entry.names == ["--git-dir"])
+        })
+        .expect("native PP declaration");
+    let continuation = fixed
+        .regions
+        .iter()
+        .find(|region| region.kind == mant_ir::RegionKind::HangingContinuation)
+        .expect("native PP/RS relation");
+    assert_eq!(continuation.owner, None);
+    assert_eq!(continuation.continuation_of, Some(owner.key));
+    assert_eq!(continuation.section, owner.section);
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let body = reader.owner_body_parts(owner.key).unwrap();
+    assert_eq!(
+        body.iter()
+            .map(|part| part.text)
+            .collect::<String>()
+            .matches("CONTINUATION")
+            .count(),
+        1
+    );
+    let section = reader.subtree_parts(reader.roots()[0]).unwrap();
+    assert_eq!(
+        section
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>()
+            .matches("CONTINUATION")
+            .count(),
+        1
+    );
+    let result = mant_query::explain_query(
+        &mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        },
+        &ExplanationQuery {
+            entry: "--git-dir".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+        result.evidence[0].content.as_ref().unwrap()
+    else {
+        panic!("not Fixed owner")
+    };
+    assert_eq!(
+        reading_body
+            .parts
+            .iter()
+            .map(|part| part.text.as_str())
+            .collect::<String>()
+            .matches("CONTINUATION")
+            .count(),
+        1
+    );
+    result.validate_references().unwrap();
+}
+
+#[test]
+fn man_hanging_declaration_requires_a_complete_head_and_positive_rs_indent() {
+    // Every exact source ran pinned CVS -Ttree/-Tutf8 before assertions.
+    // man_validate.c marks each elided PP child;
+    // man_term.c::pre_RS records the effective offset, not source adjacency.
+    // Intervening text remains in the same PP, so native continuation can
+    // survive while the complete HEAD grammar rejects a semantic name.
+    for (label, input, expect_relation, name) in [
+        (
+            "zero-indent",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --git-dir\n.RS 0\nzero body\n.RE\n".as_slice(),
+            false,
+            "--git-dir",
+        ),
+        (
+            "intervening-text",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --git-dir\nintervening text\n.RS 4\ngap body\n.RE\n"
+                .as_slice(),
+            true,
+            "--git-dir",
+        ),
+        (
+            "br-boundary",
+            b".TH T 1\n.SH OPTIONS\n.br\n.B --git-dir\n.RS 4\nbr body\n.RE\n".as_slice(),
+            false,
+            "--git-dir",
+        ),
+        (
+            "empty-rs",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\n\\&\n.RE\n".as_slice(),
+            true,
+            "--foo",
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        assert!(validate_document(&document).is_empty(), "{label}");
+        assert_eq!(
+            fixed
+                .regions
+                .iter()
+                .any(|region| region.kind == mant_ir::RegionKind::HangingContinuation),
+            expect_relation,
+            "{label} native relation"
+        );
+        let result = mant_query::explain_query(
+            &mant_ir::ResolvedContent {
+                address: None,
+                label: "T(1)".into(),
+                document: Some(document),
+                tldr: None,
+            },
+            &ExplanationQuery {
+                entry: name.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, 0, "{label}");
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
+fn native_hanging_option_forms_reuse_checked_name_boundaries() {
+    // Each exact input ran pinned CVS -Tutf8 before these assertions.
+    // man_validate.c keeps the PP or first-section execution boundary;
+    // man_term.c::pre_alternate prints BI operands without an inserted space.
+    // The whole head stays one form while native bold components can prove a
+    // shorter name than the visibly glued operand.
+    for (label, input, expected_names, expected_body) in [
+        (
+            "first-section",
+            b".TH T 1\n.SH OPTIONS\n.B --git-dir=path\n.RS 4\nfirst body\n.RE\n".as_slice(),
+            vec!["--git-dir"],
+            "first body",
+        ),
+        (
+            "argument",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --output FILE\n.RS 4\noutput body\n.RE\n".as_slice(),
+            vec!["--output"],
+            "output body",
+        ),
+        (
+            "two-children",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --output\n.I FILE\n.RS 4\nstyled body\n.RE\n".as_slice(),
+            vec!["--output"],
+            "styled body",
+        ),
+        (
+            "inline-font",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B \"\\fB--git-dir=\\fIpath\\fR\"\n.RS 4\ninline body\n.RE\n".as_slice(),
+            vec!["--git-dir"],
+            "inline body",
+        ),
+        (
+            "aliases",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B \"-a, --all\"\n.RS 4\nalias body\n.RE\n".as_slice(),
+            vec!["-a", "--all"],
+            "alias body",
+        ),
+        (
+            "alternating-font",
+            b".TH T 1\n.SH OPTIONS\n.BI --foo FILE\n.RS 4\nBI body\n.RE\n".as_slice(),
+            vec!["--foo"],
+            "BI body",
+        ),
+        (
+            "lp-alias",
+            b".TH T 1\n.SH OPTIONS\n.LP\n.B --foo\n.RS 4\nLP body\n.RE\n".as_slice(),
+            vec!["--foo"],
+            "LP body",
+        ),
+        (
+            "p-alias",
+            b".TH T 1\n.SH OPTIONS\n.P\n.B --foo\n.RS 4\nP body\n.RE\n".as_slice(),
+            vec!["--foo"],
+            "P body",
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        assert!(validate_document(&document).is_empty(), "{label}");
+        let owner = fixed
+            .owners
+            .iter()
+            .find(|owner| owner.hanging_candidate)
+            .expect("native hanging candidate");
+        let entry = owner.entry.as_ref().expect("checked semantic declaration");
+        assert_eq!(entry.names, expected_names, "{label}");
+        assert_eq!(entry.forms.len(), 1, "{label}");
+        for name in expected_names {
+            let result = mant_query::explain_query(
+                &mant_ir::ResolvedContent {
+                    address: None,
+                    label: "T(1)".into(),
+                    document: Some(document.clone()),
+                    tldr: None,
+                },
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, 1, "{label}: {name}");
+            let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+                result.evidence[0].content.as_ref().unwrap()
+            else {
+                panic!("not Fixed owner: {label}")
+            };
+            let body = reading_body
+                .parts
+                .iter()
+                .map(|part| part.text.as_str())
+                .collect::<String>();
+            assert!(body.contains(expected_body), "{label}: {body}");
+            result.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn hanging_continuation_reads_native_descendants_once_without_inventing_a_new_owner() {
+    // Each exact input ran pinned CVS -Ttree/-Tutf8 before these assertions.
+    // man_macro.c::blk_exp keeps the RS BODY as one scope, while its tbl and
+    // nested TP nodes create independent descendants. man_term.c::pre_RS
+    // indents that scope; it does not move its children into the B node.
+    for (label, input, expected) in [
+        (
+            "table",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\nbefore\n.TS\ntab(;);\nl l.\nkey;value\n.TE\nafter\n.RE\n".as_slice(),
+            &["before", "key", "value", "after"][..],
+        ),
+        (
+            "literal",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\nbefore\n.nf\n  code one\n  code two\n.fi\nafter\n.RE\n".as_slice(),
+            &["before", "code one", "code two", "after"][..],
+        ),
+        (
+            "literal-only",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\n.nf\n  code one\n  code two\n.fi\n.RE\n".as_slice(),
+            &["code one", "code two"][..],
+        ),
+        (
+            "nested-definition",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\nbefore\n.TP\n.B --inner\ninner body\nafter\n.RE\n".as_slice(),
+            &["before", "--inner", "inner body", "after"][..],
+        ),
+        (
+            "nested-only",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\n.TP\n.B --inner\ninner body\n.RE\n".as_slice(),
+            &["--inner", "inner body"][..],
+        ),
+        (
+            "nested-empty-body",
+            b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\n.TP\n.B --inner\n.RE\n".as_slice(),
+            &["--inner"][..],
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        assert!(validate_document(&document).is_empty(), "{label}");
+        assert_single_section_covers_each_visible_byte_once(fixed);
+        if label == "literal-only" {
+            assert!(
+                fixed
+                    .regions
+                    .iter()
+                    .find(|region| region.kind == mant_ir::RegionKind::HangingContinuation)
+                    .is_some_and(|region| !region.selection.parts.is_empty()),
+                "man .nf glyphs must belong to RS direct selection"
+            );
+        }
+        let owner = fixed
+            .owners
+            .iter()
+            .find(|owner| owner.entry.as_ref().is_some_and(|entry| entry.names == ["--foo"]))
+            .expect("hanging definition");
+        let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+        let body = reader
+            .owner_body_parts(owner.key)
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>();
+        let section = reader
+            .subtree_parts(reader.roots()[0])
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>();
+        let result = mant_query::explain_query(
+            &mant_ir::ResolvedContent {
+                address: None,
+                label: "T(1)".into(),
+                document: Some(document.clone()),
+                tldr: None,
+            },
+            &ExplanationQuery {
+                entry: "--foo".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, 1, "{label}");
+        let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+            result.evidence[0].content.as_ref().unwrap()
+        else {
+            panic!("not Fixed owner: {label}")
+        };
+        let projected = reading_body
+            .parts
+            .iter()
+            .map(|part| part.text.as_str())
+            .collect::<String>();
+        for token in expected {
+            assert_eq!(body.matches(token).count(), 1, "{label} reader: {body}");
+            assert_eq!(section.matches(token).count(), 1, "{label} section: {section}");
+            assert_eq!(projected.matches(token).count(), 1, "{label} explain: {projected}");
+        }
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
+fn table_only_hanging_region_remains_presentation_without_an_entry() {
+    // Exact input ran pinned CVS -Ttree before this assertion. The RS BODY
+    // contains only a tbl node; it supplies no direct lexical description.
+    let input =
+        b".TH T 1\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\n.TS\ntab(;);\nl l.\nkey;value\n.TE\n.RE\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert!(validate_document(&document).is_empty());
+    assert!(fixed.owners.iter().any(|owner| owner.hanging_candidate));
+    assert!(fixed.owners.iter().all(|owner| owner.entry.is_none()));
+    assert_single_section_covers_each_visible_byte_once(fixed);
+}
+
+#[test]
 fn native_mdoc_column_bodies_remain_one_owner_and_one_reading() {
     // Exact input ran pinned CVS -Tutf8 -O width=78 before this assertion.
     // mdoc_macro.c::phrase_ta() creates a separate BODY for each .It column;
@@ -1621,7 +1989,7 @@ fn parameterized_mdoc_head_keeps_each_native_option_name_in_one_form() {
     let owner = &fixed.owners[0];
     let entry = owner.entry.as_ref().expect("source-backed Fl names");
     assert_eq!(entry.names, ["-a", "-b"]);
-    assert_eq!(entry.forms, [owner.head.clone()]);
+    assert_eq!(entry.forms.as_slice(), std::slice::from_ref(&owner.head));
     assert_eq!(
         fixed.selection_text(&entry.forms[0]).as_deref(),
         Some("-a, -b file")

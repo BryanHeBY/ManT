@@ -201,6 +201,41 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         anchors,
         regions,
     };
+    for region in &fixed.regions {
+        if let Some(candidate) = region.continuation_of {
+            let owner = fixed.owners.get_mut((candidate.get() - 1) as usize).ok_or(
+                AnnotatedProjectionError::Relation("continuation candidate is missing"),
+            )?;
+            if owner.hanging_continuation.replace(region.key).is_some() {
+                return Err(AnnotatedProjectionError::Relation(
+                    "candidate has multiple hanging continuations",
+                ));
+            }
+        }
+    }
+    // An RS containing only a nested TP has no direct glyph selection, but
+    // the native OwnerHead still proves a structural description. Keep one
+    // direct child key as an O(1) read-time witness; a tbl region alone does
+    // not authorize a semantic hanging entry.
+    for region in &fixed.regions {
+        if region.kind != RegionKind::OwnerHead || region.owner.is_none() {
+            continue;
+        }
+        let Some(continuation) = region
+            .parent
+            .and_then(|key| fixed.regions.get((key.get() - 1) as usize))
+            .filter(|parent| parent.kind == RegionKind::HangingContinuation)
+        else {
+            continue;
+        };
+        let Some(candidate) = continuation.continuation_of else {
+            continue;
+        };
+        let owner = fixed.owners.get_mut((candidate.get() - 1) as usize).ok_or(
+            AnnotatedProjectionError::Relation("nested continuation candidate is missing"),
+        )?;
+        owner.hanging_nested_head.get_or_insert(region.key);
+    }
     // The checked native head is a borrowed display selection, not a
     // reconstructed Flow term. Keep its initial conservative identity in the
     // document so serialization and index rebuilding cannot diverge.
@@ -208,6 +243,9 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         .owners
         .iter()
         .map(|owner| {
+            if owner.hanging_candidate && !fixed.hanging_declaration_ready(owner) {
+                return None;
+            }
             if let Some(components) = fixed.lexical_component_names(owner) {
                 let (names, name_bindings) = group_bindings(
                     components

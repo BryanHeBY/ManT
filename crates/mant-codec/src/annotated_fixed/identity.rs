@@ -371,11 +371,11 @@ impl KeyMap {
             // Public owned results can be constructed without crossing the
             // FFI checker. Keep role evidence closed at this boundary too.
             let allowed_flags = match mark.kind {
-                1 => 0b1001,        // authored heading and subsection
-                2 => 0b1_1111_0001, // authored owner, definition and one head role
-                4 => 0b0101,        // authored anchor and manual target
-                3 | 5 => 0b0001,    // authored link or region
-                6 => 0b1_1110_0001, // authored HEAD component and one native role
+                1 => 0b1001,         // authored heading and subsection
+                2 => 0b11_1111_0001, // authored owner, candidate, definition and one head role
+                4 => 0b0101,         // authored anchor and manual target
+                3 | 5 => 0b0001,     // authored link or region
+                6 => 0b1_1110_0001,  // authored HEAD component and one native role
                 _ => unreachable!(),
             };
             if mark.flags & !allowed_flags != 0 {

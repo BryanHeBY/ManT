@@ -35,7 +35,9 @@ enum mant_annotated_region_kind {
 	MANT_ANNOTATED_REGION_TABLE_CELL = 9,
 	MANT_ANNOTATED_REGION_UNSECTIONED = 10,
 	/* Generated .mc glyphs belong to a physical row, never a semantic HEAD. */
-	MANT_ANNOTATED_REGION_MARGIN = 11
+	MANT_ANNOTATED_REGION_MARGIN = 11,
+	/* A native RS BODY adjacent to a proven paragraph presentation head. */
+	MANT_ANNOTATED_REGION_HANGING_CONTINUATION = 12
 };
 
 /* No physical row/column adjacency is treated as logical text evidence. */
@@ -66,6 +68,7 @@ struct mant_annotated_selection_part {
 #define MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT (1U << 6)
 #define MANT_ANNOTATED_MARK_HEAD_LITERAL (1U << 7)
 #define MANT_ANNOTATED_MARK_HEAD_LEXICAL (1U << 8)
+#define MANT_ANNOTATED_MARK_HANGING_CANDIDATE (1U << 9)
 #define MANT_ANNOTATED_MARK_HEAD_ROLE_MASK (\
     MANT_ANNOTATED_MARK_HEAD_OPTION | \
     MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT | \
@@ -91,8 +94,9 @@ struct mant_annotated_mark {
 	uint32_t title_region;
 	uint32_t body_region;
 	uint32_t flags;
-	/* Earlier direct .IP sibling under the same native parent and flow epoch.
-	 * Evidence only: it does not transfer or imply shared description text. */
+	/* Earlier direct man definition sibling on OWNER, or the presentation
+	 * OWNER related to a HANGING_CONTINUATION REGION.  Evidence only: it
+	 * does not transfer or imply shared description text. */
 	uint32_t preceding_owner;
 	/* Native tbl column and offset hint, not a validated final DisplayPoint.
 	 * Present only for a table-cell region after TABLE_CELL_POSITION. */

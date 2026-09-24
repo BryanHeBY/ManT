@@ -113,6 +113,14 @@ struct mant_annotated_collector {
 	uint32_t active_heading;
 	uint32_t last_top_heading;
 	uint32_t unsectioned_region;
+	/* At most one direct PP/P/LP or first-paragraph -> RS handoff. */
+	const struct roff_node *pending_hanging_rs;
+	const struct roff_node *pending_hanging_scope;
+	uint32_t pending_hanging_owner;
+	uint32_t pending_hanging_head_region;
+	size_t pending_hanging_epoch;
+	enum roff_tok pending_hanging_par_tok;
+	uint8_t pending_hanging_mode; /* 1 elided PP/P/LP, 2 implicit first paragraph. */
 	/* ROOT has no terminal frame: retain its last completed direct sibling. */
 	const struct roff_node *last_root_man_node;
 	uint32_t last_root_man_owner;
@@ -908,6 +916,73 @@ man_reading_family(int token)
 }
 
 static int
+man_paragraph_token(enum roff_tok token)
+{
+	return token == MAN_PP || token == MAN_P || token == MAN_LP;
+}
+
+/* man_validate.c::post_SH unwraps the first PP/P/LP after SH/SS but retains
+ * the executed token on each moved child.  Other paragraphs retain their actual
+ * BODY parent.  A first section paragraph without PP is delimited by the
+ * SH/SS BODY's own flow epoch.  The whole paragraph, not its first style
+ * macro, must directly precede RS; Rust applies complete-head grammar. */
+static const struct roff_node *
+man_hanging_successor(struct mant_annotated_collector *collector,
+    const struct roff_node *node, int *mode)
+{
+	const struct roff_node *rs;
+
+	*mode = 0;
+	if (node->parent == NULL || collector->active_owner == 0 ||
+	    collector->marks[collector->active_owner - 1].kind !=
+	    MANT_ANNOTATED_MARK_REGION ||
+	    collector->marks[collector->active_owner - 1].region_kind !=
+	    MANT_ANNOTATED_REGION_HEADING_BODY)
+		return NULL;
+	if (node->type == ROFFT_BLOCK && man_paragraph_token(node->tok) &&
+	    node->body != NULL && node->body->child != NULL)
+		rs = node->next;
+	else if (man_paragraph_token(node->mant_elided_par_tok) &&
+	    node->parent->type == ROFFT_BODY &&
+	    (node->parent->tok == MAN_SH || node->parent->tok == MAN_SS) &&
+	    node->parent->child == node) {
+		*mode = 1;
+		rs = node;
+		while (rs != NULL &&
+		    rs->mant_elided_par_tok == node->mant_elided_par_tok) {
+			if (!charge_work(collector, 1))
+				return NULL;
+			rs = rs->next;
+		}
+	} else if (node->parent->type == ROFFT_BODY &&
+	    (node->parent->tok == MAN_SH || node->parent->tok == MAN_SS) &&
+	    node->parent->child == node &&
+	    node->flow_epoch == node->parent->flow_epoch &&
+	    (node->type == ROFFT_TEXT || node->type == ROFFT_ELEM)) {
+		/* The native first section paragraph needs no PP macro.  A
+		 * deleted .br/.sp is still a flow_epoch boundary, so this cannot
+		 * turn an arbitrary later bold run into a head. */
+		*mode = 2;
+		rs = node;
+		while (rs != NULL && rs->flow_epoch == node->flow_epoch &&
+		    (rs->type == ROFFT_TEXT || rs->type == ROFFT_ELEM ||
+		    (rs->type == ROFFT_BLOCK &&
+		    (rs->tok == MAN_UR || rs->tok == MAN_MT ||
+		    rs->tok == MAN_MR)))) {
+			if (!charge_work(collector, 1))
+				return NULL;
+			rs = rs->next;
+		}
+	} else
+		return NULL;
+	return rs != NULL && rs->type == ROFFT_BLOCK &&
+	    rs->tok == MAN_RS && rs->parent == node->parent &&
+	    rs->body != NULL && rs->body->child != NULL ? rs : NULL;
+}
+
+static int hanging_point(struct mant_annotated_collector *, uint32_t);
+
+static int
 direct_man_predecessor(struct mant_annotated_collector *collector,
     const struct roff_node *node, const struct roff_node **candidate)
 {
@@ -1457,7 +1532,8 @@ select_alternate_component(struct mant_annotated_collector *collector,
 	    parent_mark->region_kind != MANT_ANNOTATED_REGION_OWNER_TERM ||
 	    parent_mark->parent == 0 ||
 	    (collector->marks[parent_mark->parent - 1].flags &
-	    MANT_ANNOTATED_MARK_DEFINITION) == 0)
+	    (MANT_ANNOTATED_MARK_DEFINITION |
+	    MANT_ANNOTATED_MARK_HANGING_CANDIDATE)) == 0)
 		return 1;
 	key = add_mark(collector, word, word,
 	    MANT_ANNOTATED_MARK_HEAD_COMPONENT, parent, 0, NULL);
@@ -1532,7 +1608,9 @@ push_node(struct mant_annotated_collector *collector,
 	struct annotated_frame *frames, *frame;
 	struct mant_annotated_mark *parent_mark;
 	struct annotated_point_state *state;
+	const struct roff_node *hanging_rs;
 	uint32_t key, region_kind, parent;
+	int hanging_mode;
 
 	if (node == NULL || collector->frame_count >=
 	    collector->session->limits->max_nesting_depth ||
@@ -1545,6 +1623,19 @@ push_node(struct mant_annotated_collector *collector,
 	}
 	if (!observe_html_phrase_boundary(collector, node))
 		return 0;
+	/* The deleted first PP/P/LP leaves direct SH/SS BODY siblings.  Route
+	 * exactly its stamped children through one presentation HEAD; RS itself
+	 * restores the surrounding section region before its own pre handler. */
+	if (collector->pending_hanging_rs == node)
+		collector->active_owner =
+		    collector->marks[collector->pending_hanging_owner - 1].parent;
+	else if (collector->pending_hanging_scope == node->parent &&
+	    ((collector->pending_hanging_mode == 1 &&
+	    node->mant_elided_par_tok == collector->pending_hanging_par_tok) ||
+	    (collector->pending_hanging_mode == 2 &&
+	    node->flow_epoch == collector->pending_hanging_epoch)) &&
+	    collector->pending_hanging_head_region != 0)
+		collector->active_owner = collector->pending_hanging_head_region;
 	/* man_term.c::print_man_nodelist() and mdoc_term.c::
 	 * print_mdoc_nodelist() traverse the first ROOT child, not ROOT itself.
 	 * The first unsectioned text therefore opens a native direct region;
@@ -1610,6 +1701,72 @@ push_node(struct mant_annotated_collector *collector,
 		collector->active_owner = key;
 		if (node->tok == MAN_SH || node->tok == MDOC_Sh)
 			collector->last_top_heading = key;
+	} else if ((hanging_rs = man_hanging_successor(collector, node,
+	    &hanging_mode)) != NULL) {
+		const struct roff_node *origin;
+		uint32_t owner_key;
+
+		if (collector->pending_hanging_rs != NULL ||
+		    collector->pending_hanging_owner != 0) {
+			fail_relation(collector, collector->pending_hanging_owner, 0);
+			return 0;
+		}
+		/* The paragraph is a presentation candidate, never a C-parsed
+		 * semantic name.  A rejected candidate still belongs to the
+		 * section reading surface.  The declaration source is its first
+		 * surviving child, not the potentially deleted paragraph boundary. */
+		origin = node->type == ROFFT_BLOCK ? node->body->child : node;
+		owner_key = add_mark(collector, node, origin,
+		    MANT_ANNOTATED_MARK_OWNER, collector->active_owner, 0, NULL);
+		if (owner_key == 0)
+			return 0;
+		collector->marks[owner_key - 1].flags |=
+		    MANT_ANNOTATED_MARK_HANGING_CANDIDATE;
+		collector->active_owner = owner_key;
+		frame->owner_mark = owner_key;
+		collector->pending_hanging_rs = hanging_rs;
+		collector->pending_hanging_owner = owner_key;
+		if (node->type == ROFFT_BLOCK) {
+			collector->pending_hanging_scope = NULL;
+			collector->pending_hanging_head_region = 0;
+			collector->pending_hanging_mode = 0;
+			collector->pending_hanging_par_tok = 0;
+			collector->pending_hanging_epoch = 0;
+		} else {
+			key = add_mark(collector, node, origin,
+			    MANT_ANNOTATED_MARK_REGION, owner_key,
+			    MANT_ANNOTATED_REGION_OWNER_TERM, NULL);
+			if (key == 0)
+				return 0;
+			collector->marks[owner_key - 1].title_region = key;
+			collector->active_owner = key;
+			frame->region_mark = key;
+			collector->pending_hanging_scope = node->parent;
+			collector->pending_hanging_head_region = key;
+			collector->pending_hanging_mode = hanging_mode;
+			collector->pending_hanging_par_tok =
+			    hanging_mode == 1 ? node->mant_elided_par_tok : 0;
+			collector->pending_hanging_epoch = node->flow_epoch;
+			if (!hanging_point(collector, owner_key) ||
+			    !hanging_point(collector, key))
+				return 0;
+		}
+	} else if (node->type == ROFFT_BODY && man_paragraph_token(node->tok) &&
+	    collector->frame_count > 1 &&
+	    collector->frames[collector->frame_count - 2].node == node->parent &&
+	    collector->frames[collector->frame_count - 2].owner_mark ==
+	    collector->pending_hanging_owner &&
+	    collector->pending_hanging_rs != NULL) {
+		parent = collector->pending_hanging_owner;
+		key = add_mark(collector, node, node->child,
+		    MANT_ANNOTATED_MARK_REGION, parent,
+		    MANT_ANNOTATED_REGION_OWNER_TERM, NULL);
+		if (key == 0)
+			return 0;
+		collector->marks[parent - 1].title_region = key;
+		collector->pending_hanging_head_region = key;
+		collector->active_owner = key;
+		frame->region_mark = key;
 	} else if (node->type == ROFFT_BLOCK &&
 	    (node->tok == MAN_TP || node->tok == MAN_IP ||
 	    node->tok == MAN_TQ ||
@@ -1791,7 +1948,8 @@ push_node(struct mant_annotated_collector *collector,
 		    MANT_ANNOTATED_REGION_OWNER_TERM &&
 		    parent_mark->parent != 0 &&
 		    (collector->marks[parent_mark->parent - 1].flags &
-	    MANT_ANNOTATED_MARK_DEFINITION) != 0) {
+	    (MANT_ANNOTATED_MARK_DEFINITION |
+	    MANT_ANNOTATED_MARK_HANGING_CANDIDATE)) != 0) {
 			key = add_mark(collector, node, node,
 			    MANT_ANNOTATED_MARK_HEAD_COMPONENT, parent, 0, NULL);
 			if (key == 0)
@@ -1844,6 +2002,120 @@ push_node(struct mant_annotated_collector *collector,
 			return 0;
 		frame->anchor_mark = key;
 	}
+	return 1;
+}
+
+static int
+hanging_point(struct mant_annotated_collector *collector, uint32_t key)
+{
+	struct annotated_point_state *state;
+
+	if (key == 0 || key > collector->mark_count ||
+	    collector->points[key - 1].state != 0) {
+		fail_relation(collector, key, collector->mark_count);
+		return 0;
+	}
+	state = collector->points + key - 1;
+	if (!mant_annotated_display_checkpoint(collector->display,
+	    collector->advance_count, &state->checkpoint)) {
+		fail_relation(collector, key, 0);
+		return 0;
+	}
+	state->state = 2;
+	return 1;
+}
+
+/* man_term.c::print_man_node emits CHILD after each macro's pre handler.
+ * The B checkpoint precedes its surviving glyphs; RS BLOCK has already
+ * flushed that head, and RS BODY has computed the effective indentation.
+ * No source width is reinterpreted by this collector. */
+static int
+observe_hanging_child(struct mant_annotated_collector *collector,
+    const struct roff_node *node)
+{
+	struct annotated_frame *frame;
+	struct mant_annotated_mark *owner, *continuation;
+	uint32_t key, owner_key, saved_owner;
+
+	if (collector->frame_count == 0)
+		return 1;
+	frame = collector->frames + collector->frame_count - 1;
+	if (frame->node != node) {
+		fail_relation(collector, collector->frame_count, 0);
+		return 0;
+	}
+	if (frame->owner_mark != 0 && node->type == ROFFT_BLOCK &&
+	    man_paragraph_token(node->tok) &&
+	    (collector->marks[frame->owner_mark - 1].flags &
+	    MANT_ANNOTATED_MARK_HANGING_CANDIDATE) != 0)
+		return hanging_point(collector, frame->owner_mark);
+	if (frame->region_mark != 0 && node->type == ROFFT_BODY &&
+	    man_paragraph_token(node->tok) &&
+	    collector->marks[frame->region_mark - 1].region_kind ==
+	    MANT_ANNOTATED_REGION_OWNER_TERM)
+		return hanging_point(collector, frame->region_mark);
+	if (collector->pending_hanging_rs != node &&
+	    (node->type != ROFFT_BODY || node->parent !=
+	    collector->pending_hanging_rs))
+		return 1;
+	owner_key = collector->pending_hanging_owner;
+	if (owner_key == 0 || owner_key > collector->mark_count ||
+	    node->tok != MAN_RS) {
+		fail_relation(collector, owner_key, collector->mark_count);
+		return 0;
+	}
+	owner = collector->marks + owner_key - 1;
+	if (node->type == ROFFT_BLOCK) {
+		if (owner->body_region != 0 ||
+		    owner->parent != collector->active_owner) {
+			fail_relation(collector, owner->body_region,
+			    collector->active_owner);
+			return 0;
+		}
+		/* A real, empty OwnerBody slot lets a failed candidate remain a
+		 * readable presentation owner without claiming RS as its body. */
+		saved_owner = collector->active_owner;
+		collector->active_owner = owner_key;
+		key = add_mark(collector, node, node,
+		    MANT_ANNOTATED_MARK_REGION, owner_key,
+		    MANT_ANNOTATED_REGION_OWNER_BODY, NULL);
+		collector->active_owner = saved_owner;
+		if (key == 0)
+			return 0;
+		collector->marks[owner_key - 1].body_region = key;
+		return hanging_point(collector, key);
+	}
+	if (node->type != ROFFT_BODY || node->parent == NULL ||
+	    node->parent->head == NULL || owner->body_region == 0 ||
+	    owner->parent != collector->active_owner) {
+		fail_relation(collector, owner_key, collector->active_owner);
+		return 0;
+	}
+	/* pre_RS BODY stores the device's effective offset in HEAD.  A
+	 * nonpositive increment is not an indented continuation. */
+	if (node->parent->head->aux > 0) {
+		owner->flags |= MANT_ANNOTATED_MARK_DEFINITION |
+		    MANT_ANNOTATED_MARK_HEAD_LEXICAL;
+		key = add_mark(collector, node, node,
+		    MANT_ANNOTATED_MARK_REGION, owner->parent,
+		    MANT_ANNOTATED_REGION_HANGING_CONTINUATION, NULL);
+		if (key == 0)
+			return 0;
+		continuation = collector->marks + key - 1;
+		continuation->owner = 0;
+		continuation->preceding_owner = owner_key;
+		collector->active_owner = key;
+		frame->region_mark = key;
+		if (!hanging_point(collector, key))
+			return 0;
+	}
+	collector->pending_hanging_rs = NULL;
+	collector->pending_hanging_scope = NULL;
+	collector->pending_hanging_owner = 0;
+	collector->pending_hanging_head_region = 0;
+	collector->pending_hanging_mode = 0;
+	collector->pending_hanging_par_tok = 0;
+	collector->pending_hanging_epoch = 0;
 	return 1;
 }
 
@@ -2398,9 +2670,12 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		if (event->phase == TERM_COLLECT_ENTER)
 			(void)push_node(collector, event->node);
 		else if (event->phase == TERM_COLLECT_CHILD &&
-		    event->node != NULL &&
-		    event->node->type == ROFFT_TBL)
-			(void)prepare_table_span(collector, event->node);
+		    event->node != NULL) {
+			if (!observe_hanging_child(collector, event->node))
+				return;
+			if (event->node->type == ROFFT_TBL)
+				(void)prepare_table_span(collector, event->node);
+		}
 		else if (event->phase == TERM_COLLECT_LEAVE)
 			pop_node(collector, event->node);
 		return;

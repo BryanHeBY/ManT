@@ -6,6 +6,7 @@
 //! final display order.
 
 use std::{
+    collections::HashSet,
     fmt,
     num::{NonZeroU32, NonZeroUsize},
 };
@@ -87,6 +88,8 @@ pub struct FixedSectionReader<'a> {
     regions_by_section: Vec<Vec<usize>>,
     owners_by_parent: Vec<Vec<usize>>,
     regions_by_owner: Vec<Vec<usize>>,
+    regions_by_parent: Vec<Vec<usize>>,
+    continuations_by_owner: Vec<Vec<usize>>,
 }
 
 impl<'a> FixedSectionReader<'a> {
@@ -114,6 +117,8 @@ impl<'a> FixedSectionReader<'a> {
         let mut regions_by_section = vec![Vec::new(); fixed.headings.len() + 1];
         let mut owners_by_parent = vec![Vec::new(); fixed.owners.len() + 1];
         let mut regions_by_owner = vec![Vec::new(); fixed.owners.len() + 1];
+        let mut regions_by_parent = vec![Vec::new(); fixed.regions.len() + 1];
+        let mut continuations_by_owner = vec![Vec::new(); fixed.owners.len() + 1];
         for (index, owner) in fixed.owners.iter().enumerate() {
             owners_by_section[owner.section.map_or(0, |key| key.get() as usize)].push(index);
             owners_by_parent[owner.parent.map_or(0, |key| key.get() as usize)].push(index);
@@ -121,6 +126,10 @@ impl<'a> FixedSectionReader<'a> {
         for (index, region) in fixed.regions.iter().enumerate() {
             regions_by_section[region.section.map_or(0, |key| key.get() as usize)].push(index);
             regions_by_owner[region.owner.map_or(0, |key| key.get() as usize)].push(index);
+            regions_by_parent[region.parent.map_or(0, |key| key.get() as usize)].push(index);
+            if let Some(owner) = region.continuation_of {
+                continuations_by_owner[owner.get() as usize].push(index);
+            }
         }
         let reader = Self {
             fixed,
@@ -130,6 +139,8 @@ impl<'a> FixedSectionReader<'a> {
             regions_by_section,
             owners_by_parent,
             regions_by_owner,
+            regions_by_parent,
+            continuations_by_owner,
         };
         // FixedBody validates individual selections, not exclusivity among
         // different sections. A duplicate selected byte would double-render
@@ -274,8 +285,49 @@ impl<'a> FixedSectionReader<'a> {
     pub fn owner_body_parts(&self, owner: NonZeroU32) -> Option<Vec<FixedSectionPart<'a>>> {
         self.fixed.owners.get((owner.get() - 1) as usize)?;
         let mut result = Vec::new();
-        let mut pending = vec![owner];
-        while let Some(key) = pending.pop() {
+        let mut pending_owners = vec![owner];
+        let mut pending_regions: Vec<usize> = Vec::new();
+        // The checked graph is sparse for a single reading. Keep per-read
+        // work proportional to its reachable marks, not the full document.
+        let mut visited_owners = HashSet::new();
+        let mut visited_regions = HashSet::new();
+        while !pending_owners.is_empty() || !pending_regions.is_empty() {
+            if let Some(index) = pending_regions.pop() {
+                let region = &self.fixed.regions[index];
+                if !visited_regions.insert(region.key) {
+                    continue;
+                }
+                // The enclosing RS is a presentation relation, not a new
+                // owner. Follow its native region descendants: tbl cells and
+                // nested definition heads are not in its direct selection.
+                for &child_index in &self.regions_by_parent[region.key.get() as usize] {
+                    let child = &self.fixed.regions[child_index];
+                    if child.kind == RegionKind::OwnerHead
+                        && let Some(nested_owner) = child.owner
+                    {
+                        pending_owners.push(nested_owner);
+                    }
+                    pending_regions.push(child_index);
+                }
+                let head_margin = region.kind == RegionKind::Margin
+                    && region.parent.is_some_and(|parent| {
+                        self.fixed.regions[(parent.get() - 1) as usize].kind
+                            == RegionKind::OwnerHead
+                    });
+                if transparent(region.kind) && !head_margin {
+                    self.extend_parts_optional(
+                        &mut result,
+                        region.section,
+                        FixedSectionPartKind::Region,
+                        &region.selection,
+                    )?;
+                }
+                continue;
+            }
+            let key = pending_owners.pop()?;
+            if !visited_owners.insert(key) {
+                continue;
+            }
             let candidate = &self.fixed.owners[(key.get() - 1) as usize];
             if key != owner {
                 self.extend_parts_optional(
@@ -292,24 +344,14 @@ impl<'a> FixedSectionReader<'a> {
                 &candidate.direct_body,
             )?;
             for &index in &self.regions_by_owner[key.get() as usize] {
-                let region = &self.fixed.regions[index];
-                // A .mc glyph on an isolated label line is visible in the
-                // section, but is not an independent owner description.
-                let head_margin = region.kind == RegionKind::Margin
-                    && region.parent.is_some_and(|parent| {
-                        self.fixed.regions[(parent.get() - 1) as usize].kind
-                            == RegionKind::OwnerHead
-                    });
-                if transparent(region.kind) && !head_margin {
-                    self.extend_parts_optional(
-                        &mut result,
-                        region.section,
-                        FixedSectionPartKind::Region,
-                        &region.selection,
-                    )?;
+                if transparent(self.fixed.regions[index].kind) {
+                    pending_regions.push(index);
                 }
             }
-            pending.extend(
+            for &index in &self.continuations_by_owner[key.get() as usize] {
+                pending_regions.push(index);
+            }
+            pending_owners.extend(
                 self.owners_by_parent[key.get() as usize]
                     .iter()
                     .map(|index| self.fixed.owners[*index].key),
@@ -551,6 +593,7 @@ fn transparent(kind: RegionKind) -> bool {
             | RegionKind::TableCell
             | RegionKind::Equation
             | RegionKind::Margin
+            | RegionKind::HangingContinuation
     )
 }
 

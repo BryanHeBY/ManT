@@ -531,6 +531,7 @@ struct	roff_node {
 	uint32_t	  mant_source_key; /* Embedding result-local source. */
 	unsigned char	  mant_coordinate_origin; /* Authored or reparse. */
 	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
+	enum roff_tok	  mant_elided_par_tok; /* Child of elided SH paragraph. */
 	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
 	int		  flags;
 #define	NODE_VALID	 (1 << 0)  /* Has been validated. */

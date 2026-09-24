@@ -59,6 +59,7 @@ fn selection(parts: &[(u64, u64)], joins: Vec<TextJoin>) -> TextSelection {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One display fixture binds both Fl components and rejects stale facts.
 fn mdoc_option_components_bind_names_inside_one_parameterized_form() {
     // This exact `.It Fl a , Fl b Ar file` input ran pinned CVS -Tutf8
     // first. mdoc_macro.c::blk_full retains both Fl nodes and the Ar operand
@@ -80,7 +81,7 @@ fn mdoc_option_components_bind_names_inside_one_parameterized_form() {
                 label: DisplayLabel {
                     owner: Some(key(1)),
                     role: DisplayRole::Body,
-                    ..first.label.clone()
+                    ..first.label
                 },
                 ..first.clone()
             };
@@ -115,6 +116,9 @@ fn mdoc_option_components_bind_names_inside_one_parameterized_form() {
         id: crate::NodeId::from("native-owner-1"),
         parent: None,
         preceding_owner: None,
+        hanging_candidate: false,
+        hanging_continuation: None,
+        hanging_nested_head: None,
         section: None,
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Option),
@@ -524,6 +528,7 @@ fn empty_region_requires_its_final_point() {
         key: key(1),
         parent: None,
         owner: None,
+        continuation_of: None,
         section: None,
         kind: RegionKind::Literal,
         selection: TextSelection {
@@ -546,6 +551,9 @@ fn owner_head_and_body_cannot_claim_the_same_bytes() {
         id: crate::NodeId::from("native-owner-1"),
         parent: None,
         preceding_owner: None,
+        hanging_candidate: false,
+        hanging_continuation: None,
+        hanging_nested_head: None,
         section: None,
         role: OwnerRole::Definition,
         head_role: None,
@@ -639,6 +647,9 @@ fn fixed_partial_name_requires_native_prefix_and_exact_surviving_slice() {
         id: NodeId::from("option-a"),
         parent: None,
         preceding_owner: None,
+        hanging_candidate: false,
+        hanging_continuation: None,
+        hanging_nested_head: None,
         section: None,
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Option),
@@ -714,6 +725,9 @@ fn lexical_option_facts_require_the_native_role_and_complete_head_binding() {
         id: NodeId::from("lexical-option"),
         parent: None,
         preceding_owner: None,
+        hanging_candidate: false,
+        hanging_continuation: None,
+        hanging_nested_head: None,
         section: None,
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Lexical),

@@ -88,7 +88,9 @@ pub(super) fn pieces(fixed: &FixedBody) -> Result<Vec<Piece>, SearchError> {
         candidates.push(Candidate {
             selection: &region.selection,
             kind: SelectionKind::Region(region.kind),
-            owner: region.owner,
+            // A native PP/RS continuation remains ownerless on the surface;
+            // its separately validated relation licenses query attribution.
+            owner: region.continuation_of.or(region.owner),
             section: region.section,
             source: region.source,
             priority: 2,

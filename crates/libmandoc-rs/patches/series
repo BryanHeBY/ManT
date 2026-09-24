@@ -39,3 +39,4 @@
 0039-observe-tag-and-item-display-points.patch
 0040-observe-post-pre-region-points.patch
 0041-track-diagnostic-coordinate-origin.patch
+0042-retain-elided-paragraph-boundary.patch

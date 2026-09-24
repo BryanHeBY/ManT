@@ -28,6 +28,7 @@ impl CollectionPlan<'_> {
 
 /// One readable source in a scoped request. Both bodies contribute to the
 /// same class-first page and debit the same response-copy budget.
+#[allow(clippy::large_enum_variant)] // One page-local plan; boxing either arm adds allocation to the Flow path.
 pub(super) enum DocumentPlan<'a> {
     Flow(CollectionPlan<'a>),
     Fixed(fixed::FixedPlan<'a>),

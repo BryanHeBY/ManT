@@ -7,7 +7,7 @@
 use std::ops::Range;
 
 mod literal_names;
-pub use literal_names::literal_option_names;
+pub use literal_names::{is_complete_hanging_option_head, literal_option_names};
 
 /// Leading ordinary dash-option spelling within one visible token.
 #[must_use]

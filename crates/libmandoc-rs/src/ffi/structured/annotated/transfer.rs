@@ -273,7 +273,8 @@ pub(super) fn transfer(
     for (index, mark) in mark_views.iter().enumerate() {
         if mark.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
             || !(1..=6).contains(&mark.kind)
-            || mark.region_kind > 11
+            || mark.region_kind > 12
+            || (mark.region_kind == 12 && mark.kind != 5)
             || mark.parent >= mark.key
             || mark.owner >= mark.key
             || mark.source as usize > sources.len()
@@ -281,7 +282,8 @@ pub(super) fn transfer(
             || (mark.source == 0 && mark.line != 0)
             || ((mark.flags & 1 != 0) != (mark.line != 0))
             || mark.point_reserved != 0
-            || mark.flags & !0b1_1111_1101 != 0
+            || mark.flags & !0b11_1111_1101 != 0
+            || (mark.flags & 512 != 0 && mark.kind != 2)
             || (mark.flags & 4 != 0 && mark.kind != 4)
             || (mark.flags & 8 != 0 && mark.kind != 1)
             || (mark.flags & 16 != 0 && mark.kind != 2)
@@ -292,7 +294,77 @@ pub(super) fn transfer(
         {
             return Err(invalid_result());
         }
-        if mark.preceding_owner != 0 {
+        if mark.kind == 2 && mark.flags & 512 != 0 {
+            let lookup = |key: u32| {
+                key.checked_sub(1)
+                    .and_then(|index| usize::try_from(index).ok())
+                    .and_then(|index| mark_views.get(index))
+                    .filter(|related| related.key == key)
+                    .ok_or_else(invalid_result)
+            };
+            let parent = lookup(mark.parent)?;
+            let title = lookup(mark.title_region)?;
+            let body = lookup(mark.body_region)?;
+            if mark.preceding_owner != 0
+                || parent.kind != 5
+                || parent.region_kind != 2
+                || (mark.flags & 16 != 0) != (mark.flags & 256 != 0)
+                || mark.flags & (32 | 64 | 128) != 0
+                || title.kind != 5
+                || title.region_kind != 3
+                || title.parent != mark.key
+                || body.kind != 5
+                || body.region_kind != 4
+                || body.parent != mark.key
+            {
+                return Err(invalid_result());
+            }
+        }
+        if mark.kind == 5 && mark.region_kind == 12 {
+            let preceding = marks
+                .get(
+                    usize::try_from(
+                        mark.preceding_owner
+                            .checked_sub(1)
+                            .ok_or_else(invalid_result)?,
+                    )
+                    .map_err(|_| invalid_result())?,
+                )
+                .ok_or_else(invalid_result)?;
+            let parent = marks
+                .get(
+                    usize::try_from(mark.parent.checked_sub(1).ok_or_else(invalid_result)?)
+                        .map_err(|_| invalid_result())?,
+                )
+                .ok_or_else(invalid_result)?;
+            if mark.owner != 0
+                || mark.preceding_owner >= mark.key
+                || mark.title_region != 0
+                || mark.body_region != 0
+                || preceding.kind != 2
+                || preceding.flags & (16 | 256 | 512) != (16 | 256 | 512)
+                || preceding.parent != mark.parent
+                || parent.kind != 5
+                || parent.region_kind != 2
+                || mark.token != crate::annotated::MAN_RS_TOKEN
+                || [(preceding.title_region, 3), (preceding.body_region, 4)]
+                    .into_iter()
+                    .any(|(key, kind)| {
+                        marks
+                            .get(
+                                key.checked_sub(1)
+                                    .map_or(usize::MAX, |index| index as usize),
+                            )
+                            .is_none_or(|region: &AnnotatedMark| {
+                                region.kind != 5
+                                    || region.region_kind != kind
+                                    || region.parent != preceding.key
+                            })
+                    })
+            {
+                return Err(invalid_result());
+            }
+        } else if mark.preceding_owner != 0 {
             let preceding = marks
                 .get(usize::try_from(mark.preceding_owner - 1).map_err(|_| invalid_result())?)
                 .ok_or_else(invalid_result)?;

@@ -17017,6 +17017,28 @@
               }
             ]
           },
+          "hangingCandidate": {
+            "description": "The native PP presentation candidate bit. It is not itself semantic\nevidence; an explicit, readable RS relation and complete head are\nrequired before this owner may carry an entry.",
+            "type": "boolean"
+          },
+          "hangingContinuation": {
+            "description": "Direct checked key of the ownerless RS region, when that candidate was\nupgraded by a positive native indentation. Direct text or an enclosed\ndefinition head must separately prove readable description content.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
+          "hangingNestedHead": {
+            "description": "Direct native OwnerHead child of the continuation, when an RS body\nconsists of a nested definition rather than directly emitted text.\nThis is structural description evidence, not another text owner.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
           "head": {
             "description": "Direct visible head, possibly empty.",
             "$ref": "#/$defs/TextSelection"
@@ -17066,7 +17088,7 @@
             "minimum": 1
           },
           "precedingOwner": {
-            "description": "Earlier direct `.IP` definition sibling proved by the native AST and\nflow boundary. This is reading-context evidence, not owned body text.",
+            "description": "Earlier direct man definition sibling proved by the native AST and\nflow boundary. This is reading-context evidence, not owned body text.",
             "type": [
               "integer",
               "null"
@@ -17439,6 +17461,11 @@
             "description": "Generated physical-line margin glyph, outside semantic heads/titles.",
             "type": "string",
             "const": "margin"
+          },
+          {
+            "description": "Native paragraph or indented block continuing an earlier definition.",
+            "type": "string",
+            "const": "hanging-continuation"
           }
         ]
       },
@@ -17446,6 +17473,15 @@
         "description": "One native region without a parallel text buffer.",
         "type": "object",
         "properties": {
+          "continuationOf": {
+            "description": "Earlier definition whose reading body includes this ownerless native\nregion. This is not a new owner or a transfer of source ownership.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
           "emptyPoint": {
             "description": "Final boundary when visible contents are empty.",
             "anyOf": [
