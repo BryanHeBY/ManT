@@ -290,3 +290,4 @@ pub(crate) fn render_annotated(
 
 mod transfer;
 use transfer::transfer;
+mod view;
