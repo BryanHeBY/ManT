@@ -134,6 +134,11 @@ int mant_annotated_display_write_join(struct mant_annotated_display *,
 	struct mant_annotated_display_edge);
 int mant_annotated_display_checkpoint(const struct mant_annotated_display *,
 	uint32_t, struct mant_annotated_display_checkpoint *);
+/* Rightmost surviving non-layout glyph on the unsealed physical row.  A
+ * mixed-owner overprint is ambiguous and returns owner zero.  Work is charged
+ * through the display's normal cumulative budget. */
+int mant_annotated_display_trailing_owner(struct mant_annotated_display *,
+	uint32_t *);
 const struct mant_annotated_run_endpoint *mant_annotated_display_endpoints(
 	const struct mant_annotated_display *, uint32_t *);
 int mant_annotated_display_finish(struct mant_annotated_display *,

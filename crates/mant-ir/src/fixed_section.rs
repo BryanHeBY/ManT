@@ -293,7 +293,14 @@ impl<'a> FixedSectionReader<'a> {
             )?;
             for &index in &self.regions_by_owner[key.get() as usize] {
                 let region = &self.fixed.regions[index];
-                if transparent(region.kind) {
+                // A .mc glyph on an isolated label line is visible in the
+                // section, but is not an independent owner description.
+                let head_margin = region.kind == RegionKind::Margin
+                    && region.parent.is_some_and(|parent| {
+                        self.fixed.regions[(parent.get() - 1) as usize].kind
+                            == RegionKind::OwnerHead
+                    });
+                if transparent(region.kind) && !head_margin {
                     self.extend_parts_optional(
                         &mut result,
                         region.section,
@@ -542,6 +549,7 @@ fn transparent(kind: RegionKind) -> bool {
             | RegionKind::TableSpan
             | RegionKind::TableCell
             | RegionKind::Equation
+            | RegionKind::Margin
     )
 }
 

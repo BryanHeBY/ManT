@@ -31,7 +31,9 @@ enum mant_annotated_region_kind {
 	MANT_ANNOTATED_REGION_TABLE_SPAN = 7,
 	MANT_ANNOTATED_REGION_EQUATION = 8,
 	MANT_ANNOTATED_REGION_TABLE_CELL = 9,
-	MANT_ANNOTATED_REGION_UNSECTIONED = 10
+	MANT_ANNOTATED_REGION_UNSECTIONED = 10,
+	/* Generated .mc glyphs belong to a physical row, never a semantic HEAD. */
+	MANT_ANNOTATED_REGION_MARGIN = 11
 };
 
 /* No physical row/column adjacency is treated as logical text evidence. */

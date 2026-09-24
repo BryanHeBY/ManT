@@ -240,6 +240,24 @@ pub(super) fn project_region(
     keys: &KeyMap,
     mark: &AnnotatedMark,
 ) -> Result<RegionMark> {
+    if mark.region_kind == 11 {
+        let parent = page.marks.get(mark.parent.saturating_sub(1) as usize);
+        if parent.is_none_or(|parent| parent.key != mark.parent || parent.kind != 5)
+            || mark.owner != mark.parent
+            || mark.source != 0
+            || mark.line != 0
+            || mark.column != 0
+            || mark.token != 0
+            || mark.flags != 0
+            || mark.title_region != 0
+            || mark.body_region != 0
+            || mark.native_table_position.is_some()
+        {
+            return Err(AnnotatedProjectionError::Relation(
+                "invalid generated margin region",
+            ));
+        }
+    }
     let selection = selection(page, mark)?;
     let empty_point = if selection.parts.is_empty() {
         Some(point(mark.point.ok_or(
@@ -264,6 +282,7 @@ pub(super) fn project_region(
             7 => RegionKind::TableSpan,
             8 => RegionKind::Equation,
             9 => RegionKind::TableCell,
+            11 => RegionKind::Margin,
             _ => {
                 return Err(AnnotatedProjectionError::Relation(
                     "unknown native region kind",

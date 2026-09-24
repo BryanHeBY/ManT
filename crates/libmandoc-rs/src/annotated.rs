@@ -519,6 +519,41 @@ mod tests {
     }
 
     #[test]
+    fn margin_mark_budget_failure_does_not_poison_the_next_session() {
+        // Exact input ran pinned CVS -Tutf8 -O width=78. term.c::endline()
+        // emits .mc after the field, so the generated display mark is
+        // allocated during output rather than while walking an AST node.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.mc |\nsome body\n.br\n.mc\n".to_vec(),
+            )
+            .unwrap();
+        let normal = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        let margin_key = normal
+            .marks
+            .iter()
+            .find(|mark| mark.kind == 5 && mark.region_kind == 11)
+            .unwrap()
+            .key;
+        let mut limited = AnnotatedRenderer::default();
+        limited.limits.max_transfer_objects = u64::from(margin_key - 1);
+        let error = limited
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap_err();
+        assert_eq!(error.status, 3, "{error:?}");
+        assert!(error.observed > error.allowed, "{error:?}");
+        assert!(
+            AnnotatedRenderer::default()
+                .render_bundle("t.1", &bundle, InputFormat::Man)
+                .is_ok()
+        );
+    }
+
+    #[test]
     fn independent_threads_render_without_shared_session_state() {
         // Same fixed-CVS minimal man input as the transfer test.
         let tasks = (0..4).map(|_| {

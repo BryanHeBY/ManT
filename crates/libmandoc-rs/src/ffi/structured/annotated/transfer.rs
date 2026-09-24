@@ -272,6 +272,8 @@ pub(super) fn transfer(
     let mut marks = reserve(mark_views.len())?;
     for (index, mark) in mark_views.iter().enumerate() {
         if mark.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
+            || !(1..=5).contains(&mark.kind)
+            || mark.region_kind > 11
             || mark.parent >= mark.key
             || mark.owner >= mark.key
             || mark.source as usize > sources.len()
@@ -337,6 +339,23 @@ pub(super) fn transfer(
             }
             None
         };
+        if mark.kind == 5
+            && mark.region_kind == 11
+            && (mark.parent == 0
+                || mark.owner != mark.parent
+                || mark.source != 0
+                || mark.line != 0
+                || mark.column != 0
+                || mark.token != 0
+                || mark.flags != 0
+                || mark.title_region != 0
+                || mark.body_region != 0
+                || marks
+                    .get(usize::try_from(mark.parent - 1).map_err(|_| invalid_result())?)
+                    .is_none_or(|parent: &AnnotatedMark| parent.kind != 5))
+        {
+            return Err(invalid_result());
+        }
         marks.push(AnnotatedMark {
             key: mark.key,
             kind: mark.kind,

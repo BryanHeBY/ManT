@@ -107,6 +107,8 @@ struct mant_annotated_collector {
 	uint32_t pending_owner;
 	uint32_t pending_link;
 	uint32_t pending_source;
+	uint32_t margin_owner;
+	uint32_t margin_mark;
 	uint64_t allocated_display_bytes;
 	uint64_t accounted_display_work;
 	uint64_t live_slots;
@@ -125,6 +127,7 @@ struct mant_annotated_collector {
 	uint8_t letter_from_field;
 	uint8_t in_header;
 	uint8_t in_footer;
+	uint8_t in_margin;
 	uint8_t footer_drained;
 	uint8_t html_nofill;
 };
@@ -1417,25 +1420,13 @@ mant_annotated_collector_account_display(
 }
 
 static int
-write_display(struct mant_annotated_collector *collector,
-    const void *bytes, size_t length,
-    struct mant_annotated_display_label label,
-    struct mant_annotated_display_edge edge)
+report_display_failure(struct mant_annotated_collector *collector)
 {
 	struct structured_session *session = collector->session;
 	enum mant_annotated_display_status status;
 	uint64_t observed, allowed;
 	uint32_t limit_kind;
-	int written;
 
-	if (session->status != MANT_STRUCTURED_OK)
-		return 0;
-	written = mant_annotated_display_write_join(collector->display, bytes,
-	    length, label, edge);
-	if (!mant_annotated_collector_account_display(collector))
-		return 0;
-	if (written)
-		return 1;
 	status = mant_annotated_display_status(collector->display);
 	if (status == MANT_ANNOTATED_DISPLAY_BUDGET) {
 		mant_annotated_display_failure(collector->display,
@@ -1453,6 +1444,23 @@ write_display(struct mant_annotated_collector *collector,
 	else
 		fail_relation(collector, status, MANT_ANNOTATED_DISPLAY_ALLOC);
 	return 0;
+}
+
+static int
+write_display(struct mant_annotated_collector *collector,
+    const void *bytes, size_t length,
+    struct mant_annotated_display_label label,
+    struct mant_annotated_display_edge edge)
+{
+	int written;
+
+	if (collector->session->status != MANT_STRUCTURED_OK)
+		return 0;
+	written = mant_annotated_display_write_join(collector->display, bytes,
+	    length, label, edge);
+	if (!mant_annotated_collector_account_display(collector))
+		return 0;
+	return written ? 1 : report_display_failure(collector);
 }
 
 static int
@@ -1680,6 +1688,19 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		} else if (event->reason == TERM_COLLECT_FOOTER) {
 			collector->in_footer = event->phase == TERM_COLLECT_ENTER;
 			collector->footer_drained = 0;
+		} else if (event->reason == TERM_COLLECT_MARGIN) {
+			collector->in_margin = event->phase == TERM_COLLECT_ENTER;
+			collector->margin_owner = 0;
+			collector->margin_mark = 0;
+			if (collector->in_margin &&
+			    current_role(collector) == MANT_ANNOTATED_BODY &&
+			    !mant_annotated_display_trailing_owner(
+			    collector->display, &collector->margin_owner)) {
+				(void)mant_annotated_collector_account_display(collector);
+				if (collector->session->status == MANT_STRUCTURED_OK)
+					(void)report_display_failure(collector);
+			} else if (collector->in_margin)
+				(void)mant_annotated_collector_account_display(collector);
 		}
 		return;
 	case TERM_COLLECT_VSPACE_DRAIN:
@@ -1695,6 +1716,15 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			join_hard(collector->columns + event->column);
 		return;
 	case TERM_COLLECT_LOGICAL:
+		/* term.c::endline() writes .mc independently of the field.  Even
+		 * Unicode margin escapes must not become authored join evidence. */
+		if (collector->in_margin) {
+			collector->pending_origin = 0;
+			collector->pending_owner = 0;
+			collector->pending_link = 0;
+			collector->pending_source = 0;
+			return;
+		}
 		if (collector->next_origin == UINT64_MAX) {
 			mant_structured_set_failure(collector->session,
 			    MANT_STRUCTURED_BUDGET, MANT_STRUCTURED_STAGE_RENDER,
@@ -1865,6 +1895,12 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			    collector->pending_link;
 			collector->letter_label.source =
 			    collector->pending_source;
+		}
+		if (collector->in_margin) {
+			collector->letter_label.glyph_origin = 0;
+			collector->letter_label.owner = collector->margin_owner;
+			collector->letter_label.link = 0;
+			collector->letter_label.source = 0;
 		}
 		collector->letter_edge = origin_edge(column,
 		    collector->letter_label.glyph_origin);
@@ -2055,6 +2091,35 @@ mant_annotated_collector_sink(void *argument, const void *bytes,
 			return 0;
 		}
 		label = collector->letter_label;
+		if (collector->in_margin && collector->margin_owner != 0 &&
+		    label.role == MANT_ANNOTATED_BODY &&
+		    !(length == 1 && bytes != NULL &&
+		    ((const uint8_t *)bytes)[0] == '\b')) {
+			if (collector->margin_mark == 0) {
+				struct annotated_point_state *state;
+				/* term.c::endline() emits .mc after the field.  Give
+				 * its generated display bytes their own region so a
+				 * heading title or definition head stays semantic-only. */
+				collector->margin_mark = add_mark(collector, NULL,
+				    NULL, MANT_ANNOTATED_MARK_REGION,
+				    collector->margin_owner,
+				    MANT_ANNOTATED_REGION_MARGIN, NULL);
+				if (collector->margin_mark == 0)
+					return 0;
+				collector->marks[collector->margin_mark - 1].owner =
+				    collector->margin_owner;
+				state = collector->points +
+				    collector->margin_mark - 1;
+				if (!mant_annotated_display_checkpoint(
+				    collector->display, 0, &state->checkpoint)) {
+					fail_relation(collector,
+					    collector->margin_mark, 0);
+					return 0;
+				}
+				state->state = 2;
+			}
+			label.owner = collector->margin_mark;
+		}
 		if (from_field) {
 			if (collector->letter_column >=
 			    collector->column_capacity) {

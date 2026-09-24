@@ -404,6 +404,53 @@ finish_row(struct mant_annotated_display *display, int break_after)
 	return 1;
 }
 
+int
+mant_annotated_display_trailing_owner(struct mant_annotated_display *display,
+    uint32_t *owner)
+{
+	const struct display_slot *slot;
+	const struct display_component *part;
+	uint32_t column, key, chain, candidate;
+	int found;
+
+	if (display == NULL || owner == NULL || display->finished ||
+	    display->status != MANT_ANNOTATED_DISPLAY_OK)
+		return 0;
+	*owner = 0;
+	if (display->slot_capacity == 0)
+		return 1;
+	for (column = display->maxcol + 1; column != 0;) {
+		column--;
+		if (!charge(display, 1))
+			return 0;
+		slot = display->slots + column;
+		if (slot->start_plus_one != column + 1 &&
+		    slot->zero_head == 0)
+			continue;
+		candidate = 0;
+		found = 0;
+		for (chain = 0; chain < 2; chain++) {
+			key = chain == 0 ? slot->zero_head : slot->head;
+			for (; key != 0; key = part->next) {
+				if (!charge(display, 1))
+					return 0;
+				part = display->components + key - 1;
+				if (part->label.role == MANT_ANNOTATED_LAYOUT)
+					continue;
+				if (found && candidate != part->label.owner)
+					return 1;
+				candidate = part->label.owner;
+				found = 1;
+			}
+		}
+		if (found) {
+			*owner = candidate;
+			return 1;
+		}
+	}
+	return 1;
+}
+
 static int
 write_scalar(struct mant_annotated_display *display, uint32_t scalar,
     const uint8_t *bytes, uint8_t length,

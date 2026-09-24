@@ -47,6 +47,34 @@ fn visible_total(query: &mant_ir::ResolvedContent, pattern: &str) -> u32 {
     .total
 }
 
+fn assert_single_section_covers_each_visible_byte_once(fixed: &mant_ir::FixedBody) {
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    assert_eq!(reader.roots().len(), 1);
+    let parts = reader.subtree_parts(reader.roots()[0]).unwrap();
+    let mut counts = fixed
+        .surface
+        .runs
+        .iter()
+        .map(|run| vec![0_u8; usize::try_from(run.byte_count).unwrap()])
+        .collect::<Vec<_>>();
+    for part in parts {
+        let slots = &mut counts[(part.slice.run.get() - 1) as usize];
+        for count in &mut slots[usize::try_from(part.slice.start_byte).unwrap()
+            ..usize::try_from(part.slice.end_byte).unwrap()]
+        {
+            *count += 1;
+        }
+    }
+    for (run, counts) in fixed.surface.runs.iter().zip(counts) {
+        if run.label.role != DisplayRole::Layout {
+            assert!(
+                counts.iter().all(|&count| count == 1),
+                "run {run:?}: {counts:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn native_word_spaces_reach_fixed_visible_search() {
     // The exact input first ran on the pinned CVS -Tutf8 reference.  In
@@ -323,6 +351,7 @@ fn native_mdoc_nested_owner_and_literal_are_in_complete_reading_view() {
     let DocumentBody::Fixed(fixed) = &document.body else {
         panic!("not Fixed")
     };
+    assert_single_section_covers_each_visible_byte_once(fixed);
     let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
     let section = reader.subtree_parts(reader.roots()[0]).unwrap();
     let text = section.iter().map(|part| part.text).collect::<String>();
@@ -371,6 +400,371 @@ fn native_mdoc_nested_owner_and_literal_are_in_complete_reading_view() {
             .iter()
             .any(|part| part.text.contains("code one"))
     );
+}
+
+#[test]
+fn native_mdoc_column_bodies_remain_one_owner_and_one_reading() {
+    // Exact input ran pinned CVS -Tutf8 -O width=78 before this assertion.
+    // mdoc_macro.c::phrase_ta() creates a separate BODY for each .It column;
+    // mdoc_term.c::termp_it_pre() places both in the same list item.
+    let input = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl foo\n.Bl -column one two\n.It alpha Ta beta\n.El\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_single_section_covers_each_visible_byte_once(fixed);
+    let outer = fixed
+        .owners
+        .iter()
+        .find(|owner| owner.parent.is_none())
+        .unwrap();
+    let inner = fixed
+        .owners
+        .iter()
+        .find(|owner| owner.parent == Some(outer.key))
+        .unwrap();
+    let direct = inner
+        .direct_body
+        .parts
+        .iter()
+        .map(|part| {
+            fixed
+                .surface
+                .run_text(part.run)
+                .unwrap()
+                .get(
+                    usize::try_from(part.start_byte).unwrap()
+                        ..usize::try_from(part.end_byte).unwrap(),
+                )
+                .unwrap()
+        })
+        .collect::<String>();
+    assert_eq!(direct.matches("alpha").count(), 1);
+    assert_eq!(direct.matches("beta").count(), 1);
+    assert!(
+        inner
+            .direct_body
+            .joins
+            .contains(&mant_ir::TextJoin::Unknown)
+    );
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    for parts in [
+        reader.subtree_parts(reader.roots()[0]).unwrap(),
+        reader.owner_body_parts(outer.key).unwrap(),
+    ] {
+        let text = parts.iter().map(|part| part.text).collect::<String>();
+        assert_eq!(text.matches("alpha").count(), 1, "{text}");
+        assert_eq!(text.matches("beta").count(), 1, "{text}");
+    }
+    let query = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(document),
+        tldr: None,
+    };
+    let result = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "-foo".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+        result.evidence[0].content.as_ref().unwrap()
+    else {
+        panic!("not Fixed owner")
+    };
+    let text = reading_body
+        .parts
+        .iter()
+        .map(|part| part.text.as_str())
+        .collect::<String>();
+    assert_eq!(text.matches("alpha").count(), 1);
+    assert_eq!(text.matches("beta").count(), 1);
+}
+
+#[test]
+fn native_margin_glyph_stays_with_its_flushed_owner_and_section() {
+    // Exact input ran pinned CVS -Tutf8 -O width=78 before this assertion.
+    // term.c::endline() emits .mc after the field as a separate direct write.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.mc |\nsome body\n.br\n.mc\n";
+    let query = native_query(input, 78);
+    let DocumentBody::Fixed(fixed) = &query.document.as_ref().unwrap().body else {
+        panic!("not Fixed")
+    };
+    assert_single_section_covers_each_visible_byte_once(fixed);
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let owner = &fixed.owners[0];
+    for parts in [
+        reader.subtree_parts(reader.roots()[0]).unwrap(),
+        reader.owner_body_parts(owner.key).unwrap(),
+    ] {
+        let text = parts.iter().map(|part| part.text).collect::<String>();
+        assert_eq!(text.matches('|').count(), 1, "{text}");
+    }
+    let result = mant_query::search_query(
+        &query,
+        &SearchQuery {
+            pattern: "|".into(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(result.total, 1);
+    assert_eq!(result.matches[0].outline.node.title(), "OPTIONS");
+}
+
+#[test]
+fn native_mdoc_columns_cover_multiple_and_empty_final_bodies() {
+    // Each exact source ran pinned CVS -Tutf8 -O width=78 first.  The .Ta
+    // and tab paths in mdoc_macro.c::phrase_ta() both create a separate BODY;
+    // an empty final BODY does not erase the preceding visible column.
+    for (input, expected) in [
+        (
+            b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl foo\n.Bl -column one two three\n.It alpha Ta beta Ta gamma\n.El\n.El\n".as_slice(),
+            ["alpha", "beta", "gamma"].as_slice(),
+        ),
+        (
+            b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl foo\n.Bl -column one two\n.It alpha\tbeta\n.El\n.El\n".as_slice(),
+            ["alpha", "beta"].as_slice(),
+        ),
+        (
+            b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl foo\n.Bl -column one two\n.It alpha Ta\n.El\n.El\n".as_slice(),
+            ["alpha"].as_slice(),
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        let outer = fixed.owners.iter().find(|owner| owner.parent.is_none()).unwrap();
+        let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+        for parts in [
+            reader.subtree_parts(reader.roots()[0]).unwrap(),
+            reader.owner_body_parts(outer.key).unwrap(),
+        ] {
+            let text = parts.iter().map(|part| part.text).collect::<String>();
+            for word in expected {
+                assert_eq!(text.matches(word).count(), 1, "{text}");
+            }
+        }
+        let query = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        let explained = mant_query::explain_query(
+            &query,
+            &ExplanationQuery {
+                entry: "-foo".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+            explained.evidence[0].content.as_ref().unwrap()
+        else {
+            panic!("not Fixed owner")
+        };
+        let text = reading_body
+            .parts
+            .iter()
+            .map(|part| part.text.as_str())
+            .collect::<String>();
+        for word in expected {
+            assert_eq!(text.matches(word).count(), 1, "{text}");
+        }
+    }
+}
+
+#[test]
+fn native_margin_follows_new_heading_and_unicode_owner() {
+    // Both exact inputs ran pinned CVS -Tutf8 -O width=78 first.  In
+    // term.c::endline(), the configured margin is emitted after the physical
+    // field, including a later heading; encode1() handles Unicode .mc.
+    let sections = native_query(
+        b".TH T 1\n.SH FIRST\n.mc |\nfirst\n.SH SECOND\nsecond\n.mc\n",
+        78,
+    );
+    let DocumentBody::Fixed(fixed) = &sections.document.as_ref().unwrap().body else {
+        panic!("not Fixed")
+    };
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    assert_eq!(reader.roots().len(), 2);
+    for &root in reader.roots() {
+        let text = reader
+            .subtree_parts(root)
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>();
+        assert_eq!(text.matches('|').count(), 1, "{text}");
+    }
+    let unicode = native_query(
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.mc \\[u263A]\nbody\n.br\n.mc\n",
+        78,
+    );
+    let DocumentBody::Fixed(fixed) = &unicode.document.as_ref().unwrap().body else {
+        panic!("not Fixed")
+    };
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let body = reader.owner_body_parts(fixed.owners[0].key).unwrap();
+    assert_eq!(
+        body.iter()
+            .map(|part| part.text)
+            .collect::<String>()
+            .matches('☺')
+            .count(),
+        1
+    );
+    let found = mant_query::search_query(
+        &unicode,
+        &SearchQuery {
+            pattern: "☺".into(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(found.total, 1);
+    assert_eq!(found.matches[0].outline.node.title(), "OPTIONS");
+}
+
+#[test]
+fn native_margin_is_readable_without_becoming_a_heading_or_definition_name() {
+    // Both exact sources ran pinned CVS -Tutf8 -O width=78 first.  In
+    // man_term.c::post_TP(HEAD), term_flushln() can end a separate label
+    // line; term.c::endline() then appends .mc outside that semantic HEAD.
+    let definition = native_query(
+        b".TH T 1\n.SH OPTIONS\n.mc |\n.TP 4n\n.B --foo\nbody\n.br\n.mc\n",
+        78,
+    );
+    let DocumentBody::Fixed(fixed) = &definition.document.as_ref().unwrap().body else {
+        panic!("not Fixed")
+    };
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let owner = &fixed.owners[0];
+    let section_text = reader
+        .subtree_parts(reader.roots()[0])
+        .unwrap()
+        .iter()
+        .map(|part| part.text)
+        .collect::<String>();
+    assert_eq!(section_text.matches('|').count(), 2);
+    let owner_body = reader.owner_body_parts(owner.key).unwrap();
+    assert_eq!(
+        owner_body
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>()
+            .matches('|')
+            .count(),
+        1
+    );
+    assert!(
+        owner
+            .head
+            .parts
+            .iter()
+            .all(|part| { !fixed.surface.run_text(part.run).unwrap().contains('|') })
+    );
+    let explained = mant_query::explain_query(
+        &definition,
+        &ExplanationQuery {
+            entry: "--foo".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(explained.total, 1);
+
+    let heading = native_query(b".TH T 1\n.mc |\n.SH OPTIONS\nbody\n.br\n.mc\n", 78);
+    let DocumentBody::Fixed(fixed) = &heading.document.as_ref().unwrap().body else {
+        panic!("not Fixed")
+    };
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let root = reader.roots()[0];
+    assert_eq!(reader.label(root).as_deref(), Some("OPTIONS"));
+    assert_eq!(
+        reader
+            .subtree_parts(root)
+            .unwrap()
+            .iter()
+            .map(|part| part.text)
+            .collect::<String>()
+            .matches('|')
+            .count(),
+        2
+    );
+
+    // The public owned native record can also be constructed without FFI;
+    // it must not be able to forge a margin with authored provenance.
+    let mut page = AnnotatedRenderer::default()
+        .render_bundle(
+            "t.1",
+            &bundle(b".TH T 1\n.mc |\n.SH OPTIONS\nbody\n.br\n.mc\n"),
+            InputFormat::Man,
+        )
+        .unwrap();
+    let margin = page
+        .marks
+        .iter_mut()
+        .find(|mark| mark.kind == 5 && mark.region_kind == 11)
+        .unwrap();
+    margin.source = 1;
+    assert!(lower_annotated_document(page).is_err());
+}
+
+#[test]
+fn native_margin_handles_overprint_and_a_zero_width_setting() {
+    // Both exact sources ran pinned CVS -Tutf8 -O width=78 first.
+    // term.c::endline() emits .mc after \\o's real backspaces; \\& emits
+    // no glyph and cannot create a phantom margin region or description.
+    let overprint = native_query(
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.mc |\n\\o'ab'\n.br\n.mc\n",
+        78,
+    );
+    let DocumentBody::Fixed(fixed) = &overprint.document.as_ref().unwrap().body else {
+        panic!("not Fixed")
+    };
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let body = reader.owner_body_parts(fixed.owners[0].key).unwrap();
+    assert_eq!(
+        body.iter()
+            .map(|part| part.text)
+            .collect::<String>()
+            .matches('|')
+            .count(),
+        1
+    );
+
+    let zero = native_query(
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.mc \\&\nbody\n.br\n.mc\n",
+        78,
+    );
+    let DocumentBody::Fixed(fixed) = &zero.document.as_ref().unwrap().body else {
+        panic!("not Fixed")
+    };
+    assert!(
+        fixed
+            .regions
+            .iter()
+            .all(|region| region.kind != mant_ir::RegionKind::Margin)
+    );
+    assert_eq!(visible_total(&zero, "body"), 1);
 }
 
 fn malformed_marks(marks: Vec<AnnotatedMark>) -> AnnotatedDocument {

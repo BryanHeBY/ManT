@@ -429,6 +429,8 @@ pub enum RegionKind {
     TableCell,
     /// Native equation region.
     Equation,
+    /// Generated physical-line margin glyph, outside semantic heads/titles.
+    Margin,
 }
 
 /// One native region without a parallel text buffer.
