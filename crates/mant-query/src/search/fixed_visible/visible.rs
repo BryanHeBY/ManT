@@ -5,11 +5,11 @@ use super::units::append_bounded;
 use super::{
     FixedBody, FixedSectionReader, FixedUnitPart, FixedVisibleUnit, FixedVisibleUnits,
     MAX_FIXED_SCAN_BYTES, MAX_FIXED_SEARCH_BYTES, MAX_SEARCH_PRESENTATION_BYTES, Matcher,
-    NonZeroU32, OutlineNodeReference, OutlineReference, OutlineTrail, QuerySearch, Range,
-    ResolvedContent, SearchContentProjection, SearchContextLine, SearchDisplaySlice, SearchError,
-    SearchFixedFragmentSource, SearchFragment, SearchFragmentSource, SearchLocation, SearchMatch,
-    SearchQuery, SearchRenderFormat, SearchRenderSchema, SearchTextJoin, SearchTextUnit, TextJoin,
-    empty_match_error, finish_result, matcher_error, non_utf8_pattern_error,
+    NonZeroU32, QuerySearch, Range, ResolvedContent, SearchContentProjection, SearchContextLine,
+    SearchDisplaySlice, SearchError, SearchFixedFragmentSource, SearchFragment,
+    SearchFragmentSource, SearchLocation, SearchMatch, SearchQuery, SearchRenderFormat,
+    SearchRenderSchema, SearchTextJoin, SearchTextUnit, TextJoin, empty_match_error, finish_result,
+    matcher_error, non_utf8_pattern_error,
 };
 
 pub(super) fn search_visible(
@@ -268,7 +268,8 @@ fn make_visible_match(
     charge_presentation(presentation_bytes, &matched_text, &preview, &context)?;
     Ok(SearchMatch {
         ordinal,
-        outline: trail(reader, first_piece.section)?,
+        outline: crate::fixed_navigation::section_trail(reader, first_piece.section)
+            .ok_or(SearchError::ContentProjection)?,
         matched_text,
         location: SearchLocation::VisibleFixed {
             unit: unit_key,
@@ -286,62 +287,6 @@ fn dense_key(index: usize) -> Result<NonZeroU32, SearchError> {
     let next = index.checked_add(1).ok_or(SearchError::ResourceLimit)?;
     NonZeroU32::new(u32::try_from(next).map_err(|_| SearchError::ResourceLimit)?)
         .ok_or(SearchError::ResourceLimit)
-}
-
-fn trail(
-    reader: &FixedSectionReader<'_>,
-    section: Option<NonZeroU32>,
-) -> Result<OutlineTrail, SearchError> {
-    let Some(section) = section else {
-        return Ok(root_trail());
-    };
-    let chain = reader
-        .breadcrumbs(section)
-        .ok_or(SearchError::ContentProjection)?;
-    let mut ancestors = vec![OutlineReference {
-        path: "root".into(),
-        id: mant_ir::DOCUMENT_ROOT_ID.into(),
-        title: "OVERVIEW".into(),
-    }];
-    for heading in chain.iter().take(chain.len().saturating_sub(1)) {
-        ancestors.push(OutlineReference {
-            path: reader
-                .path(heading.key)
-                .ok_or(SearchError::ContentProjection)?
-                .to_string()
-                .into(),
-            id: heading.id.clone(),
-            title: reader
-                .label(heading.key)
-                .ok_or(SearchError::ContentProjection)?,
-        });
-    }
-    let heading = chain.last().ok_or(SearchError::ContentProjection)?;
-    Ok(OutlineTrail {
-        ancestors,
-        node: OutlineNodeReference::DocumentSection {
-            path: reader
-                .path(section)
-                .ok_or(SearchError::ContentProjection)?
-                .to_string()
-                .into(),
-            id: heading.id.clone(),
-            title: reader
-                .label(section)
-                .ok_or(SearchError::ContentProjection)?,
-        },
-    })
-}
-
-pub(super) fn root_trail() -> OutlineTrail {
-    OutlineTrail {
-        ancestors: Vec::new(),
-        node: OutlineNodeReference::DocumentRoot {
-            path: "root".into(),
-            id: mant_ir::DOCUMENT_ROOT_ID.into(),
-            title: "OVERVIEW".into(),
-        },
-    }
 }
 
 fn row_text(fixed: &FixedBody, key: NonZeroU32) -> Result<String, SearchError> {

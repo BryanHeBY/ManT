@@ -3,6 +3,7 @@
 
 mod entry_presentation;
 mod explanation;
+mod fixed_navigation;
 mod projection;
 #[cfg(test)]
 mod query_fixture;

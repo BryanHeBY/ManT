@@ -14,8 +14,8 @@ use mant_ir::{
     TextSelection,
 };
 use mant_protocol::{
-    MAX_SEARCH_DIAGNOSTICS, MAX_SEARCH_PRESENTATION_BYTES, OutlineNodeReference, OutlineReference,
-    OutlineTrail, QuerySearch, SearchContentProjection, SearchContextLine, SearchDisplaySlice,
+    MAX_SEARCH_DIAGNOSTICS, MAX_SEARCH_PRESENTATION_BYTES, OutlineNodeReference, OutlineTrail,
+    QuerySearch, SearchContentProjection, SearchContextLine, SearchDisplaySlice,
     SearchFixedFragmentSource, SearchFragment, SearchFragmentSource, SearchLocation, SearchMatch,
     SearchQuery, SearchRender, SearchRenderFormat, SearchRenderSchema, SearchRenderScope,
     SearchSchema, SearchScope, SearchTextJoin, SearchTextUnit,
@@ -35,10 +35,11 @@ mod tests;
 pub(crate) mod units;
 mod visible;
 
+use crate::fixed_navigation::root_trail;
 use artifact::search_markdown;
 pub(crate) use candidates::SelectionKind;
 pub(crate) use units::{FixedUnitPart, FixedVisibleUnit, FixedVisibleUnits};
-use visible::{charge_presentation, root_trail, search_visible};
+use visible::{charge_presentation, search_visible};
 
 const MAX_FIXED_SEARCH_BYTES: usize = 64 * 1024 * 1024;
 pub(crate) const MAX_FIXED_SCAN_BYTES: usize = 128 * 1024 * 1024;
