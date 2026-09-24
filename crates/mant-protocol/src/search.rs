@@ -368,8 +368,8 @@ pub(crate) fn validate_search_content(
             (
                 SearchScope::Markdown,
                 SearchLocation::MarkdownArtifact {
-                    start_byte,
-                    end_byte,
+                    start_scalar,
+                    end_scalar,
                     start_line,
                     start_column,
                     end_line,
@@ -378,8 +378,8 @@ pub(crate) fn validate_search_content(
             ) => {
                 if projection.is_some()
                     || !matched.display_slices.is_empty()
-                    || start_byte >= end_byte
-                    || end_byte - start_byte != matched.matched_text.len() as u64
+                    || start_scalar >= end_scalar
+                    || end_scalar - start_scalar != matched.matched_text.chars().count() as u64
                     || start_line == 0
                     || start_column == 0
                     || end_line == 0

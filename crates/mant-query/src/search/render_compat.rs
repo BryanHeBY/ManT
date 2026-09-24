@@ -24,6 +24,7 @@ use super::mapping::{LineIndex, SearchableText, VisiblePart};
 use super::origins::FlowOrigins;
 use super::owners::{Owner, OwnerIndex};
 use super::plan::{empty_match_error, matcher_error, non_utf8_pattern_error};
+use super::scalar::ScalarCursor;
 use crate::ResolvedContent;
 
 pub(super) fn search_with_matcher(
@@ -73,6 +74,7 @@ fn search_flow_with_matcher(
         units: Vec::new(),
     };
     let mut presentation_bytes = 0usize;
+    let mut scalar_cursor = ScalarCursor::default();
     let match_context = MatchContext {
         searchable: &searchable,
         markdown,
@@ -90,6 +92,7 @@ fn search_flow_with_matcher(
                 &match_context,
                 &mut projection,
                 &mut presentation_bytes,
+                &mut scalar_cursor,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -311,6 +314,7 @@ fn build_match(
     context: &MatchContext<'_, '_>,
     projection: &mut SearchContentProjection,
     presentation_bytes: &mut usize,
+    scalar_cursor: &mut ScalarCursor,
 ) -> Result<SearchMatch, SearchError> {
     let MatchContext {
         searchable,
@@ -345,9 +349,8 @@ fn build_match(
     let (matched_text, location, display_slices) = if *scope == SearchScope::Markdown {
         let matched_text = markdown[found.markdown.clone()].to_owned();
         let location = SearchLocation::MarkdownArtifact {
-            start_byte: u64::try_from(found.markdown.start)
-                .map_err(|_| SearchError::ResourceLimit)?,
-            end_byte: u64::try_from(found.markdown.end).map_err(|_| SearchError::ResourceLimit)?,
+            start_scalar: scalar_cursor.at(markdown, found.markdown.start)?,
+            end_scalar: scalar_cursor.at(markdown, found.markdown.end)?,
             start_line: u32::try_from(start.line_index + 1)
                 .map_err(|_| SearchError::ResourceLimit)?,
             start_column: u32::try_from(start.column).map_err(|_| SearchError::ResourceLimit)?,
@@ -369,8 +372,8 @@ fn build_match(
         )?;
         let location = SearchLocation::VisibleFlow {
             unit: visible_projection.unit,
-            start_byte: visible_projection.start_byte,
-            end_byte: visible_projection.end_byte,
+            start_scalar: visible_projection.start_scalar,
+            end_scalar: visible_projection.end_scalar,
         };
         (matched_text, location, visible_projection.display_slices)
     };
@@ -400,8 +403,8 @@ fn build_match(
 
 struct VisibleProjection {
     unit: NonZeroU32,
-    start_byte: u64,
-    end_byte: u64,
+    start_scalar: u64,
+    end_scalar: u64,
     display_slices: Vec<SearchDisplaySlice>,
 }
 
@@ -449,10 +452,12 @@ fn project_visible(
         if display_start < display_end {
             slices.push(SearchDisplaySlice {
                 fragment: key,
-                start_byte: u64::try_from(display_start - part.visible.start)
-                    .map_err(|_| SearchError::ResourceLimit)?,
-                end_byte: u64::try_from(display_end - part.visible.start)
-                    .map_err(|_| SearchError::ResourceLimit)?,
+                start_scalar: part.text[..display_start - part.visible.start]
+                    .chars()
+                    .count() as u64,
+                end_scalar: part.text[..display_end - part.visible.start]
+                    .chars()
+                    .count() as u64,
             });
         }
         projection.fragments.push(SearchFragment {
@@ -486,10 +491,12 @@ fn project_visible(
     });
     Ok(VisibleProjection {
         unit: unit_key,
-        start_byte: u64::try_from(matched_range.start - unit_range.start)
-            .map_err(|_| SearchError::ResourceLimit)?,
-        end_byte: u64::try_from(matched_range.end - unit_range.start)
-            .map_err(|_| SearchError::ResourceLimit)?,
+        start_scalar: searchable.text[unit_range.start..matched_range.start]
+            .chars()
+            .count() as u64,
+        end_scalar: searchable.text[unit_range.start..matched_range.end]
+            .chars()
+            .count() as u64,
         display_slices: slices,
     })
 }

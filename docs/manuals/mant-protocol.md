@@ -2185,10 +2185,11 @@ diagnostic count bound does not permit 256 independent unbounded copies.
 ### Authoritative and Display Coordinates
 
 Each `matches` item is one exact occurrence. `location` is a tagged
-`visible-flow`, `visible-fixed`, or `markdown-artifact` coordinate; the former
-two name a response-local unit and half-open UTF-8 byte range, while the latter
-names half-open export bytes and one-based line/column. `displaySlices` are
-subordinate presentation fragments, not another authoritative range.
+`visible-flow`, `visible-fixed`, or `markdown-artifact` coordinate. All three
+use half-open Unicode scalar ranges (`startScalar`/`endScalar`); visible hits
+name a response-local unit, while artifact hits name the exact export and
+one-based scalar line/column. `displaySlices` use fragment-relative scalar
+ranges and are subordinate presentation fragments, not another authoritative range.
 `matchedText` must equal the exact unit substring for visible matches. An
 occurrence can span several Flow roots or Fixed runs without being split into
 several pagination items. The old `occurrences` line group and nullable
@@ -2197,7 +2198,9 @@ several pagination items. The old `occurrences` line group and nullable
 Visible units contain ordered, nonempty UTF-8 fragments and one explicit join
 between each adjacent pair. A `render-separator` join carries the exact
 separator bytes once; unknown or hard boundaries cannot license a cross-boundary
-match. Fragment sources are tagged Flow content locations, TLDR paths,
+match. Fragment sources retain explicitly named UTF-8 byte ranges for storage
+and source addressing; they are not public text-match positions. They are
+tagged Flow content locations, TLDR paths,
 render-derived text, or Fixed final row/run slices. The producer checks these
 against its input snapshot; the decoder checks the bounded response-local
 keys, ranges, UTF-8, joins and `matchedText` without fetching that snapshot.
@@ -2218,10 +2221,10 @@ For a Flow Markdown-coordinate result, `render` has this shape:
 ```
 
 Fixed visible results use `schema: "mant.fixed/v1"` and
-`format: "fixed-visible"`; they never put terminal columns into Markdown byte
-ranges. `lineCount` is document-dependent. Artifact `startByte`/`endByte` are
-half-open UTF-8 ranges in the exact export, while the one-based human columns
-count Unicode scalars. An artifact-only fence hit legitimately has no native
+`format: "fixed-visible"`; terminal cell columns are never used as text
+positions. `lineCount` is document-dependent. Artifact `startScalar`/`endScalar`
+are half-open Unicode scalar ranges in the exact export; its one-based human
+columns also count Unicode scalars. An artifact-only fence hit legitimately has no native
 display slice. Regex compilation has a
 fixed project resource budget in addition to the pattern-length bound; an
 expression whose compiled program exceeds that budget is rejected before

@@ -32,7 +32,7 @@ pub struct SearchMatch {
     pub ordinal: u32,
     /// Nearest addressable node for navigation, independent of match identity.
     pub outline: OutlineTrail,
-    /// Exact searched bytes, not a presentation-only preview.
+    /// Exact searched Unicode text, not a presentation-only preview.
     pub matched_text: String,
     /// Authoritative tagged occurrence coordinate.
     pub location: SearchLocation,
@@ -62,26 +62,26 @@ pub enum SearchLocation {
     VisibleFlow {
         /// Response-local complete text unit.
         unit: SearchUnitKey,
-        /// Inclusive UTF-8 byte offset in the unit.
-        start_byte: u64,
-        /// Exclusive UTF-8 byte offset in the unit.
-        end_byte: u64,
+        /// Inclusive Unicode scalar offset in the unit.
+        start_scalar: u64,
+        /// Exclusive Unicode scalar offset in the unit.
+        end_scalar: u64,
     },
     /// A validated Fixed visible-text unit.
     VisibleFixed {
         /// Response-local complete text unit.
         unit: SearchUnitKey,
-        /// Inclusive UTF-8 byte offset in the unit.
-        start_byte: u64,
-        /// Exclusive UTF-8 byte offset in the unit.
-        end_byte: u64,
+        /// Inclusive Unicode scalar offset in the unit.
+        start_scalar: u64,
+        /// Exclusive Unicode scalar offset in the unit.
+        end_scalar: u64,
     },
-    /// UTF-8 bytes in the exact user-exportable Markdown artifact.
+    /// Unicode scalar range in the exact user-exportable Markdown artifact.
     MarkdownArtifact {
-        /// Inclusive artifact byte offset.
-        start_byte: u64,
-        /// Exclusive artifact byte offset.
-        end_byte: u64,
+        /// Inclusive artifact Unicode scalar offset.
+        start_scalar: u64,
+        /// Exclusive artifact Unicode scalar offset.
+        end_scalar: u64,
         /// One-based start line.
         #[schemars(range(min = 1))]
         start_line: u32,
@@ -103,10 +103,10 @@ pub enum SearchLocation {
 pub struct SearchDisplaySlice {
     /// Fragment referenced by this display slice.
     pub fragment: SearchFragmentKey,
-    /// Inclusive fragment-relative UTF-8 byte offset.
-    pub start_byte: u64,
-    /// Exclusive fragment-relative UTF-8 byte offset.
-    pub end_byte: u64,
+    /// Inclusive fragment-relative Unicode scalar offset.
+    pub start_scalar: u64,
+    /// Exclusive fragment-relative Unicode scalar offset.
+    pub end_scalar: u64,
 }
 
 /// Only retained occurrences contribute fragments and units.
@@ -440,14 +440,14 @@ impl SearchContentProjection {
         let (unit_key, start, end, fixed) = match matched.location {
             SearchLocation::VisibleFlow {
                 unit,
-                start_byte,
-                end_byte,
-            } => (unit, start_byte, end_byte, false),
+                start_scalar,
+                end_scalar,
+            } => (unit, start_scalar, end_scalar, false),
             SearchLocation::VisibleFixed {
                 unit,
-                start_byte,
-                end_byte,
-            } => (unit, start_byte, end_byte, true),
+                start_scalar,
+                end_scalar,
+            } => (unit, start_scalar, end_scalar, true),
             SearchLocation::MarkdownArtifact { .. } => {
                 return Err("artifact match must not carry a visible projection");
             }
@@ -458,8 +458,8 @@ impl SearchContentProjection {
             .filter(|unit| unit.key == unit_key)
             .ok_or("search match references missing unit")?;
         let text = self.unit_text(unit_key)?;
-        let start = usize::try_from(start).map_err(|_| "search match byte offset overflows")?;
-        let end = usize::try_from(end).map_err(|_| "search match byte offset overflows")?;
+        let start = scalar_to_byte(&text, start).ok_or("search match scalar offset overflows")?;
+        let end = scalar_to_byte(&text, end).ok_or("search match scalar offset overflows")?;
         if start >= end || text.get(start..end) != Some(matched.matched_text.as_str()) {
             return Err("search match does not equal its authoritative unit range");
         }
@@ -520,10 +520,8 @@ impl SearchContentProjection {
                 }
                 expected_slices.push(SearchDisplaySlice {
                     fragment: *fragment_key,
-                    start_byte: u64::try_from(relative_start)
-                        .map_err(|_| "search display offset overflows")?,
-                    end_byte: u64::try_from(relative_end)
-                        .map_err(|_| "search display offset overflows")?,
+                    start_scalar: fragment.text[..relative_start].chars().count() as u64,
+                    end_scalar: fragment.text[..relative_end].chars().count() as u64,
                 });
             }
         }
@@ -532,6 +530,14 @@ impl SearchContentProjection {
         }
         Ok(())
     }
+}
+
+fn scalar_to_byte(text: &str, scalar: u64) -> Option<usize> {
+    let scalar = usize::try_from(scalar).ok()?;
+    text.char_indices()
+        .map(|(byte, _)| byte)
+        .chain(std::iter::once(text.len()))
+        .nth(scalar)
 }
 
 fn validate_fragment_source(fragment: &SearchFragment) -> Result<usize, &'static str> {
@@ -619,19 +625,19 @@ mod tests {
             matched_text: "a   b".to_owned(),
             location: SearchLocation::VisibleFixed {
                 unit: one,
-                start_byte: 0,
-                end_byte: 5,
+                start_scalar: 0,
+                end_scalar: 5,
             },
             display_slices: vec![
                 SearchDisplaySlice {
                     fragment: one,
-                    start_byte: 0,
-                    end_byte: 1,
+                    start_scalar: 0,
+                    end_scalar: 1,
                 },
                 SearchDisplaySlice {
                     fragment: two,
-                    start_byte: 0,
-                    end_byte: 1,
+                    start_scalar: 0,
+                    end_scalar: 1,
                 },
             ],
             node_source: None,
@@ -654,8 +660,8 @@ mod tests {
         }
         matched.location = SearchLocation::VisibleFlow {
             unit: one,
-            start_byte: 0,
-            end_byte: 5,
+            start_scalar: 0,
+            end_scalar: 5,
         };
         assert!(projection.validate_match(&matched).is_err());
         projection.units[0].joins[0] = SearchTextJoin::RenderSeparator {

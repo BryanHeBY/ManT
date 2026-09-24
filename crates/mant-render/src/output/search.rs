@@ -161,14 +161,14 @@ pub(super) fn coordinate(found: &SearchMatch) -> String {
     match found.location {
         SearchLocation::VisibleFlow {
             unit,
-            start_byte,
-            end_byte,
-        } => format!("visible-flow/u{}:{start_byte}..{end_byte}", unit.get()),
+            start_scalar,
+            end_scalar,
+        } => format!("visible-flow/u{}:{start_scalar}..{end_scalar}", unit.get()),
         SearchLocation::VisibleFixed {
             unit,
-            start_byte,
-            end_byte,
-        } => format!("visible-fixed/u{}:{start_byte}..{end_byte}", unit.get()),
+            start_scalar,
+            end_scalar,
+        } => format!("visible-fixed/u{}:{start_scalar}..{end_scalar}", unit.get()),
         SearchLocation::MarkdownArtifact {
             start_line,
             start_column,

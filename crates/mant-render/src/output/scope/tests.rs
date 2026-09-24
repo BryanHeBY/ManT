@@ -118,8 +118,8 @@ fn search() -> ScopeSearch {
                     },
                     matched_text: "needle".into(),
                     location: SearchLocation::MarkdownArtifact {
-                        start_byte: 0,
-                        end_byte: 6,
+                        start_scalar: 0,
+                        end_scalar: 6,
                         start_line: 1,
                         start_column: 1,
                         end_line: 1,

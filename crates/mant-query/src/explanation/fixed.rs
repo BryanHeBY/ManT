@@ -216,8 +216,8 @@ fn materialize_owner(
         forms: Vec::new(),
         fixed_forms: vec![ExplanationFixedFormRange {
             form_index: 0,
-            start_byte: 0,
-            end_byte: u64::try_from(expected.len()).expect("Fixed form byte length"),
+            start_scalar: 0,
+            end_scalar: expected.chars().count() as u64,
         }],
         content: Vec::new(),
     });

@@ -12,6 +12,7 @@ mod origins;
 mod owners;
 mod plan;
 mod render_compat;
+mod scalar;
 pub(crate) use plan::SearchPlan;
 pub use plan::validate_search_query;
 use plan::{MAX_CONTEXT_LINES, MAX_SEARCH_LIMIT};

@@ -7335,11 +7335,11 @@
         ]
       },
       "ExplanationFixedFormRange": {
-        "description": "A complete or partial byte range in a returned Fixed form's logical text.\nIts display fragments resolve through `entry.fixedForms[formIndex]`.",
+        "description": "A complete or partial Unicode scalar range in a returned Fixed form's logical text.\nIts display fragments resolve through `entry.fixedForms[formIndex]`.",
         "type": "object",
         "properties": {
-          "endByte": {
-            "description": "Exclusive UTF-8 byte offset in the joined form.",
+          "endScalar": {
+            "description": "Exclusive Unicode scalar offset in the joined form.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -7350,8 +7350,8 @@
             "format": "uint32",
             "minimum": 0
           },
-          "startByte": {
-            "description": "Inclusive UTF-8 byte offset in the joined form.",
+          "startScalar": {
+            "description": "Inclusive Unicode scalar offset in the joined form.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -7360,8 +7360,8 @@
         "additionalProperties": false,
         "required": [
           "formIndex",
-          "startByte",
-          "endByte"
+          "startScalar",
+          "endScalar"
         ]
       },
       "ExplanationFixedPart": {
@@ -7565,7 +7565,7 @@
             }
           },
           "fixedForms": {
-            "description": "Matched byte ranges in returned native Fixed forms. Flow uses an empty\narray; these never masquerade as `Inline`/`ContentStore` positions.",
+            "description": "Matched Unicode scalar ranges in returned native Fixed forms. Flow uses an empty\narray; these never masquerade as `Inline`/`ContentStore` positions.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/ExplanationFixedFormRange"
@@ -17010,6 +17010,11 @@
         "description": "Native region family useful for content boundaries and joins.",
         "oneOf": [
           {
+            "description": "Direct body text outside an explicit section or owner.",
+            "type": "string",
+            "const": "unsectioned"
+          },
+          {
             "description": "Heading title.",
             "type": "string",
             "const": "heading-title"
@@ -21590,11 +21595,11 @@
         ]
       },
       "ExplanationFixedFormRange": {
-        "description": "A complete or partial byte range in a returned Fixed form's logical text.\nIts display fragments resolve through `entry.fixedForms[formIndex]`.",
+        "description": "A complete or partial Unicode scalar range in a returned Fixed form's logical text.\nIts display fragments resolve through `entry.fixedForms[formIndex]`.",
         "type": "object",
         "properties": {
-          "endByte": {
-            "description": "Exclusive UTF-8 byte offset in the joined form.",
+          "endScalar": {
+            "description": "Exclusive Unicode scalar offset in the joined form.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -21605,8 +21610,8 @@
             "format": "uint32",
             "minimum": 0
           },
-          "startByte": {
-            "description": "Inclusive UTF-8 byte offset in the joined form.",
+          "startScalar": {
+            "description": "Inclusive Unicode scalar offset in the joined form.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -21615,8 +21620,8 @@
         "additionalProperties": false,
         "required": [
           "formIndex",
-          "startByte",
-          "endByte"
+          "startScalar",
+          "endScalar"
         ]
       },
       "ExplanationFixedPart": {
@@ -21820,7 +21825,7 @@
             }
           },
           "fixedForms": {
-            "description": "Matched byte ranges in returned native Fixed forms. Flow uses an empty\narray; these never masquerade as `Inline`/`ContentStore` positions.",
+            "description": "Matched Unicode scalar ranges in returned native Fixed forms. Flow uses an empty\narray; these never masquerade as `Inline`/`ContentStore` positions.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/ExplanationFixedFormRange"
@@ -24027,8 +24032,8 @@
         "description": "The part of one response fragment that highlights the actual display.",
         "type": "object",
         "properties": {
-          "endByte": {
-            "description": "Exclusive fragment-relative UTF-8 byte offset.",
+          "endScalar": {
+            "description": "Exclusive fragment-relative Unicode scalar offset.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -24039,8 +24044,8 @@
             "format": "uint32",
             "minimum": 1
           },
-          "startByte": {
-            "description": "Inclusive fragment-relative UTF-8 byte offset.",
+          "startScalar": {
+            "description": "Inclusive fragment-relative Unicode scalar offset.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -24049,8 +24054,8 @@
         "additionalProperties": false,
         "required": [
           "fragment",
-          "startByte",
-          "endByte"
+          "startScalar",
+          "endScalar"
         ]
       },
       "SearchFixedFragmentSource": {
@@ -24187,8 +24192,8 @@
             "description": "A validated Flow or TLDR visible-text unit.",
             "type": "object",
             "properties": {
-              "endByte": {
-                "description": "Exclusive UTF-8 byte offset in the unit.",
+              "endScalar": {
+                "description": "Exclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -24197,8 +24202,8 @@
                 "type": "string",
                 "const": "visible-flow"
               },
-              "startByte": {
-                "description": "Inclusive UTF-8 byte offset in the unit.",
+              "startScalar": {
+                "description": "Inclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -24214,16 +24219,16 @@
             "required": [
               "kind",
               "unit",
-              "startByte",
-              "endByte"
+              "startScalar",
+              "endScalar"
             ]
           },
           {
             "description": "A validated Fixed visible-text unit.",
             "type": "object",
             "properties": {
-              "endByte": {
-                "description": "Exclusive UTF-8 byte offset in the unit.",
+              "endScalar": {
+                "description": "Exclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -24232,8 +24237,8 @@
                 "type": "string",
                 "const": "visible-fixed"
               },
-              "startByte": {
-                "description": "Inclusive UTF-8 byte offset in the unit.",
+              "startScalar": {
+                "description": "Inclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -24249,20 +24254,14 @@
             "required": [
               "kind",
               "unit",
-              "startByte",
-              "endByte"
+              "startScalar",
+              "endScalar"
             ]
           },
           {
-            "description": "UTF-8 bytes in the exact user-exportable Markdown artifact.",
+            "description": "Unicode scalar range in the exact user-exportable Markdown artifact.",
             "type": "object",
             "properties": {
-              "endByte": {
-                "description": "Exclusive artifact byte offset.",
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0
-              },
               "endColumn": {
                 "description": "One-based exclusive end column.",
                 "type": "integer",
@@ -24275,15 +24274,15 @@
                 "format": "uint32",
                 "minimum": 1
               },
-              "kind": {
-                "type": "string",
-                "const": "markdown-artifact"
-              },
-              "startByte": {
-                "description": "Inclusive artifact byte offset.",
+              "endScalar": {
+                "description": "Exclusive artifact Unicode scalar offset.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "markdown-artifact"
               },
               "startColumn": {
                 "description": "One-based start column.",
@@ -24296,13 +24295,19 @@
                 "type": "integer",
                 "format": "uint32",
                 "minimum": 1
+              },
+              "startScalar": {
+                "description": "Inclusive artifact Unicode scalar offset.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
               }
             },
             "additionalProperties": false,
             "required": [
               "kind",
-              "startByte",
-              "endByte",
+              "startScalar",
+              "endScalar",
               "startLine",
               "startColumn",
               "endLine",
@@ -24336,7 +24341,7 @@
             "$ref": "#/$defs/SearchLocation"
           },
           "matchedText": {
-            "description": "Exact searched bytes, not a presentation-only preview.",
+            "description": "Exact searched Unicode text, not a presentation-only preview.",
             "type": "string"
           },
           "nodeSource": {
@@ -26744,8 +26749,8 @@
         "description": "The part of one response fragment that highlights the actual display.",
         "type": "object",
         "properties": {
-          "endByte": {
-            "description": "Exclusive fragment-relative UTF-8 byte offset.",
+          "endScalar": {
+            "description": "Exclusive fragment-relative Unicode scalar offset.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -26756,8 +26761,8 @@
             "format": "uint32",
             "minimum": 1
           },
-          "startByte": {
-            "description": "Inclusive fragment-relative UTF-8 byte offset.",
+          "startScalar": {
+            "description": "Inclusive fragment-relative Unicode scalar offset.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0
@@ -26766,8 +26771,8 @@
         "additionalProperties": false,
         "required": [
           "fragment",
-          "startByte",
-          "endByte"
+          "startScalar",
+          "endScalar"
         ]
       },
       "SearchFixedFragmentSource": {
@@ -26904,8 +26909,8 @@
             "description": "A validated Flow or TLDR visible-text unit.",
             "type": "object",
             "properties": {
-              "endByte": {
-                "description": "Exclusive UTF-8 byte offset in the unit.",
+              "endScalar": {
+                "description": "Exclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -26914,8 +26919,8 @@
                 "type": "string",
                 "const": "visible-flow"
               },
-              "startByte": {
-                "description": "Inclusive UTF-8 byte offset in the unit.",
+              "startScalar": {
+                "description": "Inclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -26931,16 +26936,16 @@
             "required": [
               "kind",
               "unit",
-              "startByte",
-              "endByte"
+              "startScalar",
+              "endScalar"
             ]
           },
           {
             "description": "A validated Fixed visible-text unit.",
             "type": "object",
             "properties": {
-              "endByte": {
-                "description": "Exclusive UTF-8 byte offset in the unit.",
+              "endScalar": {
+                "description": "Exclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -26949,8 +26954,8 @@
                 "type": "string",
                 "const": "visible-fixed"
               },
-              "startByte": {
-                "description": "Inclusive UTF-8 byte offset in the unit.",
+              "startScalar": {
+                "description": "Inclusive Unicode scalar offset in the unit.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
@@ -26966,20 +26971,14 @@
             "required": [
               "kind",
               "unit",
-              "startByte",
-              "endByte"
+              "startScalar",
+              "endScalar"
             ]
           },
           {
-            "description": "UTF-8 bytes in the exact user-exportable Markdown artifact.",
+            "description": "Unicode scalar range in the exact user-exportable Markdown artifact.",
             "type": "object",
             "properties": {
-              "endByte": {
-                "description": "Exclusive artifact byte offset.",
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0
-              },
               "endColumn": {
                 "description": "One-based exclusive end column.",
                 "type": "integer",
@@ -26992,15 +26991,15 @@
                 "format": "uint32",
                 "minimum": 1
               },
-              "kind": {
-                "type": "string",
-                "const": "markdown-artifact"
-              },
-              "startByte": {
-                "description": "Inclusive artifact byte offset.",
+              "endScalar": {
+                "description": "Exclusive artifact Unicode scalar offset.",
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "markdown-artifact"
               },
               "startColumn": {
                 "description": "One-based start column.",
@@ -27013,13 +27012,19 @@
                 "type": "integer",
                 "format": "uint32",
                 "minimum": 1
+              },
+              "startScalar": {
+                "description": "Inclusive artifact Unicode scalar offset.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
               }
             },
             "additionalProperties": false,
             "required": [
               "kind",
-              "startByte",
-              "endByte",
+              "startScalar",
+              "endScalar",
               "startLine",
               "startColumn",
               "endLine",
@@ -27053,7 +27058,7 @@
             "$ref": "#/$defs/SearchLocation"
           },
           "matchedText": {
-            "description": "Exact searched bytes, not a presentation-only preview.",
+            "description": "Exact searched Unicode text, not a presentation-only preview.",
             "type": "string"
           },
           "nodeSource": {

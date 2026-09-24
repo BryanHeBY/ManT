@@ -15,6 +15,13 @@ fn request(pattern: &str) -> SearchQuery {
     }
 }
 
+fn scalar_slice(text: &str, start: u64, end: u64) -> String {
+    text.chars()
+        .skip(usize::try_from(start).unwrap())
+        .take(usize::try_from(end - start).unwrap())
+        .collect()
+}
+
 #[test]
 fn fixed_body_uses_fixed_visible_coordinates_even_when_empty() {
     let mut query = crate::query_fixture::markdown("# Demo\n\nneedle\n", None).unwrap();
@@ -36,6 +43,82 @@ fn fixed_body_uses_fixed_visible_coordinates_even_when_empty() {
         result.render.schema,
         mant_protocol::SearchRenderSchema::Fixed
     );
+}
+
+#[test]
+fn flow_and_artifact_hits_expose_scalar_not_utf8_byte_offsets() {
+    let query = crate::query_fixture::markdown("# Demo\n\n中a\n", None).unwrap();
+    for scope in [SearchScope::Visible, SearchScope::Markdown] {
+        let mut request = request("中a");
+        request.scope = scope;
+        let result = search_query(&query, &request).unwrap();
+        assert_eq!(result.total, 1);
+        let (mant_protocol::SearchLocation::VisibleFlow {
+            start_scalar: start,
+            end_scalar: end,
+            ..
+        }
+        | mant_protocol::SearchLocation::MarkdownArtifact {
+            start_scalar: start,
+            end_scalar: end,
+            ..
+        }) = result.matches[0].location
+        else {
+            panic!("unexpected Flow search location");
+        };
+        assert_eq!(end - start, 2);
+        assert_eq!(result.matches[0].matched_text, "中a");
+        let encoded = serde_json::to_value(&result).unwrap();
+        let location = &encoded["matches"][0]["location"];
+        assert!(location.get("startScalar").is_some());
+        assert!(location.get("startByte").is_none());
+        serde_json::from_value::<mant_protocol::QuerySearch>(encoded.clone()).unwrap();
+        if scope == SearchScope::Visible {
+            let mut old_slice = encoded.clone();
+            let slice = old_slice["matches"][0]["displaySlices"][0]
+                .as_object_mut()
+                .unwrap();
+            let start = slice.remove("startScalar").unwrap();
+            slice.insert("startByte".to_owned(), start);
+            assert!(serde_json::from_value::<mant_protocol::QuerySearch>(old_slice).is_err());
+        }
+        let mut old_wire = encoded;
+        let location = old_wire["matches"][0]["location"].as_object_mut().unwrap();
+        let start = location.remove("startScalar").unwrap();
+        location.insert("startByte".to_owned(), start);
+        assert!(serde_json::from_value::<mant_protocol::QuerySearch>(old_wire).is_err());
+    }
+}
+
+#[test]
+fn paginated_unicode_hits_keep_scalar_coordinates() {
+    let query = crate::query_fixture::markdown("# Demo\n\n中a 中a\n", None).unwrap();
+    for scope in [SearchScope::Visible, SearchScope::Markdown] {
+        let mut request = request("中a");
+        request.scope = scope;
+        request.limit = 1;
+        request.offset = 1;
+        let result = search_query(&query, &request).unwrap();
+        assert_eq!(result.total, 2);
+        assert_eq!(result.returned, 1);
+        let hit = &result.matches[0];
+        assert_eq!(hit.ordinal, 2);
+        let (mant_protocol::SearchLocation::VisibleFlow {
+            start_scalar: start,
+            end_scalar: end,
+            ..
+        }
+        | mant_protocol::SearchLocation::MarkdownArtifact {
+            start_scalar: start,
+            end_scalar: end,
+            ..
+        }) = hit.location
+        else {
+            panic!("expected Flow");
+        };
+        assert_eq!(end - start, 2);
+        assert_eq!(hit.matched_text, "中a");
+    }
 }
 
 #[test]
@@ -105,22 +188,27 @@ fn visible_search_boundary_breaks_are_joins_not_display_glyphs() {
         let projection = result.content_projection.as_ref().unwrap();
         let mant_protocol::SearchLocation::VisibleFlow {
             unit,
-            start_byte,
-            end_byte,
+            start_scalar,
+            end_scalar,
         } = hit.location
         else {
             panic!("visible search must return a Flow location");
         };
-        assert_eq!(start_byte, expected_start);
-        assert_eq!(end_byte - start_byte, matched.len() as u64);
+        assert_eq!(start_scalar, expected_start);
+        assert_eq!(end_scalar - start_scalar, matched.chars().count() as u64);
         assert_eq!(hit.display_slices.len(), expected_slices);
         assert!(projection.units[0].joins.iter().any(|join| matches!(
             join,
             mant_protocol::SearchTextJoin::RenderSeparator { text } if text == "\n"
         )));
-        let start = usize::try_from(start_byte).unwrap();
-        let end = usize::try_from(end_byte).unwrap();
-        assert_eq!(&projection.unit_text(unit).unwrap()[start..end], matched);
+        assert_eq!(
+            scalar_slice(
+                &projection.unit_text(unit).unwrap(),
+                start_scalar,
+                end_scalar
+            ),
+            matched
+        );
         serde_json::from_value::<mant_protocol::QuerySearch>(serde_json::to_value(result).unwrap())
             .unwrap();
     }
@@ -231,16 +319,17 @@ fn markdown_scope_searches_exact_addressable_anchor_bytes() {
     assert!(result.total > 0);
     for found in &result.matches {
         let mant_protocol::SearchLocation::MarkdownArtifact {
-            start_byte,
-            end_byte,
+            start_scalar,
+            end_scalar,
             ..
         } = found.location
         else {
-            panic!("Markdown search must use artifact bytes");
+            panic!("Markdown search must use artifact scalar coordinates");
         };
-        let start = usize::try_from(start_byte).unwrap();
-        let end = usize::try_from(end_byte).unwrap();
-        assert_eq!(&artifact[start..end], found.matched_text);
+        assert_eq!(
+            scalar_slice(&artifact, start_scalar, end_scalar),
+            found.matched_text
+        );
     }
 }
 
@@ -260,15 +349,15 @@ fn markdown_scope_keeps_artifact_match_across_owner_boundaries() {
     assert_eq!(result.total, 1);
     let found = &result.matches[0];
     let mant_protocol::SearchLocation::MarkdownArtifact {
-        start_byte,
-        end_byte,
+        start_scalar,
+        end_scalar,
         ..
     } = found.location
     else {
-        panic!("Markdown search must use artifact bytes");
+        panic!("Markdown search must use artifact scalar coordinates");
     };
     assert_eq!(
-        &artifact[usize::try_from(start_byte).unwrap()..usize::try_from(end_byte).unwrap()],
+        scalar_slice(&artifact, start_scalar, end_scalar),
         found.matched_text,
     );
 }
@@ -291,15 +380,15 @@ fn markdown_scope_keeps_tldr_to_manual_artifact_match() {
     let result = search_query(&query, &request).unwrap();
     assert_eq!(result.total, 1);
     let mant_protocol::SearchLocation::MarkdownArtifact {
-        start_byte,
-        end_byte,
+        start_scalar,
+        end_scalar,
         ..
     } = result.matches[0].location
     else {
-        panic!("Markdown search must use artifact bytes");
+        panic!("Markdown search must use artifact scalar coordinates");
     };
     assert_eq!(
-        &artifact[usize::try_from(start_byte).unwrap()..usize::try_from(end_byte).unwrap()],
+        scalar_slice(&artifact, start_scalar, end_scalar),
         result.matches[0].matched_text,
     );
 }

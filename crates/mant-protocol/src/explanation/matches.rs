@@ -66,7 +66,7 @@ pub struct ExplanationOccurrence {
     pub source_occurrence_index: u32,
     /// Ordered fragments within returned forms.
     pub forms: Vec<ExplanationFormRange>,
-    /// Matched byte ranges in returned native Fixed forms. Flow uses an empty
+    /// Matched Unicode scalar ranges in returned native Fixed forms. Flow uses an empty
     /// array; these never masquerade as `Inline`/`ContentStore` positions.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fixed_forms: Vec<super::ExplanationFixedFormRange>,

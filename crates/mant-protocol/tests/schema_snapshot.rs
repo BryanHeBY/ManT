@@ -27,7 +27,7 @@ fn remove_non_structural_metadata(value: &mut Value) {
 }
 
 #[test]
-fn v0_12_structural_schemas_change_only_with_an_explicit_protocol_version() {
+fn unreleased_v0_12_structural_schemas_match_the_deliberate_snapshot() {
     assert_eq!(NATIVE_API_VERSION, "0.12");
 
     let mut expected: Value = serde_json::from_str(V0_12_SNAPSHOT).expect("v0.12 schema snapshot");
@@ -37,7 +37,7 @@ fn v0_12_structural_schemas_change_only_with_an_explicit_protocol_version() {
 
     assert_eq!(
         actual, expected,
-        "the v0.12 structural contract changed; restore compatibility or advance every affected schema discriminator before regenerating the snapshot"
+        "the unpublished v0.12 structural contract changed; review the wire migration and regenerate its snapshot deliberately"
     );
 }
 

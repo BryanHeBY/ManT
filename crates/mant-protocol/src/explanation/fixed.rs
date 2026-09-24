@@ -114,17 +114,17 @@ impl ExplanationFixedSelection {
     }
 }
 
-/// A complete or partial byte range in a returned Fixed form's logical text.
+/// A complete or partial Unicode scalar range in a returned Fixed form's logical text.
 /// Its display fragments resolve through `entry.fixedForms[formIndex]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExplanationFixedFormRange {
     /// Index in this evidence's returned Fixed forms.
     pub form_index: u32,
-    /// Inclusive UTF-8 byte offset in the joined form.
-    pub start_byte: u64,
-    /// Exclusive UTF-8 byte offset in the joined form.
-    pub end_byte: u64,
+    /// Inclusive Unicode scalar offset in the joined form.
+    pub start_scalar: u64,
+    /// Exclusive Unicode scalar offset in the joined form.
+    pub end_scalar: u64,
 }
 
 impl ExplanationFixedFormRange {
@@ -132,10 +132,54 @@ impl ExplanationFixedFormRange {
     #[must_use]
     pub fn resolve(&self, forms: &[ExplanationFixedSelection]) -> Option<String> {
         let text = forms.get(self.form_index as usize)?.complete_text()?;
-        let start = usize::try_from(self.start_byte).ok()?;
-        let end = usize::try_from(self.end_byte).ok()?;
+        let start = scalar_to_byte(&text, self.start_scalar)?;
+        let end = scalar_to_byte(&text, self.end_scalar)?;
         (start < end)
             .then(|| text.get(start..end).map(str::to_owned))
             .flatten()
+    }
+}
+
+fn scalar_to_byte(text: &str, scalar: u64) -> Option<usize> {
+    let scalar = usize::try_from(scalar).ok()?;
+    text.char_indices()
+        .map(|(byte, _)| byte)
+        .chain(std::iter::once(text.len()))
+        .nth(scalar)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixed_form_public_range_counts_scalars_while_slice_addresses_bytes() {
+        let key = NonZeroU32::MIN;
+        let form = ExplanationFixedSelection {
+            parts: vec![ExplanationFixedPart {
+                slice: OutputSlice {
+                    run: key,
+                    start_byte: 0,
+                    end_byte: 4,
+                },
+                row: key,
+                run_column: 0,
+                text: "中a".into(),
+                source: None,
+            }],
+            joins: Vec::new(),
+        };
+        let range = ExplanationFixedFormRange {
+            form_index: 0,
+            start_scalar: 0,
+            end_scalar: 2,
+        };
+        assert_eq!(range.resolve(&[form]).as_deref(), Some("中a"));
+        assert!(
+            serde_json::from_value::<ExplanationFixedFormRange>(
+                serde_json::json!({"formIndex": 0, "startByte": 0, "endByte": 4})
+            )
+            .is_err()
+        );
     }
 }

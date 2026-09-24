@@ -7,6 +7,7 @@ use super::{
     SearchRenderSchema, charge_presentation, empty_match_error, finish_result, matcher_error,
     non_utf8_pattern_error, root_trail,
 };
+use crate::search::scalar::ScalarCursor;
 use mant_codec::encode::{MarkdownNode, render_addressable_markdown};
 
 pub(super) fn search_markdown(
@@ -25,7 +26,7 @@ pub(super) fn search_markdown(
     let line_count = u32::try_from(lines.count()).map_err(|_| SearchError::ResourceLimit)?;
     let mut total = 0_u32;
     let mut matches = Vec::new();
-    let mut presentation_bytes = 0usize;
+    let mut projection = ArtifactProjectionState::default();
     let mut callback_error = None;
     let mut invalid_utf8 = false;
     let mut zero_width = false;
@@ -55,7 +56,7 @@ pub(super) fn search_markdown(
                 tldr_range.as_ref(),
                 next,
                 request.context_lines,
-                &mut presentation_bytes,
+                &mut projection,
             ) {
                 Ok(matched) => matches.push(matched),
                 Err(error) => {
@@ -87,6 +88,12 @@ pub(super) fn search_markdown(
     )
 }
 
+#[derive(Default)]
+struct ArtifactProjectionState {
+    presentation_bytes: usize,
+    scalar_cursor: ScalarCursor,
+}
+
 fn markdown_match(
     markdown: &str,
     lines: &LineIndex,
@@ -94,7 +101,7 @@ fn markdown_match(
     tldr_range: Option<&Range<usize>>,
     ordinal: u32,
     context_lines: u16,
-    presentation_bytes: &mut usize,
+    projection: &mut ArtifactProjectionState,
 ) -> Result<SearchMatch, SearchError> {
     let start = lines.position(markdown, found.start);
     let end = lines.position(markdown, found.end);
@@ -119,7 +126,12 @@ fn markdown_match(
         .get(found.clone())
         .ok_or(SearchError::ContentProjection)?
         .to_owned();
-    charge_presentation(presentation_bytes, &matched_text, &preview, &context)?;
+    charge_presentation(
+        &mut projection.presentation_bytes,
+        &matched_text,
+        &preview,
+        &context,
+    )?;
     Ok(SearchMatch {
         ordinal,
         outline: if tldr_range
@@ -138,8 +150,8 @@ fn markdown_match(
         },
         matched_text,
         location: SearchLocation::MarkdownArtifact {
-            start_byte: u64::try_from(found.start).map_err(|_| SearchError::ResourceLimit)?,
-            end_byte: u64::try_from(found.end).map_err(|_| SearchError::ResourceLimit)?,
+            start_scalar: projection.scalar_cursor.at(markdown, found.start)?,
+            end_scalar: projection.scalar_cursor.at(markdown, found.end)?,
             start_line: u32::try_from(start.line_index + 1)
                 .map_err(|_| SearchError::ResourceLimit)?,
             start_column: u32::try_from(start.column).map_err(|_| SearchError::ResourceLimit)?,

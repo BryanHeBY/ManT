@@ -282,13 +282,13 @@ unpresentable synthetic separator, remain filtered as today. Fixed searches
 surviving selections with known `TextJoin`s instead. One match is one
 occurrence even if it projects to several runs or rows; independent cells and
 unknown joins block a fabricated cross-boundary match.
-`scope=markdown` searches bytes of the canonical addressable user-exportable
+`scope=markdown` searches the canonical addressable user-exportable
 artifact. For Flow/TLDR this is the existing exporter selected by
 `--format markdown --preserve-anchors`, not the default clean Markdown export;
 the request has no presentation-option switch. Fixed uses the same safe-length literal fence
 exporter as R03. Fence-only hits are valid Markdown coordinates without a
 native display projection. Fixed's soft-wrap visible match and literal
-Markdown-byte match intentionally can differ.
+Markdown-artifact match intentionally can differ.
 
 The response carries a tagged authoritative coordinate: `visible-flow`,
 `visible-fixed` or `markdown-artifact`, plus subordinate display fragments.
@@ -317,8 +317,9 @@ The Fixed fence uses bare backticks of length
 `max(3, longest consecutive backtick run in surface + 1)`. Its bytes are
 `fence + "\n" + surface bytes + ("" if already newline-terminated else
 "\n") + fence`. `DisplayRow.breakAfter` distinguishes EOF with and without
-a native final newline. The Markdown artifact counts UTF-8 bytes from zero;
-its newly required delimiter newline is presentation only, not a native
+a native final newline. The artifact has exact UTF-8 bytes, while public
+match ranges count Unicode scalars from zero; its required delimiter newline
+is presentation only, not a native
 glyph. A Fixed surface of `body` with no final native newline, label `Demo`
 and one TLDR description `Quick` exports these exact bytes, with no newline
 after the closing fence:
@@ -346,13 +347,14 @@ search never joins two table cells just because literal bytes are adjacent.
 The v0.12 search request keeps existing fields but replaces `SearchHit`
 line groups with occurrence-shaped `matches`. The mandatory coordinate is
 one tagged `location` object. Both `visible-flow` and `visible-fixed` contain
-a response-local `unit` and a unit-relative half-open UTF-8 byte range;
-`markdown-artifact` contains export UTF-8 bytes and one-based line/column.
-`displaySlices` are subordinate locations, not a substitute for the
-authoritative range. Each visible unit is closed by a bounded, ordered
+a response-local `unit` and a unit-relative half-open Unicode scalar range;
+`markdown-artifact` contains an export scalar range and one-based scalar
+line/column. `displaySlices` are subordinate fragment-relative scalar
+locations, not a substitute for the authoritative range. Each visible unit
+is closed by a bounded, ordered
 projection of exact UTF-8 fragments and explicit join facts. The unit text
 is the concatenation of fragment text and exact join text, with no inferred
-separator. The occurrence range must be nonempty, UTF-8 aligned, within that
+separator. The occurrence range must be nonempty and within that
 unit, and equal to `matchedText`; a reader can check this without fetching
 the original snapshot. Only retained occurrences require projected units;
 count-only scans and zero-hit pages do not materialize a fake unit or copy
@@ -375,7 +377,7 @@ source `# Demo\n\nalpha\n\nbeta\n`, the unit below validates the single
 already collapsed the paragraph boundary to one newline:
 
 ```json
-{"contentProjection":{"fragments":[{"key":1,"text":"alpha","source":{"kind":"flow","location":{"kind":"content","sections":[],"blocks":[{"kind":"block","index":0}],"root":{"kind":"inlines"},"path":[0]},"startByte":0,"endByte":5}},{"key":2,"text":"beta","source":{"kind":"flow","location":{"kind":"content","sections":[],"blocks":[{"kind":"block","index":1}],"root":{"kind":"inlines"},"path":[0]},"startByte":0,"endByte":4}}],"units":[{"key":1,"fragments":[1,2],"joins":[{"kind":"render-separator","text":"\n"}]}]},"location":{"kind":"visible-flow","unit":1,"startByte":0,"endByte":10},"matchedText":"alpha\nbeta"}
+{"contentProjection":{"fragments":[{"key":1,"text":"alpha","source":{"kind":"flow","location":{"kind":"content","sections":[],"blocks":[{"kind":"block","index":0}],"root":{"kind":"inlines"},"path":[0]},"startByte":0,"endByte":5}},{"key":2,"text":"beta","source":{"kind":"flow","location":{"kind":"content","sections":[],"blocks":[{"kind":"block","index":1}],"root":{"kind":"inlines"},"path":[0]},"startByte":0,"endByte":4}}],"units":[{"key":1,"fragments":[1,2],"joins":[{"kind":"render-separator","text":"\n"}]}]},"location":{"kind":"visible-flow","unit":1,"startScalar":0,"endScalar":10},"matchedText":"alpha\nbeta"}
 ```
 
 The current matcher still rejects a match that
@@ -391,8 +393,8 @@ values refer to separate miniature snapshots, not to the `Demo` artifact:
 
 ```json
 {"pattern":"foobar","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0}
-{"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"foobar","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.fixed/v1","format":"fixed-visible","scope":"full","lineBase":1,"columnBase":1,"lineCount":2},"contentProjection":{"fragments":[{"key":1,"text":"foo","source":{"row":1,"run":7,"startByte":5,"endByte":8}},{"key":2,"text":"bar","source":{"row":2,"run":8,"startByte":0,"endByte":3}}],"units":[{"key":1,"fragments":[1,2],"joins":[{"kind":"direct-contact"}]}]},"total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[],"matches":[{"ordinal":1,"matchedText":"foobar","location":{"kind":"visible-fixed","unit":1,"startByte":0,"endByte":6},"displaySlices":[{"fragment":1,"startByte":0,"endByte":3},{"fragment":2,"startByte":0,"endByte":3}],"preview":"foobar","context":[]}]}
-{"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"^```","scope":"markdown","syntax":"regex","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.markdown/v1","format":"markdown","scope":"full","lineBase":1,"columnBase":1,"lineCount":3},"total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[],"matches":[{"ordinal":1,"matchedText":"```","location":{"kind":"markdown-artifact","startByte":0,"endByte":3,"startLine":1,"startColumn":1,"endLine":1,"endColumn":4},"displaySlices":[],"preview":"```","context":[]}]}
+{"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"foobar","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.fixed/v1","format":"fixed-visible","scope":"full","lineBase":1,"columnBase":1,"lineCount":2},"contentProjection":{"fragments":[{"key":1,"text":"foo","source":{"row":1,"run":7,"startByte":5,"endByte":8}},{"key":2,"text":"bar","source":{"row":2,"run":8,"startByte":0,"endByte":3}}],"units":[{"key":1,"fragments":[1,2],"joins":[{"kind":"direct-contact"}]}]},"total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[],"matches":[{"ordinal":1,"matchedText":"foobar","location":{"kind":"visible-fixed","unit":1,"startScalar":0,"endScalar":6},"displaySlices":[{"fragment":1,"startScalar":0,"endScalar":3},{"fragment":2,"startScalar":0,"endScalar":3}],"preview":"foobar","context":[]}]}
+{"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"^```","scope":"markdown","syntax":"regex","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.markdown/v1","format":"markdown","scope":"full","lineBase":1,"columnBase":1,"lineCount":3},"total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[],"matches":[{"ordinal":1,"matchedText":"```","location":{"kind":"markdown-artifact","startScalar":0,"endScalar":3,"startLine":1,"startColumn":1,"endLine":1,"endColumn":4},"displaySlices":[],"preview":"```","context":[]}]}
 {"schema":"mant.search/v0.12","label":"Demo","query":{"pattern":"absent","scope":"visible","syntax":"literal","case":"sensitive","word":false,"contextLines":0,"limit":10,"offset":0},"render":{"schema":"mant.fixed/v1","format":"fixed-visible","scope":"full","lineBase":1,"columnBase":1,"lineCount":2},"total":0,"returned":0,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":false,"coverageDetailsOmitted":1,"diagnostics":[{"level":"unsupported","impact":"semantic-coverage","code":"annotated.coverage.summary","message":"coverage detail omitted","coverageScope":{"kind":"document"}}],"matches":[]}
 ```
 
@@ -400,7 +402,7 @@ The old `SearchHit.occurrences` grouping, three nullable occurrence
 coordinates (`root`/`logical`/`markdown`) and line-group ordinal are rejected,
 not reinterpreted. A TLDR-only visible hit has a `visible-flow` unit with
 `tldr` fragment sources and no primary `SourceContext`. A Markdown-only
-hit on the `Demo` artifact's opening fence would have an export byte range
+hit on the `Demo` artifact's opening fence would have an export scalar range
 and zero `displaySlices`; the example above illustrates its shape, not the
 literal offset in `Demo`. A partially overprinted `--help` head whose final
 visible text is `--he` yields no `--help` name binding or direct match;
@@ -413,7 +415,7 @@ native surface only; a `visible-flow` TLDR hit retains its own unit and
 TLDR-local Markdown context lines, not a fabricated native row. The result
 `scope=full` means neither arm was viewport-clipped. In the single Markdown
 artifact, a hit wholly inside the TLDR range has the TLDR outline path `0`;
-the export byte coordinates remain artifact-global.
+the export scalar coordinates remain artifact-global.
 For scope search, the `documents` array still contains only retained-hit
 groups, but a separate `coverageByDocument` array contains **every scanned
 document in scope order**, including zero-hit and globally paginated-away
@@ -431,7 +433,7 @@ aggregate serialized-metadata budget across the whole scope response. The
 per-document diagnostic bound is not an independently reusable allocation.
 
 ```json
-{"schema":"mant.scope-search/v0.12","total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":false,"coverageByDocument":[{"address":{"kind":"manual","name":"first","manualSection":"1"},"depth":0,"semanticsComplete":false,"coverageDetailsOmitted":1,"diagnostics":[{"level":"unsupported","impact":"semantic-coverage","code":"annotated.coverage.summary","message":"coverage detail omitted","coverageScope":{"kind":"document"}}]},{"address":{"kind":"manual","name":"second","manualSection":"1"},"depth":1,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[]}],"documents":[{"address":{"kind":"manual","name":"second","manualSection":"1"},"depth":1,"matches":[{"ordinal":1,"location":{"kind":"visible-fixed","unit":1,"startByte":0,"endByte":3}}]}]}
+{"schema":"mant.scope-search/v0.12","total":1,"returned":1,"offset":0,"truncated":false,"nextOffset":null,"semanticsComplete":false,"coverageByDocument":[{"address":{"kind":"manual","name":"first","manualSection":"1"},"depth":0,"semanticsComplete":false,"coverageDetailsOmitted":1,"diagnostics":[{"level":"unsupported","impact":"semantic-coverage","code":"annotated.coverage.summary","message":"coverage detail omitted","coverageScope":{"kind":"document"}}]},{"address":{"kind":"manual","name":"second","manualSection":"1"},"depth":1,"semanticsComplete":true,"coverageDetailsOmitted":0,"diagnostics":[]}],"documents":[{"address":{"kind":"manual","name":"second","manualSection":"1"},"depth":1,"matches":[{"ordinal":1,"location":{"kind":"visible-fixed","unit":1,"startScalar":0,"endScalar":3}}]}]}
 ```
 
 This is a field-shape example, not a complete deserializable scope response:

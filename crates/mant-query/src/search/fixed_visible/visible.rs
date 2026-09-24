@@ -290,10 +290,8 @@ fn make_visible_match(
         if overlap.start < overlap.end {
             display_slices.push(SearchDisplaySlice {
                 fragment: key,
-                start_byte: u64::try_from(overlap.start - clip.start)
-                    .map_err(|_| SearchError::ResourceLimit)?,
-                end_byte: u64::try_from(overlap.end - clip.start)
-                    .map_err(|_| SearchError::ResourceLimit)?,
+                start_scalar: fragment_text[..overlap.start - clip.start].chars().count() as u64,
+                end_scalar: fragment_text[..overlap.end - clip.start].chars().count() as u64,
             });
         }
         keys.push(key);
@@ -303,9 +301,8 @@ fn make_visible_match(
         fragments: keys,
         joins,
     });
-    let start_byte =
-        u64::try_from(found.start - unit_start).map_err(|_| SearchError::ResourceLimit)?;
-    let end_byte = u64::try_from(found.end - unit_start).map_err(|_| SearchError::ResourceLimit)?;
+    let start_scalar = text[unit_start..found.start].chars().count() as u64;
+    let end_scalar = text[unit_start..found.end].chars().count() as u64;
     let first_piece = selected[0].piece;
     let last_piece = selected[selected.len() - 1].piece;
     let first_row = fixed.surface.runs[(first_piece.slice.run.get() - 1) as usize].row;
@@ -323,8 +320,8 @@ fn make_visible_match(
         matched_text,
         location: SearchLocation::VisibleFixed {
             unit: unit_key,
-            start_byte,
-            end_byte,
+            start_scalar,
+            end_scalar,
         },
         display_slices,
         node_source: first_piece.source,

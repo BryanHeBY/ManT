@@ -77,8 +77,8 @@
                 }
               },
               "matchedText": "index",
-              "location": {"kind": "visible-flow", "unit": 1, "startByte": 0, "endByte": 5},
-              "displaySlices": [{"fragment": 1, "startByte": 0, "endByte": 5}],
+              "location": {"kind": "visible-flow", "unit": 1, "startScalar": 0, "endScalar": 5},
+              "displaySlices": [{"fragment": 1, "startScalar": 0, "endScalar": 5}],
               "preview": "18:7: the index records content",
               "context": []
             }
@@ -115,8 +115,8 @@
                 }
               },
               "matchedText": "index",
-              "location": {"kind": "visible-flow", "unit": 1, "startByte": 0, "endByte": 5},
-              "displaySlices": [{"fragment": 1, "startByte": 0, "endByte": 5}],
+              "location": {"kind": "visible-flow", "unit": 1, "startScalar": 0, "endScalar": 5},
+              "displaySlices": [{"fragment": 1, "startScalar": 0, "endScalar": 5}],
               "preview": "12:16: add content to the index",
               "context": []
             }

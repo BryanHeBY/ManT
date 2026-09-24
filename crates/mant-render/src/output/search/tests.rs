@@ -27,8 +27,8 @@ fn artifact_match(ordinal: u32, text: &str, start: u64) -> SearchMatch {
         outline: trail(),
         matched_text: text.into(),
         location: SearchLocation::MarkdownArtifact {
-            start_byte: start,
-            end_byte: start + text.len() as u64,
+            start_scalar: start,
+            end_scalar: start + text.chars().count() as u64,
             start_line: 1,
             start_column: u32::try_from(start).unwrap() + 1,
             end_line: 1,
@@ -122,13 +122,13 @@ fn visible_match_uses_typed_unit_and_exact_text_without_markdown_reparse() {
     });
     page.matches[0].location = SearchLocation::VisibleFlow {
         unit: NonZeroU32::new(1).unwrap(),
-        start_byte: 8,
-        end_byte: 16,
+        start_scalar: 8,
+        end_scalar: 16,
     };
     page.matches[0].display_slices = vec![SearchDisplaySlice {
         fragment: NonZeroU32::new(1).unwrap(),
-        start_byte: 8,
-        end_byte: 16,
+        start_scalar: 8,
+        end_scalar: 16,
     }];
     page.matches[0].preview = "literal *needle*".into();
     page.matches[0].context = vec![SearchContextLine {

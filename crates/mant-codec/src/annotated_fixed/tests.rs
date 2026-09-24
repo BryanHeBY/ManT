@@ -60,6 +60,55 @@ fn native_word_spaces_reach_fixed_visible_search() {
 }
 
 #[test]
+fn native_unicode_hits_use_scalar_public_coordinates_and_byte_sources() {
+    // Exact source first ran pinned CVS -Tutf8 -O width=78: term.c::
+    // term_field preserves the wide scalar followed by ASCII in one body.
+    let query = native_query(".TH T 1\n.SH D\n中a\n".as_bytes(), 78);
+    for scope in [SearchScope::Visible, SearchScope::Markdown] {
+        let result = mant_query::search_query(
+            &query,
+            &SearchQuery {
+                pattern: "中a".to_owned(),
+                syntax: SearchSyntax::Literal,
+                case: SearchCase::Sensitive,
+                scope,
+                word: false,
+                context_lines: 0,
+                limit: 10,
+                offset: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(result.total, 1);
+        let hit = &result.matches[0];
+        let (mant_protocol::SearchLocation::VisibleFixed {
+            start_scalar: start,
+            end_scalar: end,
+            ..
+        }
+        | mant_protocol::SearchLocation::MarkdownArtifact {
+            start_scalar: start,
+            end_scalar: end,
+            ..
+        }) = hit.location
+        else {
+            panic!("unexpected Fixed search location");
+        };
+        assert_eq!(end - start, 2);
+        assert_eq!(hit.matched_text, "中a");
+        if scope == SearchScope::Visible {
+            let slice = &hit.display_slices[0];
+            assert_eq!(slice.end_scalar - slice.start_scalar, 2);
+            let source = &result.content_projection.as_ref().unwrap().fragments[0].source;
+            let mant_protocol::SearchFragmentSource::Fixed(source) = source else {
+                panic!("Fixed fragment lost its byte source");
+            };
+            assert_eq!(source.end_byte - source.start_byte, 4);
+        }
+    }
+}
+
+#[test]
 fn native_unsectioned_text_joins_styles_without_crossing_hard_lines() {
     // Both exact inputs first ran on pinned CVS -Tutf8 -O width=78.
     // man_term.c::print_man_nodelist() starts at ROOT's first child;
