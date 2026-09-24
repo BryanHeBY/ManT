@@ -988,9 +988,107 @@ fn native_head_roles_promote_only_complete_visible_names() {
     assert_eq!(fixed.owners[1].entry.as_ref().unwrap().names, ["DEMO_HOME"]);
     assert_eq!(
         fixed.owners[2].entry.as_ref().unwrap().kind,
-        EntryKind::Term
+        EntryKind::Command
     );
     assert!(validate_document(&document).is_empty());
+}
+
+#[test]
+fn mdoc_literal_head_component_binds_only_a_complete_command_word() {
+    // Exact fixture first ran pinned CVS -Ttree/-Tutf8. mdoc_macro.c::blk_full
+    // gives each It a distinct HEAD/BODY; mdoc_term.c::termp_bold_pre prints
+    // Ic/Cm glyphs without changing their owner or adjacent Op/Fl children.
+    let input = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/roff/annotated-mdoc-command-heads.1"
+    ));
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!();
+    };
+    let by_line = fixed
+        .owners
+        .iter()
+        .map(|owner| (owner.source.unwrap().line, owner))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    for (line, name) in [(6, "run"), (8, "attach-session"), (16, "new-session")] {
+        let owner = by_line[&line];
+        assert_eq!(owner.head_role, Some(OwnerHeadRole::Literal));
+        let entry = owner.entry.as_ref().unwrap();
+        assert_eq!(entry.kind, EntryKind::Command);
+        assert_eq!(entry.names, [name]);
+        assert_eq!(
+            entry.name_bindings[0].occurrences,
+            [owner.head_components[0].selection.clone()]
+        );
+    }
+    for line in [10, 12, 14] {
+        assert_eq!(by_line[&line].entry.as_ref().unwrap().kind, EntryKind::Term);
+    }
+    assert!(validate_document(&document).is_empty());
+    let mut untrusted = document.clone();
+    let DocumentBody::Fixed(untrusted_fixed) = &mut untrusted.body else {
+        unreachable!();
+    };
+    untrusted_fixed.owners[0].head_components[0].source = None;
+    assert!(!validate_document(&untrusted).is_empty());
+    let mut untrusted = document.clone();
+    let DocumentBody::Fixed(untrusted_fixed) = &mut untrusted.body else {
+        unreachable!();
+    };
+    untrusted_fixed.owners[0].head_components[0].selection.parts[0].end_byte = 2;
+    assert!(
+        untrusted_fixed
+            .literal_command_component(&untrusted_fixed.owners[0])
+            .is_none()
+    );
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    for (name, source_line) in [("run", 6), ("attach-session", 8), ("new-session", 16)] {
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.to_owned(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.evidence[0].source.unwrap().line, source_line);
+        assert_eq!(
+            result.evidence[0].entry.as_ref().unwrap().kind,
+            EntryKind::Command
+        );
+        let returned = result.evidence[0].entry.as_ref().unwrap();
+        assert_eq!(
+            returned.name_bindings[0].occurrences[0].fixed_forms[0]
+                .resolve(&returned.fixed_forms)
+                .as_deref(),
+            Some(name)
+        );
+        assert!(result.evidence[0].bases.iter().any(|basis| match basis {
+            EvidenceBasis::Name { matches } => matches.iter().any(|matched| {
+                matched.occurrences[0].fixed_forms[0]
+                    .resolve(&returned.fixed_forms)
+                    .as_deref()
+                    == Some(name)
+            }),
+            _ => false,
+        }));
+    }
+    let body_only = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "body-only".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(body_only.counts.direct_entry.total, 0);
 }
 
 #[test]

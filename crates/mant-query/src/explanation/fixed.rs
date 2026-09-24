@@ -521,7 +521,14 @@ impl FixedPlan<'_> {
             .entry_at(&selected.path)
             .ok_or(ExplanationError::InvalidFixed)?;
         let selections = if entry.forms.len() == 1 {
-            vec![owner.head.clone()]
+            vec![
+                owner
+                    .entry
+                    .as_ref()
+                    .and_then(|native| native.forms.first())
+                    .ok_or(ExplanationError::InvalidFixed)?
+                    .clone(),
+            ]
         } else {
             self.fixed
                 .option_component_forms(owner)

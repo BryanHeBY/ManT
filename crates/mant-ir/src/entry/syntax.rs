@@ -128,6 +128,21 @@ pub fn native_option_token(token: &str) -> bool {
                 .is_some_and(|character| !character.is_whitespace() && !character.is_control())
 }
 
+/// One complete command word proved by an authored native `Ic`/`Cm` head.
+/// A suffix in the same visible token must not be promoted as another name.
+#[must_use]
+pub fn native_command_token(token: &str) -> bool {
+    !token.is_empty()
+        && !token.chars().any(char::is_whitespace)
+        && !token.chars().any(char::is_control)
+        && !token.starts_with(['-', '+', '/'])
+        && !token
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+        && !token.contains(['[', ']', '{', '}', '<', '>', '|', ','])
+}
+
 /// Whether a dash-option body is a finite technical spelling.
 #[must_use]
 pub fn is_option_name_body(value: &str) -> bool {
@@ -225,6 +240,9 @@ mod tests {
         assert!(native_option_token("-a"));
         assert!(native_option_token("-,"));
         assert!(!native_option_token("foo"));
+        assert!(native_command_token("attach-session"));
+        assert!(!native_command_token("-bad"));
+        assert!(!native_command_token("run tail"));
         assert_eq!(
             environment_variable_alias("DEMO_HOME=foo"),
             Some("DEMO_HOME".to_owned())

@@ -238,7 +238,28 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                     value_domain: None,
                 });
             }
-            let form = fixed.owner_complete_form(owner)?;
+            let Some(form) = fixed.owner_complete_form(owner) else {
+                // Keep the complete physical HEAD in owner.head. Only this
+                // authored, delimited Ic/Cm component is a logical form:
+                // later Xo joins are Unknown and cannot be guessed into one.
+                let (name, component) = fixed.literal_command_component(owner)?;
+                let selection = component.clone();
+                return Some(EntryFacts {
+                    name_bindings: vec![EntryNameBinding {
+                        name: 0,
+                        occurrences: vec![selection.clone()],
+                        evidence: EntryNameEvidence::NativeMarkup,
+                    }],
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: vec![selection],
+                    id: owner.id.clone(),
+                    kind: EntryKind::Command,
+                    case: NameCase::Sensitive,
+                    names: vec![name],
+                    value_domain: None,
+                });
+            };
             // man_macro.c::blk_imp keeps a TP/TQ HEAD intact, while
             // man_term.c::pre_B prints this one literal operand as one form.
             // The shared spelling rule only extracts complete aliases; each
@@ -371,6 +392,24 @@ fn native_head_identity(
     }
     let leading = form.trim_start();
     let start = form.len() - leading.len();
+    if owner.head_role == Some(OwnerHeadRole::Literal) {
+        let (name, selection) = fixed.literal_command_component(owner)?;
+        let end = start.checked_add(name.len())?;
+        if form.get(start..end) != Some(name.as_str())
+            || !form
+                .get(end..)
+                .is_some_and(|suffix| suffix.is_empty() || suffix.starts_with(char::is_whitespace))
+            || fixed.selection_subrange(&owner.head, start..end).as_ref() != Some(selection)
+        {
+            return None;
+        }
+        return Some((
+            EntryKind::Command,
+            EntryNameEvidence::NativeMarkup,
+            name,
+            selection.clone(),
+        ));
+    }
     let role_prefix = owner.head_role_prefix.as_deref()?;
     if !leading.starts_with(role_prefix) {
         return None;

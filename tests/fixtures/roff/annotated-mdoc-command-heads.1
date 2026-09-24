@@ -1,0 +1,32 @@
+.Dd September 24, 2026
+.Dt T 1
+.Os
+.Sh COMMANDS
+.Bl -tag -width Ds
+.It Ic run Op Fl a
+RUN_BODY
+.It Cm attach\-session Op Fl d
+ATTACH_BODY
+.It Ic run Ns tail
+GLUED_BODY
+.It Sy styled Ic hidden
+STYLED_BODY
+.It Ic \-bad
+BAD_BODY
+.It Xo Ic new\-session
+.Op Fl AdDEPX
+.Op Fl c Ar start\-directory
+.Op Fl e Ar environment
+.Op Fl f Ar flags
+.Op Fl F Ar format
+.Op Fl n Ar window\-name
+.Op Fl s Ar session\-name
+.Op Fl t Ar group\-name
+.Op Fl x Ar width
+.Op Fl y Ar height
+.Op Ar shell\-command Op Ar argument ...
+.Xc
+XO_BODY
+.El
+.Sh DESCRIPTION
+.Ic body-only

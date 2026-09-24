@@ -353,6 +353,60 @@
           "expectedCounts": {"directEntry": 1}
         }
       ]
+    },
+    {
+      "id": "F007",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/annotated-mdoc-command-heads.1",
+      "sha256": "1f2eeb2f217112438d20f97d3d59a83ee45988f64be5a4a005405ab23608df29",
+      "queries": [
+        {
+          "query": "run",
+          "review": "Pinned CVS mdoc_macro.c::blk_full keeps line-6 It HEAD/BODY independent; mdoc_term.c::termp_bold_pre prints Ic run and the following Op Fl a separately. The native Literal component proves only run as the command name.",
+          "expected": [
+            {"source": {"line": 6, "column": 2}, "kind": "command", "names": ["run"], "forms": ["run [-a]"], "emptyDescription": false, "bodyIncludes": ["RUN_BODY"]}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "attach-session",
+          "review": "Pinned CVS line-8 Cm attach\\-session renders the exact attach-session name; authored escape spelling is not copied as a literal backslash into the final form or name.",
+          "expected": [
+            {"source": {"line": 8, "column": 2}, "kind": "command", "names": ["attach-session"], "forms": ["attach-session [-d]"], "emptyDescription": false, "bodyIncludes": ["ATTACH_BODY"]}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "new-session",
+          "review": "Pinned CVS mdoc_macro.c::blk_full retains the long Xo HEAD from line 16 and its body. Native output cannot prove all later HEAD joins, but the first Ic component and its following visible separator prove the exact command word; only that component is returned as the form.",
+          "expected": [
+            {"source": {"line": 16, "column": 2}, "kind": "command", "names": ["new-session"], "forms": ["new-session"], "emptyDescription": false, "bodyIncludes": ["XO_BODY"]}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "runtail",
+          "review": "Pinned CVS line-10 Ns glues tail to Ic run in one visible head; the component run is incomplete as a command token, so this owner remains a Term.",
+          "expected": [
+            {"source": {"line": 10, "column": 2}, "kind": "term", "names": ["runtail"], "forms": ["runtail"], "emptyDescription": false, "bodyIncludes": ["GLUED_BODY"]}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "hidden",
+          "review": "Pinned CVS line-12 HEAD begins with Sy styled; a later Ic hidden is not the first native declaration role and cannot become an independent command owner.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0}
+        },
+        {
+          "query": "-bad",
+          "review": "Pinned CVS line-14 Ic prints a dash-prefixed token, but native literal markup does not turn it into a command name; its original head remains an addressable Term.",
+          "expected": [
+            {"source": {"line": 14, "column": 2}, "kind": "term", "names": ["-bad"], "forms": ["-bad"], "emptyDescription": false, "bodyIncludes": ["BAD_BODY"]}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        }
+      ]
     }
   ]
 }

@@ -422,7 +422,15 @@ impl FixedBody {
                 });
             return valid.then_some(entry);
         }
-        let form = self.owner_complete_form(owner)?;
+        let Some(form) = self.owner_complete_form(owner) else {
+            // mdoc_macro.c::blk_full may keep a long Xo HEAD whose later
+            // output joins are unknown. Its first Ic/Cm component can still
+            // prove a complete command word; no other entry kind may borrow
+            // this partial form or infer the rest of the HEAD.
+            return self
+                .validated_partial_literal_command(owner, entry)
+                .then_some(entry);
+        };
         let [only_form] = entry.forms.as_slice() else {
             return None;
         };
@@ -465,13 +473,16 @@ impl FixedBody {
                 Some(OwnerHeadRole::Environment),
                 EntryKind::EnvironmentVariable,
                 EntryNameEvidence::NativeMarkup,
-            ) => self.native_markup_name_matches(
-                owner,
-                entry.kind,
-                &form,
-                only_name,
-                &binding.occurrences,
-            ),
+            )
+            | (Some(OwnerHeadRole::Literal), EntryKind::Command, EntryNameEvidence::NativeMarkup) => {
+                self.native_markup_name_matches(
+                    owner,
+                    entry.kind,
+                    &form,
+                    only_name,
+                    &binding.occurrences,
+                )
+            }
             _ => false,
         };
         (entry.id == owner.id
@@ -483,6 +494,34 @@ impl FixedBody {
             && entry.alias_of.is_none()
             && entry.value_domain.is_none())
         .then_some(entry)
+    }
+
+    fn validated_partial_literal_command(
+        &self,
+        owner: &OwnerMark,
+        entry: &EntryFacts<TextSelection>,
+    ) -> bool {
+        let Some((name, component)) = self.literal_command_component(owner) else {
+            return false;
+        };
+        let ([only_form], [only_name], [binding]) = (
+            entry.forms.as_slice(),
+            entry.names.as_slice(),
+            entry.name_bindings.as_slice(),
+        ) else {
+            return false;
+        };
+        entry.id == owner.id
+            && entry.kind == EntryKind::Command
+            && entry.case == NameCase::Sensitive
+            && entry.alias_groups.is_empty()
+            && entry.alias_of.is_none()
+            && entry.value_domain.is_none()
+            && only_form == component
+            && only_name == &name
+            && binding.name == 0
+            && binding.evidence == EntryNameEvidence::NativeMarkup
+            && binding.occurrences.as_slice() == std::slice::from_ref(component)
     }
 
     fn native_markup_name_matches(
@@ -497,6 +536,18 @@ impl FixedBody {
         let Some(end) = start.checked_add(name.len()) else {
             return false;
         };
+        if kind == EntryKind::Command && owner.head_role == Some(OwnerHeadRole::Literal) {
+            let Some((native_name, component)) = self.literal_command_component(owner) else {
+                return false;
+            };
+            return native_name == name
+                && form.get(start..end) == Some(name)
+                && form.get(end..).is_some_and(|suffix| {
+                    suffix.is_empty() || suffix.starts_with(char::is_whitespace)
+                })
+                && self.selection_subrange(&owner.head, start..end).as_ref() == Some(component)
+                && occurrences == std::slice::from_ref(component);
+        }
         let Some(role_prefix) = owner.head_role_prefix.as_deref() else {
             return false;
         };
@@ -520,6 +571,52 @@ impl FixedBody {
                 }))
             && self.selection_subrange(&owner.head, start..end).as_ref() == occurrences.first()
             && occurrences.len() == 1
+    }
+
+    /// A first native Ic/Cm component may prove one complete command token
+    /// even when a later Xo HEAD join is unknown. The component must be the
+    /// exact visible prefix and must end at a proved word boundary; layout
+    /// adjacency alone never supplies that boundary.
+    #[must_use]
+    pub fn literal_command_component<'a>(
+        &self,
+        owner: &'a OwnerMark,
+    ) -> Option<(String, &'a TextSelection)> {
+        if owner.role != OwnerRole::Definition || owner.head_role != Some(OwnerHeadRole::Literal) {
+            return None;
+        }
+        let component = owner.head_components.first()?;
+        if component.role != OwnerHeadRole::Literal || component.source.is_none() {
+            return None;
+        }
+        let name = self.selection_text(&component.selection)?;
+        if !crate::native_command_token(&name) || component.selection.parts.is_empty() {
+            return None;
+        }
+        let count = component.selection.parts.len();
+        if count > owner.head.parts.len()
+            || component.selection.joins.as_slice() != owner.head.joins.get(..count - 1)?
+            || component.selection.parts.as_slice() != owner.head.parts.get(..count)?
+        {
+            return None;
+        }
+        let boundary = if count == owner.head.parts.len() {
+            true
+        } else {
+            match owner.head.joins.get(count - 1)? {
+                TextJoin::AuthoredSeparator(separator) => {
+                    separator.starts_with(char::is_whitespace)
+                }
+                TextJoin::DirectContact => {
+                    let next = &owner.head.parts[count];
+                    let text = self.surface.run_text(next.run)?;
+                    text.get(usize::try_from(next.start_byte).ok()?..)?
+                        .starts_with(char::is_whitespace)
+                }
+                TextJoin::HardBoundary | TextJoin::Unknown => false,
+            }
+        };
+        boundary.then_some((name, &component.selection))
     }
 
     /// Close every lexical alias against the same original HEAD and one
