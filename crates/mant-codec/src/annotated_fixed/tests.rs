@@ -3046,7 +3046,10 @@ fn native_man_declaration_segments_keep_arguments_out_and_later_names_in() {
     ] {
         assert_fixed_segment_case(label, input, &names, rejected);
     }
+}
 
+#[test]
+fn native_man_terminal_nonprinting_escapes_keep_complete_name() {
     // This exact standalone BR input also ran pinned CVS -Tutf8. Its inline
     // italic escape overrides pre_alternate's initial bold font, so rejecting
     // its only name must not manufacture an empty or fallback Term entry.
@@ -3112,6 +3115,137 @@ fn native_man_plain_argument_does_not_promote_embedded_option() {
     }
 }
 
+#[test]
+fn native_man_complete_heads_and_styled_argument_boundaries_bind_all_names() {
+    // Each exact input ran pinned CVS -Ttree before these assertions.
+    // man_term.c::pre_B/pre_IP/pre_TP preserve the complete HEAD while
+    // term.c::term_word emits no glyph for trailing \& and applies inline
+    // italic font changes before the adjacent argument's first glyph.
+    for (label, input, names, rejected) in [
+        (
+            "bold-head-with-later-declaration",
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \"-a ARG, --all\"\nDescription.\n".as_slice(),
+            vec!["-a", "--all"],
+            "ARG",
+        ),
+        (
+            "tp-glued-italic-argument",
+            b".TH T 1\n.SH OPTIONS\n.TP\n\\fB-L\\fR\\fIdir\\fR\nDirectory.\n".as_slice(),
+            vec!["-L"],
+            "dir",
+        ),
+        (
+            "ip-glued-italic-argument",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\-O\\fIlevel\\fP \\&\"\nEnables query optimisation.\n"
+                .as_slice(),
+            vec!["-O"],
+            "level",
+        ),
+        (
+            "ip-bold-glued-italic-argument",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-L\\fR\\fIdir\\fR\" 4\nDirectory.\n".as_slice(),
+            vec!["-L"],
+            "dir",
+        ),
+    ] {
+        assert_fixed_segment_case(label, input, &names, rejected);
+    }
+
+    // Every exact suffix spelling ran pinned CVS -Ttree/-Tutf8.  Consecutive
+    // zero-glyph escapes after the last visible character cannot extend the
+    // option spelling, irrespective of the final font mode they select.
+    for input in [
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--help\\&\"\nDescription.\n".as_slice(),
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--help\\&\\fR\"\nDescription.\n",
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--help\\fR\\&\"\nDescription.\n",
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--help\\fI\"\nDescription.\n",
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--help\\fB\"\nDescription.\n",
+        b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--help\\&\\fR\" 4\nDescription.\n",
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        let entry = fixed.owners[0]
+            .entry
+            .as_ref()
+            .expect("terminal zero-width escapes keep the name");
+        assert_eq!(
+            entry.names,
+            ["--help"],
+            "{}",
+            String::from_utf8_lossy(input)
+        );
+        assert_eq!(
+            entry.kind,
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            }
+        );
+        assert_eq!(
+            fixed.selection_text(&entry.name_bindings[0].occurrences[0]),
+            Some("--help".to_owned())
+        );
+    }
+}
+
+#[test]
+fn native_man_repeated_name_preserves_both_query_occurrences() {
+    // This exact `.B` input also ran pinned CVS -Ttree.  A repeated name is
+    // one selectable spelling with two final-display occurrences, including
+    // when the parser-alive hint froze the first spelling.
+    let repeated = b".TH T 1\n.SH OPTIONS\n.TP\n.B \"-a ARG, -a\"\nDescription.\n";
+    let document = project_annotated_manual("t.1", &bundle(repeated), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let entry = fixed.owners[0].entry.as_ref().expect("repeated option");
+    assert_eq!(entry.names, ["-a"]);
+    assert_eq!(entry.name_bindings[0].occurrences.len(), 2);
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(document),
+        tldr: None,
+    };
+    let response = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "-a".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(response.counts.direct_entry.total, 1);
+    assert_eq!(
+        response.evidence[0].entry.as_ref().unwrap().name_bindings[0]
+            .occurrences
+            .len(),
+        2
+    );
+    response.validate_references().unwrap();
+}
+
+#[test]
+fn native_man_internal_nonprinting_escapes_do_not_become_terminal_suffix() {
+    // The exact 2,048-escape line ran pinned CVS -Ttree.  A visible byte
+    // after those escapes prevents a terminal-only suffix; this also keeps
+    // the native candidate scan's large-input path under regression.
+    let escaped = format!("--help{}x", "\\&".repeat(2_048));
+    let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B \"{escaped}\"\nDescription.\n");
+    let document =
+        project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.owners[0].head_role, None);
+    assert_eq!(
+        fixed.owners[0].entry.as_ref().unwrap().kind,
+        EntryKind::Term
+    );
+}
+
 fn assert_fixed_segment_case(label: &str, input: &[u8], names: &[&str], rejected: &str) {
     let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
     assert!(validate_document(&document).is_empty(), "{label}");
@@ -3137,7 +3271,7 @@ fn assert_fixed_segment_case(label: &str, input: &[u8], names: &[&str], rejected
                 options: ExplanationOptions::default(),
             },
         )
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{label}: {name}: {error:?}"));
         assert_eq!(response.counts.direct_entry.total, 1, "{label}: {name}");
         response.validate_references().unwrap();
     }
@@ -3148,7 +3282,7 @@ fn assert_fixed_segment_case(label: &str, input: &[u8], names: &[&str], rejected
             options: ExplanationOptions::default(),
         },
     )
-    .unwrap();
+    .unwrap_or_else(|error| panic!("{label}: {rejected}: {error:?}"));
     assert_eq!(response.counts.direct_entry.total, 0, "{label}: {rejected}");
     response.validate_references().unwrap();
 }

@@ -22,6 +22,8 @@ const MAX_FIXED_ROW_COLUMNS: u32 = 1_048_576;
 const MAX_FIXED_TOTAL_COLUMNS: u64 = 32 * 1024 * 1024;
 const MAX_FIXED_TOTAL_JOIN_BYTES: u64 = 32 * 1024 * 1024;
 
+type StyledArgumentScan = (Vec<(String, Range<usize>)>, usize);
+
 /// A final display surface, independent of any viewport width.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -521,19 +523,115 @@ impl FixedBody {
         &self,
         owner: &OwnerMark,
     ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
-        if owner.head_role != Some(OwnerHeadRole::Lexical) || owner.head_role_prefix.is_some() {
+        if owner.head_role != Some(OwnerHeadRole::Lexical) {
             return None;
         }
         let form = self.owner_complete_form(owner)?;
+        let (styled, _) = self.lexical_styled_argument_names(owner, &form)?;
+        let mut candidates = crate::literal_option_names(&form);
+        for (name, range) in styled {
+            candidates.retain(|(_, existing)| existing.start != range.start);
+            candidates.push((name, range));
+        }
+        candidates.sort_by_key(|(_, range)| range.start);
         let mut names = Vec::new();
-        for (name, range) in crate::literal_option_names(&form) {
+        for (name, range) in candidates {
             let selection = self.selection_subrange(&owner.head, range.clone())?;
             if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
                 return None;
             }
             names.push((name, selection, range));
         }
-        self.checked_lexical_names(&form, names)
+        let names = self.checked_lexical_names(&form, names)?;
+        // The parser-alive prefix is a candidate for the first declaration,
+        // not permission to ignore the rest of the native HEAD.  Keep it
+        // tied to the same final glyphs when it was recorded.
+        if let Some(prefix) = owner.head_role_prefix.as_deref()
+            && names.first().map(|(name, _, _)| name.as_str()) != Some(prefix)
+        {
+            return None;
+        }
+        Some(names)
+    }
+
+    /// An immediately underlined suffix is a native parameter boundary,
+    /// even when `term.c::term_word()` prints it in direct contact with the
+    /// preceding option (`-L` followed by italic `dir`).  Recover only a
+    /// complete option before that boundary; ordinary roman suffixes and
+    /// a wholly underlined option are not additional declarations.
+    fn lexical_styled_argument_names(
+        &self,
+        owner: &OwnerMark,
+        form: &str,
+    ) -> Option<StyledArgumentScan> {
+        let segments = crate::entry::literal_declaration_ranges(form);
+        let mut candidates = Vec::new();
+        let mut segment_index = 0;
+        let mut examined_segment = None;
+        let mut attempts = 0;
+        let mut offset = 0usize;
+        for (index, part) in owner.head.parts.iter().enumerate() {
+            if index != 0 {
+                offset = offset.checked_add(match &owner.head.joins[index - 1] {
+                    TextJoin::DirectContact => 0,
+                    TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text) => {
+                        text.len()
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                })?;
+            }
+            let start = offset;
+            let run = self.surface.runs.get((part.run.get() - 1) as usize)?;
+            let length = usize::try_from(part.end_byte.checked_sub(part.start_byte)?).ok()?;
+            offset = offset.checked_add(length)?;
+            if !run.label.style.underline || run.label.style.bold {
+                continue;
+            }
+            while segments
+                .get(segment_index)
+                .is_some_and(|segment| segment.end < start)
+            {
+                segment_index += 1;
+            }
+            let Some(segment) = segments.get(segment_index) else {
+                continue;
+            };
+            // A later underlined run in the same declaration cannot reveal
+            // a new leading name: its prefix already contains the first
+            // underlined argument.  More importantly, never rescan that
+            // growing prefix once per font fragment.
+            if examined_segment == Some(segment_index) {
+                continue;
+            }
+            examined_segment = Some(segment_index);
+            attempts += 1;
+            if index == 0 || owner.head.joins[index - 1] != TextJoin::DirectContact {
+                continue;
+            }
+            if start <= segment.start || start > segment.end {
+                continue;
+            }
+            let before = form.get(segment.start..start)?.trim_start();
+            if !crate::lexical_option_token(before) {
+                continue;
+            }
+            let name_start = start.checked_sub(before.len())?;
+            let range = name_start..start;
+            let selection = self.selection_subrange(&owner.head, range.clone())?;
+            if selection.parts.iter().any(|part| {
+                self.surface
+                    .runs
+                    .get((part.run.get() - 1) as usize)
+                    .is_some_and(|run| run.label.style.underline && !run.label.style.bold)
+            }) {
+                continue;
+            }
+            if candidates.len() == 64 {
+                return None;
+            }
+            candidates.push((before.to_owned(), range));
+        }
+        (offset == form.len()).then_some((candidates, attempts))
     }
 
     fn checked_lexical_names(
@@ -984,7 +1082,7 @@ impl FixedBody {
         entry: &EntryFacts<TextSelection>,
         only_form: &TextSelection,
     ) -> bool {
-        if owner.head_role != Some(OwnerHeadRole::Lexical) || owner.head_role_prefix.is_some() {
+        if owner.head_role != Some(OwnerHeadRole::Lexical) {
             return false;
         }
         let Some(found) = self.lexical_literal_names(owner) else {

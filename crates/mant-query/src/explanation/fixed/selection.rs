@@ -76,8 +76,18 @@ pub(super) fn fixed_name_positions(
     }
     if entry.forms.len() == 1 {
         let form = &entry.forms[0];
+        // A parser-alive first-name hint does not exclude later declarations
+        // or a second occurrence of that same name. Follow the native facts'
+        // lexical binding, not the number of distinct names: two occurrences
+        // can still yield one `entry.names` value.
         let names = if owner.head_role == Some(mant_ir::OwnerHeadRole::Lexical)
-            && owner.head_role_prefix.is_none()
+            && (owner.head_role_prefix.is_none()
+                || owner.entry.as_ref().is_some_and(|facts| {
+                    facts
+                        .name_bindings
+                        .iter()
+                        .any(|binding| binding.evidence == mant_ir::EntryNameEvidence::Lexical)
+                }))
             && matches!(
                 entry.kind,
                 mant_ir::EntryKind::Parameter {

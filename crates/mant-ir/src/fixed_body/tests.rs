@@ -12,6 +12,123 @@ fn empty_selection() -> TextSelection {
 }
 
 #[test]
+fn styled_argument_scan_checks_one_boundary_per_declaration_segment() {
+    // The exact small `.TP` head with `\fB-L\fR\fIa\fR\fIb\fR`
+    // ran pinned CVS -Ttree first. term.c::term_word changes fonts without
+    // emitting a glyph; this synthetic scale fixture isolates the IR work
+    // count from native wrapping and coalescing choices.
+    let fragments = 8_192usize;
+    let (body, form) = scaled_styled_argument_body(fragments);
+    body.validate()
+        .expect("scaled native-style selection is valid");
+    let (candidates, attempts) = body
+        .lexical_styled_argument_names(&body.owners[0], &form)
+        .expect("complete head remains readable");
+    assert_eq!(attempts, 1);
+    assert_eq!(candidates, [("-L".to_owned(), 0..2)]);
+    assert_eq!(
+        body.lexical_literal_names(&body.owners[0]).unwrap()[0].0,
+        "-L"
+    );
+}
+
+fn scaled_styled_argument_body(fragments: usize) -> (FixedBody, String) {
+    let form = format!("-L{}", "a".repeat(fragments));
+    let mut runs = Vec::with_capacity(fragments + 1);
+    let mut parts = Vec::with_capacity(fragments + 1);
+    runs.push(DisplayRun {
+        key: key(1),
+        row: key(1),
+        column: 0,
+        width: 2,
+        byte_start: 0,
+        byte_count: 2,
+        label: DisplayLabel {
+            owner: Some(key(1)),
+            link: None,
+            source: None,
+            style: DisplayStyle {
+                bold: true,
+                underline: false,
+            },
+            role: DisplayRole::Body,
+        },
+    });
+    parts.push(OutputSlice {
+        run: key(1),
+        start_byte: 0,
+        end_byte: 2,
+    });
+    for index in 0..fragments {
+        let run = key(u32::try_from(index + 2).unwrap());
+        runs.push(DisplayRun {
+            key: run,
+            row: key(1),
+            column: u32::try_from(index + 2).unwrap(),
+            width: 1,
+            byte_start: u64::try_from(index + 2).unwrap(),
+            byte_count: 1,
+            label: DisplayLabel {
+                owner: Some(key(1)),
+                link: None,
+                source: None,
+                style: DisplayStyle {
+                    bold: false,
+                    underline: index % 2 == 0,
+                },
+                role: DisplayRole::Body,
+            },
+        });
+        parts.push(OutputSlice {
+            run,
+            start_byte: 0,
+            end_byte: 1,
+        });
+    }
+    let body = FixedBody {
+        surface: DisplaySurface {
+            text: form.clone(),
+            rows: vec![DisplayRow {
+                key: key(1),
+                first_run: key(1),
+                run_count: u32::try_from(fragments + 1).unwrap(),
+                column_count: u32::try_from(form.len()).unwrap(),
+                break_after: false,
+            }],
+            runs,
+        },
+        headings: Vec::new(),
+        owners: vec![OwnerMark {
+            key: key(1),
+            id: crate::NodeId::from("option-l"),
+            parent: None,
+            preceding_owner: None,
+            hanging_candidate: false,
+            hanging_continuation: None,
+            hanging_nested_head: None,
+            section: None,
+            role: OwnerRole::Definition,
+            head_role: Some(OwnerHeadRole::Lexical),
+            head_role_prefix: None,
+            head_components: Vec::new(),
+            entry: None,
+            head: TextSelection {
+                parts,
+                joins: vec![TextJoin::DirectContact; fragments],
+            },
+            direct_body: empty_selection(),
+            empty_point: None,
+            source_key: None,
+            source: None,
+        }],
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    };
+    (body, form)
+}
+
+#[test]
 fn borrowed_entry_view_requires_the_mark_in_its_own_fixed_body() {
     let mut body = sample_body();
     let head = TextSelection {

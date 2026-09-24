@@ -1213,6 +1213,56 @@ owner_head_role(const struct roff_node *owner,
 	return 0;
 }
 
+/* term.c::term_word() changes font and handles a no-space escape without
+ * emitting a glyph.  Only a suffix made entirely of these escapes leaves
+ * the already collected visible prefix complete; an escape before more
+ * source text remains a separate, potentially meaningful boundary. */
+static int
+nonprinting_escape(enum mandoc_esc escape)
+{
+	switch (escape) {
+	case ESCAPE_IGNORE:
+	case ESCAPE_NOSPACE:
+	case ESCAPE_FONT:
+	case ESCAPE_FONTBOLD:
+	case ESCAPE_FONTITALIC:
+	case ESCAPE_FONTBI:
+	case ESCAPE_FONTROMAN:
+	case ESCAPE_FONTCR:
+	case ESCAPE_FONTCB:
+	case ESCAPE_FONTCI:
+	case ESCAPE_FONTPREV:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+/* Find the last run of no-glyph escapes in one forward pass.  Testing the
+ * entire remaining string at every escape would be quadratic for a long
+ * sequence of font changes followed by one visible byte. */
+static const char *
+terminal_nonprinting_suffix(const char *text)
+{
+	const char *cursor, *next, *suffix = NULL;
+	enum mandoc_esc escape;
+
+	for (cursor = text; *cursor != '\0'; cursor = next) {
+		next = cursor + 1;
+		if (*cursor != '\\') {
+			suffix = NULL;
+			continue;
+		}
+		escape = mandoc_escape(&next, NULL, NULL);
+		if (nonprinting_escape(escape)) {
+			if (suffix == NULL)
+				suffix = cursor;
+		} else
+			suffix = NULL;
+	}
+	return suffix;
+}
+
 /* man_macro.c::blk_imp keeps TP/TQ HEAD distinct.  man_term.c::pre_B
  * supplies the font, while term.c::term_word() prints \- through
  * mandoc_escape() as an ordinary hyphen.  Keep this a candidate hint:
@@ -1223,9 +1273,9 @@ copy_tp_lexical_head(struct mant_annotated_collector *collector,
     int *recognized)
 {
 	const struct roff_node *head, *first;
-	const char *cursor, *next, *sequence, *text;
+	const char *cursor, *next, *sequence, *text, *terminal;
 	char candidate[256], glyph;
-	size_t length = 0;
+	size_t length = 0, text_size;
 	int size, prefix_done = 0;
 	int prefix_valid = 1, first_glyph = 0;
 	enum mandoc_esc escape;
@@ -1286,10 +1336,18 @@ copy_tp_lexical_head(struct mant_annotated_collector *collector,
 		return 1;
 	}
 	text = first->child->string;
-	if (!charge_work(collector, strlen(text)))
+	text_size = strlen(text);
+	/* Count the suffix prepass and the prefix scan independently. */
+	if (!charge_work(collector, text_size) ||
+	    !charge_work(collector, text_size))
 		return 0;
+	terminal = terminal_nonprinting_suffix(text);
 	for (cursor = text; *cursor != '\0'; ) {
 		if (*cursor == '\\') {
+			if (cursor == terminal) {
+				cursor = text + text_size;
+				break;
+			}
 			next = cursor + 1;
 			escape = mandoc_escape(&next, &sequence, &size);
 			if (escape != ESCAPE_SPECIAL || size != 1 ||
@@ -1352,7 +1410,7 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
     int *recognized)
 {
 	const struct roff_node *first;
-	const char *cursor, *next, *sequence;
+	const char *cursor, *next, *sequence, *terminal;
 	char candidate[256];
 	size_t source_size, length = 0, index;
 	int size, declaration_separator = 0;
@@ -1365,14 +1423,21 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
 	    first->string == NULL || first->string[0] != '\\')
 		return 1;
 	source_size = strlen(first->string);
-	if (!charge_work(collector, source_size))
+	/* Count the suffix prepass and the authored-prefix scan. */
+	if (!charge_work(collector, source_size) ||
+	    !charge_work(collector, source_size))
 		return 0;
+	terminal = terminal_nonprinting_suffix(first->string);
 	cursor = first->string + 1;
 	escape = mandoc_escape(&cursor, NULL, NULL);
 	if (escape != ESCAPE_FONTBOLD && escape != ESCAPE_FONTCB)
 		return 1;
 	while (*cursor != '\0') {
 		if (*cursor == '\\') {
+			if (cursor == terminal) {
+				cursor = first->string + source_size;
+				break;
+			}
 			next = cursor + 1;
 			escape = mandoc_escape(&next, &sequence, &size);
 			if (escape == ESCAPE_FONTROMAN ||
@@ -1381,6 +1446,20 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
 				cursor = next;
 				if (*cursor != '\0' && *cursor != '=' &&
 				    !isspace((unsigned char)*cursor)) {
+					/* A directly adjacent italic operand is still
+					 * one visible HEAD, but not part of the bold
+					 * option.  Keep the owner as a candidate and let
+					 * checked final-display style set the boundary. */
+					if (*cursor == '\\') {
+						const char *argument = cursor + 1;
+						enum mandoc_esc font = mandoc_escape(
+						    &argument, NULL, NULL);
+						if (font == ESCAPE_FONTITALIC ||
+						    font == ESCAPE_FONTCI) {
+							*recognized = 1;
+							return 1;
+						}
+					}
 					if (strchr(",|/", *cursor) == NULL)
 						return 1;
 					declaration_separator = 1;

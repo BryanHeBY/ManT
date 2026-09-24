@@ -227,6 +227,145 @@ fn fixture() -> ResolvedContent {
 }
 
 #[test]
+fn hinted_fixed_head_keeps_later_name_positions_in_one_form() {
+    // Both exact `.TP`/`.B` inputs ran pinned CVS -Ttree.  man_term.c::
+    // pre_TP keeps one visible HEAD; a first-name hint hides neither a
+    // second distinct name nor a repeated occurrence of that same name.
+    for (form, names, occurrences, expected) in [
+        (
+            "-a ARG, --all",
+            vec!["-a", "--all"],
+            vec![("-a", 0, 2), ("--all", 8, 13)],
+            vec![vec![(0, 0, 2)], vec![(0, 8, 13)]],
+        ),
+        (
+            "-a ARG, -a",
+            vec!["-a"],
+            vec![("-a", 0, 2), ("-a", 8, 10)],
+            vec![vec![(0, 0, 2), (0, 8, 10)]],
+        ),
+    ] {
+        let fixed = hinted_fixed_body(form, &names, &occurrences);
+        fixed
+            .validate()
+            .expect("query fixture is a valid Fixed body");
+        let entry = mant_ir::SemanticEntry {
+            id: NodeId::from("option-a"),
+            kind: mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            names: names.iter().map(|name| (*name).into()).collect(),
+            alias_groups: Vec::new(),
+            alias_of: None,
+            case: mant_ir::NameCase::Sensitive,
+            forms: vec![form.into()],
+            document_targets: Vec::new(),
+            children: Vec::new(),
+            value_domain: None,
+        };
+        assert_eq!(
+            super::selection::fixed_name_positions(&fixed, &fixed.owners[0], &entry).unwrap(),
+            expected,
+            "{form}",
+        );
+    }
+}
+
+fn hinted_fixed_body(form: &str, names: &[&str], occurrences: &[(&str, u64, u64)]) -> FixedBody {
+    let length = u64::try_from(form.len()).unwrap();
+    let head = slices(&[1], Vec::new(), &[length]);
+    let bindings = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| mant_ir::EntryNameBinding {
+            name: index,
+            occurrences: occurrences
+                .iter()
+                .filter(|(candidate, _, _)| candidate == name)
+                .map(|(_, start, end)| TextSelection {
+                    parts: vec![OutputSlice {
+                        run: key(1),
+                        start_byte: *start,
+                        end_byte: *end,
+                    }],
+                    joins: Vec::new(),
+                })
+                .collect(),
+            evidence: mant_ir::EntryNameEvidence::Lexical,
+        })
+        .collect();
+    FixedBody {
+        surface: DisplaySurface {
+            text: form.into(),
+            rows: vec![DisplayRow {
+                key: key(1),
+                first_run: key(1),
+                run_count: 1,
+                column_count: u32::try_from(form.len()).unwrap(),
+                break_after: false,
+            }],
+            runs: vec![DisplayRun {
+                key: key(1),
+                row: key(1),
+                column: 0,
+                width: u32::try_from(form.len()).unwrap(),
+                byte_start: 0,
+                byte_count: length,
+                label: DisplayLabel {
+                    owner: Some(key(1)),
+                    link: None,
+                    source: None,
+                    style: DisplayStyle {
+                        bold: true,
+                        underline: false,
+                    },
+                    role: DisplayRole::Body,
+                },
+            }],
+        },
+        headings: Vec::new(),
+        owners: vec![OwnerMark {
+            key: key(1),
+            id: NodeId::from("option-a"),
+            parent: None,
+            preceding_owner: None,
+            hanging_candidate: false,
+            hanging_continuation: None,
+            hanging_nested_head: None,
+            section: None,
+            role: OwnerRole::Definition,
+            head_role: Some(mant_ir::OwnerHeadRole::Lexical),
+            head_role_prefix: Some("-a".into()),
+            head_components: Vec::new(),
+            entry: Some(mant_ir::EntryFacts {
+                name_bindings: bindings,
+                alias_groups: Vec::new(),
+                alias_of: None,
+                forms: vec![head.clone()],
+                id: NodeId::from("option-a"),
+                kind: mant_ir::EntryKind::Parameter {
+                    parameter_kind: mant_ir::ParameterKind::Option,
+                },
+                case: mant_ir::NameCase::Sensitive,
+                names: names.iter().map(|name| (*name).into()).collect(),
+                value_domain: None,
+            }),
+            head,
+            direct_body: TextSelection {
+                parts: Vec::new(),
+                joins: Vec::new(),
+            },
+            empty_point: None,
+            source_key: None,
+            source: None,
+        }],
+        links: Vec::new(),
+        anchors: Vec::new(),
+        regions: Vec::new(),
+    }
+}
+
+#[test]
 fn complete_linked_cross_row_head_is_the_only_semantic_entry() {
     let resolved = fixture();
     let document = resolved.document.as_ref().unwrap();

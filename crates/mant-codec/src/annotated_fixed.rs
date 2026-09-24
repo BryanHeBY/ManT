@@ -365,8 +365,8 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
             // form may also contain arguments, so bind only the shared
             // grammar's exact name ranges to final-display sub-selections.
             if owner.head_role == Some(OwnerHeadRole::Lexical)
-                && owner.head_role_prefix.is_none()
                 && let Some(occurrences) = fixed.lexical_literal_names(owner)
+                && (owner.head_role_prefix.is_none() || occurrences.len() != 1)
             {
                 if occurrences.is_empty() {
                     // A final underlined, nonbold operand was rejected by
