@@ -231,6 +231,8 @@ mod tests {
         assert_eq!(entries[0].children[0].names, ["-L"]);
         assert_eq!(entries[0].children[0].forms.len(), 2);
         assert_eq!(entries[0].subtree_len(), 2);
+        let child_path = crate::OutlinePath::nested_entry(Some(&[1]), &[1, 1]).unwrap();
+        assert_eq!(index.entry_at(&child_path).unwrap().names, ["-L"]);
 
         assert_eq!(
             index.section_summary("synopsis"),

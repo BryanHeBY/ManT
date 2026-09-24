@@ -210,6 +210,32 @@ impl SemanticIndex {
         self.owner_locations.get(path)
     }
 
+    /// Borrow one semantic entry from its exact indexed outline coordinate.
+    /// This uses the same tree and path as `owner_at`, without another entry
+    /// map or a copy of native form text.
+    #[must_use]
+    pub fn entry_at(&self, path: &crate::OutlinePath) -> Option<&SemanticEntry> {
+        let crate::OutlinePath::Entry { section, indices } = path else {
+            return None;
+        };
+        let section_path = section.as_ref().map(|coordinates| {
+            coordinates
+                .iter()
+                .map(|coordinate| coordinate.get() - 1)
+                .collect::<Vec<_>>()
+        });
+        let mut entries = section_path
+            .as_deref()
+            .map_or(self.root(), |path| self.section_at(path));
+        let mut entry = None;
+        for coordinate in indices {
+            let current = entries.get(coordinate.get() - 1)?;
+            entry = Some(current);
+            entries = &current.children;
+        }
+        entry
+    }
+
     /// Summary for content before the first section.
     #[must_use]
     pub fn root_summary(&self) -> EntrySummary {

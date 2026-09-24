@@ -21,9 +21,24 @@ use mant_protocol::{
 
 use super::{ExplanationError, materialize::Budget};
 
-struct IndexedOwner<'a> {
-    entry: &'a SemanticEntry,
+struct IndexedOwner {
     path: OutlinePath,
+    matched: (bool, bool, bool, bool),
+}
+
+pub(super) struct FixedCandidate {
+    pub key: NonZeroU32,
+}
+
+pub(super) struct FixedPlan<'a> {
+    pub content: &'a ResolvedContent,
+    document: &'a Document,
+    fixed: &'a FixedBody,
+    reader: FixedSectionReader<'a>,
+    index: SemanticIndex,
+    indexed: BTreeMap<NonZeroU32, IndexedOwner>,
+    pub candidates: Vec<FixedCandidate>,
+    pub truncated: bool,
 }
 
 /// A Fixed result only claims directly evidenced complete heads. Native body
@@ -34,47 +49,23 @@ pub(super) fn response(
     fixed: &FixedBody,
     query: &ExplanationQuery,
 ) -> Result<(QueryExplanation, u32), ExplanationError> {
-    mant_ir::validate_document_sources(document).map_err(|_| ExplanationError::InvalidFixed)?;
-    let reader = FixedSectionReader::new(fixed).map_err(|_| ExplanationError::InvalidFixed)?;
-    let index = SemanticIndex::build(document);
-    let indexed = collect_indexed(&index, &reader);
+    let plan = plan(resolved, document, fixed, query.entry.trim())?;
+    let resolved = plan.content;
+    let document = plan.document;
     let requested = query.entry.trim();
-    let mut candidates = Vec::new();
-    let mut truncated = false;
-    for owner in &fixed.owners {
-        let Some(indexed) = indexed.get(&owner.key) else {
-            continue;
-        };
-        let name = indexed.entry.names.iter().any(|value| value == requested);
-        let form = indexed.entry.forms.iter().any(|value| value == requested);
-        let id = indexed.entry.id.as_str() == requested;
-        let path = indexed.path.to_string() == requested;
-        if !(name || form || id || path) {
-            continue;
-        }
-        if candidates.len() == mant_protocol::MAX_EXPLANATION_CANDIDATES {
-            truncated = true;
-            break;
-        }
-        candidates.push((owner, indexed, name, form, id, path));
-    }
-    let total = u32::try_from(candidates.len()).expect("bounded Fixed candidates");
+    let total = u32::try_from(plan.candidates.len()).expect("bounded Fixed candidates");
     let mut budget = Budget(query.options.content_bytes as usize);
     let mut counts = EvidenceCounts::default();
     let mut evidence = Vec::new();
-    for (ordinal, (owner, _indexed_owner, name, form, id, path)) in candidates.iter().enumerate() {
+    for (ordinal, candidate) in plan.candidates.iter().enumerate() {
         let selected = ordinal >= query.options.offset as usize
             && evidence.len() < query.options.limit as usize;
         counts.record(EvidenceClass::DirectEntry, selected);
         if selected {
-            evidence.push(materialize_owner(
-                fixed,
-                &reader,
-                &indexed,
-                owner,
+            evidence.push(plan.materialize(
+                candidate,
                 u32::try_from(ordinal).expect("bounded Fixed ordinal"),
                 requested,
-                (*name, *form, *id, *path),
                 &mut budget,
             )?);
         }
@@ -112,7 +103,7 @@ pub(super) fn response(
             returned,
             next_offset: (end < total).then_some(end),
             truncation: ExplanationTruncation {
-                candidates: truncated,
+                candidates: plan.truncated,
                 relations: false,
                 content: content_omitted,
             },
@@ -124,12 +115,83 @@ pub(super) fn response(
     ))
 }
 
-fn collect_indexed<'a>(
-    index: &'a SemanticIndex,
+pub(super) fn plan<'a>(
+    resolved: &'a ResolvedContent,
+    document: &'a Document,
+    fixed: &'a FixedBody,
+    requested: &str,
+) -> Result<FixedPlan<'a>, ExplanationError> {
+    mant_ir::validate_document_sources(document).map_err(|_| ExplanationError::InvalidFixed)?;
+    let reader = FixedSectionReader::new(fixed).map_err(|_| ExplanationError::InvalidFixed)?;
+    let index = SemanticIndex::build(document);
+    let indexed = collect_indexed(&index, &reader, requested);
+    let mut candidates = Vec::new();
+    let mut truncated = false;
+    for owner in &fixed.owners {
+        let Some(indexed) = indexed.get(&owner.key) else {
+            continue;
+        };
+        let (name, form, id, path) = indexed.matched;
+        if !(name || form || id || path) {
+            continue;
+        }
+        if candidates.len() == mant_protocol::MAX_EXPLANATION_CANDIDATES {
+            truncated = true;
+            break;
+        }
+        candidates.push(FixedCandidate { key: owner.key });
+    }
+    Ok(FixedPlan {
+        content: resolved,
+        document,
+        fixed,
+        reader,
+        index,
+        indexed,
+        candidates,
+        truncated,
+    })
+}
+
+impl FixedPlan<'_> {
+    pub(super) fn materialize(
+        &self,
+        candidate: &FixedCandidate,
+        ordinal: u32,
+        requested: &str,
+        budget: &mut Budget,
+    ) -> Result<ExplanationEvidence, ExplanationError> {
+        let owner = self
+            .fixed
+            .owners
+            .get((candidate.key.get() - 1) as usize)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        let matched = self
+            .indexed
+            .get(&candidate.key)
+            .ok_or(ExplanationError::InvalidFixed)?
+            .matched;
+        materialize_owner(
+            self.fixed,
+            &self.reader,
+            &self.index,
+            &self.indexed,
+            owner,
+            ordinal,
+            requested,
+            matched,
+            budget,
+        )
+    }
+}
+
+fn collect_indexed(
+    index: &SemanticIndex,
     reader: &FixedSectionReader<'_>,
-) -> BTreeMap<NonZeroU32, IndexedOwner<'a>> {
+    requested: &str,
+) -> BTreeMap<NonZeroU32, IndexedOwner> {
     let mut map = BTreeMap::new();
-    add_entries(index, index.root(), None, &[], &mut map);
+    add_entries(index, index.root(), None, &[], requested, &mut map);
     for heading in &reader.fixed().headings {
         let Some(OutlinePath::Section(coordinates)) = reader.path(heading.key) else {
             continue;
@@ -144,18 +206,20 @@ fn collect_indexed<'a>(
             index.section_at(&source),
             Some(&section),
             &[],
+            requested,
             &mut map,
         );
     }
     map
 }
 
-fn add_entries<'a>(
+fn add_entries(
     index: &SemanticIndex,
-    entries: &'a [SemanticEntry],
+    entries: &[SemanticEntry],
     section: Option<&[usize]>,
     prefix: &[usize],
-    result: &mut BTreeMap<NonZeroU32, IndexedOwner<'a>>,
+    requested: &str,
+    result: &mut BTreeMap<NonZeroU32, IndexedOwner>,
 ) {
     for (position, entry) in entries.iter().enumerate() {
         let mut indices = prefix.to_vec();
@@ -164,9 +228,15 @@ fn add_entries<'a>(
             continue;
         };
         if let Some(mant_ir::ContentReveal::FixedOwner { key }) = index.owner_at(&path) {
-            result.insert(*key, IndexedOwner { entry, path });
+            let matched = (
+                entry.names.iter().any(|value| value == requested),
+                entry.forms.iter().any(|value| value == requested),
+                entry.id.as_str() == requested,
+                path.to_string() == requested,
+            );
+            result.insert(*key, IndexedOwner { path, matched });
         }
-        add_entries(index, &entry.children, section, &indices, result);
+        add_entries(index, &entry.children, section, &indices, requested, result);
     }
 }
 
@@ -174,7 +244,8 @@ fn add_entries<'a>(
 fn materialize_owner(
     fixed: &FixedBody,
     reader: &FixedSectionReader<'_>,
-    indexed: &BTreeMap<NonZeroU32, IndexedOwner<'_>>,
+    index: &SemanticIndex,
+    indexed: &BTreeMap<NonZeroU32, IndexedOwner>,
     owner: &OwnerMark,
     ordinal: u32,
     requested: &str,
@@ -184,9 +255,12 @@ fn materialize_owner(
     let selected = indexed
         .get(&owner.key)
         .ok_or(ExplanationError::InvalidFixed)?;
+    let entry = index
+        .entry_at(&selected.path)
+        .ok_or(ExplanationError::InvalidFixed)?;
     let (name_match, form_match, id_match, path_match) = matched;
-    let outline = trail(reader, indexed, owner, selected)?;
-    let [expected] = selected.entry.forms.as_slice() else {
+    let outline = trail(reader, index, indexed, owner, selected)?;
+    let [expected] = entry.forms.as_slice() else {
         return Err(ExplanationError::InvalidFixed);
     };
     // Match facts are self-contained even when the optional owner excerpt
@@ -227,11 +301,7 @@ fn materialize_owner(
     {
         return Err(ExplanationError::InvalidFixed);
     }
-    let name = selected
-        .entry
-        .names
-        .first()
-        .ok_or(ExplanationError::InvalidFixed)?;
+    let name = entry.names.first().ok_or(ExplanationError::InvalidFixed)?;
     let start_byte = if name == expected {
         0
     } else {
@@ -257,9 +327,9 @@ fn materialize_owner(
             content: Vec::new(),
         };
         let entry = ExplanationEntry {
-            kind: selected.entry.kind,
-            case: selected.entry.case,
-            names: selected.entry.names.clone(),
+            kind: entry.kind,
+            case: entry.case,
+            names: entry.names.clone(),
             forms: Vec::new(),
             fixed_forms: vec![form],
             name_bindings: vec![ExplanationNameBinding {
@@ -416,9 +486,10 @@ fn selection(
 
 fn trail(
     reader: &FixedSectionReader<'_>,
-    indexed: &BTreeMap<NonZeroU32, IndexedOwner<'_>>,
+    index: &SemanticIndex,
+    indexed: &BTreeMap<NonZeroU32, IndexedOwner>,
     owner: &OwnerMark,
-    selected: &IndexedOwner<'_>,
+    selected: &IndexedOwner,
 ) -> Result<OutlineTrail, ExplanationError> {
     let mut ancestors = Vec::new();
     ancestors.push(OutlineReference {
@@ -453,24 +524,30 @@ fn trail(
             .get(usize::try_from(key.get() - 1).map_err(|_| ExplanationError::InvalidFixed)?)
             .ok_or(ExplanationError::InvalidFixed)?;
         if let Some(entry) = indexed.get(&key) {
+            let facts = index
+                .entry_at(&entry.path)
+                .ok_or(ExplanationError::InvalidFixed)?;
             parents.push(OutlineReference {
                 path: entry.path.to_string().into(),
-                id: entry.entry.id.clone(),
-                title: entry.entry.forms.first().cloned().unwrap_or_default(),
+                id: facts.id.clone(),
+                title: facts.forms.first().cloned().unwrap_or_default(),
             });
         }
         parent = mark.parent;
     }
     ancestors.extend(parents.into_iter().rev());
+    let facts = index
+        .entry_at(&selected.path)
+        .ok_or(ExplanationError::InvalidFixed)?;
     Ok(OutlineTrail {
         ancestors,
         node: OutlineNodeReference::DocumentEntry {
             path: selected.path.to_string().into(),
-            id: selected.entry.id.clone(),
-            title: selected.entry.forms.first().cloned().unwrap_or_default(),
-            entry_kind: selected.entry.kind,
-            case: selected.entry.case,
-            names: selected.entry.names.clone(),
+            id: facts.id.clone(),
+            title: facts.forms.first().cloned().unwrap_or_default(),
+            entry_kind: facts.kind,
+            case: facts.case,
+            names: facts.names.clone(),
         },
     })
 }
