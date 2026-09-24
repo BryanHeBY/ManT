@@ -289,6 +289,14 @@ pub struct OwnerHeadComponent {
     pub source_key: Option<SourceKey>,
 }
 
+impl OwnerHeadComponent {
+    /// An expanded macro still proves its native role when its source key is
+    /// known, even if no authored line and column survive reparsing.
+    const fn has_source_identity(&self) -> bool {
+        self.source.is_some() || self.source_key.is_some()
+    }
+}
+
 /// One native candidate owner, not a fabricated semantic entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -462,7 +470,7 @@ impl FixedBody {
                 .is_some_and(|form| crate::is_complete_hanging_option_head(&form))
     }
 
-    /// Read option spellings only from authored bold operands of an
+    /// Read option spellings only from source-identified bold operands of an
     /// alternating-font man `HEAD`. `man_term.c::pre_alternate` prints adjacent
     /// operands without inserting a space; their final glyphs alone cannot
     /// recover the boundary between a name and an italic argument.
@@ -482,7 +490,7 @@ impl FixedBody {
         let byte_ranges = self.component_byte_ranges(&owner.head, &ranges)?;
         let mut names = Vec::new();
         for (component, outer) in owner.head_components.iter().zip(byte_ranges) {
-            if component.role != OwnerHeadRole::Lexical || component.source.is_none() {
+            if component.role != OwnerHeadRole::Lexical || !component.has_source_identity() {
                 return None;
             }
             let text = self.selection_text(&component.selection)?;
@@ -501,7 +509,40 @@ impl FixedBody {
         (!names.is_empty()).then_some(names)
     }
 
-    /// Bind each source-backed `Fl` macro to its own final glyphs without
+    /// Select names from one complete native lexical head, stopping at an
+    /// underlined final-display operand. The native sidecar folds font output
+    /// and overstrike into bold/underline runs, so this is a conservative
+    /// display boundary rather than a recovered font opcode. Flow's authored
+    /// form rule likewise stops before emphasized operands.
+    #[must_use]
+    pub fn lexical_literal_names(
+        &self,
+        owner: &OwnerMark,
+    ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
+        if owner.head_role != Some(OwnerHeadRole::Lexical) || owner.head_role_prefix.is_some() {
+            return None;
+        }
+        let form = self.owner_complete_form(owner)?;
+        let mut names = Vec::new();
+        for (name, range) in crate::literal_option_names(&form) {
+            let selection = self.selection_subrange(&owner.head, range.clone())?;
+            if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
+                return None;
+            }
+            if selection.parts.iter().any(|part| {
+                self.surface
+                    .runs
+                    .get((part.run.get() - 1) as usize)
+                    .is_some_and(|run| run.label.style.underline && !run.label.style.bold)
+            }) {
+                break;
+            }
+            names.push((name, selection, range));
+        }
+        Some(names)
+    }
+
+    /// Bind each source-identified `Fl` macro to its own final glyphs without
     /// requiring those names to cover the entire `HEAD`.
     /// `mdoc_macro.c::blk_full()` keeps `Ar` operands in the same `It` `HEAD`,
     /// and `mdoc_term.c::termp_fl_pre()` prints every distinct `Fl` invocation.
@@ -524,7 +565,7 @@ impl FixedBody {
         for (component, range) in owner.head_components.iter().zip(byte_ranges) {
             if component.role != OwnerHeadRole::Option
                 || component.selection.parts.is_empty()
-                || component.source.is_none()
+                || !component.has_source_identity()
             {
                 return None;
             }
@@ -594,7 +635,7 @@ impl FixedBody {
         for component in &owner.head_components {
             if component.role != OwnerHeadRole::Option
                 || component.selection.parts.is_empty()
-                || component.source.is_none()
+                || !component.has_source_identity()
             {
                 return None;
             }
@@ -702,7 +743,7 @@ impl FixedBody {
         }
         if entry.names.len() > 1 {
             return (self.validated_lexical_component_names(owner, entry, only_form)
-                || self.validated_literal_names(owner, entry, &form, only_form)
+                || self.validated_literal_names(owner, entry, only_form)
                 || self.validated_component_names(owner, entry, only_form))
             .then_some(entry);
         }
@@ -725,7 +766,7 @@ impl FixedBody {
                 EntryNameEvidence::Lexical,
             ) => {
                 self.validated_lexical_component_names(owner, entry, only_form)
-                    || self.validated_literal_names(owner, entry, &form, only_form)
+                    || self.validated_literal_names(owner, entry, only_form)
             }
             (
                 Some(OwnerHeadRole::Option | OwnerHeadRole::Lexical),
@@ -851,7 +892,7 @@ impl FixedBody {
             return None;
         }
         let component = owner.head_components.first()?;
-        if component.role != OwnerHeadRole::Literal || component.source.is_none() {
+        if component.role != OwnerHeadRole::Literal || !component.has_source_identity() {
             return None;
         }
         let name = self.selection_text(&component.selection)?;
@@ -892,20 +933,19 @@ impl FixedBody {
         &self,
         owner: &OwnerMark,
         entry: &EntryFacts<TextSelection>,
-        form: &str,
         only_form: &TextSelection,
     ) -> bool {
         if owner.head_role != Some(OwnerHeadRole::Lexical) || owner.head_role_prefix.is_some() {
             return false;
         }
-        let mut found = Vec::new();
-        for (name, range) in crate::literal_option_names(form) {
-            let Some(selection) = self.selection_subrange(&owner.head, range) else {
-                return false;
-            };
-            found.push((name, selection));
-        }
-        let grouped = group_name_occurrences(found);
+        let Some(found) = self.lexical_literal_names(owner) else {
+            return false;
+        };
+        let grouped = group_name_occurrences(
+            found
+                .into_iter()
+                .map(|(name, selection, _)| (name, selection)),
+        );
         entry.id == owner.id
             && entry.kind
                 == EntryKind::Parameter {

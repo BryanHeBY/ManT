@@ -107,6 +107,132 @@ fn macro_diagnostic_retains_only_its_source_identity() {
 }
 
 #[test]
+fn expanded_mdoc_head_components_keep_all_native_option_names() {
+    // Each exact input ran pinned CVS -Tutf8 first. read.c::mparse_buf_r
+    // reparses macro and string expansions without authored coordinates;
+    // mdoc_term.c::termp_fl_pre still executes each Fl and emits its dash.
+    for (label, input) in [
+        (
+            "macro-arguments",
+            b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.de Opt\n.It Fl a , Fl b Ar file\nOption description.\n..\n.Bl -tag -width xxx\n.Opt\n.El\n".as_slice(),
+        ),
+        (
+            "macro-no-argument",
+            b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.de Opt\n.It Fl a , Fl b\nOption description.\n..\n.Bl -tag -width xxx\n.Opt\n.El\n".as_slice(),
+        ),
+        (
+            "string-expansion",
+            b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.ds X Fl a , Fl b Ar file\n.Bl -tag -width xxx\n.It \\*[X]\nOption description.\n.El\n".as_slice(),
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc)
+            .unwrap();
+        assert!(validate_document(&document).is_empty(), "{label}");
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        let owner = &fixed.owners[0];
+        assert_eq!(owner.entry.as_ref().unwrap().names, ["-a", "-b"], "{label}");
+        assert!(owner.head_components.iter().all(|component| {
+            component.source.is_some() || component.source_key == Some(SourceKey::FIRST)
+        }));
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in ["-a", "-b"] {
+            let response = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(response.counts.direct_entry.total, 1, "{label}: {name}");
+            response.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn expanded_man_alternating_font_components_keep_name_boundaries() {
+    // Both exact inputs ran pinned CVS -Tutf8 first. read.c::mparse_buf_r
+    // removes authored coordinates from expansion nodes, while man_term.c::
+    // pre_alternate preserves which operand received bold font.
+    for (label, input, names) in [
+        (
+            "br-aliases",
+            b".TH T 1\n.SH OPTIONS\n.de Opt\n.TP\n.BR -a , --all\nShared description.\n..\n.Opt\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "bi-argument",
+            b".TH T 1\n.SH OPTIONS\n.de Opt\n.TP\n.BI --output= FILE\nDescription.\n..\n.Opt\n"
+                .as_slice(),
+            vec!["--output"],
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        assert!(validate_document(&document).is_empty(), "{label}");
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        let owner = &fixed.owners[0];
+        assert_eq!(owner.entry.as_ref().unwrap().names, names, "{label}");
+        assert!(owner.head_components.iter().all(|component| {
+            component.source.is_none() && component.source_key == Some(SourceKey::FIRST)
+        }));
+    }
+}
+
+#[test]
+fn rejected_hanging_candidates_remain_ordinary_mentions() {
+    // Each exact input ran pinned CVS -Tutf8 first. man_term.c::pre_PP and
+    // pre_RS display the original paragraph independently of our optional
+    // PP/RS declaration evidence; a rejected head is still readable ink.
+    for (label, input, needle) in [
+        (
+            "prose",
+            b".TH T 1\n.SH DESCRIPTION\n.PP\nCompare --foo with --bar.\n.RS 4\nAdditional details.\n.RE\n".as_slice(),
+            "--foo",
+        ),
+        (
+            "zero-indent",
+            b".TH T 1\n.SH DESCRIPTION\n.PP\nCompare --foo with --bar.\n.RS 0\nAdditional details.\n.RE\n".as_slice(),
+            "--foo",
+        ),
+        (
+            "intervening-prose",
+            b".TH T 1\n.SH DESCRIPTION\n.PP\n.B --git-dir\nintervening text\n.RS 4\nAdditional details.\n.RE\n".as_slice(),
+            "--git-dir",
+        ),
+    ] {
+        let resolved = native_query(input, 78);
+        let document = resolved.document.as_ref().unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        assert!(fixed.owners.iter().any(|owner| owner.hanging_candidate && owner.entry.is_none()), "{label}");
+        assert!(visible_total(&resolved, needle) > 0, "{label}");
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: needle.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, 0, "{label}");
+        assert!(result.counts.context_mention.total > 0, "{label}");
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
 fn native_man_declarations_keep_legacy_option_names() {
     for (label, input) in [
         ("width", b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--width=NUMBER\"\nWidth description.\n".as_slice()),
@@ -2695,6 +2821,170 @@ fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
     assert_eq!(fixed.owners[0].head_role_prefix.as_deref(), Some("-x."));
     assert!(fixed.owners[0].entry.is_none());
     assert!(validate_document(&document).is_empty());
+}
+
+#[test]
+fn man_ip_equivalent_bold_aliases_use_one_checked_display_grammar() {
+    // Each exact input ran pinned CVS -Tutf8 first. man_term.c::pre_IP prints
+    // the first HEAD operand and term.c::term_word changes font without a
+    // glyph. The C bold role is a candidate; visible spelling and exact
+    // sub-selections decide names, irrespective of equivalent font syntax.
+    for (label, input, names) in [
+        (
+            "short-font",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a, --all\\fR\" 4\nShared description.\n".as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "bracket-font",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\f[B]-a, --all\\f[R]\" 4\nShared description.\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "split-font",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fR, \\fB--all\\fR\" 4\nShared description.\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "value-and-alias",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a, --all=FILE\\fR\" 4\nShared description.\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "constant-width-bold",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\f[CB]-a, --all\\f[CR]\" 4\nBody.\n".as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "previous-font",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fP, \\fB--all\\fP\" 4\nShared description.\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "styled-or",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fR or \\fB--all\\fR\" 4\nShared description.\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "plain-or",
+            b".TH T 1\n.SH OPTIONS\n.IP \"-a or --all\" 4\nShared description.\n".as_slice(),
+            vec!["-a", "--all"],
+        ),
+        (
+            "bold-space-pair",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fR \\fB--all\\fR\" 4\nBody.\n".as_slice(),
+            vec!["-a", "--all"],
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        assert!(validate_document(&document).is_empty(), "{label}");
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        let entry = fixed.owners[0].entry.as_ref().expect("option entry");
+        assert_eq!(entry.names, names, "{label}");
+        assert!(entry.alias_groups.is_empty(), "{label}");
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in names {
+            let response = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(response.counts.direct_entry.total, 1, "{label}: {name}");
+            response.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn man_ip_styled_argument_and_list_labels_do_not_become_option_aliases() {
+    // Each exact input ran pinned CVS -Tutf8 first. The same final-display
+    // grammar must not infer names across a glued or underlined operand.
+    for (label, input) in [
+        (
+            "glued",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fRfoo\" 4\nBody.\n".as_slice(),
+        ),
+        (
+            "italic",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fI-a, --all\\fR\" 4\nBody.\n".as_slice(),
+        ),
+        (
+            "bullet",
+            b".TH T 1\n.SH OPTIONS\n.IP \\(bu 4\nBody.\n".as_slice(),
+        ),
+        (
+            "constant-width-glued",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\f[CB]-a\\f[CR]foo\" 4\nBody.\n".as_slice(),
+        ),
+        (
+            "previous-font-glued",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fPfoo\" 4\nBody.\n".as_slice(),
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        assert!(fixed.owners[0].entry.is_none(), "{label}");
+    }
+
+    for (label, input) in [
+        (
+            "italic-second-or",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fR or \\fI--all\\fR\" 4\nBody.\n".as_slice(),
+        ),
+        (
+            "italic-second-argument",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fR \\fI--all\\fR\" 4\nBody.\n".as_slice(),
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        assert_eq!(
+            fixed.owners[0].entry.as_ref().unwrap().names,
+            ["-a"],
+            "{label}"
+        );
+        assert!(validate_document(&document).is_empty(), "{label}");
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for (name, expected) in [("-a", 1), ("--all", 0)] {
+            let response = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                response.counts.direct_entry.total, expected,
+                "{label}: {name}"
+            );
+            response.validate_references().unwrap();
+        }
+    }
 }
 
 #[test]

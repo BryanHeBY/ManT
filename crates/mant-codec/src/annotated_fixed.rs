@@ -365,15 +365,10 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
             // form may also contain arguments, so bind only the shared
             // grammar's exact name ranges to final-display sub-selections.
             if owner.head_role == Some(OwnerHeadRole::Lexical) && owner.head_role_prefix.is_none() {
-                let found = mant_ir::literal_option_names(&form);
-                let mut occurrences = Vec::with_capacity(found.len());
-                for (name, range) in found {
-                    let occurrence = fixed.selection_subrange(&owner.head, range)?;
-                    if fixed.selection_text(&occurrence).as_deref() != Some(name.as_str()) {
-                        return None;
-                    }
-                    occurrences.push((name, occurrence));
-                }
+                let occurrences = fixed
+                    .lexical_literal_names(owner)?
+                    .into_iter()
+                    .map(|(name, selection, _)| (name, selection));
                 let (names, name_bindings) =
                     group_bindings(occurrences, EntryNameEvidence::Lexical);
                 if !names.is_empty() {

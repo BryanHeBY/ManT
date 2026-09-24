@@ -31,7 +31,7 @@ pub(super) fn collect(
     let mut scanned = 0usize;
     let mut truncated = false;
     for (ordinal, unit) in units.iter().enumerate() {
-        let Some((owner, section)) = ownership(&ancestry, unit.pieces) else {
+        let Some((owner, section)) = ownership(fixed, &ancestry, unit.pieces) else {
             continue;
         };
         let materialized = match unit.materialize(fixed) {
@@ -104,6 +104,7 @@ fn matched_direct_owner(indexed: &BTreeMap<NonZeroU32, IndexedOwner>, key: NonZe
 /// Accept only text that a native body/region owns. A heading/term or drawn
 /// rule is not prose, even if its final glyphs happen to spell the query.
 fn ownership(
+    fixed: &FixedBody,
     ancestry: &OwnerAncestry,
     pieces: &[crate::search::fixed_visible::units::Piece],
 ) -> Option<(Option<NonZeroU32>, Option<NonZeroU32>)> {
@@ -125,7 +126,17 @@ fn ownership(
                         | RegionKind::Equation
                         | RegionKind::HangingContinuation
                 )
-        );
+        ) || (piece.kind == SelectionKind::OwnerHead
+            && piece.selection_owner.is_some_and(|key| {
+                fixed
+                    .owners
+                    .get((key.get() - 1) as usize)
+                    .is_some_and(|owner| {
+                        // A PP/RS candidate that produced no entry is still its
+                        // original paragraph ink. A real definition head is not.
+                        owner.hanging_candidate && owner.entry.is_none()
+                    })
+            }));
         if !body_kind || piece.display_role != DisplayRole::Body || piece.section != section {
             return None;
         }

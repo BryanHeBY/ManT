@@ -413,7 +413,7 @@ impl FixedBody {
                 }
                 previous_component = Some(component);
             }
-            // The source-backed component must occupy a contiguous HEAD
+            // The source-identified component must occupy a contiguous HEAD
             // interval with the same internal joins, not merely reuse some
             // later glyph parts or replace a generated separator.
             if super::component_part_ranges(&owner.head, &owner.head_components).is_none() {

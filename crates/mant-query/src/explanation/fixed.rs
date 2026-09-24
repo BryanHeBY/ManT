@@ -1003,15 +1003,15 @@ fn fixed_name_positions(
                     parameter_kind: mant_ir::ParameterKind::Option
                 }
             ) {
-            Some(fixed.lexical_component_names(owner).map_or_else(
-                || mant_ir::literal_option_names(form),
-                |components| {
+            fixed
+                .lexical_component_names(owner)
+                .or_else(|| fixed.lexical_literal_names(owner))
+                .map(|components| {
                     components
                         .into_iter()
                         .map(|(name, _, range)| (name, range))
-                        .collect()
-                },
-            ))
+                        .collect::<Vec<_>>()
+                })
         } else if owner.head_role == Some(mant_ir::OwnerHeadRole::Option)
             && owner.head_components.len() > 1
         {

@@ -1355,7 +1355,7 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
 	const char *cursor, *next, *sequence;
 	char candidate[256];
 	size_t source_size, length = 0, index;
-	int size;
+	int size, declaration_separator = 0;
 	enum mandoc_esc escape;
 	uint8_t *copy;
 
@@ -1368,17 +1368,23 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
 	if (!charge_work(collector, source_size))
 		return 0;
 	cursor = first->string + 1;
-	if (mandoc_escape(&cursor, NULL, NULL) != ESCAPE_FONTBOLD)
+	escape = mandoc_escape(&cursor, NULL, NULL);
+	if (escape != ESCAPE_FONTBOLD && escape != ESCAPE_FONTCB)
 		return 1;
 	while (*cursor != '\0') {
 		if (*cursor == '\\') {
 			next = cursor + 1;
 			escape = mandoc_escape(&next, &sequence, &size);
-			if (escape == ESCAPE_FONTROMAN) {
+			if (escape == ESCAPE_FONTROMAN ||
+			    escape == ESCAPE_FONTCR ||
+			    escape == ESCAPE_FONTPREV) {
 				cursor = next;
 				if (*cursor != '\0' && *cursor != '=' &&
-				    !isspace((unsigned char)*cursor))
-					return 1;
+				    !isspace((unsigned char)*cursor)) {
+					if (strchr(",|/", *cursor) == NULL)
+						return 1;
+					declaration_separator = 1;
+				}
 				break;
 			}
 			if (escape != ESCAPE_SPECIAL || size != 1 ||
@@ -1386,6 +1392,9 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
 				return 1;
 			cursor = next;
 			candidate[length] = '-';
+		} else if (strchr(",|/", *cursor) != NULL) {
+			declaration_separator = 1;
+			break;
 		} else if (*cursor == '=' ||
 		    isspace((unsigned char)*cursor)) {
 			break;
@@ -1409,6 +1418,15 @@ copy_ip_option_prefix(struct mant_annotated_collector *collector,
 			break;
 	if (index == length)
 		return 1;
+	/* A separator or later dash can follow a bold option, an argument, or
+	 * a font transition. Admit the native bold HEAD as a candidate, but do
+	 * not freeze its first spelling as the only name. The checked
+	 * final-display grammar decides which complete names survive. */
+	if (declaration_separator || strpbrk(cursor, ",|/") != NULL ||
+	    strchr(cursor, '-') != NULL) {
+		*recognized = 1;
+		return 1;
+	}
 	if (!mant_structured_charge(collector->session,
 	    &collector->session->content_bytes, length,
 	    collector->session->limits->max_content_bytes, 10,
@@ -1433,16 +1451,21 @@ ip_head_declaration_candidate(struct mant_annotated_collector *collector,
     const struct roff_node *owner, int *recognized)
 {
 	const struct roff_node *first;
+	const char *cursor;
+	enum mandoc_esc escape;
 
 	*recognized = 0;
 	first = owner->head == NULL ? NULL : owner->head->child;
 	if (first == NULL || first->type != ROFFT_TEXT || first->string == NULL)
 		return 1;
-	/* A bold escape begins the stricter IP prefix grammar above. If that
-	 * parser rejected the authored font transition or suffix, do not re-enter
-	 * through the generic plain-label candidate path. */
-	if (strncmp(first->string, "\\fB", 3) == 0)
-		return 1;
+	/* All native bold font spellings take the same prefix-candidate path.
+	 * A rejected glued suffix must not re-enter as plain text. */
+	if (first->string[0] == '\\') {
+		cursor = first->string + 1;
+		escape = mandoc_escape(&cursor, NULL, NULL);
+		if (escape == ESCAPE_FONTBOLD || escape == ESCAPE_FONTCB)
+			return 1;
+	}
 	return man_text_declaration_candidate(collector, first->string, 1,
 	    recognized);
 }
