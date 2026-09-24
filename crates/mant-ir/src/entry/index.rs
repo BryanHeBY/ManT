@@ -1,18 +1,18 @@
 //! Rebuild an operation-local semantic index from finalized identities.
 use super::{
-    model::{DocumentReference, EntrySummary, SemanticDocumentTarget, SemanticEntry, ValueDomain},
+    model::{EntrySummary, SemanticEntry},
     walk::{owner_child_step, visit_child_entry_locations},
 };
 use crate::{
-    Block, ContentContext, ContentReadError, Document, DocumentBodyRef, EntryOwner, FixedBody,
-    Inline, InlineView, NodeId,
+    Block, ContentContext, ContentReadError, Document, DocumentBodyRef, EntryOwner, EntryOwnerView,
+    FixedBody, NodeId,
 };
 use std::{collections::BTreeMap, num::NonZeroU32};
 
 /// Rebuildable semantic index for the document root and every section.
 ///
-/// The index is a derived navigation sidecar. Both item shapes and their facts
-/// remain in the [`Document`] content tree, so callers may rebuild this value
+/// The index is a derived navigation sidecar. Flow items or Fixed owner marks
+/// and their facts remain in the [`Document`] body, so callers may rebuild it
 /// after a trusted document transformation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SemanticIndex {
@@ -106,11 +106,9 @@ impl SemanticIndex {
             let parent = owner
                 .parent
                 .and_then(|key| nearest_entry[key.get() as usize]);
-            let Some(facts) = fixed.validated_entry(owner) else {
-                nearest_entry[owner.key.get() as usize] = parent;
-                continue;
-            };
-            let Some(entry) = fixed_entry(fixed, facts) else {
+            let Some(entry) = EntryOwnerView::fixed(fixed, owner)
+                .and_then(|view| view.semantic_entry().ok().flatten())
+            else {
                 nearest_entry[owner.key.get() as usize] = parent;
                 continue;
             };
@@ -231,29 +229,6 @@ struct FixedCandidate {
     child_count: usize,
     entry_indices: Vec<usize>,
     entry: Option<SemanticEntry>,
-}
-
-fn fixed_entry(
-    fixed: &FixedBody,
-    facts: &crate::EntryFacts<crate::TextSelection>,
-) -> Option<SemanticEntry> {
-    let forms = facts
-        .forms
-        .iter()
-        .map(|form| fixed.selection_text(form))
-        .collect::<Option<Vec<_>>>()?;
-    Some(SemanticEntry {
-        id: facts.id.clone(),
-        kind: facts.kind,
-        names: facts.names.clone(),
-        alias_groups: facts.alias_groups.clone(),
-        alias_of: facts.alias_of.clone(),
-        case: facts.case,
-        forms,
-        document_targets: Vec::new(),
-        children: Vec::new(),
-        value_domain: facts.value_domain.clone(),
-    })
 }
 
 fn has_alias_of(entry: &SemanticEntry) -> bool {
@@ -384,85 +359,6 @@ impl SemanticEntry {
         item: EntryOwner<'store>,
         content: ContentContext<'store>,
     ) -> Result<Option<Self>, ContentReadError> {
-        let Some(identity) = item.facts() else {
-            return Ok(None);
-        };
-        let forms = content.entry_forms(item)?.unwrap_or_default();
-        let value_domain = identity.value_domain.clone().or_else(|| {
-            item.has_value_choices()
-                .then_some(ValueDomain::Choices { exhaustive: false })
-        });
-        Ok(Some(SemanticEntry {
-            id: identity.id.clone(),
-            kind: identity.kind,
-            names: content
-                .entry_validated_names(item)?
-                .unwrap_or_default()
-                .to_vec(),
-            // An absent relationship has nothing to project. Native manuals usually
-            // have no authored groups: do not revalidate all names a second time.
-            alias_groups: if identity.alias_groups.is_empty() {
-                Vec::new()
-            } else {
-                content
-                    .entry_validated_alias_groups(item)?
-                    .unwrap_or_default()
-                    .to_vec()
-            },
-            alias_of: identity.alias_of.clone(),
-            case: identity.case,
-            forms: forms
-                .iter()
-                .map(|form| content.plain_text(form))
-                .collect::<Result<Vec<_>, _>>()?,
-            document_targets: document_targets(content, &forms)?,
-            children: Vec::new(),
-            value_domain,
-        }))
+        EntryOwnerView::flow(item, content).semantic_entry()
     }
-}
-
-fn document_targets(
-    content: ContentContext<'_>,
-    terms: &crate::EntryForms<'_>,
-) -> Result<Vec<SemanticDocumentTarget>, ContentReadError> {
-    let mut targets = Vec::new();
-    for term in terms.iter() {
-        collect_document_targets(content, term, &mut targets)?;
-    }
-    Ok(targets)
-}
-
-fn collect_document_targets(
-    content: ContentContext<'_>,
-    inlines: &[Inline],
-    output: &mut Vec<SemanticDocumentTarget>,
-) -> Result<(), ContentReadError> {
-    for inline in inlines {
-        match content.inline(inline)? {
-            InlineView::Link(link)
-                if DocumentReference::from_link_target(link.target()).is_some() =>
-            {
-                let candidate = SemanticDocumentTarget {
-                    label: content.plain_text(link.children())?,
-                    reference: DocumentReference::from_link_target(link.target())
-                        .expect("the match guard accepts a document reference"),
-                };
-                if !output.contains(&candidate) {
-                    output.push(candidate);
-                }
-            }
-            InlineView::Strong(children) | InlineView::Emphasis(children) => {
-                collect_document_targets(content, children, output)?;
-            }
-            InlineView::Link(link) => {
-                collect_document_targets(content, link.children(), output)?;
-            }
-            InlineView::Text(_)
-            | InlineView::Code(_)
-            | InlineView::Anchor(_)
-            | InlineView::LineBreak => {}
-        }
-    }
-    Ok(())
 }

@@ -6,6 +6,7 @@ mod location;
 mod model;
 mod relations;
 mod syntax;
+mod view;
 mod walk;
 #[cfg(test)]
 mod wire;
@@ -24,6 +25,7 @@ pub use syntax::{
     contains_additional_environment_assignment, environment_variable_alias,
     environment_variable_body, is_option_name_body, native_option_token, option_prefix,
 };
+pub use view::EntryOwnerView;
 pub use walk::visit_child_entries;
 
 #[cfg(test)]

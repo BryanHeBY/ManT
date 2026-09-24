@@ -11,6 +11,41 @@ fn empty_selection() -> TextSelection {
     }
 }
 
+#[test]
+fn borrowed_entry_view_requires_the_mark_in_its_own_fixed_body() {
+    let mut body = sample_body();
+    let head = TextSelection {
+        parts: vec![OutputSlice {
+            run: key(1),
+            start_byte: 0,
+            end_byte: 1,
+        }],
+        joins: Vec::new(),
+    };
+    let owner = &mut body.owners[0];
+    owner.head = head.clone();
+    owner.entry = Some(crate::EntryFacts {
+        name_bindings: vec![crate::EntryNameBinding {
+            name: 0,
+            occurrences: vec![head.clone()],
+            evidence: crate::EntryNameEvidence::Lexical,
+        }],
+        alias_groups: Vec::new(),
+        alias_of: None,
+        forms: vec![head],
+        id: owner.id.clone(),
+        kind: crate::EntryKind::Term,
+        case: crate::NameCase::Sensitive,
+        names: vec!["a".to_owned()],
+        value_domain: None,
+    });
+    let view = crate::EntryOwnerView::fixed(&body, &body.owners[0])
+        .expect("a mark within this body has a checked head");
+    assert_eq!(view.semantic_entry().unwrap().unwrap().forms, ["a"]);
+    let detached = body.owners[0].clone();
+    assert!(crate::EntryOwnerView::fixed(&body, &detached).is_none());
+}
+
 // One complete fixture keeps cross-mark relation tests on the same surface.
 #[allow(clippy::too_many_lines)]
 fn sample_body() -> FixedBody {
