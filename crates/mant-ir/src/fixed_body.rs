@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     EntryFacts, EntryKind, EntryNameEvidence, FragmentAlias, LinkTarget, NameCase, NodeId,
-    SourceKey, SourceSpan,
+    ParameterKind, SourceKey, SourceSpan,
 };
 
 // Match the existing native fixed-display geometry ceiling. A small UTF-8
@@ -249,6 +249,19 @@ pub enum OwnerRole {
     Other,
 }
 
+/// First significant native macro in a definition head, captured while the
+/// upstream AST is alive. This is authored role evidence, not a semantic kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum OwnerHeadRole {
+    /// An mdoc `Fl` option head.
+    Option,
+    /// An mdoc `Ev` environment-variable head.
+    Environment,
+    /// An mdoc `Ic` or `Cm` literal command head.
+    Literal,
+}
+
 /// One native candidate owner, not a fabricated semantic entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -263,6 +276,9 @@ pub struct OwnerMark {
     pub section: Option<NonZeroU32>,
     /// Native owner kind before classification.
     pub role: OwnerRole,
+    /// Native first-head role, if one survived the head AST boundary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head_role: Option<OwnerHeadRole>,
     /// Checked semantic facts referring only to this owner's final display
     /// selections. The display surface remains the sole text owner.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -313,13 +329,28 @@ impl FixedBody {
         let [binding] = entry.name_bindings.as_slice() else {
             return None;
         };
+        let role_matches = matches!(
+            (owner.head_role, entry.kind, binding.evidence),
+            (_, EntryKind::Term, EntryNameEvidence::Lexical)
+                | (
+                    Some(OwnerHeadRole::Option),
+                    EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    EntryNameEvidence::NativeMarkup,
+                )
+                | (
+                    Some(OwnerHeadRole::Environment),
+                    EntryKind::EnvironmentVariable,
+                    EntryNameEvidence::NativeMarkup,
+                )
+        );
         (entry.id == owner.id
-            && entry.kind == EntryKind::Term
+            && role_matches
             && entry.case == NameCase::Sensitive
             && only_form == &owner.head
             && only_name == &form
             && binding.name == 0
-            && binding.evidence == EntryNameEvidence::Lexical
             && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
             && entry.alias_groups.is_empty()
             && entry.alias_of.is_none()

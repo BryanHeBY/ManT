@@ -290,6 +290,9 @@ impl FixedBody {
             }
             earlier(owner.parent, owner.key)?;
             reference(owner.section, self.headings.len())?;
+            if owner.head_role.is_some() && owner.role != super::OwnerRole::Definition {
+                return Err(FixedBodyError("non-definition owner has a head role"));
+            }
             validate_selection(&owner.head)?;
             validate_selection(&owner.direct_body)?;
             if owner.entry.is_some() && self.validated_entry(owner).is_none() {

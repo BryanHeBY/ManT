@@ -279,10 +279,14 @@ pub(super) fn transfer(
             || mark.source as usize > sources.len()
             || mark.reserved != 0
             || mark.point_reserved != 0
-            || mark.flags & !0b1_1101 != 0
+            || mark.flags & !0b1111_1101 != 0
             || (mark.flags & 4 != 0 && mark.kind != 4)
             || (mark.flags & 8 != 0 && mark.kind != 1)
             || (mark.flags & 16 != 0 && mark.kind != 2)
+            || (mark.flags & 0b1110_0000 != 0
+                && (mark.kind != 2
+                    || mark.flags & 16 == 0
+                    || (mark.flags & 0b1110_0000).count_ones() != 1))
         {
             return Err(invalid_result());
         }

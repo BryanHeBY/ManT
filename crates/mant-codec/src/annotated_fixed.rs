@@ -16,9 +16,9 @@ use mant_ir::{
     DisplayPoint, DisplayRole, DisplayRow, DisplayRun, DisplayStyle, DisplaySurface, Document,
     DocumentBody, DocumentMeta, EntryFacts, EntryKind, EntryNameBinding, EntryNameEvidence,
     FixedBody, FragmentAlias, HeadingMark, LinkMark, LinkTarget, NameCase, NodeId, OutputSlice,
-    OwnerMark, OwnerRole, ParserInfo, RegionKind, RegionMark, SourceCoordinates, SourceFormat,
-    SourceIdentity, SourceKey, SourceRecord, SourceSpan, TextJoin, TextSelection,
-    validate_document, validate_document_sources,
+    OwnerHeadRole, OwnerMark, OwnerRole, ParameterKind, ParserInfo, RegionKind, RegionMark,
+    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, SourceSpan, TextJoin,
+    TextSelection, validate_document, validate_document_sources,
 };
 
 /// A native render failure or a relation that cannot be represented honestly
@@ -182,17 +182,18 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         .iter()
         .map(|owner| {
             let form = fixed.owner_complete_form(owner)?;
+            let (kind, evidence) = exact_native_head_kind(owner, &form);
             Some(EntryFacts {
                 name_bindings: vec![EntryNameBinding {
                     name: 0,
                     occurrences: vec![owner.head.clone()],
-                    evidence: EntryNameEvidence::Lexical,
+                    evidence,
                 }],
                 alias_groups: Vec::new(),
                 alias_of: None,
                 forms: vec![owner.head.clone()],
                 id: owner.id.clone(),
-                kind: EntryKind::Term,
+                kind,
                 case: NameCase::Sensitive,
                 names: vec![form],
                 value_domain: None,
@@ -231,6 +232,35 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         )));
     }
     Ok(document)
+}
+
+/// Promote only a complete visible native head whose entire spelling passes
+/// the same finite grammar used by Flow discovery. Partial names need a
+/// checked offset-to-selection mapping before they can be promoted.
+fn exact_native_head_kind(owner: &OwnerMark, form: &str) -> (EntryKind, EntryNameEvidence) {
+    if form.trim() == form {
+        match owner.head_role {
+            Some(OwnerHeadRole::Option) if crate::definitions::native_option_token(form) => {
+                return (
+                    EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    EntryNameEvidence::NativeMarkup,
+                );
+            }
+            Some(OwnerHeadRole::Environment)
+                if crate::definitions::environment_variable_alias(form).as_deref()
+                    == Some(form) =>
+            {
+                return (
+                    EntryKind::EnvironmentVariable,
+                    EntryNameEvidence::NativeMarkup,
+                );
+            }
+            _ => {}
+        }
+    }
+    (EntryKind::Term, EntryNameEvidence::Lexical)
 }
 
 fn key(value: u32, error: &'static str) -> Result<NonZeroU32> {

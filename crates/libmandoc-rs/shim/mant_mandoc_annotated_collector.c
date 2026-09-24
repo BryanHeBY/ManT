@@ -905,6 +905,96 @@ observe_html_phrase_boundary(struct mant_annotated_collector *collector,
 	return 1;
 }
 
+/* term.c::term_word() emits no glyph for IGNORE, NOSPACE and font escapes.
+ * All other escapes remain significant here, including skipchar/overstrike
+ * state and potentially visible special or Unicode characters. */
+static int
+head_text_has_glyph(const char *text)
+{
+	enum mandoc_esc esc;
+	const unsigned char *plain;
+
+	while (*text != '\0') {
+		if (*text != '\\') {
+			plain = (const unsigned char *)text;
+			if (!isspace(*plain))
+				return 1;
+			text++;
+			continue;
+		}
+		text++;
+		esc = mandoc_escape(&text, NULL, NULL);
+		switch (esc) {
+		case ESCAPE_IGNORE:
+		case ESCAPE_NOSPACE:
+		case ESCAPE_FONT:
+		case ESCAPE_FONTROMAN:
+		case ESCAPE_FONTITALIC:
+		case ESCAPE_FONTBOLD:
+		case ESCAPE_FONTBI:
+		case ESCAPE_FONTCR:
+		case ESCAPE_FONTCB:
+		case ESCAPE_FONTCI:
+		case ESCAPE_FONTPREV:
+			break;
+		default:
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* mdoc_macro.c::blk_full() closes the It HEAD before terminal traversal.
+ * Freeze the first significant authored head macro while that native tree
+ * remains alive; final bold glyphs alone cannot distinguish Fl/Ev/Ic/Cm
+ * from unrelated typography.  This is evidence, not classification. */
+static uint32_t
+owner_head_role(const struct roff_node *owner)
+{
+	const struct roff_node *head, *node;
+	int skip_children;
+
+	head = owner->head;
+	if (head == NULL)
+		return 0;
+	for (node = head->child; node != NULL; ) {
+		skip_children = 0;
+		switch (node->tok) {
+		case MDOC_Fl:
+			return MANT_ANNOTATED_MARK_HEAD_OPTION;
+		case MDOC_Ev:
+			return MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT;
+		case MDOC_Ic:
+		case MDOC_Cm:
+			return MANT_ANNOTATED_MARK_HEAD_LITERAL;
+		case MDOC_Ar:
+		case MDOC_Em:
+		case MDOC_Sy:
+			return 0;
+		case MDOC_Tg:
+		case MDOC_Ns:
+		case MDOC_Sm:
+			skip_children = 1;
+			break;
+		default:
+			break;
+		}
+		if (node->type == ROFFT_TEXT && node->string != NULL &&
+		    head_text_has_glyph(node->string))
+			return 0;
+		if (!skip_children && node->child != NULL) {
+			node = node->child;
+			continue;
+		}
+		while (node != head && node->next == NULL)
+			node = node->parent;
+		if (node == head)
+			break;
+		node = node->next;
+	}
+	return 0;
+}
+
 static int
 push_node(struct mant_annotated_collector *collector,
     const struct roff_node *node)
@@ -1016,7 +1106,8 @@ push_node(struct mant_annotated_collector *collector,
 			return 0;
 		if (definition)
 			collector->marks[key - 1].flags |=
-			    MANT_ANNOTATED_MARK_DEFINITION;
+			    MANT_ANNOTATED_MARK_DEFINITION |
+			    owner_head_role(node);
 		collector->active_owner = key;
 		frame->owner_mark = key;
 	} else if (node->type == ROFFT_BLOCK &&

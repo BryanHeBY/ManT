@@ -2,7 +2,10 @@ use libmandoc_rs::annotated::{
     AnnotatedDocument, AnnotatedMark, AnnotatedMetadata, AnnotatedRenderer, AnnotationCoverage,
 };
 use libmandoc_rs::{InputFormat, SourceBundle};
-use mant_ir::{DisplayRole, DocumentBody, DocumentIndex, LinkTarget, OwnerRole, validate_document};
+use mant_ir::{
+    DisplayRole, DocumentBody, DocumentIndex, EntryKind, LinkTarget, OwnerHeadRole, OwnerRole,
+    ParameterKind, validate_document,
+};
 use mant_protocol::{
     EvidenceClass, ExplanationOptions, ExplanationQuery, SearchCase, SearchQuery, SearchScope,
     SearchSyntax,
@@ -851,6 +854,14 @@ fn malformed_public_mark_role_flags_are_rejected_before_projection() {
     owner.kind = 2;
     owner.flags = 8; // A subsection bit cannot turn an owner into a heading.
     assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
+    let mut owner = malformed_anchor(1, 0);
+    owner.kind = 2;
+    owner.flags = 32; // Head evidence requires a definition owner.
+    assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
+    let mut owner = malformed_anchor(1, 0);
+    owner.kind = 2;
+    owner.flags = 16 | 32 | 64; // One head cannot have two first roles.
+    assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
 }
 
 #[test]
@@ -933,6 +944,102 @@ fn native_owner_role_distinguishes_definition_from_bullet_item() {
     let index = DocumentIndex::build(&document);
     assert!(index.get(fixed.owners[0].id.as_str()).is_some());
     assert!(index.get(fixed.owners[1].id.as_str()).is_none());
+}
+
+#[test]
+fn native_head_roles_promote_only_complete_visible_names() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. mdoc_macro.c::
+    // blk_full constructs each It HEAD; mdoc_term.c::termp_fl_pre adds the
+    // visible dash. The collector freezes Fl/Ev/Ic before the AST dies.
+    let input = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a\nbody\n.It Ev DEMO_HOME\nenv body\n.It Ic run\ncommand body\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!("annotated output must use Fixed");
+    };
+    assert_eq!(fixed.owners.len(), 3);
+    assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Option));
+    assert_eq!(fixed.owners[1].head_role, Some(OwnerHeadRole::Environment));
+    assert_eq!(fixed.owners[2].head_role, Some(OwnerHeadRole::Literal));
+    assert_eq!(
+        fixed.owners[0].entry.as_ref().unwrap().kind,
+        EntryKind::Parameter {
+            parameter_kind: ParameterKind::Option
+        }
+    );
+    assert_eq!(
+        fixed.owners[1].entry.as_ref().unwrap().kind,
+        EntryKind::EnvironmentVariable
+    );
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["-a"]);
+    assert_eq!(fixed.owners[1].entry.as_ref().unwrap().names, ["DEMO_HOME"]);
+    assert_eq!(
+        fixed.owners[2].entry.as_ref().unwrap().kind,
+        EntryKind::Term
+    );
+    assert!(validate_document(&document).is_empty());
+
+    // The exact second input also ran pinned CVS. A styled argument and an
+    // assignment preserve native role evidence, but this interim whole-head
+    // binder must not claim their partial names as entire visible forms.
+    let partial = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a Ar VALUE\nbody\n.It Ev DEMO_HOME=foo\nenv body\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(partial), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!("annotated output must use Fixed");
+    };
+    assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Option));
+    assert_eq!(fixed.owners[1].head_role, Some(OwnerHeadRole::Environment));
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().kind, EntryKind::Term);
+    assert_eq!(fixed.owners[1].entry.as_ref().unwrap().kind, EntryKind::Term);
+    assert!(validate_document(&document).is_empty());
+
+    // This third exact input ran pinned CVS too. Later Fl markup cannot
+    // override an earlier visible word in the same It HEAD.
+    let later = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It prefix Fl a\nbody\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(later), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!("annotated output must use Fixed");
+    };
+    assert_eq!(fixed.owners[0].head_role, None);
+
+    // Both exact inputs first ran pinned CVS. term.c::term_word emits no
+    // glyph for ESCAPE_IGNORE or font changes, so neither can hide the first
+    // visible Fl declaration from native role capture.
+    for leading in [
+        b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It \\& Fl a\nbody\n.El\n"
+            .as_slice(),
+        b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It \\fB Fl a\nbody\n.El\n"
+            .as_slice(),
+    ] {
+        let document =
+            project_annotated_manual("t.1", &bundle(leading), InputFormat::Mdoc).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!("annotated output must use Fixed");
+        };
+        assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Option));
+        // The native formatter can retain a leading head space. The role is
+        // preserved, but the interim whole-head binder must not claim that
+        // the entire visible form is an option spelling.
+        assert_eq!(fixed.owners[0].entry.as_ref().unwrap().kind, EntryKind::Term);
+    }
+
+    // mdoc_term.c::termp_fl_pre supplies the generated dash; the shared Fl
+    // grammar admits complete two-character punctuation options too.
+    let punctuation = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl ,\nbody\n.It Fl -\nsecond\n.El\n";
+    let document =
+        project_annotated_manual("t.1", &bundle(punctuation), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!("annotated output must use Fixed");
+    };
+    for (owner, spelling) in fixed.owners.iter().zip(["-,", "--"]) {
+        assert_eq!(owner.head_role, Some(OwnerHeadRole::Option));
+        assert_eq!(owner.entry.as_ref().unwrap().names, [spelling]);
+        assert_eq!(
+            owner.entry.as_ref().unwrap().kind,
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option
+            }
+        );
+    }
 }
 
 #[test]

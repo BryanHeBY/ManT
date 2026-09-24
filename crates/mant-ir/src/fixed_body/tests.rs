@@ -92,6 +92,7 @@ fn sample_body() -> FixedBody {
             parent: None,
             section: Some(key(1)),
             role: OwnerRole::Definition,
+            head_role: None,
             entry: None,
             head: empty_selection(),
             direct_body: empty_selection(),

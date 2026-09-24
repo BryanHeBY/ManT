@@ -399,13 +399,19 @@ valid_marks(const struct mant_annotated_result *result)
 		    (mark->flags & ~(MANT_ANNOTATED_MARK_AUTHORED |
 		    MANT_ANNOTATED_MARK_MANUAL_TARGET |
 		    MANT_ANNOTATED_MARK_SUBSECTION |
-		    MANT_ANNOTATED_MARK_DEFINITION)) != 0 ||
+		    MANT_ANNOTATED_MARK_DEFINITION |
+		    MANT_ANNOTATED_MARK_HEAD_ROLE_MASK)) != 0 ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_MANUAL_TARGET) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_ANCHOR) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_SUBSECTION) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_HEADING) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_DEFINITION) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) != 0 &&
+		    (mark->kind != MANT_ANNOTATED_MARK_OWNER ||
+		    (mark->flags & MANT_ANNOTATED_MARK_DEFINITION) == 0 ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) &
+		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) - 1)) != 0)) ||
 		    mark->reserved != 0 || mark->point_reserved != 0)
 			return 0;
 		switch (mark->point_kind) {

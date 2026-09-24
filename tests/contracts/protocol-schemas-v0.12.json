@@ -16801,6 +16801,26 @@
           "endByte"
         ]
       },
+      "OwnerHeadRole": {
+        "description": "First significant native macro in a definition head, captured while the\nupstream AST is alive. This is authored role evidence, not a semantic kind.",
+        "oneOf": [
+          {
+            "description": "An mdoc `Fl` option head.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "An mdoc `Ev` environment-variable head.",
+            "type": "string",
+            "const": "environment"
+          },
+          {
+            "description": "An mdoc `Ic` or `Cm` literal command head.",
+            "type": "string",
+            "const": "literal"
+          }
+        ]
+      },
       "OwnerMark": {
         "description": "One native candidate owner, not a fabricated semantic entry.",
         "type": "object",
@@ -16834,6 +16854,17 @@
           "head": {
             "description": "Direct visible head, possibly empty.",
             "$ref": "#/$defs/TextSelection"
+          },
+          "headRole": {
+            "description": "Native first-head role, if one survived the head AST boundary.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/OwnerHeadRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "description": "Normalized document-local identity, distinct from the native key.",

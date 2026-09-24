@@ -585,6 +585,7 @@ mod tests {
                     parent: None,
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
+                    head_role: None,
                     entry: None,
                     head: slices(&[3, 4], vec![TextJoin::DirectContact], &lengths),
                     direct_body: slices(&[5], Vec::new(), &lengths),
@@ -597,6 +598,7 @@ mod tests {
                     parent: None,
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
+                    head_role: None,
                     entry: None,
                     head: TextSelection {
                         parts: Vec::new(),

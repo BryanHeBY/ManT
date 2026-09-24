@@ -93,14 +93,7 @@ pub(super) fn native_option_occurrences(
         let Some(token) = prefix.split_whitespace().next() else {
             continue;
         };
-        if token.starts_with('-')
-            && token.chars().count() == 2
-            && token
-                .chars()
-                .nth(1)
-                .is_some_and(|c| !c.is_whitespace() && !c.is_control())
-            && !names.iter().any(|found| found.name == token)
-        {
+        if native_option_token(token) && !names.iter().any(|found| found.name == token) {
             names.insert(
                 0,
                 RecognizedName::contiguous(token, prefix.len() - prefix.trim_start().len()),
@@ -108,6 +101,19 @@ pub(super) fn native_option_occurrences(
         }
     }
     result
+}
+
+/// Complete spelling licensed by an upstream `Fl` head. Generic option
+/// syntax handles ordinary names; mandoc also prints a single punctuation
+/// operand after its generated dash, including `-,` and `--`.
+pub(crate) fn native_option_token(token: &str) -> bool {
+    option_prefix(token) == Some(token)
+        || token.starts_with('-')
+            && token.chars().count() == 2
+            && token
+                .chars()
+                .nth(1)
+                .is_some_and(|character| !character.is_whitespace() && !character.is_control())
 }
 
 pub(in crate::definitions) fn parameter_occurrences(

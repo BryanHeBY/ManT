@@ -413,6 +413,7 @@ fn owner_head_and_body_cannot_claim_the_same_bytes() {
         parent: None,
         section: None,
         role: OwnerRole::Definition,
+        head_role: None,
         entry: None,
         head: selection(&[(0, 2)], Vec::new()),
         direct_body: selection(&[(1, 3)], Vec::new()),

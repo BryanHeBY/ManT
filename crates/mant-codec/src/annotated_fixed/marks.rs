@@ -3,8 +3,8 @@
 use super::{
     AnchorMark, AnnotatedDocument, AnnotatedMark, AnnotatedProjectionError, Diagnostic,
     DiagnosticImpact, DiagnosticLevel, DisplayPoint, HeadingMark, Identities, KeyMap, LinkMark,
-    LinkTarget, OwnerMark, OwnerRole, RegionKind, RegionMark, Result, TextJoin, TextSelection,
-    mark_source, point, region_selection, selection,
+    LinkTarget, OwnerHeadRole, OwnerMark, OwnerRole, RegionKind, RegionMark, Result, TextJoin,
+    TextSelection, mark_source, point, region_selection, selection,
 };
 
 pub(super) fn project_heading(
@@ -148,6 +148,17 @@ pub(super) fn project_owner(
             OwnerRole::Definition
         } else {
             OwnerRole::Other
+        },
+        head_role: match mark.flags & 0b1110_0000 {
+            0 => None,
+            32 => Some(OwnerHeadRole::Option),
+            64 => Some(OwnerHeadRole::Environment),
+            128 => Some(OwnerHeadRole::Literal),
+            _ => {
+                return Err(AnnotatedProjectionError::Relation(
+                    "invalid native head role",
+                ));
+            }
         },
         entry: None,
         head,

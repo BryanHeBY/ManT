@@ -22,7 +22,8 @@ pub(super) use options::option_names;
 #[cfg(test)]
 pub(crate) use options::option_names_from_terms;
 pub(crate) use options::{
-    option_names_from_literal, option_occurrences_from_literal, option_prefix, slash_option_forms,
+    native_option_token, option_names_from_literal, option_occurrences_from_literal, option_prefix,
+    slash_option_forms,
 };
 
 pub(super) struct InferredIdentity {
