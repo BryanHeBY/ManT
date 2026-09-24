@@ -715,6 +715,61 @@ mod tests {
     }
 
     #[test]
+    fn argument_and_quote_state_cross_style_slices_and_literal_heads() {
+        // Pinned CVS man_term.c::pre_TP/pre_IP and term.c::term_word render
+        // these complete HEADs before name inference. A parameter's commas
+        // do not create another authored option declaration.
+        for parameter in ["-10,--fake,20", "-10%,--fake,20", "-10:20,--fake,30"] {
+            for head in [
+                vec![Inline::Strong {
+                    children: vec![fixture::text(format!("--number {parameter}"))],
+                }],
+                vec![
+                    Inline::Strong {
+                        children: vec![fixture::text("--number")],
+                    },
+                    fixture::text(format!(" {parameter}")),
+                ],
+            ] {
+                assert_eq!(
+                    option_names_from_terms(&[head]),
+                    ["--number"],
+                    "{parameter}"
+                );
+            }
+            assert_eq!(
+                super::super::option_names_from_literal(&format!("--number {parameter}")),
+                ["--number"],
+                "Markdown: {parameter}"
+            );
+        }
+        let quoted = "--pattern \"one, --fake,two\"";
+        assert_eq!(
+            option_names_from_terms(&[vec![Inline::Strong {
+                children: vec![fixture::text(quoted)],
+            }]]),
+            ["--pattern"]
+        );
+        assert_eq!(
+            option_names_from_terms(&[vec![
+                Inline::Strong {
+                    children: vec![fixture::text("--pattern ")],
+                },
+                fixture::text("\"one, "),
+                Inline::Strong {
+                    children: vec![fixture::text("--fake")],
+                },
+                fixture::text(",two\""),
+            ]]),
+            ["--pattern"]
+        );
+        assert_eq!(
+            super::super::option_names_from_literal(quoted),
+            ["--pattern"]
+        );
+    }
+
+    #[test]
     fn transparent_links_preserve_separators_and_parameter_ancestry() {
         let text = fixture::text;
         let link = |children| {
