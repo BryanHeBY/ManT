@@ -32,14 +32,16 @@ mod artifact;
 mod candidates;
 #[cfg(test)]
 mod tests;
+pub(crate) mod units;
 mod visible;
 
 use artifact::search_markdown;
-use candidates::{Piece, pieces};
+pub(crate) use candidates::SelectionKind;
+pub(crate) use units::{FixedUnitPart, FixedVisibleUnit, FixedVisibleUnits};
 use visible::{charge_presentation, root_trail, search_visible};
 
 const MAX_FIXED_SEARCH_BYTES: usize = 64 * 1024 * 1024;
-const MAX_FIXED_SCAN_BYTES: usize = 128 * 1024 * 1024;
+pub(crate) const MAX_FIXED_SCAN_BYTES: usize = 128 * 1024 * 1024;
 
 pub(super) fn search_with_matcher(
     query: &ResolvedContent,

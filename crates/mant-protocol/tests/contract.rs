@@ -81,6 +81,85 @@ fn explanation_rejects_unknown_sources_in_previews_and_support_blocks() {
 }
 
 #[test]
+fn fixed_mention_preview_needs_no_flow_block_or_body_but_checks_its_own_sources() {
+    // Pure protocol wire validation; no roff behavior expectation is asserted.
+    let mut response: Value = serde_json::from_str(EXPLANATION).unwrap();
+    let evidence = &mut response["evidence"][1];
+    evidence.as_object_mut().unwrap().remove("blockPath");
+    evidence.as_object_mut().unwrap().remove("content");
+    evidence["previews"] = serde_json::json!([]);
+    evidence["fixedPreviews"] = serde_json::json!([{
+        "selection": {"parts": [{
+            "slice": {"run": 1, "startByte": 0, "endByte": 4},
+            "row": 1, "runColumn": 0, "column": 0, "width": 2,
+            "style": {"bold": false, "underline": false}, "text": "中a"
+        }], "joins": []},
+        "matchStartScalar": 0, "matchEndScalar": 2,
+        "clippedBefore": false, "clippedAfter": false
+    }]);
+    let decoded: mant_protocol::QueryExplanation =
+        serde_json::from_value(response.clone()).unwrap();
+    assert!(decoded.evidence[1].content.is_none());
+    assert!(decoded.evidence[1].block_path.is_none());
+    assert_eq!(decoded.evidence[1].fixed_previews.len(), 1);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), response);
+
+    let mut mixed = response.clone();
+    mixed["evidence"][1]["previews"] =
+        serde_json::from_str::<Value>(EXPLANATION).unwrap()["evidence"][1]["previews"].clone();
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(mixed).is_err());
+    let mut excessive = response.clone();
+    let representative = excessive["evidence"][1]["fixedPreviews"][0].clone();
+    excessive["evidence"][1]["fixedPreviews"] = serde_json::json!([
+        representative.clone(),
+        representative.clone(),
+        representative
+    ]);
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(excessive).is_err());
+    let mut wrong_source = response.clone();
+    wrong_source["evidence"][1]["fixedPreviews"][0]["selection"]["parts"][0]["source"] = 1.into();
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(wrong_source).is_err());
+    let mut wrong_authorship = response;
+    wrong_authorship["evidence"][1]["fixedPreviews"][0]["source"] =
+        serde_json::json!({"source":1,"line":1,"column":1});
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(wrong_authorship).is_err());
+
+    let mut sourced: Value = serde_json::from_str(EXPLANATION).unwrap();
+    sourced["evidence"][1]
+        .as_object_mut()
+        .unwrap()
+        .remove("blockPath");
+    sourced["evidence"][1]
+        .as_object_mut()
+        .unwrap()
+        .remove("content");
+    sourced["evidence"][1]["previews"] = serde_json::json!([]);
+    sourced["evidence"][1]["fixedPreviews"] = serde_json::json!([{
+        "selection": {"parts": [{
+            "slice": {"run": 1, "startByte": 0, "endByte": 1},
+            "row": 1, "runColumn": 0, "column": 0, "width": 1,
+            "style": {"bold": false, "underline": false}, "text": "x", "source": 1
+        }], "joins": []},
+        "matchStartScalar": 0, "matchEndScalar": 1,
+        "source": {"source": 1, "line": 1, "column": 1},
+        "clippedBefore": false, "clippedAfter": false
+    }]);
+    sourced["sourceContext"] = serde_json::json!({
+        "sources": [{
+            "key": 1,
+            "identity": {"kind": "anonymous", "name": "test"},
+            "format": "markdown",
+            "decodedByteLength": 0,
+            "coordinates": {"kind": "decoded-utf8-bytes"}
+        }],
+        "rootSource": 1
+    });
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(sourced.clone()).is_ok());
+    sourced["evidence"][1]["fixedPreviews"][0]["source"]["source"] = 2.into();
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(sourced).is_err());
+}
+
+#[test]
 fn scope_results_validate_spans_against_each_document_context() {
     let mut coverage: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
     coverage["result"]["search"]["coverageByDocument"][0]["diagnostics"] = serde_json::json!([{"level":"warning","impact":"none", "message":"source finding",

@@ -6916,7 +6916,7 @@
         "description": "Fixed explanation ordering; no legacy/source-only ordering mode exists.",
         "oneOf": [
           {
-            "description": "Class, resolved-document BFS position, then original IR owner/block order.",
+            "description": "Class, resolved-document BFS position, then original Flow owner/block\norder or Fixed native owner/final-visible-unit order.",
             "type": "string",
             "const": "class-then-source"
           }
@@ -7284,6 +7284,14 @@
               }
             ]
           },
+          "fixedPreviews": {
+            "description": "At most two native Fixed windows, without fabricated Flow block paths.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedPreview"
+            },
+            "maxItems": 2
+          },
           "matchDetailsOmitted": {
             "description": "Some actual Name/Form records or applicable matched positions were omitted.",
             "type": "boolean"
@@ -7310,7 +7318,7 @@
             }
           },
           "previewsOmitted": {
-            "description": "A representative match window did not fit the remaining copy budget.",
+            "description": "A Flow or Fixed match window could not be retained exactly within\nresponse copy/position limits; evidence and counts remain intact.",
             "type": "boolean"
           },
           "source": {
@@ -7470,6 +7478,57 @@
           "width",
           "style",
           "text"
+        ]
+      },
+      "ExplanationFixedPreview": {
+        "description": "One bounded native display window for a literal explanation match.\nIts selection is independent of Flow block paths and may be returned even\nwhen the matching Fixed owner body is omitted by the shared copy budget.",
+        "type": "object",
+        "properties": {
+          "clippedAfter": {
+            "description": "The window excludes following original text.",
+            "type": "boolean"
+          },
+          "clippedBefore": {
+            "description": "The window excludes preceding original text.",
+            "type": "boolean"
+          },
+          "matchEndScalar": {
+            "description": "Exclusive end of the complete match in logical Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 1024,
+            "minimum": 0
+          },
+          "matchStartScalar": {
+            "description": "Start of the complete match in the window's logical Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 1024,
+            "minimum": 0
+          },
+          "selection": {
+            "description": "Exact surviving native display fragments in display/source order.",
+            "$ref": "#/$defs/ExplanationFixedSelection"
+          },
+          "source": {
+            "description": "Actual authored location of the matched text, when known.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "selection",
+          "matchStartScalar",
+          "matchEndScalar",
+          "clippedBefore",
+          "clippedAfter"
         ]
       },
       "ExplanationFixedSelection": {
@@ -21490,7 +21549,7 @@
         "description": "Fixed explanation ordering; no legacy/source-only ordering mode exists.",
         "oneOf": [
           {
-            "description": "Class, resolved-document BFS position, then original IR owner/block order.",
+            "description": "Class, resolved-document BFS position, then original Flow owner/block\norder or Fixed native owner/final-visible-unit order.",
             "type": "string",
             "const": "class-then-source"
           }
@@ -21858,6 +21917,14 @@
               }
             ]
           },
+          "fixedPreviews": {
+            "description": "At most two native Fixed windows, without fabricated Flow block paths.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFixedPreview"
+            },
+            "maxItems": 2
+          },
           "matchDetailsOmitted": {
             "description": "Some actual Name/Form records or applicable matched positions were omitted.",
             "type": "boolean"
@@ -21884,7 +21951,7 @@
             }
           },
           "previewsOmitted": {
-            "description": "A representative match window did not fit the remaining copy budget.",
+            "description": "A Flow or Fixed match window could not be retained exactly within\nresponse copy/position limits; evidence and counts remain intact.",
             "type": "boolean"
           },
           "source": {
@@ -22044,6 +22111,57 @@
           "width",
           "style",
           "text"
+        ]
+      },
+      "ExplanationFixedPreview": {
+        "description": "One bounded native display window for a literal explanation match.\nIts selection is independent of Flow block paths and may be returned even\nwhen the matching Fixed owner body is omitted by the shared copy budget.",
+        "type": "object",
+        "properties": {
+          "clippedAfter": {
+            "description": "The window excludes following original text.",
+            "type": "boolean"
+          },
+          "clippedBefore": {
+            "description": "The window excludes preceding original text.",
+            "type": "boolean"
+          },
+          "matchEndScalar": {
+            "description": "Exclusive end of the complete match in logical Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 1024,
+            "minimum": 0
+          },
+          "matchStartScalar": {
+            "description": "Start of the complete match in the window's logical Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 1024,
+            "minimum": 0
+          },
+          "selection": {
+            "description": "Exact surviving native display fragments in display/source order.",
+            "$ref": "#/$defs/ExplanationFixedSelection"
+          },
+          "source": {
+            "description": "Actual authored location of the matched text, when known.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "selection",
+          "matchStartScalar",
+          "matchEndScalar",
+          "clippedBefore",
+          "clippedAfter"
         ]
       },
       "ExplanationFixedSelection": {

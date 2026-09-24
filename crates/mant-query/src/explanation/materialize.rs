@@ -127,6 +127,7 @@ pub(super) fn prepare(
         bases,
         entry: None,
         previews: Vec::new(),
+        fixed_previews: Vec::new(),
         previews_omitted: false,
         details_omitted: false,
         match_details_omitted,

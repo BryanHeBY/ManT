@@ -44,7 +44,8 @@ impl EvidenceClass {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum EvidenceOrder {
-    /// Class, resolved-document BFS position, then original IR owner/block order.
+    /// Class, resolved-document BFS position, then original Flow owner/block
+    /// order or Fixed native owner/final-visible-unit order.
     #[default]
     ClassThenSource,
 }

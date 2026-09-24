@@ -3,12 +3,12 @@ use libmandoc_rs::annotated::{
 };
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{
-    DisplayRole, DocumentBody, DocumentIndex, EntryKind, LinkTarget, OwnerHeadRole, OwnerRole,
-    ParameterKind, validate_document,
+    DisplayRole, DocumentAddress, DocumentBody, DocumentIndex, EntryKind, LinkTarget,
+    MarkdownOrigin, OwnerHeadRole, OwnerRole, ParameterKind, validate_document,
 };
 use mant_protocol::{
-    EvidenceBasis, EvidenceClass, ExplanationOptions, ExplanationQuery, SearchCase, SearchQuery,
-    SearchScope, SearchSyntax,
+    DocumentScope, EvidenceBasis, EvidenceClass, ExplanationOptions, ExplanationQuery,
+    ResolvedDocumentScope, ScopedDocument, SearchCase, SearchQuery, SearchScope, SearchSyntax,
 };
 
 use super::{lower_annotated_document, project_annotated_manual};
@@ -1089,6 +1089,281 @@ fn mdoc_literal_head_component_binds_only_a_complete_command_word() {
     )
     .unwrap();
     assert_eq!(body_only.counts.direct_entry.total, 0);
+}
+
+#[test]
+fn fixed_mentions_keep_direct_entry_owner_and_plain_section_distinct() {
+    // Exact fixture ran pinned CVS -Ttree/-Tutf8. man_macro.c::blk_imp keeps
+    // each TP HEAD/BODY separate and SH closes the preceding section scope;
+    // term.c::term_flushln consumes only the native-proven text joins.
+    let input = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/roff/annotated-fixed-mentions.1"
+    ));
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let query = |options| {
+        mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: "--foo".to_owned(),
+                options,
+            },
+        )
+        .unwrap()
+    };
+    let all = query(ExplanationOptions::default());
+    assert_eq!(all.total, 3);
+    assert_eq!(all.counts.direct_entry.total, 1);
+    assert_eq!(all.counts.entry_mention.total, 1);
+    assert_eq!(all.counts.context_mention.total, 1);
+    assert_eq!(
+        all.evidence
+            .iter()
+            .map(|item| item.class)
+            .collect::<Vec<_>>(),
+        [
+            EvidenceClass::DirectEntry,
+            EvidenceClass::EntryMention,
+            EvidenceClass::ContextMention,
+        ]
+    );
+    assert_eq!(all.evidence[0].source.unwrap().line, 3);
+    assert_eq!(all.evidence[1].source.unwrap().line, 6);
+    assert!(all.evidence[2].source.is_none());
+    assert_eq!(all.evidence[2].outline.node.title(), "NOTES");
+    for record in &all.evidence {
+        assert_eq!(record.fixed_previews.len(), 1);
+        let preview = &record.fixed_previews[0];
+        assert_eq!(preview.selection.complete_text().as_deref(), Some("--foo"));
+        assert_eq!(
+            (preview.match_start_scalar, preview.match_end_scalar),
+            (0, 5)
+        );
+        assert!(record.block_path.is_none());
+    }
+    all.validate_references().unwrap();
+    for (offset, class) in [
+        (0, EvidenceClass::DirectEntry),
+        (1, EvidenceClass::EntryMention),
+        (2, EvidenceClass::ContextMention),
+    ] {
+        let page = query(ExplanationOptions {
+            limit: 1,
+            offset,
+            ..Default::default()
+        });
+        assert_eq!(page.total, 3);
+        assert_eq!(page.evidence[0].class, class);
+        page.validate_references().unwrap();
+    }
+    let small = query(ExplanationOptions {
+        content_bytes: 1,
+        ..Default::default()
+    });
+    assert_eq!(small.total, 3);
+    assert!(
+        small
+            .evidence
+            .iter()
+            .all(|item| item.fixed_previews.is_empty())
+    );
+    small.validate_references().unwrap();
+}
+
+#[test]
+fn fixed_mention_preview_clips_zwj_run_with_native_scalar_cell_width() {
+    // Exact input first ran pinned CVS -Tutf8. term_ascii.c::utf8_getwidth
+    // measures each scalar through mant_mandoc_utf8_width, including ZWJ;
+    // grapheme-wide measurement cannot map this clipped native run.
+    let query = native_query(".TH T 1\n.SH D\nemoji👩‍👩‍👧‍👧 --foo\n".as_bytes(), 78);
+    let result = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "--foo".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(result.counts.context_mention.total, 1);
+    let evidence = &result.evidence[0];
+    assert!(!evidence.previews_omitted);
+    assert_eq!(evidence.fixed_previews.len(), 1);
+    assert_eq!(
+        evidence.fixed_previews[0]
+            .selection
+            .complete_text()
+            .as_deref(),
+        Some("--foo")
+    );
+}
+
+#[test]
+fn fixed_mentions_preserve_table_literal_owner_and_exclude_margin_ink() {
+    // Exact source first ran pinned CVS -Tutf8. man_term.c::pre_TP retains
+    // the item body while tbl_term.c emits cells; term.c::term_flushln emits
+    // the margin character at line end, not as authored body prose.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.TS\ntab(;);\nl l.\nleft;needle\n.TE\n.nf\nneedle literal\n.fi\n.mc |\ntail\n.br\n.mc\n";
+    let query = native_query(input, 78);
+    let explain = |entry: &str| {
+        mant_query::explain_query(
+            &query,
+            &ExplanationQuery {
+                entry: entry.to_owned(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap()
+    };
+    let needle = explain("needle");
+    assert_eq!(needle.counts.entry_mention.total, 1);
+    assert_eq!(needle.counts.context_mention.total, 0);
+    assert_eq!(needle.evidence[0].fixed_previews.len(), 2);
+    assert!(
+        needle.evidence[0]
+            .fixed_previews
+            .iter()
+            .all(|preview| preview.selection.complete_text().as_deref() == Some("needle"))
+    );
+    let margin = explain("|");
+    assert_eq!(margin.total, 0);
+}
+
+#[test]
+fn fixed_unsectioned_styled_body_is_one_context_mention() {
+    // Exact source first ran pinned CVS -Ttree/-Tutf8. term.c::term_word
+    // changes font in one text node; neither a section nor an entry is made.
+    let query = native_query(b".TH T 1\nalpha\\fBbeta\\fP gamma\n", 78);
+    let result = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "alphabeta".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(result.counts.context_mention.total, 1);
+    assert_eq!(result.counts.entry_mention.total, 0);
+    assert_eq!(
+        result.evidence[0].fixed_previews[0]
+            .selection
+            .complete_text()
+            .as_deref(),
+        Some("alphabeta")
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One self-contained mixed-body scope fixture and its pages.
+fn scoped_fixed_mentions_rebuild_selected_units_after_flow_document() {
+    // The Fixed source is the pinned-CVS-checked TP/SH fixture above. This
+    // checks scope page scheduling, not a second roff formatting expectation.
+    let fixed_source = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/roff/annotated-fixed-mentions.1"
+    ));
+    let fixed = native_query(fixed_source, 78);
+    let flow = crate::parse_markdown(
+        "# Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `--foo`: Flow body.\n",
+        None,
+    )
+    .unwrap();
+    let mut documents = vec![
+        fixed,
+        mant_ir::ResolvedContent {
+            address: None,
+            label: "flow".to_owned(),
+            document: Some(flow.document),
+            tldr: None,
+        },
+    ];
+    let sources = ["fixed", "flow"]
+        .into_iter()
+        .map(|path| ScopedDocument {
+            address: DocumentAddress::Markdown {
+                path: path.into(),
+                origin: MarkdownOrigin::Documents,
+            },
+            depth: 0,
+            root_indices: vec![],
+            reached_from: vec![],
+        })
+        .collect::<Vec<_>>();
+    for (source, document) in sources.iter().zip(&mut documents) {
+        document.address = Some(source.address.clone());
+    }
+    let graph = ResolvedDocumentScope {
+        reference_limits: Vec::new(),
+        query: DocumentScope {
+            documents: vec![],
+            traversal: mant_protocol::DocumentTraversal::default(),
+        },
+        documents: sources,
+        edges: vec![],
+        frontier: vec![],
+        unresolved: vec![],
+    };
+    let input = mant_query::QueryScopeView::new(&graph, &documents).unwrap();
+    let response = mant_query::explain_scope(
+        input,
+        &ExplanationQuery {
+            entry: "--foo".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(response.total, 4);
+    assert_eq!(
+        response
+            .evidence
+            .iter()
+            .map(|record| (record.document_index, record.evidence.class))
+            .collect::<Vec<_>>(),
+        [
+            (0, EvidenceClass::DirectEntry),
+            (1, EvidenceClass::DirectEntry),
+            (0, EvidenceClass::EntryMention),
+            (0, EvidenceClass::ContextMention),
+        ]
+    );
+    for record in response
+        .evidence
+        .iter()
+        .filter(|item| item.document_index == 0)
+    {
+        assert_eq!(
+            record.evidence.fixed_previews[0]
+                .selection
+                .complete_text()
+                .as_deref(),
+            Some("--foo")
+        );
+    }
+    response.validate_references().unwrap();
+    for offset in 0..response.total {
+        let page = mant_query::explain_scope(
+            input,
+            &ExplanationQuery {
+                entry: "--foo".to_owned(),
+                options: ExplanationOptions {
+                    limit: 1,
+                    offset,
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(page.returned, 1);
+        let expected = &response.evidence[offset as usize];
+        assert_eq!(page.evidence[0].document_index, expected.document_index);
+        assert_eq!(page.evidence[0].evidence.class, expected.evidence.class);
+        page.validate_references().unwrap();
+    }
 }
 
 #[test]

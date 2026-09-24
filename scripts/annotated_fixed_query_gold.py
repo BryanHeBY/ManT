@@ -229,6 +229,30 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
     }
 
 
+def mention_record(evidence: object) -> dict:
+    if not isinstance(evidence, dict) or evidence.get("class") not in (
+            "entry-mention", "context-mention"):
+        raise ValueError("not a Fixed mention")
+    if evidence.get("blockPath") is not None or evidence.get("previews"):
+        raise ValueError("Fixed mention fabricated a Flow block path or preview")
+    if not any(isinstance(basis, dict) and basis.get("kind") == "literal"
+               for basis in evidence.get("bases", [])):
+        raise ValueError("Fixed mention lacks literal evidence")
+    previews = evidence.get("fixedPreviews")
+    if not isinstance(previews, list) or not 1 <= len(previews) <= 2:
+        raise ValueError("Fixed mention lacks bounded native preview")
+    preview = previews[0]
+    text = complete_form(preview.get("selection"))
+    start, end = preview.get("matchStartScalar"), preview.get("matchEndScalar")
+    if type(start) is not int or type(end) is not int or not 0 <= start < end <= len(text):
+        raise ValueError("Fixed mention has invalid scalar match")
+    node = evidence.get("outline", {}).get("node", {})
+    if not isinstance(node, dict) or not isinstance(node.get("title"), str):
+        raise ValueError("Fixed mention lacks original owner/section")
+    return {"class": evidence["class"], "source": evidence.get("source"),
+            "title": node["title"], "match": text[start:end]}
+
+
 def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
     try:
         if not isinstance(response, dict) or response.get("schema") != "mant.explanation/v0.12":
@@ -241,6 +265,8 @@ def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
             raise ValueError("invalid evidence class")
         actual = [owner_record(item, probe["query"], response.get("supports")) for item in evidence
                   if item.get("class") == "direct-entry"]
+        actual_mentions = [mention_record(item) for item in evidence
+                           if item.get("class") in ("entry-mention", "context-mention")]
         totals = {kind: counts[kind]["total"] for kind in CLASSES}
         if not all(type(total) is int and total >= 0 for total in totals.values()):
             raise ValueError("invalid evidence counts")
@@ -318,6 +344,10 @@ def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
         for witness in want.get("bodyExcludes", []):
             if witness in got["body"]:
                 errors.append(f"{source}: wrong-owner body witness {witness!r}")
+    if "expectedMentions" in probe:
+        wanted = probe["expectedMentions"]
+        if not isinstance(wanted, list) or actual_mentions != wanted:
+            errors.append(f"Fixed mentions: {actual_mentions!r} != {wanted!r}")
     return ("failure" if errors else "passed"), errors, actual
 
 
@@ -473,6 +503,16 @@ def self_check() -> None:
     broken = {**evidence, "entry": {**evidence["entry"], "fixedForms": [{
         "parts": selection["parts"] * 2, "joins": [{"kind": "unknown"}]}]}}
     assert compare(probe, {**response, "evidence": [broken]})[0] == "unresolved"
+    mention = {"class": "context-mention", "outline": {"node": {"title": "NOTES"}},
+               "bases": [{"kind": "literal"}], "fixedPreviews": [{
+                   "selection": selection, "matchStartScalar": 0, "matchEndScalar": 2}]}
+    with_mention = {**response, "counts": {**response["counts"],
+        "contextMention": {"total": 1, "returned": 1}}, "total": 2, "returned": 2,
+        "evidence": [evidence, mention]}
+    reviewed = {**probe, "expectedMentions": [{"class": "context-mention",
+        "source": None, "title": "NOTES", "match": "-a"}]}
+    assert compare(reviewed, with_mention)[0] == "passed"
+    assert compare({**reviewed, "expectedMentions": []}, with_mention)[0] == "failure"
 
 
 def main() -> int:

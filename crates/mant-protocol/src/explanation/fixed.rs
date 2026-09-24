@@ -6,7 +6,7 @@
 
 use std::num::NonZeroU32;
 
-use mant_ir::{DisplayStyle, OutputSlice, SourceKey, TextJoin};
+use mant_ir::{DisplayStyle, OutputSlice, SourceKey, SourceSpan, TextJoin};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -138,6 +138,114 @@ impl ExplanationFixedSelection {
     }
 }
 
+/// One bounded native display window for a literal explanation match.
+/// Its selection is independent of Flow block paths and may be returned even
+/// when the matching Fixed owner body is omitted by the shared copy budget.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExplanationFixedPreview {
+    /// Exact surviving native display fragments in display/source order.
+    pub selection: ExplanationFixedSelection,
+    /// Start of the complete match in the window's logical Unicode scalars.
+    #[schemars(range(max = 1024))]
+    pub match_start_scalar: u32,
+    /// Exclusive end of the complete match in logical Unicode scalars.
+    #[schemars(range(max = 1024))]
+    pub match_end_scalar: u32,
+    /// Actual authored location of the matched text, when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<SourceSpan>,
+    /// The window excludes preceding original text.
+    pub clipped_before: bool,
+    /// The window excludes following original text.
+    pub clipped_after: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    remote = "ExplanationFixedPreview",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ExplanationFixedPreviewWire {
+    selection: ExplanationFixedSelection,
+    match_start_scalar: u32,
+    match_end_scalar: u32,
+    source: Option<SourceSpan>,
+    clipped_before: bool,
+    clipped_after: bool,
+}
+
+impl<'de> Deserialize<'de> for ExplanationFixedPreview {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let preview = ExplanationFixedPreviewWire::deserialize(deserializer)?;
+        preview.validate().map_err(serde::de::Error::custom)?;
+        Ok(preview)
+    }
+}
+
+impl ExplanationFixedPreview {
+    /// Prove that the copied window has one complete logical reading and a
+    /// nonempty match within its bounded Unicode-scalar coordinates.
+    /// Original-run ownership and authored source keys are checked by the
+    /// producer and enclosing document response respectively.
+    ///
+    /// # Errors
+    /// Returns a finite reason for malformed or oversized detached previews.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        self.selection.validate()?;
+        if self.selection.parts.is_empty() {
+            return Err("empty Fixed preview selection");
+        }
+        let mut scalars = 0usize;
+        for part in &self.selection.parts {
+            scalars = scalars
+                .checked_add(
+                    part.text
+                        .chars()
+                        .take(super::MAX_EXPLANATION_PREVIEW_SCALARS + 1)
+                        .count(),
+                )
+                .ok_or("Fixed preview scalar count overflows")?;
+            if scalars > super::MAX_EXPLANATION_PREVIEW_SCALARS {
+                return Err("Fixed preview exceeds scalar limit");
+            }
+        }
+        for join in &self.selection.joins {
+            match join {
+                TextJoin::DirectContact => {}
+                TextJoin::AuthoredSeparator(separator) => {
+                    scalars = scalars
+                        .checked_add(
+                            separator
+                                .chars()
+                                .take(super::MAX_EXPLANATION_PREVIEW_SCALARS + 1)
+                                .count(),
+                        )
+                        .ok_or("Fixed preview scalar count overflows")?;
+                    if scalars > super::MAX_EXPLANATION_PREVIEW_SCALARS {
+                        return Err("Fixed preview exceeds scalar limit");
+                    }
+                }
+                TextJoin::HardBoundary | TextJoin::Unknown => {
+                    return Err("Fixed preview has no complete logical reading");
+                }
+            }
+        }
+        if self.selection.complete_text().is_none() {
+            return Err("Fixed preview has no complete logical reading");
+        }
+        let start = usize::try_from(self.match_start_scalar)
+            .map_err(|_| "Fixed preview match starts outside window")?;
+        let end = usize::try_from(self.match_end_scalar)
+            .map_err(|_| "Fixed preview match ends outside window")?;
+        if start >= end || end > scalars {
+            return Err("Fixed preview match lies outside window");
+        }
+        Ok(())
+    }
+}
+
 /// A complete or partial Unicode scalar range in a returned Fixed form's logical text.
 /// Its display fragments resolve through `entry.fixedForms[formIndex]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -175,6 +283,94 @@ fn scalar_to_byte(text: &str, scalar: u64) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn preview() -> ExplanationFixedPreview {
+        let key = NonZeroU32::MIN;
+        ExplanationFixedPreview {
+            selection: ExplanationFixedSelection {
+                parts: vec![ExplanationFixedPart {
+                    slice: OutputSlice {
+                        run: key,
+                        start_byte: 0,
+                        end_byte: 4,
+                    },
+                    row: key,
+                    run_column: 0,
+                    column: 0,
+                    width: 2,
+                    style: DisplayStyle {
+                        bold: false,
+                        underline: false,
+                    },
+                    text: "中a".into(),
+                    source: None,
+                }],
+                joins: Vec::new(),
+            },
+            match_start_scalar: 0,
+            match_end_scalar: 2,
+            source: None,
+            clipped_before: false,
+            clipped_after: false,
+        }
+    }
+
+    #[test]
+    fn fixed_preview_uses_scalar_match_coordinates_and_closed_native_selection() {
+        let valid = preview();
+        assert_eq!(valid.selection.complete_text().as_deref(), Some("中a"));
+        assert!(valid.validate().is_ok());
+        let encoded = serde_json::to_value(&valid).unwrap();
+        assert_eq!(
+            serde_json::from_value::<ExplanationFixedPreview>(encoded.clone()).unwrap(),
+            valid
+        );
+        let mut byte_range = encoded.clone();
+        byte_range["matchEndByte"] = 4.into();
+        assert!(serde_json::from_value::<ExplanationFixedPreview>(byte_range).is_err());
+        let mut outside = encoded.clone();
+        outside["matchEndScalar"] = 3.into();
+        assert!(serde_json::from_value::<ExplanationFixedPreview>(outside).is_err());
+        let mut empty = encoded;
+        empty["matchStartScalar"] = 2.into();
+        assert!(serde_json::from_value::<ExplanationFixedPreview>(empty).is_err());
+    }
+
+    #[test]
+    fn fixed_preview_requires_complete_bounded_logical_text() {
+        let mut invalid = preview();
+        invalid.selection.parts.push(ExplanationFixedPart {
+            slice: OutputSlice {
+                run: NonZeroU32::new(2).unwrap(),
+                start_byte: 0,
+                end_byte: 1,
+            },
+            row: NonZeroU32::new(2).unwrap(),
+            run_column: 0,
+            column: 0,
+            width: 1,
+            style: DisplayStyle {
+                bold: false,
+                underline: false,
+            },
+            text: "b".into(),
+            source: None,
+        });
+        invalid.selection.joins.push(TextJoin::HardBoundary);
+        assert!(invalid.validate().is_err());
+        invalid.selection.joins[0] = TextJoin::Unknown;
+        assert!(invalid.validate().is_err());
+        invalid.selection.joins[0] = TextJoin::DirectContact;
+        assert!(invalid.validate().is_ok());
+
+        let mut oversized = preview();
+        oversized.selection.parts[0].text =
+            "a".repeat(super::super::MAX_EXPLANATION_PREVIEW_SCALARS + 1);
+        oversized.selection.parts[0].slice.end_byte =
+            oversized.selection.parts[0].text.len() as u64;
+        oversized.match_end_scalar = 1;
+        assert!(oversized.validate().is_err());
+    }
 
     #[test]
     fn fixed_form_public_range_counts_scalars_while_slice_addresses_bytes() {

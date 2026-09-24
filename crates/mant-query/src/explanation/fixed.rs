@@ -4,7 +4,7 @@
 //! synthesized from terminal geometry. Complete native definition heads and
 //! proven head components retain their final display selections.
 
-use std::{collections::BTreeMap, num::NonZeroU32};
+use std::{cell::RefCell, collections::BTreeMap, num::NonZeroU32, ops::Range};
 
 use mant_ir::{
     DOCUMENT_ROOT_ID, Document, FixedBody, FixedSectionReader, OutlinePath, OwnerMark,
@@ -13,7 +13,7 @@ use mant_ir::{
 use mant_protocol::{
     EvidenceBasis, EvidenceClass, EvidenceCounts, EvidenceOrder, ExplanationContent,
     ExplanationEntry, ExplanationEvidence, ExplanationFixedFormRange, ExplanationFixedGroupMember,
-    ExplanationFixedPart, ExplanationFixedSelection, ExplanationFormMatch,
+    ExplanationFixedPart, ExplanationFixedPreview, ExplanationFixedSelection, ExplanationFormMatch,
     ExplanationIdentityField, ExplanationNameBinding, ExplanationNameMatch, ExplanationOccurrence,
     ExplanationOutcome, ExplanationQuery, ExplanationSchema, ExplanationSupport,
     ExplanationTruncation, OutlineNodeReference, OutlineReference, OutlineTrail, QueryExplanation,
@@ -21,13 +21,24 @@ use mant_protocol::{
 
 use super::{ExplanationError, materialize::Budget, support::Pool};
 
+mod mentions;
+
 struct IndexedOwner {
     path: OutlinePath,
     matched: (bool, bool, bool, bool),
 }
 
 pub(super) struct FixedCandidate {
-    pub key: NonZeroU32,
+    pub key: Option<NonZeroU32>,
+    pub section: Option<NonZeroU32>,
+    pub class: EvidenceClass,
+    pub hits: Vec<FixedHit>,
+}
+
+#[derive(Clone)]
+pub(super) struct FixedHit {
+    pub unit: usize,
+    pub range: Range<usize>,
 }
 
 pub(super) struct FixedPlan<'a> {
@@ -39,6 +50,9 @@ pub(super) struct FixedPlan<'a> {
     indexed: BTreeMap<NonZeroU32, IndexedOwner>,
     pub candidates: Vec<FixedCandidate>,
     pub truncated: bool,
+    // Built only for documents selected by the response page, never for all
+    // scoped plans. A scope page releases it between document segments.
+    preview_units: RefCell<Option<crate::search::fixed_visible::FixedVisibleUnits>>,
 }
 
 /// A Fixed result only claims directly evidenced complete heads. Native body
@@ -62,13 +76,18 @@ pub(super) fn response(
     for (ordinal, candidate) in plan.candidates.iter().enumerate() {
         let selected = ordinal >= query.options.offset as usize
             && evidence.len() < query.options.limit as usize;
-        counts.record(EvidenceClass::DirectEntry, selected);
+        counts.record(candidate.class, selected);
         if selected {
+            let mut deferred = Budget(0);
             let record = plan.prepare(
                 candidate,
                 u32::try_from(ordinal).expect("bounded Fixed ordinal"),
                 requested,
-                &mut budget,
+                if candidate.class == EvidenceClass::DirectEntry {
+                    &mut budget
+                } else {
+                    &mut deferred
+                },
             )?;
             selected_candidates.push(ordinal);
             evidence.push(record);
@@ -82,6 +101,13 @@ pub(super) fn response(
     }
     for (&index, record) in selected_candidates.iter().zip(&mut evidence) {
         plan.finish_optional(&plan.candidates[index], record, &mut budget)?;
+    }
+    for (&index, record) in selected_candidates.iter().zip(&mut evidence) {
+        let candidate = &plan.candidates[index];
+        if candidate.class != EvidenceClass::DirectEntry {
+            *record = plan.prepare(candidate, record.ordinal, requested, &mut budget)?;
+        }
+        plan.copy_previews(candidate, record, &mut budget)?;
     }
     let returned = u32::try_from(evidence.len()).expect("bounded Fixed page");
     let end = query.options.offset.saturating_add(returned);
@@ -138,8 +164,8 @@ pub(super) fn plan<'a>(
     let reader = FixedSectionReader::new(fixed).map_err(|_| ExplanationError::InvalidFixed)?;
     let index = SemanticIndex::build(document);
     let indexed = collect_indexed(&index, &reader, requested);
-    let mut candidates = Vec::new();
-    let mut truncated = false;
+    let mut direct = BTreeMap::new();
+    let mut truncated_direct = false;
     for owner in &fixed.owners {
         let Some(indexed) = indexed.get(&owner.key) else {
             continue;
@@ -148,11 +174,39 @@ pub(super) fn plan<'a>(
         if !(name || form || id || path) {
             continue;
         }
-        if candidates.len() == mant_protocol::MAX_EXPLANATION_CANDIDATES {
-            truncated = true;
-            break;
+        if direct.len() == mant_protocol::MAX_EXPLANATION_CANDIDATES {
+            truncated_direct = true;
+            continue;
         }
-        candidates.push(FixedCandidate { key: owner.key });
+        direct.insert(
+            owner.key,
+            FixedCandidate {
+                key: Some(owner.key),
+                section: owner.section,
+                class: EvidenceClass::DirectEntry,
+                hits: Vec::new(),
+            },
+        );
+    }
+    let (mentions, mut truncated) = mentions::collect(fixed, &indexed, &direct, requested)?;
+    truncated |= truncated_direct;
+    let mut weak = Vec::new();
+    for mention in mentions {
+        if let Some(owner) = mention.key
+            && let Some(selected) = direct.get_mut(&owner)
+        {
+            selected
+                .hits
+                .extend(mention.hits.into_iter().take(2 - selected.hits.len()));
+        } else {
+            weak.push(mention);
+        }
+    }
+    let mut candidates = direct.into_values().collect::<Vec<_>>();
+    candidates.extend(weak);
+    if candidates.len() > mant_protocol::MAX_EXPLANATION_CANDIDATES {
+        candidates.truncate(mant_protocol::MAX_EXPLANATION_CANDIDATES);
+        truncated = true;
     }
     Ok(FixedPlan {
         content: resolved,
@@ -163,14 +217,16 @@ pub(super) fn plan<'a>(
         indexed,
         candidates,
         truncated,
+        preview_units: RefCell::new(None),
     })
 }
 
 impl FixedPlan<'_> {
     fn owner(&self, candidate: &FixedCandidate) -> Result<&OwnerMark, ExplanationError> {
+        let key = candidate.key.ok_or(ExplanationError::InvalidFixed)?;
         self.fixed
             .owners
-            .get((candidate.key.get() - 1) as usize)
+            .get((key.get() - 1) as usize)
             .ok_or(ExplanationError::InvalidFixed)
     }
 
@@ -181,10 +237,14 @@ impl FixedPlan<'_> {
         requested: &str,
         budget: &mut Budget,
     ) -> Result<ExplanationEvidence, ExplanationError> {
+        if candidate.class != EvidenceClass::DirectEntry {
+            return self.prepare_mention(candidate, ordinal, budget);
+        }
         let owner = self.owner(candidate)?;
+        let key = candidate.key.ok_or(ExplanationError::InvalidFixed)?;
         let selected = self
             .indexed
-            .get(&candidate.key)
+            .get(&key)
             .ok_or(ExplanationError::InvalidFixed)?;
         let entry = self
             .index
@@ -240,6 +300,13 @@ impl FixedPlan<'_> {
             }
             evidence_bases.push(EvidenceBasis::Identity { fields });
         }
+        if !candidate.hits.is_empty() {
+            if budget.take(&EvidenceBasis::Literal) {
+                evidence_bases.push(EvidenceBasis::Literal);
+            } else {
+                match_details_omitted = true;
+            }
+        }
         Ok(ExplanationEvidence {
             support: None,
             support_omitted: false,
@@ -250,6 +317,7 @@ impl FixedPlan<'_> {
             source: owner.source,
             bases: evidence_bases,
             previews: Vec::new(),
+            fixed_previews: Vec::new(),
             previews_omitted: false,
             entry: None,
             content: None,
@@ -260,14 +328,67 @@ impl FixedPlan<'_> {
         })
     }
 
+    fn prepare_mention(
+        &self,
+        candidate: &FixedCandidate,
+        ordinal: u32,
+        budget: &mut Budget,
+    ) -> Result<ExplanationEvidence, ExplanationError> {
+        let outline = if let Some(key) = candidate.key {
+            let owner = self
+                .fixed
+                .owners
+                .get((key.get() - 1) as usize)
+                .ok_or(ExplanationError::InvalidFixed)?;
+            let selected = self
+                .indexed
+                .get(&key)
+                .ok_or(ExplanationError::InvalidFixed)?;
+            trail(&self.reader, &self.index, &self.indexed, owner, selected)?
+        } else {
+            mention_section_trail(&self.reader, candidate.section)?
+        };
+        let retained = budget.take(&EvidenceBasis::Literal);
+        Ok(ExplanationEvidence {
+            support: None,
+            support_omitted: false,
+            class: candidate.class,
+            ordinal,
+            outline,
+            block_path: None,
+            source: candidate
+                .key
+                .and_then(|key| self.fixed.owners.get((key.get() - 1) as usize))
+                .and_then(|owner| owner.source),
+            bases: if retained {
+                vec![EvidenceBasis::Literal]
+            } else {
+                Vec::new()
+            },
+            previews: Vec::new(),
+            fixed_previews: Vec::new(),
+            previews_omitted: false,
+            entry: None,
+            content: None,
+            details_omitted: false,
+            match_details_omitted: !retained,
+            name_bindings_omitted: false,
+            content_omitted: false,
+        })
+    }
+
     pub(super) fn copy_body(
         &self,
         candidate: &FixedCandidate,
         record: &mut ExplanationEvidence,
         budget: &mut Budget,
     ) -> Result<(), ExplanationError> {
+        if candidate.class != EvidenceClass::DirectEntry {
+            return Ok(());
+        }
+        let key = candidate.key.ok_or(ExplanationError::InvalidFixed)?;
         let minimum = ExplanationContent::FixedOwner {
-            key: candidate.key,
+            key,
             reading_body: ExplanationFixedSelection {
                 parts: Vec::new(),
                 joins: Vec::new(),
@@ -327,7 +448,11 @@ impl FixedPlan<'_> {
         pool: &mut Pool,
         budget: &mut Budget,
     ) -> Result<(), ExplanationError> {
-        let Some(group) = self.index.fixed_reading_group(candidate.key) else {
+        if candidate.class != EvidenceClass::DirectEntry {
+            return Ok(());
+        }
+        let key = candidate.key.ok_or(ExplanationError::InvalidFixed)?;
+        let Some(group) = self.index.fixed_reading_group(key) else {
             return Ok(());
         };
         if record.content.is_none() {
@@ -511,10 +636,14 @@ impl FixedPlan<'_> {
         record: &mut ExplanationEvidence,
         budget: &mut Budget,
     ) -> Result<(), ExplanationError> {
+        if candidate.class != EvidenceClass::DirectEntry {
+            return Ok(());
+        }
+        let key = candidate.key.ok_or(ExplanationError::InvalidFixed)?;
         let owner = self.owner(candidate)?;
         let selected = self
             .indexed
-            .get(&candidate.key)
+            .get(&key)
             .ok_or(ExplanationError::InvalidFixed)?;
         let entry = self
             .index
@@ -677,7 +806,7 @@ impl FixedPlan<'_> {
                         });
                     }
                 }
-                EvidenceBasis::Identity { .. } => continue,
+                EvidenceBasis::Identity { .. } | EvidenceBasis::Literal => continue,
                 _ => return Err(ExplanationError::InvalidFixed),
             }
             if budget.take_growth(basis, &with_position) {
@@ -690,6 +819,115 @@ impl FixedPlan<'_> {
         record.match_details_omitted |= record.details_omitted && (name_match || form_match);
         Ok(())
     }
+
+    pub(super) fn copy_previews(
+        &self,
+        candidate: &FixedCandidate,
+        record: &mut ExplanationEvidence,
+        budget: &mut Budget,
+    ) -> Result<(), ExplanationError> {
+        if candidate.hits.is_empty() {
+            return Ok(());
+        }
+        if candidate
+            .hits
+            .iter()
+            .all(|hit| hit.range.end - hit.range.start > budget.0)
+        {
+            record.previews_omitted = true;
+            return Ok(());
+        }
+        let mut cache = self.preview_units.borrow_mut();
+        if cache.is_none() {
+            *cache = Some(
+                crate::search::fixed_visible::FixedVisibleUnits::new(self.fixed)
+                    .map_err(|_| ExplanationError::InvalidFixed)?,
+            );
+        }
+        let units = cache.as_ref().ok_or(ExplanationError::InvalidFixed)?;
+        for hit in &candidate.hits {
+            if hit.range.end - hit.range.start > budget.0 {
+                record.previews_omitted = true;
+                continue;
+            }
+            let materialized = units
+                .get(hit.unit)
+                .ok_or(ExplanationError::InvalidFixed)?
+                .materialize(self.fixed)
+                .map_err(|_| ExplanationError::InvalidFixed)?;
+            let expected = materialized
+                .text
+                .get(hit.range.clone())
+                .ok_or(ExplanationError::InvalidFixed)?;
+            let preview = hit_selection(&materialized, &hit.range).and_then(|source| {
+                let selected_text = self.fixed.selection_text(&source)?;
+                if selected_text != expected {
+                    return None;
+                }
+                let selected = selection(self.fixed, &source, budget.0)?;
+                let scalar_count = u32::try_from(selected_text.chars().count()).ok()?;
+                let preview = ExplanationFixedPreview {
+                    selection: selected,
+                    match_start_scalar: 0,
+                    match_end_scalar: scalar_count,
+                    source: None,
+                    clipped_before: hit.range.start != 0,
+                    clipped_after: hit.range.end != materialized.text.len(),
+                };
+                preview.validate().ok()?;
+                Some(preview)
+            });
+            if let Some(preview) = preview.filter(|preview| budget.take(preview)) {
+                record.fixed_previews.push(preview);
+            } else {
+                record.previews_omitted = true;
+            }
+        }
+        Ok(())
+    }
+
+    /// Scope pagination can revisit a document in another evidence class;
+    /// releasing between segments bounds the live index to one document.
+    pub(super) fn release_preview_units(&self) {
+        self.preview_units.borrow_mut().take();
+    }
+}
+
+fn hit_selection(
+    unit: &crate::search::fixed_visible::units::FixedUnitText<'_>,
+    hit: &Range<usize>,
+) -> Option<TextSelection> {
+    let mut parts = Vec::new();
+    let mut joins = Vec::new();
+    for part in &unit.parts {
+        let start = hit.start.max(part.text_range.start);
+        let end = hit.end.min(part.text_range.end);
+        if start >= end {
+            continue;
+        }
+        if parts.len() == mant_protocol::MAX_EXPLANATION_POSITIONS {
+            return None;
+        }
+        if !parts.is_empty() {
+            joins.push(part.piece.join_before.clone()?);
+        }
+        let start_byte = part
+            .piece
+            .slice
+            .start_byte
+            .checked_add(u64::try_from(start - part.text_range.start).ok()?)?;
+        let end_byte = part
+            .piece
+            .slice
+            .start_byte
+            .checked_add(u64::try_from(end - part.text_range.start).ok()?)?;
+        parts.push(mant_ir::OutputSlice {
+            run: part.piece.slice.run,
+            start_byte,
+            end_byte,
+        });
+    }
+    (!parts.is_empty()).then_some(TextSelection { parts, joins })
 }
 
 fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError> {
@@ -864,14 +1102,16 @@ fn selection(
             // A clipped run needs a checked UTF-8-scalar to terminal-cell
             // mapping. Never treat byte offsets as cell offsets or guess when
             // the native run width disagrees with this mapping.
-            use unicode_width::UnicodeWidthStr;
-            if u32::try_from(text.width()).ok()? != run.width {
+            // Pinned term_ascii.c::utf8_getwidth calls the per-scalar
+            // mant_mandoc_utf8_width hook. Grapheme-wide measurement would
+            // undercount joined emoji and misplace a clipped native run.
+            if native_cell_width(text)? != run.width {
                 return None;
             }
             (
                 run.column
-                    .checked_add(u32::try_from(text.get(..start)?.width()).ok()?)?,
-                u32::try_from(text.get(start..end)?.width()).ok()?,
+                    .checked_add(native_cell_width(text.get(..start)?)?)?,
+                native_cell_width(text.get(start..end)?)?,
             )
         };
         parts.push(ExplanationFixedPart {
@@ -891,6 +1131,14 @@ fn selection(
     };
     selection.validate().ok()?;
     Some(selection)
+}
+
+fn native_cell_width(text: &str) -> Option<u32> {
+    use unicode_width::UnicodeWidthChar;
+
+    text.chars().try_fold(0_u32, |total, scalar| {
+        total.checked_add(u32::try_from(scalar.width().unwrap_or(0)).ok()?)
+    })
 }
 
 fn selection_bytes(source: &TextSelection) -> Option<usize> {
@@ -969,6 +1217,58 @@ fn trail(
             entry_kind: facts.kind,
             case: facts.case,
             names: facts.names.clone(),
+        },
+    })
+}
+
+fn mention_section_trail(
+    reader: &FixedSectionReader<'_>,
+    section: Option<NonZeroU32>,
+) -> Result<OutlineTrail, ExplanationError> {
+    let Some(section) = section else {
+        return Ok(OutlineTrail {
+            ancestors: Vec::new(),
+            node: OutlineNodeReference::DocumentRoot {
+                path: OutlinePath::DocumentRoot.to_string().into(),
+                id: DOCUMENT_ROOT_ID.into(),
+                title: crate::selectors::DOCUMENT_ROOT_TITLE.to_owned(),
+            },
+        });
+    };
+    let chain = reader
+        .breadcrumbs(section)
+        .ok_or(ExplanationError::InvalidFixed)?;
+    let mut ancestors = vec![OutlineReference {
+        path: OutlinePath::DocumentRoot.to_string().into(),
+        id: DOCUMENT_ROOT_ID.into(),
+        title: crate::selectors::DOCUMENT_ROOT_TITLE.to_owned(),
+    }];
+    for heading in chain.iter().take(chain.len().saturating_sub(1)) {
+        ancestors.push(OutlineReference {
+            path: reader
+                .path(heading.key)
+                .ok_or(ExplanationError::InvalidFixed)?
+                .to_string()
+                .into(),
+            id: heading.id.clone(),
+            title: reader
+                .label(heading.key)
+                .ok_or(ExplanationError::InvalidFixed)?,
+        });
+    }
+    let heading = chain.last().ok_or(ExplanationError::InvalidFixed)?;
+    Ok(OutlineTrail {
+        ancestors,
+        node: OutlineNodeReference::DocumentSection {
+            path: reader
+                .path(section)
+                .ok_or(ExplanationError::InvalidFixed)?
+                .to_string()
+                .into(),
+            id: heading.id.clone(),
+            title: reader
+                .label(section)
+                .ok_or(ExplanationError::InvalidFixed)?,
         },
     })
 }
@@ -1283,12 +1583,11 @@ mod tests {
         result.validate_references().unwrap();
         serde_json::from_value::<QueryExplanation>(serde_json::to_value(&result).unwrap()).unwrap();
 
-        assert_eq!(
-            super::super::select_explanation(&resolved, "empty body")
-                .unwrap()
-                .total,
-            0
-        );
+        // Pinned CVS man_macro.c::blk_imp retains the TP BODY after a zero-
+        // width HEAD. Its visible text is ordinary context, not a declaration.
+        let ordinary = super::super::select_explanation(&resolved, "empty body").unwrap();
+        assert_eq!(ordinary.total, 1);
+        assert_eq!(ordinary.evidence[0].class, EvidenceClass::ContextMention);
         assert_eq!(
             super::super::select_explanation(&resolved, "owner-empty")
                 .unwrap()

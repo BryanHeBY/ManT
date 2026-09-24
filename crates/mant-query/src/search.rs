@@ -6,7 +6,7 @@ use mant_protocol::{MAX_SEARCH_PATTERN_CHARS, QuerySearch, SearchQuery};
 
 use crate::ResolvedContent;
 
-mod fixed_visible;
+pub(crate) mod fixed_visible;
 mod mapping;
 mod origins;
 mod owners;

@@ -554,6 +554,20 @@ impl Report<'_> {
                 );
             }
         } else {
+            for preview in &e.fixed_previews {
+                self.line(
+                    output,
+                    TextRole::Coordinate,
+                    &format!(
+                        "Native match scalars={}..{}; clippedBefore={}, clippedAfter={}",
+                        preview.match_start_scalar,
+                        preview.match_end_scalar,
+                        preview.clipped_before,
+                        preview.clipped_after
+                    ),
+                );
+                self.fixed_selection(output, &preview.selection, "Preview (Fixed):", None);
+            }
             for preview in &e.previews {
                 self.line(
                     output,

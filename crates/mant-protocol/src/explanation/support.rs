@@ -495,8 +495,29 @@ impl super::ExplanationEvidence {
         pool: &'a [ExplanationSupport],
     ) -> bool {
         use super::{EvidenceBasis, ExplanationContent, ExplanationOccurrence};
-        if matches!(self.content, Some(ExplanationContent::SharedEntry { .. }))
-            && self.shared_entry(context, pool).is_none()
+        if self
+            .previews
+            .len()
+            .saturating_add(self.fixed_previews.len())
+            > 2
+            || !self.previews.is_empty() && !self.fixed_previews.is_empty()
+            || self
+                .fixed_previews
+                .iter()
+                .any(|preview| preview.validate().is_err())
+            || !self.fixed_previews.is_empty()
+                && (self.block_path.is_some()
+                    || self
+                        .entry
+                        .as_ref()
+                        .is_some_and(|entry| !entry.forms.is_empty())
+                    || self.content.as_ref().is_some_and(|content| {
+                        !matches!(content, ExplanationContent::FixedOwner { .. })
+                    }))
+            || !self.previews.is_empty()
+                && matches!(self.content, Some(ExplanationContent::FixedOwner { .. }))
+            || matches!(self.content, Some(ExplanationContent::SharedEntry { .. }))
+                && self.shared_entry(context, pool).is_none()
             || self.support_omitted && self.class != super::EvidenceClass::DirectEntry
             || self.content_omitted && self.content.is_some()
             || self.support.is_some() && !self.covered_by_support(context, pool)

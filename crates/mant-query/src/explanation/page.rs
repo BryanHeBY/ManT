@@ -54,7 +54,18 @@ pub(super) fn materialize<'a>(
                     )
                 }
                 DocumentPlan::Fixed(plan) => {
-                    plan.prepare(&plan.candidates[index], ordinal, requested, budget)?
+                    let candidate = &plan.candidates[index];
+                    let mut deferred = Budget(0);
+                    plan.prepare(
+                        candidate,
+                        ordinal,
+                        requested,
+                        if candidate.class == EvidenceClass::DirectEntry {
+                            budget
+                        } else {
+                            &mut deferred
+                        },
+                    )?
                 }
             };
             Ok(ScopedExplanationEvidence {
@@ -140,10 +151,28 @@ pub(super) fn materialize<'a>(
             )?;
         }
     }
+    // Class-first order groups each document only within a class. Keep at
+    // most one selected document's native unit index live; a later class may
+    // rebuild it rather than multiplying a scope page's peak storage.
+    let mut cached_fixed_doc = None;
     for (&(doc, index, ordinal), result) in selected.iter().zip(&mut evidence) {
+        if cached_fixed_doc != Some(doc)
+            && let Some(previous) = cached_fixed_doc.take()
+            && let DocumentPlan::Fixed(plan) = &plans[previous]
+        {
+            plan.release_preview_units();
+        }
         match &plans[doc] {
             DocumentPlan::Fixed(plan) => {
-                plan.finish_optional(&plan.candidates[index], &mut result.evidence, budget)?;
+                let candidate = &plan.candidates[index];
+                if candidate.class != EvidenceClass::DirectEntry {
+                    result.evidence = plan.prepare(candidate, ordinal, requested, budget)?;
+                }
+                plan.finish_optional(candidate, &mut result.evidence, budget)?;
+                plan.copy_previews(candidate, &mut result.evidence, budget)?;
+                if !candidate.hits.is_empty() {
+                    cached_fixed_doc = Some(doc);
+                }
             }
             DocumentPlan::Flow(plan) => {
                 let candidate = &plan.candidates[index];
@@ -170,6 +199,11 @@ pub(super) fn materialize<'a>(
                 );
             }
         }
+    }
+    if let Some(previous) = cached_fixed_doc
+        && let DocumentPlan::Fixed(plan) = &plans[previous]
+    {
+        plan.release_preview_units();
     }
     Ok(Page {
         evidence,

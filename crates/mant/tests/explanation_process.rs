@@ -19,6 +19,62 @@ Use `--help` for assistance.
 
 #[test]
 #[cfg(feature = "annotated-preview")]
+fn annotated_fixed_mentions_render_native_previews_after_class_pagination() {
+    // Exact fixture ran pinned CVS -Ttree/-Tutf8. man_macro.c::blk_imp
+    // separates TP heads/bodies and the later SH closes the old section.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/roff/annotated-fixed-mentions.1");
+    let json = success(
+        &Command::new(env!("CARGO_BIN_EXE_mant"))
+            .args([
+                "--annotated-preview",
+                "--input",
+                path.to_str().unwrap(),
+                "--input-format",
+                "roff",
+                "--explain=--foo",
+                "--format",
+                "json",
+                "--compact",
+            ])
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(json["total"], 3);
+    assert_eq!(json["counts"]["directEntry"]["total"], 1);
+    assert_eq!(json["counts"]["entryMention"]["total"], 1);
+    assert_eq!(json["counts"]["contextMention"]["total"], 1);
+    assert_eq!(
+        json["evidence"][1]["fixedPreviews"][0]["selection"]["parts"][0]["text"],
+        "--foo"
+    );
+    assert_eq!(json["evidence"][2]["outline"]["node"]["title"], "NOTES");
+    for format in ["text", "markdown"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_mant"))
+            .args([
+                "--annotated-preview",
+                "--input",
+                path.to_str().unwrap(),
+                "--input-format",
+                "roff",
+                "--explain=--foo",
+                "--format",
+                format,
+                "--display",
+                "direct",
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let shown = String::from_utf8(output.stdout).unwrap();
+        assert!(shown.contains("Mentions in other entries"));
+        assert!(shown.contains("Mentions in ordinary content"));
+        assert!(shown.contains("Preview"));
+    }
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
 fn annotated_fixed_group_budget_keeps_own_bodies_and_page_local_support() {
     // Pinned CVS man_macro.c::blk_imp creates three distinct IP blocks;
     // man_term.c::pre_IP prints the first two as an empty-prefix/provider

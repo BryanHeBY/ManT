@@ -1,7 +1,7 @@
 {
   "schema": "mant.annotated-fixed-query-gold/v1",
   "reviewed": "2026-09-24",
-  "scope": "Pinned-source, manually reviewed Fixed direct-owner controls; not full R04 recall.",
+  "scope": "Pinned-source Fixed direct-owner controls plus reviewed F007/F008 mention controls; F005 GCC and other direct-only probes do not yet assert mention recall.",
   "roots": {
     "checkout": "../../.."
   },
@@ -394,9 +394,10 @@
         },
         {
           "query": "hidden",
-          "review": "Pinned CVS line-12 HEAD begins with Sy styled; a later Ic hidden is not the first native declaration role and cannot become an independent command owner.",
+          "review": "Pinned CVS -Ttree line-12 HEAD begins with Sy styled; Ic hidden remains in HEAD, while line-13 BODY is STYLED_BODY. It is neither a declaration nor a body mention.",
           "expected": [],
-          "expectedCounts": {"directEntry": 0}
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0},
+          "expectedMentions": []
         },
         {
           "query": "-bad",
@@ -405,6 +406,26 @@
             {"source": {"line": 14, "column": 2}, "kind": "term", "names": ["-bad"], "forms": ["-bad"], "emptyDescription": false, "bodyIncludes": ["BAD_BODY"]}
           ],
           "expectedCounts": {"directEntry": 1}
+        }
+      ]
+    },
+    {
+      "id": "F008",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/annotated-fixed-mentions.1",
+      "sha256": "5aba2f0040ff3475593246195acfc2e8bb7261c5af2df8342107ed3c1e81e2ec",
+      "queries": [
+        {
+          "query": "--foo",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps both TP heads and bodies independent, while the next SH closes OPTIONS. The native final surface has one direct --foo declaration, one --bar body mention, and one ordinary NOTES mention; no term or heading is counted as prose.",
+          "expected": [
+            {"source": {"line": 3, "column": 2}, "kind": "option", "names": ["--foo"], "forms": ["--foo"], "emptyDescription": false, "bodyIncludes": ["own --foo body"], "basisKinds": ["name", "form", "literal"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 1, "contextMention": 1},
+          "expectedMentions": [
+            {"class": "entry-mention", "source": {"source": 1, "line": 6, "column": 2}, "title": "--bar", "match": "--foo"},
+            {"class": "context-mention", "source": null, "title": "NOTES", "match": "--foo"}
+          ]
         }
       ]
     }

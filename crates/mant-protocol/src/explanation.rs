@@ -27,6 +27,8 @@ pub const MAX_EXPLANATION_CONTENT_BYTES: u32 = 4 * 1024 * 1024;
 pub const MAX_EXPLANATION_RELATIONS: usize = 4096;
 /// Maximum edges in one returned relationship chain.
 pub const MAX_EXPLANATION_RELATION_DEPTH: usize = 32;
+/// Maximum Unicode scalars copied into one representative match window.
+pub const MAX_EXPLANATION_PREVIEW_SCALARS: usize = 1024;
 
 /// Request-local semantic pagination and materialization controls.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -240,7 +242,12 @@ pub struct ExplanationEvidence {
     pub bases: Vec<EvidenceBasis>,
     /// At most two representative matched blocks, in their source order.
     pub previews: Vec<ExplanationPreview>,
-    /// A representative match window did not fit the remaining copy budget.
+    /// At most two native Fixed windows, without fabricated Flow block paths.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(length(max = 2))]
+    pub fixed_previews: Vec<ExplanationFixedPreview>,
+    /// A Flow or Fixed match window could not be retained exactly within
+    /// response copy/position limits; evidence and counts remain intact.
     pub previews_omitted: bool,
     /// Semantic metadata, absent for prose or when its copy exceeds the budget.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -459,8 +466,13 @@ pub(crate) fn validate_explanation_sources<'a>(
                 ExplanationContent::FixedOwner { reading_body, .. } => Some(reading_body),
                 _ => None,
             });
+        let previews = record
+            .fixed_previews
+            .iter()
+            .map(|preview| &preview.selection);
         if forms
             .chain(bodies)
+            .chain(previews)
             .flat_map(|selection| &selection.parts)
             .any(|part| !valid_fixed_source(part.source))
         {
@@ -496,6 +508,12 @@ pub(crate) fn validate_explanation_sources<'a>(
                 evidence
                     .iter()
                     .flat_map(|evidence| evidence.previews.iter())
+                    .filter_map(|preview| preview.source),
+            )
+            .chain(
+                evidence
+                    .iter()
+                    .flat_map(|evidence| evidence.fixed_previews.iter())
                     .filter_map(|preview| preview.source),
             ),
     )?;

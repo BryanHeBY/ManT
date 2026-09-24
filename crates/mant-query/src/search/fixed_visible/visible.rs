@@ -1,14 +1,15 @@
 //! Match and project native-proven Fixed visible selections.
 #![allow(clippy::similar_names)] // Matcher, match and matches are distinct search-domain terms.
 
+use super::units::append_bounded;
 use super::{
-    FixedBody, FixedSectionReader, MAX_FIXED_SCAN_BYTES, MAX_FIXED_SEARCH_BYTES,
-    MAX_SEARCH_PRESENTATION_BYTES, Matcher, NonZeroU32, OutlineNodeReference, OutlineReference,
-    OutlineTrail, Piece, QuerySearch, Range, ResolvedContent, SearchContentProjection,
-    SearchContextLine, SearchDisplaySlice, SearchError, SearchFixedFragmentSource, SearchFragment,
-    SearchFragmentSource, SearchLocation, SearchMatch, SearchQuery, SearchRenderFormat,
-    SearchRenderSchema, SearchTextJoin, SearchTextUnit, TextJoin, empty_match_error, finish_result,
-    matcher_error, non_utf8_pattern_error, pieces,
+    FixedBody, FixedSectionReader, FixedUnitPart, FixedVisibleUnit, FixedVisibleUnits,
+    MAX_FIXED_SCAN_BYTES, MAX_FIXED_SEARCH_BYTES, MAX_SEARCH_PRESENTATION_BYTES, Matcher,
+    NonZeroU32, OutlineNodeReference, OutlineReference, OutlineTrail, QuerySearch, Range,
+    ResolvedContent, SearchContentProjection, SearchContextLine, SearchDisplaySlice, SearchError,
+    SearchFixedFragmentSource, SearchFragment, SearchFragmentSource, SearchLocation, SearchMatch,
+    SearchQuery, SearchRenderFormat, SearchRenderSchema, SearchTextJoin, SearchTextUnit, TextJoin,
+    empty_match_error, finish_result, matcher_error, non_utf8_pattern_error,
 };
 
 pub(super) fn search_visible(
@@ -18,7 +19,7 @@ pub(super) fn search_visible(
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
     let reader = FixedSectionReader::new(fixed).map_err(|_| SearchError::ContentProjection)?;
-    let parts = pieces(fixed)?;
+    let units = FixedVisibleUnits::new(fixed)?;
     let mut projection = SearchContentProjection {
         fragments: Vec::new(),
         units: Vec::new(),
@@ -27,22 +28,11 @@ pub(super) fn search_visible(
     let mut total = 0_u32;
     let mut presentation_bytes = 0usize;
     let mut scan_bytes = 0usize;
-    let mut cursor = 0;
-    while cursor < parts.len() {
-        let mut end = cursor + 1;
-        while end < parts.len()
-            && parts[end].group == parts[end - 1].group
-            && matches!(
-                parts[end].join_before,
-                Some(TextJoin::DirectContact | TextJoin::AuthoredSeparator(_))
-            )
-        {
-            end += 1;
-        }
+    for unit in units.iter() {
         search_unit(
             fixed,
             &reader,
-            &parts[cursor..end],
+            unit,
             request,
             matcher,
             &mut total,
@@ -51,7 +41,6 @@ pub(super) fn search_visible(
             &mut presentation_bytes,
             &mut scan_bytes,
         )?;
-        cursor = end;
     }
     let content_projection = if matches.is_empty() {
         None
@@ -73,16 +62,11 @@ pub(super) fn search_visible(
     )
 }
 
-struct UnitPart<'a> {
-    piece: &'a Piece,
-    text_range: Range<usize>,
-}
-
 #[allow(clippy::too_many_arguments)] // One bounded unit scan passes borrowed state and two budgets.
 fn search_unit(
     fixed: &FixedBody,
     reader: &FixedSectionReader<'_>,
-    pieces: &[Piece],
+    unit: FixedVisibleUnit<'_>,
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
     total: &mut u32,
@@ -91,32 +75,9 @@ fn search_unit(
     presentation_bytes: &mut usize,
     scan_bytes: &mut usize,
 ) -> Result<(), SearchError> {
-    let mut text = String::new();
-    let mut parts = Vec::with_capacity(pieces.len());
-    for (index, piece) in pieces.iter().enumerate() {
-        if index != 0
-            && let Some(TextJoin::AuthoredSeparator(separator)) = &piece.join_before
-        {
-            append_bounded(&mut text, separator)?;
-        }
-        let start = text.len();
-        let run = fixed
-            .surface
-            .run_text(piece.slice.run)
-            .ok_or(SearchError::ContentProjection)?;
-        let slice = run
-            .get(
-                usize::try_from(piece.slice.start_byte).map_err(|_| SearchError::ResourceLimit)?
-                    ..usize::try_from(piece.slice.end_byte)
-                        .map_err(|_| SearchError::ResourceLimit)?,
-            )
-            .ok_or(SearchError::ContentProjection)?;
-        append_bounded(&mut text, slice)?;
-        parts.push(UnitPart {
-            piece,
-            text_range: start..text.len(),
-        });
-    }
+    let logical = unit.materialize(fixed)?;
+    let text = &logical.text;
+    let parts = &logical.parts;
     *scan_bytes = scan_bytes
         .checked_add(text.len())
         .ok_or(SearchError::ResourceLimit)?;
@@ -147,8 +108,8 @@ fn search_unit(
             match make_visible_match(
                 fixed,
                 reader,
-                &text,
-                &parts,
+                text,
+                parts,
                 found.start()..found.end(),
                 next,
                 request.context_lines,
@@ -175,25 +136,13 @@ fn search_unit(
     }
 }
 
-fn append_bounded(target: &mut String, addition: &str) -> Result<(), SearchError> {
-    let new_len = target
-        .len()
-        .checked_add(addition.len())
-        .ok_or(SearchError::ResourceLimit)?;
-    if new_len > MAX_FIXED_SEARCH_BYTES {
-        return Err(SearchError::ResourceLimit);
-    }
-    target.push_str(addition);
-    Ok(())
-}
-
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)] // A single occurrence closes typed coordinates, slices and preview.
 fn make_visible_match(
     fixed: &FixedBody,
     reader: &FixedSectionReader<'_>,
     text: &str,
-    parts: &[UnitPart<'_>],
+    parts: &[FixedUnitPart<'_>],
     found: Range<usize>,
     ordinal: u32,
     context_lines: u16,

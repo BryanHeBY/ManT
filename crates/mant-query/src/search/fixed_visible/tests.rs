@@ -137,6 +137,43 @@ fn soft_join_has_one_occurrence_and_two_display_slices() {
 }
 
 #[test]
+fn borrowed_units_keep_proven_joins_and_split_unknown_without_guessing() {
+    // This is an IR-only boundary test, not an assertion about which roff
+    // input produces Unknown. Final glyphs and native TextJoin evidence are
+    // independent; terminal row adjacency cannot repair an Unknown edge.
+    let mut query = fixture();
+    let fixed = match &mut query.document.as_mut().unwrap().body {
+        DocumentBody::Fixed(fixed) => fixed,
+        DocumentBody::Flow(_) => unreachable!(),
+    };
+    let units = FixedVisibleUnits::new(fixed).unwrap();
+    let texts = units
+        .iter()
+        .map(|unit| unit.materialize(fixed).unwrap().text)
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["alpha", " alpha"]);
+    assert_eq!(units.iter().count(), 2);
+    assert_eq!(units.iter().next().unwrap().pieces[0].owner, None);
+    assert_eq!(units.iter().next().unwrap().pieces[0].selection_owner, None);
+    assert_eq!(
+        units.iter().next().unwrap().pieces[0].kind,
+        SelectionKind::Region(RegionKind::Literal)
+    );
+
+    fixed.regions[0].selection.joins[0] = TextJoin::Unknown;
+    fixed.validate().unwrap();
+    let units = FixedVisibleUnits::new(fixed).unwrap();
+    let texts = units
+        .iter()
+        .map(|unit| unit.materialize(fixed).unwrap().text)
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["alp", "ha", " alpha"]);
+    let result =
+        super::super::search_query(&query, &request("alpha", SearchScope::Visible, 0, 2)).unwrap();
+    assert_eq!(result.total, 1);
+}
+
+#[test]
 fn fixed_occurrence_paging_and_hidden_bytes_are_exact() {
     let query = fixture();
     let page =

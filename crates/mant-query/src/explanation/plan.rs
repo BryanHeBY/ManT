@@ -66,7 +66,7 @@ impl<'a> DocumentPlan<'a> {
                 let candidate = &plan.candidates[index];
                 (candidate.class(), candidate.order)
             }
-            Self::Fixed(_) => (EvidenceClass::DirectEntry, index),
+            Self::Fixed(plan) => (plan.candidates[index].class, index),
         }
     }
 
