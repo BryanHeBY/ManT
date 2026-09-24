@@ -31,6 +31,7 @@ struct annotated_slot {
 	uint8_t flags;
 	uint8_t occupied;
 	uint8_t authored_space;
+	uint8_t generated_space;
 	uint8_t layout_space;
 	uint32_t first_point;
 	uint64_t skipped_visual;
@@ -209,13 +210,19 @@ static int
 join_wrap_space(struct mant_annotated_collector *collector,
     struct annotated_column *column, const struct annotated_slot *slot)
 {
+	uint32_t join;
+
 	if (column->pending_join == MANT_DISPLAY_JOIN_HARD ||
 	    column->pending_join == MANT_DISPLAY_JOIN_UNKNOWN)
 		return 1;
-	/* term_word() inserts AUTO_SPACE before the next word.  Even when
-	 * bufferc() reuses a blank slot, only a surviving TEXT write can prove
-	 * that a consumed WRAP space was authored. */
-	if (!slot->authored_space) {
+	/* Pinned term.c::term_word() emits AUTO_SPACE before an operand.
+	 * term_flushln() may consume that actual buffer slot at a soft wrap.
+	 * A reused blank has neither proof: BUFFER_CURSOR clears both flags. */
+	join = slot->authored_space ? MANT_DISPLAY_JOIN_SEPARATOR :
+	    slot->generated_space ? MANT_DISPLAY_JOIN_GENERATED_SEPARATOR :
+	    MANT_DISPLAY_JOIN_UNKNOWN;
+	if (join == MANT_DISPLAY_JOIN_UNKNOWN ||
+	    (column->pending_spaces != 0 && column->pending_join != join)) {
 		join_unknown(column);
 		return 1;
 	}
@@ -235,7 +242,7 @@ join_wrap_space(struct mant_annotated_collector *collector,
 		join_unknown(column);
 		return 1;
 	}
-	column->pending_join = MANT_DISPLAY_JOIN_SEPARATOR;
+	column->pending_join = join;
 	column->pending_spaces++;
 	return 1;
 }
@@ -2242,6 +2249,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		slot->value = event->value;
 		slot->authored_space = event->reason == TERM_COLLECT_TEXT &&
 		    event->value == ' ' && collector->pending_source != 0;
+		slot->generated_space = event->reason ==
+		    TERM_COLLECT_AUTO_SPACE && event->value == ' ';
 		slot->layout_space = event->value == ' ' &&
 		    (event->reason == TERM_COLLECT_HORIZ ||
 		    event->reason == TERM_COLLECT_FIELD);
@@ -2255,11 +2264,16 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			column = collector->columns + event->column;
 			if (event->pos < column->capacity) {
 				slot = column->slots + event->pos;
-				if (slot->occupied && slot->value == ' ' &&
-				    (slot->origin != collector->pending_origin ||
-				    event->reason != TERM_COLLECT_TEXT)) {
-					slot->authored_space = 0;
-				/* bufferc() can traverse a previously written
+				if (slot->occupied && slot->value == ' ') {
+					/* A matching cursor is the second half of
+					 * bufferc()'s own write, not blank reuse. */
+					if (slot->origin != collector->pending_origin ||
+					    event->reason != TERM_COLLECT_TEXT)
+						slot->authored_space = 0;
+					if (slot->origin != collector->pending_origin ||
+					    event->reason != TERM_COLLECT_AUTO_SPACE)
+						slot->generated_space = 0;
+					/* bufferc() can traverse a previously written
 				 * HORIZ/FIELD blank without replacing it.  The
 				 * cell remains formatter layout even after its
 				 * logical origin is no longer current. */

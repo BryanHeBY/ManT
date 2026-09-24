@@ -378,9 +378,9 @@
         },
         {
           "query": "new-session",
-          "review": "Pinned CVS mdoc_macro.c::blk_full retains the long Xo HEAD from line 16 and its body. Native output cannot prove all later HEAD joins, but the first Ic component and its following visible separator prove the exact command word; only that component is returned as the form.",
+          "review": "Pinned CVS mdoc_macro.c::blk_full retains the long Xo HEAD from line 16 and its body. term.c::term_word writes AUTO_SPACE before option operands; two consumed WRAP spaces are distinct generated-separator joins, so the complete final head is one form while only Ic new-session binds the command name.",
           "expected": [
-            {"source": {"line": 16, "column": 2}, "kind": "command", "names": ["new-session"], "forms": ["new-session"], "emptyDescription": false, "bodyIncludes": ["XO_BODY"]}
+            {"source": {"line": 16, "column": 2}, "kind": "command", "names": ["new-session"], "forms": ["new-session [-AdDEPX] [-c start-directory] [-e environment] [-f flags] [-F format] [-n window-name] [-s session-name] [-t group-name] [-x width] [-y height] [shell-command [argument ...]]"], "emptyDescription": false, "bodyIncludes": ["XO_BODY"]}
           ],
           "expectedCounts": {"directEntry": 1}
         },

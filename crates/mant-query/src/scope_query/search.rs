@@ -193,6 +193,7 @@ fn accumulate_response_bytes(
         for unit in &projection.units {
             for join in &unit.joins {
                 if let SearchTextJoin::AuthoredSeparator { text }
+                | SearchTextJoin::GeneratedSeparator { text }
                 | SearchTextJoin::RenderSeparator { text } = join
                 {
                     *projection_bytes =

@@ -158,6 +158,10 @@ pub enum TextJoin {
     ///
     /// A separator already visible inside a slice is not repeated here.
     AuthoredSeparator(String),
+    /// Exact formatter-generated ASCII spaces consumed between final runs.
+    /// These bytes have no authored source span and are never inferred from
+    /// row or terminal-column geometry.
+    GeneratedSeparator(String),
     /// A native structural boundary forbids a cross-slice match.
     HardBoundary,
     /// Adjacency exists but cannot license a cross-slice match.
@@ -332,7 +336,9 @@ impl OwnerMark {
             && self.head.joins.iter().all(|join| {
                 matches!(
                     join,
-                    TextJoin::DirectContact | TextJoin::AuthoredSeparator(_)
+                    TextJoin::DirectContact
+                        | TextJoin::AuthoredSeparator(_)
+                        | TextJoin::GeneratedSeparator(_)
                 )
             })
     }
@@ -604,7 +610,8 @@ impl FixedBody {
             true
         } else {
             match owner.head.joins.get(count - 1)? {
-                TextJoin::AuthoredSeparator(separator) => {
+                TextJoin::AuthoredSeparator(separator)
+                | TextJoin::GeneratedSeparator(separator) => {
                     separator.starts_with(char::is_whitespace)
                 }
                 TextJoin::DirectContact => {
@@ -669,7 +676,8 @@ impl FixedBody {
             if index != 0 {
                 match &selection.joins[index - 1] {
                     TextJoin::DirectContact => {}
-                    TextJoin::AuthoredSeparator(separator) => text.push_str(separator),
+                    TextJoin::AuthoredSeparator(separator)
+                    | TextJoin::GeneratedSeparator(separator) => text.push_str(separator),
                     TextJoin::HardBoundary | TextJoin::Unknown => return None,
                 }
             }
@@ -682,8 +690,9 @@ impl FixedBody {
     }
 
     /// Map a logical UTF-8 range back to surviving display slices. A range
-    /// touching an authored separator has no final glyph to bind and is
-    /// rejected; no byte or cell coordinate is inferred from layout.
+    /// touching a consumed authored or generated separator has no final
+    /// glyph to bind and is rejected; no byte or cell coordinate is inferred
+    /// from layout.
     #[must_use]
     pub fn selection_subrange(
         &self,
@@ -701,7 +710,8 @@ impl FixedBody {
             if index != 0 {
                 match &selection.joins[index - 1] {
                     TextJoin::DirectContact => {}
-                    TextJoin::AuthoredSeparator(separator) => {
+                    TextJoin::AuthoredSeparator(separator)
+                    | TextJoin::GeneratedSeparator(separator) => {
                         let end = cursor.checked_add(separator.len())?;
                         if range.start < end && cursor < range.end {
                             return None;

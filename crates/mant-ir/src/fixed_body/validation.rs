@@ -161,14 +161,17 @@ impl DisplaySurface {
             }
             if let Some(prior) = previous {
                 let join = &selection.joins[index - 1];
-                if let TextJoin::AuthoredSeparator(separator) = join
+                if let TextJoin::AuthoredSeparator(separator)
+                | TextJoin::GeneratedSeparator(separator) = join
                     && (separator.is_empty() || !separator.bytes().all(|byte| byte == b' '))
                 {
-                    return Err(FixedBodyError("invalid authored display separator"));
+                    return Err(FixedBodyError("invalid native display separator"));
                 }
                 if !matches!(
                     join,
-                    TextJoin::DirectContact | TextJoin::AuthoredSeparator(_)
+                    TextJoin::DirectContact
+                        | TextJoin::AuthoredSeparator(_)
+                        | TextJoin::GeneratedSeparator(_)
                 ) {
                     previous = Some(*part);
                     continue;
@@ -264,7 +267,9 @@ impl FixedBody {
             self.surface
                 .validate_selection_with_prefix(selection, &non_layout_prefix)?;
             for join in &selection.joins {
-                if let TextJoin::AuthoredSeparator(separator) = join {
+                if let TextJoin::AuthoredSeparator(separator)
+                | TextJoin::GeneratedSeparator(separator) = join
+                {
                     join_bytes = join_bytes
                         .checked_add(separator.len() as u64)
                         .ok_or(FixedBodyError("display join byte count overflows"))?;

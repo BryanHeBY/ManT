@@ -86,7 +86,8 @@ pub struct AnnotatedSelectionPart {
     pub start_byte: u64,
     pub end_byte: u64,
     pub join_before: AnnotatedTextJoin,
-    /// Byte range in `AnnotatedDocument::join_text` for an authored separator.
+    /// Byte range in `AnnotatedDocument::join_text` for an exact native
+    /// authored or formatter-generated separator.
     /// Other join kinds have a zero start and length.
     pub join_text_start: u64,
     pub join_text_len: u64,
@@ -101,6 +102,7 @@ pub enum AnnotatedTextJoin {
     AuthoredSeparator = 2,
     HardBoundary = 3,
     Unknown = 4,
+    GeneratedSeparator = 5,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -253,7 +255,7 @@ pub struct AnnotatedDocument {
     pub marks: Vec<AnnotatedMark>,
     /// Final, surviving direct owner/link selections, grouped by mark key.
     pub selection_parts: Vec<AnnotatedSelectionPart>,
-    /// Shared exact authored-separator bytes for selection joins.
+    /// Shared exact authored or native-generated separator bytes for joins.
     pub join_text: String,
     pub coverage: AnnotationCoverage,
 }
@@ -396,7 +398,10 @@ mod tests {
         for part in &page.selection_parts
             [mark.selection_first as usize..(mark.selection_first + mark.selection_count) as usize]
         {
-            if part.join_before == AnnotatedTextJoin::AuthoredSeparator {
+            if matches!(
+                part.join_before,
+                AnnotatedTextJoin::AuthoredSeparator | AnnotatedTextJoin::GeneratedSeparator
+            ) {
                 let start = usize::try_from(part.join_text_start).unwrap();
                 let end = start + usize::try_from(part.join_text_len).unwrap();
                 text.push_str(&page.join_text[start..end]);
@@ -519,6 +524,36 @@ mod tests {
             .unwrap();
         let component = page.marks.iter().find(|mark| mark.kind == 6).unwrap();
         assert_eq!(direct_mark_text(&page, component), "foo");
+    }
+
+    #[test]
+    fn native_soft_wrap_records_generated_separator_without_authored_provenance() {
+        // Exact fixture ran pinned CVS -Ttree/-Tutf8 before this assertion.
+        // term.c::term_word writes AUTO_SPACE; term_flushln consumes its
+        // buffer slot at WRAP, while the Xo HEAD stays one native region.
+        let input = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/roff/annotated-mdoc-xo-generated-space.1"
+        ));
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", input.to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let head = page
+            .marks
+            .iter()
+            .find(|mark| mark.kind == 5 && mark.region_kind == 3)
+            .unwrap();
+        assert_eq!(
+            direct_mark_text(&page, head),
+            "run [-alpha] [-bravo] [-charlie] [-delta] [-echo] [-foxtrot] [-golf] [-hotel]"
+        );
+        let parts = &page.selection_parts
+            [head.selection_first as usize..(head.selection_first + head.selection_count) as usize];
+        assert!(parts.iter().any(|part| {
+            part.join_before == AnnotatedTextJoin::GeneratedSeparator && part.join_text_len > 0
+        }));
     }
 
     #[test]

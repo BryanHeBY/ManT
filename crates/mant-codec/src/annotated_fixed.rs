@@ -609,7 +609,7 @@ fn selection(page: &AnnotatedDocument, mark: &AnnotatedMark) -> Result<TextSelec
         if index != 0 {
             joins.push(match part.join_before {
                 AnnotatedTextJoin::DirectContact => TextJoin::DirectContact,
-                AnnotatedTextJoin::AuthoredSeparator => {
+                AnnotatedTextJoin::AuthoredSeparator | AnnotatedTextJoin::GeneratedSeparator => {
                     let start = usize::try_from(part.join_text_start)
                         .map_err(|_| AnnotatedProjectionError::Relation("join start overflow"))?;
                     let end = start
@@ -617,14 +617,18 @@ fn selection(page: &AnnotatedDocument, mark: &AnnotatedMark) -> Result<TextSelec
                             AnnotatedProjectionError::Relation("join length overflow")
                         })?)
                         .ok_or(AnnotatedProjectionError::Relation("join text overflow"))?;
-                    TextJoin::AuthoredSeparator(
-                        page.join_text
-                            .get(start..end)
-                            .ok_or(AnnotatedProjectionError::Relation(
-                                "join text outside arena",
-                            ))?
-                            .to_owned(),
-                    )
+                    let text = page
+                        .join_text
+                        .get(start..end)
+                        .ok_or(AnnotatedProjectionError::Relation(
+                            "join text outside arena",
+                        ))?
+                        .to_owned();
+                    if part.join_before == AnnotatedTextJoin::AuthoredSeparator {
+                        TextJoin::AuthoredSeparator(text)
+                    } else {
+                        TextJoin::GeneratedSeparator(text)
+                    }
                 }
                 AnnotatedTextJoin::HardBoundary => TextJoin::HardBoundary,
                 AnnotatedTextJoin::Unknown => TextJoin::Unknown,

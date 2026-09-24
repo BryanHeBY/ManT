@@ -295,6 +295,14 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
             .as_deref(),
         Some("界")
     );
+    // Exact native AUTO_SPACE is logical text, but has no final run bytes to
+    // project as an isolated source-backed occurrence.
+    let generated = TextSelection {
+        joins: vec![TextJoin::GeneratedSeparator(" ".to_owned())],
+        ..separated
+    };
+    assert_eq!(body.selection_text(&generated).as_deref(), Some("a 界"));
+    assert!(body.selection_subrange(&generated, 0..5).is_none());
 }
 
 #[test]

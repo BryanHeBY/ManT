@@ -65,14 +65,15 @@ def checked_parts(selection: object) -> tuple[list[dict], list[dict]]:
         previous = part
     for join in joins:
         if not isinstance(join, dict) or join.get("kind") not in (
-            "direct-contact", "authored-separator", "hard-boundary", "unknown"
+            "direct-contact", "authored-separator", "generated-separator",
+            "hard-boundary", "unknown"
         ):
             raise ValueError("invalid Fixed text join")
-        if join["kind"] == "authored-separator" and (
+        if join["kind"] in ("authored-separator", "generated-separator") and (
             not isinstance(join.get("text"), str) or not join["text"]
             or set(join["text"]) != {" "}
         ):
-            raise ValueError("invalid Fixed authored separator")
+            raise ValueError("invalid Fixed native separator")
     return parts, joins
 
 
@@ -87,10 +88,10 @@ def complete_form(selection: object) -> str:
             join = joins[index - 1]
             if not isinstance(join, dict):
                 raise ValueError("invalid Fixed form join")
-            if join.get("kind") == "authored-separator":
+            if join.get("kind") in ("authored-separator", "generated-separator"):
                 separator = join.get("text")
                 if not isinstance(separator, str) or not separator or set(separator) != {" "}:
-                    raise ValueError("invalid authored separator")
+                    raise ValueError("invalid native separator")
                 text += separator
             elif join.get("kind") != "direct-contact":
                 raise ValueError("form lacks proven logical continuity")
@@ -462,6 +463,19 @@ def run(manifest: Path, cli: Path, timeout: int, only: set[str]) -> dict:
 def self_check() -> None:
     selection = {"parts": [{"slice": {"run": 1, "startByte": 0, "endByte": 2},
                              "text": "-a", "row": 1, "runColumn": 0, "column": 0, "width": 2}], "joins": []}
+    second = {**selection["parts"][0],
+              "slice": {"run": 2, "startByte": 0, "endByte": 2},
+              "text": "-b", "row": 2}
+    generated = {"parts": [selection["parts"][0], second],
+                 "joins": [{"kind": "generated-separator", "text": " "}]}
+    assert complete_form(generated) == "-a -b"
+    invalid_generated = {**generated, "joins": [{"kind": "generated-separator", "text": "\t"}]}
+    try:
+        complete_form(invalid_generated)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-space generated join was accepted")
     evidence = {"class": "direct-entry", "source": {"source": 1, "line": 4, "column": 2},
                 "outline": {"node": {"id": "x", "path": "1/e1"}},
                 "bases": [{"kind": "name", "matches": [{"name": "-a"}]}],

@@ -111,10 +111,10 @@ impl ExplanationFixedSelection {
             previous = Some(part);
         }
         if self.joins.iter().any(|join| {
-            matches!(join, TextJoin::AuthoredSeparator(text)
+            matches!(join, TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text)
                 if text.is_empty() || !text.bytes().all(|byte| byte == b' '))
         }) {
-            return Err("invalid Fixed authored separator");
+            return Err("invalid Fixed native separator");
         }
         Ok(())
     }
@@ -128,7 +128,8 @@ impl ExplanationFixedSelection {
             if index > 0 {
                 match &self.joins[index - 1] {
                     TextJoin::DirectContact => {}
-                    TextJoin::AuthoredSeparator(separator) => text.push_str(separator),
+                    TextJoin::AuthoredSeparator(separator)
+                    | TextJoin::GeneratedSeparator(separator) => text.push_str(separator),
                     TextJoin::HardBoundary | TextJoin::Unknown => return None,
                 }
             }
@@ -214,7 +215,8 @@ impl ExplanationFixedPreview {
         for join in &self.selection.joins {
             match join {
                 TextJoin::DirectContact => {}
-                TextJoin::AuthoredSeparator(separator) => {
+                TextJoin::AuthoredSeparator(separator)
+                | TextJoin::GeneratedSeparator(separator) => {
                     scalars = scalars
                         .checked_add(
                             separator
@@ -362,6 +364,11 @@ mod tests {
         assert!(invalid.validate().is_err());
         invalid.selection.joins[0] = TextJoin::DirectContact;
         assert!(invalid.validate().is_ok());
+        invalid.selection.joins[0] = TextJoin::GeneratedSeparator(" ".into());
+        assert_eq!(invalid.selection.complete_text().as_deref(), Some("中a b"));
+        assert!(invalid.validate().is_ok());
+        invalid.selection.joins[0] = TextJoin::GeneratedSeparator("\t".into());
+        assert!(invalid.validate().is_err());
 
         let mut oversized = preview();
         oversized.selection.parts[0].text =

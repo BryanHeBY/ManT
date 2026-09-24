@@ -1147,7 +1147,8 @@ fn selection_bytes(source: &TextSelection) -> Option<usize> {
     })?;
     source.joins.iter().try_fold(text, |total, join| {
         total.checked_add(match join {
-            mant_ir::TextJoin::AuthoredSeparator(text) => text.len(),
+            mant_ir::TextJoin::AuthoredSeparator(text)
+            | mant_ir::TextJoin::GeneratedSeparator(text) => text.len(),
             _ => 0,
         })
     })

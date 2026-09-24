@@ -149,8 +149,8 @@ fn make_visible_match(
     projection: &mut SearchContentProjection,
     presentation_bytes: &mut usize,
 ) -> Result<SearchMatch, SearchError> {
-    // Retain only the parts necessary to close this occurrence. A match in an
-    // authored separator still needs both neighboring real run fragments.
+    // Retain only the parts necessary to close this occurrence. A consumed
+    // native separator still needs both neighboring real run fragments.
     let first = parts
         .partition_point(|part| part.text_range.start <= found.start)
         .saturating_sub(1);
@@ -204,6 +204,9 @@ fn make_visible_match(
                 {
                     TextJoin::DirectContact => SearchTextJoin::DirectContact,
                     TextJoin::AuthoredSeparator(separator) => SearchTextJoin::AuthoredSeparator {
+                        text: separator.clone(),
+                    },
+                    TextJoin::GeneratedSeparator(separator) => SearchTextJoin::GeneratedSeparator {
                         text: separator.clone(),
                     },
                     TextJoin::HardBoundary | TextJoin::Unknown => {

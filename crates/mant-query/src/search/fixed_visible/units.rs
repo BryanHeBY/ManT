@@ -26,7 +26,11 @@ impl FixedVisibleUnits {
                 && pieces[end].group == pieces[end - 1].group
                 && matches!(
                     pieces[end].join_before,
-                    Some(TextJoin::DirectContact | TextJoin::AuthoredSeparator(_))
+                    Some(
+                        TextJoin::DirectContact
+                            | TextJoin::AuthoredSeparator(_)
+                            | TextJoin::GeneratedSeparator(_)
+                    )
                 )
             {
                 end += 1;
@@ -96,7 +100,10 @@ impl<'a> FixedVisibleUnit<'a> {
         let mut parts = Vec::with_capacity(self.pieces.len());
         for (index, piece) in self.pieces.iter().enumerate() {
             if index != 0
-                && let Some(TextJoin::AuthoredSeparator(separator)) = &piece.join_before
+                && let Some(
+                    TextJoin::AuthoredSeparator(separator)
+                    | TextJoin::GeneratedSeparator(separator),
+                ) = &piece.join_before
             {
                 append_bounded(&mut text, separator)?;
             }

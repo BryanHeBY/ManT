@@ -628,11 +628,13 @@ write_bytes(struct mant_annotated_display *display,
 	    (label.flags & ~MANT_ANNOTATED_FONT_STROKE) != 0 ||
 	    label.reserved != 0 || edge.reserved != 0 ||
 	    edge.same_origin_continuation > 1 ||
-	    edge.join > MANT_DISPLAY_JOIN_HARD ||
+	    edge.join > MANT_DISPLAY_JOIN_GENERATED_SEPARATOR ||
 	    (edge.join != MANT_DISPLAY_JOIN_SEPARATOR &&
+	    edge.join != MANT_DISPLAY_JOIN_GENERATED_SEPARATOR &&
 	    (edge.separator_spaces != 0 || edge.separator_owner != 0 ||
 	    edge.separator_link != 0)) ||
-	    (edge.join == MANT_DISPLAY_JOIN_SEPARATOR &&
+	    ((edge.join == MANT_DISPLAY_JOIN_SEPARATOR ||
+	    edge.join == MANT_DISPLAY_JOIN_GENERATED_SEPARATOR) &&
 	    edge.separator_spaces == 0) ||
 	    (display->tracking_mode != 0 && display->tracking_mode != mode))
 		return fail(display, MANT_ANNOTATED_DISPLAY_INVALID);

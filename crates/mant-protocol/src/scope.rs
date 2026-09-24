@@ -640,6 +640,7 @@ fn add_scope_projection_bytes(
     for unit in &projection.units {
         for join in &unit.joins {
             if let crate::SearchTextJoin::AuthoredSeparator { text }
+            | crate::SearchTextJoin::GeneratedSeparator { text }
             | crate::SearchTextJoin::RenderSeparator { text } = join
             {
                 *total = total

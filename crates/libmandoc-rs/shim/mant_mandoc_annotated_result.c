@@ -64,13 +64,16 @@ native_join(const struct mant_annotated_run_endpoint *endpoints,
 	case MANT_DISPLAY_JOIN_HARD:
 		return MANT_ANNOTATED_JOIN_HARD_BOUNDARY;
 	case MANT_DISPLAY_JOIN_SEPARATOR:
+	case MANT_DISPLAY_JOIN_GENERATED_SEPARATOR:
 		if ((mark_kind == MANT_ANNOTATED_MARK_LINK ?
 		    current->first_edge.separator_link :
 		    current->first_edge.separator_owner) != mark_key)
 			return MANT_ANNOTATED_JOIN_UNKNOWN;
 		*spaces = current->first_edge.separator_spaces;
 		return *spaces == 0 ? MANT_ANNOTATED_JOIN_UNKNOWN :
-		    MANT_ANNOTATED_JOIN_AUTHORED_SEPARATOR;
+		    current->first_edge.join == MANT_DISPLAY_JOIN_SEPARATOR ?
+		    MANT_ANNOTATED_JOIN_AUTHORED_SEPARATOR :
+		    MANT_ANNOTATED_JOIN_GENERATED_SEPARATOR;
 	default:
 		return MANT_ANNOTATED_JOIN_UNKNOWN;
 	}

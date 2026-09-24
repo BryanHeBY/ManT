@@ -49,7 +49,8 @@ enum mant_annotated_display_join {
 	MANT_DISPLAY_JOIN_UNKNOWN = 0,
 	MANT_DISPLAY_JOIN_DIRECT = 1,
 	MANT_DISPLAY_JOIN_SEPARATOR = 2,
-	MANT_DISPLAY_JOIN_HARD = 3
+	MANT_DISPLAY_JOIN_HARD = 3,
+	MANT_DISPLAY_JOIN_GENERATED_SEPARATOR = 4
 };
 
 struct mant_annotated_display_edge {

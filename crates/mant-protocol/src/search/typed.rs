@@ -267,6 +267,12 @@ pub enum SearchTextJoin {
         /// One or more source-authored ASCII spaces absent from final runs.
         text: String,
     },
+    /// Exact formatter-generated ASCII spaces consumed between Fixed runs.
+    /// These bytes have no authored source position or terminal-cell geometry.
+    GeneratedSeparator {
+        /// Exact native separator text, represented only in this join.
+        text: String,
+    },
     /// Structural boundary that blocks a cross-fragment match.
     HardBoundary,
     /// Unknown connection that blocks a cross-fragment match.
@@ -298,6 +304,7 @@ impl SearchContentProjection {
         }
         for join in &unit.joins {
             if let SearchTextJoin::AuthoredSeparator { text }
+            | SearchTextJoin::GeneratedSeparator { text }
             | SearchTextJoin::RenderSeparator { text } = join
             {
                 bytes = bytes
@@ -372,15 +379,19 @@ impl SearchContentProjection {
             }
             for join in &unit.joins {
                 if let SearchTextJoin::RenderSeparator { text }
-                | SearchTextJoin::AuthoredSeparator { text } = join
+                | SearchTextJoin::AuthoredSeparator { text }
+                | SearchTextJoin::GeneratedSeparator { text } = join
                 {
                     if text.is_empty() {
                         return Err("search separator is empty");
                     }
-                    if matches!(join, SearchTextJoin::AuthoredSeparator { .. })
-                        && !text.bytes().all(|byte| byte == b' ')
+                    if matches!(
+                        join,
+                        SearchTextJoin::AuthoredSeparator { .. }
+                            | SearchTextJoin::GeneratedSeparator { .. }
+                    ) && !text.bytes().all(|byte| byte == b' ')
                     {
-                        return Err("search authored separator is not native ASCII space");
+                        return Err("search native separator is not ASCII space");
                     }
                     bytes = bytes
                         .checked_add(text.len())
@@ -414,7 +425,8 @@ impl SearchContentProjection {
         for (index, fragment_key) in unit.fragments.iter().enumerate() {
             if let Some(
                 SearchTextJoin::RenderSeparator { text: separator }
-                | SearchTextJoin::AuthoredSeparator { text: separator },
+                | SearchTextJoin::AuthoredSeparator { text: separator }
+                | SearchTextJoin::GeneratedSeparator { text: separator },
             ) = index.checked_sub(1).and_then(|prior| unit.joins.get(prior))
             {
                 text.push_str(separator);
@@ -474,7 +486,12 @@ impl SearchContentProjection {
                     .get(index - 1)
                     .ok_or("search unit join is missing")?;
                 if (fixed && matches!(join, SearchTextJoin::RenderSeparator { .. }))
-                    || (!fixed && matches!(join, SearchTextJoin::AuthoredSeparator { .. }))
+                    || (!fixed
+                        && matches!(
+                            join,
+                            SearchTextJoin::AuthoredSeparator { .. }
+                                | SearchTextJoin::GeneratedSeparator { .. }
+                        ))
                 {
                     return Err("search join is invalid for this visible body family");
                 }
@@ -485,7 +502,8 @@ impl SearchContentProjection {
                     return Err("search match crosses a blocked join");
                 }
                 if let SearchTextJoin::RenderSeparator { text }
-                | SearchTextJoin::AuthoredSeparator { text } = join
+                | SearchTextJoin::AuthoredSeparator { text }
+                | SearchTextJoin::GeneratedSeparator { text } = join
                 {
                     cursor = cursor
                         .checked_add(text.len())
@@ -575,11 +593,10 @@ mod tests {
     use super::*;
     use crate::OutlineNodeReference;
 
-    #[test]
-    fn authored_separator_is_exact_and_display_slices_are_intersections() {
+    fn fixed_separator_fixture() -> (SearchContentProjection, SearchMatch) {
         let one = NonZeroU32::MIN;
         let two = NonZeroU32::new(2).unwrap();
-        let mut projection = SearchContentProjection {
+        let projection = SearchContentProjection {
             fragments: vec![
                 SearchFragment {
                     key: one,
@@ -610,9 +627,7 @@ mod tests {
                 }],
             }],
         };
-        projection.validate().unwrap();
-        assert_eq!(projection.unit_text(one).unwrap(), "a   b");
-        let mut matched = SearchMatch {
+        let matched = SearchMatch {
             ordinal: 1,
             outline: OutlineTrail {
                 ancestors: Vec::new(),
@@ -644,7 +659,29 @@ mod tests {
             preview: "a   b".to_owned(),
             context: Vec::new(),
         };
+        (projection, matched)
+    }
+
+    #[test]
+    fn authored_separator_is_exact_and_display_slices_are_intersections() {
+        let (mut projection, mut matched) = fixed_separator_fixture();
+        projection.validate().unwrap();
+        assert_eq!(projection.unit_text(NonZeroU32::MIN).unwrap(), "a   b");
         projection.validate_match(&matched).unwrap();
+        // term.c::term_word() AUTO_SPACE may be consumed by term_flushln().
+        // The exact non-authored bytes remain searchable Fixed join evidence.
+        projection.units[0].joins[0] = SearchTextJoin::GeneratedSeparator {
+            text: "   ".to_owned(),
+        };
+        let generated = serde_json::to_value(&projection.units[0].joins[0]).unwrap();
+        assert_eq!(generated["kind"], "generated-separator");
+        assert_eq!(generated["text"], "   ");
+        projection.validate().unwrap();
+        projection.validate_match(&matched).unwrap();
+        projection.units[0].joins[0] = SearchTextJoin::GeneratedSeparator {
+            text: "\t".to_owned(),
+        };
+        assert!(projection.validate().is_err());
         projection.units[0].joins[0] = SearchTextJoin::RenderSeparator {
             text: "   ".to_owned(),
         };
@@ -659,9 +696,13 @@ mod tests {
                 });
         }
         matched.location = SearchLocation::VisibleFlow {
-            unit: one,
+            unit: NonZeroU32::MIN,
             start_scalar: 0,
             end_scalar: 5,
+        };
+        assert!(projection.validate_match(&matched).is_err());
+        projection.units[0].joins[0] = SearchTextJoin::GeneratedSeparator {
+            text: "   ".to_owned(),
         };
         assert!(projection.validate_match(&matched).is_err());
         projection.units[0].joins[0] = SearchTextJoin::RenderSeparator {

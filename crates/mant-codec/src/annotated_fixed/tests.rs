@@ -1367,6 +1367,113 @@ fn scoped_fixed_mentions_rebuild_selected_units_after_flow_document() {
 }
 
 #[test]
+fn fixed_xo_wrap_keeps_generated_space_in_full_form_and_visible_match() {
+    // Exact fixture first ran pinned CVS -Ttree/-Tutf8. mdoc_macro.c keeps
+    // Xo children in one HEAD; term.c::term_word writes AUTO_SPACE and
+    // term_flushln consumes the last option's separator at a soft wrap.
+    let input = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/roff/annotated-mdoc-xo-generated-space.1"
+    ));
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    let full = "run [-alpha] [-bravo] [-charlie] [-delta] [-echo] [-foxtrot] [-golf] [-hotel]";
+    let fixed = match &document.body {
+        DocumentBody::Fixed(fixed) => fixed,
+        DocumentBody::Flow(_) => unreachable!(),
+    };
+    let owner = fixed
+        .owners
+        .iter()
+        .find(|owner| owner.entry.is_some())
+        .unwrap();
+    let forms = &owner.entry.as_ref().unwrap().forms;
+    assert_eq!(forms.len(), 1);
+    assert_eq!(fixed.selection_text(&forms[0]).as_deref(), Some(full));
+    assert!(
+        owner
+            .head
+            .joins
+            .iter()
+            .any(|join| matches!(join, mant_ir::TextJoin::GeneratedSeparator(text) if text == " "))
+    );
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let result = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: full.to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(result.counts.direct_entry.total, 1);
+    let found = mant_query::search_query(
+        &resolved,
+        &SearchQuery {
+            pattern: full.to_owned(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(found.total, 1);
+    let hit = &found.matches[0];
+    assert_eq!(hit.matched_text, full);
+    let mant_protocol::SearchLocation::VisibleFixed {
+        unit,
+        start_scalar,
+        end_scalar,
+    } = hit.location
+    else {
+        panic!("generated-space hit lost its Fixed coordinate");
+    };
+    assert_eq!(end_scalar - start_scalar, full.chars().count() as u64);
+    let projection = found.content_projection.as_ref().unwrap();
+    assert_eq!(projection.unit_text(unit).unwrap(), full);
+    assert!(projection.units.iter().any(|unit| unit.joins.iter().any(
+        |join| matches!(join, mant_protocol::SearchTextJoin::GeneratedSeparator { text } if text == " ")
+    )));
+    projection.validate_match(hit).unwrap();
+}
+
+#[test]
+fn fixed_native_nospace_modes_do_not_forge_generated_word_join() {
+    // Both exact inputs ran pinned CVS -Tutf8 first. mdoc_term.c sets
+    // TERMP_NOSPACE for Ns/Sm off, so term.c::term_word emits no AUTO_SPACE.
+    for input in [
+        b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag\n.It Ic foo Ns Ic bar\nbody\n.El\n".as_slice(),
+        b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag\n.Sm off\n.It Ic foo Ic bar\nbody\n.Sm on\n.El\n".as_slice(),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!()
+        };
+        let head = &fixed.owners[0].head;
+        assert_eq!(fixed.selection_text(head).as_deref(), Some("foobar"));
+        assert!(!head
+            .joins
+            .iter()
+            .any(|join| matches!(join, mant_ir::TextJoin::GeneratedSeparator(_))));
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".to_owned(),
+            document: Some(document),
+            tldr: None,
+        };
+        assert_eq!(visible_total(&resolved, "foo bar"), 0);
+    }
+}
+
+#[test]
 fn native_head_components_index_distinct_mdoc_options_without_guessing_styled_terms() {
     // These exact inputs first ran pinned CVS -Ttree and -Tutf8. In
     // mdoc_macro.c::blk_full, each Fl is a distinct HEAD child; mdoc_term.c::

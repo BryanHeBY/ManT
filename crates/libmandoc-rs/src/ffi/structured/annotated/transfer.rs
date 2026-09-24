@@ -596,9 +596,13 @@ pub(super) fn transfer(
                 (1.., 2) => AnnotatedTextJoin::AuthoredSeparator,
                 (1.., 3) => AnnotatedTextJoin::HardBoundary,
                 (1.., 4) => AnnotatedTextJoin::Unknown,
+                (1.., 5) => AnnotatedTextJoin::GeneratedSeparator,
                 _ => return Err(invalid_result()),
             };
-            if join_before == AnnotatedTextJoin::AuthoredSeparator {
+            if matches!(
+                join_before,
+                AnnotatedTextJoin::AuthoredSeparator | AnnotatedTextJoin::GeneratedSeparator
+            ) {
                 let join_start =
                     usize::try_from(part.join_text_start).map_err(|_| invalid_result())?;
                 let join_len = usize::try_from(part.join_text_len).map_err(|_| invalid_result())?;

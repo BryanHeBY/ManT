@@ -413,7 +413,8 @@ impl<'a> FixedSectionReader<'a> {
             {
                 match join {
                     TextJoin::DirectContact => {}
-                    TextJoin::AuthoredSeparator(separator) => text.push_str(separator),
+                    TextJoin::AuthoredSeparator(separator)
+                    | TextJoin::GeneratedSeparator(separator) => text.push_str(separator),
                     TextJoin::HardBoundary | TextJoin::Unknown => text.push(' '),
                 }
             }

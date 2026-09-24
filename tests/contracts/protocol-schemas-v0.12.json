@@ -9600,6 +9600,24 @@
             ]
           },
           {
+            "description": "Exact formatter-generated ASCII spaces consumed between final runs.\nThese bytes have no authored source span and are never inferred from\nrow or terminal-column geometry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated-separator"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
             "description": "A native structural boundary forbids a cross-slice match.",
             "type": "object",
             "properties": {
@@ -18018,6 +18036,24 @@
             ]
           },
           {
+            "description": "Exact formatter-generated ASCII spaces consumed between final runs.\nThese bytes have no authored source span and are never inferred from\nrow or terminal-column geometry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated-separator"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
             "description": "A native structural boundary forbids a cross-slice match.",
             "type": "object",
             "properties": {
@@ -25148,6 +25184,25 @@
             ]
           },
           {
+            "description": "Exact formatter-generated ASCII spaces consumed between Fixed runs.\nThese bytes have no authored source position or terminal-cell geometry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated-separator"
+              },
+              "text": {
+                "description": "Exact native separator text, represented only in this join.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
             "description": "Structural boundary that blocks a cross-fragment match.",
             "type": "object",
             "properties": {
@@ -25737,6 +25792,24 @@
               "kind": {
                 "type": "string",
                 "const": "authored-separator"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Exact formatter-generated ASCII spaces consumed between final runs.\nThese bytes have no authored source span and are never inferred from\nrow or terminal-column geometry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated-separator"
               },
               "text": {
                 "type": "string"
@@ -27865,6 +27938,25 @@
               },
               "text": {
                 "description": "One or more source-authored ASCII spaces absent from final runs.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ]
+          },
+          {
+            "description": "Exact formatter-generated ASCII spaces consumed between Fixed runs.\nThese bytes have no authored source position or terminal-cell geometry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "generated-separator"
+              },
+              "text": {
+                "description": "Exact native separator text, represented only in this join.",
                 "type": "string"
               }
             },
