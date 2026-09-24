@@ -3,8 +3,8 @@
 use super::{
     AnchorMark, AnnotatedDocument, AnnotatedMark, AnnotatedProjectionError, Diagnostic,
     DiagnosticImpact, DiagnosticLevel, DisplayPoint, HeadingMark, Identities, KeyMap, LinkMark,
-    LinkTarget, OwnerMark, OwnerRole, RegionKind, RegionMark, Result, mark_source, point,
-    region_selection, selection,
+    LinkTarget, OwnerMark, OwnerRole, RegionKind, RegionMark, Result, TextJoin, TextSelection,
+    mark_source, point, region_selection, selection,
 };
 
 pub(super) fn project_heading(
@@ -91,9 +91,47 @@ pub(super) fn project_owner(
     keys: &KeyMap,
     identities: &Identities,
     mark: &AnnotatedMark,
+    body_regions: &[u32],
 ) -> Result<OwnerMark> {
     let head = region_selection(page, mark.title_region)?;
-    let direct_body = region_selection(page, mark.body_region)?;
+    if body_regions.last().copied() != Some(mark.body_region) {
+        return Err(AnnotatedProjectionError::Relation(
+            "owner body pointer is not its latest direct body",
+        ));
+    }
+    let mut pieces = Vec::new();
+    for &region_key in body_regions {
+        let body = region_selection(page, region_key)?;
+        for (index, part) in body.parts.into_iter().enumerate() {
+            let join = if index == 0 {
+                None
+            } else {
+                Some(body.joins[index - 1].clone())
+            };
+            pieces.push((part, region_key, index, join));
+        }
+    }
+    pieces.sort_unstable_by_key(|(part, _, _, _)| (part.run, part.start_byte));
+    let mut direct_body = TextSelection {
+        parts: Vec::with_capacity(pieces.len()),
+        joins: Vec::with_capacity(pieces.len().saturating_sub(1)),
+    };
+    let mut previous = None;
+    for (part, region, index, join) in pieces {
+        if let Some((previous_region, previous_index)) = previous {
+            direct_body.joins.push(
+                if previous_region == region && previous_index + 1 == index {
+                    join.ok_or(AnnotatedProjectionError::Relation(
+                        "owner body lost its native join",
+                    ))?
+                } else {
+                    TextJoin::Unknown
+                },
+            );
+        }
+        direct_body.parts.push(part);
+        previous = Some((region, index));
+    }
     let empty_point = if head.parts.is_empty() && direct_body.parts.is_empty() {
         Some(point(mark.point.ok_or(
             AnnotatedProjectionError::Relation("empty owner has no final point"),

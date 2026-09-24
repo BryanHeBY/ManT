@@ -109,10 +109,36 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     let mut resolution_diagnostics = Vec::new();
     let mut anchors = Vec::new();
     let mut regions = Vec::new();
+    // mdoc_macro.c::phrase_ta() creates a distinct BODY for each .It
+    // column.  The native body's singular pointer is only its latest BODY;
+    // index every direct BODY once before projecting owners.
+    let mut owner_bodies = vec![Vec::new(); page.marks.len() + 1];
+    for mark in &page.marks {
+        if mark.kind == 5 && mark.region_kind == 4 {
+            let owner = page
+                .marks
+                .get(mark.parent.saturating_sub(1) as usize)
+                .ok_or(AnnotatedProjectionError::Relation(
+                    "owner body has no parent",
+                ))?;
+            if owner.key != mark.parent || owner.kind != 2 {
+                return Err(AnnotatedProjectionError::Relation(
+                    "owner body parent is not an owner",
+                ));
+            }
+            owner_bodies[mark.parent as usize].push(mark.key);
+        }
+    }
     for mark in &page.marks {
         match mark.kind {
             1 => headings.push(project_heading(&page, &keys, &identities, mark)?),
-            2 => owners.push(project_owner(&page, &keys, &identities, mark)?),
+            2 => owners.push(project_owner(
+                &page,
+                &keys,
+                &identities,
+                mark,
+                &owner_bodies[mark.key as usize],
+            )?),
             3 => links.push(project_link(
                 &page,
                 &keys,

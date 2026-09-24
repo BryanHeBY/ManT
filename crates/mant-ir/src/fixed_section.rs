@@ -536,6 +536,7 @@ fn transparent(kind: RegionKind) -> bool {
     matches!(
         kind,
         RegionKind::Unsectioned
+            | RegionKind::OwnerBody
             | RegionKind::List
             | RegionKind::Literal
             | RegionKind::TableSpan
