@@ -843,6 +843,53 @@ fn table_only_hanging_region_remains_presentation_without_an_entry() {
 }
 
 #[test]
+fn hanging_rs_with_unlabeled_ip_is_readable_without_an_invalid_definition_proof() {
+    // Exact input ran pinned CVS -Ttree before this assertion. man_macro.c::
+    // blk_exp retains RS; man_validate.c::post_IP retains the label-less IP
+    // BODY. man_term.c::pre_IP displays it, though the IP is not a named
+    // Definition owner in the native collector.
+    let input = b".TH T 1 2026-09-24\n.SH OPTIONS\n.PP\n.B --foo\n.RS 4\n.IP\ninside\n.RE\n";
+    let page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    let continuation = page
+        .marks
+        .iter()
+        .find(|mark| mark.region_kind == 12)
+        .expect("RS continuation");
+    let nested_owner = page
+        .marks
+        .iter()
+        .find(|mark| mark.kind == 2 && mark.parent == continuation.key)
+        .expect("nested IP owner");
+    assert!(
+        page.marks
+            .iter()
+            .any(|mark| mark.region_kind == 3 && mark.parent == nested_owner.key)
+    );
+    assert_eq!(nested_owner.flags & 16, 0, "IP is presentation-only");
+    let document = lower_annotated_document(page).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let candidate = fixed
+        .owners
+        .iter()
+        .find(|owner| owner.hanging_candidate)
+        .expect("hanging candidate");
+    assert_eq!(candidate.hanging_nested_head, None);
+    let reading = mant_ir::FixedSectionReader::new(fixed)
+        .unwrap()
+        .owner_body_parts(candidate.key)
+        .unwrap()
+        .iter()
+        .map(|part| part.text)
+        .collect::<String>();
+    assert!(reading.contains("inside"), "{reading}");
+}
+
+#[test]
 fn native_mdoc_column_bodies_remain_one_owner_and_one_reading() {
     // Exact input ran pinned CVS -Tutf8 -O width=78 before this assertion.
     // mdoc_macro.c::phrase_ta() creates a separate BODY for each .It column;

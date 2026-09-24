@@ -213,10 +213,11 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
             }
         }
     }
-    // An RS containing only a nested TP has no direct glyph selection, but
-    // the native OwnerHead still proves a structural description. Keep one
-    // direct child key as an O(1) read-time witness; a tbl region alone does
-    // not authorize a semantic hanging entry.
+    // An RS containing only a nested definition can have no direct glyph
+    // selection. Keep one checked OwnerHead child as an O(1) read-time
+    // witness. A generic unlabeled IP is still readable presentation, but
+    // neither it nor a tbl region is this semantic proof; selecting either
+    // would make an otherwise valid page fail the stricter IR relation.
     for region in &fixed.regions {
         if region.kind != RegionKind::OwnerHead || region.owner.is_none() {
             continue;
@@ -231,6 +232,25 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         let Some(candidate) = continuation.continuation_of else {
             continue;
         };
+        let Some(nested) = region
+            .owner
+            .and_then(|key| fixed.owners.get((key.get() - 1) as usize))
+        else {
+            continue;
+        };
+        let Some(candidate_owner) = fixed.owners.get((candidate.get() - 1) as usize) else {
+            return Err(AnnotatedProjectionError::Relation(
+                "nested continuation candidate is missing",
+            ));
+        };
+        if nested.key == candidate
+            || nested.role != OwnerRole::Definition
+            || nested.head != region.selection
+            || nested.section != candidate_owner.section
+            || nested.parent != candidate_owner.parent
+        {
+            continue;
+        }
         let owner = fixed.owners.get_mut((candidate.get() - 1) as usize).ok_or(
             AnnotatedProjectionError::Relation("nested continuation candidate is missing"),
         )?;
