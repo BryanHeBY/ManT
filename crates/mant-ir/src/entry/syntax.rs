@@ -4,6 +4,8 @@
 //! producer still needs independent owner/markup evidence and a checked
 //! binding to visible content before it may publish an entry.
 
+use std::ops::Range;
+
 /// Leading ordinary dash-option spelling within one visible token.
 #[must_use]
 pub fn option_prefix(token: &str) -> Option<&str> {
@@ -38,6 +40,79 @@ pub fn lexical_option_token(token: &str) -> bool {
         return false;
     }
     option_prefix(token) == Some(token)
+}
+
+/// Exact option aliases in one complete, independently established literal
+/// declaration. The returned ranges refer to the original visible UTF-8
+/// text; punctuation and spacing remain in the sole display form.
+///
+/// An unpunctuated pair is limited to the conventional short/long spelling.
+/// This never treats an assignment value or an arbitrary dash-prefixed
+/// operand as another declaration.
+#[must_use]
+pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>> {
+    let bytes = form.as_bytes();
+    let mut cursor = 0;
+    let mut names = Vec::new();
+    let mut whitespace_pair = false;
+    loop {
+        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        let start = cursor;
+        while bytes
+            .get(cursor)
+            .is_some_and(|byte| !byte.is_ascii_whitespace() && !matches!(byte, b',' | b'|' | b'/'))
+        {
+            cursor += 1;
+        }
+        let token = form.get(start..cursor)?;
+        if !lexical_option_token(token)
+            || names.iter().any(|(name, _)| name == token)
+            || names.len() == 64
+        {
+            return None;
+        }
+        names.push((token.to_owned(), start..cursor));
+        let separator_start = cursor;
+        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        if cursor == bytes.len() {
+            break;
+        }
+        if bytes
+            .get(cursor)
+            .is_some_and(|byte| matches!(byte, b',' | b'|' | b'/'))
+        {
+            cursor += 1;
+        } else if cursor > separator_start {
+            whitespace_pair = true;
+            // The Flow literal declaration grammar admits exactly this
+            // textual connector between a short and a long option.
+            if names.len() == 1
+                && bytes.get(cursor..cursor + 2) == Some(b"or")
+                && bytes.get(cursor + 2).is_some_and(u8::is_ascii_whitespace)
+            {
+                cursor += 2;
+                while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+                    cursor += 1;
+                }
+            }
+        } else {
+            return None;
+        }
+        if cursor == bytes.len() {
+            return None;
+        }
+    }
+    if names.len() < 2
+        || whitespace_pair
+            && (names.len() != 2 || names[0].0.len() != 2 || !names[1].0.starts_with("--"))
+    {
+        return None;
+    }
+    Some(names)
 }
 
 /// Complete spelling licensed by an independently proved native option head.
@@ -155,5 +230,38 @@ mod tests {
             Some("DEMO_HOME".to_owned())
         );
         assert_eq!(environment_variable_alias("a!"), None);
+    }
+
+    #[test]
+    fn complete_literal_aliases_preserve_one_form_and_exact_ranges() {
+        // The matching TP/B heads first ran through pinned CVS -Ttree.
+        // man_macro.c::blk_imp retains one HEAD, and man_term.c::pre_B prints
+        // its one operand without splitting punctuation into AST nodes.
+        let aliases = literal_option_aliases("-a, --all").unwrap();
+        assert_eq!(
+            aliases,
+            [("-a".to_owned(), 0..2), ("--all".to_owned(), 4..9)]
+        );
+        assert_eq!(
+            literal_option_aliases("-a --all"),
+            Some(vec![("-a".to_owned(), 0..2), ("--all".to_owned(), 3..8)])
+        );
+        assert_eq!(
+            literal_option_aliases("-q or --quiet"),
+            Some(vec![("-q".to_owned(), 0..2), ("--quiet".to_owned(), 6..13)])
+        );
+        for not_aliases in [
+            "--set=KEY,VALUE",
+            "-a, text",
+            "--first --second",
+            "-a --all --other",
+            "-a, -a",
+            "-a,, --all",
+        ] {
+            assert!(
+                literal_option_aliases(not_aliases).is_none(),
+                "{not_aliases}"
+            );
+        }
     }
 }

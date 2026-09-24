@@ -422,6 +422,11 @@ impl FixedBody {
         let [only_form] = entry.forms.as_slice() else {
             return None;
         };
+        if entry.names.len() > 1 {
+            return self
+                .validated_literal_aliases(owner, entry, &form, only_form)
+                .then_some(entry);
+        }
         let [only_name] = entry.names.as_slice() else {
             return None;
         };
@@ -484,6 +489,44 @@ impl FixedBody {
             && entry.alias_of.is_none()
             && entry.value_domain.is_none())
         .then_some(entry)
+    }
+
+    /// Close every lexical alias against the same original HEAD and one
+    /// exact, surviving display sub-selection. The syntax cannot stand in for
+    /// the native role or for a missing glyph range.
+    fn validated_literal_aliases(
+        &self,
+        owner: &OwnerMark,
+        entry: &EntryFacts<TextSelection>,
+        form: &str,
+        only_form: &TextSelection,
+    ) -> bool {
+        let Some(aliases) = (owner.head_role == Some(OwnerHeadRole::Lexical))
+            .then(|| crate::literal_option_aliases(form))
+            .flatten()
+        else {
+            return false;
+        };
+        entry.id == owner.id
+            && entry.kind
+                == EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                }
+            && entry.case == NameCase::Sensitive
+            && entry.alias_groups.is_empty()
+            && entry.alias_of.is_none()
+            && entry.value_domain.is_none()
+            && only_form == &owner.head
+            && entry.names.len() == aliases.len()
+            && entry.name_bindings.len() == aliases.len()
+            && aliases.iter().enumerate().all(|(index, (name, range))| {
+                entry.names[index] == *name
+                    && entry.name_bindings[index].name == index
+                    && entry.name_bindings[index].evidence == EntryNameEvidence::Lexical
+                    && self.selection_subrange(&owner.head, range.clone()).as_ref()
+                        == entry.name_bindings[index].occurrences.first()
+                    && entry.name_bindings[index].occurrences.len() == 1
+            })
     }
 
     /// Project a checked final-display selection into logical text without

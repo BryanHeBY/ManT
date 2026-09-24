@@ -1149,6 +1149,146 @@ fn complete_man_tp_option_uses_shared_lexical_rule_without_promoting_other_terms
 }
 
 #[test]
+fn one_native_man_head_keeps_alias_names_bound_to_one_complete_form() {
+    // Each exact input first ran pinned CVS -Ttree. man_macro.c::blk_imp
+    // retains one TP HEAD and one BODY; man_term.c::pre_B/term.c::term_word
+    // emit the single literal operand without creating separate owners.
+    for (label, names) in [
+        ("-a, --all", ["-a", "--all"]),
+        ("-a --all", ["-a", "--all"]),
+        ("-q or --quiet", ["-q", "--quiet"]),
+    ] {
+        let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nBODY\n");
+        let document =
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!();
+        };
+        let owner = &fixed.owners[0];
+        let facts = owner.entry.as_ref().unwrap();
+        assert_eq!(
+            facts.kind,
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option
+            }
+        );
+        assert_eq!(facts.names, names);
+        assert_eq!(facts.forms.as_slice(), std::slice::from_ref(&owner.head));
+        assert_eq!(
+            fixed.selection_text(&facts.forms[0]).as_deref(),
+            Some(label)
+        );
+        for (binding, name) in facts.name_bindings.iter().zip(&facts.names) {
+            assert_eq!(
+                fixed.selection_text(&binding.occurrences[0]).as_deref(),
+                Some(name.as_str())
+            );
+        }
+        assert!(validate_document(&document).is_empty());
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".to_owned(),
+            document: Some(document),
+            tldr: None,
+        };
+        for requested in names {
+            let result = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: requested.to_owned(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.total, 1, "{label}: {requested}");
+            let entry = result.evidence[0].entry.as_ref().unwrap();
+            assert_eq!(entry.fixed_forms.len(), 1);
+            assert_eq!(entry.fixed_forms[0].complete_text().as_deref(), Some(label));
+            let binding = &entry.name_bindings[usize::from(requested == names[1])];
+            assert_eq!(
+                binding.occurrences[0].fixed_forms[0]
+                    .resolve(&entry.fixed_forms)
+                    .as_deref(),
+                Some(requested)
+            );
+            result.validate_references().unwrap();
+        }
+    }
+
+    // The exact negative heads also ran pinned CVS. Their visible commas do
+    // not prove a second complete option declaration.
+    for label in ["--set=KEY,VALUE", "-a, text"] {
+        let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nBODY\n");
+        let document =
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!();
+        };
+        assert_eq!(
+            fixed.owners[0].entry.as_ref().unwrap().kind,
+            EntryKind::Term
+        );
+        assert!(validate_document(&document).is_empty());
+    }
+}
+
+#[test]
+fn literal_alias_binding_cap_and_page_keep_one_owner() {
+    // This exact generated TP/B input first ran pinned CVS -Ttree. Its 33
+    // option spellings remain one literal HEAD and one BODY even when the
+    // final terminal head wraps over multiple physical rows.
+    let label = (0..33)
+        .map(|index| format!("-o{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nBODY\n");
+    let resolved = native_query(input.as_bytes(), 78);
+    let query = |options| {
+        mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: "-o32".to_owned(),
+                options,
+            },
+        )
+        .unwrap()
+    };
+    let first = query(ExplanationOptions {
+        limit: 1,
+        ..ExplanationOptions::default()
+    });
+    assert_eq!(first.total, 1);
+    assert_eq!(first.evidence.len(), 1);
+    assert_eq!(first.next_offset, None);
+    assert!(first.evidence[0].name_bindings_omitted);
+    assert!(first.evidence[0].match_details_omitted);
+    assert_eq!(first.evidence[0].entry.as_ref().unwrap().names.len(), 33);
+    let retained = &first.evidence[0].entry.as_ref().unwrap().name_bindings;
+    assert_eq!(retained.len(), 32);
+    assert_eq!(retained[31].name_index, 31);
+    first.validate_references().unwrap();
+
+    let second = query(ExplanationOptions {
+        limit: 1,
+        offset: 1,
+        ..ExplanationOptions::default()
+    });
+    assert_eq!(second.total, 1);
+    assert!(second.evidence.is_empty());
+    assert_eq!(second.next_offset, None);
+    second.validate_references().unwrap();
+
+    let limited = query(ExplanationOptions {
+        content_bytes: 128,
+        ..ExplanationOptions::default()
+    });
+    assert_eq!(limited.total, 1);
+    assert_eq!(limited.evidence.len(), 1);
+    assert!(limited.evidence[0].details_omitted || limited.evidence[0].content_omitted);
+    limited.validate_references().unwrap();
+}
+
+#[test]
 fn emphasized_native_heads_do_not_gain_lexical_option_eligibility() {
     // Both exact inputs first ran pinned CVS -Tutf8. man_term.c::pre_I and
     // mdoc_term.c::termp_under_pre select underline; those presentation

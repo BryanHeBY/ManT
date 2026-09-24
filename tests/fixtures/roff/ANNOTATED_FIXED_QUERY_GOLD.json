@@ -63,6 +63,58 @@
           "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
         }
       ]
+    },
+    {
+      "id": "F003",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/annotated-literal-option-aliases.1",
+      "sha256": "09491ece374751385ca50dbb1fbd005db529f3877a24c992a6f67596d7abcbed",
+      "queries": [
+        {
+          "query": "--all",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps line-4 TP/B as one HEAD; man_term.c::pre_B prints its literal comma pair before the single line-5 body.",
+          "expected": [
+            {
+              "source": {"line": 3, "column": 2},
+              "kind": "option",
+              "names": ["-a", "--all"],
+              "forms": ["-a, --all"],
+              "emptyDescription": false,
+              "bodyIncludes": ["comma alias body"],
+              "bodyExcludes": ["word alias body", "assignment body"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "-q",
+          "review": "Pinned CVS line-7 TP/B remains one HEAD; the authored short-or-long literal binds both names to one complete form and its own line-8 body.",
+          "expected": [
+            {
+              "source": {"line": 6, "column": 2},
+              "kind": "option",
+              "names": ["-q", "--quiet"],
+              "forms": ["-q or --quiet"],
+              "emptyDescription": false,
+              "bodyIncludes": ["word alias body"],
+              "bodyExcludes": ["comma alias body", "assignment body"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "--set",
+          "review": "Pinned CVS prints line-10 --set=KEY,VALUE as one literal operand; its comma is inside the assignment value and proves no complete alias.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "-z",
+          "review": "Pinned CVS line-13 TP/B is one literal -z, prose head, not two complete option spellings; an incomplete alias group does not promote a name.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        }
+      ]
     }
   ]
 }

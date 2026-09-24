@@ -239,6 +239,41 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                 });
             }
             let form = fixed.owner_complete_form(owner)?;
+            // man_macro.c::blk_imp keeps a TP/TQ HEAD intact, while
+            // man_term.c::pre_B prints this one literal operand as one form.
+            // The shared spelling rule only extracts complete aliases; each
+            // name still needs its own checked final-display sub-selection.
+            if owner.head_role == Some(OwnerHeadRole::Lexical)
+                && let Some(found) = mant_ir::literal_option_aliases(&form)
+            {
+                let mut names = Vec::with_capacity(found.len());
+                let mut name_bindings = Vec::with_capacity(found.len());
+                for (name, range) in found {
+                    let occurrence = fixed.selection_subrange(&owner.head, range)?;
+                    if fixed.selection_text(&occurrence).as_deref() != Some(name.as_str()) {
+                        return None;
+                    }
+                    name_bindings.push(EntryNameBinding {
+                        name: names.len(),
+                        occurrences: vec![occurrence],
+                        evidence: EntryNameEvidence::Lexical,
+                    });
+                    names.push(name);
+                }
+                return Some(EntryFacts {
+                    name_bindings,
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: vec![owner.head.clone()],
+                    id: owner.id.clone(),
+                    kind: EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
+                    names,
+                    value_domain: None,
+                });
+            }
             let (kind, evidence, name, occurrence) = native_head_identity(&fixed, owner, &form)
                 .unwrap_or_else(|| {
                     (

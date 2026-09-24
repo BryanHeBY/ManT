@@ -179,7 +179,7 @@ impl FixedPlan<'_> {
             .ok_or(ExplanationError::InvalidFixed)?;
         let (name_match, form_match, id_match, path_match) = selected.matched;
         let outline = trail(&self.reader, &self.index, &self.indexed, owner, selected)?;
-        if entry.forms.is_empty() || entry.forms.len() != entry.names.len() {
+        if entry.forms.is_empty() {
             return Err(ExplanationError::InvalidFixed);
         }
         let mut evidence_bases = Vec::new();
@@ -328,14 +328,16 @@ impl FixedPlan<'_> {
                 .map(|(_, selection)| selection)
                 .collect()
         };
-        if entry.forms.len() != selections.len() || entry.forms.len() != entry.names.len() {
+        if entry.forms.len() != selections.len() {
             return Err(ExplanationError::InvalidFixed);
         }
+        let name_positions = fixed_name_positions(entry)?;
         record.name_bindings_omitted =
             entry.names.len() > mant_protocol::MAX_EXPLANATION_NAME_BINDINGS;
         let mut forms = Vec::with_capacity(selections.len());
         let mut bindings = Vec::with_capacity(
-            selections
+            entry
+                .names
                 .len()
                 .min(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS),
         );
@@ -345,7 +347,8 @@ impl FixedPlan<'_> {
                 count.checked_add(source.parts.len())
             })
             .unwrap_or(usize::MAX);
-        let binding_positions = selections
+        let binding_positions = entry
+            .names
             .len()
             .min(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS);
         let match_positions = record
@@ -368,8 +371,6 @@ impl FixedPlan<'_> {
                 break;
             }
             let expected = &entry.forms[index];
-            let name = &entry.names[index];
-            let (start_scalar, end_scalar) = name_span(expected, name)?;
             let Some(form) = selection(self.fixed, source, budget.0) else {
                 complete = false;
                 break;
@@ -378,14 +379,20 @@ impl FixedPlan<'_> {
                 return Err(ExplanationError::InvalidFixed);
             }
             forms.push(form);
-            if index < mant_protocol::MAX_EXPLANATION_NAME_BINDINGS {
+        }
+        if complete {
+            for (index, (form_index, start_scalar, end_scalar)) in name_positions
+                .into_iter()
+                .take(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS)
+                .enumerate()
+            {
                 bindings.push(ExplanationNameBinding {
                     name_index: u32::try_from(index).map_err(|_| ExplanationError::InvalidFixed)?,
                     occurrences: vec![ExplanationOccurrence {
                         source_occurrence_index: 0,
                         forms: Vec::new(),
                         fixed_forms: vec![ExplanationFixedFormRange {
-                            form_index: u32::try_from(index)
+                            form_index: u32::try_from(form_index)
                                 .map_err(|_| ExplanationError::InvalidFixed)?,
                             start_scalar,
                             end_scalar,
@@ -507,6 +514,44 @@ fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError>
     let start_scalar = expected[..start_byte].chars().count() as u64;
     let end_scalar = start_scalar + name.chars().count() as u64;
     Ok((start_scalar, end_scalar))
+}
+
+fn fixed_name_positions(
+    entry: &mant_ir::SemanticEntry,
+) -> Result<Vec<(usize, u64, u64)>, ExplanationError> {
+    if entry.forms.len() == 1 && entry.names.len() > 1 {
+        let form = &entry.forms[0];
+        let aliases =
+            mant_ir::literal_option_aliases(form).ok_or(ExplanationError::InvalidFixed)?;
+        if aliases.len() != entry.names.len() {
+            return Err(ExplanationError::InvalidFixed);
+        }
+        return aliases
+            .into_iter()
+            .zip(&entry.names)
+            .map(|((name, range), expected)| {
+                if &name != expected {
+                    return Err(ExplanationError::InvalidFixed);
+                }
+                let start = form[..range.start].chars().count() as u64;
+                let end = start + name.chars().count() as u64;
+                Ok((0, start, end))
+            })
+            .collect();
+    }
+    if entry.forms.len() != entry.names.len() {
+        return Err(ExplanationError::InvalidFixed);
+    }
+    entry
+        .forms
+        .iter()
+        .zip(&entry.names)
+        .enumerate()
+        .map(|(index, (form, name))| {
+            let (start, end) = name_span(form, name)?;
+            Ok((index, start, end))
+        })
+        .collect()
 }
 
 fn retained_fixed_positions(record: &ExplanationEvidence) -> usize {
