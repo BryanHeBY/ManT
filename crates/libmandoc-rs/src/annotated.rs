@@ -6,8 +6,12 @@
 
 use crate::{InputFormat, SourceBundle};
 
-/// Pinned roff.h discriminator for the authored man(7) `.IP` macro.
-/// The native build asserts this value against `MAN_IP`.
+/// Pinned roff.h discriminators for authored man(7) definition macros.
+/// The native build asserts these values against `MAN_TP`, `MAN_TQ`, and `MAN_IP`.
+#[doc(hidden)]
+pub const MAN_TP_TOKEN: u32 = 382;
+#[doc(hidden)]
+pub const MAN_TQ_TOKEN: u32 = 383;
 #[doc(hidden)]
 pub const MAN_IP_TOKEN: u32 = 387;
 
@@ -128,7 +132,7 @@ pub struct AnnotatedMark {
     pub title_region: u32,
     pub body_region: u32,
     pub flags: u32,
-    /// Earlier direct `.IP` definition sibling in the same native flow.
+    /// Earlier direct man definition sibling in the same native flow.
     /// Zero means no proven predecessor; this is not shared body content.
     pub preceding_owner: u32,
     /// Half-open range in `AnnotatedDocument::selection_parts`.

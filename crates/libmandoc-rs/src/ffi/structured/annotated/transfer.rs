@@ -293,15 +293,27 @@ pub(super) fn transfer(
             let preceding = marks
                 .get(usize::try_from(mark.preceding_owner - 1).map_err(|_| invalid_result())?)
                 .ok_or_else(invalid_result)?;
+            let reading_family = |token| {
+                if token == crate::annotated::MAN_IP_TOKEN {
+                    1
+                } else if token == crate::annotated::MAN_TP_TOKEN
+                    || token == crate::annotated::MAN_TQ_TOKEN
+                {
+                    2
+                } else {
+                    0
+                }
+            };
+            let family = reading_family(mark.token);
             if mark.kind != 2
-                || mark.token != crate::annotated::MAN_IP_TOKEN
+                || family == 0
                 || mark.flags & (16 | 256) != (16 | 256)
-                || mark.name_length == 0
+                || family == 1 && mark.name_length == 0
+                || mark.preceding_owner >= mark.key
                 || preceding.kind != 2
-                || preceding.token != crate::annotated::MAN_IP_TOKEN
+                || reading_family(preceding.token) != family
                 || preceding.flags & (16 | 256) != (16 | 256)
-                || preceding.name.is_none()
-                || preceding.token != mark.token
+                || family == 1 && preceding.name.is_none()
                 || preceding.parent != mark.parent
                 || preceding.owner != mark.owner
             {

@@ -212,15 +212,26 @@ fn project_owner_predecessor(
         .ok_or(AnnotatedProjectionError::Relation(
             "owner predecessor is missing",
         ))?;
+    let reading_family = |token| {
+        if token == libmandoc_rs::annotated::MAN_IP_TOKEN {
+            1
+        } else if token == libmandoc_rs::annotated::MAN_TP_TOKEN
+            || token == libmandoc_rs::annotated::MAN_TQ_TOKEN
+        {
+            2
+        } else {
+            0
+        }
+    };
+    let family = reading_family(mark.token);
     if mark.kind != 2
-        || mark.token != libmandoc_rs::annotated::MAN_IP_TOKEN
+        || family == 0
         || mark.flags & (16 | 256) != (16 | 256)
-        || mark.name.is_none()
+        || family == 1 && mark.name.is_none()
         || preceding.kind != 2
-        || preceding.token != libmandoc_rs::annotated::MAN_IP_TOKEN
+        || reading_family(preceding.token) != family
         || preceding.flags & (16 | 256) != (16 | 256)
-        || preceding.name.is_none()
-        || preceding.token != mark.token
+        || family == 1 && preceding.name.is_none()
         || preceding.parent != mark.parent
         || preceding.owner != mark.owner
     {

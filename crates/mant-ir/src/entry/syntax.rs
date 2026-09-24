@@ -46,15 +46,18 @@ pub fn lexical_option_token(token: &str) -> bool {
 /// declaration. The returned ranges refer to the original visible UTF-8
 /// text; punctuation and spacing remain in the sole display form.
 ///
-/// An unpunctuated pair is limited to the conventional short/long spelling.
-/// This never treats an assignment value or an arbitrary dash-prefixed
-/// operand as another declaration.
+/// An unpunctuated group must start with one short spelling followed by one
+/// or more long spellings. This covers a single literal head such as gzip's
+/// `-c --stdout --to-stdout` without treating another short option, an
+/// assignment value, or an arbitrary operand as an alias.
 #[must_use]
 pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>> {
     let bytes = form.as_bytes();
     let mut cursor = 0;
     let mut names = Vec::new();
-    let mut whitespace_pair = false;
+    let mut whitespace_group = false;
+    let mut punctuation_group = false;
+    let mut word_connector = false;
     loop {
         while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
             cursor += 1;
@@ -85,15 +88,17 @@ pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>>
             .get(cursor)
             .is_some_and(|byte| matches!(byte, b',' | b'|' | b'/'))
         {
+            punctuation_group = true;
             cursor += 1;
         } else if cursor > separator_start {
-            whitespace_pair = true;
+            whitespace_group = true;
             // The Flow literal declaration grammar admits exactly this
             // textual connector between a short and a long option.
             if names.len() == 1
                 && bytes.get(cursor..cursor + 2) == Some(b"or")
                 && bytes.get(cursor + 2).is_some_and(u8::is_ascii_whitespace)
             {
+                word_connector = true;
                 cursor += 2;
                 while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
                     cursor += 1;
@@ -106,11 +111,16 @@ pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>>
             return None;
         }
     }
-    if names.len() < 2
-        || whitespace_pair
-            && (names.len() != 2 || names[0].0.len() != 2 || !names[1].0.starts_with("--"))
-    {
+    if names.len() < 2 {
         return None;
+    }
+    if whitespace_group {
+        let short_then_long = names[0].0.len() == 2
+            && names[0].0.starts_with('-')
+            && names.iter().skip(1).all(|(name, _)| name.starts_with("--"));
+        if !short_then_long || (word_connector || punctuation_group) && names.len() != 2 {
+            return None;
+        }
     }
     Some(names)
 }
@@ -268,11 +278,28 @@ mod tests {
             literal_option_aliases("-q or --quiet"),
             Some(vec![("-q".to_owned(), 0..2), ("--quiet".to_owned(), 6..13)])
         );
+        // Pinned CVS man_macro.c::blk_imp keeps gzip's escaped-dash TP/B
+        // source `\-c \-\-stdout \-\-to-stdout` in one HEAD. term.c::
+        // term_word prints the three visible spellings with ASCII spaces;
+        // source-neutral alias grammar operates on that final form.
+        assert_eq!(
+            literal_option_aliases("-c --stdout --to-stdout"),
+            Some(vec![
+                ("-c".to_owned(), 0..2),
+                ("--stdout".to_owned(), 3..11),
+                ("--to-stdout".to_owned(), 12..23),
+            ])
+        );
         for not_aliases in [
             "--set=KEY,VALUE",
             "-a, text",
             "--first --second",
-            "-a --all --other",
+            "-a -b --all",
+            "-a --all -b",
+            "-a --all operand",
+            "-a --all --all",
+            "-a or --all --other",
+            "-a, --all --other",
             "-a, -a",
             "-a,, --all",
         ] {

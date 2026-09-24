@@ -5,6 +5,7 @@ use super::{
     MAX_FIXED_ROW_COLUMNS, MAX_FIXED_TOTAL_COLUMNS, MAX_FIXED_TOTAL_JOIN_BYTES, NonZeroU32,
     OutputSlice, SourceKey, SourceSpan, TextJoin, TextSelection, fmt,
 };
+use std::collections::BTreeMap;
 
 /// A malformed reference or relationship in an owned Fixed body.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -288,6 +289,7 @@ impl FixedBody {
             validate_selection(&heading.title)?;
             validate_selection(&heading.direct_body)?;
         }
+        let mut latest_owner_by_scope = BTreeMap::new();
         for (index, owner) in self.owners.iter().enumerate() {
             dense_key(owner.key, index)?;
             if !crate::is_normalized_node_id(owner.id.as_str()) {
@@ -297,19 +299,22 @@ impl FixedBody {
             earlier(owner.preceding_owner, owner.key)?;
             reference(owner.section, self.headings.len())?;
             if let Some(preceding_key) = owner.preceding_owner {
+                // Native C/FFI prove the IP or TP/TQ sibling family and
+                // flow epoch. Typed IR retains only that asserted relation:
+                // a TP/TQ lexical head need not carry an IP-style prefix.
                 let preceding = self
                     .owners
                     .get((preceding_key.get() - 1) as usize)
                     .ok_or(FixedBodyError("fixed owner predecessor is missing"))?;
                 if preceding.key != preceding_key
+                    || latest_owner_by_scope.get(&(owner.parent, owner.section))
+                        != Some(&preceding_key)
                     || preceding.parent != owner.parent
                     || preceding.section != owner.section
                     || preceding.role != super::OwnerRole::Definition
                     || owner.role != super::OwnerRole::Definition
                     || preceding.head_role != Some(super::OwnerHeadRole::Lexical)
                     || owner.head_role != Some(super::OwnerHeadRole::Lexical)
-                    || preceding.head_role_prefix.is_none()
-                    || owner.head_role_prefix.is_none()
                 {
                     return Err(FixedBodyError(
                         "fixed owner predecessor crosses a structural boundary",
@@ -394,6 +399,7 @@ impl FixedBody {
             } else if owner.empty_point.is_none() {
                 return Err(FixedBodyError("empty owner has no display point"));
             }
+            latest_owner_by_scope.insert((owner.parent, owner.section), owner.key);
         }
         let mut link_covered_bytes = vec![0u64; self.surface.runs.len()];
         for (index, link) in self.links.iter().enumerate() {

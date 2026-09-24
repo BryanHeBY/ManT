@@ -1714,6 +1714,117 @@ fn one_native_man_head_keeps_alias_names_bound_to_one_complete_form() {
 }
 
 #[test]
+fn man_bold_heads_bind_only_checked_option_names() {
+    // Each exact input ran pinned CVS -Ttree/-Tascii before these assertions.
+    // man_macro.c::blk_imp keeps one TP/TQ HEAD; man_term.c::pre_B and
+    // term.c::term_word print each \- as a hyphen in that same HEAD.
+    for (label, names, prefix) in [
+        (r"\-Y, \-\-yay", vec!["-Y", "--yay"], None),
+        (r"\-p|\-\-parents", vec!["-p", "--parents"], None),
+        (r"\-a \-\-ascii", vec!["-a", "--ascii"], None),
+        (
+            r"\-c \-\-stdout \-\-to-stdout",
+            vec!["-c", "--stdout", "--to-stdout"],
+            None,
+        ),
+        (
+            r"\-\-builddir <dir>",
+            vec!["--builddir"],
+            Some("--builddir"),
+        ),
+        ("--builddir <dir>", vec!["--builddir"], Some("--builddir")),
+        (r"\-p", vec!["-p"], None),
+    ] {
+        let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nbody\n");
+        let document =
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!();
+        };
+        let owner = &fixed.owners[0];
+        assert_eq!(owner.head_role, Some(OwnerHeadRole::Lexical), "{label}");
+        assert_eq!(owner.head_role_prefix.as_deref(), prefix, "{label}");
+        let facts = owner.entry.as_ref().unwrap();
+        assert_eq!(facts.names, names, "{label}");
+        assert_eq!(
+            facts.kind,
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option
+            },
+            "{label}"
+        );
+        assert_eq!(facts.forms.as_slice(), std::slice::from_ref(&owner.head));
+        for (name, binding) in facts.names.iter().zip(&facts.name_bindings) {
+            assert_eq!(
+                fixed.selection_text(&binding.occurrences[0]).as_deref(),
+                Some(name.as_str()),
+                "{label}"
+            );
+        }
+        assert!(validate_document(&document).is_empty());
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".to_owned(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in names {
+            let result = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.to_owned(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, 1, "{label}: {name}");
+            result.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn escaped_dash_tq_keeps_its_own_checked_option_name() {
+    // This exact input ran pinned CVS -Ttree. man_macro.c::blk_imp keeps the
+    // TQ HEAD distinct; man_term.c::pre_TP traverses its sole B operand.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a\nbody\n.TQ\n.B \\-\\-all\nbody\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!();
+    };
+    assert_eq!(fixed.owners.len(), 2);
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["-a"]);
+    assert_eq!(fixed.owners[1].entry.as_ref().unwrap().names, ["--all"]);
+    assert!(validate_document(&document).is_empty());
+}
+
+#[test]
+fn escaped_dash_man_hint_rejects_unproved_escapes_and_names() {
+    // Each exact input ran pinned CVS -Ttree/-Tascii first.  term.c::
+    // term_word() changes font for \fR and prints \[hy] as a different
+    // special character; neither is the literal \- option-head proof.
+    for (label, role, kind) in [
+        (r"\-B\fRn", None, EntryKind::Term),
+        (r"\[hy]x", None, EntryKind::Term),
+        (r"\-x\&foo", None, EntryKind::Term),
+        (r"\-1", Some(OwnerHeadRole::Lexical), EntryKind::Term),
+        (r"\-x.", Some(OwnerHeadRole::Lexical), EntryKind::Term),
+        (r"\-a, text", Some(OwnerHeadRole::Lexical), EntryKind::Term),
+    ] {
+        let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nbody\n");
+        let document =
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!();
+        };
+        let owner = &fixed.owners[0];
+        assert_eq!(owner.head_role, role, "{label}");
+        assert_eq!(owner.entry.as_ref().unwrap().kind, kind, "{label}");
+        assert!(validate_document(&document).is_empty());
+    }
+}
+
+#[test]
 fn literal_alias_binding_cap_and_page_keep_one_owner() {
     // This exact generated TP/B input first ran pinned CVS -Ttree. Its 33
     // option spellings remain one literal HEAD and one BODY even when the
@@ -1940,6 +2051,180 @@ fn man_ip_reading_groups_require_native_siblings_and_empty_prior_body() {
     assert_eq!(blocked.total, 1);
     assert!(blocked.supports.is_empty());
     assert!(blocked.evidence[0].support.is_none());
+}
+
+#[test]
+fn man_tp_tq_reading_groups_preserve_distinct_heads_around_pd() {
+    // Both exact inputs first ran pinned CVS -Ttree. man_macro.c::blk_imp
+    // gives each TP/TQ its own HEAD/BODY; man_term.c::pre_TP executes a PD
+    // preceding B inside HEAD without printing a label glyph. The later
+    // owner's body is reading context, not body owned by the earlier head.
+    for (input, requested, expected_heads, expected_lines) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.PD 0\n.B -A\n.TP\n.PD\n.B --adjust-sfx\nBODY\n"
+                .as_slice(),
+            "-A",
+            ["-A", "--adjust-sfx"],
+            [3, 6],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B -a\n.TQ\n.B --all\nBODY\n".as_slice(),
+            "-a",
+            ["-a", "--all"],
+            [3, 5],
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!()
+        };
+        assert_eq!(fixed.owners.len(), 2);
+        assert_eq!(fixed.owners[0].source.unwrap().line, expected_lines[0]);
+        assert_eq!(fixed.owners[1].source.unwrap().line, expected_lines[1]);
+        assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Lexical));
+        assert_eq!(fixed.owners[1].head_role, Some(OwnerHeadRole::Lexical));
+        assert_eq!(fixed.owners[0].preceding_owner, None);
+        assert_eq!(fixed.owners[1].preceding_owner, Some(fixed.owners[0].key));
+        for (owner, expected) in fixed.owners.iter().zip(expected_heads) {
+            assert_eq!(fixed.selection_text(&owner.head).as_deref(), Some(expected));
+            assert_eq!(owner.entry.as_ref().unwrap().names, [expected]);
+        }
+        let index = mant_ir::SemanticIndex::build(&document);
+        let group = index.fixed_reading_group(fixed.owners[0].key).unwrap();
+        assert_eq!(group.members, [fixed.owners[0].key, fixed.owners[1].key]);
+        assert!(validate_document(&document).is_empty());
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".to_owned(),
+            document: Some(document),
+            tldr: None,
+        };
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: requested.to_owned(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        result.validate_references().unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.evidence[0].support, Some(0));
+        let mant_protocol::ExplanationSupport::FixedDeclarationGroup {
+            members,
+            reading_body,
+        } = &result.supports[0]
+        else {
+            unreachable!()
+        };
+        assert_eq!(members.len(), 2);
+        assert_eq!(
+            members[0].head.complete_text().as_deref(),
+            Some(expected_heads[0])
+        );
+        assert_eq!(
+            members[1].head.complete_text().as_deref(),
+            Some(expected_heads[1])
+        );
+        assert!(
+            reading_body
+                .parts
+                .iter()
+                .any(|part| part.text.contains("BODY"))
+        );
+    }
+}
+
+#[test]
+fn man_tp_reading_context_stops_at_body_flow_and_nonlexical_heads() {
+    // Every exact input first ran pinned CVS -Ttree. roff.c stamps executed
+    // paragraph boundaries even if validation removes .PP; man_term.c still
+    // prints an italic HEAD but it cannot certify a lexical option candidate.
+    for (input, expected_predecessor) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B -a\nOWN\n.TP\n.B --all\nBODY\n".as_slice(),
+            true,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B -a\n.PP\n.TP\n.B --all\nBODY\n".as_slice(),
+            false,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.I -a\n.TP\n.B --all\nBODY\n".as_slice(),
+            false,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB\\-a\\fR\" 4\n.TP\n.B --all\nBODY\n".as_slice(),
+            false,
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!()
+        };
+        assert_eq!(fixed.owners.len(), 2);
+        assert_eq!(
+            fixed.owners[1].preceding_owner,
+            expected_predecessor.then_some(fixed.owners[0].key)
+        );
+        assert!(validate_document(&document).is_empty());
+        let index = mant_ir::SemanticIndex::build(&document);
+        assert!(index.fixed_reading_group(fixed.owners[0].key).is_none());
+        assert!(index.fixed_reading_group(fixed.owners[1].key).is_none());
+    }
+}
+
+#[test]
+fn man_tp_styled_operands_and_punctuation_keep_native_head_classification() {
+    // Each exact input first ran pinned CVS -Ttree. term.c::term_word()
+    // executes a font escape after the authored space, so the first option
+    // remains a complete prefix; punctuation instead leaves alias splitting
+    // to the source-neutral grammar over the full final HEAD.
+    let styled = b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-x \\fIlang\nBODY\n";
+    let document = project_annotated_manual("t.1", &bundle(styled), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    let owner = &fixed.owners[0];
+    assert_eq!(owner.head_role_prefix.as_deref(), Some("-x"));
+    assert_eq!(owner.entry.as_ref().unwrap().names, ["-x"]);
+    assert_eq!(
+        fixed.selection_text(&owner.head).as_deref(),
+        Some("-x lang")
+    );
+    assert!(validate_document(&document).is_empty());
+
+    for (input, expected_names) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a , \\-\\-all\nBODY\n".as_slice(),
+            Some(vec!["-a", "--all"]),
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a | \\-\\-all\nBODY\n".as_slice(),
+            Some(vec!["-a", "--all"]),
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a / \\-\\-all\nBODY\n".as_slice(),
+            Some(vec!["-a", "--all"]),
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-a , text\nBODY\n".as_slice(),
+            None,
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            unreachable!()
+        };
+        let owner = &fixed.owners[0];
+        assert_eq!(owner.head_role_prefix, None);
+        if let Some(names) = expected_names {
+            assert_eq!(owner.entry.as_ref().unwrap().names, names);
+        } else {
+            assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+        }
+        assert!(validate_document(&document).is_empty());
+    }
 }
 
 #[test]

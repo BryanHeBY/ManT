@@ -6,8 +6,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Keep the private Rust transfer/codec discriminator pinned to roff.h. */
+/* Keep the private Rust transfer/codec discriminators pinned to roff.h. */
+_Static_assert(MAN_TP == 382, "annotated MAN_TP token changed");
+_Static_assert(MAN_TQ == 383, "annotated MAN_TQ token changed");
 _Static_assert(MAN_IP == 387, "annotated MAN_IP token changed");
+
+static int
+man_reading_family(uint32_t token)
+{
+	if (token == MAN_IP)
+		return 1;
+	return token == MAN_TP || token == MAN_TQ ? 2 : 0;
+}
 
 static int
 count_direct_part(struct structured_session *session,
@@ -431,24 +441,25 @@ valid_marks(const struct mant_annotated_result *result)
 			return 0;
 		if (mark->preceding_owner != 0) {
 			const struct mant_annotated_mark *preceding;
+			int family = man_reading_family(mark->token);
 
 			if (mark->kind != MANT_ANNOTATED_MARK_OWNER ||
-			    mark->token != MAN_IP ||
+			    family == 0 ||
 			    (mark->flags & (MANT_ANNOTATED_MARK_DEFINITION |
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
 			    (MANT_ANNOTATED_MARK_DEFINITION |
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL) ||
-			    mark->name_length == 0 ||
+			    (family == 1 && mark->name_length == 0) ||
 			    mark->preceding_owner >= mark->key)
 				return 0;
 			preceding = result->marks + mark->preceding_owner - 1;
 			if (preceding->kind != MANT_ANNOTATED_MARK_OWNER ||
-			    preceding->token != MAN_IP ||
+			    man_reading_family(preceding->token) != family ||
 			    (preceding->flags & (MANT_ANNOTATED_MARK_DEFINITION |
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
 			    (MANT_ANNOTATED_MARK_DEFINITION |
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL) ||
-			    preceding->name_length == 0 ||
+			    (family == 1 && preceding->name_length == 0) ||
 			    preceding->parent != mark->parent ||
 			    preceding->owner != mark->owner)
 				return 0;

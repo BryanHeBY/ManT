@@ -56,7 +56,7 @@ struct annotated_column {
 struct annotated_frame {
 	const struct roff_node *node;
 	const struct roff_node *saved_link_node;
-	const struct roff_node *last_direct_ip_node;
+	const struct roff_node *last_direct_man_node;
 	uint32_t saved_owner;
 	uint32_t saved_head_component;
 	uint32_t saved_link;
@@ -65,7 +65,7 @@ struct annotated_frame {
 	uint32_t owner_mark;
 	uint32_t anchor_mark;
 	uint32_t region_mark;
-	uint32_t last_direct_ip_owner;
+	uint32_t last_direct_man_owner;
 };
 
 struct annotated_point_state {
@@ -111,8 +111,8 @@ struct mant_annotated_collector {
 	uint32_t last_top_heading;
 	uint32_t unsectioned_region;
 	/* ROOT has no terminal frame: retain its last completed direct sibling. */
-	const struct roff_node *last_root_ip_node;
-	uint32_t last_root_ip_owner;
+	const struct roff_node *last_root_man_node;
+	uint32_t last_root_man_owner;
 	uint64_t next_origin;
 	uint64_t pending_origin;
 	uint32_t pending_owner;
@@ -882,10 +882,10 @@ unsupported_target:
 
 /* roff.c::roff_node_prev() skips a wider set of transparent nodes, including
  * layout controls. For reading-context evidence, only these non-content
- * siblings can stand between direct .IP blocks. A real flow boundary also
- * changes roff_node::flow_epoch at allocation. */
+ * siblings can stand between direct man definition blocks. A real flow
+ * boundary also changes roff_node::flow_epoch at allocation. */
 static int
-ip_sibling_gap(const struct roff_node *node)
+man_reading_sibling_gap(const struct roff_node *node)
 {
 	return node->type == ROFFT_COMMENT || node->tok == MAN_PD ||
 	    node->tok == MDOC_Sm || node->tok == MDOC_Tg ||
@@ -893,20 +893,34 @@ ip_sibling_gap(const struct roff_node *node)
 }
 
 static int
-direct_ip_predecessor(struct mant_annotated_collector *collector,
+man_reading_family(int token)
+{
+	if (token == MAN_IP)
+		return 1;
+	return token == MAN_TP || token == MAN_TQ ? 2 : 0;
+}
+
+static int
+direct_man_predecessor(struct mant_annotated_collector *collector,
     const struct roff_node *node, const struct roff_node **candidate)
 {
 	const struct roff_node *previous;
+	int family = man_reading_family(node->tok);
 
 	*candidate = NULL;
 	for (previous = node->prev; previous != NULL &&
-	    ip_sibling_gap(previous); previous = previous->prev)
+	    man_reading_sibling_gap(previous); previous = previous->prev)
 		if (!charge_work(collector, 1))
 			return 0;
 	if (!charge_work(collector, 1))
 		return 0;
-	if (previous != NULL && previous->type == ROFFT_BLOCK &&
-	    previous->tok == MAN_IP && previous->parent == node->parent &&
+	/* man_html.c::list_continues() keeps TP/TQ in one definition-list
+	 * family, but never merges that family with IP. Both remain separate
+	 * declaration owners and need a completed, direct AST sibling. */
+	if (family != 0 && previous != NULL &&
+	    previous->type == ROFFT_BLOCK &&
+	    man_reading_family(previous->tok) == family &&
+	    previous->parent == node->parent &&
 	    previous->flow_epoch == node->flow_epoch)
 		*candidate = previous;
 	return 1;
@@ -1050,25 +1064,96 @@ owner_head_role(const struct roff_node *owner,
 	return 0;
 }
 
-/* man_macro.c::blk_imp keeps TP/TQ HEAD distinct.  man_term.c::pre_B and
- * pre_I select different presentation fonts, not semantic kinds.  This
- * deliberately conservative candidate hint accepts one plain B word only;
- * Rust still checks the complete final spelling before classification. */
+/* man_macro.c::blk_imp keeps TP/TQ HEAD distinct.  man_term.c::pre_B
+ * supplies the font, while term.c::term_word() prints \- through
+ * mandoc_escape() as an ordinary hyphen.  Keep this a candidate hint:
+ * Rust checks every name against a final-display HEAD sub-selection. */
 static int
-owner_lexical_head(const struct roff_node *owner)
+copy_tp_lexical_head(struct mant_annotated_collector *collector,
+    struct mant_annotated_mark *mark, const struct roff_node *owner,
+    int *recognized)
 {
 	const struct roff_node *head, *first;
+	const char *cursor, *next, *sequence, *text;
+	char candidate[256], glyph;
+	size_t length = 0;
+	int size, prefix_done = 0;
+	int prefix_valid = 1, first_glyph = 0;
+	enum mandoc_esc escape;
 
+	*recognized = 0;
 	if (owner->tok != MAN_TP && owner->tok != MAN_TQ)
-		return 0;
+		return 1;
 	head = owner->head;
 	first = head == NULL ? NULL : head->child;
-	return first != NULL && first->tok == MAN_B &&
-	    first->next == NULL && first->child != NULL &&
-	    first->child->type == ROFFT_TEXT &&
-	    first->child->string != NULL &&
-	    strchr(first->child->string, '\\') == NULL &&
-	    first->child->next == NULL;
+	/* man_macro.c::blk_imp can place PD before the next-line B in this
+	 * HEAD. man_term.c::pre_TP executes PD through print_man_node(),
+	 * but pre_PD changes only pardist and emits no head glyph. Keep the
+	 * formatter traversal intact while selecting the sole visible label. */
+	while (first != NULL && first->tok == MAN_PD) {
+		if (!charge_work(collector, 1))
+			return 0;
+		first = first->next;
+	}
+	if (first == NULL || first->tok != MAN_B || first->next != NULL ||
+	    first->child == NULL || first->child->type != ROFFT_TEXT ||
+	    first->child->string == NULL || first->child->next != NULL)
+		return 1;
+	text = first->child->string;
+	if (!charge_work(collector, strlen(text)))
+		return 0;
+	for (cursor = text; *cursor != '\0'; ) {
+		if (*cursor == '\\') {
+			next = cursor + 1;
+			escape = mandoc_escape(&next, &sequence, &size);
+			if (escape != ESCAPE_SPECIAL || size != 1 ||
+			    sequence[0] != '-')
+				return 1;
+			glyph = '-';
+			cursor = next;
+		} else
+			glyph = *cursor++;
+		if (first_glyph == 0)
+			first_glyph = (unsigned char)glyph;
+		if (isspace((unsigned char)glyph)) {
+			prefix_done = 1;
+			break;
+		}
+		if ((unsigned char)glyph > 0x7f ||
+		    (!isalnum((unsigned char)glyph) &&
+		    strchr("-_.?+", glyph) == NULL) ||
+		    length == sizeof(candidate))
+			prefix_valid = 0;
+		if (prefix_valid)
+			candidate[length++] = glyph;
+	}
+	if (first_glyph != '-') {
+		/* The sole plain B still marks a lexical TP/TQ term even when
+		 * its spelling is not an option. Rust keeps FILE and prose as Term. */
+		*recognized = 1;
+		return 1;
+	}
+	*recognized = 1;
+	/* After the first authored whitespace, a font escape belongs to the
+	 * operand, not the option prefix. A second raw option-looking spelling
+	 * instead leaves the whole HEAD to the shared Rust alias grammar. */
+	if (!prefix_done || !prefix_valid || length < 2)
+		return 1;
+	while (isspace((unsigned char)*cursor))
+		cursor++;
+	if (*cursor == '\0' || *cursor == '-' ||
+	    *cursor == ',' || *cursor == '|' || *cursor == '/' ||
+	    (cursor[0] == 'o' && cursor[1] == 'r' &&
+	    isspace((unsigned char)cursor[2])) ||
+	    (cursor[0] == '\\' && cursor[1] == '-'))
+		return 1;
+	mark->name = mant_structured_copy_bytes(collector->session,
+	    (const uint8_t *)candidate, length, 1,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (mark->name == NULL)
+		return 0;
+	mark->name_length = length;
+	return 1;
 }
 
 /* man_macro.c::blk_imp retains the first .IP argument as one HEAD text node;
@@ -1296,8 +1381,8 @@ push_node(struct mant_annotated_collector *collector,
 	frame->saved_heading = collector->active_heading;
 	frame->saved_link_epoch = collector->active_link_epoch;
 	frame->owner_mark = frame->anchor_mark = frame->region_mark = 0;
-	frame->last_direct_ip_node = NULL;
-	frame->last_direct_ip_owner = 0;
+	frame->last_direct_man_node = NULL;
+	frame->last_direct_man_owner = 0;
 
 	/* man_macro.c::blk_imp and mdoc_macro.c::blk_full produce a block
 	 * with distinct HEAD/BODY scopes.  Their terminal traversal emits
@@ -1326,7 +1411,7 @@ push_node(struct mant_annotated_collector *collector,
 		const struct roff_node *preceding_node, *completed_node;
 		const struct annotated_frame *parent_frame;
 		const struct roff_node *role_node = NULL;
-		int definition;
+		int definition, lexical_head;
 		uint32_t head_role = 0, preceding_key;
 
 		/* man_term.c::pre_TP/post_TP present HEAD as a named term.
@@ -1357,45 +1442,59 @@ push_node(struct mant_annotated_collector *collector,
 		    collector->marks + key - 1, node, &definition))
 			return 0;
 		if (definition) {
-			if (node->tok == MAN_IP) {
-				if (!direct_ip_predecessor(collector, node,
-				    &preceding_node))
-					return 0;
-				parent_frame = collector->frame_count > 1 ?
-				    collector->frames + collector->frame_count - 2 : NULL;
-				if (parent_frame == NULL) {
-					completed_node = collector->last_root_ip_node;
-					preceding_key = collector->last_root_ip_owner;
-				} else if (parent_frame->node == node->parent) {
-					completed_node = parent_frame->last_direct_ip_node;
-					preceding_key = parent_frame->last_direct_ip_owner;
-				} else {
-					completed_node = NULL;
-					preceding_key = 0;
-				}
-				/* A completed direct sibling and the AST's nearest eligible
-				 * predecessor must identify the same owner.  Merely sharing
-				 * a rendered position cannot establish reading context. */
-				if (preceding_node != NULL &&
-				    preceding_node == completed_node &&
-				    preceding_key != 0 &&
-				    collector->marks[preceding_key - 1].parent ==
-				    collector->marks[key - 1].parent)
-					collector->marks[key - 1].preceding_owner =
-					    preceding_key;
-			}
 			if (node->tok == MDOC_It)
 				head_role = owner_head_role(node, &role_node);
 			else if (node->tok == MAN_IP)
 				head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
-			else if (owner_lexical_head(node))
-				head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
+			else if (node->tok == MAN_TP || node->tok == MAN_TQ) {
+				if (!copy_tp_lexical_head(collector,
+				    collector->marks + key - 1, node, &lexical_head))
+					return 0;
+				if (lexical_head)
+					head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
+			}
 			collector->marks[key - 1].flags |=
 			    MANT_ANNOTATED_MARK_DEFINITION |
 			    head_role;
 			if (!copy_owner_head_operand(collector,
 			    collector->marks + key - 1, role_node))
 				return 0;
+			if (man_reading_family(node->tok) != 0 &&
+			    head_role == MANT_ANNOTATED_MARK_HEAD_LEXICAL) {
+				if (!direct_man_predecessor(collector, node,
+				    &preceding_node))
+					return 0;
+				parent_frame = collector->frame_count > 1 ?
+				    collector->frames + collector->frame_count - 2 : NULL;
+				if (parent_frame == NULL) {
+					completed_node = collector->last_root_man_node;
+					preceding_key = collector->last_root_man_owner;
+				} else if (parent_frame->node == node->parent) {
+					completed_node = parent_frame->last_direct_man_node;
+					preceding_key = parent_frame->last_direct_man_owner;
+				} else {
+					completed_node = NULL;
+					preceding_key = 0;
+				}
+				/* A completed direct sibling and the AST's nearest eligible
+				 * predecessor must identify the same owner. The prior HEAD
+				 * must itself be a checked lexical definition candidate. */
+				if (preceding_node != NULL &&
+				    preceding_node == completed_node &&
+				    preceding_key != 0 &&
+				    (collector->marks[preceding_key - 1].flags &
+				    (MANT_ANNOTATED_MARK_DEFINITION |
+				    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) ==
+				    (MANT_ANNOTATED_MARK_DEFINITION |
+				    MANT_ANNOTATED_MARK_HEAD_LEXICAL) &&
+				    (node->tok != MAN_IP ||
+				    (collector->marks[key - 1].name_length != 0 &&
+				    collector->marks[preceding_key - 1].name_length != 0)) &&
+				    collector->marks[preceding_key - 1].parent ==
+				    collector->marks[key - 1].parent)
+					collector->marks[key - 1].preceding_owner =
+					    preceding_key;
+			}
 		}
 		collector->active_owner = key;
 		frame->owner_mark = key;
@@ -1775,18 +1874,19 @@ pop_node(struct mant_annotated_collector *collector,
 	    collector->frames + collector->frame_count - 1;
 	if (parent_frame != NULL && parent_frame->node != node->parent)
 		return; /* A skipped AST wrapper cannot prove direct adjacency. */
-	last_node = parent_frame == NULL ? &collector->last_root_ip_node :
-	    &parent_frame->last_direct_ip_node;
-	last_owner = parent_frame == NULL ? &collector->last_root_ip_owner :
-	    &parent_frame->last_direct_ip_owner;
+	last_node = parent_frame == NULL ? &collector->last_root_man_node :
+	    &parent_frame->last_direct_man_node;
+	last_owner = parent_frame == NULL ? &collector->last_root_man_owner :
+	    &parent_frame->last_direct_man_owner;
 	owner = frame->owner_mark == 0 ? NULL :
 	    collector->marks + frame->owner_mark - 1;
-	if (node->type == ROFFT_BLOCK && node->tok == MAN_IP &&
+	if (node->type == ROFFT_BLOCK &&
+	    man_reading_family(node->tok) != 0 &&
 	    owner != NULL &&
 	    (owner->flags & MANT_ANNOTATED_MARK_DEFINITION) != 0) {
 		*last_node = node;
 		*last_owner = frame->owner_mark;
-	} else if (!ip_sibling_gap(node)) {
+	} else if (!man_reading_sibling_gap(node)) {
 		*last_node = NULL;
 		*last_owner = 0;
 	}

@@ -209,7 +209,7 @@ fn one_arena_and_borrowed_slices_round_trip() {
 }
 
 #[test]
-fn ip_predecessor_is_structural_evidence_not_shared_body() {
+fn native_predecessor_is_structural_evidence_not_shared_body() {
     let mut body = sample_body();
     body.owners[0].head_role = Some(OwnerHeadRole::Lexical);
     body.owners[0].head_role_prefix = Some("-x".to_owned());
@@ -229,8 +229,30 @@ fn ip_predecessor_is_structural_evidence_not_shared_body() {
     body.owners[1].parent = Some(key(1));
     assert!(body.validate().is_err());
     body.owners[1].parent = None;
+    // Typed IR has no man macro token: a TP/TQ lexical predecessor may
+    // legitimately lack the IP-style source prefix, while C/FFI check its
+    // native sibling family before transfer.
     body.owners[1].head_role_prefix = None;
+    body.validate().unwrap();
+    body.owners[1].head_role = None;
     assert!(body.validate().is_err());
+}
+
+#[test]
+fn predecessor_cannot_skip_another_owner_in_the_same_scope() {
+    let mut body = sample_body();
+    body.owners[0].head_role = Some(OwnerHeadRole::Lexical);
+    let mut middle = body.owners[0].clone();
+    middle.key = key(2);
+    middle.id = crate::NodeId::from("native-owner-2");
+    let mut last = body.owners[0].clone();
+    last.key = key(3);
+    last.id = crate::NodeId::from("native-owner-3");
+    last.preceding_owner = Some(key(1));
+    body.owners.extend([middle, last]);
+    assert!(body.validate().is_err());
+    body.owners[2].preceding_owner = Some(key(2));
+    body.validate().unwrap();
 }
 
 #[test]
