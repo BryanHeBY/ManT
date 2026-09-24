@@ -918,6 +918,7 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
 	n->line = line;
 	n->pos = pos;
 	n->mant_source_key = mandoc_msg_getsourcekey();
+	n->mant_coordinate_origin = mandoc_msg_getcoordinateorigin();
 	n->tok = tok;
 	n->type = type;
 	n->sec = man->lastsec;
@@ -1521,6 +1522,9 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 		    &iarg, &iendarg, &iend) != ESCAPE_EXPAND) {
 			while (pos < iend) {
 				if (buf->buf[pos] == ec) {
+					if (ec != '\\')
+						mandoc_msg_setcoordinateorigin(
+						    MANDOC_COORDINATE_EXPANDED);
 					buf->buf[pos] = '\\';
 					if (pos + 1 < iend)
 						pos++;
@@ -1610,6 +1614,8 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 				asz += strlen(ctx->argv[argi]);
 			}
 			if (asz != iend - iesc) {
+				mandoc_msg_setcoordinateorigin(
+				    MANDOC_COORDINATE_EXPANDED);
 				rsz = buf->sz - iend;
 				if (asz < iend - iesc)
 					memmove(buf->buf + iesc + asz,
@@ -1621,6 +1627,7 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 					    buf->buf + iend, rsz);
 			}
 			dst = buf->buf + iesc;
+			mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
 			for (argi = 0; argi < ctx->argc; argi++) {
 				if (argi)
 					*dst++ = ' ';
@@ -1719,6 +1726,7 @@ roff_expand_patch(struct buf *buf, int start, const char *repl, int end)
 {
 	char	*nbuf;
 
+	mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
 	buf->sz = mandoc_asprintf(&nbuf, "%.*s%s%s", start, buf->buf,
 	    repl, buf->buf + end) + 1;
 	free(buf->buf);
@@ -4144,6 +4152,7 @@ roff_userdef(ROFF_ARGS)
 
 	/* Replace the macro invocation by the macro definition. */
 
+	mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
 	free(buf->buf);
 	buf->buf = mandoc_strdup(r->current_string);
 	buf->sz = strlen(buf->buf) + 1;
@@ -4162,6 +4171,7 @@ roff_renamed(ROFF_ARGS)
 {
 	char	*nbuf;
 
+	mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
 	buf->sz = mandoc_asprintf(&nbuf, ".%s%s%s", r->current_string,
 	    buf->buf[pos] == '\0' ? "" : " ", buf->buf + pos) + 1;
 	free(buf->buf);

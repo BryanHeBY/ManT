@@ -128,6 +128,101 @@ fn diagnostics_keep_the_emitting_source_key() {
 }
 
 #[test]
+fn macro_reparse_diagnostic_keeps_source_without_claiming_authored_columns() {
+    // Both exact inputs ran the pinned CVS reference with -Wstyle -Ttree.
+    // read.c::mparse_buf_r reparses .EE at its call-site line, while
+    // roff.c::roff_userdef substitutes its body: the 6:6 diagnostic
+    // addresses expanded text even when the authored invocation is long
+    // enough that a bounds-only heuristic would accept that column.
+    for call in [".EE", ".EE ignored"] {
+        let input = format!(".TH T 1\n.SH TEST\n.de EE\n.    fi\n..\n{call}\n.fi\ntext\n");
+        let mut bundle = SourceBundle::new();
+        bundle.insert("expanded.1", input.into_bytes()).unwrap();
+        let owned = render_prelude(
+            "expanded.1",
+            &bundle,
+            InputFormat::Man,
+            78,
+            &Limits::default(),
+        )
+        .expect("a macro expansion diagnostic must not reject the whole page");
+        let fill_warnings = owned
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.message.contains("fill mode already enabled"))
+            .map(|diagnostic| diagnostic_span(&owned, diagnostic).expect("sourced diagnostic"))
+            .collect::<Vec<_>>();
+        assert_eq!(fill_warnings.len(), 2, "{call}");
+        assert_eq!(fill_warnings[0].source, 1, "{call}");
+        assert_eq!(fill_warnings[0].line_columns, None, "{call}");
+        assert_eq!(fill_warnings[1].source, 1, "{call}");
+        assert_eq!(fill_warnings[1].line_columns, Some((7, 2, 0, 0)), "{call}");
+        assert!(owned.content_atoms.iter().any(|atom| atom.text == "text"));
+    }
+}
+
+#[test]
+fn macro_generated_content_keeps_source_identity_without_authored_positions() {
+    // Both exact inputs ran the pinned CVS reference with -Thtml.  It emits
+    // OPTIONS, --macro-generated, Description., and the linked label for
+    // both invocation spellings.  read.c::mparse_buf_r reparses the macro
+    // body at the call-site source key, but its node columns are expanded
+    // coordinates even when the call is long enough to contain them.
+    for call in [".EE", ".EE ignored-padding-for-coordinate-check"] {
+        let input = format!(
+            ".TH T 1\n.de EE\n.SH OPTIONS\n.TP\n.B --macro-generated\nDescription.\n.UR https://example.test/x\nlabel\n.UE\n..\n{call}\n"
+        );
+        let mut bundle = SourceBundle::new();
+        bundle.insert("expanded.1", input.into_bytes()).unwrap();
+        let owned = render_prelude(
+            "expanded.1",
+            &bundle,
+            InputFormat::Man,
+            78,
+            &Limits::default(),
+        )
+        .expect("macro-generated content retains source-only provenance");
+        let visible = owned
+            .content_atoms
+            .iter()
+            .map(|atom| atom.text.as_str())
+            .collect::<String>();
+        for marker in ["OPTIONS", "--macro-generated", "Description.", "label"] {
+            assert!(visible.contains(marker), "missing {marker} for {call}");
+        }
+        assert!(
+            owned
+                .heading_evidence
+                .iter()
+                .any(|heading| heading.authored_phrase.as_deref() == Some("OPTIONS"))
+        );
+        for atom in &owned.content_atoms {
+            let OwnedProvenance::Generated {
+                trigger_span: Some(span),
+            } = owned.provenances[atom.provenance as usize - 1]
+            else {
+                panic!("{} falsely has authored provenance for {call}", atom.text);
+            };
+            assert_eq!(owned.spans[span as usize - 1].source, 1, "{call}");
+            assert_eq!(owned.spans[span as usize - 1].line_columns, None, "{call}");
+        }
+        let link = owned
+            .links
+            .iter()
+            .find(|link| link.target_a == "https://example.test/x")
+            .expect("generated UR occurrence");
+        let OwnedProvenance::Generated {
+            trigger_span: Some(span),
+        } = owned.provenances[link.provenance as usize - 1]
+        else {
+            panic!("generated link falsely has authored provenance for {call}");
+        };
+        assert_eq!(owned.spans[span as usize - 1].source, 1, "{call}");
+        assert_eq!(owned.spans[span as usize - 1].line_columns, None, "{call}");
+    }
+}
+
+#[test]
 fn typed_diagnostic_codes_keep_closed_native_identity() {
     use crate::structured::StructuredDiagnosticCode;
 

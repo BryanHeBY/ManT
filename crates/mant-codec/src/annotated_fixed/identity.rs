@@ -383,6 +383,14 @@ impl KeyMap {
                     "native mark has invalid kind flags",
                 ));
             }
+            if (mark.line == 0) != (mark.column == 0)
+                || (mark.source == 0 && mark.line != 0)
+                || ((mark.flags & 1 != 0) != (mark.line != 0))
+            {
+                return Err(AnnotatedProjectionError::Relation(
+                    "native mark has inconsistent authored coordinates",
+                ));
+            }
             if mark.kind == 2
                 && mark.flags & 0b1_1110_0000 != 0
                 && (mark.flags & 16 == 0 || (mark.flags & 0b1_1110_0000).count_ones() != 1)
@@ -392,8 +400,7 @@ impl KeyMap {
                 ));
             }
             if mark.kind == 6
-                && (mark.flags & 1 == 0
-                    || mark.source == 0
+                && (mark.source == 0
                     || (mark.flags & 0b1_1110_0000).count_ones() != 1
                     || mark.parent == 0
                     || mark.owner != mark.parent

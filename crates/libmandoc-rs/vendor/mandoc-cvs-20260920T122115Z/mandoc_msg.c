@@ -295,6 +295,8 @@ static	const char *const type_message[MANDOCERR_MAX] = {
 MANT_THREAD_LOCAL FILE *fileptr = NULL;
 MANT_THREAD_LOCAL const char *filename = NULL;
 MANT_THREAD_LOCAL uint32_t sourcekey = 0;
+MANT_THREAD_LOCAL enum mandoc_coordinate_origin coordinate_origin =
+    MANDOC_COORDINATE_AUTHORED;
 MANT_THREAD_LOCAL mandoc_msg_observer observer = NULL;
 MANT_THREAD_LOCAL void *observer_arg = NULL;
 MANT_THREAD_LOCAL mandoc_line_observer line_observer = NULL;
@@ -333,6 +335,18 @@ mandoc_msg_setsourcekey(uint32_t key)
 	sourcekey = key;
 }
 
+enum mandoc_coordinate_origin
+mandoc_msg_getcoordinateorigin(void)
+{
+	return coordinate_origin;
+}
+
+void
+mandoc_msg_setcoordinateorigin(enum mandoc_coordinate_origin origin)
+{
+	coordinate_origin = origin;
+}
+
 void
 mandoc_msg_setobserver(mandoc_msg_observer fn, void *arg)
 {
@@ -360,6 +374,7 @@ mandoc_msg_getstate(struct mandoc_msg_state *state)
 	state->outfile = fileptr;
 	state->infilename = filename;
 	state->sourcekey = sourcekey;
+	state->coordinate_origin = coordinate_origin;
 	state->observer = observer;
 	state->observer_arg = observer_arg;
 	state->line_observer = line_observer;
@@ -374,6 +389,7 @@ mandoc_msg_setstate(const struct mandoc_msg_state *state)
 	fileptr = state->outfile;
 	filename = state->infilename;
 	sourcekey = state->sourcekey;
+	coordinate_origin = state->coordinate_origin;
 	observer = state->observer;
 	observer_arg = state->observer_arg;
 	line_observer = state->line_observer;

@@ -464,6 +464,7 @@ mant_structured_observe_diagnostic(void *arg, enum mandocerr code, enum mandocle
 	uint64_t base_length, detail_length, message_length;
 	int needed, written_count, has_span;
 	uint32_t span_key;
+	enum mandoc_coordinate_origin coordinate_origin;
 
 	if (session == NULL || session->status != MANT_STRUCTURED_OK)
 		return;
@@ -532,8 +533,13 @@ mant_structured_observe_diagnostic(void *arg, enum mandocerr code, enum mandocle
 		}
 	} else if (message != NULL)
 		message[message_length] = '\0';
+	coordinate_origin = mandoc_msg_getcoordinateorigin();
+	/* read.c reparses user macros at their call-site line number, while
+	 * columns refer to the expanded buffer. Keep the valid source identity,
+	 * but never present expansion coordinates as authored source positions. */
 	has_span = source_key != 0 && source_key <= session->result->source_count &&
-	    line > 0 && column >= 0;
+	    (coordinate_origin == MANDOC_COORDINATE_EXPANDED ||
+	    (line > 0 && column >= 0));
 	if (has_span) {
 		if (!mant_structured_charge(session, &session->builder_operations, 1,
 		    session->limits->max_builder_operations, 8,
@@ -569,10 +575,12 @@ mant_structured_observe_diagnostic(void *arg, enum mandocerr code, enum mandocle
 	if (has_span) {
 		span = session->result->spans + session->result->span_count;
 		memset(span, 0, sizeof(*span));
-		span->line_column_present = 1;
 		span->source = source_key;
-		span->line_start = (uint32_t)line;
-		span->column_start = (uint32_t)column + 1;
+		if (coordinate_origin == MANDOC_COORDINATE_AUTHORED) {
+			span->line_column_present = 1;
+			span->line_start = (uint32_t)line;
+			span->column_start = (uint32_t)column + 1;
+		}
 		span_key = ++session->result->span_count;
 	}
 	diagnostic = grown_diagnostics + session->result->diagnostic_count;

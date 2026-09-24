@@ -113,6 +113,7 @@ man_validate(struct roff_man *man)
 	struct roff_node *n;
 	const v_check	 *cp;
 	uint32_t	  saved_source_key;
+	enum mandoc_coordinate_origin saved_coordinate_origin;
 
 	/*
 	 * Iterate over all children, recursing into each one
@@ -121,10 +122,12 @@ man_validate(struct roff_man *man)
 
 	n = man->last;
 	saved_source_key = mandoc_msg_getsourcekey();
+	saved_coordinate_origin = mandoc_msg_getcoordinateorigin();
 	if (n->flags & NODE_NOSRC)
 		mandoc_msg_setsourcekey(0);
 	else if (n->type != ROFFT_ROOT)
 		mandoc_msg_setsourcekey(n->mant_source_key);
+	mandoc_msg_setcoordinateorigin(n->mant_coordinate_origin);
 	man->last = man->last->child;
 	while (man->last != NULL) {
 		man_validate(man);
@@ -163,6 +166,7 @@ man_validate(struct roff_man *man)
 		break;
 	}
 	mandoc_msg_setsourcekey(saved_source_key);
+	mandoc_msg_setcoordinateorigin(saved_coordinate_origin);
 }
 
 static void

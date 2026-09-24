@@ -303,10 +303,16 @@ typedef void (*mandoc_msg_observer)(void *, enum mandocerr,
     va_list *);
 typedef void (*mandoc_line_observer)(void *, uint32_t, int, size_t);
 
+enum mandoc_coordinate_origin {
+	MANDOC_COORDINATE_AUTHORED,
+	MANDOC_COORDINATE_EXPANDED
+};
+
 struct mandoc_msg_state {
 	FILE		 *outfile;
 	const char	 *infilename;
 	uint32_t	  sourcekey;
+	enum mandoc_coordinate_origin coordinate_origin;
 	mandoc_msg_observer observer;
 	void		 *observer_arg;
 	mandoc_line_observer line_observer;
@@ -350,6 +356,8 @@ const char	 *mandoc_msg_getinfilename(void);
 void		  mandoc_msg_setinfilename(const char *);
 uint32_t	  mandoc_msg_getsourcekey(void);
 void		  mandoc_msg_setsourcekey(uint32_t);
+enum mandoc_coordinate_origin mandoc_msg_getcoordinateorigin(void);
+void		  mandoc_msg_setcoordinateorigin(enum mandoc_coordinate_origin);
 void		  mandoc_msg_setobserver(mandoc_msg_observer, void *);
 void		  mandoc_msg_setlineobserver(mandoc_line_observer, void *);
 void		  mandoc_msg_sourceline(int, size_t);

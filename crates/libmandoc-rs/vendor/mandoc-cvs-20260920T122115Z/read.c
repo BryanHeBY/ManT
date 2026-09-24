@@ -177,8 +177,10 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
 	int		 fd;
 #endif
 	int		 inloop; /* Saw .while on this level. */
+	enum mandoc_coordinate_origin saved_coordinate_origin;
 	unsigned char	 c;
 
+	saved_coordinate_origin = mandoc_msg_getcoordinateorigin();
 	ln.sz = 256;
 	ln.buf = mandoc_malloc(ln.sz);
 	ln.next = NULL;
@@ -189,6 +191,10 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
 	result = ROFF_CONT;
 
 	while (i < blk.sz && (blk.buf[i] != '\0' || pos != 0)) {
+		/* Reparse retains the invocation line but not its authored
+		 * columns.  Appended lines also contain earlier input bytes. */
+		mandoc_msg_setcoordinateorigin(start && pos == 0 ?
+		    MANDOC_COORDINATE_AUTHORED : MANDOC_COORDINATE_EXPANDED);
 		if (start) {
 			curp->line = lnn;
 			curp->reparse_count = 0;
@@ -506,6 +512,7 @@ out:
 	free(ln.buf);
 	if (firstln != curp->secondary)
 		free_buf_list(firstln);
+	mandoc_msg_setcoordinateorigin(saved_coordinate_origin);
 	return result;
 }
 

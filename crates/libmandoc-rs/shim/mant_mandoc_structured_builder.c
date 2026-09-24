@@ -63,21 +63,26 @@ static const struct roff_node *
 source_node(const struct roff_node *node)
 {
 	while (node != NULL && ((node->flags & NODE_NOSRC) != 0 ||
-	    node->mant_source_key == 0 || node->line <= 0 || node->pos < 0))
+	    node->mant_source_key == 0 ||
+	    (node->mant_coordinate_origin == MANDOC_COORDINATE_AUTHORED &&
+	    (node->line <= 0 || node->pos < 0))))
 		node = node->parent;
 	return node;
 }
 
 static uint32_t
 append_span_for_node(struct structured_session *session,
-    const struct roff_node *node)
+    const struct roff_node *node, int source_only)
 {
 	struct mant_structured_span_view *span, *grown;
 
 	node = source_node(node);
 	if (node == NULL || node->mant_source_key > session->result->source_count)
 		return 0;
-	if (node == session->last_span_node && session->last_span != 0)
+	if (node == session->last_span_node && session->last_span != 0 &&
+	    session->result->spans[session->last_span - 1].line_column_present ==
+	    (!source_only &&
+	    node->mant_coordinate_origin == MANDOC_COORDINATE_AUTHORED))
 		return session->last_span;
 	if (!mant_structured_charge(session, &session->builder_operations, 1,
 	    session->limits->max_builder_operations, 8,
@@ -96,10 +101,16 @@ append_span_for_node(struct structured_session *session,
 	session->result->spans = grown;
 	span = grown + session->result->span_count;
 	memset(span, 0, sizeof(*span));
-	span->line_column_present = 1;
 	span->source = node->mant_source_key;
-	span->line_start = (uint32_t)node->line;
-	span->column_start = (uint32_t)node->pos + 1;
+	/* read.c::mparse_buf_r retains the invocation source key while a
+	 * reparse uses offsets in expanded text.  Those offsets cannot address
+	 * the authored source map, even when they happen to be in range. */
+	if (!source_only &&
+	    node->mant_coordinate_origin == MANDOC_COORDINATE_AUTHORED) {
+		span->line_column_present = 1;
+		span->line_start = (uint32_t)node->line;
+		span->column_start = (uint32_t)node->pos + 1;
+	}
 	session->last_span_node = node;
 	session->last_span = ++session->result->span_count;
 	return session->last_span;
@@ -111,13 +122,27 @@ mant_structured_append_provenance(struct structured_session *session,
 {
 	struct mant_structured_provenance_view *provenance, *grown;
 	uint32_t span;
+	int authored_origin;
+	int source_only;
 
+	/* The requested role alone does not prove that the parser coordinates
+	 * belong to an authored line.  Generated nodes may still have a source
+	 * key identifying the invocation's input. */
+	authored_origin = authored && node != NULL &&
+	    (node->flags & NODE_NOSRC) == 0 &&
+	    node->mant_coordinate_origin == MANDOC_COORDINATE_AUTHORED;
+	source_only = node != NULL &&
+	    node->mant_coordinate_origin == MANDOC_COORDINATE_EXPANDED;
 	node = source_node(node);
+	if (node == NULL ||
+	    node->mant_coordinate_origin != MANDOC_COORDINATE_AUTHORED)
+		authored_origin = 0;
 	if (node == session->last_provenance_node &&
-	    authored == session->last_provenance_authored &&
+	    authored_origin == session->last_provenance_authored &&
+	    source_only == session->last_provenance_source_only &&
 	    session->last_provenance != 0)
 		return session->last_provenance;
-	span = append_span_for_node(session, node);
+	span = append_span_for_node(session, node, source_only);
 	if (session->status != MANT_STRUCTURED_OK)
 		return 0;
 	grown = mant_structured_grow_array(session, session->result->provenances,
@@ -130,7 +155,7 @@ mant_structured_append_provenance(struct structured_session *session,
 	session->result->provenances = grown;
 	provenance = grown + session->result->provenance_count;
 	memset(provenance, 0, sizeof(*provenance));
-	if (authored && span != 0) {
+	if (authored_origin && span != 0) {
 		provenance->kind = MANT_PROVENANCE_AUTHORED;
 		provenance->authored_span = span;
 	} else if (span != 0) {
@@ -139,7 +164,8 @@ mant_structured_append_provenance(struct structured_session *session,
 	} else
 		provenance->kind = MANT_PROVENANCE_UNKNOWN;
 	session->last_provenance_node = node;
-	session->last_provenance_authored = authored != 0;
+	session->last_provenance_authored = authored_origin != 0;
+	session->last_provenance_source_only = source_only != 0;
 	session->last_provenance = ++session->result->provenance_count;
 	return session->last_provenance;
 }

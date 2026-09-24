@@ -277,6 +277,9 @@ pub(super) fn transfer(
             || mark.parent >= mark.key
             || mark.owner >= mark.key
             || mark.source as usize > sources.len()
+            || (mark.line == 0) != (mark.column == 0)
+            || (mark.source == 0 && mark.line != 0)
+            || ((mark.flags & 1 != 0) != (mark.line != 0))
             || mark.point_reserved != 0
             || mark.flags & !0b1_1111_1101 != 0
             || (mark.flags & 4 != 0 && mark.kind != 4)
@@ -394,7 +397,6 @@ pub(super) fn transfer(
             && (mark.parent == 0
                 || mark.owner != mark.parent
                 || mark.source == 0
-                || mark.flags & 1 == 0
                 || mark.flags & 0b1_1110_0000 == 0
                 || mark.flags & !(1 | 0b1_1110_0000) != 0
                 || mark.title_region != 0

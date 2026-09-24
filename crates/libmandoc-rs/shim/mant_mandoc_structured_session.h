@@ -176,6 +176,7 @@ struct structured_session {
 	const struct roff_node *last_provenance_node;
 	uint32_t last_provenance;
 	uint8_t last_provenance_authored;
+	uint8_t last_provenance_source_only;
 	uint64_t current_atom_capacity;
 	uint64_t current_display_capacity;
 	struct structured_link_identity *link_identities;

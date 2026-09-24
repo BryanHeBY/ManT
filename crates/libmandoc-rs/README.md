@@ -384,7 +384,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 40 ordered patches in `patches/series`. The following group contains
+the 41 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -486,6 +486,9 @@ The remaining patches implement the synchronous embedding boundary:
 - `0040-observe-post-pre-region-points.patch` observes non-cell region starts
   after native pre handlers as unresolved terminal buffer gaps, without
   changing formatter output.
+- `0041-track-diagnostic-coordinate-origin.patch` distinguishes authored
+  columns from user-macro and other reparsed text, preserving source identity
+  without assigning generated columns to an authored line.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

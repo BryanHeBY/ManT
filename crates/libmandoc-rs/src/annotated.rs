@@ -660,6 +660,35 @@ mod tests {
     }
 
     #[test]
+    fn macro_generated_marks_keep_source_without_authored_coordinates() {
+        // Both exact inputs ran the pinned CVS -Thtml reference: generated
+        // SH, TP, and UR all render. read.c::mparse_buf_r retains the input
+        // source key but substitutes expanded line coordinates.
+        for call in [".EE", ".EE ignored-padding-for-coordinate-check"] {
+            let input = format!(
+                ".TH T 1\n.de EE\n.SH OPTIONS\n.TP\n.B --macro-generated\nDescription.\n.UR https://example.test/x\nlabel\n.UE\n..\n{call}\n"
+            );
+            let mut bundle = SourceBundle::new();
+            bundle.insert("expanded.1", input.into_bytes()).unwrap();
+            let page = AnnotatedRenderer::default()
+                .render_bundle("expanded.1", &bundle, InputFormat::Man)
+                .expect("macro-generated marks retain source-only coordinates");
+            for kind in [1, 2, 3, 6] {
+                let mark = page
+                    .marks
+                    .iter()
+                    .find(|mark| mark.kind == kind && mark.source == 1)
+                    .unwrap_or_else(|| panic!("missing generated mark kind {kind} for {call}"));
+                assert_eq!((mark.line, mark.column), (0, 0), "kind {kind} {call}");
+                assert_eq!(mark.flags & 1, 0, "kind {kind} {call}");
+            }
+            assert!(page.text.contains("--macro-generated"), "{call}");
+            assert!(page.text.contains("Description."), "{call}");
+            assert!(page.text.contains("label"), "{call}");
+        }
+    }
+
+    #[test]
     fn resource_failures_return_no_partial_page_and_next_call_recovers() {
         // Same exact minimal input as the pinned CVS man_term.c smoke above.
         let mut bundle = SourceBundle::new();

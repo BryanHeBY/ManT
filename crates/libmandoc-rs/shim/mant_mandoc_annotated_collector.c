@@ -752,7 +752,11 @@ add_mark(struct mant_annotated_collector *collector,
 	mark->region_kind = region_kind;
 	mark->token = node == NULL ? 0 : node->tok;
 	mark->source = source_key(origin);
+	/* read.c reparses user macros at the invocation source key, but their
+	 * node positions address expanded text.  Keep source identity without
+	 * claiming those positions are authored coordinates. */
 	if (mark->source != 0 && origin != NULL &&
+	    origin->mant_coordinate_origin == MANDOC_COORDINATE_AUTHORED &&
 	    origin->line > 0 && origin->pos >= 0 &&
 	    (uint64_t)origin->line <= UINT32_MAX &&
 	    (uint64_t)origin->pos < UINT32_MAX) {

@@ -1,0 +1,299 @@
+Subject: retain authored diagnostic coordinate provenance across reparse
+Upstream-Status: Local embedding (not submitted)
+
+The parser reuses a user macro call-site line number while interpreting an
+expanded buffer, whose columns do not address the authored input. Record the
+coordinate origin through parse, syntax nodes, and validation so the embedding
+observer can retain the source identity without inventing authored positions.
+
+diff --git a/man_validate.c b/man_validate.c
+index 96bbde8e..2def7375 100644
+--- a/man_validate.c
++++ b/man_validate.c
+@@ -113,6 +113,7 @@ man_validate(struct roff_man *man)
+ 	struct roff_node *n;
+ 	const v_check	 *cp;
+ 	uint32_t	  saved_source_key;
++	enum mandoc_coordinate_origin saved_coordinate_origin;
+ 
+ 	/*
+ 	 * Iterate over all children, recursing into each one
+@@ -121,10 +122,12 @@ man_validate(struct roff_man *man)
+ 
+ 	n = man->last;
+ 	saved_source_key = mandoc_msg_getsourcekey();
++	saved_coordinate_origin = mandoc_msg_getcoordinateorigin();
+ 	if (n->flags & NODE_NOSRC)
+ 		mandoc_msg_setsourcekey(0);
+ 	else if (n->type != ROFFT_ROOT)
+ 		mandoc_msg_setsourcekey(n->mant_source_key);
++	mandoc_msg_setcoordinateorigin(n->mant_coordinate_origin);
+ 	man->last = man->last->child;
+ 	while (man->last != NULL) {
+ 		man_validate(man);
+@@ -163,6 +166,7 @@ man_validate(struct roff_man *man)
+ 		break;
+ 	}
+ 	mandoc_msg_setsourcekey(saved_source_key);
++	mandoc_msg_setcoordinateorigin(saved_coordinate_origin);
+ }
+ 
+ static void
+diff --git a/mandoc.h b/mandoc.h
+index 5b8a4b56..680a7a70 100644
+--- a/mandoc.h
++++ b/mandoc.h
+@@ -303,10 +303,16 @@ typedef void (*mandoc_msg_observer)(void *, enum mandocerr,
+     va_list *);
+ typedef void (*mandoc_line_observer)(void *, uint32_t, int, size_t);
+ 
++enum mandoc_coordinate_origin {
++	MANDOC_COORDINATE_AUTHORED,
++	MANDOC_COORDINATE_EXPANDED
++};
++
+ struct mandoc_msg_state {
+ 	FILE		 *outfile;
+ 	const char	 *infilename;
+ 	uint32_t	  sourcekey;
++	enum mandoc_coordinate_origin coordinate_origin;
+ 	mandoc_msg_observer observer;
+ 	void		 *observer_arg;
+ 	mandoc_line_observer line_observer;
+@@ -350,6 +356,8 @@ const char	 *mandoc_msg_getinfilename(void);
+ void		  mandoc_msg_setinfilename(const char *);
+ uint32_t	  mandoc_msg_getsourcekey(void);
+ void		  mandoc_msg_setsourcekey(uint32_t);
++enum mandoc_coordinate_origin mandoc_msg_getcoordinateorigin(void);
++void		  mandoc_msg_setcoordinateorigin(enum mandoc_coordinate_origin);
+ void		  mandoc_msg_setobserver(mandoc_msg_observer, void *);
+ void		  mandoc_msg_setlineobserver(mandoc_line_observer, void *);
+ void		  mandoc_msg_sourceline(int, size_t);
+diff --git a/mandoc_msg.c b/mandoc_msg.c
+index 05ad926e..19b8ff48 100644
+--- a/mandoc_msg.c
++++ b/mandoc_msg.c
+@@ -295,6 +295,8 @@ static	const char *const type_message[MANDOCERR_MAX] = {
+ MANT_THREAD_LOCAL FILE *fileptr = NULL;
+ MANT_THREAD_LOCAL const char *filename = NULL;
+ MANT_THREAD_LOCAL uint32_t sourcekey = 0;
++MANT_THREAD_LOCAL enum mandoc_coordinate_origin coordinate_origin =
++    MANDOC_COORDINATE_AUTHORED;
+ MANT_THREAD_LOCAL mandoc_msg_observer observer = NULL;
+ MANT_THREAD_LOCAL void *observer_arg = NULL;
+ MANT_THREAD_LOCAL mandoc_line_observer line_observer = NULL;
+@@ -333,6 +335,18 @@ mandoc_msg_setsourcekey(uint32_t key)
+ 	sourcekey = key;
+ }
+ 
++enum mandoc_coordinate_origin
++mandoc_msg_getcoordinateorigin(void)
++{
++	return coordinate_origin;
++}
++
++void
++mandoc_msg_setcoordinateorigin(enum mandoc_coordinate_origin origin)
++{
++	coordinate_origin = origin;
++}
++
+ void
+ mandoc_msg_setobserver(mandoc_msg_observer fn, void *arg)
+ {
+@@ -360,6 +374,7 @@ mandoc_msg_getstate(struct mandoc_msg_state *state)
+ 	state->outfile = fileptr;
+ 	state->infilename = filename;
+ 	state->sourcekey = sourcekey;
++	state->coordinate_origin = coordinate_origin;
+ 	state->observer = observer;
+ 	state->observer_arg = observer_arg;
+ 	state->line_observer = line_observer;
+@@ -374,6 +389,7 @@ mandoc_msg_setstate(const struct mandoc_msg_state *state)
+ 	fileptr = state->outfile;
+ 	filename = state->infilename;
+ 	sourcekey = state->sourcekey;
++	coordinate_origin = state->coordinate_origin;
+ 	observer = state->observer;
+ 	observer_arg = state->observer_arg;
+ 	line_observer = state->line_observer;
+diff --git a/mdoc_validate.c b/mdoc_validate.c
+index faa4a456..4a086692 100644
+--- a/mdoc_validate.c
++++ b/mdoc_validate.c
+@@ -305,6 +305,7 @@ mdoc_validate(struct roff_man *mdoc)
+ 	struct roff_node *n, *np;
+ 	const v_post *p;
+ 	uint32_t	  saved_source_key;
++	enum mandoc_coordinate_origin saved_coordinate_origin;
+ 
+ 	/*
+ 	 * Translate obsolete macros to modern macros first
+@@ -314,10 +315,12 @@ mdoc_validate(struct roff_man *mdoc)
+ 
+ 	n = mdoc->last;
+ 	saved_source_key = mandoc_msg_getsourcekey();
++	saved_coordinate_origin = mandoc_msg_getcoordinateorigin();
+ 	if (n->flags & NODE_NOSRC)
+ 		mandoc_msg_setsourcekey(0);
+ 	else if (n->type != ROFFT_ROOT)
+ 		mandoc_msg_setsourcekey(n->mant_source_key);
++	mandoc_msg_setcoordinateorigin(n->mant_coordinate_origin);
+ 	switch (n->tok) {
+ 	case MDOC_Lp:
+ 		n->tok = MDOC_Pp;
+@@ -399,6 +402,7 @@ mdoc_validate(struct roff_man *mdoc)
+ 		break;
+ 	}
+ 	mandoc_msg_setsourcekey(saved_source_key);
++	mandoc_msg_setcoordinateorigin(saved_coordinate_origin);
+ }
+ 
+ static void
+@@ -2106,6 +2110,7 @@ post_root(POST_ARGS)
+ {
+ 	struct roff_node *n;
+ 	uint32_t saved_source_key;
++	enum mandoc_coordinate_origin saved_coordinate_origin;
+ 
+ 	/* Add missing prologue data. */
+ 
+@@ -2139,12 +2144,15 @@ post_root(POST_ARGS)
+ 			n = n->next;
+ 		n = n->child->next->next;
+ 		saved_source_key = mandoc_msg_getsourcekey();
++		saved_coordinate_origin = mandoc_msg_getcoordinateorigin();
+ 		mandoc_msg_setsourcekey(n->mant_source_key);
++		mandoc_msg_setcoordinateorigin(n->mant_coordinate_origin);
+ 		mandoc_msg(MANDOCERR_ARCH_BAD, n->line, n->pos,
+ 		    "Dt ... %s %s", mdoc->meta.arch,
+ 		    mdoc->meta.os_e == MANDOC_OS_OPENBSD ?
+ 		    "(OpenBSD)" : "(NetBSD)");
+ 		mandoc_msg_setsourcekey(saved_source_key);
++		mandoc_msg_setcoordinateorigin(saved_coordinate_origin);
+ 	}
+ 
+ 	/* Check that we begin with a proper `Sh'. */
+@@ -2160,10 +2168,13 @@ post_root(POST_ARGS)
+ 		mandoc_msg(MANDOCERR_DOC_EMPTY, 0, 0, NULL);
+ 	else if (n->tok != MDOC_Sh) {
+ 		saved_source_key = mandoc_msg_getsourcekey();
++		saved_coordinate_origin = mandoc_msg_getcoordinateorigin();
+ 		mandoc_msg_setsourcekey(n->mant_source_key);
++		mandoc_msg_setcoordinateorigin(n->mant_coordinate_origin);
+ 		mandoc_msg(MANDOCERR_SEC_BEFORE, n->line, n->pos,
+ 		    "%s", roff_name[n->tok]);
+ 		mandoc_msg_setsourcekey(saved_source_key);
++		mandoc_msg_setcoordinateorigin(saved_coordinate_origin);
+ 	}
+ }
+ 
+diff --git a/read.c b/read.c
+index 8f05984e..71e16e1c 100644
+--- a/read.c
++++ b/read.c
+@@ -177,8 +177,10 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
+ 	int		 fd;
+ #endif
+ 	int		 inloop; /* Saw .while on this level. */
++	enum mandoc_coordinate_origin saved_coordinate_origin;
+ 	unsigned char	 c;
+ 
++	saved_coordinate_origin = mandoc_msg_getcoordinateorigin();
+ 	ln.sz = 256;
+ 	ln.buf = mandoc_malloc(ln.sz);
+ 	ln.next = NULL;
+@@ -189,6 +191,10 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
+ 	result = ROFF_CONT;
+ 
+ 	while (i < blk.sz && (blk.buf[i] != '\0' || pos != 0)) {
++		/* Reparse retains the invocation line but not its authored
++		 * columns.  Appended lines also contain earlier input bytes. */
++		mandoc_msg_setcoordinateorigin(start && pos == 0 ?
++		    MANDOC_COORDINATE_AUTHORED : MANDOC_COORDINATE_EXPANDED);
+ 		if (start) {
+ 			curp->line = lnn;
+ 			curp->reparse_count = 0;
+@@ -506,6 +512,7 @@ out:
+ 	free(ln.buf);
+ 	if (firstln != curp->secondary)
+ 		free_buf_list(firstln);
++	mandoc_msg_setcoordinateorigin(saved_coordinate_origin);
+ 	return result;
+ }
+ 
+diff --git a/roff.c b/roff.c
+index 3c4808d5..07ea45d7 100644
+--- a/roff.c
++++ b/roff.c
+@@ -918,6 +918,7 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
+ 	n->line = line;
+ 	n->pos = pos;
+ 	n->mant_source_key = mandoc_msg_getsourcekey();
++	n->mant_coordinate_origin = mandoc_msg_getcoordinateorigin();
+ 	n->tok = tok;
+ 	n->type = type;
+ 	n->sec = man->lastsec;
+@@ -1521,6 +1522,9 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
+ 		    &iarg, &iendarg, &iend) != ESCAPE_EXPAND) {
+ 			while (pos < iend) {
+ 				if (buf->buf[pos] == ec) {
++					if (ec != '\\')
++						mandoc_msg_setcoordinateorigin(
++						    MANDOC_COORDINATE_EXPANDED);
+ 					buf->buf[pos] = '\\';
+ 					if (pos + 1 < iend)
+ 						pos++;
+@@ -1610,6 +1614,8 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
+ 				asz += strlen(ctx->argv[argi]);
+ 			}
+ 			if (asz != iend - iesc) {
++				mandoc_msg_setcoordinateorigin(
++				    MANDOC_COORDINATE_EXPANDED);
+ 				rsz = buf->sz - iend;
+ 				if (asz < iend - iesc)
+ 					memmove(buf->buf + iesc + asz,
+@@ -1621,6 +1627,7 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
+ 					    buf->buf + iend, rsz);
+ 			}
+ 			dst = buf->buf + iesc;
++			mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
+ 			for (argi = 0; argi < ctx->argc; argi++) {
+ 				if (argi)
+ 					*dst++ = ' ';
+@@ -1719,6 +1726,7 @@ roff_expand_patch(struct buf *buf, int start, const char *repl, int end)
+ {
+ 	char	*nbuf;
+ 
++	mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
+ 	buf->sz = mandoc_asprintf(&nbuf, "%.*s%s%s", start, buf->buf,
+ 	    repl, buf->buf + end) + 1;
+ 	free(buf->buf);
+@@ -4144,6 +4152,7 @@ roff_userdef(ROFF_ARGS)
+ 
+ 	/* Replace the macro invocation by the macro definition. */
+ 
++	mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
+ 	free(buf->buf);
+ 	buf->buf = mandoc_strdup(r->current_string);
+ 	buf->sz = strlen(buf->buf) + 1;
+@@ -4162,6 +4171,7 @@ roff_renamed(ROFF_ARGS)
+ {
+ 	char	*nbuf;
+ 
++	mandoc_msg_setcoordinateorigin(MANDOC_COORDINATE_EXPANDED);
+ 	buf->sz = mandoc_asprintf(&nbuf, ".%s%s%s", r->current_string,
+ 	    buf->buf[pos] == '\0' ? "" : " ", buf->buf + pos) + 1;
+ 	free(buf->buf);
+diff --git a/roff.h b/roff.h
+index d7de0edd..77c40b41 100644
+--- a/roff.h
++++ b/roff.h
+@@ -529,6 +529,7 @@ struct	roff_node {
+ 	int		  line;    /* Input file line number. */
+ 	int		  pos;     /* Input file column number. */
+ 	uint32_t	  mant_source_key; /* Embedding result-local source. */
++	unsigned char	  mant_coordinate_origin; /* Authored or reparse. */
+ 	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
+ 	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
+ 	int		  flags;

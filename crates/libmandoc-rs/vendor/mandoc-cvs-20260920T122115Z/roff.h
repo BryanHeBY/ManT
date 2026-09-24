@@ -529,6 +529,7 @@ struct	roff_node {
 	int		  line;    /* Input file line number. */
 	int		  pos;     /* Input file column number. */
 	uint32_t	  mant_source_key; /* Embedding result-local source. */
+	unsigned char	  mant_coordinate_origin; /* Authored or reparse. */
 	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
 	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
 	int		  flags;

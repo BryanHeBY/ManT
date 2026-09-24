@@ -416,6 +416,8 @@ valid_marks(const struct mant_annotated_result *result)
 		    mark->source > result->common->source_count ||
 		    ((mark->line == 0) != (mark->column == 0)) ||
 		    (mark->source == 0 && mark->line != 0) ||
+		    (((mark->flags & MANT_ANNOTATED_MARK_AUTHORED) != 0) !=
+		    (mark->line != 0)) ||
 		    mark->region_kind > MANT_ANNOTATED_REGION_MARGIN ||
 		    mark->title_region > result->mark_count ||
 		    mark->body_region > result->mark_count ||
@@ -467,7 +469,6 @@ valid_marks(const struct mant_annotated_result *result)
 		if (mark->kind == MANT_ANNOTATED_MARK_HEAD_COMPONENT &&
 		    (mark->parent == 0 || mark->owner != mark->parent ||
 		    mark->source == 0 ||
-		    (mark->flags & MANT_ANNOTATED_MARK_AUTHORED) == 0 ||
 		    (mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) == 0 ||
 		    result->marks[mark->parent - 1].kind !=
 		    MANT_ANNOTATED_MARK_REGION ||
