@@ -137,7 +137,7 @@ fn metadata_stays_single_line_but_plain_original_content_is_not_framed() {
         .split("\nDefinition:\n")
         .nth(1)
         .unwrap()
-        .split("\n\nRead original:")
+        .split("\n\nOriginal location:")
         .next()
         .unwrap();
     assert!(!body.lines().any(|line| line.starts_with("| ")), "{body}");
@@ -148,7 +148,7 @@ fn metadata_stays_single_line_but_plain_original_content_is_not_framed() {
         .split("\nDefinition:\n\n")
         .nth(1)
         .unwrap()
-        .split("\n\n\nRead original")
+        .split("\n\n\nOriginal location")
         .next()
         .unwrap();
     assert!(
@@ -206,7 +206,7 @@ fn forms_suppression_requires_this_records_complete_materialized_owner() {
             render_explanation_markdown(&report).contains("\nForms:"),
             "mutation {mutation}"
         );
-        assert!(render_explanation_text(&report).contains("Read original:"));
+        assert!(render_explanation_text(&report).contains("Original location:"));
     }
     report.evidence[0] = original;
     report.evidence[0].entry = None;
@@ -364,8 +364,8 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
         mant_render::render_scope_explanation_markdown(&decoded),
         mant_render::render_scope_explanation_markdown(&explanation)
     );
-    assert!(text.contains("Read original: manual/1/doc0; node root/e1"));
-    assert!(text.contains("Read original: manual/1/doc1; node root/e1"));
+    assert!(text.contains("Original location: manual/1/doc0; node root/e1"));
+    assert!(text.contains("Original location: manual/1/doc1; node root/e1"));
     assert!(text.contains("\n\n----------\n\n"));
     let seen = seen.into_inner();
     assert!(seen.contains(&Some(mant_ir::EntryKind::Command)));

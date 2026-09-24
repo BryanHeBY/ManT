@@ -2,7 +2,10 @@
 //! uses standard blockquotes in Markdown. Neither surface is a wire protocol.
 use super::{definition::DefinitionDisplay, metadata, spans};
 use crate::presentation::{TextPresentation, TextRole};
-use mant_protocol::{EvidenceClass, EvidenceCounts, ExplanationEvidence, ExplanationIdentityField};
+use mant_protocol::{
+    EvidenceClass, EvidenceCounts, ExplanationContent, ExplanationEvidence,
+    ExplanationIdentityField,
+};
 use std::fmt::Write;
 
 pub(super) struct Report<'a> {
@@ -251,7 +254,7 @@ impl Report<'_> {
             output,
             TextRole::Path,
             &format!(
-                "Read original: {}; node {}",
+                "Original location: {}; node {}",
                 address.unwrap_or("current input"),
                 e.outline.path()
             ),
@@ -269,7 +272,7 @@ impl Report<'_> {
     ) {
         let Some(entry) = &evidence.entry else { return };
         if !covered
-            && !entry.forms.is_empty()
+            && (!entry.forms.is_empty() || !entry.fixed_forms.is_empty())
             && !DefinitionDisplay::new(locations.content(), evidence)
                 .is_some_and(|body| body.includes_forms())
         {
@@ -286,6 +289,19 @@ impl Report<'_> {
                     })
                 };
                 self.quote(output, &text);
+            }
+            for form in &entry.fixed_forms {
+                if let Some(text) = form.complete_text() {
+                    let text = metadata::safe(&text);
+                    self.quote(
+                        output,
+                        &if self.markdown {
+                            metadata::escape(&text)
+                        } else {
+                            (self.decorate)(TextRole::Body.into(), &text)
+                        },
+                    );
+                }
             }
         }
         if !entry.alias_groups.is_empty() {
@@ -324,6 +340,74 @@ impl Report<'_> {
             output.push('\n');
         }
     }
+    fn fixed_body(&self, output: &mut String, body: &mant_protocol::ExplanationFixedSelection) {
+        self.line(output, TextRole::Metadata, "Definition (Fixed):");
+        if body.validate().is_err() {
+            self.line(
+                output,
+                TextRole::Notice,
+                "Returned Fixed content is invalid.",
+            );
+            return;
+        }
+        if body.parts.is_empty() {
+            self.line(
+                output,
+                TextRole::Notice,
+                "Declaration located; no independent description was provided for this owner.",
+            );
+            return;
+        }
+        let mut first = &body.parts[0];
+        let mut text = String::new();
+        for (index, part) in body.parts.iter().enumerate() {
+            if index != 0 {
+                match &body.joins[index - 1] {
+                    mant_ir::TextJoin::DirectContact => {}
+                    mant_ir::TextJoin::AuthoredSeparator(separator) => text.push_str(separator),
+                    mant_ir::TextJoin::HardBoundary | mant_ir::TextJoin::Unknown => {
+                        self.fixed_segment(output, first, &text);
+                        self.line(
+                            output,
+                            TextRole::Coordinate,
+                            if body.joins[index - 1] == mant_ir::TextJoin::HardBoundary {
+                                "Native hard boundary"
+                            } else {
+                                "Native join unknown"
+                            },
+                        );
+                        text.clear();
+                        first = part;
+                    }
+                }
+            }
+            text.push_str(&part.text);
+        }
+        self.fixed_segment(output, first, &text);
+    }
+    fn fixed_segment(
+        &self,
+        output: &mut String,
+        first: &mant_protocol::ExplanationFixedPart,
+        text: &str,
+    ) {
+        // A run column is not a byte-slice start column. Show the actual DTO
+        // coordinate without converting bytes into terminal cells.
+        self.line(
+            output,
+            TextRole::Coordinate,
+            &format!("At row {}, run column {}:", first.row, first.run_column),
+        );
+        let text = metadata::safe(text);
+        self.quote(
+            output,
+            &if self.markdown {
+                metadata::escape(&text)
+            } else {
+                (self.decorate)(TextRole::Body.into(), &text)
+            },
+        );
+    }
     fn body(
         &self,
         output: &mut String,
@@ -334,6 +418,10 @@ impl Report<'_> {
             e.class,
             EvidenceClass::DirectEntry | EvidenceClass::RelatedEntry
         ) {
+            if let Some(ExplanationContent::FixedOwner { direct_body, .. }) = &e.content {
+                self.fixed_body(output, direct_body);
+                return;
+            }
             if let Some(display) = DefinitionDisplay::new(locations.content(), e) {
                 let block = display.block;
                 self.line(output, TextRole::Metadata, "Definition:");
@@ -368,14 +456,14 @@ impl Report<'_> {
                     self.line(
                         output,
                         TextRole::Notice,
-                        "Definition content is incomplete or omitted; read the original owner.",
+                        "Definition content is incomplete or omitted in this response.",
                     );
                 }
             } else {
                 self.line(
                     output,
                     TextRole::Notice,
-                    "Definition content was not returned; read the original owner.",
+                    "Definition content was not returned in this response.",
                 );
             }
         } else {
@@ -409,5 +497,48 @@ impl Report<'_> {
                 self.quote(output, &body);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Report;
+    use mant_ir::{OutputSlice, TextJoin};
+    use mant_protocol::{ExplanationFixedPart, ExplanationFixedSelection};
+    use std::num::NonZeroU32;
+
+    fn part(run: u32, text: &str) -> ExplanationFixedPart {
+        ExplanationFixedPart {
+            slice: OutputSlice {
+                run: NonZeroU32::new(run).unwrap(),
+                start_byte: 0,
+                end_byte: text.len() as u64,
+            },
+            row: NonZeroU32::new(1).unwrap(),
+            run_column: (run - 1) * 4,
+            text: text.to_owned(),
+            source: None,
+        }
+    }
+
+    #[test]
+    fn fixed_body_uses_exact_join_evidence_and_names_unproven_boundaries() {
+        let body = ExplanationFixedSelection {
+            parts: vec![part(1, "foo"), part(2, "bar"), part(3, "baz")],
+            joins: vec![
+                TextJoin::AuthoredSeparator(" ".to_owned()),
+                TextJoin::Unknown,
+            ],
+        };
+        let report = Report {
+            markdown: false,
+            decorate: &|_, text| text.to_owned(),
+        };
+        let mut output = String::new();
+        report.fixed_body(&mut output, &body);
+        assert!(output.contains("foo bar"), "{output}");
+        assert!(output.contains("Native join unknown"), "{output}");
+        assert!(!output.contains("barbaz"), "{output}");
+        assert!(output.contains("run column"), "{output}");
     }
 }

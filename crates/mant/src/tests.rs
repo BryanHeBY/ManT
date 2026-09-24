@@ -735,6 +735,80 @@ fn annotated_preview_uses_the_real_cli_query_and_recovers_after_rejected_input()
 
 #[test]
 #[cfg(feature = "annotated-preview")]
+fn annotated_preview_explain_presents_fixed_forms_and_body_in_all_text_formats() {
+    use std::{fs, path::PathBuf};
+
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. The native
+    // definition displays --foo and its direct body, not an absent body.
+    let directory =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/annotated-preview-tests");
+    fs::create_dir_all(&directory).expect("repository target directory");
+    let path = directory.join(format!("explain-{}.1", std::process::id()));
+    fs::write(
+        &path,
+        b".TH T 1\n.SH DESCRIPTION\nalpha beta gamma\n.TP\n.B --foo\nfoo \\fBbody\\fP\n",
+    )
+    .expect("write test-owned source");
+    let name = path.to_str().expect("UTF-8 repository path");
+    let host = FakeHost::new();
+    for format in ["text", "markdown"] {
+        let args = [
+            "--annotated-preview",
+            "--input",
+            name,
+            "--input-format",
+            "roff",
+            "--explain=--foo",
+            "--display",
+            "direct",
+            "--format",
+            format,
+        ];
+        let (status, output, diagnostics) = invoke(&args, b"", &host);
+        assert_eq!(status, 0, "{format}: {diagnostics}");
+        assert!(output.contains("foo body"), "{format}: {output}");
+        assert!(output.contains("Forms:"), "{format}: {output}");
+        let forms = output
+            .split("Forms:")
+            .nth(1)
+            .and_then(|tail| tail.split("Definition").next())
+            .expect("Fixed Forms region");
+        assert!(
+            forms.contains(if format == "markdown" {
+                "\\-\\-foo"
+            } else {
+                "--foo"
+            }),
+            "{format}: {output}"
+        );
+        assert!(!output.contains("Definition content was not returned"));
+    }
+    let args = [
+        "--annotated-preview",
+        "--input",
+        name,
+        "--input-format",
+        "roff",
+        "--explain=--foo",
+        "--display",
+        "direct",
+        "--format",
+        "text",
+        "--color",
+        "always",
+    ];
+    let (status, output, diagnostics) = invoke_with_terminal_output(&args, b"", &host);
+    fs::remove_file(&path).expect("remove test-owned source");
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(output.contains("foo body"), "{output}");
+    assert!(
+        output.contains("\u{1b}["),
+        "ANSI decoration missing: {output}"
+    );
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
 fn annotated_preview_loads_all_four_representative_pages_end_to_end() {
     // Each exact compressed fixture was decoded and rendered with the pinned
     // CVS -Tutf8 reference before these assertions. This exercises the real
