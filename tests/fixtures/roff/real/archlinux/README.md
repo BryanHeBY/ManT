@@ -1,7 +1,8 @@
 # Arch Linux fixtures
 
 These fixtures contain roff manual bytes extracted from the immutable Arch
-Linux Archive packages listed below. The original `*.1.gz` fixtures were
+Linux Archive packages listed below, plus one exact manual from the pinned
+upstream yay source release. The original `*.1.gz` fixtures were
 recorded in ManT on 2026-07-19. The `gawk` and `rsync` package references were
 verified on 2026-07-23 after those fixtures were added: their gzip members were
 decompressed without changing the roff bytes and recompressed as zstd to retain
@@ -30,6 +31,19 @@ after a target-conservation audit showed that function identities moved onto
 paragraph nodes by libmandoc disappeared during structural lowering. The
 original compressed package member is retained unchanged.
 
+On 2026-09-24, the R04 semantic-query corpus gained the original packaged
+gzip members for tmux, zsh, gzip, zip and btrfs-subvolume. Their package
+archives were retained in the local Arch package cache and checked by SHA-256
+before extraction. The gzip 1.14-2
+archive is intentionally older than the installed 1.15-1 package: its manual
+bytes match the previously reviewed `ENTRY_QUERY_GOLD.json` source identity.
+The yay fixture is the exact `doc/yay.8` member of the upstream v13.0.1 source
+tarball; that member is byte-identical to the locally built package's manual
+after decompression. It is stored uncompressed and does not depend on the
+locally built package for reproduction.
+These additions do not retroactively change the 2026-07-21 parser-scan counts
+in `VERIFIED_TOPICS.txt`; R04 query evidence is tracked separately.
+
 They form the primary real-man corpus for section topology, definition lists,
 preformatted blocks, inline fonts, navigation, and source-markup regressions.
 The neighbouring Fedora corpus supplies independently packaged generator
@@ -50,14 +64,29 @@ output.
 | `expand_number.3bsd` | [libbsd], [Arch `libbsd` 0.12.2-2] | `usr/share/man/man3/expand_number.3bsd.gz` | Exact decompressed source | [BSD-2-Clause] | `4e0d2bd2af63de49f6c55ce96ae07b52a6c2214d837f4c33eec47699ca19de03` |
 | `zip_source_function.3` | [libzip], [Arch `libzip` 1.11.4-1] | `usr/share/man/man3/zip_source_function.3.gz` | Exact decompressed source | [BSD-3-Clause] | `73a409d297a001c885fc00092a92105f30fe4e6ecca0b57d06c6fecc40b5b898` |
 | `libpipeline.3.gz` | [libpipeline], [Arch `libpipeline` 1.5.8-1] | `usr/share/man/man3/libpipeline.3.gz` | Original member | [GPL-3.0-or-later] | `20d992e497e6f86a3abfc218aa349620a05e7b58250db0beefafedc07c7aed7e` |
+| `tmux.1.gz` | [tmux], [Arch `tmux` 3.7_c-1] | `usr/share/man/man1/tmux.1.gz` | Original member | [tmux license] | `fe9b35d424d72b5c6155d3bc6b351724e034d4034746b7e008523a47b71cba7d` |
+| `zsh.1.gz` | [Z shell], [Arch `zsh` 5.9.2-1] | `usr/share/man/man1/zsh.1.gz` | Original member | [Zsh license] | `48e46d49ac1d6678e818cbbf5e099d6c7406589a79e9757d3dbe2c2eaa2e707a` |
+| `gzip.1.gz` | [GNU gzip], [Arch `gzip` 1.14-2] | `usr/share/man/man1/gzip.1.gz` | Original member | [gzip manual permission] | `91ec1c846bb4deeb3339f718988737a4957de335b3860923da6bfd302eada4c0` |
+| `zip.1.gz` | [Info-ZIP], [Arch `zip` 3.0-14] | `usr/share/man/man1/zip.1.gz` | Original member | [Info-ZIP license] | `9f984b4b87db8f5ccf78dd28c9907a601f8c0a431d4efd64195b5006cf189818` |
+| `btrfs-subvolume.8.gz` | [Btrfs progs], [Arch `btrfs-progs` 7.1-1] | `usr/share/man/man8/btrfs-subvolume.8.gz` | Original member | [GPL-2.0-only] | `c00ade46fa983503b4fe2f0457f719142d00c2e4a09a9d69054538a2032d7a78` |
+| `yay.8` | [yay], [upstream yay v13.0.1 source] | `yay-13.0.1/doc/yay.8` | Exact upstream source | [GPL-3.0-or-later] | `7f5115d15c9647b77bbc4aa838dff90818a20f03763f1557e1a0e36292ab614e` |
 
-The two recompressed fixtures preserve these exact decompressed roff hashes:
+The recompressed fixtures and the newly frozen gzip members preserve these
+exact decompressed roff hashes:
 
 - `gawk.1`: `d28fc0d5bfdc08f85faaa6267b14223520967f9fdf0730550f12fee880b2ca31`
 - `rsync.1`: `12417d699e494cd5154195df53762f0043e2ffe3997634c4e5f4afc209f87d45`
 - `sh.1p`: `8caa52a52fcb46e6e4e38105408dac290b66865cf712f6897d81bfa438f16b2d`
+- `tmux.1`: `cbedf24cf75128a6794a24a4c380307f73515047945b6736933d313af4623ae7`
+- `zsh.1`: `fee817f32be2ca893147affc5b9f82dce17ad8f44d77fcb40839450ea94dd15d`
+- `gzip.1`: `107c35463c2fb970318b34ccca09db100e1b99bfab793196eab68ef91d350b78`
+- `zip.1`: `b8cd4f0980a6a3abd243c00a146bf336564b2bf6c270d1101f541da4d9796623`
+- `btrfs-subvolume.8`: `7aad0096c8fa69c22b8487f45ace7e38f820d4b7dc1a5877b2e95ebd9a28ae96`
 
-The corresponding immutable package archives have these SHA-256 values:
+The uncompressed `yay.8` fixture and its upstream source member have the same
+SHA-256: `7f5115d15c9647b77bbc4aa838dff90818a20f03763f1557e1a0e36292ab614e`.
+
+The corresponding package and source archives have these SHA-256 values:
 
 - `gawk-5.2.0-1-x86_64.pkg.tar.zst`: `dd6a14cb65eec0754eb0d77a373bc685cff2776133007251e35593a3de8045f6`
 - `rsync-3.4.3-1-x86_64.pkg.tar.zst`: `f2ad0dcc4d7022cb7f04c4da716be067b93a95fc246f2c0259cb2dbb880684e5`
@@ -66,6 +95,12 @@ The corresponding immutable package archives have these SHA-256 values:
 - `libbsd-0.12.2-2-x86_64.pkg.tar.zst`: `e26194849786b0202828a348be3f4b90d410604cd7d48f113a4301584a49895a`
 - `libzip-1.11.4-1-x86_64.pkg.tar.zst`: `e6bc733cdc738d317d94f1906eb86229be174aa8362ad7dbb03ae68d9eb3dbf6`
 - `libpipeline-1.5.8-1-x86_64.pkg.tar.zst`: `35caa28ccb5f00d06f043a68004c406d4985dd4557669e972c7fafeb1af3be5f`
+- `tmux-3.7_c-1-x86_64.pkg.tar.zst`: `dacfb3eb339bb87bd08be4b8134543ae4911243f8c90d0b9ef8dd98968cf40df`
+- `zsh-5.9.2-1-x86_64.pkg.tar.zst`: `92982239da698cd541ed2f8c366b6d152c06d0aad22c78f7313f364edab15433`
+- `gzip-1.14-2-x86_64.pkg.tar.zst`: `e08b33c6aa9a19108d7941a78a6d137e3f700a544d21f14bf863d3c392c3a88e`
+- `zip-3.0-14-x86_64.pkg.tar.zst`: `b1b09aedec942330aae0715be52066455aac418f8f8c39ee3db00d7b3d92cd0b`
+- `btrfs-progs-7.1-1-x86_64.pkg.tar.zst`: `5151b1c783a376bc85c04bb7ddc6f816668db60d9e864a88042dbb286b146456`
+- `yay-13.0.1.tar.gz`: `b77454bce87110180a1b6664c2d260de78124c9894b71101610ba84f551eb0d0` (upstream source, also verified against the AUR `PKGBUILD` at commit `cb43f84828ab4f9700f7c6f9c6d7a923d4cfaff0`)
 
 The GCC manual embeds its own GFDL invariant sections, front-cover text, and
 back-cover text. Those page-specific notices remain in `gcc.1.gz`; the shared
@@ -83,6 +118,17 @@ BSD-2-Clause notices at the start of each fixture. The SPDX-identified
 `bsdunzip` page's complete page-specific terms are reproduced in
 [`LIBARCHIVE-BSD-2-Clause.txt`](../LICENSES/LIBARCHIVE-BSD-2-Clause.txt). The
 libzip page likewise retains its complete BSD-3-Clause notice.
+The new tmux, zsh and zip pages use the exact license files shipped in their
+matching Arch packages: [`TMUX-LICENSE.txt`](../LICENSES/TMUX-LICENSE.txt),
+[`ZSH-LICENSE.txt`](../LICENSES/ZSH-LICENSE.txt) and
+[`INFO-ZIP-LICENSE.txt`](../LICENSES/INFO-ZIP-LICENSE.txt). The gzip manual's
+own complete copying permission remains embedded in its `COPYRIGHT NOTICE`
+section and is transcribed in
+[`GZIP-MANPAGE.txt`](../LICENSES/GZIP-MANPAGE.txt); it is distinct from the
+package's program license. The Btrfs package declares GPL-2.0-only, whose
+complete text is already shared above. The yay
+source tarball contains the full GPL-3.0 text in `LICENSE`, covered by the
+shared [GPL-3.0-or-later] text.
 
 ## Reproducing a fixture
 
@@ -96,6 +142,16 @@ bsdtar -xOf coreutils-9.11-2-x86_64.pkg.tar.zst \
 sha256sum ls.1.gz
 ```
 
+For the upstream yay source, verify the tarball SHA above and extract its
+uncompressed manual member directly:
+
+```sh
+curl -L -o yay-13.0.1.tar.gz https://github.com/Jguer/yay/archive/v13.0.1.tar.gz
+sha256sum yay-13.0.1.tar.gz
+bsdtar -xOf yay-13.0.1.tar.gz yay-13.0.1/doc/yay.8 > yay.8
+sha256sum yay.8
+```
+
 For the two zstd fixtures, decompress the package member and recompress only
 the unchanged roff bytes:
 
@@ -107,9 +163,9 @@ zstd -19 -f -o rsync.1.zst rsync.1
 sha256sum rsync.1 rsync.1.zst
 ```
 
-When replacing a fixture, update its archive URL, package version, member path,
-raw and fixture hashes, applicable shared license files, and native topology
-assertions in the same commit.
+When replacing a fixture, update its archive URL, package or release version,
+member path, raw and fixture hashes, applicable shared license files, and
+native topology assertions in the same commit.
 
 ## `mant` parsing verification
 
@@ -150,6 +206,12 @@ representative topics, grouped by source package.
 [libbsd]: https://libbsd.freedesktop.org/
 [libzip]: https://libzip.org/
 [libpipeline]: https://nongnu.org/libpipeline/
+[tmux]: https://github.com/tmux/tmux
+[Z shell]: https://www.zsh.org/
+[GNU gzip]: https://www.gnu.org/software/gzip/
+[Info-ZIP]: https://infozip.sourceforge.net/
+[Btrfs progs]: https://btrfs.readthedocs.io/
+[yay]: https://github.com/Jguer/yay
 [Arch `coreutils` 9.11-2]: https://archive.archlinux.org/packages/c/coreutils/coreutils-9.11-2-x86_64.pkg.tar.zst
 [Arch `git` 2.55.0-1]: https://archive.archlinux.org/packages/g/git/git-2.55.0-1-x86_64.pkg.tar.zst
 [Arch `gcc` 16.1.1+r346+g4e03491b401d-4]: https://archive.archlinux.org/packages/g/gcc/gcc-16.1.1%2Br346%2Bg4e03491b401d-4-x86_64.pkg.tar.zst
@@ -162,6 +224,12 @@ representative topics, grouped by source package.
 [Arch `libbsd` 0.12.2-2]: https://archive.archlinux.org/packages/l/libbsd/libbsd-0.12.2-2-x86_64.pkg.tar.zst
 [Arch `libzip` 1.11.4-1]: https://archive.archlinux.org/packages/l/libzip/libzip-1.11.4-1-x86_64.pkg.tar.zst
 [Arch `libpipeline` 1.5.8-1]: https://archive.archlinux.org/packages/l/libpipeline/libpipeline-1.5.8-1-x86_64.pkg.tar.zst
+[Arch `tmux` 3.7_c-1]: https://archive.archlinux.org/packages/t/tmux/tmux-3.7_c-1-x86_64.pkg.tar.zst
+[Arch `zsh` 5.9.2-1]: https://archive.archlinux.org/packages/z/zsh/zsh-5.9.2-1-x86_64.pkg.tar.zst
+[Arch `gzip` 1.14-2]: https://archive.archlinux.org/packages/g/gzip/gzip-1.14-2-x86_64.pkg.tar.zst
+[Arch `zip` 3.0-14]: https://archive.archlinux.org/packages/z/zip/zip-3.0-14-x86_64.pkg.tar.zst
+[Arch `btrfs-progs` 7.1-1]: https://archive.archlinux.org/packages/b/btrfs-progs/btrfs-progs-7.1-1-x86_64.pkg.tar.zst
+[upstream yay v13.0.1 source]: https://github.com/Jguer/yay/archive/v13.0.1.tar.gz
 [GPL-2.0-only]: ../LICENSES/GPL-2.0-only.txt
 [GPL-3.0-or-later]: ../LICENSES/GPL-3.0-or-later.txt
 [GFDL-1.3-invariants-or-later]: ../LICENSES/GFDL-1.3-invariants-or-later.txt
@@ -171,3 +239,7 @@ representative topics, grouped by source package.
 [BSD-2-Clause]: archive_entry_stat.3
 [libarchive BSD-2-Clause]: ../LICENSES/LIBARCHIVE-BSD-2-Clause.txt
 [BSD-3-Clause]: zip_source_function.3
+[tmux license]: ../LICENSES/TMUX-LICENSE.txt
+[Zsh license]: ../LICENSES/ZSH-LICENSE.txt
+[gzip manual permission]: ../LICENSES/GZIP-MANPAGE.txt
+[Info-ZIP license]: ../LICENSES/INFO-ZIP-LICENSE.txt
