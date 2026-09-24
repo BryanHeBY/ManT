@@ -3044,41 +3044,7 @@ fn native_man_declaration_segments_keep_arguments_out_and_later_names_in() {
             "--operand",
         ),
     ] {
-        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man)
-            .unwrap();
-        assert!(validate_document(&document).is_empty(), "{label}");
-        let DocumentBody::Fixed(fixed) = &document.body else {
-            panic!("not Fixed: {label}")
-        };
-        assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, names, "{label}");
-        let resolved = mant_ir::ResolvedContent {
-            address: None,
-            label: "T(1)".into(),
-            document: Some(document),
-            tldr: None,
-        };
-        for name in names {
-            let response = mant_query::explain_query(
-                &resolved,
-                &ExplanationQuery {
-                    entry: name.into(),
-                    options: ExplanationOptions::default(),
-                },
-            )
-            .unwrap();
-            assert_eq!(response.counts.direct_entry.total, 1, "{label}: {name}");
-            response.validate_references().unwrap();
-        }
-        let response = mant_query::explain_query(
-            &resolved,
-            &ExplanationQuery {
-                entry: rejected.into(),
-                options: ExplanationOptions::default(),
-            },
-        )
-        .unwrap();
-        assert_eq!(response.counts.direct_entry.total, 0, "{label}: {rejected}");
-        response.validate_references().unwrap();
+        assert_fixed_segment_case(label, input, &names, rejected);
     }
 
     // This exact standalone BR input also ran pinned CVS -Tutf8. Its inline
@@ -3091,6 +3057,82 @@ fn native_man_declaration_segments_keep_arguments_out_and_later_names_in() {
     };
     assert!(fixed.owners[0].entry.is_none());
     assert!(validate_document(&document).is_empty());
+}
+
+#[test]
+fn native_man_plain_argument_does_not_promote_embedded_option() {
+    // Each exact .IP input ran pinned CVS -Tutf8 before these assertions.
+    // man_term.c::pre_IP prints one label operand; term.c::term_word prints
+    // its plain parameter punctuation without creating another HEAD.
+    for (label, input, names) in [
+        (
+            "plain-argument-commas",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--list\\fR first,--fake,last\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--list"],
+        ),
+        (
+            "plain-argument-after-comma",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--list\\fR, first,--fake,last\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--list"],
+        ),
+        (
+            "plain-argument-pipes",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--list\\fR first|--fake|last\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--list"],
+        ),
+        (
+            "plain-argument-then-name",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--list\\fR first,--fake,last, \\fB--all\\fR\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--list", "--all"],
+        ),
+    ] {
+        assert_fixed_segment_case(label, input, &names, "--fake");
+    }
+}
+
+fn assert_fixed_segment_case(label: &str, input: &[u8], names: &[&str], rejected: &str) {
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty(), "{label}");
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed: {label}")
+    };
+    assert_eq!(
+        fixed.owners[0].entry.as_ref().unwrap().names,
+        names,
+        "{label}"
+    );
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(document),
+        tldr: None,
+    };
+    for name in names {
+        let response = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: (*name).into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(response.counts.direct_entry.total, 1, "{label}: {name}");
+        response.validate_references().unwrap();
+    }
+    let response = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: rejected.into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(response.counts.direct_entry.total, 0, "{label}: {rejected}");
+    response.validate_references().unwrap();
 }
 
 #[test]

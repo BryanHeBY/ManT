@@ -57,10 +57,27 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     let mut start = 0;
     let mut phase = Phase::Name;
+    let mut name_end = declaration_name_end(form, start);
+    let mut after_name_space = false;
     let mut closers = Vec::new();
     let mut quote = None;
     let mut uncertain = false;
     for (offset, character) in form.char_indices() {
+        // A complete name followed by a separated non-option begins an
+        // ordinary parameter. Flow's declaration state makes the same
+        // transition after a literal name; punctuation inside that parameter
+        // cannot create another name. A later separator followed by a fresh
+        // option can still begin an independent declaration.
+        if phase == Phase::Name && name_end.is_some_and(|end| offset >= end) {
+            if character.is_whitespace() {
+                after_name_space = true;
+            } else if after_name_space {
+                if character != '-' {
+                    phase = Phase::Argument;
+                }
+                after_name_space = false;
+            }
+        }
         if let Some(close) = quote {
             if character == close {
                 quote = None;
@@ -84,17 +101,26 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
             phase = Phase::Argument;
             continue;
         }
+        let remainder = &form[offset + character.len_utf8()..];
+        let fresh_option = remainder
+            .strip_prefix(char::is_whitespace)
+            .is_some_and(|tail| tail.trim_start().starts_with('-'));
         if matches!(character, ',' | '|')
             && !uncertain
             && closers.is_empty()
-            && (phase == Phase::Name
-                || form[offset + character.len_utf8()..]
-                    .strip_prefix(char::is_whitespace)
-                    .is_some_and(|tail| tail.trim_start().starts_with('-')))
+            && (phase == Phase::Name && name_end.is_some() || fresh_option)
         {
             ranges.push(start..offset);
             start = offset + character.len_utf8();
-            phase = Phase::Name;
+            phase = if remainder.trim_start().starts_with('-') {
+                Phase::Name
+            } else {
+                Phase::Argument
+            };
+            name_end = (phase == Phase::Name)
+                .then(|| declaration_name_end(form, start))
+                .flatten();
+            after_name_space = false;
             continue;
         }
         match character {
@@ -125,6 +151,19 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
     }
     ranges.push(start..form.len());
     ranges
+}
+
+/// End of the leading option spelling, before any attached value or visible
+/// declaration separator. This is a syntax boundary, not a source coordinate
+/// or proof that the native owner represents an option.
+fn declaration_name_end(form: &str, start: usize) -> Option<usize> {
+    let remainder = form.get(start..)?;
+    let leading = remainder.len() - remainder.trim_start().len();
+    let head = remainder.trim_start();
+    let token_end = head
+        .find(|character: char| character.is_whitespace() || matches!(character, ',' | '|'))
+        .unwrap_or(head.len());
+    leading_name(&head[..token_end], start + leading).map(|(_, range)| range.end)
 }
 
 /// Require an inferred PP/RS head to be complete declaration syntax, not
@@ -352,6 +391,30 @@ mod tests {
 
         let adjacent = "--pattern,'one,--fake,two'";
         assert_eq!(literal_option_names(adjacent), [("--pattern".into(), 0..9)]);
+    }
+
+    #[test]
+    fn ordinary_argument_punctuation_does_not_restart_a_declaration() {
+        // These exact .IP labels first ran pinned CVS -Tutf8. man_term.c::
+        // pre_IP emits one label operand; term.c::term_word keeps the plain
+        // parameter and its punctuation after the bold --list spelling.
+        for form in [
+            "--list first,--fake,last",
+            "--list, first,--fake,last",
+            "--list first|--fake|last",
+        ] {
+            assert_eq!(
+                literal_option_names(form),
+                [("--list".into(), 0..6)],
+                "{form}"
+            );
+        }
+        let followed = "--list first,--fake,last, --all";
+        let start = followed.find("--all").unwrap();
+        assert_eq!(
+            literal_option_names(followed),
+            [("--list".into(), 0..6), ("--all".into(), start..start + 5)]
+        );
     }
 
     #[test]
