@@ -1,0 +1,39 @@
+{
+  "schema": "mant.annotated-fixed-query-gold/v1",
+  "reviewed": "2026-09-24",
+  "scope": "Pinned-source, manually reviewed Fixed direct-owner controls; not full R04 recall.",
+  "roots": {
+    "checkout": "../../.."
+  },
+  "sources": [
+    {
+      "id": "F001",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/entry-name-boundaries-mdoc.1",
+      "sha256": "639aa59b1aef62ca7e096fb5ccb8437f09b3dcaffc26267dd94d44be532f60a6",
+      "queries": [
+        {
+          "query": "-Wall",
+          "review": "Pinned CVS mdoc_macro.c::blk_full and mdoc_term.c::termp_fl_pre render the Fl Wall head and FIXED_NAME_PAYLOAD body; source head is line 15.",
+          "expected": [
+            {
+              "source": {"line": 15, "column": 2},
+              "kind": "option",
+              "names": ["-Wall"],
+              "forms": ["-Wall"],
+              "emptyDescription": false,
+              "bodyIncludes": ["FIXED_NAME_PAYLOAD."]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "-NUM",
+          "review": "Pinned CVS mdoc_macro.c::blk_full keeps Ar -NUM inside the Fl n head; mdoc_term.c::termp_it_pre prints one head, not an independent -NUM declaration.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        }
+      ]
+    }
+  ]
+}
