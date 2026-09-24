@@ -138,28 +138,40 @@ def fixed_context(evidence: dict, supports: object) -> dict | None:
     members = support.get("members")
     if not isinstance(members, list) or not 2 <= len(members) <= 256:
         raise ValueError("Fixed group has invalid member count")
-    heads, seen = [], set()
-    matched = False
-    for member in members:
+    heads, paths, seen_keys, seen_paths, seen_ids = [], [], set(), set(), set()
+    matched_index = None
+    for index, member in enumerate(members):
         if not isinstance(member, dict) or type(member.get("key")) is not int or member["key"] < 1:
             raise ValueError("Fixed group has an invalid owner key")
         node = member.get("outline", {}).get("node", {})
-        if not isinstance(node, dict) or not isinstance(node.get("path"), str):
+        if (not isinstance(node, dict) or not isinstance(node.get("path"), str)
+                or not node["path"] or not isinstance(node.get("id"), str) or not node["id"]):
             raise ValueError("Fixed group has an invalid member trail")
-        identity = (member["key"], node["path"])
-        if identity in seen:
+        if (member["key"] in seen_keys or node["path"] in seen_paths
+                or node["id"] in seen_ids):
             raise ValueError("Fixed group repeats an owner")
-        seen.add(identity)
+        seen_keys.add(member["key"])
+        seen_paths.add(node["path"])
+        seen_ids.add(node["id"])
+        paths.append(node["path"])
         heads.append(complete_form(member.get("head")))
         if (member["key"] == evidence.get("content", {}).get("key")
                 and member["outline"] == evidence.get("outline")):
-            matched = True
-    if not matched:
+            matched_index = index
+    if matched_index is None:
         raise ValueError("Fixed support does not contain its referring owner")
+    owner_body = evidence.get("content", {}).get("readingBody")
+    if matched_index == len(members) - 1:
+        if owner_body != support.get("readingBody"):
+            raise ValueError("Fixed provider body differs from its support")
+    elif not isinstance(owner_body, dict) or owner_body.get("parts") != []:
+        raise ValueError("Fixed non-provider contains an independent reading body")
     body = displayed_body(support.get("readingBody"))
     if not body.strip():
         raise ValueError("Fixed group has no provider body")
-    return {"heads": heads, "body": " ".join(body.split())}
+    return {"heads": heads, "memberPaths": paths,
+            "queryIsProvider": matched_index == len(members) - 1,
+            "body": " ".join(body.split())}
 
 
 def owner_record(evidence: object, requested: str, supports: object) -> dict:
@@ -336,6 +348,12 @@ def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
             else:
                 if context["heads"] != requested_context["heads"]:
                     errors.append(f"{source}: wrong reading-context members")
+                if ("memberPaths" in requested_context
+                        and context["memberPaths"] != requested_context["memberPaths"]):
+                    errors.append(f"{source}: wrong reading-context owner paths")
+                if ("queryIsProvider" in requested_context
+                        and context["queryIsProvider"] != requested_context["queryIsProvider"]):
+                    errors.append(f"{source}: wrong reading-context provider")
                 for witness in requested_context.get("bodyIncludes", []):
                     if witness not in context["body"]:
                         errors.append(f"{source}: missing reading-context witness {witness!r}")
@@ -527,6 +545,26 @@ def self_check() -> None:
         "source": None, "title": "NOTES", "match": "-a"}]}
     assert compare(reviewed, with_mention)[0] == "passed"
     assert compare({**reviewed, "expectedMentions": []}, with_mention)[0] == "failure"
+    second_outline = {"node": {"id": "y", "path": "1/e2"}}
+    group = {"kind": "fixed-declaration-group", "members": [
+        {"key": 1, "outline": evidence["outline"], "head": selection},
+        {"key": 2, "outline": second_outline, "head": selection}],
+        "readingBody": evidence["content"]["readingBody"]}
+    provider = {**evidence, "support": 0, "outline": second_outline,
+                "content": {**evidence["content"], "key": 2}}
+    assert fixed_context(provider, [group])["queryIsProvider"]
+    duplicate_id = {**group, "members": [group["members"][0],
+        {**group["members"][1], "outline": {"node": {"id": "x", "path": "1/e2"}}}]}
+    mismatched_body = {**provider, "content": {**provider["content"],
+        "readingBody": {"parts": [], "joins": []}}}
+    for invalid_owner, invalid_group in ((provider, duplicate_id),
+                                         (mismatched_body, group)):
+        try:
+            fixed_context(invalid_owner, [invalid_group])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("malformed Fixed reading group was accepted")
 
 
 def main() -> int:

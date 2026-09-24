@@ -1,7 +1,7 @@
 {
   "schema": "mant.annotated-fixed-query-gold/v1",
   "reviewed": "2026-09-24",
-  "scope": "Pinned-source Fixed direct-owner controls plus reviewed F007/F008 mention controls; F005 GCC and other direct-only probes do not yet assert mention recall.",
+  "scope": "Pinned-source Fixed direct-owner and reading-context controls, F007/F008 mention controls, and source-bound R04 real-page positives/negatives for GCC, tmux, zsh, yay, gzip, zip, and btrfs. Only probes with explicit mention counts assert mention recall.",
   "roots": {
     "checkout": "../../.."
   },
@@ -426,6 +426,162 @@
             {"class": "entry-mention", "source": {"source": 1, "line": 6, "column": 2}, "title": "--bar", "match": "--foo"},
             {"class": "context-mention", "source": null, "title": "NOTES", "match": "--foo"}
           ]
+        }
+      ]
+    },
+    {
+      "id": "F009",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/tmux.1.gz",
+      "sha256": "cbedf24cf75128a6794a24a4c380307f73515047945b6736933d313af4623ae7",
+      "queries": [
+        {
+          "query": "new-session",
+          "review": "Pinned CVS mdoc_macro.c::blk_full keeps the line-1305 Xo command HEAD and its BODY in one It owner; mdoc_term.c prints Ic new-session, while term.c soft wraps its full option signature without changing the command name. The separately frozen upstream tmux page and its exact 78-column reference output were checked before this expectation.",
+          "expected": [
+            {"source": {"line": 1305, "column": 2}, "kind": "command", "names": ["new-session"], "forms": ["new-session [-AdDEPX] [-c start-directory] [-e environment] [-f flags] [-F format] [-n window-name] [-s session-name] [-t group-name] [-x width] [-y height] [shell-command [argument ...]]"], "emptyDescription": false, "bodyIncludes": ["Create a new session with name"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 6, "contextMention": 10}
+        },
+        {
+          "query": "-AdDEPX",
+          "review": "Pinned CVS keeps -AdDEPX inside the new-session synopsis, not as an independent It HEAD or Fl declaration; no direct option identity is inferred from the display.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        }
+      ]
+    },
+    {
+      "id": "F010",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/zsh.1.gz",
+      "sha256": "fee817f32be2ca893147affc5b9f82dce17ad8f44d77fcb40839450ea94dd15d",
+      "queries": [
+        {
+          "query": "-c",
+          "review": "Pinned CVS man_macro.c::blk_imp and man_term.c::pre_TP preserve the line-156 inline-font HEAD and its own BODY. The Fixed annotator conservatively keeps this typography-only head as Term rather than claiming a native option role; its exact complete label remains directly addressable.",
+          "expected": [
+            {"source": {"line": 156, "column": 2}, "kind": "term", "names": ["-c"], "forms": ["-c"], "emptyDescription": false, "bodyIncludes": ["Take the first argument as a command"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 1}
+        },
+        {
+          "query": "--help",
+          "review": "Pinned CVS renders --help only in zsh explanatory prose, not in a TP/TQ declaration HEAD; it may be a context mention but cannot become a direct entry.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 1}
+        }
+      ]
+    },
+    {
+      "id": "F011",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/yay.8",
+      "sha256": "7f5115d15c9647b77bbc4aa838dff90818a20f03763f1557e1a0e36292ab614e",
+      "queries": [
+        {
+          "query": "--yay",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps line-23 TP/B as one HEAD, and term.c::term_word prints both escaped hyphens in -Y, --yay. The two checked final-display names bind one owner and one full form; they are not two invented entries.",
+          "expected": [
+            {"source": {"line": 23, "column": 2}, "kind": "option", "names": ["-Y", "--yay"], "forms": ["-Y, --yay"], "emptyDescription": false, "bodyIncludes": ["Perform yay specific operations."], "bodyExcludes": ["Directory to use for Building AUR Packages."]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "--builddir",
+          "review": "Pinned CVS line-178 TP/B has an escaped option token followed by an authored space and <dir> operand. Only the bounded visible --builddir prefix is the option name; the whole signature remains its form and the next TP keeps separate ownership.",
+          "expected": [
+            {"source": {"line": 178, "column": 2}, "kind": "option", "names": ["--builddir"], "forms": ["--builddir <dir>"], "emptyDescription": false, "bodyIncludes": ["Directory to use for Building AUR Packages."], "bodyExcludes": ["Perform yay specific operations."]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 1, "contextMention": 0}
+        },
+        {
+          "query": "-Syu",
+          "review": "Pinned CVS renders yay -Syu in explanatory text after the operations list, not in an independently styled TP HEAD; this occurrence may be context mention but never a direct declaration.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 1}
+        }
+      ]
+    },
+    {
+      "id": "F012",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/gzip.1.gz",
+      "sha256": "107c35463c2fb970318b34ccca09db100e1b99bfab793196eab68ef91d350b78",
+      "queries": [
+        {
+          "query": "--ascii",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps the line-205 TP/B as one HEAD with escaped -a and --ascii separated by an authored space; term.c prints both. Shared finite alias grammar binds two exact visible names to one form, with no independent second owner.",
+          "expected": [
+            {"source": {"line": 205, "column": 2}, "kind": "option", "names": ["-a", "--ascii"], "forms": ["-a --ascii"], "emptyDescription": false, "bodyIncludes": ["Ascii text mode: convert end-of-lines"], "bodyExcludes": ["Write output on standard output"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "--stdout",
+          "review": "Pinned CVS line-211 TP/B has the one complete escaped-dash HEAD -c --stdout --to-stdout. Each selected name remains a checked sub-selection of the same native form and owner; no formatter geometry or separate TP is invented.",
+          "expected": [
+            {"source": {"line": 211, "column": 2}, "kind": "option", "names": ["-c", "--stdout", "--to-stdout"], "forms": ["-c --stdout --to-stdout"], "emptyDescription": false, "bodyIncludes": ["Write output on standard output"], "bodyExcludes": ["Ascii text mode: convert end-of-lines"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "zcat",
+          "review": "Pinned CVS renders zcat in the synopsis and explanatory paragraphs, not in an independent option-definition TP HEAD. Those visible mentions cannot become a direct declaration.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0}
+        }
+      ]
+    },
+    {
+      "id": "F013",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/zip.1.gz",
+      "sha256": "b8cd4f0980a6a3abd243c00a146bf336564b2bf6c270d1101f541da4d9796623",
+      "queries": [
+        {
+          "query": "-A",
+          "review": "Pinned CVS man_macro.c::blk_imp creates separate line-534 and line-537 TP HEAD/BODY owners; their leading PD macros only change paragraph distance through man_term.c::pre_PD. The first empty declaration keeps its own name/form, while the second body is explicit reading context, not an alias or copied first body.",
+          "expected": [
+            {"source": {"line": 534, "column": 2}, "kind": "option", "names": ["-A"], "forms": ["-A"], "emptyDescription": true, "readingContext": {"heads": ["-A", "--adjust-sfx"], "memberPaths": ["5/e3", "5/e4"], "queryIsProvider": false, "bodyIncludes": ["Adjust self-extracting executable archive."]}}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "--adjust-sfx",
+          "review": "Pinned CVS line-537 TP/B prints --adjust-sfx after its own no-glyph PD control, with a body beginning Adjust self-extracting executable archive. It remains a second owner in the same bounded reading group.",
+          "expected": [
+            {"source": {"line": 537, "column": 2}, "kind": "option", "names": ["--adjust-sfx"], "forms": ["--adjust-sfx"], "emptyDescription": false, "bodyIncludes": ["Adjust self-extracting executable archive."], "readingContext": {"heads": ["-A", "--adjust-sfx"], "memberPaths": ["5/e3", "5/e4"], "queryIsProvider": true, "bodyIncludes": ["Adjust self-extracting executable archive."]}}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "zipcloak",
+          "review": "Pinned CVS renders zipcloak only in synopsis and explanatory prose here, without a definition-list TP owner; it may be mentioned in section context but must not become a direct entry.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0}
+        }
+      ]
+    },
+    {
+      "id": "F014",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/btrfs-subvolume.8.gz",
+      "sha256": "7aad0096c8fa69c22b8487f45ace7e38f820d4b7dc1a5877b2e95ebd9a28ae96",
+      "queries": [
+        {
+          "query": "--parents",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps the line-333 escaped -p|--parents pair inside one TP/B HEAD; term.c prints one exact form and the two bounded lexical option names refer to the same owner.",
+          "expected": [
+            {"source": {"line": 333, "column": 2}, "kind": "option", "names": ["-p", "--parents"], "forms": ["-p|--parents"], "emptyDescription": false, "bodyIncludes": ["Create any missing parent directories"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "create",
+          "review": "Pinned CVS prints create [options] as a TP/B synopsis in SUBCOMMAND. Plain B supplies font only, not a native command macro; absent a separately proved command convention, the prefix create is not promoted to a direct Command name, while prose mentions remain visible.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0}
         }
       ]
     }
