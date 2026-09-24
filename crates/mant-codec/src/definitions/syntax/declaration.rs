@@ -4,7 +4,7 @@
 //! separator following a completed argument may introduce another full option;
 //! it never gives a parameter fragment a fresh chance to become a name.
 
-use mant_ir::{ContentContext, Inline, InlineView};
+use mant_ir::{ContentContext, Inline, InlineView, lexical_option_token, option_prefix};
 use std::collections::HashSet;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -37,9 +37,14 @@ impl DeclarationState {
                 let rest = &text[end..];
                 let next = rest.trim_start();
                 let offset = text.len() - next.len();
+                let token = first_declaration_token(next);
+                // A leading dash alone is not declaration evidence: -10 is
+                // an ordinary parameter whose commas remain inside it.
+                let starts_declaration = next.starts_with([',', '|', '/', '+'])
+                    || next.starts_with('-') && !negative_number_parameter(token);
                 (rest.starts_with(char::is_whitespace)
                     && !next.is_empty()
-                    && !next.starts_with([',', '|', '/', '-', '+'])
+                    && !starts_declaration
                     && !literal_starts.contains(&offset))
                 .then_some(offset)
             })
@@ -92,9 +97,12 @@ impl DeclarationState {
             return false;
         }
         let remainder = &self.text[next_offset..];
-        let fresh_option = remainder.starts_with(char::is_whitespace)
-            && remainder.trim_start().starts_with(['-', '+']);
         let following = remainder.trim_start();
+        let token = first_declaration_token(following);
+        let negative_argument = negative_number_parameter(token);
+        let fresh_option = remainder.starts_with(char::is_whitespace)
+            && following.starts_with(['-', '+'])
+            && !negative_argument;
         let fresh_literal = self.phase != Phase::Name
             && remainder.starts_with(char::is_whitespace)
             && self
@@ -104,13 +112,19 @@ impl DeclarationState {
                 .split_whitespace()
                 .next()
                 .is_some_and(super::commands::is_command_name);
-        let split = self.validated_token
-            || !self.uncertain
-                && self.closers.is_empty()
-                && (self.phase == Phase::Name || fresh_option || fresh_literal);
+        let split = !negative_argument
+            && (self.validated_token
+                || !self.uncertain
+                    && self.closers.is_empty()
+                    && (self.phase == Phase::Name || fresh_option || fresh_literal));
         if split {
             self.phase = Phase::Name;
         } else {
+            if negative_argument {
+                // Keep the entire signed parameter, including its commas,
+                // in the preceding declaration's argument interval.
+                self.begin_argument();
+            }
             self.observe(character, false);
         }
         self.offset = next_offset;
@@ -156,6 +170,20 @@ impl DeclarationState {
             self.phase = Phase::Argument;
         }
     }
+}
+
+fn first_declaration_token(value: &str) -> &str {
+    value
+        .split(|character: char| character.is_whitespace() || matches!(character, ',' | '|'))
+        .next()
+        .unwrap_or_default()
+}
+
+fn negative_number_parameter(token: &str) -> bool {
+    // Keep the Flow grammar's non-ASCII and attached-value spellings. Only a
+    // complete dash token that the shared lexical rule specifically rejects
+    // is a signed numeric parameter rather than a declaration candidate.
+    option_prefix(token) == Some(token) && !lexical_option_token(token)
 }
 
 /// Preserve literal coverage through transparent wrappers. Only a whitespace-

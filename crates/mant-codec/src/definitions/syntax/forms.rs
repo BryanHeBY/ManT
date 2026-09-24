@@ -682,6 +682,39 @@ mod tests {
     }
 
     #[test]
+    fn negative_number_after_a_name_is_an_argument_not_an_alias_source() {
+        // All three exact .IP labels ran pinned CVS -Tutf8 first. man_term.c::
+        // pre_IP keeps one HEAD, while term.c::term_word prints the roman
+        // negative-number parameter after the bold name.
+        let head = vec![
+            Inline::Strong {
+                children: vec![fixture::text("--number")],
+            },
+            fixture::text(" -10,--fake,20"),
+        ];
+        assert_eq!(option_names_from_terms(&[head]), ["--number"]);
+
+        let followed = vec![
+            Inline::Strong {
+                children: vec![fixture::text("--number")],
+            },
+            fixture::text(" -10,--fake,20, "),
+            Inline::Strong {
+                children: vec![fixture::text("--all")],
+            },
+        ];
+        assert_eq!(option_names_from_terms(&[followed]), ["--number", "--all"]);
+
+        let after_comma = vec![
+            Inline::Strong {
+                children: vec![fixture::text("--number")],
+            },
+            fixture::text(", -10,--fake,20"),
+        ];
+        assert_eq!(option_names_from_terms(&[after_comma]), ["--number"]);
+    }
+
+    #[test]
     fn transparent_links_preserve_separators_and_parameter_ancestry() {
         let text = fixture::text;
         let link = |children| {

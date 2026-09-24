@@ -3089,6 +3089,24 @@ fn native_man_plain_argument_does_not_promote_embedded_option() {
                 .as_slice(),
             vec!["--list", "--all"],
         ),
+        (
+            "negative-number-argument",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--number\\fR -10,--fake,20\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--number"],
+        ),
+        (
+            "negative-number-after-comma",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--number\\fR, -10,--fake,20\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--number"],
+        ),
+        (
+            "negative-number-then-name",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--number\\fR -10,--fake,20, \\fB--all\\fR\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--number", "--all"],
+        ),
     ] {
         assert_fixed_segment_case(label, input, &names, "--fake");
     }

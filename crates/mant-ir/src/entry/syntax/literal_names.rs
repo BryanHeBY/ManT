@@ -72,7 +72,7 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
             if character.is_whitespace() {
                 after_name_space = true;
             } else if after_name_space {
-                if character != '-' {
+                if declaration_name_end(form, offset).is_none() {
                     phase = Phase::Argument;
                 }
                 after_name_space = false;
@@ -105,19 +105,18 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
             // Looking past a separator may scan whitespace. Do this only at
             // a separator, never for every scalar in a long literal head.
             let remainder = &form[offset + character.len_utf8()..];
-            let following = remainder.trim_start();
-            let fresh_option = following.len() != remainder.len() && following.starts_with('-');
+            let next_name_end = declaration_name_end(form, offset + character.len_utf8());
+            let fresh_option =
+                remainder.starts_with(char::is_whitespace) && next_name_end.is_some();
             if phase == Phase::Name && name_end.is_some() || fresh_option {
                 ranges.push(start..offset);
                 start = offset + character.len_utf8();
-                phase = if following.starts_with('-') {
+                phase = if next_name_end.is_some() {
                     Phase::Name
                 } else {
                     Phase::Argument
                 };
-                name_end = (phase == Phase::Name)
-                    .then(|| declaration_name_end(form, start))
-                    .flatten();
+                name_end = next_name_end;
                 after_name_space = false;
                 continue;
             }
@@ -414,6 +413,25 @@ mod tests {
         assert_eq!(
             literal_option_names(followed),
             [("--list".into(), 0..6), ("--all".into(), start..start + 5)]
+        );
+    }
+
+    #[test]
+    fn negative_number_parameter_does_not_start_a_declaration() {
+        // All three exact .IP labels ran pinned CVS -Tutf8 first. Under
+        // man_term.c::pre_IP the visible -10 is still part of one HEAD; it
+        // does not license a name inside its comma-separated parameter.
+        for form in ["--number -10,--fake,20", "--number, -10,--fake,20"] {
+            assert_eq!(literal_option_names(form), [("--number".into(), 0..8)]);
+        }
+        let followed = "--number -10,--fake,20, --all";
+        let start = followed.find("--all").unwrap();
+        assert_eq!(
+            literal_option_names(followed),
+            [
+                ("--number".into(), 0..8),
+                ("--all".into(), start..start + 5)
+            ]
         );
     }
 
