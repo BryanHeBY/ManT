@@ -17096,6 +17096,11 @@
             "description": "Native equation region.",
             "type": "string",
             "const": "equation"
+          },
+          {
+            "description": "Generated physical-line margin glyph, outside semantic heads/titles.",
+            "type": "string",
+            "const": "margin"
           }
         ]
       },
