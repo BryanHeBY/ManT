@@ -59,9 +59,12 @@ done
 # Packaged source tests cover the repository's full parser fixture corpus and
 # four representative annotated pages. Keep fixtures outside crate archives,
 # but make the same exact inputs available to this disposable test workspace.
-mkdir -p "$PACKAGE_CHECK_ROOT/tests/fixtures/roff/real"
-cp -R "$ROOT/tests/fixtures/roff/real/." \
-  "$PACKAGE_CHECK_ROOT/tests/fixtures/roff/real/"
+mkdir -p "$PACKAGE_CHECK_ROOT/tests/fixtures/roff"
+cp -R "$ROOT/tests/fixtures/roff/." \
+  "$PACKAGE_CHECK_ROOT/tests/fixtures/roff/"
+# Private packaged protocol tests include the versioned repository contracts
+# at compile time; make those fixtures available beside the extracted crates.
+cp -R "$ROOT/tests/contracts" "$PACKAGE_CHECK_ROOT/tests/"
 
 # Refreshed extracted source mtimes invalidate stale same-version fingerprints.
 # Keep build products in the repository target tree; unrelated third-party
