@@ -6,7 +6,7 @@
 
 use std::num::NonZeroU32;
 
-use mant_ir::{OutputSlice, SourceKey, TextJoin};
+use mant_ir::{DisplayStyle, OutputSlice, SourceKey, TextJoin};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -20,6 +20,12 @@ pub struct ExplanationFixedPart {
     pub row: NonZeroU32,
     /// Run's native starting terminal column; UTF-8 bytes are not columns.
     pub run_column: u32,
+    /// Checked terminal column of this selected fragment.
+    pub column: u32,
+    /// Selected fragment's terminal-cell width, not its UTF-8 byte length.
+    pub width: u32,
+    /// Final native style after overstrike folding.
+    pub style: DisplayStyle,
     /// Exact copied UTF-8 bytes from this slice.
     pub text: String,
     /// Source-qualified native run identity, when it survived.
@@ -69,18 +75,36 @@ impl ExplanationFixedSelection {
             return Err("invalid Fixed selection part count");
         }
         let mut previous: Option<&ExplanationFixedPart> = None;
+        let mut display_padding = 0u64;
         for part in &self.parts {
             if part.slice.start_byte >= part.slice.end_byte
                 || part.slice.end_byte - part.slice.start_byte != part.text.len() as u64
                 || part.text.is_empty()
                 || part.text.chars().any(char::is_control)
+                || part.column < part.run_column
+                || part.column.checked_add(part.width).is_none()
+                || part.column > 1_048_576
             {
                 return Err("invalid Fixed selection fragment");
+            }
+            let row_gap =
+                previous.map_or(0, |prior| part.row.get().saturating_sub(prior.row.get()));
+            let prior_end = previous
+                .filter(|prior| prior.row == part.row)
+                .map_or(0, |prior| prior.column.saturating_add(prior.width));
+            display_padding = display_padding
+                .checked_add(u64::from(row_gap) + u64::from(part.column.saturating_sub(prior_end)))
+                .ok_or("Fixed display padding overflows")?;
+            if display_padding > u64::from(super::MAX_EXPLANATION_CONTENT_BYTES) {
+                return Err("Fixed display padding exceeds response budget");
             }
             if let Some(prior) = previous
                 && (part.slice.run < prior.slice.run
                     || (part.slice.run == prior.slice.run
-                        && part.slice.start_byte < prior.slice.end_byte))
+                        && part.slice.start_byte < prior.slice.end_byte)
+                    || part.row < prior.row
+                    || (part.row == prior.row
+                        && part.column < prior.column.saturating_add(prior.width)))
             {
                 return Err("unordered Fixed selection fragment");
             }
@@ -164,6 +188,12 @@ mod tests {
                 },
                 row: key,
                 run_column: 0,
+                column: 0,
+                width: 2,
+                style: DisplayStyle {
+                    bold: false,
+                    underline: false,
+                },
                 text: "中a".into(),
                 source: None,
             }],
@@ -181,5 +211,38 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn detached_fixed_geometry_rejects_overlap_and_unbounded_padding() {
+        let key = NonZeroU32::MIN;
+        let part = ExplanationFixedPart {
+            slice: OutputSlice {
+                run: key,
+                start_byte: 0,
+                end_byte: 1,
+            },
+            row: key,
+            run_column: 0,
+            column: 0,
+            width: 1,
+            style: DisplayStyle {
+                bold: false,
+                underline: false,
+            },
+            text: "a".into(),
+            source: None,
+        };
+        let mut next = part.clone();
+        next.slice.run = NonZeroU32::new(2).unwrap();
+        next.text = "b".into();
+        let mut selection = ExplanationFixedSelection {
+            parts: vec![part, next],
+            joins: vec![TextJoin::HardBoundary],
+        };
+        assert!(selection.validate().is_err(), "overlapping cells");
+        selection.parts[1].row =
+            NonZeroU32::new(super::super::MAX_EXPLANATION_CONTENT_BYTES + 2).unwrap();
+        assert!(selection.validate().is_err(), "unbounded row gap");
     }
 }

@@ -56,9 +56,7 @@ pub(super) fn pieces(fixed: &FixedBody) -> Result<Vec<Piece>, SearchError> {
     for region in &fixed.regions {
         candidates.push(Candidate {
             selection: &region.selection,
-            section: region
-                .owner
-                .and_then(|owner| fixed.owners.get((owner.get() - 1) as usize)?.section),
+            section: region.section,
             source: region.source,
             priority: 2,
         });

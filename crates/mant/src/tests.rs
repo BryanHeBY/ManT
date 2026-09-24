@@ -800,11 +800,90 @@ fn annotated_preview_explain_presents_fixed_forms_and_body_in_all_text_formats()
     let (status, output, diagnostics) = invoke_with_terminal_output(&args, b"", &host);
     fs::remove_file(&path).expect("remove test-owned source");
     assert_eq!(status, 0, "{diagnostics}");
-    assert!(output.contains("foo body"), "{output}");
+    assert!(output.contains("foo \u{1b}[1mbody"), "{output}");
     assert!(
         output.contains("\u{1b}["),
         "ANSI decoration missing: {output}"
     );
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_preview_explain_keeps_native_wrap_blank_rows_and_table_body() {
+    use std::{fs, path::PathBuf};
+
+    // Both exact inputs ran pinned CVS -Tutf8 -O width=78 before these
+    // assertions. man_term.c::print_man_node() and term.c::term_flushln()
+    // supply physical line boundaries; tbl_term.c::term_tbl() supplies cells.
+    let directory =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/annotated-preview-tests");
+    fs::create_dir_all(&directory).expect("repository target directory");
+    let path = directory.join(format!("explain-geometry-{}.1", std::process::id()));
+    let host = FakeHost::new();
+    fs::write(&path, b".TH T 1\n.SH OPTIONS\n.ll 24n\n.TP\n.B --foo\nalpha beta gamma delta epsilon zeta eta theta\n.sp 2\n.nf\n  code one\n    code two\n.fi\n")
+        .expect("write test-owned source");
+    let name = path.to_str().expect("UTF-8 repository path");
+    let args = [
+        "--annotated-preview",
+        "--input",
+        name,
+        "--input-format",
+        "roff",
+        "--explain=--foo",
+        "--display",
+        "direct",
+        "--format",
+        "text",
+    ];
+    let (status, output, diagnostics) = invoke(&args, b"", &host);
+    assert_eq!(status, 0, "{diagnostics}");
+    let detail = output
+        .split("Definition (Fixed):")
+        .nth(1)
+        .expect("Fixed detail");
+    for phrase in [
+        "alpha beta",
+        "gamma delta",
+        "epsilon zeta",
+        "eta theta",
+        "code one",
+        "code two",
+    ] {
+        assert!(
+            detail.lines().any(|line| line.contains(phrase)),
+            "{phrase}: {detail}"
+        );
+    }
+    assert!(!detail.contains("alpha beta gamma delta"), "{detail}");
+    assert!(!detail.contains("Native hard boundary"), "{detail}");
+    let lines = detail.lines().collect::<Vec<_>>();
+    let eta = lines
+        .iter()
+        .position(|line| line.contains("eta theta"))
+        .unwrap();
+    let code = lines
+        .iter()
+        .position(|line| line.contains("code one"))
+        .unwrap();
+    assert!(code >= eta + 3, "native blank rows were lost: {detail}");
+    let mut markdown_args = args;
+    markdown_args[9] = "markdown";
+    let (status, markdown, diagnostics) = invoke(&markdown_args, b"", &host);
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(markdown.contains(">     "), "{markdown}");
+    assert!(markdown.contains("alpha beta"), "{markdown}");
+    assert!(!markdown.contains("alpha beta gamma delta"), "{markdown}");
+    fs::write(
+        &path,
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.TS\ntab(;);\nl l.\nkey;value\n.TE\n",
+    )
+    .expect("write test-owned table source");
+    let (status, output, diagnostics) = invoke(&args, b"", &host);
+    fs::remove_file(&path).expect("remove test-owned source");
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(output.contains("key"), "{output}");
+    assert!(output.contains("value"), "{output}");
+    assert!(!output.contains("no independent description"), "{output}");
 }
 
 #[test]

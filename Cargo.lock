@@ -1046,6 +1046,7 @@ dependencies = [
  "regex-syntax",
  "serde",
  "serde_json",
+ "unicode-width",
 ]
 
 [[package]]

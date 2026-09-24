@@ -1,7 +1,7 @@
 //! Report furniture is generated; source remains unframed in plain text and
 //! uses standard blockquotes in Markdown. Neither surface is a wire protocol.
 use super::{definition::DefinitionDisplay, metadata, spans};
-use crate::presentation::{TextPresentation, TextRole};
+use crate::presentation::{InlinePresentation, TextPresentation, TextRole};
 use mant_protocol::{
     EvidenceClass, EvidenceCounts, ExplanationContent, ExplanationEvidence,
     ExplanationIdentityField,
@@ -358,55 +358,54 @@ impl Report<'_> {
             );
             return;
         }
-        let mut first = &body.parts[0];
-        let mut text = String::new();
-        for (index, part) in body.parts.iter().enumerate() {
-            if index != 0 {
-                match &body.joins[index - 1] {
-                    mant_ir::TextJoin::DirectContact => {}
-                    mant_ir::TextJoin::AuthoredSeparator(separator) => text.push_str(separator),
-                    mant_ir::TextJoin::HardBoundary | mant_ir::TextJoin::Unknown => {
-                        self.fixed_segment(output, first, &text);
-                        self.line(
-                            output,
-                            TextRole::Coordinate,
-                            if body.joins[index - 1] == mant_ir::TextJoin::HardBoundary {
-                                "Native hard boundary"
-                            } else {
-                                "Native join unknown"
-                            },
-                        );
-                        text.clear();
-                        first = part;
-                    }
-                }
+        // TextJoin proves logical search continuity, not physical line layout.
+        // The final native row/column and style are the only display authority.
+        let mut row = body.parts[0].row.get();
+        let mut column = 0;
+        self.fixed_line_start(output);
+        for part in &body.parts {
+            while row < part.row.get() {
+                row += 1;
+                column = 0;
+                self.fixed_line_start(output);
             }
-            text.push_str(&part.text);
-        }
-        self.fixed_segment(output, first, &text);
-    }
-    fn fixed_segment(
-        &self,
-        output: &mut String,
-        first: &mant_protocol::ExplanationFixedPart,
-        text: &str,
-    ) {
-        // A run column is not a byte-slice start column. Show the actual DTO
-        // coordinate without converting bytes into terminal cells.
-        self.line(
-            output,
-            TextRole::Coordinate,
-            &format!("At row {}, run column {}:", first.row, first.run_column),
-        );
-        let text = metadata::safe(text);
-        self.quote(
-            output,
-            &if self.markdown {
-                metadata::escape(&text)
+            if part.column < column {
+                self.line(
+                    output,
+                    TextRole::Notice,
+                    "Returned Fixed geometry overlaps.",
+                );
+                return;
+            }
+            output.extend(std::iter::repeat_n(' ', (part.column - column) as usize));
+            let text = metadata::safe(&part.text);
+            if self.markdown {
+                output.push_str(&text);
             } else {
-                (self.decorate)(TextRole::Body.into(), &text)
-            },
-        );
+                output.push_str(&(self.decorate)(
+                    TextPresentation {
+                        role: TextRole::Body,
+                        inline: InlinePresentation {
+                            strong: part.style.bold,
+                            emphasis: part.style.underline,
+                            ..InlinePresentation::default()
+                        },
+                        matched: false,
+                    },
+                    &text,
+                ));
+            }
+            column = part.column + part.width;
+        }
+    }
+
+    fn fixed_line_start(&self, output: &mut String) {
+        output.push('\n');
+        if self.markdown {
+            // Indented code inside the report's block quote retains native
+            // spaces, physical blank rows, and punctuation without reflow.
+            output.push_str(">     ");
+        }
     }
     fn body(
         &self,
@@ -418,8 +417,8 @@ impl Report<'_> {
             e.class,
             EvidenceClass::DirectEntry | EvidenceClass::RelatedEntry
         ) {
-            if let Some(ExplanationContent::FixedOwner { direct_body, .. }) = &e.content {
-                self.fixed_body(output, direct_body);
+            if let Some(ExplanationContent::FixedOwner { reading_body, .. }) = &e.content {
+                self.fixed_body(output, reading_body);
                 return;
             }
             if let Some(display) = DefinitionDisplay::new(locations.content(), e) {
@@ -503,7 +502,7 @@ impl Report<'_> {
 #[cfg(test)]
 mod tests {
     use super::Report;
-    use mant_ir::{OutputSlice, TextJoin};
+    use mant_ir::{DisplayStyle, OutputSlice, TextJoin};
     use mant_protocol::{ExplanationFixedPart, ExplanationFixedSelection};
     use std::num::NonZeroU32;
 
@@ -516,13 +515,19 @@ mod tests {
             },
             row: NonZeroU32::new(1).unwrap(),
             run_column: (run - 1) * 4,
+            column: (run - 1) * 4,
+            width: u32::try_from(text.len()).unwrap(),
+            style: DisplayStyle {
+                bold: false,
+                underline: false,
+            },
             text: text.to_owned(),
             source: None,
         }
     }
 
     #[test]
-    fn fixed_body_uses_exact_join_evidence_and_names_unproven_boundaries() {
+    fn fixed_body_uses_native_geometry_not_logical_join_for_display() {
         let body = ExplanationFixedSelection {
             parts: vec![part(1, "foo"), part(2, "bar"), part(3, "baz")],
             joins: vec![
@@ -536,9 +541,7 @@ mod tests {
         };
         let mut output = String::new();
         report.fixed_body(&mut output, &body);
-        assert!(output.contains("foo bar"), "{output}");
-        assert!(output.contains("Native join unknown"), "{output}");
-        assert!(!output.contains("barbaz"), "{output}");
-        assert!(output.contains("run column"), "{output}");
+        assert!(output.contains("foo bar baz"), "{output}");
+        assert!(!output.contains("Native join"), "{output}");
     }
 }

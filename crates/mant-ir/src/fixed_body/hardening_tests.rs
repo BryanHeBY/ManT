@@ -390,6 +390,7 @@ fn empty_region_requires_its_final_point() {
         key: key(1),
         parent: None,
         owner: None,
+        section: None,
         kind: RegionKind::Literal,
         selection: TextSelection {
             parts: Vec::new(),

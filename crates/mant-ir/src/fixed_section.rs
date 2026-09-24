@@ -11,8 +11,8 @@ use std::{
 };
 
 use crate::{
-    DisplayPoint, FixedBody, FixedBodyError, HeadingMark, OutlinePath, OutputSlice, TextJoin,
-    TextSelection,
+    DisplayPoint, FixedBody, FixedBodyError, HeadingMark, OutlinePath, OutputSlice, RegionKind,
+    TextJoin, TextSelection,
 };
 
 /// Failure to construct or read a checked Fixed section view.
@@ -47,6 +47,10 @@ pub enum FixedSectionPartKind {
     Title,
     /// Visible body bytes directly owned by this section, excluding descendants.
     DirectBody,
+    /// A definition or list item's own head or body.
+    Owner,
+    /// A transparent native list, literal, table, or equation region.
+    Region,
     /// Content preceding the first native section.
     RootPreface,
 }
@@ -71,14 +75,18 @@ pub struct FixedSectionPart<'a> {
 
 /// A checked borrowed view of a Fixed section hierarchy.
 ///
-/// Its sidecar is linear in the number of headings. It keeps neither a body
-/// string nor per-ancestor subtree selections.
+/// Its sidecar is linear in native marks. It keeps neither a body string nor
+/// per-ancestor subtree selections.
 pub struct FixedSectionReader<'a> {
     fixed: &'a FixedBody,
     // Slot 0 is the document root; slot key.get() contains that heading's
     // immediate children. Dense native keys make a separate map unnecessary.
     children: Vec<Vec<NonZeroU32>>,
     sibling_ordinals: Vec<NonZeroUsize>,
+    owners_by_section: Vec<Vec<usize>>,
+    regions_by_section: Vec<Vec<usize>>,
+    owners_by_parent: Vec<Vec<usize>>,
+    regions_by_owner: Vec<Vec<usize>>,
 }
 
 impl<'a> FixedSectionReader<'a> {
@@ -102,10 +110,26 @@ impl<'a> FixedSectionReader<'a> {
             children[parent].push(heading.key);
             sibling_ordinals.push(ordinal);
         }
+        let mut owners_by_section = vec![Vec::new(); fixed.headings.len() + 1];
+        let mut regions_by_section = vec![Vec::new(); fixed.headings.len() + 1];
+        let mut owners_by_parent = vec![Vec::new(); fixed.owners.len() + 1];
+        let mut regions_by_owner = vec![Vec::new(); fixed.owners.len() + 1];
+        for (index, owner) in fixed.owners.iter().enumerate() {
+            owners_by_section[owner.section.map_or(0, |key| key.get() as usize)].push(index);
+            owners_by_parent[owner.parent.map_or(0, |key| key.get() as usize)].push(index);
+        }
+        for (index, region) in fixed.regions.iter().enumerate() {
+            regions_by_section[region.section.map_or(0, |key| key.get() as usize)].push(index);
+            regions_by_owner[region.owner.map_or(0, |key| key.get() as usize)].push(index);
+        }
         let reader = Self {
             fixed,
             children,
             sibling_ordinals,
+            owners_by_section,
+            regions_by_section,
+            owners_by_parent,
+            regions_by_owner,
         };
         // FixedBody validates individual selections, not exclusivity among
         // different sections. A duplicate selected byte would double-render
@@ -236,10 +260,86 @@ impl<'a> FixedSectionReader<'a> {
                 FixedSectionPartKind::DirectBody,
                 &heading.direct_body,
             )?;
+            self.extend_section_content(&mut result, key)?;
             pending.extend(self.children[key.get() as usize].iter().rev());
         }
         sort_parts(&mut result);
+        dedup_parts(&mut result)?;
         Some(result)
+    }
+
+    /// Borrow the complete visible body of an owner, including nested owners
+    /// and transparent native regions, but never its own declaration head.
+    #[must_use]
+    pub fn owner_body_parts(&self, owner: NonZeroU32) -> Option<Vec<FixedSectionPart<'a>>> {
+        self.fixed.owners.get((owner.get() - 1) as usize)?;
+        let mut result = Vec::new();
+        let mut pending = vec![owner];
+        while let Some(key) = pending.pop() {
+            let candidate = &self.fixed.owners[(key.get() - 1) as usize];
+            if key != owner {
+                self.extend_parts_optional(
+                    &mut result,
+                    candidate.section,
+                    FixedSectionPartKind::Owner,
+                    &candidate.head,
+                )?;
+            }
+            self.extend_parts_optional(
+                &mut result,
+                candidate.section,
+                FixedSectionPartKind::Owner,
+                &candidate.direct_body,
+            )?;
+            for &index in &self.regions_by_owner[key.get() as usize] {
+                let region = &self.fixed.regions[index];
+                if transparent(region.kind) {
+                    self.extend_parts_optional(
+                        &mut result,
+                        region.section,
+                        FixedSectionPartKind::Region,
+                        &region.selection,
+                    )?;
+                }
+            }
+            pending.extend(
+                self.owners_by_parent[key.get() as usize]
+                    .iter()
+                    .map(|index| self.fixed.owners[*index].key),
+            );
+        }
+        sort_parts(&mut result);
+        dedup_parts(&mut result)?;
+        Some(result)
+    }
+
+    fn extend_section_content(
+        &self,
+        result: &mut Vec<FixedSectionPart<'a>>,
+        section: NonZeroU32,
+    ) -> Option<()> {
+        for &index in &self.owners_by_section[section.get() as usize] {
+            let owner = &self.fixed.owners[index];
+            self.extend_parts(result, section, FixedSectionPartKind::Owner, &owner.head)?;
+            self.extend_parts(
+                result,
+                section,
+                FixedSectionPartKind::Owner,
+                &owner.direct_body,
+            )?;
+        }
+        for &index in &self.regions_by_section[section.get() as usize] {
+            let region = &self.fixed.regions[index];
+            if transparent(region.kind) {
+                self.extend_parts(
+                    result,
+                    section,
+                    FixedSectionPartKind::Region,
+                    &region.selection,
+                )?;
+            }
+        }
+        Some(())
     }
 
     /// Borrow every final visible run byte before the first section start.
@@ -333,6 +433,16 @@ impl<'a> FixedSectionReader<'a> {
         kind: FixedSectionPartKind,
         selection: &TextSelection,
     ) -> Option<()> {
+        self.extend_parts_optional(output, Some(section), kind, selection)
+    }
+
+    fn extend_parts_optional(
+        &self,
+        output: &mut Vec<FixedSectionPart<'a>>,
+        section: Option<NonZeroU32>,
+        kind: FixedSectionPartKind,
+        selection: &TextSelection,
+    ) -> Option<()> {
         for slice in &selection.parts {
             let run = self
                 .fixed
@@ -344,7 +454,7 @@ impl<'a> FixedSectionReader<'a> {
                 usize::try_from(slice.start_byte).ok()?..usize::try_from(slice.end_byte).ok()?,
             )?;
             output.push(FixedSectionPart {
-                section: Some(section),
+                section,
                 kind,
                 slice: *slice,
                 text,
@@ -422,8 +532,44 @@ impl<'a> FixedSectionReader<'a> {
     }
 }
 
+fn transparent(kind: RegionKind) -> bool {
+    matches!(
+        kind,
+        RegionKind::Unsectioned
+            | RegionKind::List
+            | RegionKind::Literal
+            | RegionKind::TableSpan
+            | RegionKind::TableCell
+            | RegionKind::Equation
+    )
+}
+
 fn sort_parts(parts: &mut [FixedSectionPart<'_>]) {
     parts.sort_unstable_by_key(|part| (part.slice.run, part.slice.start_byte, part.slice.end_byte));
+}
+
+// A direct mark may also enclose a more specific owner/region. Read each
+// final surface byte once, without changing any mark's semantic selection.
+fn dedup_parts(parts: &mut Vec<FixedSectionPart<'_>>) -> Option<()> {
+    let mut unique: Vec<FixedSectionPart<'_>> = Vec::with_capacity(parts.len());
+    for mut part in parts.drain(..) {
+        if let Some(previous) = unique.last()
+            && previous.slice.run == part.slice.run
+        {
+            if previous.slice.end_byte >= part.slice.end_byte {
+                continue;
+            }
+            if previous.slice.end_byte > part.slice.start_byte {
+                let skipped =
+                    usize::try_from(previous.slice.end_byte - part.slice.start_byte).ok()?;
+                part.text = part.text.get(skipped..)?;
+                part.slice.start_byte = previous.slice.end_byte;
+            }
+        }
+        unique.push(part);
+    }
+    *parts = unique;
+    Some(())
 }
 
 fn ensure_disjoint(parts: &[FixedSectionPart<'_>]) -> Result<(), FixedSectionReadError> {

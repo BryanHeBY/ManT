@@ -277,13 +277,14 @@ impl ExplanationEvidence {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum ExplanationContent {
-    /// The selected native owner's direct body, copied only under the response
+    /// The selected owner's complete reading view, copied under the response
     /// budget from final display slices; no Flow block is synthesized.
     FixedOwner {
         /// Exact one-based owner key in the queried Fixed document.
         key: std::num::NonZeroU32,
-        /// Direct body only, never a later sibling or child owner's body.
-        direct_body: ExplanationFixedSelection,
+        /// Own body and enclosed owners/regions, never a later sibling.
+        #[serde(rename = "readingBody")]
+        reading_body: ExplanationFixedSelection,
     },
     /// Physical owner stored once because nested selected contexts also use
     /// its body; not a declaration-group or alias relationship.
@@ -455,7 +456,7 @@ pub(crate) fn validate_explanation_sources<'a>(
             .as_ref()
             .into_iter()
             .filter_map(|content| match content {
-                ExplanationContent::FixedOwner { direct_body, .. } => Some(direct_body),
+                ExplanationContent::FixedOwner { reading_body, .. } => Some(reading_body),
                 _ => None,
             });
         if forms

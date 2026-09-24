@@ -47,7 +47,7 @@ as metadata where the native tree will be unavailable after return.
 | `OwnerMark` | native candidate key, parent, head/body and role | not itself a classified `EntryKind`; direct body and subtree reading differ |
 | `LinkMark` | occurrence key, optional destination, label selection, source | one macro instance can have multiple surviving slices; equal destinations do not merge occurrences |
 | `AnchorMark` | native declaration, source and final zero-width point | authored `.Tg` source differs from migrated display location |
-| `RegionMark` | table/cell/other native identity and final selection/point | a cell need not own a physical row or another text copy |
+| `RegionMark` | table/cell/other native identity, enclosing section and final selection/point | an ownerless table still belongs to its section; a cell need not own a physical row or another text copy |
 
 All offsets name their units: source bytes, output UTF-8 bytes, Unicode
 scalars, graphemes and terminal columns are distinct. `SourceTable` records
@@ -97,7 +97,7 @@ run `rN`, and `@rN:b` is a zero-width boundary.
 | Two `.TP` owners print on one device line | `OwnerMark(o1)` and `OwnerMark(o2)` select disjoint subranges of that row; row identity is not owner identity |
 | Empty list/definition owner | distinct `OwnerMark` and point `@r8:0`; no text from the following item is borrowed |
 | Link spans a table cell boundary | one occurrence can retain separate slices in cells `c1` and `c2`; the cell boundary is a hard logical join unless native facts prove otherwise |
-| Root-level preface, section and subsection | preface belongs to document root; section `s1` has direct body excluding child `s2`; subtree reading `s1` traverses title, direct body and `s2` once, in display order |
+| Root-level preface, section and subsection | preface belongs to document root; section `s1` has direct body excluding child `s2`; subtree reading `s1` traverses title, direct body, enclosed owners/regions and `s2` once, in display order |
 | No parent `.SH/.Sh` for `.SS/.Ss` | subsection is attached to root, retaining its native level evidence; no synthetic visible parent title |
 | Root and include use the same line/byte offset | their spans have distinct `SourceKey`s; repeated include can reuse a source key but never merges output occurrences |
 
@@ -108,7 +108,13 @@ structure never adds display indentation. Root preface, empty and repeated
 sections keep identities. Source order, output order and selection reading
 order are specified independently; no section close or owner close flushes
 the native device. A direct-body read excludes descendants, while the normal
-section read includes the title and descendants without rendering them twice.
+section read includes the title, owner heads/bodies and transparent list,
+literal, table and equation regions with descendants, each final byte once.
+An owner explanation's `readingBody` includes enclosed owners and regions;
+`OwnerMark.direct_body` remains the narrower semantic selection. Its bounded
+DTO fragments retain native physical row, checked terminal column/width and
+final style. Text/ANSI/Markdown presentation uses those physical coordinates,
+including blank rows, never `TextJoin` as a layout instruction.
 
 ## Safe output and overwritten marks
 

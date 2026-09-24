@@ -6218,6 +6218,25 @@
           }
         ]
       },
+      "DisplayStyle": {
+        "description": "Final font style, not raw terminal overstrike bytes.",
+        "type": "object",
+        "properties": {
+          "bold": {
+            "description": "Native bold styling.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Native underline styling.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "bold",
+          "underline"
+        ]
+      },
       "DocumentAddress": {
         "description": "Stable selector for one discoverable document candidate.",
         "oneOf": [
@@ -6907,13 +6926,9 @@
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
-            "description": "The selected native owner's direct body, copied only under the response\nbudget from final display slices; no Flow block is synthesized.",
+            "description": "The selected owner's complete reading view, copied under the response\nbudget from final display slices; no Flow block is synthesized.",
             "type": "object",
             "properties": {
-              "direct_body": {
-                "description": "Direct body only, never a later sibling or child owner's body.",
-                "$ref": "#/$defs/ExplanationFixedSelection"
-              },
               "key": {
                 "description": "Exact one-based owner key in the queried Fixed document.",
                 "type": "integer",
@@ -6923,13 +6938,17 @@
               "kind": {
                 "type": "string",
                 "const": "fixed-owner"
+              },
+              "readingBody": {
+                "description": "Own body and enclosed owners/regions, never a later sibling.",
+                "$ref": "#/$defs/ExplanationFixedSelection"
               }
             },
             "additionalProperties": false,
             "required": [
               "kind",
               "key",
-              "direct_body"
+              "readingBody"
             ]
           },
           {
@@ -7368,6 +7387,12 @@
         "description": "One exact final-run fragment copied under an explanation response budget.",
         "type": "object",
         "properties": {
+          "column": {
+            "description": "Checked terminal column of this selected fragment.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
           "row": {
             "description": "Final physical row containing the run.",
             "type": "integer",
@@ -7395,9 +7420,19 @@
               }
             ]
           },
+          "style": {
+            "description": "Final native style after overstrike folding.",
+            "$ref": "#/$defs/DisplayStyle"
+          },
           "text": {
             "description": "Exact copied UTF-8 bytes from this slice.",
             "type": "string"
+          },
+          "width": {
+            "description": "Selected fragment's terminal-cell width, not its UTF-8 byte length.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
           }
         },
         "additionalProperties": false,
@@ -7405,6 +7440,9 @@
           "slice",
           "row",
           "runColumn",
+          "column",
+          "width",
+          "style",
           "text"
         ]
       },
@@ -17104,6 +17142,15 @@
             "format": "uint32",
             "minimum": 1
           },
+          "section": {
+            "description": "Enclosing native section, including ownerless table and literal regions.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
           "selection": {
             "description": "Final visible contents, possibly empty.",
             "$ref": "#/$defs/TextSelection"
@@ -17125,6 +17172,7 @@
           "key",
           "parent",
           "owner",
+          "section",
           "kind",
           "selection",
           "emptyPoint",
@@ -20316,6 +20364,25 @@
           }
         ]
       },
+      "DisplayStyle": {
+        "description": "Final font style, not raw terminal overstrike bytes.",
+        "type": "object",
+        "properties": {
+          "bold": {
+            "description": "Native bold styling.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Native underline styling.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "bold",
+          "underline"
+        ]
+      },
       "DocumentAddress": {
         "description": "Stable selector for one discoverable document candidate.",
         "oneOf": [
@@ -21167,13 +21234,9 @@
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
-            "description": "The selected native owner's direct body, copied only under the response\nbudget from final display slices; no Flow block is synthesized.",
+            "description": "The selected owner's complete reading view, copied under the response\nbudget from final display slices; no Flow block is synthesized.",
             "type": "object",
             "properties": {
-              "direct_body": {
-                "description": "Direct body only, never a later sibling or child owner's body.",
-                "$ref": "#/$defs/ExplanationFixedSelection"
-              },
               "key": {
                 "description": "Exact one-based owner key in the queried Fixed document.",
                 "type": "integer",
@@ -21183,13 +21246,17 @@
               "kind": {
                 "type": "string",
                 "const": "fixed-owner"
+              },
+              "readingBody": {
+                "description": "Own body and enclosed owners/regions, never a later sibling.",
+                "$ref": "#/$defs/ExplanationFixedSelection"
               }
             },
             "additionalProperties": false,
             "required": [
               "kind",
               "key",
-              "direct_body"
+              "readingBody"
             ]
           },
           {
@@ -21628,6 +21695,12 @@
         "description": "One exact final-run fragment copied under an explanation response budget.",
         "type": "object",
         "properties": {
+          "column": {
+            "description": "Checked terminal column of this selected fragment.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
           "row": {
             "description": "Final physical row containing the run.",
             "type": "integer",
@@ -21655,9 +21728,19 @@
               }
             ]
           },
+          "style": {
+            "description": "Final native style after overstrike folding.",
+            "$ref": "#/$defs/DisplayStyle"
+          },
           "text": {
             "description": "Exact copied UTF-8 bytes from this slice.",
             "type": "string"
+          },
+          "width": {
+            "description": "Selected fragment's terminal-cell width, not its UTF-8 byte length.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
           }
         },
         "additionalProperties": false,
@@ -21665,6 +21748,9 @@
           "slice",
           "row",
           "runColumn",
+          "column",
+          "width",
+          "style",
           "text"
         ]
       },

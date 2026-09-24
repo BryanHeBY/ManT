@@ -441,6 +441,8 @@ pub struct RegionMark {
     pub parent: Option<NonZeroU32>,
     /// Owning native candidate, when present.
     pub owner: Option<NonZeroU32>,
+    /// Enclosing native section, including ownerless table and literal regions.
+    pub section: Option<NonZeroU32>,
     /// Region family.
     pub kind: RegionKind,
     /// Final visible contents, possibly empty.

@@ -139,12 +139,20 @@ fn sample_body() -> FixedBody {
             key: key(1),
             parent: None,
             owner: Some(key(1)),
+            section: Some(key(1)),
             kind: RegionKind::OwnerHead,
             selection: empty_selection(),
             empty_point: Some(DisplayPoint::DocumentEnd { row_count: 1 }),
             source: None,
         }],
     }
+}
+
+#[test]
+fn region_section_must_match_its_native_owner() {
+    let mut body = sample_body();
+    body.regions[0].section = None;
+    assert!(body.validate().is_err());
 }
 
 #[test]

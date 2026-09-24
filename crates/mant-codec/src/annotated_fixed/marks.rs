@@ -214,6 +214,7 @@ pub(super) fn project_region(
         key: keys.required(mark.key, 5)?,
         parent: keys.nearest(mark.parent, 5)?,
         owner: keys.nearest(mark.owner, 2)?,
+        section: keys.nearest(mark.parent, 1)?,
         kind: match mark.region_kind {
             10 => RegionKind::Unsectioned,
             1 => RegionKind::HeadingTitle,

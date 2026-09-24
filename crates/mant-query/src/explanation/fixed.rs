@@ -260,10 +260,29 @@ fn materialize_owner(
         }
         evidence_bases.push(EvidenceBasis::Identity { fields });
     }
-    let content = selection(fixed, &owner.direct_body, budget.0).and_then(|body| {
+    let body_parts = reader
+        .owner_body_parts(owner.key)
+        .ok_or(ExplanationError::InvalidFixed)?;
+    let body_selection = if body_parts.iter().map(|part| part.slice).eq(owner
+        .direct_body
+        .parts
+        .iter()
+        .copied())
+    {
+        owner.direct_body.clone()
+    } else {
+        // A union of direct, nested-owner and transparent-region selections
+        // has no single native logical-join chain. Do not invent searchable
+        // continuity: the presentation reads physical rows, not these joins.
+        TextSelection {
+            parts: body_parts.iter().map(|part| part.slice).collect(),
+            joins: vec![mant_ir::TextJoin::HardBoundary; body_parts.len().saturating_sub(1)],
+        }
+    };
+    let content = selection(fixed, &body_selection, budget.0).and_then(|body| {
         let content = ExplanationContent::FixedOwner {
             key: owner.key,
-            direct_body: body,
+            reading_body: body,
         };
         budget.take(&content).then_some(content)
     });
@@ -310,10 +329,29 @@ fn selection(
         let text = fixed.surface.run_text(slice.run)?;
         let start = usize::try_from(slice.start_byte).ok()?;
         let end = usize::try_from(slice.end_byte).ok()?;
+        let (column, width) = if start == 0 && end == text.len() {
+            (run.column, run.width)
+        } else {
+            // A clipped run needs a checked UTF-8-scalar to terminal-cell
+            // mapping. Never treat byte offsets as cell offsets or guess when
+            // the native run width disagrees with this mapping.
+            use unicode_width::UnicodeWidthStr;
+            if u32::try_from(text.width()).ok()? != run.width {
+                return None;
+            }
+            (
+                run.column
+                    .checked_add(u32::try_from(text.get(..start)?.width()).ok()?)?,
+                u32::try_from(text.get(start..end)?.width()).ok()?,
+            )
+        };
         parts.push(ExplanationFixedPart {
             slice: *slice,
             row: run.row,
             run_column: run.column,
+            column,
+            width,
+            style: run.label.style,
             text: text.get(start..end)?.to_owned(),
             source: run.label.source,
         });
@@ -649,15 +687,15 @@ mod tests {
         );
         let Some(ExplanationContent::FixedOwner {
             key: owner_key,
-            direct_body,
+            reading_body,
         }) = &record.content
         else {
             panic!("Fixed owner body must not become a Flow block");
         };
         assert_eq!(*owner_key, key(1));
-        assert_eq!(direct_body.complete_text().as_deref(), Some("first body"));
+        assert_eq!(reading_body.complete_text().as_deref(), Some("first body"));
         assert!(
-            !direct_body
+            !reading_body
                 .parts
                 .iter()
                 .any(|part| part.text == "empty body")

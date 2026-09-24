@@ -340,6 +340,12 @@ impl FixedBody {
             dense_key(region.key, index)?;
             earlier(region.parent, region.key)?;
             reference(region.owner, self.owners.len())?;
+            reference(region.section, self.headings.len())?;
+            if let Some(owner) = region.owner
+                && self.owners[(owner.get() - 1) as usize].section != region.section
+            {
+                return Err(FixedBodyError("region and owner have different sections"));
+            }
             validate_selection(&region.selection)?;
             if let Some(point) = region.empty_point {
                 self.surface.validate_point(point)?;

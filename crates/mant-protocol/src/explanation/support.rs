@@ -406,10 +406,10 @@ impl super::ExplanationEvidence {
                         .any(|form| form.validate().is_err())
             })
             || self.content.as_ref().is_some_and(|content| match content {
-                ExplanationContent::FixedOwner { direct_body, .. } => {
+                ExplanationContent::FixedOwner { reading_body, .. } => {
                     self.class != super::EvidenceClass::DirectEntry
                         || self.support.is_some()
-                        || direct_body.validate().is_err()
+                        || reading_body.validate().is_err()
                         || self
                             .entry
                             .as_ref()

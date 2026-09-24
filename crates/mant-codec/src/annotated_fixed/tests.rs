@@ -209,6 +209,170 @@ fn native_multiword_definition_head_reaches_fixed_explain() {
     );
 }
 
+#[test]
+fn native_section_reader_includes_entries_and_transparent_regions_once() {
+    // These exact inputs ran on pinned CVS -Tutf8 -O width=78 before this
+    // assertion. man_term.c::print_man_node() enters ROFFT_TBL separately;
+    // tbl_term.c::term_tbl() emits its cell text outside the heading's direct
+    // body, while MAN_TP has its own HEAD/BODY scopes.
+    for input in [
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\nfoo body\n".as_slice(),
+        b".TH T 1\n.SH DATA\n.TS\ntab(;);\nl l.\nkey;value\n.TE\n".as_slice(),
+        b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.TS\ntab(;);\nl l.\nkey;value\n.TE\n".as_slice(),
+    ] {
+        let query = native_query(input, 78);
+        let DocumentBody::Fixed(fixed) = &query.document.as_ref().unwrap().body else {
+            panic!("native body is not Fixed");
+        };
+        let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+        let parts = reader.subtree_parts(reader.roots()[0]).unwrap();
+        let text = parts.iter().map(|part| part.text).collect::<String>();
+        if input.windows(3).any(|window| window == b".TP") {
+            assert!(text.contains("--foo"), "{text}");
+        }
+        if input.windows(3).any(|window| window == b".TS") {
+            assert!(text.contains("key"), "{text}");
+            assert!(text.contains("value"), "{text}");
+        }
+        if input.windows(8).any(|window| window == b"foo body") {
+            assert!(text.contains("foo body"), "{text}");
+        }
+    }
+}
+
+#[test]
+fn native_owner_reading_includes_table_and_visible_search_uses_its_section() {
+    // Exact input ran pinned CVS -Tutf8 -O width=78. The table's final
+    // display cells belong under OPTIONS even though the native table span
+    // is not the owner's direct BODY selection.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n.TS\ntab(;);\nl l.\nkey;value\n.TE\n";
+    let query = native_query(input, 78);
+    let result = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "--foo".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+        result.evidence[0].content.as_ref().unwrap()
+    else {
+        panic!("not Fixed owner")
+    };
+    assert!(reading_body.parts.iter().any(|part| part.text == "key"));
+    assert!(reading_body.parts.iter().any(|part| part.text == "value"));
+    let table_only = native_query(
+        b".TH T 1\n.SH DATA\n.TS\ntab(;);\nl l.\nkey;value\n.TE\n",
+        78,
+    );
+    let found = mant_query::search_query(
+        &table_only,
+        &SearchQuery {
+            pattern: "value".into(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(found.total, 1);
+    assert_eq!(found.matches[0].outline.node.title(), "DATA");
+}
+
+#[test]
+fn fixed_explain_keeps_native_cells_distinct_from_unicode_scalars_and_bytes() {
+    // Exact input ran pinned CVS -Tutf8 -O width=78. term.c::term_field
+    // advances the terminal by three cells for the two-scalar "中a" body.
+    let query = native_query(".TH T 1\n.SH OPTIONS\n.TP\n.B --foo\n中a\n".as_bytes(), 78);
+    let result = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "--foo".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+        result.evidence[0].content.as_ref().unwrap()
+    else {
+        panic!("not Fixed owner")
+    };
+    let part = reading_body
+        .parts
+        .iter()
+        .find(|part| part.text == "中a")
+        .unwrap();
+    assert_eq!(part.text.chars().count(), 2);
+    assert_eq!(part.text.len(), 4);
+    assert_eq!(part.width, 3);
+    assert!(part.column > 0);
+}
+
+#[test]
+fn native_mdoc_nested_owner_and_literal_are_in_complete_reading_view() {
+    // Both exact inputs ran pinned CVS -Tutf8 -O width=78. mdoc_term.c::
+    // termp_it_pre/post and termp_bd_pre/post keep nested .It and literal
+    // output inside their enclosing native section and owner boundaries.
+    let nested = b".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl outer\nouter body\n.Bl -tag\n.It Fl inner\ninner body\n.El\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(nested), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let section = reader.subtree_parts(reader.roots()[0]).unwrap();
+    let text = section.iter().map(|part| part.text).collect::<String>();
+    for expected in ["outer", "outer body", "inner", "inner body"] {
+        assert!(text.contains(expected), "{expected}: {text}");
+    }
+    let outer = fixed
+        .owners
+        .iter()
+        .find(|owner| owner.parent.is_none())
+        .unwrap();
+    let body = reader.owner_body_parts(outer.key).unwrap();
+    let text = body.iter().map(|part| part.text).collect::<String>();
+    assert!(text.contains("inner body"), "{text}");
+
+    let literal = b".Dd September 23, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl foo\n.Bd -literal\ncode one\n.Ed\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(literal), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let reader = mant_ir::FixedSectionReader::new(fixed).unwrap();
+    let body = reader.owner_body_parts(fixed.owners[0].key).unwrap();
+    assert!(body.iter().any(|part| part.text.contains("code one")));
+    let query = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(document),
+        tldr: None,
+    };
+    let explained = mant_query::explain_query(
+        &query,
+        &ExplanationQuery {
+            entry: "-foo".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+        explained.evidence[0].content.as_ref().unwrap()
+    else {
+        panic!("not Fixed owner")
+    };
+    assert!(
+        reading_body
+            .parts
+            .iter()
+            .any(|part| part.text.contains("code one"))
+    );
+}
+
 fn malformed_marks(marks: Vec<AnnotatedMark>) -> AnnotatedDocument {
     AnnotatedDocument {
         root_source: 0,
