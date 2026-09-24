@@ -182,11 +182,19 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         .iter()
         .map(|owner| {
             let form = fixed.owner_complete_form(owner)?;
-            let (kind, evidence) = exact_native_head_kind(owner, &form);
+            let (kind, evidence, name, occurrence) = native_head_identity(&fixed, owner, &form)
+                .unwrap_or_else(|| {
+                    (
+                        EntryKind::Term,
+                        EntryNameEvidence::Lexical,
+                        form.clone(),
+                        owner.head.clone(),
+                    )
+                });
             Some(EntryFacts {
                 name_bindings: vec![EntryNameBinding {
                     name: 0,
-                    occurrences: vec![owner.head.clone()],
+                    occurrences: vec![occurrence],
                     evidence,
                 }],
                 alias_groups: Vec::new(),
@@ -195,7 +203,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                 id: owner.id.clone(),
                 kind,
                 case: NameCase::Sensitive,
-                names: vec![form],
+                names: vec![name],
                 value_domain: None,
             })
         })
@@ -234,33 +242,45 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     Ok(document)
 }
 
-/// Promote only a complete visible native head whose entire spelling passes
-/// the same finite grammar used by Flow discovery. Partial names need a
-/// checked offset-to-selection mapping before they can be promoted.
-fn exact_native_head_kind(owner: &OwnerMark, form: &str) -> (EntryKind, EntryNameEvidence) {
-    if form.trim() == form {
-        match owner.head_role {
-            Some(OwnerHeadRole::Option) if crate::definitions::native_option_token(form) => {
-                return (
+/// Reuse the Flow declaration grammar only where a native role and checked
+/// final-display slice prove the exact name. The rest of the head remains a
+/// form; a layout gap or unselected authored separator cannot become a name.
+fn native_head_identity(
+    fixed: &FixedBody,
+    owner: &OwnerMark,
+    form: &str,
+) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
+    let leading = form.trim_start();
+    let start = form.len() - leading.len();
+    let role_prefix = owner.head_role_prefix.as_deref()?;
+    if !leading.starts_with(role_prefix) {
+        return None;
+    }
+    let (kind, name) = match owner.head_role? {
+        OwnerHeadRole::Option => {
+            crate::definitions::native_option_token(role_prefix).then(|| {
+                (
                     EntryKind::Parameter {
                         parameter_kind: ParameterKind::Option,
                     },
-                    EntryNameEvidence::NativeMarkup,
-                );
-            }
-            Some(OwnerHeadRole::Environment)
-                if crate::definitions::environment_variable_alias(form).as_deref()
-                    == Some(form) =>
-            {
-                return (
-                    EntryKind::EnvironmentVariable,
-                    EntryNameEvidence::NativeMarkup,
-                );
-            }
-            _ => {}
+                    role_prefix.to_owned(),
+                )
+            })?
         }
-    }
-    (EntryKind::Term, EntryNameEvidence::Lexical)
+        OwnerHeadRole::Environment => (
+            EntryKind::EnvironmentVariable,
+            crate::definitions::environment_variable_alias(role_prefix)?,
+        ),
+        OwnerHeadRole::Literal => return None,
+    };
+    let end = start.checked_add(name.len())?;
+    let occurrence = fixed.selection_subrange(&owner.head, start..end)?;
+    (fixed.selection_text(&occurrence).as_deref() == Some(name.as_str())).then_some((
+        kind,
+        EntryNameEvidence::NativeMarkup,
+        name,
+        occurrence,
+    ))
 }
 
 fn key(value: u32, error: &'static str) -> Result<NonZeroU32> {

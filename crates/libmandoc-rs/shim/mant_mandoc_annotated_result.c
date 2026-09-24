@@ -478,6 +478,15 @@ valid_marks(const struct mant_annotated_result *result)
 			    !mant_structured_valid_utf8(mark->name,
 			    mark->name_length)))
 				return 0;
+		} else if (mark->kind == MANT_ANNOTATED_MARK_OWNER &&
+		    (mark->flags & (MANT_ANNOTATED_MARK_HEAD_OPTION |
+		    MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT)) != 0) {
+			if ((mark->name == NULL) !=
+			    (mark->name_length == 0) ||
+			    (mark->name != NULL &&
+			    !mant_structured_valid_utf8(mark->name,
+			    mark->name_length)))
+				return 0;
 		} else if (mark->name != NULL || mark->name_length != 0)
 			return 0;
 		if (mark->kind == MANT_ANNOTATED_MARK_LINK) {

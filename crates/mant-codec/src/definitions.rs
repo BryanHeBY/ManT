@@ -30,9 +30,11 @@ use identity::{document_anchor_ids, identify_item, identify_list_item};
 use mant_ir::{Block, ContentStore, Section};
 pub(crate) use recognized::RecognizedName;
 use std::collections::{HashMap, HashSet};
+#[cfg(feature = "native-annotated")]
+pub(crate) use syntax::native_option_token;
 pub(crate) use syntax::{
-    environment_variable_alias, native_option_token, option_names_from_literal,
-    option_occurrences_from_literal, option_prefix, slash_option_forms,
+    environment_variable_alias, option_names_from_literal, option_occurrences_from_literal,
+    option_prefix, slash_option_forms,
 };
 #[cfg(test)]
 use syntax::{is_value_name, option_names};

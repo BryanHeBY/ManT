@@ -377,7 +377,10 @@ pub(super) fn transfer(
             selection_count: mark.selection_count,
             point,
             native_table_position,
-            name: if mark.kind == 4 || mark.kind == 1 && mark.name_length != 0 {
+            name: if mark.kind == 4
+                || mark.kind == 1 && mark.name_length != 0
+                || mark.kind == 2 && mark.flags & (32 | 64) != 0 && mark.name_length != 0
+            {
                 let name = copy_string(
                     handle,
                     super::super::BytesView {

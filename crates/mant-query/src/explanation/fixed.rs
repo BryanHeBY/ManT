@@ -227,14 +227,32 @@ fn materialize_owner(
     {
         return Err(ExplanationError::InvalidFixed);
     }
+    let name = selected
+        .entry
+        .names
+        .first()
+        .ok_or(ExplanationError::InvalidFixed)?;
+    let start_byte = if name == expected {
+        0
+    } else {
+        expected.len() - expected.trim_start().len()
+    };
+    let end_byte = start_byte
+        .checked_add(name.len())
+        .ok_or(ExplanationError::InvalidFixed)?;
+    if expected.get(start_byte..end_byte) != Some(name.as_str()) {
+        return Err(ExplanationError::InvalidFixed);
+    }
+    let start_scalar = expected[..start_byte].chars().count() as u64;
+    let end_scalar = start_scalar + name.chars().count() as u64;
     let retained_entry = form.and_then(|form| {
         let occurrence = ExplanationOccurrence {
             source_occurrence_index: 0,
             forms: Vec::new(),
             fixed_forms: vec![ExplanationFixedFormRange {
                 form_index: 0,
-                start_scalar: 0,
-                end_scalar: expected.chars().count() as u64,
+                start_scalar,
+                end_scalar,
             }],
             content: Vec::new(),
         };
@@ -255,20 +273,25 @@ fn materialize_owner(
         budget.take(&entry).then_some(entry)
     });
     let details_omitted = retained_entry.is_none();
-    let occurrence = retained_entry
+    let name_occurrence = retained_entry
         .as_ref()
         .and_then(|entry| entry.name_bindings.first())
         .and_then(|binding| binding.occurrences.first())
         .cloned();
     for basis in &mut evidence_bases {
-        let Some(occurrence) = &occurrence else {
+        let Some(occurrence) = &name_occurrence else {
             match_details_omitted = true;
             continue;
         };
         let mut with_position = basis.clone();
         match &mut with_position {
             EvidenceBasis::Name { matches } => matches[0].occurrences.push(occurrence.clone()),
-            EvidenceBasis::Form { matches } => matches[0].occurrences.push(occurrence.clone()),
+            EvidenceBasis::Form { matches } => {
+                let mut complete = occurrence.clone();
+                complete.fixed_forms[0].start_scalar = 0;
+                complete.fixed_forms[0].end_scalar = expected.chars().count() as u64;
+                matches[0].occurrences.push(complete);
+            }
             _ => unreachable!("only charged matches precede identity"),
         }
         if budget.take_growth(basis, &with_position) {
@@ -586,6 +609,7 @@ mod tests {
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
                     head_role: None,
+                    head_role_prefix: None,
                     entry: None,
                     head: slices(&[3, 4], vec![TextJoin::DirectContact], &lengths),
                     direct_body: slices(&[5], Vec::new(), &lengths),
@@ -599,6 +623,7 @@ mod tests {
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
                     head_role: None,
+                    head_role_prefix: None,
                     entry: None,
                     head: TextSelection {
                         parts: Vec::new(),

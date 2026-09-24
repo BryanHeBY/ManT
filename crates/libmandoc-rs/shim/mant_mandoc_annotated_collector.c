@@ -10,6 +10,7 @@
 #include "mandoc.h"
 #include "roff.h"
 #include "mdoc.h"
+#include "libmdoc.h"
 #include "tbl.h"
 #include "out.h"
 #include "tag.h"
@@ -949,23 +950,28 @@ head_text_has_glyph(const char *text)
  * remains alive; final bold glyphs alone cannot distinguish Fl/Ev/Ic/Cm
  * from unrelated typography.  This is evidence, not classification. */
 static uint32_t
-owner_head_role(const struct roff_node *owner)
+owner_head_role(const struct roff_node *owner,
+    const struct roff_node **role_node)
 {
 	const struct roff_node *head, *node;
 	int skip_children;
 
 	head = owner->head;
+	*role_node = NULL;
 	if (head == NULL)
 		return 0;
 	for (node = head->child; node != NULL; ) {
 		skip_children = 0;
 		switch (node->tok) {
 		case MDOC_Fl:
+			*role_node = node;
 			return MANT_ANNOTATED_MARK_HEAD_OPTION;
 		case MDOC_Ev:
+			*role_node = node;
 			return MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT;
 		case MDOC_Ic:
 		case MDOC_Cm:
+			*role_node = node;
 			return MANT_ANNOTATED_MARK_HEAD_LITERAL;
 		case MDOC_Ar:
 		case MDOC_Em:
@@ -993,6 +999,63 @@ owner_head_role(const struct roff_node *owner)
 		node = node->next;
 	}
 	return 0;
+}
+
+/* mdoc_term.c::termp_fl_pre emits its own dash before the Fl operand;
+ * termp_ns_pre may then glue a different macro's glyphs to it.  Preserve a
+ * deliberately simple authored operand while the AST lives.  Rust must still
+ * match it against final surviving output before binding any semantic name. */
+static int
+copy_owner_head_operand(struct mant_annotated_collector *collector,
+    struct mant_annotated_mark *mark, const struct roff_node *role_node)
+{
+	const struct roff_node *operand;
+	struct structured_session *session = collector->session;
+	const char *value;
+	size_t size, total;
+	uint8_t *copy;
+
+	if (role_node == NULL || (role_node->tok != MDOC_Fl &&
+	    role_node->tok != MDOC_Ev))
+		return 1;
+	operand = role_node->child;
+	/* mdoc_macro.c::macro_or_word() permits an empty Fl element before
+	 * closing/middle punctuation.  The next HEAD text node is the exact
+	 * delimiter printed against termp_fl_pre()'s generated dash. */
+	if (operand == NULL && role_node->tok == MDOC_Fl &&
+	    role_node->next != NULL &&
+	    role_node->next->type == ROFFT_TEXT &&
+	    role_node->next->string != NULL &&
+	    (mdoc_isdelim(role_node->next->string) == DELIM_CLOSE ||
+	    mdoc_isdelim(role_node->next->string) == DELIM_MIDDLE))
+		operand = role_node->next;
+	if (operand == NULL || operand->next != NULL ||
+	    operand->type != ROFFT_TEXT || operand->string == NULL ||
+	    operand->string[0] == '\0' ||
+	    strpbrk(operand->string, "\\ \t\r\n") != NULL)
+		return 1;
+	value = operand->string;
+	size = strlen(value);
+	if (size == SIZE_MAX || !charge_work(collector, size))
+		return 0;
+	if (!mant_structured_valid_utf8(
+	    (const uint8_t *)value, size))
+		return 1;
+	total = size + (role_node->tok == MDOC_Fl);
+	if (!mant_structured_charge(session, &session->content_bytes,
+	    total, session->limits->max_content_bytes, 10,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	copy = mant_structured_allocate(session, total, 0,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (copy == NULL)
+		return 0;
+	if (role_node->tok == MDOC_Fl)
+		copy[0] = '-';
+	memcpy(copy + total - size, value, size);
+	mark->name = copy;
+	mark->name_length = total;
+	return 1;
 }
 
 static int
@@ -1079,7 +1142,9 @@ push_node(struct mant_annotated_collector *collector,
 	    node->tok == MAN_TQ ||
 	    node->tok == MDOC_It)) {
 		const struct roff_node *bl;
+		const struct roff_node *role_node = NULL;
 		int definition;
+		uint32_t head_role = 0;
 
 		/* man_term.c::pre_TP/post_TP present HEAD as a named term.
 		 * mdoc_term.c::termp_it_pre uses Bl's validated list type;
@@ -1104,10 +1169,16 @@ push_node(struct mant_annotated_collector *collector,
 		    MANT_ANNOTATED_MARK_OWNER, collector->active_owner, 0, NULL);
 		if (key == 0)
 			return 0;
-		if (definition)
+		if (definition) {
+			if (node->tok == MDOC_It)
+				head_role = owner_head_role(node, &role_node);
 			collector->marks[key - 1].flags |=
 			    MANT_ANNOTATED_MARK_DEFINITION |
-			    owner_head_role(node);
+			    head_role;
+			if (!copy_owner_head_operand(collector,
+			    collector->marks + key - 1, role_node))
+				return 0;
+		}
 		collector->active_owner = key;
 		frame->owner_mark = key;
 	} else if (node->type == ROFFT_BLOCK &&

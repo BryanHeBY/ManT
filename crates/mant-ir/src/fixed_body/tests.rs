@@ -93,6 +93,7 @@ fn sample_body() -> FixedBody {
             section: Some(key(1)),
             role: OwnerRole::Definition,
             head_role: None,
+            head_role_prefix: None,
             entry: None,
             head: empty_selection(),
             direct_body: empty_selection(),
@@ -193,6 +194,45 @@ fn empty_surface_keeps_document_end_without_fake_run() {
     }];
     body.regions.clear();
     body.validate().unwrap();
+}
+
+#[test]
+fn checked_logical_subrange_maps_only_final_glyphs() {
+    let body = sample_body();
+    let direct = TextSelection {
+        parts: vec![
+            OutputSlice {
+                run: key(1),
+                start_byte: 0,
+                end_byte: 1,
+            },
+            OutputSlice {
+                run: key(2),
+                start_byte: 0,
+                end_byte: 3,
+            },
+        ],
+        joins: vec![TextJoin::DirectContact],
+    };
+    assert_eq!(body.selection_text(&direct).as_deref(), Some("a界"));
+    let clipped = body.selection_subrange(&direct, 1..4).unwrap();
+    assert_eq!(clipped.parts, vec![direct.parts[1]]);
+    assert!(clipped.joins.is_empty());
+    assert_eq!(body.selection_text(&clipped).as_deref(), Some("界"));
+    assert!(body.selection_subrange(&direct, 2..4).is_none());
+    assert_eq!(body.selection_subrange(&direct, 0..4), Some(direct.clone()));
+
+    let separated = TextSelection {
+        parts: direct.parts,
+        joins: vec![TextJoin::AuthoredSeparator(" ".to_owned())],
+    };
+    assert_eq!(body.selection_text(&separated).as_deref(), Some("a 界"));
+    assert!(body.selection_subrange(&separated, 0..5).is_none());
+    assert_eq!(
+        body.selection_text(&body.selection_subrange(&separated, 2..5).unwrap())
+            .as_deref(),
+        Some("界")
+    );
 }
 
 #[test]

@@ -16866,6 +16866,13 @@
               }
             ]
           },
+          "headRolePrefix": {
+            "description": "Conservative rendered prefix of the first native head macro's own\noperand. The final display selection and name remain separately\nchecked; this is evidence, not copied body content.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "description": "Normalized document-local identity, distinct from the native key.",
             "$ref": "#/$defs/NodeId"

@@ -14,6 +14,9 @@ mod head;
 mod named;
 mod options;
 pub(super) use head::is_inferred_head;
+#[cfg(feature = "native-annotated")]
+pub(crate) use mant_ir::native_option_token;
+pub(crate) use mant_ir::option_prefix;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};
 pub(super) use named::{is_ordinal_marker, is_value_name};
@@ -22,8 +25,7 @@ pub(super) use options::option_names;
 #[cfg(test)]
 pub(crate) use options::option_names_from_terms;
 pub(crate) use options::{
-    native_option_token, option_names_from_literal, option_occurrences_from_literal, option_prefix,
-    slash_option_forms,
+    option_names_from_literal, option_occurrences_from_literal, slash_option_forms,
 };
 
 pub(super) struct InferredIdentity {

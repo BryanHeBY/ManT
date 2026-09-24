@@ -7,8 +7,8 @@ use mant_ir::{
     ParameterKind, validate_document,
 };
 use mant_protocol::{
-    EvidenceClass, ExplanationOptions, ExplanationQuery, SearchCase, SearchQuery, SearchScope,
-    SearchSyntax,
+    EvidenceBasis, EvidenceClass, ExplanationOptions, ExplanationQuery, SearchCase, SearchQuery,
+    SearchScope, SearchSyntax,
 };
 
 use super::{lower_annotated_document, project_annotated_manual};
@@ -862,6 +862,11 @@ fn malformed_public_mark_role_flags_are_rejected_before_projection() {
     owner.kind = 2;
     owner.flags = 16 | 32 | 64; // One head cannot have two first roles.
     assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
+    let mut owner = malformed_anchor(1, 0);
+    owner.kind = 2;
+    owner.flags = 16; // An operand cannot exist without its native role.
+    owner.name = Some("-a".to_owned());
+    assert!(lower_annotated_document(malformed_marks(vec![owner])).is_err());
 }
 
 #[test]
@@ -977,10 +982,12 @@ fn native_head_roles_promote_only_complete_visible_names() {
         EntryKind::Term
     );
     assert!(validate_document(&document).is_empty());
+}
 
-    // The exact second input also ran pinned CVS. A styled argument and an
-    // assignment preserve native role evidence, but this interim whole-head
-    // binder must not claim their partial names as entire visible forms.
+#[test]
+fn native_partial_head_names_resolve_to_display_and_explain_ranges() {
+    // The exact input also ran pinned CVS. A styled argument and an
+    // assignment retain full forms while binding only their proven names.
     let partial = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a Ar VALUE\nbody\n.It Ev DEMO_HOME=foo\nenv body\n.El\n";
     let document = project_annotated_manual("t.1", &bundle(partial), InputFormat::Mdoc).unwrap();
     let DocumentBody::Fixed(fixed) = &document.body else {
@@ -988,11 +995,91 @@ fn native_head_roles_promote_only_complete_visible_names() {
     };
     assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Option));
     assert_eq!(fixed.owners[1].head_role, Some(OwnerHeadRole::Environment));
-    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().kind, EntryKind::Term);
-    assert_eq!(fixed.owners[1].entry.as_ref().unwrap().kind, EntryKind::Term);
+    assert_eq!(
+        fixed.owners[0].entry.as_ref().unwrap().kind,
+        EntryKind::Parameter {
+            parameter_kind: ParameterKind::Option
+        }
+    );
+    assert_eq!(
+        fixed.owners[1].entry.as_ref().unwrap().kind,
+        EntryKind::EnvironmentVariable
+    );
+    for (owner, name) in fixed.owners.iter().zip(["-a", "DEMO_HOME"]) {
+        let entry = owner.entry.as_ref().unwrap();
+        assert_eq!(entry.names, [name]);
+        assert_eq!(
+            fixed.selection_text(&entry.name_bindings[0].occurrences[0]),
+            Some(name.to_owned())
+        );
+        assert_ne!(fixed.selection_text(&owner.head).as_deref(), Some(name));
+    }
     assert!(validate_document(&document).is_empty());
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    for name in ["-a", "DEMO_HOME"] {
+        let explanation = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.to_owned(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(explanation.total, 1);
+        let entry = explanation.evidence[0].entry.as_ref().unwrap();
+        let name_range = &entry.name_bindings[0].occurrences[0].fixed_forms[0];
+        assert_eq!(
+            name_range.resolve(&entry.fixed_forms).as_deref(),
+            Some(name)
+        );
+        let form = entry.fixed_forms[0].complete_text().unwrap();
+        assert_ne!(form, name);
+        let by_form = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: form.clone(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        let evidence = &by_form.evidence[0];
+        let returned = evidence.entry.as_ref().unwrap();
+        assert!(evidence.bases.iter().any(|basis| match basis {
+            EvidenceBasis::Form { matches } => matches.iter().any(|matched| {
+                matched.occurrences[0].fixed_forms[0]
+                    .resolve(&returned.fixed_forms)
+                    .as_deref()
+                    == Some(form.as_str())
+            }),
+            _ => false,
+        }));
+    }
 
-    // This third exact input ran pinned CVS too. Later Fl markup cannot
+    // The exact input ran pinned CVS. mdoc_term.c::termp_ns_pre removes the
+    // inter-macro blank, but the Ar glyphs do not become part of Fl's name.
+    let glued = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a Ns Ar VALUE\nbody\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(glued), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!("annotated output must use Fixed");
+    };
+    assert_eq!(fixed.owners[0].head_role_prefix.as_deref(), Some("-a"));
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["-a"]);
+    assert_eq!(
+        fixed.selection_text(
+            &fixed.owners[0].entry.as_ref().unwrap().name_bindings[0].occurrences[0]
+        ),
+        Some("-a".to_owned())
+    );
+}
+
+#[test]
+fn native_head_role_respects_visible_prefix_and_punctuation() {
+    // This exact input ran pinned CVS too. Later Fl markup cannot
     // override an earlier visible word in the same It HEAD.
     let later = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It prefix Fl a\nbody\n.El\n";
     let document = project_annotated_manual("t.1", &bundle(later), InputFormat::Mdoc).unwrap();
@@ -1016,10 +1103,15 @@ fn native_head_roles_promote_only_complete_visible_names() {
             unreachable!("annotated output must use Fixed");
         };
         assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Option));
-        // The native formatter can retain a leading head space. The role is
-        // preserved, but the interim whole-head binder must not claim that
-        // the entire visible form is an option spelling.
-        assert_eq!(fixed.owners[0].entry.as_ref().unwrap().kind, EntryKind::Term);
+        // The native formatter can retain a leading head space; it is not
+        // included in the checked name binding.
+        assert_eq!(
+            fixed.owners[0].entry.as_ref().unwrap().kind,
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option
+            }
+        );
+        assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["-a"]);
     }
 
     // mdoc_term.c::termp_fl_pre supplies the generated dash; the shared Fl
@@ -1037,7 +1129,9 @@ fn native_head_roles_promote_only_complete_visible_names() {
             owner.entry.as_ref().unwrap().kind,
             EntryKind::Parameter {
                 parameter_kind: ParameterKind::Option
-            }
+            },
+            "{spelling}: native role prefix: {:?}",
+            owner.head_role_prefix
         );
     }
 }

@@ -293,6 +293,18 @@ impl FixedBody {
             if owner.head_role.is_some() && owner.role != super::OwnerRole::Definition {
                 return Err(FixedBodyError("non-definition owner has a head role"));
             }
+            if owner
+                .head_role_prefix
+                .as_ref()
+                .is_some_and(String::is_empty)
+                || owner.head_role_prefix.is_some()
+                    && !matches!(
+                        owner.head_role,
+                        Some(super::OwnerHeadRole::Option | super::OwnerHeadRole::Environment)
+                    )
+            {
+                return Err(FixedBodyError("invalid native owner head prefix"));
+            }
             validate_selection(&owner.head)?;
             validate_selection(&owner.direct_body)?;
             if owner.entry.is_some() && self.validated_entry(owner).is_none() {

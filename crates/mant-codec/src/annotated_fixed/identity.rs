@@ -389,6 +389,15 @@ impl KeyMap {
                     "native owner has invalid head role flags",
                 ));
             }
+            if mark.name.as_deref().is_some_and(str::is_empty)
+                || mark.name.is_some()
+                    && !matches!(mark.kind, 1 | 4)
+                    && !(mark.kind == 2 && mark.flags & (32 | 64) != 0)
+            {
+                return Err(AnnotatedProjectionError::Relation(
+                    "native mark has an invalid authored operand",
+                ));
+            }
             // Native marks form a preorder forest. Public owned results can
             // also be constructed by callers, so reject cycles before any
             // ancestry lookup instead of relying on the FFI validator.

@@ -5,7 +5,7 @@
 //! module does not infer formatter geometry or parse roff. The containing
 //! `Document` closes typed source keys against its own `SourceTable`.
 
-use std::{fmt, num::NonZeroU32};
+use std::{fmt, num::NonZeroU32, ops::Range};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -279,6 +279,11 @@ pub struct OwnerMark {
     /// Native first-head role, if one survived the head AST boundary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_role: Option<OwnerHeadRole>,
+    /// Conservative rendered prefix of the first native head macro's own
+    /// operand. The final display selection and name remain separately
+    /// checked; this is evidence, not copied body content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head_role_prefix: Option<String>,
     /// Checked semantic facts referring only to this owner's final display
     /// selections. The display surface remains the sole text owner.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -329,29 +334,47 @@ impl FixedBody {
         let [binding] = entry.name_bindings.as_slice() else {
             return None;
         };
-        let role_matches = matches!(
-            (owner.head_role, entry.kind, binding.evidence),
-            (_, EntryKind::Term, EntryNameEvidence::Lexical)
-                | (
-                    Some(OwnerHeadRole::Option),
-                    EntryKind::Parameter {
-                        parameter_kind: ParameterKind::Option,
-                    },
-                    EntryNameEvidence::NativeMarkup,
-                )
-                | (
-                    Some(OwnerHeadRole::Environment),
-                    EntryKind::EnvironmentVariable,
-                    EntryNameEvidence::NativeMarkup,
-                )
-        );
+        let binding_matches = match (owner.head_role, entry.kind, binding.evidence) {
+            (_, EntryKind::Term, EntryNameEvidence::Lexical) => {
+                only_name == &form
+                    && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
+            }
+            (
+                Some(OwnerHeadRole::Option),
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                EntryNameEvidence::NativeMarkup,
+            )
+            | (
+                Some(OwnerHeadRole::Environment),
+                EntryKind::EnvironmentVariable,
+                EntryNameEvidence::NativeMarkup,
+            ) => {
+                let start = form.len() - form.trim_start().len();
+                let end = start.checked_add(only_name.len())?;
+                let role_prefix = owner.head_role_prefix.as_deref()?;
+                let role_proves_name = match entry.kind {
+                    EntryKind::EnvironmentVariable => {
+                        crate::environment_variable_alias(role_prefix).as_deref()
+                            == Some(only_name.as_str())
+                    }
+                    _ => role_prefix == only_name && crate::native_option_token(only_name),
+                };
+                role_proves_name
+                    && form.trim_start().starts_with(role_prefix)
+                    && form.get(start..end) == Some(only_name.as_str())
+                    && self.selection_subrange(&owner.head, start..end).as_ref()
+                        == binding.occurrences.first()
+                    && binding.occurrences.len() == 1
+            }
+            _ => false,
+        };
         (entry.id == owner.id
-            && role_matches
+            && binding_matches
             && entry.case == NameCase::Sensitive
             && only_form == &owner.head
-            && only_name == &form
             && binding.name == 0
-            && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
             && entry.alias_groups.is_empty()
             && entry.alias_of.is_none()
             && entry.value_domain.is_none())
@@ -380,6 +403,64 @@ impl FixedBody {
             text.push_str(run.get(start..end)?);
         }
         Some(text)
+    }
+
+    /// Map a logical UTF-8 range back to surviving display slices. A range
+    /// touching an authored separator has no final glyph to bind and is
+    /// rejected; no byte or cell coordinate is inferred from layout.
+    #[must_use]
+    pub fn selection_subrange(
+        &self,
+        selection: &TextSelection,
+        range: Range<usize>,
+    ) -> Option<TextSelection> {
+        let logical = self.selection_text(selection)?;
+        if range.start >= range.end || logical.get(range.clone()).is_none() {
+            return None;
+        }
+        let mut cursor = 0usize;
+        let mut parts = Vec::new();
+        let mut joins = Vec::new();
+        for (index, part) in selection.parts.iter().enumerate() {
+            if index != 0 {
+                match &selection.joins[index - 1] {
+                    TextJoin::DirectContact => {}
+                    TextJoin::AuthoredSeparator(separator) => {
+                        let end = cursor.checked_add(separator.len())?;
+                        if range.start < end && cursor < range.end {
+                            return None;
+                        }
+                        cursor = end;
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                }
+            }
+            let length = usize::try_from(part.end_byte.checked_sub(part.start_byte)?).ok()?;
+            let end = cursor.checked_add(length)?;
+            let start_in_part = range.start.max(cursor);
+            let end_in_part = range.end.min(end);
+            if start_in_part < end_in_part {
+                let start_byte = part
+                    .start_byte
+                    .checked_add(u64::try_from(start_in_part - cursor).ok()?)?;
+                let end_byte = part
+                    .start_byte
+                    .checked_add(u64::try_from(end_in_part - cursor).ok()?)?;
+                self.surface
+                    .run_text(part.run)?
+                    .get(usize::try_from(start_byte).ok()?..usize::try_from(end_byte).ok()?)?;
+                if !parts.is_empty() {
+                    joins.push(selection.joins[index - 1].clone());
+                }
+                parts.push(OutputSlice {
+                    run: part.run,
+                    start_byte,
+                    end_byte,
+                });
+            }
+            cursor = end;
+        }
+        (cursor == logical.len() && !parts.is_empty()).then_some(TextSelection { parts, joins })
     }
 
     /// Read one complete surviving definition head without inferring bytes

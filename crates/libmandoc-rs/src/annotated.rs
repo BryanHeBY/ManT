@@ -128,7 +128,8 @@ pub struct AnnotatedMark {
     /// Native tbl column and offset hint, not a final display point.
     pub native_table_position: Option<(u32, u64)>,
     /// Exact target spelling for anchors, optional `deroff()` authored
-    /// heading phrase for headings; absent for all other mark kinds.
+    /// heading phrase for headings, or a conservative native Fl/Ev operand
+    /// on an owner. The latter must still match final visible head glyphs.
     pub name: Option<String>,
     /// Decoded destination, when this native mark represents one link target.
     pub link_target: Option<AnnotatedLinkTarget>,

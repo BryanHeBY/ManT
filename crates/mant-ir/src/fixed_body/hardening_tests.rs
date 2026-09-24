@@ -414,6 +414,7 @@ fn owner_head_and_body_cannot_claim_the_same_bytes() {
         section: None,
         role: OwnerRole::Definition,
         head_role: None,
+        head_role_prefix: None,
         entry: None,
         head: selection(&[(0, 2)], Vec::new()),
         direct_body: selection(&[(1, 3)], Vec::new()),
@@ -489,4 +490,78 @@ fn fixed_links_obey_the_shared_target_grammar() {
         assert!(body.validate().is_err());
         assert!(serde_json::from_value::<FixedBody>(serde_json::to_value(&body).unwrap()).is_err());
     }
+}
+
+#[test]
+fn fixed_partial_name_requires_native_prefix_and_exact_surviving_slice() {
+    let mut body = body_with_run("-aVALUE", 7);
+    body.surface.runs[0].label.owner = Some(key(1));
+    let head = selection(&[(0, 7)], Vec::new());
+    let name = selection(&[(0, 2)], Vec::new());
+    body.owners.push(OwnerMark {
+        key: key(1),
+        id: NodeId::from("option-a"),
+        parent: None,
+        section: None,
+        role: OwnerRole::Definition,
+        head_role: Some(OwnerHeadRole::Option),
+        head_role_prefix: Some("-a".to_owned()),
+        entry: Some(EntryFacts {
+            id: NodeId::from("option-a"),
+            kind: EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            },
+            case: NameCase::Sensitive,
+            names: vec!["-a".to_owned()],
+            forms: vec![head.clone()],
+            name_bindings: vec![crate::EntryNameBinding {
+                name: 0,
+                occurrences: vec![name],
+                evidence: EntryNameEvidence::NativeMarkup,
+            }],
+            alias_groups: Vec::new(),
+            alias_of: None,
+            value_domain: None,
+        }),
+        head,
+        direct_body: selection(&[], Vec::new()),
+        empty_point: None,
+        source: None,
+    });
+    body.validate().unwrap();
+    let mut forged = body.clone();
+    forged.owners[0].head_role_prefix = Some("-aVALUE".to_owned());
+    assert!(forged.validate().is_err());
+    forged = body.clone();
+    forged.owners[0].entry.as_mut().unwrap().name_bindings[0].occurrences =
+        vec![selection(&[(0, 3)], Vec::new())];
+    assert!(forged.validate().is_err());
+    assert!(serde_json::from_value::<FixedBody>(serde_json::to_value(forged).unwrap()).is_err());
+
+    let mut forged = body.clone();
+    forged.surface.text = "foo".to_owned();
+    forged.surface.runs[0].byte_count = 3;
+    forged.surface.runs[0].width = 3;
+    forged.surface.rows[0].column_count = 3;
+    forged.owners[0].head = selection(&[(0, 3)], Vec::new());
+    forged.owners[0].head_role_prefix = Some("foo".to_owned());
+    let facts = forged.owners[0].entry.as_mut().unwrap();
+    facts.names = vec!["foo".to_owned()];
+    facts.forms = vec![selection(&[(0, 3)], Vec::new())];
+    facts.name_bindings[0].occurrences = facts.forms.clone();
+    assert!(forged.validate().is_err()); // Native Fl cannot render `foo`.
+
+    forged.surface.text = "a!".to_owned();
+    forged.surface.runs[0].byte_count = 2;
+    forged.surface.runs[0].width = 2;
+    forged.surface.rows[0].column_count = 2;
+    forged.owners[0].head = selection(&[(0, 2)], Vec::new());
+    forged.owners[0].head_role = Some(OwnerHeadRole::Environment);
+    forged.owners[0].head_role_prefix = Some("a!".to_owned());
+    let facts = forged.owners[0].entry.as_mut().unwrap();
+    facts.kind = EntryKind::EnvironmentVariable;
+    facts.names = vec!["a!".to_owned()];
+    facts.forms = vec![selection(&[(0, 2)], Vec::new())];
+    facts.name_bindings[0].occurrences = facts.forms.clone();
+    assert!(forged.validate().is_err());
 }

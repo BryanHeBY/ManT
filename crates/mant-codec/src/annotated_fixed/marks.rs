@@ -160,6 +160,7 @@ pub(super) fn project_owner(
                 ));
             }
         },
+        head_role_prefix: mark.name.clone(),
         entry: None,
         head,
         direct_body,

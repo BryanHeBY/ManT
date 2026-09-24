@@ -93,7 +93,8 @@ struct mant_annotated_mark {
 	uint32_t table_position_present;
 	uint64_t table_offset;
 	/* Owned UTF-8 target spelling for ANCHOR, optional deroff() authored
-	 * phrase for HEADING.  Empty for other mark kinds. */
+	 * phrase for HEADING, or conservative first native Fl/Ev operand for
+	 * OWNER.  The latter is only a bound on a final display name. */
 	const uint8_t *name;
 	uint64_t name_length;
 	/* Owned decoded destination for a link; authoring source remains above. */

@@ -4,7 +4,8 @@ use crate::definitions::RecognizedName;
 #[cfg(test)]
 use mant_ir::DefinitionItem;
 use mant_ir::inline_plain_text as plain_text;
-use mant_ir::{ContentContext, Inline};
+use mant_ir::{ContentContext, Inline, is_option_name_body, native_option_token};
+pub(crate) use mant_ir::option_prefix;
 
 #[cfg(test)]
 pub(in crate::definitions) fn option_names(
@@ -103,19 +104,6 @@ pub(super) fn native_option_occurrences(
     result
 }
 
-/// Complete spelling licensed by an upstream `Fl` head. Generic option
-/// syntax handles ordinary names; mandoc also prints a single punctuation
-/// operand after its generated dash, including `-,` and `--`.
-pub(crate) fn native_option_token(token: &str) -> bool {
-    option_prefix(token) == Some(token)
-        || token.starts_with('-')
-            && token.chars().count() == 2
-            && token
-                .chars()
-                .nth(1)
-                .is_some_and(|character| !character.is_whitespace() && !character.is_control())
-}
-
 pub(in crate::definitions) fn parameter_occurrences(
     content: ContentContext<'_>,
     terms: &[Vec<Inline>],
@@ -165,35 +153,6 @@ pub(crate) fn slash_option_forms(value: &str) -> Option<Vec<&str>> {
     let token = last.split_whitespace().next()?;
     let name = option_prefix(token)?;
     (token == name || token[name.len()..].starts_with('=')).then_some(parts)
-}
-
-pub(crate) fn option_prefix(token: &str) -> Option<&str> {
-    if !token.starts_with('-') || token == "-" {
-        return None;
-    }
-    let end = token
-        .char_indices()
-        .skip(1)
-        .take_while(|(_, character)| {
-            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?' | '.' | '+')
-        })
-        .map(|(index, character)| index + character.len_utf8())
-        .last()?;
-    let candidate = &token[..end];
-    let body = candidate.trim_start_matches('-');
-    is_option_name_body(body).then_some(candidate)
-}
-
-pub(in crate::definitions) fn is_option_name_body(value: &str) -> bool {
-    value.split('.').all(|segment| {
-        !segment.is_empty()
-            && segment.chars().all(|character| {
-                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?' | '+')
-            })
-            && segment
-                .chars()
-                .any(|character| character.is_ascii_alphanumeric() || character == '?')
-    })
 }
 
 #[cfg(test)]

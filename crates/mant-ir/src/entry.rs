@@ -5,6 +5,7 @@ mod index;
 mod location;
 mod model;
 mod relations;
+mod syntax;
 mod walk;
 #[cfg(test)]
 mod wire;
@@ -19,6 +20,10 @@ pub use location::{ContentEntry, content_entries, content_entry_locations};
 pub use model::*;
 pub(crate) use relations::relation_issues;
 pub use relations::{EntryRelationIssue, EntryRelationIssueKind, entry_relation_issues};
+pub use syntax::{
+    contains_additional_environment_assignment, environment_variable_alias,
+    environment_variable_body, is_option_name_body, native_option_token, option_prefix,
+};
 pub use walk::visit_child_entries;
 
 #[cfg(test)]
