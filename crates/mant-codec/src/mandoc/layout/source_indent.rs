@@ -130,6 +130,7 @@ impl crate::mandoc::LoweringContext<'_> {
             code: Some("manual.indentation-limit".into()),
             message: "unsupported or excessive indentation was bounded; invalid offsets use the default and cumulative indentation is limited to 4096 columns".into(),
             source: crate::mandoc::source_span(node),
+            source_key: None,
             coverage_scope: None,
         });
     }

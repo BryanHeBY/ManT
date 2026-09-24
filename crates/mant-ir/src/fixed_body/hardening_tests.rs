@@ -128,6 +128,7 @@ fn mdoc_option_components_bind_names_inside_one_parameterized_form() {
             .map(|run| OwnerHeadComponent {
                 role: OwnerHeadRole::Option,
                 selection: component(run),
+                source_key: None,
                 source: Some(source(if run == 1 { 5 } else { 14 })),
             })
             .collect(),
@@ -138,6 +139,7 @@ fn mdoc_option_components_bind_names_inside_one_parameterized_form() {
             joins: Vec::new(),
         },
         empty_point: None,
+        source_key: None,
         source: Some(source(1)),
     };
     body.owners.push(owner);
@@ -216,6 +218,7 @@ fn direct_contact_must_not_skip_bytes_in_one_run() {
             uri: "https://example.test".to_owned(),
         }),
         label: selection(&[(0, 1), (2, 3)], vec![TextJoin::DirectContact]),
+        source_key: None,
         source: None,
     });
     body.surface.runs[0].label.link = Some(key(1));
@@ -491,6 +494,7 @@ fn repeated_selection_gap_checks_share_one_surface_index() {
                 parts: vec![],
                 joins: vec![],
             },
+            source_key: None,
             source: None,
         })
         .collect();
@@ -510,6 +514,7 @@ fn link_run_labels_require_complete_occurrence_coverage() {
             parts: Vec::new(),
             joins: Vec::new(),
         },
+        source_key: None,
         source: None,
     });
     assert!(body.validate().is_err());
@@ -536,6 +541,7 @@ fn empty_region_requires_its_final_point() {
             joins: Vec::new(),
         },
         empty_point: None,
+        source_key: None,
         source: None,
     });
     assert!(body.validate().is_err());
@@ -563,6 +569,7 @@ fn owner_head_and_body_cannot_claim_the_same_bytes() {
         head: selection(&[(0, 2)], Vec::new()),
         direct_body: selection(&[(1, 3)], Vec::new()),
         empty_point: None,
+        source_key: None,
         source: None,
     });
     body.surface.runs[0].label.owner = Some(key(1));
@@ -581,6 +588,7 @@ fn a_native_link_instance_may_have_no_href() {
         key: key(1),
         target: None,
         label: selection(&[(0, 2)], Vec::new()),
+        source_key: None,
         source: None,
     });
     body.surface.runs[0].label.link = Some(key(1));
@@ -607,6 +615,7 @@ fn fixed_links_obey_the_shared_target_grammar() {
             uri: "https://example.test".to_owned(),
         }),
         label: selection(&[(0, 1)], Vec::new()),
+        source_key: None,
         source: None,
     });
     body.surface.runs[0].label.link = Some(key(1));
@@ -675,6 +684,7 @@ fn fixed_partial_name_requires_native_prefix_and_exact_surviving_slice() {
         head,
         direct_body: selection(&[], Vec::new()),
         empty_point: None,
+        source_key: None,
         source: None,
     });
     body.validate().unwrap();
@@ -753,6 +763,7 @@ fn lexical_option_facts_require_the_native_role_and_complete_head_binding() {
         head,
         direct_body: selection(&[], Vec::new()),
         empty_point: None,
+        source_key: None,
         source: None,
     });
     body.validate().unwrap();

@@ -408,7 +408,7 @@ impl<'de> Deserialize<'de> for ScopedSearchDocument {
 }
 
 /// Coverage of one scanned scope document, including zero-hit documents.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopedSearchCoverage {
     /// Stable logical document identity.
@@ -424,6 +424,33 @@ pub struct ScopedSearchCoverage {
     pub coverage_details_omitted: u32,
     /// Bounded producer and validation findings.
     pub diagnostics: Vec<mant_ir::Diagnostic>,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    remote = "ScopedSearchCoverage",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ScopedSearchCoverageWire {
+    address: DocumentAddress,
+    depth: u16,
+    source_context: Option<SourceContext>,
+    semantics_complete: bool,
+    coverage_details_omitted: u32,
+    diagnostics: Vec<mant_ir::Diagnostic>,
+}
+
+impl<'de> Deserialize<'de> for ScopedSearchCoverage {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopedSearchCoverageWire::deserialize(deserializer)?;
+        crate::document::validate_optional_diagnostic_sources(
+            value.source_context.as_ref(),
+            &value.diagnostics,
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// Exact schema marker for a scoped search response.
@@ -566,12 +593,9 @@ impl ScopeSearch {
                 coverage.coverage_details_omitted,
                 &coverage.diagnostics,
             )?;
-            crate::document::validate_optional_source_spans(
+            crate::document::validate_optional_diagnostic_sources(
                 coverage.source_context.as_ref(),
-                coverage
-                    .diagnostics
-                    .iter()
-                    .filter_map(|diagnostic| diagnostic.source),
+                &coverage.diagnostics,
             )
             .map_err(|_| "scope search diagnostic source is not closed by its source table")?;
         }

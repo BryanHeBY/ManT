@@ -178,6 +178,45 @@ pub(crate) fn validate_optional_source_spans(
     Ok(())
 }
 
+fn validate_optional_diagnostic_key(
+    source_context: Option<&SourceContext>,
+    key: SourceKey,
+    role: &str,
+) -> Result<(), String> {
+    let context = source_context.ok_or_else(|| format!("{role} requires a source context"))?;
+    if context
+        .sources
+        .get((key.get() - 1) as usize)
+        .is_none_or(|record| record.key != key)
+    {
+        return Err(format!(
+            "{role} key {} is not closed by its source table",
+            key.get()
+        ));
+    }
+    Ok(())
+}
+
+/// Close authored, source-only, and source-scoped diagnostic references.
+pub(crate) fn validate_optional_diagnostic_sources(
+    source_context: Option<&SourceContext>,
+    diagnostics: &[Diagnostic],
+) -> Result<(), String> {
+    for diagnostic in diagnostics {
+        if diagnostic.source.is_some() && diagnostic.source_key.is_some() {
+            return Err("diagnostic has both authored source and source-only key".to_owned());
+        }
+        validate_optional_source_spans(source_context, diagnostic.source)?;
+        if let Some(key) = diagnostic.source_key {
+            validate_optional_diagnostic_key(source_context, key, "source-only diagnostic")?;
+        }
+        if let Some(mant_ir::CoverageScope::Source { key }) = diagnostic.coverage_scope {
+            validate_optional_diagnostic_key(source_context, key, "source-scoped diagnostic")?;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_projection_sources(
     source_context: Option<&SourceContext>,
     projection: Option<&ContentProjection>,

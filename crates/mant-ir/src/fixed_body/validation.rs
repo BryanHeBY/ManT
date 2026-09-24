@@ -19,6 +19,18 @@ impl fmt::Display for FixedBodyError {
 
 impl std::error::Error for FixedBodyError {}
 
+fn exclusive_source(
+    source: Option<SourceSpan>,
+    source_key: Option<SourceKey>,
+) -> Result<(), FixedBodyError> {
+    if source.is_some() && source_key.is_some() {
+        return Err(FixedBodyError(
+            "mark has both authored span and source-only key",
+        ));
+    }
+    Ok(())
+}
+
 impl DisplaySurface {
     /// Check dense final keys, row/run ownership, UTF-8 boundaries and exact
     /// one-time byte-arena coverage. No geometry is recomputed here.
@@ -262,6 +274,9 @@ impl FixedBody {
     #[allow(clippy::too_many_lines)] // One pass closes all typed mark relations over one surface.
     pub fn validate(&self) -> Result<(), FixedBodyError> {
         self.surface.validate()?;
+        for (source, source_key) in self.source_claims() {
+            exclusive_source(source, source_key)?;
+        }
         let non_layout_prefix = self.surface.non_layout_prefix();
         let mut join_bytes = 0_u64;
         let mut validate_selection = |selection: &TextSelection| {
@@ -550,24 +565,47 @@ impl FixedBody {
             .runs
             .iter()
             .filter_map(|run| run.label.source)
-            .chain(self.source_spans().map(|span| span.source))
+            .chain(
+                self.source_claims()
+                    .flat_map(|(span, key)| span.map(|span| span.source).into_iter().chain(key)),
+            )
     }
 
     /// Iterate authored mark spans for containing-document range validation.
     pub fn source_spans(&self) -> impl Iterator<Item = SourceSpan> + '_ {
+        self.source_claims().filter_map(|(span, _)| span)
+    }
+
+    /// All mark origins before choosing authored coordinates or source-only
+    /// identity. The document boundary checks the same pairs independently.
+    pub(crate) fn source_claims(
+        &self,
+    ) -> impl Iterator<Item = (Option<SourceSpan>, Option<SourceKey>)> + '_ {
         self.headings
             .iter()
-            .filter_map(|mark| mark.source)
-            .chain(self.owners.iter().filter_map(|mark| mark.source))
+            .map(|mark| (mark.source, mark.source_key))
+            .chain(
+                self.owners
+                    .iter()
+                    .map(|mark| (mark.source, mark.source_key)),
+            )
             .chain(self.owners.iter().flat_map(|owner| {
                 owner
                     .head_components
                     .iter()
-                    .filter_map(|component| component.source)
+                    .map(|component| (component.source, component.source_key))
             }))
-            .chain(self.links.iter().filter_map(|mark| mark.source))
-            .chain(self.anchors.iter().filter_map(|mark| mark.source))
-            .chain(self.regions.iter().filter_map(|mark| mark.source))
+            .chain(self.links.iter().map(|mark| (mark.source, mark.source_key)))
+            .chain(
+                self.anchors
+                    .iter()
+                    .map(|mark| (mark.source, mark.source_key)),
+            )
+            .chain(
+                self.regions
+                    .iter()
+                    .map(|mark| (mark.source, mark.source_key)),
+            )
     }
 }
 

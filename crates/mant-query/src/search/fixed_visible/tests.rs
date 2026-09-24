@@ -69,6 +69,7 @@ fn fixture() -> ResolvedContent {
             ],
         },
         empty_point: None,
+        source_key: None,
         source: None,
     };
     let document = Document {

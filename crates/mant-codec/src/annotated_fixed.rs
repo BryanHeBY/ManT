@@ -699,6 +699,17 @@ fn mark_source(mark: &AnnotatedMark) -> Result<Option<SourceSpan>> {
     }
 }
 
+fn mark_source_key(mark: &AnnotatedMark) -> Result<Option<SourceKey>> {
+    match (mark.source, mark.line, mark.column) {
+        (0, 0, 0) => Ok(None),
+        (source, 0, 0) => Ok(Some(key_source(source)?)),
+        (source, line, column) if source != 0 && line != 0 && column != 0 => Ok(None),
+        _ => Err(AnnotatedProjectionError::Relation(
+            "partial native mark source",
+        )),
+    }
+}
+
 fn point(point: AnnotatedDisplayPoint) -> Result<DisplayPoint> {
     Ok(match point {
         AnnotatedDisplayPoint::RowColumn { row, column } => DisplayPoint::RowColumn {

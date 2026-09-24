@@ -197,6 +197,7 @@ fn invalid_fixed_mark_preserves_tldr_in_document_view_fallback() {
             at: mant_ir::DisplayPoint::DocumentEnd { row_count: 0 },
             title: empty_selection.clone(),
             direct_body: empty_selection,
+            source_key: None,
             source: None,
         }],
         owners: Vec::new(),

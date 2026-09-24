@@ -6,7 +6,8 @@ use super::{
     AnchorMark, AnnotatedDocument, AnnotatedMark, AnnotatedProjectionError, Diagnostic,
     DiagnosticImpact, DiagnosticLevel, DisplayPoint, HeadingMark, Identities, KeyMap, LinkMark,
     LinkTarget, OwnerHeadComponent, OwnerHeadRole, OwnerMark, OwnerRole, RegionKind, RegionMark,
-    Result, TextJoin, TextSelection, mark_source, point, region_selection, selection,
+    Result, TextJoin, TextSelection, mark_source, mark_source_key, point, region_selection,
+    selection,
 };
 
 pub(super) fn project_heading(
@@ -85,6 +86,7 @@ pub(super) fn project_heading(
         title,
         direct_body: region_selection(page, mark.body_region)?,
         source: mark_source(mark)?,
+        source_key: mark_source_key(mark)?,
     })
 }
 
@@ -117,6 +119,7 @@ pub(super) fn project_owner(
             role,
             selection: selection(page, component)?,
             source: mark_source(component)?,
+            source_key: mark_source_key(component)?,
         });
     }
     let direct_body = project_owner_body(page, mark, body_regions)?;
@@ -160,6 +163,7 @@ pub(super) fn project_owner(
         direct_body,
         empty_point,
         source: mark_source(mark)?,
+        source_key: mark_source_key(mark)?,
     })
 }
 
@@ -265,6 +269,7 @@ pub(super) fn project_link(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Result<LinkMark> {
     let authored = mark_source(mark)?;
+    let source_only = mark_source_key(mark)?;
     let target = match &mark.link_target {
         None => None,
         Some(native) => match native.kind {
@@ -295,6 +300,7 @@ pub(super) fn project_link(
                         code: Some("unresolved-section-reference".to_owned()),
                         message: format!("cannot resolve section reference: {}", native.primary),
                         source: authored,
+                        source_key: source_only,
                         coverage_scope: None,
                     });
                     None
@@ -311,6 +317,7 @@ pub(super) fn project_link(
         target,
         label: selection(page, mark)?,
         source: authored,
+        source_key: source_only,
     })
 }
 
@@ -333,6 +340,7 @@ pub(super) fn project_anchor(
             "anchor has no final point",
         ))?)?,
         source: mark_source(mark)?,
+        source_key: mark_source_key(mark)?,
     })
 }
 
@@ -404,5 +412,6 @@ pub(super) fn project_region(
         selection,
         empty_point,
         source: mark_source(mark)?,
+        source_key: mark_source_key(mark)?,
     })
 }

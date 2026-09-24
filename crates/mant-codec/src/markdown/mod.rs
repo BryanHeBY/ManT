@@ -159,6 +159,7 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
             code: Some("markdown.byte-order-mark".to_owned()),
             message: "masked a leading byte-order mark".to_owned(),
             source: None,
+            source_key: None,
             coverage_scope: None,
         });
     }
@@ -169,6 +170,7 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
             code: Some("markdown.control-characters".to_owned()),
             message: format!("masked {controls} terminal-unsafe control character(s)"),
             source: None,
+            source_key: None,
             coverage_scope: None,
         });
     }

@@ -12,6 +12,7 @@ fn finding(impact: DiagnosticImpact, level: DiagnosticLevel, code: Option<&str>)
         code: code.map(str::to_owned),
         message: "producer finding".into(),
         source: None,
+        source_key: None,
         coverage_scope: None,
     }
 }

@@ -239,6 +239,9 @@ pub struct HeadingMark {
     pub direct_body: TextSelection,
     /// Authored heading location when known.
     pub source: Option<SourceSpan>,
+    /// Source identity when no authored heading position can be proved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<SourceKey>,
 }
 
 /// Native owner role before semantic declaration classification.
@@ -281,6 +284,9 @@ pub struct OwnerHeadComponent {
     pub selection: TextSelection,
     /// Authored macro location, separate from generated final glyphs.
     pub source: Option<SourceSpan>,
+    /// Source identity when the macro's authored position cannot be proved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<SourceKey>,
 }
 
 /// One native candidate owner, not a fabricated semantic entry.
@@ -339,6 +345,9 @@ pub struct OwnerMark {
     pub empty_point: Option<DisplayPoint>,
     /// Authored owner location when known.
     pub source: Option<SourceSpan>,
+    /// Source identity when no authored owner position can be proved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<SourceKey>,
 }
 
 impl OwnerMark {
@@ -1105,6 +1114,9 @@ pub struct LinkMark {
     pub label: TextSelection,
     /// Authored macro location when known.
     pub source: Option<SourceSpan>,
+    /// Source identity when no authored link position can be proved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<SourceKey>,
 }
 
 // An omitted `target` is not the same as a native macro with no href.  Keep
@@ -1147,6 +1159,8 @@ struct LinkMarkWire {
     target: RequiredNullableLinkTarget,
     label: TextSelection,
     source: Option<SourceSpan>,
+    #[serde(default)]
+    source_key: Option<SourceKey>,
 }
 
 impl<'de> Deserialize<'de> for LinkMark {
@@ -1157,6 +1171,7 @@ impl<'de> Deserialize<'de> for LinkMark {
             target: wire.target.0,
             label: wire.label,
             source: wire.source,
+            source_key: wire.source_key,
         })
     }
 }
@@ -1182,6 +1197,9 @@ pub struct AnchorMark {
     pub at: DisplayPoint,
     /// Original authored declaration location, distinct from `at`.
     pub source: Option<SourceSpan>,
+    /// Source identity when no authored declaration position can be proved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<SourceKey>,
 }
 
 /// Native region family useful for content boundaries and joins.
@@ -1238,6 +1256,9 @@ pub struct RegionMark {
     pub empty_point: Option<DisplayPoint>,
     /// Authored region location when known.
     pub source: Option<SourceSpan>,
+    /// Source identity when no authored region position can be proved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<SourceKey>,
 }
 
 /// The sole owned Fixed arm of a future exclusive document body.

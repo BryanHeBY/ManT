@@ -156,12 +156,9 @@ struct QueryOutlineWire {
 impl<'de> Deserialize<'de> for QueryOutline {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = QueryOutlineWire::deserialize(deserializer)?;
-        crate::document::validate_optional_source_spans(
+        crate::document::validate_optional_diagnostic_sources(
             value.source_context.as_ref(),
-            value
-                .diagnostics
-                .iter()
-                .filter_map(|diagnostic| diagnostic.source),
+            &value.diagnostics,
         )
         .map_err(serde::de::Error::custom)?;
         crate::document::validate_projection_sources(
@@ -433,12 +430,9 @@ struct QueryExcerptWire {
 impl<'de> Deserialize<'de> for QueryExcerpt {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = QueryExcerptWire::deserialize(deserializer)?;
-        crate::document::validate_optional_source_spans(
+        crate::document::validate_optional_diagnostic_sources(
             value.source_context.as_ref(),
-            value
-                .diagnostics
-                .iter()
-                .filter_map(|diagnostic| diagnostic.source),
+            &value.diagnostics,
         )
         .map_err(serde::de::Error::custom)?;
         let fallback = mant_ir::SourceRecord {

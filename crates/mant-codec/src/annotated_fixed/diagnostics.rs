@@ -10,26 +10,27 @@ pub(super) fn native_diagnostics(page: &AnnotatedDocument) -> Result<Vec<Diagnos
     page.diagnostics
         .iter()
         .map(|native| {
-            let source = if native.span == 0 {
-                None
+            let (source, source_key) = if native.span == 0 {
+                (None, None)
             } else {
                 let span = page.spans.get((native.span - 1) as usize).ok_or(
                     AnnotatedProjectionError::Relation("diagnostic span missing"),
                 )?;
-                span.line_column
-                    .map(
-                        |(line, column, end_line, end_column)| -> Result<SourceSpan> {
-                            Ok(SourceSpan {
-                                source: key_source(span.source)?,
-                                byte_range: None,
-                                line,
-                                column,
-                                end_line: (end_line != 0).then_some(end_line),
-                                end_column: (end_column != 0).then_some(end_column),
-                            })
-                        },
-                    )
-                    .transpose()?
+                let key = key_source(span.source)?;
+                match span.line_column {
+                    Some((line, column, end_line, end_column)) => (
+                        Some(SourceSpan {
+                            source: key,
+                            byte_range: None,
+                            line,
+                            column,
+                            end_line: (end_line != 0).then_some(end_line),
+                            end_column: (end_column != 0).then_some(end_column),
+                        }),
+                        None,
+                    ),
+                    None => (None, Some(key)),
+                }
             };
             Ok(Diagnostic {
                 level: match native.level {
@@ -47,6 +48,7 @@ pub(super) fn native_diagnostics(page: &AnnotatedDocument) -> Result<Vec<Diagnos
                 code: Some(format!("mandoc.native-{}", native.code)),
                 message: native.message.clone(),
                 source,
+                source_key,
                 coverage_scope: None,
             })
         })
@@ -130,6 +132,7 @@ fn coverage_diagnostic(
         code: Some(format!("annotated.coverage.{dimension}.{reason}")),
         message: format!("{dimension} evidence {reason}"),
         source,
+        source_key: None,
         coverage_scope: Some(coverage_scope),
     }
 }

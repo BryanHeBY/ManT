@@ -4,7 +4,7 @@ use libmandoc_rs::annotated::{
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{
     DisplayRole, DocumentAddress, DocumentBody, DocumentIndex, EntryKind, LinkTarget,
-    MarkdownOrigin, OwnerHeadRole, OwnerRole, ParameterKind, validate_document,
+    MarkdownOrigin, OwnerHeadRole, OwnerRole, ParameterKind, SourceKey, validate_document,
 };
 use mant_protocol::{
     DocumentScope, EvidenceBasis, EvidenceClass, ExplanationOptions, ExplanationQuery,
@@ -17,6 +17,93 @@ fn bundle(input: &[u8]) -> SourceBundle {
     let mut bundle = SourceBundle::new();
     bundle.insert("t.1", input.to_vec()).unwrap();
     bundle
+}
+
+#[test]
+fn macro_generated_marks_keep_source_identity_without_authored_coordinates() {
+    // Exact bytes ran pinned CVS -Ttree/-Tutf8 before these assertions.
+    // read.c::mparse_buf_r reparses the EE body at the invocation source key;
+    // its displayed line 13 is an expansion coordinate, not an authored
+    // location for SH, TP, UR or the empty EQ region.
+    let input = b".TH T 1 2026-09-24\n.de EE\n.SH OPTIONS\n.TP\n.B --macro-generated\nDescription.\n.UR https://example.test/x\nlabel\n.UE\n.EQ\n.EN\n..\n.EE\n";
+    let page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    for kind in [1, 2, 3, 6] {
+        assert!(page.marks.iter().any(|mark| {
+            mark.kind == kind && mark.source == 1 && mark.line == 0 && mark.column == 0
+        }));
+    }
+    assert!(page.marks.iter().any(|mark| {
+        mark.kind == 5
+            && mark.region_kind == 8
+            && mark.source == 1
+            && mark.line == 0
+            && mark.column == 0
+            && mark.selection_count == 0
+    }));
+    let document = lower_annotated_document(page).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.headings[0].source, None);
+    assert_eq!(fixed.headings[0].source_key, Some(SourceKey::FIRST));
+    assert_eq!(fixed.owners[0].source, None);
+    assert_eq!(fixed.owners[0].source_key, Some(SourceKey::FIRST));
+    assert!(fixed.owners[0].head_components.iter().any(|component| {
+        component.source.is_none() && component.source_key == Some(SourceKey::FIRST)
+    }));
+    assert_eq!(fixed.links[0].source, None);
+    assert_eq!(fixed.links[0].source_key, Some(SourceKey::FIRST));
+    let equation = fixed
+        .regions
+        .iter()
+        .find(|region| region.kind == mant_ir::RegionKind::Equation)
+        .expect("empty equation region");
+    assert!(equation.selection.parts.is_empty());
+    assert_eq!(equation.source, None);
+    assert_eq!(equation.source_key, Some(SourceKey::FIRST));
+
+    // The exact direct SH input also ran pinned CVS -Ttree: its line 2 is an
+    // authored coordinate, so no source-only companion may be populated.
+    let authored = project_annotated_manual(
+        "t.1",
+        &bundle(b".TH T 1 2026-09-24\n.SH AUTHORED\nbody\n"),
+        InputFormat::Man,
+    )
+    .unwrap();
+    let DocumentBody::Fixed(authored) = &authored.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(
+        authored.headings[0].source.as_ref().map(|span| span.line),
+        Some(2)
+    );
+    assert_eq!(authored.headings[0].source_key, None);
+}
+
+#[test]
+fn macro_diagnostic_retains_only_its_source_identity() {
+    // Exact bytes ran pinned CVS -Ttree -Wwarning first: the generated UR
+    // reports a missing resource identifier at expansion line 8. Its source
+    // key is known, but that line is not an authored position in the file.
+    let input = b".TH T 1 2026-09-24\n.de EE\n.SH D\n.UR\nlabel\n.UE\n..\n.EE\n";
+    let page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    assert!(page.diagnostics.iter().any(|diagnostic| {
+        diagnostic.span != 0
+            && page
+                .spans
+                .get((diagnostic.span - 1) as usize)
+                .is_some_and(|span| span.source == 1 && span.line_column.is_none())
+    }));
+    let document = lower_annotated_document(page).unwrap();
+    assert!(validate_document(&document).is_empty());
+    assert!(document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.source.is_none() && diagnostic.source_key == Some(SourceKey::FIRST)
+    }));
 }
 
 #[test]

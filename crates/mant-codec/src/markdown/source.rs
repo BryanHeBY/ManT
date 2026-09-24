@@ -167,6 +167,7 @@ impl<'a> MarkdownSource<'a> {
             code: Some("markdown.unsupported".to_owned()),
             message: format!("preserved unsupported Markdown {name} as source text"),
             source: Some(self.span(&range)),
+            source_key: None,
             coverage_scope: None,
         });
     }

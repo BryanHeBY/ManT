@@ -258,16 +258,15 @@ impl QuerySearch {
             &self.diagnostics,
         )?;
         validate_search_presentation(&self.matches)?;
+        crate::document::validate_optional_diagnostic_sources(
+            self.source_context.as_ref(),
+            &self.diagnostics,
+        )?;
         crate::document::validate_optional_source_spans(
             self.source_context.as_ref(),
             self.matches
                 .iter()
-                .filter_map(|matched| matched.node_source)
-                .chain(
-                    self.diagnostics
-                        .iter()
-                        .filter_map(|diagnostic| diagnostic.source),
-                ),
+                .filter_map(|matched| matched.node_source),
         )?;
         Ok(())
     }

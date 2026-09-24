@@ -37,6 +37,7 @@ impl crate::mandoc::LoweringContext<'_> {
                         code: Some("manual.vertical-spacing-limit".into()),
                         message: "vertical spacing exceeds the 4096-row boundary limit; presentation is bounded".into(),
                         source: blocks.first().and_then(mant_ir::geometry::block_source),
+                        source_key: None,
                         coverage_scope: None,
                     });
             }

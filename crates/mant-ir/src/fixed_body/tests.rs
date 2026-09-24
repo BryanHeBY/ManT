@@ -120,6 +120,7 @@ fn sample_body() -> FixedBody {
                 joins: Vec::new(),
             },
             direct_body: empty_selection(),
+            source_key: None,
             source: None,
         }],
         owners: vec![OwnerMark {
@@ -142,6 +143,7 @@ fn sample_body() -> FixedBody {
                 run: key(1),
                 byte: 0,
             }),
+            source_key: None,
             source: None,
         }],
         links: vec![LinkMark {
@@ -164,6 +166,7 @@ fn sample_body() -> FixedBody {
                 ],
                 joins: vec![TextJoin::DirectContact],
             },
+            source_key: None,
             source: None,
         }],
         anchors: vec![AnchorMark {
@@ -177,6 +180,7 @@ fn sample_body() -> FixedBody {
                 run: key(2),
                 byte: 3,
             },
+            source_key: None,
             source: None,
         }],
         regions: vec![RegionMark {
@@ -188,6 +192,7 @@ fn sample_body() -> FixedBody {
             kind: RegionKind::OwnerHead,
             selection: empty_selection(),
             empty_point: Some(DisplayPoint::DocumentEnd { row_count: 1 }),
+            source_key: None,
             source: None,
         }],
     }
@@ -198,6 +203,117 @@ fn region_section_must_match_its_native_owner() {
     let mut body = sample_body();
     body.regions[0].section = None;
     assert!(body.validate().is_err());
+}
+
+#[test]
+fn source_only_fixed_marks_round_trip_without_forging_authored_spans() {
+    let mut body = sample_body();
+    let source_key = SourceKey::FIRST;
+    body.headings[0].source_key = Some(source_key);
+    body.owners[0].source_key = Some(source_key);
+    body.links[0].source_key = Some(source_key);
+    body.anchors[0].source_key = Some(source_key);
+    body.regions[0].source_key = Some(source_key);
+    body.validate().unwrap();
+    assert_eq!(
+        body.source_keys().filter(|key| *key == source_key).count(),
+        7
+    );
+    assert_eq!(body.source_spans().count(), 0);
+    let wire = serde_json::to_value(&body).unwrap();
+    assert_eq!(wire["headings"][0]["sourceKey"], 1);
+    assert_eq!(wire["links"][0]["sourceKey"], 1);
+    assert_eq!(serde_json::from_value::<FixedBody>(wire).unwrap(), body);
+
+    let span = SourceSpan {
+        source: source_key,
+        byte_range: None,
+        line: 1,
+        column: 1,
+        end_line: None,
+        end_column: None,
+    };
+    let mut conflicting = body.clone();
+    conflicting.headings[0].source = Some(span);
+    assert!(conflicting.validate().is_err());
+    conflicting = body.clone();
+    conflicting.owners[0].source = Some(span);
+    assert!(conflicting.validate().is_err());
+    conflicting = body.clone();
+    conflicting.links[0].source = Some(span);
+    assert!(conflicting.validate().is_err());
+    conflicting = body.clone();
+    conflicting.anchors[0].source = Some(span);
+    assert!(conflicting.validate().is_err());
+    conflicting = body;
+    conflicting.regions[0].source = Some(span);
+    assert!(conflicting.validate().is_err());
+}
+
+#[test]
+fn source_only_head_component_does_not_become_an_authored_span() {
+    let mut body = sample_body();
+    let selection = TextSelection {
+        parts: vec![OutputSlice {
+            run: key(1),
+            start_byte: 0,
+            end_byte: 1,
+        }],
+        joins: Vec::new(),
+    };
+    body.owners[0].head = selection.clone();
+    body.owners[0].empty_point = None;
+    body.owners[0].head_components = vec![OwnerHeadComponent {
+        role: OwnerHeadRole::Lexical,
+        selection: selection.clone(),
+        source: None,
+        source_key: Some(SourceKey::FIRST),
+    }];
+    body.regions[0].selection = selection;
+    body.regions[0].empty_point = None;
+    body.validate().unwrap();
+    assert_eq!(body.source_spans().count(), 0);
+    assert!(body.source_keys().any(|key| key == SourceKey::FIRST));
+
+    body.owners[0].head_components[0].source = Some(SourceSpan {
+        source: SourceKey::FIRST,
+        byte_range: None,
+        line: 1,
+        column: 1,
+        end_line: None,
+        end_column: None,
+    });
+    assert!(body.validate().is_err());
+}
+
+#[test]
+fn fixed_source_only_identity_requires_a_source_table_record() {
+    let mut body = sample_body();
+    body.headings[0].source_key = Some(SourceKey::FIRST);
+    let mut document = crate::Document {
+        parser: None,
+        sources: vec![crate::SourceRecord {
+            key: SourceKey::FIRST,
+            identity: crate::SourceIdentity::Anonymous {
+                name: "fixed-source-only".to_owned(),
+            },
+            format: crate::SourceFormat::Man,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: crate::SourceCoordinates::DecodedUtf8Bytes,
+        }],
+        root_source: SourceKey::FIRST,
+        body: crate::DocumentBody::Fixed(body),
+        meta: crate::DocumentMeta::default(),
+        fragment_aliases: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    crate::validate_document_sources(&document).unwrap();
+    let crate::DocumentBody::Fixed(body) = &mut document.body else {
+        unreachable!();
+    };
+    body.headings[0].source_key = SourceKey::new(2);
+    assert!(crate::validate_document_sources(&document).is_err());
 }
 
 #[test]
@@ -226,6 +342,7 @@ fn hanging_continuation_keeps_a_checked_ownerless_relation() {
                 run: key(1),
                 byte: 0,
             }),
+            source_key: None,
             source: None,
         },
         RegionMark {
@@ -237,6 +354,7 @@ fn hanging_continuation_keeps_a_checked_ownerless_relation() {
             kind: RegionKind::OwnerHead,
             selection: empty_selection(),
             empty_point: Some(DisplayPoint::DocumentEnd { row_count: 1 }),
+            source_key: None,
             source: None,
         },
         RegionMark {
@@ -255,6 +373,7 @@ fn hanging_continuation_keeps_a_checked_ownerless_relation() {
                 joins: Vec::new(),
             },
             empty_point: None,
+            source_key: None,
             source: None,
         },
     ];
@@ -339,6 +458,7 @@ fn hanging_continuation_keeps_a_checked_ownerless_relation() {
             joins: Vec::new(),
         },
         empty_point: None,
+        source_key: None,
         source: None,
     });
     table.validate().unwrap();
@@ -388,6 +508,7 @@ fn hanging_continuation_keeps_a_checked_ownerless_relation() {
         kind: RegionKind::OwnerHead,
         selection: table.regions[3].selection.clone(),
         empty_point: None,
+        source_key: None,
         source: None,
     });
     nested.owners[0].hanging_nested_head = Some(key(4));
@@ -502,6 +623,7 @@ fn empty_surface_keeps_document_end_without_fake_run() {
         rendered_fragment: "empty".into(),
         authored: false,
         at: DisplayPoint::DocumentEnd { row_count: 0 },
+        source_key: None,
         source: None,
     }];
     body.regions.clear();

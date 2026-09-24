@@ -6,6 +6,7 @@ use mant_protocol::{
     RequestSchema, ScopeQueryRequest, ScopeQueryResponse, ScopeQueryResult, ScopeQueryView,
     ScopeRequestSchema, SearchCase, SearchScope, SearchSyntax,
 };
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query-v0.12.json");
@@ -13,6 +14,110 @@ const ROOTED_OUTLINE: &str = include_str!("../../../tests/contracts/rooted-outli
 const SCOPE_SEARCH: &str = include_str!("../../../tests/contracts/scope-search-v0.12.json");
 const SCOPE_EXPLAIN: &str = include_str!("../../../tests/contracts/scope-explain-v0.12.json");
 const EXPLANATION: &str = include_str!("../../../tests/contracts/explanation-v0.12.json");
+
+fn assert_source_only_diagnostic_contract<T: DeserializeOwned>(
+    mut response: Value,
+    report_pointer: &str,
+) {
+    let report = response
+        .pointer_mut(report_pointer)
+        .expect("report carrying diagnostics");
+    if report.get("sourceContext").is_none_or(Value::is_null) {
+        report["sourceContext"] = serde_json::json!({
+            "sources":[{
+                "key":1,
+                "identity":{"kind":"anonymous","name":"test"},
+                "format":"man",
+                "decodedByteLength":0,
+                "coordinates":{"kind":"decoded-utf8-bytes"}
+            }],
+            "rootSource":1
+        });
+    }
+    report["diagnostics"] = serde_json::json!([{
+        "level":"warning", "impact":"none", "message":"expanded finding", "sourceKey":1
+    }]);
+    serde_json::from_value::<T>(response.clone()).unwrap_or_else(|error| {
+        panic!(
+            "{} rejected valid source-only diagnostic: {error}",
+            std::any::type_name::<T>()
+        )
+    });
+
+    let mut unknown = response.clone();
+    unknown.pointer_mut(report_pointer).unwrap()["diagnostics"][0]["sourceKey"] = 2.into();
+    assert!(serde_json::from_value::<T>(unknown).is_err());
+
+    let mut missing_context = response.clone();
+    missing_context
+        .pointer_mut(report_pointer)
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .remove("sourceContext");
+    assert!(serde_json::from_value::<T>(missing_context).is_err());
+
+    let mut scoped = response.clone();
+    let scoped_diagnostic = &mut scoped.pointer_mut(report_pointer).unwrap()["diagnostics"][0];
+    scoped_diagnostic
+        .as_object_mut()
+        .unwrap()
+        .remove("sourceKey");
+    scoped_diagnostic["coverageScope"] = serde_json::json!({"kind":"source","key":1});
+    assert!(serde_json::from_value::<T>(scoped.clone()).is_ok());
+    let mut unknown_scope = scoped.clone();
+    unknown_scope.pointer_mut(report_pointer).unwrap()["diagnostics"][0]["coverageScope"]["key"] =
+        2.into();
+    assert!(serde_json::from_value::<T>(unknown_scope).is_err());
+    scoped
+        .pointer_mut(report_pointer)
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .remove("sourceContext");
+    assert!(serde_json::from_value::<T>(scoped).is_err());
+
+    response.pointer_mut(report_pointer).unwrap()["diagnostics"][0]["source"] =
+        serde_json::json!({"source":1,"line":1,"column":1});
+    assert!(serde_json::from_value::<T>(response).is_err());
+}
+
+#[test]
+fn source_only_diagnostics_close_against_each_query_context() {
+    // Protocol-only wire cases: no roff behavior is asserted here.
+    let search = serde_json::json!({
+        "schema":"mant.search/v0.12", "label":"test",
+        "query":{"pattern":"x","scope":"visible","limit":10},
+        "render":{"schema":"mant.markdown/v1","format":"markdown","scope":"full",
+            "lineBase":1,"columnBase":1,"lineCount":0},
+        "total":0,"returned":0,"offset":0,"truncated":false,
+        "semanticsComplete":true,"coverageDetailsOmitted":0,
+        "diagnostics":[],"matches":[]
+    });
+    assert_source_only_diagnostic_contract::<mant_protocol::QuerySearch>(search, "");
+    let outline: Value = serde_json::from_str(ROOTED_OUTLINE).unwrap();
+    assert_source_only_diagnostic_contract::<QueryOutline>(outline, "");
+    let excerpt = serde_json::json!({
+        "schema":"mant.excerpt/v0.12","label":"test","selections":[]
+    });
+    assert_source_only_diagnostic_contract::<mant_protocol::QueryExcerpt>(excerpt, "");
+    let explanation: Value = serde_json::from_str(EXPLANATION).unwrap();
+    assert_source_only_diagnostic_contract::<mant_protocol::QueryExplanation>(explanation, "");
+    let scope_search: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    assert_source_only_diagnostic_contract::<mant_protocol::ScopedSearchCoverage>(
+        scope_search["result"]["search"]["coverageByDocument"][0].clone(),
+        "",
+    );
+    assert_source_only_diagnostic_contract::<ScopeQueryResponse>(
+        scope_search,
+        "/result/search/coverageByDocument/0",
+    );
+    let scope_explanation: Value = serde_json::from_str(SCOPE_EXPLAIN).unwrap();
+    assert_source_only_diagnostic_contract::<ScopeQueryResponse>(
+        scope_explanation,
+        "/result/explanation/documents/0",
+    );
+}
 
 #[test]
 fn independent_evidence_contract_preserves_ordinary_owners_and_omission_state() {

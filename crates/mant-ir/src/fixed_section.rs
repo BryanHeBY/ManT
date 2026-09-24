@@ -683,6 +683,7 @@ mod tests {
             },
             title: selection(title),
             direct_body: selection(body),
+            source_key: None,
             source: None,
         }
     }

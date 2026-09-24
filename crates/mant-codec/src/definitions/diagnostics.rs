@@ -139,6 +139,7 @@ fn report_unclassified_definition(
             context.label()
         ),
         source,
+        source_key: None,
         coverage_scope: None,
     });
 }

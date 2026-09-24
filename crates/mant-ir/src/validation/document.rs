@@ -321,6 +321,7 @@ fn invariant(code: &str, message: String) -> Diagnostic {
         code: Some(code.to_owned()),
         message,
         source: None,
+        source_key: None,
         coverage_scope: None,
     }
 }
@@ -332,6 +333,7 @@ pub(super) fn invariant_at(code: &str, message: String, source: SourceSpan) -> D
         code: Some(code.to_owned()),
         message,
         source: Some(source),
+        source_key: None,
         coverage_scope: None,
     }
 }
@@ -994,6 +996,7 @@ mod tests {
                     parts: Vec::new(),
                     joins: Vec::new(),
                 },
+                source_key: None,
                 source: None,
             }],
             anchors: Vec::new(),
@@ -1601,6 +1604,7 @@ mod tests {
             code: Some("producer.finding".to_owned()),
             message: "producer finding".to_owned(),
             source: Some(source),
+            source_key: None,
             coverage_scope: None,
         });
 
@@ -1614,6 +1618,39 @@ mod tests {
                 .any(|code| code == "ir.invalid-source-position")
         );
         assert!(codes.iter().any(|code| code == "ir.reverse-source-range"));
+    }
+
+    #[test]
+    fn source_only_diagnostic_identity_is_closed_without_an_authored_position() {
+        let mut document = document(Vec::new(), Vec::new());
+        document.diagnostics.push(Diagnostic {
+            impact: crate::DiagnosticImpact::None,
+            level: DiagnosticLevel::Warning,
+            code: Some("producer.source-only".to_owned()),
+            message: "expanded source coordinates are not authored".to_owned(),
+            source: None,
+            source_key: Some(SourceKey::FIRST),
+            coverage_scope: None,
+        });
+        crate::validate_document_sources(&document).unwrap();
+        let wire = serde_json::to_value(&document).unwrap();
+        assert_eq!(wire["diagnostics"][0]["sourceKey"], 1);
+        assert!(wire["diagnostics"][0].get("source").is_none());
+        assert_eq!(serde_json::from_value::<Document>(wire).unwrap(), document);
+
+        let diagnostic = &mut document.diagnostics[0];
+        diagnostic.source = Some(SourceSpan {
+            source: SourceKey::FIRST,
+            byte_range: None,
+            line: 1,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        });
+        assert!(crate::validate_document_sources(&document).is_err());
+        document.diagnostics[0].source = None;
+        document.diagnostics[0].source_key = SourceKey::new(2);
+        assert!(crate::validate_document_sources(&document).is_err());
     }
 
     #[test]
@@ -1636,6 +1673,7 @@ mod tests {
                 code: Some("annotated.coverage.owner.unverified".to_owned()),
                 message: "native mark unavailable".to_owned(),
                 source: None,
+                source_key: None,
                 coverage_scope: Some(scope),
             });
             let findings = validate_document(&document);
@@ -1658,6 +1696,7 @@ mod tests {
             code: None,
             message: "source binding unavailable".to_owned(),
             source: None,
+            source_key: None,
             coverage_scope: Some(CoverageScope::Source {
                 key: SourceKey::new(2).unwrap(),
             }),

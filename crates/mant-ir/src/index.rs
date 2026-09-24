@@ -459,6 +459,7 @@ mod tests {
                     at: crate::DisplayPoint::DocumentEnd { row_count: 0 },
                     title: empty.clone(),
                     direct_body: empty,
+                    source_key: None,
                     source: None,
                 }],
                 owners: Vec::new(),
@@ -472,6 +473,7 @@ mod tests {
                         rendered_fragment: "--option".into(),
                         authored: true,
                         at: crate::DisplayPoint::DocumentEnd { row_count: 0 },
+                        source_key: None,
                         source: None,
                     },
                     crate::AnchorMark {
@@ -482,6 +484,7 @@ mod tests {
                         rendered_fragment: "Generated.Tag".into(),
                         authored: false,
                         at: crate::DisplayPoint::DocumentEnd { row_count: 0 },
+                        source_key: None,
                         source: None,
                     },
                 ],

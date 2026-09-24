@@ -2069,6 +2069,17 @@
                 "type": "null"
               }
             ]
+          },
+          "sourceKey": {
+            "description": "Known source identity without a provable authored position. Mutually\nexclusive with `source`; never a substitute for coverage scope.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6165,6 +6176,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Known source identity without a provable authored position. Mutually\nexclusive with `source`; never a substitute for coverage scope.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
               },
               {
                 "type": "null"
@@ -11077,6 +11099,17 @@
                 "type": "null"
               }
             ]
+          },
+          "sourceKey": {
+            "description": "Known source identity without a provable authored position. Mutually\nexclusive with `source`; never a substitute for coverage scope.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13606,6 +13639,17 @@
                 "type": "null"
               }
             ]
+          },
+          "sourceKey": {
+            "description": "Source identity when no authored declaration position can be proved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -14939,6 +14983,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Known source identity without a provable authored position. Mutually\nexclusive with `source`; never a substitute for coverage scope.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
               },
               {
                 "type": "null"
@@ -16280,6 +16335,17 @@
               }
             ]
           },
+          "sourceKey": {
+            "description": "Source identity when no authored heading position can be proved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "title": {
             "description": "Surviving visible title.",
             "$ref": "#/$defs/TextSelection"
@@ -16540,6 +16606,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Source identity when no authored link position can be proved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
               },
               {
                 "type": "null"
@@ -16953,6 +17030,17 @@
                 "type": "null"
               }
             ]
+          },
+          "sourceKey": {
+            "description": "Source identity when the macro's authored position cannot be proved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -17031,7 +17119,7 @@
             "minimum": 1
           },
           "hangingNestedHead": {
-            "description": "Direct native OwnerHead child of the continuation, when an RS body\nconsists of a nested definition rather than directly emitted text.\nThis is structural description evidence, not another text owner.",
+            "description": "Direct native `OwnerHead` child of the continuation, when an `RS` body\nconsists of a nested definition rather than directly emitted text.\nThis is structural description evidence, not another text owner.",
             "type": [
               "integer",
               "null"
@@ -17114,6 +17202,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Source identity when no authored owner position can be proved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
               },
               {
                 "type": "null"
@@ -17539,6 +17638,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Source identity when no authored region position can be proved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
               },
               {
                 "type": "null"
@@ -20708,6 +20818,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Known source identity without a provable authored position. Mutually\nexclusive with `source`; never a substitute for coverage scope.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
               },
               {
                 "type": "null"
@@ -26856,6 +26977,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Known source identity without a provable authored position. Mutually\nexclusive with `source`; never a substitute for coverage scope.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
               },
               {
                 "type": "null"

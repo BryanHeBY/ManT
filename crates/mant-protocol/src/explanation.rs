@@ -498,12 +498,12 @@ pub(crate) fn validate_explanation_sources<'a>(
     {
         return Err("Fixed explanation support has invalid source key".to_owned());
     }
+    crate::document::validate_optional_diagnostic_sources(source_context, diagnostics)?;
     crate::document::validate_optional_source_spans(
         source_context,
-        diagnostics
+        evidence
             .iter()
-            .filter_map(|diagnostic| diagnostic.source)
-            .chain(evidence.iter().filter_map(|evidence| evidence.source))
+            .filter_map(|evidence| evidence.source)
             .chain(
                 evidence
                     .iter()

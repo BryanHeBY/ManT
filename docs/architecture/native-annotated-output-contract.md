@@ -194,6 +194,13 @@ gains an optional strictly validated `coverageScope` for all five; a
 source-scoped gap may name only its known `SourceKey`, without inventing a
 line/column. When the exact authored location is known, the existing
 `source` also retains its qualified `SourceSpan`.
+Parser-generated diagnostics and marks can retain a source identity without
+an authored position. Their optional `sourceKey` carries only that
+`SourceTable` member; it is mutually exclusive with an authored `source`
+span and is validated against the same table. Neither a macro-expansion
+offset nor a generated inline equation's reparse offset is converted into a
+fabricated authored line or byte range. Display runs already carry their
+source key separately from authored mark locations.
 Absence of local scope means document-wide. Wrong keys/ranges are hard
 errors, not coverage issues. Codec merges these diagnostics with common
 name/form/link validation; `semanticsComplete` is computed *only* from the

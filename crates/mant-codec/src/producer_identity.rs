@@ -59,6 +59,7 @@ pub(crate) fn outline_identity_diagnostics(
                     "outline ID '{id}' belongs to multiple nodes: {candidates}; select by path"
                 ),
                 source: matches.first().and_then(|candidate| candidate.source),
+                source_key: None,
                 coverage_scope: None,
             })
         })

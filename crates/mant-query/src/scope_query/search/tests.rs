@@ -237,6 +237,7 @@ fn zero_hit_document_coverage_survives_global_pagination() {
             code: Some("test.unverified".to_owned()),
             message: "test coverage gap".to_owned(),
             source: None,
+            source_key: None,
             coverage_scope: Some(mant_ir::CoverageScope::Document),
         });
     let second = manual("second");

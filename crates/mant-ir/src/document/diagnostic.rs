@@ -21,6 +21,10 @@ pub struct Diagnostic {
     /// Original source location associated with the finding.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceSpan>,
+    /// Known source identity without a provable authored position. Mutually
+    /// exclusive with `source`; never a substitute for coverage scope.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<SourceKey>,
     /// Source-neutral semantic coverage scope; an authored location, if known,
     /// remains in `source` independently of this scope.
     #[serde(default, skip_serializing_if = "Option::is_none")]

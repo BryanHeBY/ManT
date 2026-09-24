@@ -19,10 +19,84 @@ use crate::{
 /// relation in the document references an unknown or incompatible source.
 pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelationError> {
     validate_source_table(&document.sources, document.root_source)?;
+    validate_diagnostic_sources(document)?;
+    let DocumentBodyRef::Flow(flow) = document.body() else {
+        let DocumentBodyRef::Fixed(fixed) = document.body() else {
+            unreachable!("all document body arms were matched")
+        };
+        if fixed
+            .source_claims()
+            .any(|(span, key)| span.is_some() && key.is_some())
+        {
+            return Err(relation(
+                "fixed mark has both authored span and source-only key",
+            ));
+        }
+        for key in fixed.source_keys() {
+            if document.source_record(key).is_none() {
+                return Err(relation(format!(
+                    "fixed body references unknown SourceKey {}",
+                    key.get()
+                )));
+            }
+        }
+        for span in fixed.source_spans() {
+            validate_relation_span(document, span)?;
+        }
+        return Ok(());
+    };
+    let store = flow.content_store;
+    for provenance in store
+        .owners
+        .iter()
+        .map(|record| record.provenance)
+        .chain(store.roots.iter().map(|record| record.provenance))
+        .chain(store.atoms.iter().map(|record| record.provenance))
+        .chain(store.points.iter().map(|record| record.provenance))
+        .chain(store.links.iter().map(|record| record.provenance))
+        .chain(store.fixed_views.iter().flat_map(|view| {
+            std::iter::once(view.provenance).chain(
+                view.lines
+                    .iter()
+                    .flat_map(|line| &line.decorations)
+                    .map(|decoration| decoration.provenance),
+            )
+        }))
+    {
+        if let Some(span) = provenance_span(provenance) {
+            validate_relation_span(document, span)?;
+        }
+    }
 
+    let mut collector = SourceRelationCollector {
+        document,
+        error: None,
+        saw_span: false,
+    };
+    collector.visit_document(document);
+    match collector.error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+fn validate_diagnostic_sources(document: &Document) -> Result<(), SourceRelationError> {
     for diagnostic in &document.diagnostics {
+        if diagnostic.source.is_some() && diagnostic.source_key.is_some() {
+            return Err(relation(
+                "diagnostic has both authored span and source-only key",
+            ));
+        }
         if let Some(span) = diagnostic.source {
             validate_relation_span(document, span)?;
+        }
+        if let Some(key) = diagnostic.source_key
+            && document.source_record(key).is_none()
+        {
+            return Err(relation(format!(
+                "diagnostic references unknown SourceKey {}",
+                key.get()
+            )));
         }
         match diagnostic.coverage_scope {
             Some(CoverageScope::Source { key }) if document.source_record(key).is_none() => {
@@ -70,56 +144,7 @@ pub fn validate_document_sources(document: &Document) -> Result<(), SourceRelati
             Some(CoverageScope::Document | CoverageScope::Source { .. }) | None => {}
         }
     }
-    let DocumentBodyRef::Flow(flow) = document.body() else {
-        let DocumentBodyRef::Fixed(fixed) = document.body() else {
-            unreachable!("all document body arms were matched")
-        };
-        for key in fixed.source_keys() {
-            if document.source_record(key).is_none() {
-                return Err(relation(format!(
-                    "fixed body references unknown SourceKey {}",
-                    key.get()
-                )));
-            }
-        }
-        for span in fixed.source_spans() {
-            validate_relation_span(document, span)?;
-        }
-        return Ok(());
-    };
-    let store = flow.content_store;
-    for provenance in store
-        .owners
-        .iter()
-        .map(|record| record.provenance)
-        .chain(store.roots.iter().map(|record| record.provenance))
-        .chain(store.atoms.iter().map(|record| record.provenance))
-        .chain(store.points.iter().map(|record| record.provenance))
-        .chain(store.links.iter().map(|record| record.provenance))
-        .chain(store.fixed_views.iter().flat_map(|view| {
-            std::iter::once(view.provenance).chain(
-                view.lines
-                    .iter()
-                    .flat_map(|line| &line.decorations)
-                    .map(|decoration| decoration.provenance),
-            )
-        }))
-    {
-        if let Some(span) = provenance_span(provenance) {
-            validate_relation_span(document, span)?;
-        }
-    }
-
-    let mut collector = SourceRelationCollector {
-        document,
-        error: None,
-        saw_span: false,
-    };
-    collector.visit_document(document);
-    match collector.error {
-        Some(error) => Err(error),
-        None => Ok(()),
-    }
+    Ok(())
 }
 
 /// Return whether any document diagnostic or content node retains a source span.

@@ -263,6 +263,7 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
                 code: None,
                 message: "unsupported request".to_owned(),
                 source: None,
+                source_key: None,
                 coverage_scope: None,
             })
             .into_iter()

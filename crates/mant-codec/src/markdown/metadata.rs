@@ -269,6 +269,7 @@ pub(super) fn diagnostic(diagnostics: &mut Vec<Diagnostic>, source: SourceSpan, 
         code: Some("markdown.semantic-entry-metadata".into()),
         message: message.into(),
         source: Some(source),
+        source_key: None,
         coverage_scope: None,
     });
 }
