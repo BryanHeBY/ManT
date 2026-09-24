@@ -47,6 +47,15 @@ pub(in crate::mandoc) struct InlineBuilder {
     definition_outcome: DefinitionOutcome,
     no_break_field: Option<NoBreakField>,
     last_executed_source_line: Option<u32>,
+    // Definition-head-only, zero-width witnesses around executed `.Fl`
+    // instances. They are removed from draft output before content commit.
+    native_option_marks: NativeOptionMarks,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NativeOptionMarks {
+    Disabled,
+    DefinitionHead,
 }
 #[derive(Clone, Copy)]
 struct AuthorExecution {
@@ -394,6 +403,7 @@ impl InlineBuilder {
             definition_outcome: DefinitionOutcome(0),
             no_break_field: None,
             last_executed_source_line: None,
+            native_option_marks: NativeOptionMarks::Disabled,
         }
     }
 
@@ -425,6 +435,25 @@ impl InlineBuilder {
             definition_outcome: DefinitionOutcome(0),
             no_break_field: None,
             last_executed_source_line: None,
+            native_option_marks: NativeOptionMarks::Disabled,
+        }
+    }
+
+    pub(in crate::mandoc) fn enable_native_option_marks(&mut self) {
+        self.native_option_marks = NativeOptionMarks::DefinitionHead;
+    }
+
+    pub(in crate::mandoc) fn mark_native_option(&mut self, node: &crate::mandoc::Node, end: bool) {
+        if self.native_option_marks == NativeOptionMarks::DefinitionHead {
+            self.nodes.push(Inline::Anchor {
+                id: format!(
+                    "\0mant-native-option-{}:{:x}",
+                    if end { "end" } else { "start" },
+                    std::ptr::from_ref(node) as usize
+                )
+                .into(),
+                owner_source: None,
+            });
         }
     }
 }

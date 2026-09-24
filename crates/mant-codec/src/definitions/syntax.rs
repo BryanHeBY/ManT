@@ -40,6 +40,7 @@ pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
+    option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> InferredIdentity {
     let first = item
         .terms
@@ -59,7 +60,7 @@ pub(super) fn infer_identity(
             })
             .collect()
     } else if hint == Some(super::NativeHeadRole::Option) {
-        options::native_option_occurrences(content, &item.terms)
+        options::native_option_occurrences(content, &item.terms, option_ranges)
     } else if hint == Some(super::NativeHeadRole::Environment) {
         item.terms
             .iter()

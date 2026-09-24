@@ -131,8 +131,14 @@ impl PreparedDefinitions {
                     let heads = items
                         .iter()
                         .map(|item| {
-                            identity_plan(content, item, item_context, evidence.role(item))
-                                .group_head
+                            identity_plan(
+                                content,
+                                item,
+                                item_context,
+                                evidence.role(item),
+                                evidence.option_ranges(item),
+                            )
+                            .group_head
                         })
                         .collect::<Vec<_>>();
                     *declaration_groups =
@@ -141,8 +147,13 @@ impl PreparedDefinitions {
                             .resolve(content, items, &heads, group_matches);
                     crate::definitions::remove_native_definition_owner_markers_from_items(items);
                     for item in items.iter_mut() {
-                        let identity =
-                            identity_plan(content, item, item_context, evidence.role(item));
+                        let identity = identity_plan(
+                            content,
+                            item,
+                            item_context,
+                            evidence.role(item),
+                            evidence.option_ranges(item),
+                        );
                         if has_semantic_spelling(content, item, &identity) {
                             *self
                                 .preferred_counts
@@ -223,7 +234,13 @@ fn normalize_blocks(
             Block::DefinitionList { items, .. } => {
                 let item_context = definition_group_context(content, items, context);
                 for item in items {
-                    let identity = identity_plan(content, item, item_context, evidence.role(item));
+                    let identity = identity_plan(
+                        content,
+                        item,
+                        item_context,
+                        evidence.role(item),
+                        evidence.option_ranges(item),
+                    );
                     let child_context = child_definition_context(identity.kind, item_context);
                     normalize_blocks(content, &mut item.description, child_context, evidence);
                 }

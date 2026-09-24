@@ -1,6 +1,78 @@
 use super::*;
 
 #[test]
+fn flow_complete_head_keeps_negative_and_quoted_arguments_out_of_names() {
+    // Exact inputs ran the pinned CVS -Tutf8 reference first. man_term.c::
+    // pre_TP/pre_IP retain one label; term.c::term_word executes the quoted
+    // and styled argument text without making a second declaration macro.
+    for (label, head) in [
+        ("same-bold-negative", ".TP\n.B --number -10,--fake,20"),
+        ("same-bold-unit", ".TP\n.B --number -10%,--fake,20"),
+        (
+            "quoted-argument",
+            ".IP \"\\fB--pattern\\fR \\(dqone, --fake,two\\(dq\" 4",
+        ),
+    ] {
+        let input = format!(".TH T 1\n.SH OPTIONS\n{head}\nDescription.\n");
+        let document =
+            parse_manual_bytes(std::path::Path::new("argument-head.1"), input.as_bytes())
+                .expect("parse complete man declaration head");
+        let [Block::DefinitionList { items, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!("expected a definition list: {label}");
+        };
+        assert_eq!(
+            items[0].entry.as_ref().expect("entry").names,
+            [if label == "quoted-argument" {
+                "--pattern"
+            } else {
+                "--number"
+            }],
+            "{label}"
+        );
+    }
+}
+
+#[test]
+fn each_native_fl_proves_its_own_numeric_name_without_licensing_bold_text() {
+    // Both inputs ran the pinned CVS reference first. mdoc_macro.c::in_line()
+    // keeps the second Fl as its own macro; mdoc_term.c::termp_fl_pre() emits
+    // that macro's dash. Sy -6 looks identical in bold but is not an Fl.
+    for (label, head, expected) in [
+        ("second-fl", "Fl 4 , Fl 6 Ar file", vec!["-4", "-6"]),
+        (
+            "interleaved-fl",
+            "Fl 4 , Fl 6 , Fl alpha",
+            vec!["-4", "-6", "-alpha"],
+        ),
+        ("bold-negative", "Fl 4 , Sy -6", vec!["-4"]),
+    ] {
+        let input = format!(
+            ".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It {head}\nProtocol options.\n.El\n"
+        );
+        let document = parse_manual_bytes(std::path::Path::new("numeric-fl.1"), input.as_bytes())
+            .expect("parse mdoc numeric option head");
+        let [Block::DefinitionList { items, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!("expected one definition list: {label}");
+        };
+        assert_eq!(
+            items[0].entry.as_ref().expect("option identity").names,
+            expected,
+            "{label}"
+        );
+        assert!(
+            !format!("{document:?}").contains("mant-native-option-"),
+            "parse-local Fl witnesses must not enter public IR: {label}"
+        );
+    }
+}
+
+#[test]
 fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_lists() {
     let body_closed = parse_manual_bytes(
         std::path::Path::new("declaration-body-closure.1"),

@@ -1,5 +1,6 @@
 //! Operation-local native head evidence, never serialized as a second IR.
 use std::collections::HashMap;
+use std::ops::Range;
 
 use mant_ir::{DefinitionItem, Inline, SourceSpan};
 
@@ -18,6 +19,7 @@ struct HeadWitness {
     source: SourceSpan,
     terms: Vec<Vec<Inline>>,
     role: NativeHeadRole,
+    option_ranges: Vec<Vec<Range<usize>>>,
 }
 
 /// Locations only select a bucket. Evidence is reusable only when the entire
@@ -34,8 +36,18 @@ pub(crate) struct NativeHeadEvidence {
 }
 
 impl NativeHeadEvidence {
-    #[cfg(any(feature = "roff", test))]
+    #[cfg(test)]
     pub(crate) fn record(&mut self, item: &DefinitionItem, role: NativeHeadRole) {
+        self.record_with_option_ranges(item, role, Vec::new());
+    }
+
+    #[cfg(any(feature = "roff", test))]
+    pub(crate) fn record_with_option_ranges(
+        &mut self,
+        item: &DefinitionItem,
+        role: NativeHeadRole,
+        option_ranges: Vec<Vec<Range<usize>>>,
+    ) {
         let Some(source) = item.source else { return };
         self.witnesses
             .entry((source.line, source.column))
@@ -44,18 +56,32 @@ impl NativeHeadEvidence {
                 source,
                 terms: head_content(&item.terms),
                 role,
+                option_ranges,
             });
     }
 
     pub(super) fn role(&self, item: &DefinitionItem) -> Option<NativeHeadRole> {
+        self.witness(item).map(|witness| witness.role)
+    }
+
+    pub(super) fn option_ranges(&self, item: &DefinitionItem) -> Option<&[Vec<Range<usize>>]> {
+        let witness = self.witness(item)?;
+        (witness.role == NativeHeadRole::Option).then_some(witness.option_ranges.as_slice())
+    }
+
+    fn witness(&self, item: &DefinitionItem) -> Option<&HeadWitness> {
         let source = item.source?;
         let candidates = self.witnesses.get(&(source.line, source.column))?;
         let terms = head_content(&item.terms);
         let mut matches = candidates
             .iter()
             .filter(|witness| witness.source == source && witness.terms == terms);
-        let role = matches.next()?.role;
-        matches.all(|witness| witness.role == role).then_some(role)
+        let first = matches.next()?;
+        matches
+            .all(|witness| {
+                witness.role == first.role && witness.option_ranges == first.option_ranges
+            })
+            .then_some(first)
     }
 }
 

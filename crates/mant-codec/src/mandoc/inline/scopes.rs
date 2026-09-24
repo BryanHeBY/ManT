@@ -71,11 +71,13 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         }
         Some("Fl") => builder.append_scope(
             |builder| {
+                builder.mark_native_option(node, false);
                 builder.with_font_scope(Font::Strong, |builder| {
                     builder.append_text("-");
                     builder
                         .with_prefix_join(|builder| append_inline_nodes(builder, children, name));
                 });
+                builder.mark_native_option(node, true);
             },
             coalesce_font_runs,
         ),

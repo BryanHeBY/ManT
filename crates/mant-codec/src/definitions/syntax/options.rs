@@ -87,19 +87,49 @@ pub(crate) fn option_names_from_literal(value: &str) -> Vec<String> {
 pub(super) fn native_option_occurrences(
     content: ContentContext<'_>,
     terms: &[Vec<Inline>],
+    option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> Vec<Vec<RecognizedName>> {
     let mut result = recognize_option_occurrences_from_terms(content, terms);
-    for (term, names) in terms.iter().zip(&mut result) {
+    for (index, (term, names)) in terms.iter().zip(&mut result).enumerate() {
         let prefix = forms::literal_prefix(content, term);
-        let Some(token) = prefix.split_whitespace().next() else {
-            continue;
-        };
-        if native_option_token(token) && !names.iter().any(|found| found.name == token) {
+        if let Some(token) = prefix.split_whitespace().next()
+            && native_option_token(token)
+            && !names.iter().any(|found| found.name == token)
+        {
             names.insert(
                 0,
                 RecognizedName::contiguous(token, prefix.len() - prefix.trim_start().len()),
             );
         }
+        // A native `.Fl` proves even a digit spelling to be a declaration.
+        // The witness identifies this *macro instance's* final visible span;
+        // identical bold text from `.Sy -6` is not equivalent evidence.
+        let Some(ranges) = option_ranges.and_then(|terms| terms.get(index)) else {
+            continue;
+        };
+        let text = plain_text(content, term);
+        for range in ranges {
+            let Some(fragment) = text.get(range.clone()) else {
+                continue;
+            };
+            let leading = fragment.len() - fragment.trim_start().len();
+            let Some(token) = fragment.split_whitespace().next() else {
+                continue;
+            };
+            let offset = range.start + leading;
+            if native_option_token(token)
+                && !names.iter().any(|found| {
+                    found.name == token
+                        && found.parts.len() == 1
+                        && found.parts[0] == (offset..offset + token.len())
+                })
+            {
+                names.push(RecognizedName::contiguous(token, offset));
+            }
+        }
+        // Native `.Fl` instances are recovered after the generic candidates;
+        // preserve the actual visible head order, not discovery order.
+        names.sort_by_key(|found| found.parts.first().map_or(usize::MAX, |part| part.start));
     }
     result
 }

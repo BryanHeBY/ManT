@@ -392,7 +392,8 @@ pub(super) fn definition_item(
             crate::mandoc::inline::DraftInline::anchor_at(id, source_span(node)),
         );
     }
-    let terms = split_definition_terms(term);
+    let mut terms = split_definition_terms(term);
+    let native_option_ranges = super::evidence::take_option_ranges(&mut terms);
     if flow.head.generated_cells().is_some() {
         // The native generated cells execute inside the shared stream below.
         // Their surviving projection is carried by the description itself;
@@ -446,6 +447,7 @@ pub(super) fn definition_item(
         role: (context.macro_set == libmandoc_rs::MacroSet::Mdoc)
             .then(|| super::evidence::leading_role(head))
             .flatten(),
+        native_option_ranges,
     }
 }
 
@@ -456,6 +458,7 @@ pub(in crate::mandoc::blocks::lists) struct PendingDefinitionItem {
     pub(super) description: Vec<Block>,
     pub(super) native_key: usize,
     pub(super) role: Option<crate::definitions::NativeHeadRole>,
+    pub(super) native_option_ranges: Vec<Vec<std::ops::Range<usize>>>,
 }
 
 impl PendingDefinitionItem {
@@ -523,7 +526,7 @@ impl PendingDefinitionItem {
         let mut evidence = context.native_heads.borrow_mut();
         evidence.groups.record(&item, self.native_key);
         if let Some(role) = self.role {
-            evidence.record(&item, role);
+            evidence.record_with_option_ranges(&item, role, self.native_option_ranges);
         }
         item
     }
@@ -577,11 +580,12 @@ fn lower_definition_head(
     let mut definition_body_gap_consumed = false;
     for group in groups {
         let (lowered, field_exited, body_gap_consumed) = context
-            .lower_inline_draft_with_author_break(
+            .lower_inline_draft_with_option_evidence(
                 group,
                 flow.spacing_enabled,
                 formatter,
                 flow.head.author_break_effect(),
+                context.macro_set == libmandoc_rs::MacroSet::Mdoc,
             );
         term_builder.append(lowered);
         definition_field_exited |= field_exited;
