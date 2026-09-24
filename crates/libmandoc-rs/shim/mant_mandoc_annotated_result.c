@@ -1,9 +1,13 @@
 /* Checked borrowed view and destruction for one annotated native result. */
 #include "mant_mandoc_annotated_internal.h"
 #include "mant_mandoc_structured_session.h"
+#include "roff.h"
 
 #include <stdlib.h>
 #include <string.h>
+
+/* Keep the private Rust transfer/codec discriminator pinned to roff.h. */
+_Static_assert(MAN_IP == 387, "annotated MAN_IP token changed");
 
 static int
 count_direct_part(struct structured_session *session,
@@ -420,8 +424,32 @@ valid_marks(const struct mant_annotated_result *result)
 		    (mark->flags & MANT_ANNOTATED_MARK_DEFINITION) == 0) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) &
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) - 1)) != 0)) ||
-		    mark->reserved != 0 || mark->point_reserved != 0)
+		    mark->point_reserved != 0)
 			return 0;
+		if (mark->preceding_owner != 0) {
+			const struct mant_annotated_mark *preceding;
+
+			if (mark->kind != MANT_ANNOTATED_MARK_OWNER ||
+			    mark->token != MAN_IP ||
+			    (mark->flags & (MANT_ANNOTATED_MARK_DEFINITION |
+			    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
+			    (MANT_ANNOTATED_MARK_DEFINITION |
+			    MANT_ANNOTATED_MARK_HEAD_LEXICAL) ||
+			    mark->name_length == 0 ||
+			    mark->preceding_owner >= mark->key)
+				return 0;
+			preceding = result->marks + mark->preceding_owner - 1;
+			if (preceding->kind != MANT_ANNOTATED_MARK_OWNER ||
+			    preceding->token != MAN_IP ||
+			    (preceding->flags & (MANT_ANNOTATED_MARK_DEFINITION |
+			    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
+			    (MANT_ANNOTATED_MARK_DEFINITION |
+			    MANT_ANNOTATED_MARK_HEAD_LEXICAL) ||
+			    preceding->name_length == 0 ||
+			    preceding->parent != mark->parent ||
+			    preceding->owner != mark->owner)
+				return 0;
+		}
 		if (mark->kind == MANT_ANNOTATED_MARK_HEAD_COMPONENT &&
 		    (mark->parent == 0 || mark->owner != mark->parent ||
 		    mark->source == 0 ||

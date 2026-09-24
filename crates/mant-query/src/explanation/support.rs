@@ -6,7 +6,7 @@ use super::{
 };
 use mant_ir::{Block, DeclarationGroup};
 use mant_protocol::{EvidenceClass, ExplanationEvidence, ExplanationSupport};
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU32};
 
 struct Group<'a> {
     block: &'a Block,
@@ -329,6 +329,8 @@ pub(super) struct Pool {
     copied: HashMap<usize, usize>,
     failed: std::collections::HashSet<usize>,
     entries: HashMap<usize, usize>,
+    pub fixed_groups: HashMap<NonZeroU32, usize>,
+    pub failed_fixed_groups: std::collections::HashSet<NonZeroU32>,
     pub values: Vec<ExplanationSupport>,
 }
 

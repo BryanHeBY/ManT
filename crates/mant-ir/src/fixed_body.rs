@@ -289,6 +289,10 @@ pub struct OwnerMark {
     pub id: NodeId,
     /// Root or an earlier enclosing owner.
     pub parent: Option<NonZeroU32>,
+    /// Earlier direct `.IP` definition sibling proved by the native AST and
+    /// flow boundary. This is reading-context evidence, not owned body text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preceding_owner: Option<NonZeroU32>,
     /// Enclosing section, if known.
     pub section: Option<NonZeroU32>,
     /// Native owner kind before classification.

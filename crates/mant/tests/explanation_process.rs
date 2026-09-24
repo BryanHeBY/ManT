@@ -18,6 +18,74 @@ Use `--help` for assistance.
 "#;
 
 #[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_fixed_group_budget_keeps_own_bodies_and_page_local_support() {
+    // Pinned CVS man_macro.c::blk_imp creates three distinct IP blocks;
+    // man_term.c::pre_IP prints the first two as an empty-prefix/provider
+    // pair, while the intervening PP keeps the third body independent.
+    // The exact fixture was checked with the pinned reference -Ttree/-Tutf8.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/roff/annotated-man-ip-reading-budget.1");
+    let query = |limit: u32, offset: u32, bytes: u32| -> Value {
+        success(
+            &Command::new(env!("CARGO_BIN_EXE_mant"))
+                .args([
+                    "--annotated-preview",
+                    "--input",
+                    path.to_str().unwrap(),
+                    "--input-format",
+                    "roff",
+                    "--explain=-x",
+                    "--format",
+                    "json",
+                    "--compact",
+                    "--limit",
+                    &limit.to_string(),
+                    "--offset",
+                    &offset.to_string(),
+                    "--explain-content-bytes",
+                    &bytes.to_string(),
+                ])
+                .output()
+                .unwrap(),
+        )
+    };
+    let first = query(1, 0, 2048);
+    assert_eq!(first["supports"].as_array().unwrap().len(), 1);
+    assert_eq!(first["evidence"][0]["support"], 0);
+
+    let crowded = query(3, 0, 2048);
+    assert!(crowded["supports"].as_array().unwrap().is_empty());
+    let records = crowded["evidence"].as_array().unwrap();
+    assert_eq!(records.len(), 3);
+    assert_eq!(records[0]["supportOmitted"], true);
+    assert_eq!(records[1]["supportOmitted"], true);
+    assert_eq!(records[2]["supportOmitted"], false);
+    assert_eq!(
+        records[1]["content"]["readingBody"]["parts"][0]["text"],
+        "GROUP_PROVIDER_BODY"
+    );
+    assert_eq!(
+        records[2]["content"]["readingBody"]["parts"][0]["text"],
+        "INDEPENDENT_BODY"
+    );
+    assert!(
+        records
+            .iter()
+            .all(|record| record["contentOmitted"] == false)
+    );
+
+    let shared = query(3, 0, 3072);
+    assert_eq!(shared["supports"].as_array().unwrap().len(), 1);
+    assert_eq!(shared["evidence"][0]["support"], 0);
+    assert_eq!(shared["evidence"][1]["support"], 0);
+    assert!(shared["evidence"][2].get("support").is_none());
+    let provider_page = query(1, 1, 3072);
+    assert_eq!(provider_page["evidence"][0]["support"], 0);
+    assert_eq!(provider_page["supports"].as_array().unwrap().len(), 1);
+}
+
+#[test]
 #[cfg(feature = "roff")]
 fn cli_file_stdin_and_public_production_api_agree_on_executed_boundaries() {
     use std::{io::Write, process::Stdio};

@@ -55,6 +55,7 @@ struct annotated_column {
 struct annotated_frame {
 	const struct roff_node *node;
 	const struct roff_node *saved_link_node;
+	const struct roff_node *last_direct_ip_node;
 	uint32_t saved_owner;
 	uint32_t saved_head_component;
 	uint32_t saved_link;
@@ -63,6 +64,7 @@ struct annotated_frame {
 	uint32_t owner_mark;
 	uint32_t anchor_mark;
 	uint32_t region_mark;
+	uint32_t last_direct_ip_owner;
 };
 
 struct annotated_point_state {
@@ -107,6 +109,9 @@ struct mant_annotated_collector {
 	uint32_t active_heading;
 	uint32_t last_top_heading;
 	uint32_t unsectioned_region;
+	/* ROOT has no terminal frame: retain its last completed direct sibling. */
+	const struct roff_node *last_root_ip_node;
+	uint32_t last_root_ip_owner;
 	uint64_t next_origin;
 	uint64_t pending_origin;
 	uint32_t pending_owner;
@@ -868,6 +873,38 @@ unsupported_target:
 	return 0;
 }
 
+/* roff.c::roff_node_prev() skips a wider set of transparent nodes, including
+ * layout controls. For reading-context evidence, only these non-content
+ * siblings can stand between direct .IP blocks. A real flow boundary also
+ * changes roff_node::flow_epoch at allocation. */
+static int
+ip_sibling_gap(const struct roff_node *node)
+{
+	return node->type == ROFFT_COMMENT || node->tok == MAN_PD ||
+	    node->tok == MDOC_Sm || node->tok == MDOC_Tg ||
+	    node->tok == ROFF_ft;
+}
+
+static int
+direct_ip_predecessor(struct mant_annotated_collector *collector,
+    const struct roff_node *node, const struct roff_node **candidate)
+{
+	const struct roff_node *previous;
+
+	*candidate = NULL;
+	for (previous = node->prev; previous != NULL &&
+	    ip_sibling_gap(previous); previous = previous->prev)
+		if (!charge_work(collector, 1))
+			return 0;
+	if (!charge_work(collector, 1))
+		return 0;
+	if (previous != NULL && previous->type == ROFFT_BLOCK &&
+	    previous->tok == MAN_IP && previous->parent == node->parent &&
+	    previous->flow_epoch == node->flow_epoch)
+		*candidate = previous;
+	return 1;
+}
+
 static int
 observe_html_phrase_boundary(struct mant_annotated_collector *collector,
     const struct roff_node *node)
@@ -1252,6 +1289,8 @@ push_node(struct mant_annotated_collector *collector,
 	frame->saved_heading = collector->active_heading;
 	frame->saved_link_epoch = collector->active_link_epoch;
 	frame->owner_mark = frame->anchor_mark = frame->region_mark = 0;
+	frame->last_direct_ip_node = NULL;
+	frame->last_direct_ip_owner = 0;
 
 	/* man_macro.c::blk_imp and mdoc_macro.c::blk_full produce a block
 	 * with distinct HEAD/BODY scopes.  Their terminal traversal emits
@@ -1277,9 +1316,11 @@ push_node(struct mant_annotated_collector *collector,
 	    node->tok == MAN_TQ ||
 	    node->tok == MDOC_It)) {
 		const struct roff_node *bl;
+		const struct roff_node *preceding_node, *completed_node;
+		const struct annotated_frame *parent_frame;
 		const struct roff_node *role_node = NULL;
 		int definition;
-		uint32_t head_role = 0;
+		uint32_t head_role = 0, preceding_key;
 
 		/* man_term.c::pre_TP/post_TP present HEAD as a named term.
 		 * mdoc_term.c::termp_it_pre uses Bl's validated list type;
@@ -1309,6 +1350,33 @@ push_node(struct mant_annotated_collector *collector,
 		    collector->marks + key - 1, node, &definition))
 			return 0;
 		if (definition) {
+			if (node->tok == MAN_IP) {
+				if (!direct_ip_predecessor(collector, node,
+				    &preceding_node))
+					return 0;
+				parent_frame = collector->frame_count > 1 ?
+				    collector->frames + collector->frame_count - 2 : NULL;
+				if (parent_frame == NULL) {
+					completed_node = collector->last_root_ip_node;
+					preceding_key = collector->last_root_ip_owner;
+				} else if (parent_frame->node == node->parent) {
+					completed_node = parent_frame->last_direct_ip_node;
+					preceding_key = parent_frame->last_direct_ip_owner;
+				} else {
+					completed_node = NULL;
+					preceding_key = 0;
+				}
+				/* A completed direct sibling and the AST's nearest eligible
+				 * predecessor must identify the same owner.  Merely sharing
+				 * a rendered position cannot establish reading context. */
+				if (preceding_node != NULL &&
+				    preceding_node == completed_node &&
+				    preceding_key != 0 &&
+				    collector->marks[preceding_key - 1].parent ==
+				    collector->marks[key - 1].parent)
+					collector->marks[key - 1].preceding_owner =
+					    preceding_key;
+			}
 			if (node->tok == MDOC_It)
 				head_role = owner_head_role(node, &role_node);
 			else if (node->tok == MAN_IP)
@@ -1669,7 +1737,10 @@ static void
 pop_node(struct mant_annotated_collector *collector,
     const struct roff_node *node)
 {
-	struct annotated_frame *frame;
+	struct annotated_frame *frame, *parent_frame;
+	const struct mant_annotated_mark *owner;
+	const struct roff_node **last_node;
+	uint32_t *last_owner;
 
 	if (collector->frame_count == 0) {
 		fail_relation(collector, 0, 1);
@@ -1693,6 +1764,25 @@ pop_node(struct mant_annotated_collector *collector,
 	collector->active_link_epoch = frame->saved_link_epoch;
 	collector->active_heading = frame->saved_heading;
 	collector->frame_count--;
+	parent_frame = collector->frame_count == 0 ? NULL :
+	    collector->frames + collector->frame_count - 1;
+	if (parent_frame != NULL && parent_frame->node != node->parent)
+		return; /* A skipped AST wrapper cannot prove direct adjacency. */
+	last_node = parent_frame == NULL ? &collector->last_root_ip_node :
+	    &parent_frame->last_direct_ip_node;
+	last_owner = parent_frame == NULL ? &collector->last_root_ip_owner :
+	    &parent_frame->last_direct_ip_owner;
+	owner = frame->owner_mark == 0 ? NULL :
+	    collector->marks + frame->owner_mark - 1;
+	if (node->type == ROFFT_BLOCK && node->tok == MAN_IP &&
+	    owner != NULL &&
+	    (owner->flags & MANT_ANNOTATED_MARK_DEFINITION) != 0) {
+		*last_node = node;
+		*last_owner = frame->owner_mark;
+	} else if (!ip_sibling_gap(node)) {
+		*last_node = NULL;
+		*last_owner = 0;
+	}
 }
 
 struct mant_annotated_collector *

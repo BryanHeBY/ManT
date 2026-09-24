@@ -7383,6 +7383,32 @@
           "endScalar"
         ]
       },
+      "ExplanationFixedGroupMember": {
+        "description": "One physical Fixed declaration, preserving its own final-display head.",
+        "type": "object",
+        "properties": {
+          "head": {
+            "description": "Complete final-display head, not a reconstructed Flow term.",
+            "$ref": "#/$defs/ExplanationFixedSelection"
+          },
+          "key": {
+            "description": "Exact one-based owner key in the queried Fixed document.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "outline": {
+            "description": "Original semantic trail; grouping does not replace member identity.",
+            "$ref": "#/$defs/OutlineTrail"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "outline",
+          "head"
+        ]
+      },
       "ExplanationFixedPart": {
         "description": "One exact final-run fragment copied under an explanation response budget.",
         "type": "object",
@@ -7882,6 +7908,33 @@
               "members",
               "support",
               "path"
+            ]
+          },
+          {
+            "description": "Native sibling declarations whose final member supplies reading context.\nThis does not make the members aliases or inherit the provider's facts.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "fixed-declaration-group"
+              },
+              "members": {
+                "description": "Original independent owners in source order; the last is the provider.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationFixedGroupMember"
+                }
+              },
+              "readingBody": {
+                "description": "Last member's original complete reading view; a returned provider may\nseparately carry its own independent `fixed-owner` content.",
+                "$ref": "#/$defs/ExplanationFixedSelection"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "members",
+              "readingBody"
             ]
           }
         ]
@@ -16836,7 +16889,7 @@
         "description": "First significant native macro in a definition head, captured while the\nupstream AST is alive. This is authored role evidence, not a semantic kind.",
         "oneOf": [
           {
-            "description": "An mdoc `Fl` option head.",
+            "description": "An authored option head, such as mdoc `Fl`.",
             "type": "string",
             "const": "option"
           },
@@ -16910,7 +16963,7 @@
             ]
           },
           "headRolePrefix": {
-            "description": "Conservative rendered prefix of the first native head macro's own\noperand. The final display selection and name remain separately\nchecked; this is evidence, not copied body content.",
+            "description": "Conservative rendered prefix of the first native head macro's own\noperand or man `.IP` bold prefix. The final display and name remain\nseparately checked; this is evidence, not copied body content.",
             "type": [
               "string",
               "null"
@@ -16928,6 +16981,15 @@
           },
           "parent": {
             "description": "Root or an earlier enclosing owner.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
+          "precedingOwner": {
+            "description": "Earlier direct `.IP` definition sibling proved by the native AST and\nflow boundary. This is reading-context evidence, not owned body text.",
             "type": [
               "integer",
               "null"
@@ -21895,6 +21957,32 @@
           "endScalar"
         ]
       },
+      "ExplanationFixedGroupMember": {
+        "description": "One physical Fixed declaration, preserving its own final-display head.",
+        "type": "object",
+        "properties": {
+          "head": {
+            "description": "Complete final-display head, not a reconstructed Flow term.",
+            "$ref": "#/$defs/ExplanationFixedSelection"
+          },
+          "key": {
+            "description": "Exact one-based owner key in the queried Fixed document.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "outline": {
+            "description": "Original semantic trail; grouping does not replace member identity.",
+            "$ref": "#/$defs/OutlineTrail"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "outline",
+          "head"
+        ]
+      },
       "ExplanationFixedPart": {
         "description": "One exact final-run fragment copied under an explanation response budget.",
         "type": "object",
@@ -22384,6 +22472,33 @@
               "members",
               "support",
               "path"
+            ]
+          },
+          {
+            "description": "Native sibling declarations whose final member supplies reading context.\nThis does not make the members aliases or inherit the provider's facts.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "fixed-declaration-group"
+              },
+              "members": {
+                "description": "Original independent owners in source order; the last is the provider.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationFixedGroupMember"
+                }
+              },
+              "readingBody": {
+                "description": "Last member's original complete reading view; a returned provider may\nseparately carry its own independent `fixed-owner` content.",
+                "$ref": "#/$defs/ExplanationFixedSelection"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "members",
+              "readingBody"
             ]
           }
         ]

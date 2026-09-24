@@ -194,7 +194,8 @@ fn project(
             | ExplanationSupport::DeclarationGroup { block, .. } => {
                 builder.include_blocks(std::slice::from_ref(block))?;
             }
-            ExplanationSupport::ContainedDeclarationGroup { .. } => {}
+            ExplanationSupport::ContainedDeclarationGroup { .. }
+            | ExplanationSupport::FixedDeclarationGroup { .. } => {}
         }
     }
     for record in evidence {
@@ -228,7 +229,8 @@ fn remap_topology(
             | ExplanationSupport::DeclarationGroup { block, .. } => {
                 remap.remap_blocks(std::slice::from_mut(block))?;
             }
-            ExplanationSupport::ContainedDeclarationGroup { .. } => {}
+            ExplanationSupport::ContainedDeclarationGroup { .. }
+            | ExplanationSupport::FixedDeclarationGroup { .. } => {}
         }
     }
     for record in evidence {

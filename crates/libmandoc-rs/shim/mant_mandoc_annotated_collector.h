@@ -90,7 +90,9 @@ struct mant_annotated_mark {
 	uint32_t title_region;
 	uint32_t body_region;
 	uint32_t flags;
-	uint32_t reserved;
+	/* Earlier direct .IP sibling under the same native parent and flow epoch.
+	 * Evidence only: it does not transfer or imply shared description text. */
+	uint32_t preceding_owner;
 	/* Native tbl column and offset hint, not a validated final DisplayPoint.
 	 * Present only for a table-cell region after TABLE_CELL_POSITION. */
 	uint32_t table_column;

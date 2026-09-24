@@ -467,6 +467,25 @@ pub(crate) fn validate_explanation_sources<'a>(
             return Err("Fixed explanation fragment has invalid source key".to_owned());
         }
     }
+    if supports
+        .iter()
+        .filter_map(|support| match support {
+            ExplanationSupport::FixedDeclarationGroup {
+                members,
+                reading_body,
+            } => Some((members, reading_body)),
+            _ => None,
+        })
+        .any(|(members, reading_body)| {
+            members
+                .iter()
+                .flat_map(|member| &member.head.parts)
+                .chain(&reading_body.parts)
+                .any(|part| !valid_fixed_source(part.source))
+        })
+    {
+        return Err("Fixed explanation support has invalid source key".to_owned());
+    }
     crate::document::validate_optional_source_spans(
         source_context,
         diagnostics
@@ -511,7 +530,8 @@ pub(crate) fn validate_explanation_sources<'a>(
                     .blocks
                     .push(block.clone());
             }
-            ExplanationSupport::ContainedDeclarationGroup { .. } => {}
+            ExplanationSupport::ContainedDeclarationGroup { .. }
+            | ExplanationSupport::FixedDeclarationGroup { .. } => {}
         }
     }
     for evidence in evidence {

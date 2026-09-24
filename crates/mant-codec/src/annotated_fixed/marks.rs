@@ -1,5 +1,7 @@
 //! Projection of native heading, owner, link, anchor and region marks.
 
+use std::num::NonZeroU32;
+
 use super::{
     AnchorMark, AnnotatedDocument, AnnotatedMark, AnnotatedProjectionError, Diagnostic,
     DiagnosticImpact, DiagnosticLevel, DisplayPoint, HeadingMark, Identities, KeyMap, LinkMark,
@@ -166,6 +168,7 @@ pub(super) fn project_owner(
         key: keys.required(mark.key, 2)?,
         id: identities.owner(mark.key)?,
         parent: keys.nearest(mark.parent, 2)?,
+        preceding_owner: project_owner_predecessor(page, keys, mark)?,
         section: keys.nearest(mark.parent, 1)?,
         role: if mark.flags & 16 != 0 {
             OwnerRole::Definition
@@ -192,6 +195,40 @@ pub(super) fn project_owner(
         empty_point,
         source: mark_source(mark)?,
     })
+}
+
+fn project_owner_predecessor(
+    page: &AnnotatedDocument,
+    keys: &KeyMap,
+    mark: &AnnotatedMark,
+) -> Result<Option<NonZeroU32>> {
+    if mark.preceding_owner == 0 {
+        return Ok(None);
+    }
+    let preceding = page
+        .marks
+        .get((mark.preceding_owner - 1) as usize)
+        .filter(|preceding| preceding.key == mark.preceding_owner)
+        .ok_or(AnnotatedProjectionError::Relation(
+            "owner predecessor is missing",
+        ))?;
+    if mark.kind != 2
+        || mark.token != libmandoc_rs::annotated::MAN_IP_TOKEN
+        || mark.flags & (16 | 256) != (16 | 256)
+        || mark.name.is_none()
+        || preceding.kind != 2
+        || preceding.token != libmandoc_rs::annotated::MAN_IP_TOKEN
+        || preceding.flags & (16 | 256) != (16 | 256)
+        || preceding.name.is_none()
+        || preceding.token != mark.token
+        || preceding.parent != mark.parent
+        || preceding.owner != mark.owner
+    {
+        return Err(AnnotatedProjectionError::Relation(
+            "owner predecessor crosses native structure",
+        ));
+    }
+    keys.required(preceding.key, 2).map(Some)
 }
 
 pub(super) fn project_link(

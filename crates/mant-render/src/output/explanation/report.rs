@@ -4,7 +4,7 @@ use super::{definition::DefinitionDisplay, metadata, spans};
 use crate::presentation::{InlinePresentation, TextPresentation, TextRole};
 use mant_protocol::{
     EvidenceClass, EvidenceCounts, ExplanationContent, ExplanationEvidence,
-    ExplanationIdentityField,
+    ExplanationIdentityField, ExplanationSupport,
 };
 use std::fmt::Write;
 
@@ -82,14 +82,44 @@ impl Report<'_> {
         for &(e, address, supports, content) in &records {
             self.record_separator(output, e.class, previous == Some(e.class));
             previous = Some(e.class);
-            let retained =
-                || content.expect("retained explanation support has a content projection");
-            let reference = (!supports.is_empty() || e.support.is_some())
-                .then(|| e.source_reference(retained(), supports))
-                .flatten();
+            let fixed_reference = e.support.filter(|&index| {
+                matches!(
+                    supports.get(index),
+                    Some(ExplanationSupport::FixedDeclarationGroup { .. })
+                ) && e.covered_by_fixed_support(supports)
+            });
+            let reference = fixed_reference
+                .or_else(|| content.and_then(|retained| e.source_reference(retained, supports)));
             let covered = reference.is_some();
             self.owner(output, e, address, covered, content);
             if let Some(support) = reference.and_then(|index| supports.get(index)) {
+                if let ExplanationSupport::FixedDeclarationGroup {
+                    members,
+                    reading_body,
+                } = support
+                {
+                    let key = std::ptr::from_ref(support) as usize;
+                    if let std::collections::hash_map::Entry::Vacant(slot) = displayed.entry(key) {
+                        slot.insert(reference.expect("validated Fixed support"));
+                        self.fixed_group(
+                            output,
+                            reference.expect("validated Fixed support"),
+                            members,
+                            reading_body,
+                        );
+                    } else {
+                        self.line(
+                            output,
+                            TextRole::Metadata,
+                            &format!(
+                                "Declaration-group context: see support {} displayed above.",
+                                displayed[&key]
+                            ),
+                        );
+                    }
+                    continue;
+                }
+                let retained = || content.expect("retained Flow support has a content projection");
                 let Some(block) = support.materialized(retained(), supports) else {
                     continue;
                 };
@@ -340,8 +370,68 @@ impl Report<'_> {
             output.push('\n');
         }
     }
+    fn fixed_group(
+        &self,
+        output: &mut String,
+        reference: usize,
+        members: &[mant_protocol::ExplanationFixedGroupMember],
+        reading_body: &mant_protocol::ExplanationFixedSelection,
+    ) {
+        self.line(
+            output,
+            TextRole::Metadata,
+            &format!(
+                "Declaration-group context [support {reference}]: recovered from consecutive declarations"
+            ),
+        );
+        for member in members {
+            self.fixed_selection(
+                output,
+                &member.head,
+                &format!(
+                    "Original head: {}; node {}",
+                    member.outline.title(),
+                    member.outline.path()
+                ),
+                None,
+            );
+        }
+        if let Some(provider) = members.last() {
+            self.line(
+                output,
+                TextRole::Path,
+                &format!(
+                    "Source of description: {}; node {}",
+                    provider.outline.title(),
+                    provider.outline.path()
+                ),
+            );
+        }
+        self.fixed_selection(
+            output,
+            reading_body,
+            "Original shared reading context (Fixed):",
+            None,
+        );
+    }
+
     fn fixed_body(&self, output: &mut String, body: &mant_protocol::ExplanationFixedSelection) {
-        self.line(output, TextRole::Metadata, "Definition (Fixed):");
+        self.fixed_selection(
+            output,
+            body,
+            "Definition (Fixed):",
+            Some("Declaration located; no independent description was provided for this owner."),
+        );
+    }
+
+    fn fixed_selection(
+        &self,
+        output: &mut String,
+        body: &mant_protocol::ExplanationFixedSelection,
+        label: &str,
+        empty_notice: Option<&str>,
+    ) {
+        self.line(output, TextRole::Metadata, label);
         if body.validate().is_err() {
             self.line(
                 output,
@@ -351,11 +441,9 @@ impl Report<'_> {
             return;
         }
         if body.parts.is_empty() {
-            self.line(
-                output,
-                TextRole::Notice,
-                "Declaration located; no independent description was provided for this owner.",
-            );
+            if let Some(notice) = empty_notice {
+                self.line(output, TextRole::Notice, notice);
+            }
             return;
         }
         // TextJoin proves logical search continuity, not physical line layout.

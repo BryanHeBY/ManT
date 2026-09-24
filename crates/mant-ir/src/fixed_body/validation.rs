@@ -289,7 +289,28 @@ impl FixedBody {
                 return Err(FixedBodyError("fixed owner has invalid identity"));
             }
             earlier(owner.parent, owner.key)?;
+            earlier(owner.preceding_owner, owner.key)?;
             reference(owner.section, self.headings.len())?;
+            if let Some(preceding_key) = owner.preceding_owner {
+                let preceding = self
+                    .owners
+                    .get((preceding_key.get() - 1) as usize)
+                    .ok_or(FixedBodyError("fixed owner predecessor is missing"))?;
+                if preceding.key != preceding_key
+                    || preceding.parent != owner.parent
+                    || preceding.section != owner.section
+                    || preceding.role != super::OwnerRole::Definition
+                    || owner.role != super::OwnerRole::Definition
+                    || preceding.head_role != Some(super::OwnerHeadRole::Lexical)
+                    || owner.head_role != Some(super::OwnerHeadRole::Lexical)
+                    || preceding.head_role_prefix.is_none()
+                    || owner.head_role_prefix.is_none()
+                {
+                    return Err(FixedBodyError(
+                        "fixed owner predecessor crosses a structural boundary",
+                    ));
+                }
+            }
             if owner.head_role.is_some() && owner.role != super::OwnerRole::Definition {
                 return Err(FixedBodyError("non-definition owner has a head role"));
             }

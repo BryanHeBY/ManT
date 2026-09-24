@@ -6,6 +6,11 @@
 
 use crate::{InputFormat, SourceBundle};
 
+/// Pinned roff.h discriminator for the authored man(7) `.IP` macro.
+/// The native build asserts this value against `MAN_IP`.
+#[doc(hidden)]
+pub const MAN_IP_TOKEN: u32 = 387;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnotatedMetadata {
     pub macroset: u32,
@@ -121,6 +126,9 @@ pub struct AnnotatedMark {
     pub title_region: u32,
     pub body_region: u32,
     pub flags: u32,
+    /// Earlier direct `.IP` definition sibling in the same native flow.
+    /// Zero means no proven predecessor; this is not shared body content.
+    pub preceding_owner: u32,
     /// Half-open range in `AnnotatedDocument::selection_parts`.
     pub selection_first: u32,
     pub selection_count: u32,

@@ -818,6 +818,7 @@ fn malformed_anchor(key: u32, parent: u32) -> AnnotatedMark {
         title_region: 0,
         body_region: 0,
         flags: 0,
+        preceding_owner: 0,
         selection_first: 0,
         selection_count: 0,
         point: None,
@@ -1364,6 +1365,101 @@ fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
     assert_eq!(fixed.owners[0].head_role_prefix.as_deref(), Some("-x."));
     assert!(fixed.owners[0].entry.is_none());
     assert!(validate_document(&document).is_empty());
+}
+
+#[test]
+fn man_ip_reading_groups_require_native_siblings_and_empty_prior_body() {
+    // This exact fixture first ran pinned CVS -Ttree and -Tutf8.  man_macro.c::
+    // blk_imp keeps distinct IP HEAD/BODY owners; .PD remains in the prior
+    // BODY, while a deleted .PP changes roff.c's flow_epoch and bars a group.
+    let input = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/roff/annotated-man-ip-reading-groups.1"
+    ));
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!();
+    };
+    let by_line = fixed
+        .owners
+        .iter()
+        .map(|owner| (owner.source.unwrap().line, owner))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(by_line[&3].preceding_owner, Some(by_line[&2].key));
+    assert_eq!(by_line[&8].preceding_owner, Some(by_line[&6].key));
+    assert_eq!(by_line[&13].preceding_owner, None);
+    assert_eq!(by_line[&17].preceding_owner, Some(by_line[&15].key));
+    assert_eq!(by_line[&22].preceding_owner, None);
+    let index = mant_ir::SemanticIndex::build(&document);
+    for (member, expected) in [(2, vec![2, 3]), (6, vec![6, 8])] {
+        let group = index.fixed_reading_group(by_line[&member].key).unwrap();
+        assert_eq!(
+            group
+                .members
+                .iter()
+                .map(|key| fixed.owners[(key.get() - 1) as usize].source.unwrap().line)
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+    for line in [11, 13, 15, 17, 20, 22] {
+        assert!(index.fixed_reading_group(by_line[&line].key).is_none());
+    }
+    assert!(validate_document(&document).is_empty());
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    for (name, expected_heads, expected_body) in [
+        ("-root", ["-root", "-root-long"], "ROOT_BODY"),
+        ("-a", ["-a", "--all"], "SHARED_BODY"),
+    ] {
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.to_owned(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        result.validate_references().unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.evidence[0].support, Some(0));
+        let mant_protocol::ExplanationSupport::FixedDeclarationGroup {
+            members,
+            reading_body,
+        } = &result.supports[0]
+        else {
+            unreachable!();
+        };
+        assert_eq!(
+            members
+                .iter()
+                .map(|member| member.head.complete_text().unwrap())
+                .collect::<Vec<_>>(),
+            expected_heads
+        );
+        assert!(
+            reading_body
+                .parts
+                .iter()
+                .any(|part| part.text.contains(expected_body))
+        );
+    }
+    let blocked = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "-b".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    blocked.validate_references().unwrap();
+    assert_eq!(blocked.total, 1);
+    assert!(blocked.supports.is_empty());
+    assert!(blocked.evidence[0].support.is_none());
 }
 
 #[test]

@@ -12,14 +12,14 @@ use mant_ir::{
 };
 use mant_protocol::{
     EvidenceBasis, EvidenceClass, EvidenceCounts, EvidenceOrder, ExplanationContent,
-    ExplanationEntry, ExplanationEvidence, ExplanationFixedFormRange, ExplanationFixedPart,
-    ExplanationFixedSelection, ExplanationFormMatch, ExplanationIdentityField,
-    ExplanationNameBinding, ExplanationNameMatch, ExplanationOccurrence, ExplanationOutcome,
-    ExplanationQuery, ExplanationSchema, ExplanationTruncation, OutlineNodeReference,
-    OutlineReference, OutlineTrail, QueryExplanation,
+    ExplanationEntry, ExplanationEvidence, ExplanationFixedFormRange, ExplanationFixedGroupMember,
+    ExplanationFixedPart, ExplanationFixedSelection, ExplanationFormMatch,
+    ExplanationIdentityField, ExplanationNameBinding, ExplanationNameMatch, ExplanationOccurrence,
+    ExplanationOutcome, ExplanationQuery, ExplanationSchema, ExplanationSupport,
+    ExplanationTruncation, OutlineNodeReference, OutlineReference, OutlineTrail, QueryExplanation,
 };
 
-use super::{ExplanationError, materialize::Budget};
+use super::{ExplanationError, materialize::Budget, support::Pool};
 
 struct IndexedOwner {
     path: OutlinePath,
@@ -57,18 +57,31 @@ pub(super) fn response(
     let mut budget = Budget(query.options.content_bytes as usize);
     let mut counts = EvidenceCounts::default();
     let mut evidence = Vec::new();
+    let mut pool = Pool::default();
+    let mut selected_candidates = Vec::new();
     for (ordinal, candidate) in plan.candidates.iter().enumerate() {
         let selected = ordinal >= query.options.offset as usize
             && evidence.len() < query.options.limit as usize;
         counts.record(EvidenceClass::DirectEntry, selected);
         if selected {
-            evidence.push(plan.materialize(
+            let record = plan.prepare(
                 candidate,
                 u32::try_from(ordinal).expect("bounded Fixed ordinal"),
                 requested,
                 &mut budget,
-            )?);
+            )?;
+            selected_candidates.push(ordinal);
+            evidence.push(record);
         }
+    }
+    for (&index, record) in selected_candidates.iter().zip(&mut evidence) {
+        plan.copy_body(&plan.candidates[index], record, &mut budget)?;
+    }
+    for (&index, record) in selected_candidates.iter().zip(&mut evidence) {
+        plan.attach_group(&plan.candidates[index], record, &mut pool, &mut budget)?;
+    }
+    for (&index, record) in selected_candidates.iter().zip(&mut evidence) {
+        plan.finish_optional(&plan.candidates[index], record, &mut budget)?;
     }
     let returned = u32::try_from(evidence.len()).expect("bounded Fixed page");
     let end = query.options.offset.saturating_add(returned);
@@ -81,7 +94,7 @@ pub(super) fn response(
         .any(ExplanationEvidence::has_omitted_content);
     Ok((
         QueryExplanation {
-            supports: Vec::new(),
+            supports: pool.values,
             content_projection: None,
             order: EvidenceOrder::ClassThenSource,
             counts,
@@ -265,32 +278,13 @@ impl FixedPlan<'_> {
             return Ok(());
         }
         let owner = self.owner(candidate)?;
-        let body_parts = self
-            .reader
-            .owner_body_parts(owner.key)
-            .ok_or(ExplanationError::InvalidFixed)?;
-        if retained_fixed_positions(record).saturating_add(body_parts.len())
+        let body_selection = self.reading_body_selection(owner)?;
+        if retained_fixed_positions(record).saturating_add(body_selection.parts.len())
             > mant_protocol::MAX_EXPLANATION_POSITIONS
         {
             record.content_omitted = true;
             return Ok(());
         }
-        let body_selection = if body_parts.iter().map(|part| part.slice).eq(owner
-            .direct_body
-            .parts
-            .iter()
-            .copied())
-        {
-            owner.direct_body.clone()
-        } else {
-            // A union of direct, nested-owner and transparent-region selections
-            // has no single native logical-join chain. Do not invent searchable
-            // continuity: the presentation reads physical rows, not these joins.
-            TextSelection {
-                parts: body_parts.iter().map(|part| part.slice).collect(),
-                joins: vec![mant_ir::TextJoin::HardBoundary; body_parts.len().saturating_sub(1)],
-            }
-        };
         record.content = selection(self.fixed, &body_selection, budget.0).and_then(|body| {
             let content = ExplanationContent::FixedOwner {
                 key: owner.key,
@@ -300,6 +294,214 @@ impl FixedPlan<'_> {
         });
         record.content_omitted = record.content.is_none();
         Ok(())
+    }
+
+    fn reading_body_selection(&self, owner: &OwnerMark) -> Result<TextSelection, ExplanationError> {
+        let parts = self
+            .reader
+            .owner_body_parts(owner.key)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        if parts
+            .iter()
+            .map(|part| part.slice)
+            .eq(owner.direct_body.parts.iter().copied())
+        {
+            return Ok(owner.direct_body.clone());
+        }
+        // A union of direct, nested-owner and transparent-region selections
+        // has no single native logical-join chain. Its physical rows remain
+        // authoritative; do not invent searchable continuity across regions.
+        Ok(TextSelection {
+            parts: parts.iter().map(|part| part.slice).collect(),
+            joins: vec![mant_ir::TextJoin::HardBoundary; parts.len().saturating_sub(1)],
+        })
+    }
+
+    /// Attach one response-local native reading group without moving body
+    /// bytes into an earlier owner or asserting name equivalence. The index
+    /// has already closed the sibling chain against final owner facts.
+    pub(super) fn attach_group(
+        &self,
+        candidate: &FixedCandidate,
+        record: &mut ExplanationEvidence,
+        pool: &mut Pool,
+        budget: &mut Budget,
+    ) -> Result<(), ExplanationError> {
+        let Some(group) = self.index.fixed_reading_group(candidate.key) else {
+            return Ok(());
+        };
+        if record.content.is_none() {
+            record.support_omitted = true;
+            return Ok(());
+        }
+        let provider = *group.members.last().ok_or(ExplanationError::InvalidFixed)?;
+        if pool.failed_fixed_groups.contains(&provider) {
+            record.support_omitted = true;
+            return Ok(());
+        }
+        if let Some(&reference) = pool.fixed_groups.get(&provider) {
+            if budget.take(&reference) {
+                record.support = Some(reference);
+            } else {
+                record.support_omitted = true;
+            }
+            return Ok(());
+        }
+        let Some(support) = self.copy_group(group, budget.0)? else {
+            pool.failed_fixed_groups.insert(provider);
+            record.support_omitted = true;
+            return Ok(());
+        };
+        let reference = pool.values.len();
+        if !budget.take(&(reference, &support)) {
+            pool.failed_fixed_groups.insert(provider);
+            record.support_omitted = true;
+            return Ok(());
+        }
+        pool.values.push(support);
+        pool.fixed_groups.insert(provider, reference);
+        record.support = Some(reference);
+        Ok(())
+    }
+
+    fn copy_group(
+        &self,
+        group: &mant_ir::FixedReadingGroup,
+        maximum_bytes: usize,
+    ) -> Result<Option<ExplanationSupport>, ExplanationError> {
+        let mut members = Vec::with_capacity(group.members.len());
+        let mut positions = 0usize;
+        let mut remaining_bytes = maximum_bytes;
+        for &key in &group.members {
+            let owner = self
+                .fixed
+                .owners
+                .get((key.get() - 1) as usize)
+                .ok_or(ExplanationError::InvalidFixed)?;
+            let selected = self
+                .indexed
+                .get(&key)
+                .ok_or(ExplanationError::InvalidFixed)?;
+            positions = positions.saturating_add(owner.head.parts.len());
+            if positions > mant_protocol::MAX_EXPLANATION_POSITIONS {
+                return Ok(None);
+            }
+            let outline_bytes = self.trail_copy_bound(owner, selected)?;
+            if outline_bytes > remaining_bytes {
+                return Ok(None);
+            }
+            remaining_bytes -= outline_bytes;
+            let Some(bytes) =
+                selection_bytes(&owner.head).filter(|&bytes| bytes <= remaining_bytes)
+            else {
+                return Ok(None);
+            };
+            remaining_bytes -= bytes;
+            let Some(head) = selection(self.fixed, &owner.head, bytes) else {
+                return Ok(None);
+            };
+            members.push(ExplanationFixedGroupMember {
+                key,
+                outline: trail(&self.reader, &self.index, &self.indexed, owner, selected)?,
+                head,
+            });
+        }
+        let provider = self
+            .fixed
+            .owners
+            .get(
+                (group
+                    .members
+                    .last()
+                    .ok_or(ExplanationError::InvalidFixed)?
+                    .get()
+                    - 1) as usize,
+            )
+            .ok_or(ExplanationError::InvalidFixed)?;
+        let body = self.reading_body_selection(provider)?;
+        if positions.saturating_add(body.parts.len()) > mant_protocol::MAX_EXPLANATION_POSITIONS {
+            return Ok(None);
+        }
+        let Some(bytes) = selection_bytes(&body).filter(|&bytes| bytes <= remaining_bytes) else {
+            return Ok(None);
+        };
+        let Some(reading_body) = selection(self.fixed, &body, bytes) else {
+            return Ok(None);
+        };
+        Ok(Some(ExplanationSupport::FixedDeclarationGroup {
+            members,
+            reading_body,
+        }))
+    }
+
+    /// Conservative allocation preflight for strings and bounded DTO nodes
+    /// that `trail` would clone. It can omit a group whose eventual JSON might
+    /// fit; the exact serialized-byte charge still happens after transfer.
+    /// In particular, one long section title is repeated in every member;
+    /// never copy all 256 before discovering it exceeds the work allowance.
+    fn trail_copy_bound(
+        &self,
+        owner: &OwnerMark,
+        selected: &IndexedOwner,
+    ) -> Result<usize, ExplanationError> {
+        let mut bytes = OutlinePath::DocumentRoot
+            .to_string()
+            .len()
+            .saturating_add(DOCUMENT_ROOT_ID.len())
+            .saturating_add(crate::selectors::DOCUMENT_ROOT_TITLE.len())
+            .saturating_add(256);
+        if let Some(section) = owner.section {
+            for heading in self
+                .reader
+                .breadcrumbs(section)
+                .ok_or(ExplanationError::InvalidFixed)?
+            {
+                let title_bytes =
+                    selection_bytes(&heading.title).ok_or(ExplanationError::InvalidFixed)?;
+                bytes = bytes
+                    .saturating_add(title_bytes.saturating_mul(3))
+                    .saturating_add(
+                        self.reader
+                            .path(heading.key)
+                            .ok_or(ExplanationError::InvalidFixed)?
+                            .to_string()
+                            .len(),
+                    )
+                    .saturating_add(heading.id.as_str().len())
+                    .saturating_add(256);
+            }
+        }
+        let mut parent = owner.parent;
+        while let Some(key) = parent {
+            let mark = self
+                .fixed
+                .owners
+                .get(usize::try_from(key.get() - 1).map_err(|_| ExplanationError::InvalidFixed)?)
+                .ok_or(ExplanationError::InvalidFixed)?;
+            if let Some(entry) = self.indexed.get(&key) {
+                let facts = self
+                    .index
+                    .entry_at(&entry.path)
+                    .ok_or(ExplanationError::InvalidFixed)?;
+                bytes = bytes
+                    .saturating_add(entry.path.to_string().len())
+                    .saturating_add(facts.id.as_str().len())
+                    .saturating_add(facts.forms.first().map_or(0, String::len))
+                    .saturating_add(256);
+            }
+            parent = mark.parent;
+        }
+        let facts = self
+            .index
+            .entry_at(&selected.path)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        bytes = bytes
+            .saturating_add(selected.path.to_string().len())
+            .saturating_add(facts.id.as_str().len())
+            .saturating_add(facts.forms.first().map_or(0, String::len))
+            .saturating_add(facts.names.iter().map(String::len).sum::<usize>())
+            .saturating_add(256);
+        Ok(bytes)
     }
 
     #[allow(clippy::too_many_lines)] // One bounded, all-or-none Fixed DTO transfer.
@@ -481,22 +683,6 @@ impl FixedPlan<'_> {
         record.match_details_omitted |= record.details_omitted && (name_match || form_match);
         Ok(())
     }
-
-    pub(super) fn materialize(
-        &self,
-        candidate: &FixedCandidate,
-        ordinal: u32,
-        requested: &str,
-        budget: &mut Budget,
-    ) -> Result<ExplanationEvidence, ExplanationError> {
-        // Preserve the standalone Fixed response's historical copy order.
-        // Scoped pages call these stages separately so all selected direct
-        // bodies can precede optional entry metadata under a shared budget.
-        let mut record = self.prepare(candidate, ordinal, requested, budget)?;
-        self.finish_optional(candidate, &mut record, budget)?;
-        self.copy_body(candidate, &mut record, budget)?;
-        Ok(record)
-    }
 }
 
 fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError> {
@@ -652,9 +838,7 @@ fn selection(
     maximum_bytes: usize,
 ) -> Option<ExplanationFixedSelection> {
     if source.parts.len() > mant_protocol::MAX_EXPLANATION_POSITIONS
-        || source.parts.iter().try_fold(0usize, |total, part| {
-            total.checked_add(usize::try_from(part.end_byte.checked_sub(part.start_byte)?).ok()?)
-        })? > maximum_bytes
+        || selection_bytes(source)? > maximum_bytes
     {
         return None;
     }
@@ -700,6 +884,18 @@ fn selection(
     };
     selection.validate().ok()?;
     Some(selection)
+}
+
+fn selection_bytes(source: &TextSelection) -> Option<usize> {
+    let text = source.parts.iter().try_fold(0usize, |total, part| {
+        total.checked_add(usize::try_from(part.end_byte.checked_sub(part.start_byte)?).ok()?)
+    })?;
+    source.joins.iter().try_fold(text, |total, join| {
+        total.checked_add(match join {
+            mant_ir::TextJoin::AuthoredSeparator(text) => text.len(),
+            _ => 0,
+        })
+    })
 }
 
 fn trail(
@@ -901,6 +1097,7 @@ mod tests {
                     key: key(1),
                     id: NodeId::from("owner-printf"),
                     parent: None,
+                    preceding_owner: None,
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
                     head_role: None,
@@ -916,6 +1113,7 @@ mod tests {
                     key: key(2),
                     id: NodeId::from("owner-empty"),
                     parent: None,
+                    preceding_owner: None,
                     section: Some(key(1)),
                     role: OwnerRole::Definition,
                     head_role: None,

@@ -4,10 +4,23 @@ use super::{
     walk::{owner_child_step, visit_child_entry_locations},
 };
 use crate::{
-    Block, ContentContext, ContentReadError, Document, DocumentBodyRef, EntryOwner, EntryOwnerView,
-    FixedBody, NodeId,
+    Block, ContentContext, ContentReadError, DisplayRole, Document, DocumentBodyRef, EntryOwner,
+    EntryOwnerView, FixedBody, NodeId, RegionKind, TextSelection,
 };
 use std::{collections::BTreeMap, num::NonZeroU32};
+
+// The explanation protocol bounds one original reading-context group at 256
+// members.  A longer native run remains independently addressable, but is not
+// truncated into a misleading partial group.
+const MAX_FIXED_READING_GROUP_MEMBERS: usize = 256;
+
+/// A bounded original run of Fixed declaration owners, ending in the one
+/// member with readable body. This is reading context, never alias evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FixedReadingGroup {
+    /// Original owner keys in native sibling order; the last provides context.
+    pub members: Vec<NonZeroU32>,
+}
 
 /// Rebuildable semantic index for the document root and every section.
 ///
@@ -20,6 +33,8 @@ pub struct SemanticIndex {
     sections: BTreeMap<Vec<usize>, Vec<SemanticEntry>>,
     section_paths: BTreeMap<NodeId, Option<Vec<usize>>>,
     owner_locations: BTreeMap<crate::OutlinePath, crate::ContentReveal>,
+    fixed_reading_groups: Vec<FixedReadingGroup>,
+    fixed_group_by_member: Vec<Option<usize>>,
 }
 
 impl SemanticIndex {
@@ -49,6 +64,8 @@ impl SemanticIndex {
             sections,
             section_paths,
             owner_locations,
+            fixed_reading_groups: Vec::new(),
+            fixed_group_by_member: Vec::new(),
         };
         if result
             .root
@@ -176,7 +193,56 @@ impl SemanticIndex {
                 result.root = entries;
             }
         }
+        result.build_fixed_reading_groups(fixed);
         result
+    }
+
+    fn build_fixed_reading_groups(&mut self, fixed: &FixedBody) {
+        let (readable, has_body_parts) = fixed_owner_readability(fixed);
+        self.fixed_group_by_member = vec![None; fixed.owners.len() + 1];
+        for provider in &fixed.owners {
+            if !readable[provider.key.get() as usize] || fixed.validated_entry(provider).is_none() {
+                continue;
+            }
+            let mut members = vec![provider.key];
+            let mut predecessor = provider.preceding_owner;
+            while let Some(key) = predecessor {
+                if members.len() == MAX_FIXED_READING_GROUP_MEMBERS {
+                    members.clear();
+                    break;
+                }
+                let Some(owner) = fixed.owners.get((key.get() - 1) as usize) else {
+                    break;
+                };
+                if has_body_parts[key.get() as usize] || fixed.validated_entry(owner).is_none() {
+                    break;
+                }
+                members.push(key);
+                predecessor = owner.preceding_owner;
+            }
+            if members.len() < 2 {
+                continue;
+            }
+            members.reverse();
+            let index = self.fixed_reading_groups.len();
+            for &key in &members {
+                self.fixed_group_by_member[key.get() as usize] = Some(index);
+            }
+            self.fixed_reading_groups
+                .push(FixedReadingGroup { members });
+        }
+    }
+
+    /// The original bounded declaration run containing this Fixed owner.
+    /// Empty-body members keep their own content; the last member supplies
+    /// explicit reading context without changing name or alias ownership.
+    #[must_use]
+    pub fn fixed_reading_group(&self, owner: NonZeroU32) -> Option<&FixedReadingGroup> {
+        let index = self
+            .fixed_group_by_member
+            .get(owner.get() as usize)?
+            .as_ref()?;
+        self.fixed_reading_groups.get(*index)
     }
 
     /// Entries directly owned by content before the first section.
@@ -255,6 +321,64 @@ struct FixedCandidate {
     child_count: usize,
     entry_indices: Vec<usize>,
     entry: Option<SemanticEntry>,
+}
+
+/// Read every direct selected byte once, then propagate child-owner content
+/// upward.  A table/literal region is readable even if the owner has no
+/// `direct_body`; terminal layout and margin ink alone cannot provide prose.
+fn fixed_owner_readability(fixed: &FixedBody) -> (Vec<bool>, Vec<bool>) {
+    let mut readable = vec![false; fixed.owners.len() + 1];
+    let mut has_body_parts = vec![false; fixed.owners.len() + 1];
+    for owner in &fixed.owners {
+        readable[owner.key.get() as usize] = fixed_selection_readable(fixed, &owner.direct_body);
+        has_body_parts[owner.key.get() as usize] = !owner.direct_body.parts.is_empty();
+    }
+    for region in &fixed.regions {
+        if matches!(
+            region.kind,
+            RegionKind::HeadingTitle | RegionKind::HeadingBody | RegionKind::OwnerHead
+        ) {
+            continue;
+        }
+        if let Some(owner) = region.owner {
+            has_body_parts[owner.get() as usize] |= !region.selection.parts.is_empty();
+            if region.kind != RegionKind::Margin {
+                readable[owner.get() as usize] |=
+                    fixed_selection_readable(fixed, &region.selection);
+            }
+        }
+    }
+    for owner in fixed.owners.iter().rev() {
+        if let Some(parent) = owner.parent {
+            readable[parent.get() as usize] |=
+                readable[owner.key.get() as usize] || fixed_selection_readable(fixed, &owner.head);
+            has_body_parts[parent.get() as usize] |=
+                has_body_parts[owner.key.get() as usize] || !owner.head.parts.is_empty();
+        }
+    }
+    (readable, has_body_parts)
+}
+
+fn fixed_selection_readable(fixed: &FixedBody, selection: &TextSelection) -> bool {
+    selection.parts.iter().any(|part| {
+        let Some(run) = fixed.surface.runs.get((part.run.get() - 1) as usize) else {
+            return false;
+        };
+        if run.label.role != DisplayRole::Body {
+            return false;
+        }
+        let Some(text) = fixed.surface.run_text(part.run) else {
+            return false;
+        };
+        let Some(start) = usize::try_from(part.start_byte).ok() else {
+            return false;
+        };
+        let Some(end) = usize::try_from(part.end_byte).ok() else {
+            return false;
+        };
+        text.get(start..end)
+            .is_some_and(|slice| slice.chars().any(|character| !character.is_whitespace()))
+    })
 }
 
 fn has_alias_of(entry: &SemanticEntry) -> bool {

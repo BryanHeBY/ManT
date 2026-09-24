@@ -269,7 +269,7 @@ pub(super) fn transfer(
             span: diagnostic.span,
         });
     }
-    let mut marks = reserve(mark_views.len())?;
+    let mut marks: Vec<AnnotatedMark> = reserve(mark_views.len())?;
     for (index, mark) in mark_views.iter().enumerate() {
         if mark.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
             || !(1..=6).contains(&mark.kind)
@@ -277,7 +277,6 @@ pub(super) fn transfer(
             || mark.parent >= mark.key
             || mark.owner >= mark.key
             || mark.source as usize > sources.len()
-            || mark.reserved != 0
             || mark.point_reserved != 0
             || mark.flags & !0b1_1111_1101 != 0
             || (mark.flags & 4 != 0 && mark.kind != 4)
@@ -289,6 +288,25 @@ pub(super) fn transfer(
                     || (mark.flags & 0b1_1110_0000).count_ones() != 1))
         {
             return Err(invalid_result());
+        }
+        if mark.preceding_owner != 0 {
+            let preceding = marks
+                .get(usize::try_from(mark.preceding_owner - 1).map_err(|_| invalid_result())?)
+                .ok_or_else(invalid_result)?;
+            if mark.kind != 2
+                || mark.token != crate::annotated::MAN_IP_TOKEN
+                || mark.flags & (16 | 256) != (16 | 256)
+                || mark.name_length == 0
+                || preceding.kind != 2
+                || preceding.token != crate::annotated::MAN_IP_TOKEN
+                || preceding.flags & (16 | 256) != (16 | 256)
+                || preceding.name.is_none()
+                || preceding.token != mark.token
+                || preceding.parent != mark.parent
+                || preceding.owner != mark.owner
+            {
+                return Err(invalid_result());
+            }
         }
         let point = match mark.point_kind {
             0 if mark.point_row == 0
@@ -391,6 +409,7 @@ pub(super) fn transfer(
             title_region: mark.title_region,
             body_region: mark.body_region,
             flags: mark.flags,
+            preceding_owner: mark.preceding_owner,
             selection_first: mark.selection_first,
             selection_count: mark.selection_count,
             point,

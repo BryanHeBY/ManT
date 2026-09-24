@@ -77,7 +77,7 @@ pub(super) fn materialize<'a>(
             },
         )
     });
-    for slot in body_order {
+    for &slot in &body_order {
         let (doc, index, _) = selected[slot];
         let result = &mut evidence[slot];
         if let DocumentPlan::Fixed(plan) = &plans[doc] {
@@ -127,6 +127,17 @@ pub(super) fn materialize<'a>(
                 &mut pools[doc],
                 budget,
             );
+        }
+    }
+    for slot in body_order {
+        let (doc, index, _) = selected[slot];
+        if let DocumentPlan::Fixed(plan) = &plans[doc] {
+            plan.attach_group(
+                &plan.candidates[index],
+                &mut evidence[slot].evidence,
+                &mut pools[doc],
+                budget,
+            )?;
         }
     }
     for (&(doc, index, ordinal), result) in selected.iter().zip(&mut evidence) {

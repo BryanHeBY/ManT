@@ -132,6 +132,7 @@
               "names": ["-x"],
               "forms": ["-x language"],
               "emptyDescription": false,
+              "readingContext": null,
               "bodyIncludes": ["LANGUAGE_BODY"],
               "bodyExcludes": ["NONE_BODY", "GLUED_BODY"]
             },
@@ -141,6 +142,7 @@
               "names": ["-x"],
               "forms": ["-x none"],
               "emptyDescription": false,
+              "readingContext": null,
               "bodyIncludes": ["NONE_BODY"],
               "bodyExcludes": ["LANGUAGE_BODY", "GLUED_BODY"]
             }
@@ -202,7 +204,11 @@
               "kind": "option",
               "names": ["-x"],
               "forms": ["-x language"],
-              "emptyDescription": true
+              "emptyDescription": true,
+              "readingContext": {
+                "heads": ["-x language", "--language=language", "--language language"],
+                "bodyIncludes": ["Specify explicitly the language"]
+              }
             },
             {
               "source": {"line": 1755, "column": 2},
@@ -210,6 +216,7 @@
               "names": ["-x"],
               "forms": ["-x none"],
               "emptyDescription": false,
+              "readingContext": null,
               "bodyIncludes": ["Turn off any specification of a language"]
             }
           ],
@@ -257,13 +264,93 @@
           "query": "-Wformat",
           "review": "Pinned CVS preserves GCC's five independent IP heads at lines 6747, 6750, 6775, 6778 and 6789. The final three members are nested under RS, while empty heads remain empty owners rather than borrowing a neighboring description.",
           "expected": [
-            {"source": {"line": 6747, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat"], "emptyDescription": true},
-            {"source": {"line": 6750, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=n"], "emptyDescription": false, "bodyIncludes": ["Check calls to"]},
-            {"source": {"line": 6775, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=1"], "emptyDescription": true},
-            {"source": {"line": 6778, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat"], "emptyDescription": false, "bodyIncludes": ["is equivalent to -Wformat=1"]},
-            {"source": {"line": 6789, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=2"], "emptyDescription": false, "bodyIncludes": ["additional format checks"]}
+            {"source": {"line": 6747, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat"], "emptyDescription": true, "readingContext": {"heads": ["-Wformat", "-Wformat=n"], "bodyIncludes": ["Check calls to"]}},
+            {"source": {"line": 6750, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=n"], "emptyDescription": false, "readingContext": {"heads": ["-Wformat", "-Wformat=n"], "bodyIncludes": ["Check calls to"]}, "bodyIncludes": ["Check calls to"]},
+            {"source": {"line": 6775, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=1"], "emptyDescription": true, "readingContext": {"heads": ["-Wformat=1", "-Wformat"], "bodyIncludes": ["is equivalent to -Wformat=1"]}},
+            {"source": {"line": 6778, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat"], "emptyDescription": false, "readingContext": {"heads": ["-Wformat=1", "-Wformat"], "bodyIncludes": ["is equivalent to -Wformat=1"]}, "bodyIncludes": ["is equivalent to -Wformat=1"]},
+            {"source": {"line": 6789, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=2"], "emptyDescription": false, "readingContext": null, "bodyIncludes": ["additional format checks"]}
           ],
           "expectedCounts": {"directEntry": 5}
+        }
+      ]
+    },
+    {
+      "id": "F006",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/annotated-man-ip-reading-groups.1",
+      "sha256": "068832e637ddae01efc15a836a0defe864c7d8fc765a6034afab8e83668451ee",
+      "queries": [
+        {
+          "query": "-root",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps lines 2-3 as ROOT-level direct IP siblings. The first body is empty; the second contains ROOT_BODY, so native sibling evidence licenses reading context without transferring body ownership.",
+          "expected": [
+            {"source": {"line": 2, "column": 2}, "kind": "option", "names": ["-root"], "forms": ["-root"], "emptyDescription": true, "readingContext": {"heads": ["-root", "-root-long"], "bodyIncludes": ["ROOT_BODY"]}}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "-a",
+          "review": "Pinned CVS retains line-7 .PD inside line-6 IP BODY and line-8 IP as its direct sibling. .PD changes spacing but is not readable description; line-9 SHARED_BODY belongs only to --all.",
+          "expected": [
+            {"source": {"line": 6, "column": 2}, "kind": "option", "names": ["-a"], "forms": ["-a"], "emptyDescription": true, "readingContext": {"heads": ["-a", "--all"], "bodyIncludes": ["SHARED_BODY"]}}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "--all",
+          "review": "The same pinned CVS line-8 IP is the independent provider: its own body remains SHARED_BODY even while the bounded group supplies reading context to -a.",
+          "expected": [
+            {"source": {"line": 8, "column": 2}, "kind": "option", "names": ["--all"], "forms": ["--all"], "emptyDescription": false, "bodyIncludes": ["SHARED_BODY"], "readingContext": {"heads": ["-a", "--all"], "bodyIncludes": ["SHARED_BODY"]}}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "-b",
+          "review": "Pinned CVS removes the intervening .PP from the final tree, but roff.c flow_epoch still records its boundary; the empty line-11 IP must not borrow line-13 BROKEN_BODY.",
+          "expected": [
+            {"source": {"line": 11, "column": 2}, "kind": "option", "names": ["-b"], "forms": ["-b"], "emptyDescription": true, "readingContext": null}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "--broken",
+          "review": "Pinned CVS line-13 IP owns BROKEN_BODY after the .PP boundary; it does not share a reading group with -b.",
+          "expected": [
+            {"source": {"line": 13, "column": 2}, "kind": "option", "names": ["--broken"], "forms": ["--broken"], "emptyDescription": false, "bodyIncludes": ["BROKEN_BODY"], "readingContext": null}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "-c",
+          "review": "Pinned CVS line-15 IP has its own readable OWN_BODY, so the following direct sibling cannot treat it as an empty predecessor.",
+          "expected": [
+            {"source": {"line": 15, "column": 2}, "kind": "option", "names": ["-c"], "forms": ["-c"], "emptyDescription": false, "bodyIncludes": ["OWN_BODY"], "readingContext": null}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "--c-long",
+          "review": "Pinned CVS line-17 IP owns FOLLOW_BODY independently of the prior described -c owner.",
+          "expected": [
+            {"source": {"line": 17, "column": 2}, "kind": "option", "names": ["--c-long"], "forms": ["--c-long"], "emptyDescription": false, "bodyIncludes": ["FOLLOW_BODY"], "readingContext": null}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "-d",
+          "review": "Pinned CVS closes NEXT before OTHER; the empty line-20 IP cannot borrow line-22 LATE_BODY across section ownership.",
+          "expected": [
+            {"source": {"line": 20, "column": 2}, "kind": "option", "names": ["-d"], "forms": ["-d"], "emptyDescription": true, "readingContext": null}
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "--d-long",
+          "review": "Pinned CVS line-22 IP is a separate OTHER-section declaration with its own LATE_BODY, not NEXT's provider.",
+          "expected": [
+            {"source": {"line": 22, "column": 2}, "kind": "option", "names": ["--d-long"], "forms": ["--d-long"], "emptyDescription": false, "bodyIncludes": ["LATE_BODY"], "readingContext": null}
+          ],
+          "expectedCounts": {"directEntry": 1}
         }
       ]
     }

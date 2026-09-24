@@ -14,9 +14,9 @@ mod wire;
 use crate::{Block, DefinitionItem, Document, LinkTarget};
 pub use content::*;
 pub use facts::*;
-pub use index::SemanticIndex;
 #[cfg(test)]
 use index::entry_from_definition;
+pub use index::{FixedReadingGroup, SemanticIndex};
 pub use location::{ContentEntry, content_entries, content_entry_locations};
 pub use model::*;
 pub(crate) use relations::relation_issues;

@@ -59,7 +59,7 @@ pub(super) struct MarkView {
     pub(super) title_region: u32,
     pub(super) body_region: u32,
     pub(super) flags: u32,
-    pub(super) reserved: u32,
+    pub(super) preceding_owner: u32,
     pub(super) table_column: u32,
     pub(super) table_position_present: u32,
     pub(super) table_offset: u64,

@@ -1,6 +1,21 @@
 //! Page-local original context, explicitly distinct from alias evidence.
+use std::collections::HashSet;
+use std::num::NonZeroU32;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+/// One physical Fixed declaration, preserving its own final-display head.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExplanationFixedGroupMember {
+    /// Exact one-based owner key in the queried Fixed document.
+    pub key: NonZeroU32,
+    /// Original semantic trail; grouping does not replace member identity.
+    pub outline: crate::OutlineTrail,
+    /// Complete final-display head, not a reconstructed Flow term.
+    pub head: super::ExplanationFixedSelection,
+}
 
 /// Original content supporting directly matched declarations. IDs are indices
 /// in the containing document response's pool, never persistent identities.
@@ -44,6 +59,15 @@ pub enum ExplanationSupport {
         support: usize,
         /// Typed path from that fragment's copied block to the nested list.
         path: Vec<super::ExplanationBlockStep>,
+    },
+    /// Native sibling declarations whose final member supplies reading context.
+    /// This does not make the members aliases or inherit the provider's facts.
+    FixedDeclarationGroup {
+        /// Original independent owners in source order; the last is the provider.
+        members: Vec<ExplanationFixedGroupMember>,
+        /// Last member's original complete reading view; a returned provider may
+        /// separately carry its own independent `fixed-owner` content.
+        reading_body: super::ExplanationFixedSelection,
     },
 }
 
@@ -111,7 +135,7 @@ impl ExplanationSupport {
     #[must_use]
     pub fn members(&self) -> &[crate::OutlineTrail] {
         match self {
-            Self::OwnedEntry { .. } => &[],
+            Self::OwnedEntry { .. } | Self::FixedDeclarationGroup { .. } => &[],
             Self::DeclarationGroup { members, .. }
             | Self::ContainedDeclarationGroup { members, .. } => members,
         }
@@ -130,11 +154,11 @@ impl ExplanationSupport {
         }
         self.fragment(content, pool)?;
         match self {
-            Self::OwnedEntry { .. } => None,
+            Self::OwnedEntry { .. } | Self::FixedDeclarationGroup { .. } => None,
             Self::DeclarationGroup { block, .. } => Some(block),
             Self::ContainedDeclarationGroup { support, .. } => match pool.get(*support)? {
                 Self::DeclarationGroup { block, .. } | Self::OwnedEntry { block } => Some(block),
-                Self::ContainedDeclarationGroup { .. } => None,
+                Self::ContainedDeclarationGroup { .. } | Self::FixedDeclarationGroup { .. } => None,
             },
         }
     }
@@ -145,7 +169,7 @@ impl ExplanationSupport {
         pool: &'a [Self],
     ) -> Option<(&'a mant_ir::Block, mant_ir::DeclarationGroup)> {
         match self {
-            Self::OwnedEntry { .. } => None,
+            Self::OwnedEntry { .. } | Self::FixedDeclarationGroup { .. } => None,
             Self::DeclarationGroup { block, .. } => Some((
                 block,
                 mant_ir::DeclarationGroup {
@@ -170,7 +194,9 @@ impl ExplanationSupport {
                         block.entry_owner()?;
                         block
                     }
-                    Self::ContainedDeclarationGroup { .. } => return None,
+                    Self::ContainedDeclarationGroup { .. } | Self::FixedDeclarationGroup { .. } => {
+                        return None;
+                    }
                 };
                 if path.is_empty() {
                     return None;
@@ -199,6 +225,39 @@ impl ExplanationSupport {
                 Some((block, *group))
             }
         }
+    }
+
+    /// Check the detached Fixed context before accepting any evidence pointer.
+    /// Native sibling ancestry and final-surface identity are producer checks;
+    /// the wire still closes every local member and copied selection reference.
+    fn valid_fixed_group(&self) -> bool {
+        let Self::FixedDeclarationGroup {
+            members,
+            reading_body,
+        } = self
+        else {
+            return false;
+        };
+        if !(2..=crate::MAX_EXPLANATION_RESULTS as usize).contains(&members.len())
+            || reading_body.parts.is_empty()
+            || reading_body.validate().is_err()
+        {
+            return false;
+        }
+        let mut keys = HashSet::with_capacity(members.len());
+        let mut paths = HashSet::with_capacity(members.len());
+        let mut ids = HashSet::with_capacity(members.len());
+        members.iter().all(|member| {
+            matches!(
+                member.outline.node,
+                crate::OutlineNodeReference::DocumentEntry { .. }
+            ) && keys.insert(member.key)
+                && paths.insert(member.outline.path())
+                && ids.insert(member.outline.node.id())
+                && member.outline.ancestors == members[0].outline.ancestors
+                && !member.head.parts.is_empty()
+                && member.head.validate().is_ok()
+        })
     }
 }
 
@@ -347,6 +406,12 @@ impl super::ExplanationEvidence {
         content: mant_ir::ContentContext<'a>,
         pool: &'a [ExplanationSupport],
     ) -> bool {
+        if matches!(
+            self.content,
+            Some(super::ExplanationContent::FixedOwner { .. })
+        ) {
+            return self.covered_by_fixed_support(pool);
+        }
         let Some(source @ super::ExplanationContent::DeclarationMember { support, .. }) =
             &self.content
         else {
@@ -359,6 +424,49 @@ impl super::ExplanationEvidence {
             && source
                 .referenced_owner(content, pool)
                 .is_some_and(|owner| self.matches_owner(content, owner))
+    }
+
+    /// Check Fixed support without requiring a Flow content projection.
+    #[must_use]
+    pub fn covered_by_fixed_support(&self, pool: &[ExplanationSupport]) -> bool {
+        if let Some(super::ExplanationContent::FixedOwner { key, reading_body }) = &self.content {
+            let Some(
+                support @ super::ExplanationSupport::FixedDeclarationGroup {
+                    members,
+                    reading_body: provider_body,
+                },
+            ) = self.support.and_then(|index| pool.get(index))
+            else {
+                return false;
+            };
+            if !support.valid_fixed_group() {
+                return false;
+            }
+            let Some((index, member)) = members
+                .iter()
+                .enumerate()
+                .find(|(_, member)| member.key == *key)
+            else {
+                return false;
+            };
+            return self.class == super::EvidenceClass::DirectEntry
+                && !self.content_omitted
+                && !self.support_omitted
+                && member.outline == self.outline
+                && self.entry.as_ref().is_none_or(|entry| {
+                    entry.forms.is_empty()
+                        && entry
+                            .fixed_forms
+                            .iter()
+                            .all(|form| fixed_form_within_head(form, &member.head))
+                })
+                && if index + 1 == members.len() {
+                    reading_body == provider_body
+                } else {
+                    reading_body.parts.is_empty()
+                };
+        }
+        false
     }
 
     fn matches_owner(
@@ -408,7 +516,7 @@ impl super::ExplanationEvidence {
             || self.content.as_ref().is_some_and(|content| match content {
                 ExplanationContent::FixedOwner { reading_body, .. } => {
                     self.class != super::EvidenceClass::DirectEntry
-                        || self.support.is_some()
+                        || self.support.is_some() && !self.covered_by_support(context, pool)
                         || reading_body.validate().is_err()
                         || self
                             .entry
@@ -464,9 +572,117 @@ impl super::ExplanationEvidence {
 
 fn valid_pool<'a>(content: mant_ir::ContentContext<'a>, pool: &'a [ExplanationSupport]) -> bool {
     pool.len() <= crate::MAX_EXPLANATION_RESULTS as usize
-        && pool
-            .iter()
-            .all(|support| support.materialized(content, pool).is_some())
+        && pool.iter().all(|support| match support {
+            ExplanationSupport::FixedDeclarationGroup { .. } => support.valid_fixed_group(),
+            _ => support.materialized(content, pool).is_some(),
+        })
+}
+
+/// Returned forms may be smaller than the complete native HEAD, but every
+/// retained byte must still be an exact final-display byte of that HEAD.
+fn fixed_form_within_head(
+    form: &super::ExplanationFixedSelection,
+    head: &super::ExplanationFixedSelection,
+) -> bool {
+    use unicode_width::UnicodeWidthStr;
+
+    if form.parts.is_empty() || form.validate().is_err() {
+        return false;
+    }
+    let mut cursor = 0;
+    let mut prior: Option<usize> = None;
+    let mut measured = None;
+    for (part_index, part) in form.parts.iter().enumerate() {
+        while head.parts.get(cursor).is_some_and(|head_part| {
+            head_part.slice.run < part.slice.run
+                || head_part.slice.run == part.slice.run
+                    && head_part.slice.end_byte <= part.slice.start_byte
+        }) {
+            cursor += 1;
+        }
+        let Some(head_part) = head.parts.get(cursor) else {
+            return false;
+        };
+        if part.slice.run != head_part.slice.run
+            || part.slice.start_byte < head_part.slice.start_byte
+            || part.slice.end_byte > head_part.slice.end_byte
+            || part.row != head_part.row
+            || part.run_column != head_part.run_column
+            || part.style != head_part.style
+            || part.source != head_part.source
+        {
+            return false;
+        }
+        let Some((start, end)) = part
+            .slice
+            .start_byte
+            .checked_sub(head_part.slice.start_byte)
+            .and_then(|start| {
+                part.slice
+                    .end_byte
+                    .checked_sub(head_part.slice.start_byte)
+                    .map(|end| (start, end))
+            })
+            .and_then(|(start, end)| {
+                Some((usize::try_from(start).ok()?, usize::try_from(end).ok()?))
+            })
+        else {
+            return false;
+        };
+        if head_part.text.get(start..end) != Some(part.text.as_str()) {
+            return false;
+        }
+        if start == 0 && end == head_part.text.len() {
+            if part.column != head_part.column || part.width != head_part.width {
+                return false;
+            }
+        } else {
+            let (measured_cursor, measured_end, measured_cells) =
+                measured.unwrap_or((usize::MAX, 0usize, 0u32));
+            let (prefix_end, prefix_cells) = if measured_cursor == cursor {
+                (measured_end, measured_cells)
+            } else {
+                if u32::try_from(head_part.text.width()).ok() != Some(head_part.width) {
+                    return false;
+                }
+                (0usize, 0u32)
+            };
+            let Some(gap) = head_part.text.get(prefix_end..start) else {
+                return false;
+            };
+            let Some(cells) =
+                prefix_cells.checked_add(u32::try_from(gap.width()).unwrap_or(u32::MAX))
+            else {
+                return false;
+            };
+            let Some(width) = u32::try_from(part.text.width()).ok() else {
+                return false;
+            };
+            if head_part.column.checked_add(cells) != Some(part.column) || width != part.width {
+                return false;
+            }
+            let Some(end_cells) = cells.checked_add(width) else {
+                return false;
+            };
+            measured = Some((cursor, end, end_cells));
+        }
+        if let Some(previous) = prior {
+            let Some(join) = form.joins.get(part_index - 1) else {
+                return false;
+            };
+            if previous == cursor {
+                if !matches!(join, mant_ir::TextJoin::DirectContact)
+                    || form.parts[part_index - 1].slice.end_byte != part.slice.start_byte
+                {
+                    return false;
+                }
+            } else if previous + 1 != cursor || head.joins.get(previous) != Some(join) {
+                return false;
+            }
+        }
+        prior = Some(cursor);
+    }
+    true
 }
 
 fn remap_range(
@@ -564,5 +780,134 @@ impl crate::ScopeExplanation {
         }))
         .then_some(())
         .ok_or("invalid scoped explanation source reference or position")
+    }
+}
+
+#[cfg(test)]
+mod fixed_group_tests {
+    use serde_json::{Value, json};
+
+    use super::super::QueryExplanation;
+
+    fn part(run: u32, row: u32, text: &str) -> Value {
+        json!({
+            "slice": {"run": run, "startByte": 0, "endByte": text.len()},
+            "row": row,
+            "runColumn": 0,
+            "column": 0,
+            "width": text.len(),
+            "style": {"bold": false, "underline": false},
+            "text": text
+        })
+    }
+
+    fn selection(part: &Value) -> Value {
+        json!({"parts": [part], "joins": []})
+    }
+
+    fn grouped_response() -> Value {
+        let mut value: Value = serde_json::from_str(include_str!(
+            "../../../../tests/contracts/explanation-v0.12.json"
+        ))
+        .unwrap();
+        let first = value["evidence"][0]["outline"].clone();
+        let mut second = first.clone();
+        second["node"]["path"] = "root/e2".into();
+        second["node"]["id"] = "help-more".into();
+        second["node"]["title"] = "--help-more".into();
+        let first_head = selection(&part(1, 1, "--help"));
+        let second_head = selection(&part(2, 2, "--help-more"));
+        let body = selection(&part(3, 3, "description"));
+        value["supports"] = json!([{
+            "kind": "fixed-declaration-group",
+            "members": [
+                {"key": 1, "outline": first, "head": first_head},
+                {"key": 2, "outline": second, "head": second_head}
+            ],
+            "readingBody": body
+        }]);
+        value["evidence"][0]["support"] = 0.into();
+        value["evidence"][0]["contentOmitted"] = false.into();
+        value["evidence"][0]["content"] = json!({
+            "kind": "fixed-owner", "key": 1,
+            "readingBody": {"parts": [], "joins": []}
+        });
+        value["evidence"][0]["entry"]["forms"] = json!([]);
+        value["evidence"][0]["entry"]["fixedForms"] =
+            json!([value["supports"][0]["members"][0]["head"].clone()]);
+        for basis in value["evidence"][0]["bases"].as_array_mut().unwrap() {
+            let occurrence = &mut basis["matches"][0]["occurrences"][0];
+            occurrence["forms"] = json!([]);
+            occurrence["fixedForms"] = json!([{"formIndex": 0, "startScalar": 0, "endScalar": 6}]);
+        }
+        let binding = &mut value["evidence"][0]["entry"]["nameBindings"][0]["occurrences"][0];
+        binding["forms"] = json!([]);
+        binding["fixedForms"] = json!([{"formIndex": 0, "startScalar": 0, "endScalar": 6}]);
+        value
+    }
+
+    #[test]
+    fn fixed_group_uses_exact_member_head_and_provider_body() {
+        let original = grouped_response();
+        let decoded: QueryExplanation = serde_json::from_value(original.clone()).unwrap();
+        assert_eq!(
+            decoded.evidence[0].source_reference(
+                decoded.content_projection.as_ref().unwrap().content(),
+                &decoded.supports
+            ),
+            Some(0)
+        );
+
+        let mut duplicate_key = original.clone();
+        duplicate_key["supports"][0]["members"][1]["key"] = 1.into();
+        assert!(serde_json::from_value::<QueryExplanation>(duplicate_key).is_err());
+
+        let mut singleton = original.clone();
+        let first_member = singleton["supports"][0]["members"][0].clone();
+        singleton["supports"][0]["members"] = json!([first_member]);
+        assert!(serde_json::from_value::<QueryExplanation>(singleton).is_err());
+
+        let mut foreign_member = original.clone();
+        foreign_member["supports"][0]["members"][0]["outline"]["node"]["id"] = "foreign".into();
+        assert!(serde_json::from_value::<QueryExplanation>(foreign_member).is_err());
+
+        let mut foreign_form = original.clone();
+        foreign_form["evidence"][0]["entry"]["fixedForms"][0]["parts"][0]["slice"]["run"] =
+            9.into();
+        assert!(serde_json::from_value::<QueryExplanation>(foreign_form).is_err());
+
+        let mut foreign_source = original.clone();
+        foreign_source["supports"][0]["members"][0]["head"]["parts"][0]["source"] = 2.into();
+        assert!(serde_json::from_value::<QueryExplanation>(foreign_source).is_err());
+
+        let mut false_body = original.clone();
+        let provider_body = false_body["supports"][0]["readingBody"].clone();
+        false_body["evidence"][0]["content"]["readingBody"] = provider_body;
+        assert!(serde_json::from_value::<QueryExplanation>(false_body).is_err());
+
+        let mut missing_provider = original;
+        missing_provider["supports"][0]["readingBody"] = json!({"parts": [], "joins": []});
+        assert!(serde_json::from_value::<QueryExplanation>(missing_provider).is_err());
+    }
+
+    #[test]
+    fn fixed_group_rejects_forged_join_and_column() {
+        let mut original = grouped_response();
+        let head = json!({
+            "parts": [part(1, 1, "--he"), part(2, 2, "lp")],
+            "joins": [{"kind": "direct-contact"}]
+        });
+        original["supports"][0]["members"][0]["head"] = head.clone();
+        original["evidence"][0]["entry"]["fixedForms"] = json!([head]);
+        assert!(serde_json::from_value::<QueryExplanation>(original.clone()).is_ok());
+
+        let mut false_join = original.clone();
+        false_join["evidence"][0]["entry"]["fixedForms"][0]["joins"][0] =
+            json!({"kind": "authored-separator", "text": " "});
+        assert!(serde_json::from_value::<QueryExplanation>(false_join).is_err());
+
+        let mut false_column = original;
+        false_column["evidence"][0]["entry"]["fixedForms"][0]["parts"][0]["column"] = 1.into();
+        assert!(serde_json::from_value::<QueryExplanation>(false_column).is_err());
     }
 }

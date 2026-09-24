@@ -124,7 +124,44 @@ def displayed_body(selection: object) -> str:
     return "".join(rows)
 
 
-def owner_record(evidence: object, requested: str) -> dict:
+def fixed_context(evidence: dict, supports: object) -> dict | None:
+    reference = evidence.get("support")
+    if reference is None:
+        return None
+    if (type(reference) is not int or not isinstance(supports, list)
+            or not 0 <= reference < len(supports)):
+        raise ValueError("Fixed owner has an invalid support index")
+    support = supports[reference]
+    if not isinstance(support, dict) or support.get("kind") != "fixed-declaration-group":
+        raise ValueError("Fixed owner references a non-Fixed context")
+    members = support.get("members")
+    if not isinstance(members, list) or not 2 <= len(members) <= 256:
+        raise ValueError("Fixed group has invalid member count")
+    heads, seen = [], set()
+    matched = False
+    for member in members:
+        if not isinstance(member, dict) or type(member.get("key")) is not int or member["key"] < 1:
+            raise ValueError("Fixed group has an invalid owner key")
+        node = member.get("outline", {}).get("node", {})
+        if not isinstance(node, dict) or not isinstance(node.get("path"), str):
+            raise ValueError("Fixed group has an invalid member trail")
+        identity = (member["key"], node["path"])
+        if identity in seen:
+            raise ValueError("Fixed group repeats an owner")
+        seen.add(identity)
+        heads.append(complete_form(member.get("head")))
+        if (member["key"] == evidence.get("content", {}).get("key")
+                and member["outline"] == evidence.get("outline")):
+            matched = True
+    if not matched:
+        raise ValueError("Fixed support does not contain its referring owner")
+    body = displayed_body(support.get("readingBody"))
+    if not body.strip():
+        raise ValueError("Fixed group has no provider body")
+    return {"heads": heads, "body": " ".join(body.split())}
+
+
+def owner_record(evidence: object, requested: str, supports: object) -> dict:
     if not isinstance(evidence, dict) or evidence.get("class") != "direct-entry":
         raise ValueError("not a Fixed direct owner")
     entry, content = evidence.get("entry"), evidence.get("content")
@@ -188,6 +225,7 @@ def owner_record(evidence: object, requested: str) -> dict:
         "omitted": any(evidence.get(field, False) for field in (
             "supportOmitted", "previewsOmitted", "detailsOmitted",
             "matchDetailsOmitted", "nameBindingsOmitted", "contentOmitted")),
+        "readingContext": fixed_context(evidence, supports),
     }
 
 
@@ -201,7 +239,7 @@ def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
             raise ValueError("invalid evidence array")
         if not all(isinstance(item, dict) and item.get("class") in WIRE_CLASSES for item in evidence):
             raise ValueError("invalid evidence class")
-        actual = [owner_record(item, probe["query"]) for item in evidence
+        actual = [owner_record(item, probe["query"], response.get("supports")) for item in evidence
                   if item.get("class") == "direct-entry"]
         totals = {kind: counts[kind]["total"] for kind in CLASSES}
         if not all(type(total) is int and total >= 0 for total in totals.values()):
@@ -260,6 +298,20 @@ def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
             errors.append(f"{source}: selected facts/body omitted")
         if got["aliasGroups"] or got["aliasOf"]:
             errors.append(f"{source}: unreviewed alias relation")
+        if "readingContext" in want:
+            context = got["readingContext"]
+            requested_context = want["readingContext"]
+            if requested_context is None:
+                if context is not None:
+                    errors.append(f"{source}: unexpected reading context")
+            elif context is None:
+                errors.append(f"{source}: missing reading context")
+            else:
+                if context["heads"] != requested_context["heads"]:
+                    errors.append(f"{source}: wrong reading-context members")
+                for witness in requested_context.get("bodyIncludes", []):
+                    if witness not in context["body"]:
+                        errors.append(f"{source}: missing reading-context witness {witness!r}")
         for witness in want.get("bodyIncludes", []):
             if witness not in got["body"]:
                 errors.append(f"{source}: missing body witness {witness!r}")

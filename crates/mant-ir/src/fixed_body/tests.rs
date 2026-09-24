@@ -125,6 +125,7 @@ fn sample_body() -> FixedBody {
             key: key(1),
             id: crate::NodeId::from("native-owner-1"),
             parent: None,
+            preceding_owner: None,
             section: Some(key(1)),
             role: OwnerRole::Definition,
             head_role: None,
@@ -205,6 +206,31 @@ fn one_arena_and_borrowed_slices_round_trip() {
     );
     let wire = serde_json::to_value(&body).unwrap();
     assert_eq!(serde_json::from_value::<FixedBody>(wire).unwrap(), body);
+}
+
+#[test]
+fn ip_predecessor_is_structural_evidence_not_shared_body() {
+    let mut body = sample_body();
+    body.owners[0].head_role = Some(OwnerHeadRole::Lexical);
+    body.owners[0].head_role_prefix = Some("-x".to_owned());
+    let mut next = body.owners[0].clone();
+    next.key = key(2);
+    next.id = crate::NodeId::from("native-owner-2");
+    next.preceding_owner = Some(key(1));
+    body.owners.push(next);
+    body.validate().unwrap();
+    let wire = serde_json::to_value(&body).unwrap();
+    assert_eq!(wire["owners"][1]["precedingOwner"], 1);
+    assert_eq!(serde_json::from_value::<FixedBody>(wire).unwrap(), body);
+
+    body.owners[1].section = None;
+    assert!(body.validate().is_err());
+    body.owners[1].section = Some(key(1));
+    body.owners[1].parent = Some(key(1));
+    assert!(body.validate().is_err());
+    body.owners[1].parent = None;
+    body.owners[1].head_role_prefix = None;
+    assert!(body.validate().is_err());
 }
 
 #[test]
