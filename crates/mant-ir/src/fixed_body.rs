@@ -5,7 +5,7 @@
 //! module does not infer formatter geometry or parse roff. The containing
 //! `Document` closes typed source keys against its own `SourceTable`.
 
-use std::{fmt, num::NonZeroU32, ops::Range};
+use std::{collections::BTreeSet, fmt, num::NonZeroU32, ops::Range};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -265,6 +265,20 @@ pub enum OwnerHeadRole {
     Lexical,
 }
 
+/// One native macro instance whose glyphs survived inside an owner's HEAD.
+/// Its role is authored evidence; it does not itself classify an entry or
+/// split a visible form. The selection borrows the sole Fixed display surface.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OwnerHeadComponent {
+    /// Native macro role before source-neutral declaration recognition.
+    pub role: OwnerHeadRole,
+    /// Exact final glyphs from that one macro instance, possibly empty.
+    pub selection: TextSelection,
+    /// Authored macro location, separate from generated final glyphs.
+    pub source: Option<SourceSpan>,
+}
+
 /// One native candidate owner, not a fabricated semantic entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -287,6 +301,9 @@ pub struct OwnerMark {
     /// checked; this is evidence, not copied body content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_role_prefix: Option<String>,
+    /// Native HEAD macro evidence in authoring order; not inferred from font.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub head_components: Vec<OwnerHeadComponent>,
     /// Checked semantic facts referring only to this owner's final display
     /// selections. The display surface remains the sole text owner.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -318,6 +335,56 @@ impl OwnerMark {
 }
 
 impl FixedBody {
+    /// Return multiple exact option declarations only when distinct native
+    /// `Fl` macro instances cover every non-separator glyph in one complete
+    /// definition HEAD. Typography or punctuation alone never creates names.
+    #[must_use]
+    pub fn option_component_forms(
+        &self,
+        owner: &OwnerMark,
+    ) -> Option<Vec<(String, TextSelection)>> {
+        if owner.role != OwnerRole::Definition || owner.head_components.len() < 2 {
+            return None;
+        }
+        let mut forms = Vec::with_capacity(owner.head_components.len());
+        let mut seen = BTreeSet::new();
+        for component in &owner.head_components {
+            if component.role != OwnerHeadRole::Option
+                || component.selection.parts.is_empty()
+                || component.source.is_none()
+            {
+                return None;
+            }
+            let text = self.selection_text(&component.selection)?;
+            if !crate::native_option_token(&text) || !seen.insert(text.clone()) {
+                return None;
+            }
+            forms.push((text, component.selection.clone()));
+        }
+        let mut selected = owner
+            .head_components
+            .iter()
+            .flat_map(|component| component.selection.parts.iter())
+            .peekable();
+        for part in &owner.head.parts {
+            if selected.peek().is_some_and(|component| *component == part) {
+                selected.next();
+                continue;
+            }
+            let run = self.surface.run_text(part.run)?;
+            let start = usize::try_from(part.start_byte).ok()?;
+            let end = usize::try_from(part.end_byte).ok()?;
+            if !run
+                .get(start..end)?
+                .bytes()
+                .all(|byte| byte.is_ascii_whitespace() || matches!(byte, b',' | b'|' | b'/'))
+            {
+                return None;
+            }
+        }
+        selected.next().is_none().then_some(forms)
+    }
+
     /// Borrow only the current conservative Fixed facts whose form, name and
     /// lexical binding close against this owner's surviving native head.
     /// Recheck at read time: an in-memory `Document` can be changed after its
@@ -327,6 +394,30 @@ impl FixedBody {
         owner: &'a OwnerMark,
     ) -> Option<&'a EntryFacts<TextSelection>> {
         let entry = owner.entry.as_ref()?;
+        if entry.forms.len() > 1 {
+            let forms = self.option_component_forms(owner)?;
+            let valid = entry.id == owner.id
+                && entry.kind
+                    == EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    }
+                && entry.case == NameCase::Sensitive
+                && entry.alias_groups.is_empty()
+                && entry.alias_of.is_none()
+                && entry.value_domain.is_none()
+                && entry.forms.len() == forms.len()
+                && entry.names.len() == forms.len()
+                && entry.name_bindings.len() == forms.len()
+                && forms.iter().enumerate().all(|(index, (name, selection))| {
+                    entry.names[index] == *name
+                        && entry.forms[index] == *selection
+                        && entry.name_bindings[index].name == index
+                        && entry.name_bindings[index].evidence == EntryNameEvidence::NativeMarkup
+                        && entry.name_bindings[index].occurrences.as_slice()
+                            == std::slice::from_ref(selection)
+                });
+            return valid.then_some(entry);
+        }
         let form = self.owner_complete_form(owner)?;
         let [only_form] = entry.forms.as_slice() else {
             return None;

@@ -16801,6 +16801,37 @@
           "endByte"
         ]
       },
+      "OwnerHeadComponent": {
+        "description": "One native macro instance whose glyphs survived inside an owner's HEAD.\nIts role is authored evidence; it does not itself classify an entry or\nsplit a visible form. The selection borrows the sole Fixed display surface.",
+        "type": "object",
+        "properties": {
+          "role": {
+            "description": "Native macro role before source-neutral declaration recognition.",
+            "$ref": "#/$defs/OwnerHeadRole"
+          },
+          "selection": {
+            "description": "Exact final glyphs from that one macro instance, possibly empty.",
+            "$ref": "#/$defs/TextSelection"
+          },
+          "source": {
+            "description": "Authored macro location, separate from generated final glyphs.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "selection",
+          "source"
+        ]
+      },
       "OwnerHeadRole": {
         "description": "First significant native macro in a definition head, captured while the\nupstream AST is alive. This is authored role evidence, not a semantic kind.",
         "oneOf": [
@@ -16859,6 +16890,13 @@
           "head": {
             "description": "Direct visible head, possibly empty.",
             "$ref": "#/$defs/TextSelection"
+          },
+          "headComponents": {
+            "description": "Native HEAD macro evidence in authoring order; not inferred from font.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/OwnerHeadComponent"
+            }
           },
           "headRole": {
             "description": "Native first-head role, if one survived the head AST boundary.",

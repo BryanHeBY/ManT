@@ -272,7 +272,7 @@ pub(super) fn transfer(
     let mut marks = reserve(mark_views.len())?;
     for (index, mark) in mark_views.iter().enumerate() {
         if mark.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
-            || !(1..=5).contains(&mark.kind)
+            || !(1..=6).contains(&mark.kind)
             || mark.region_kind > 11
             || mark.parent >= mark.key
             || mark.owner >= mark.key
@@ -284,8 +284,8 @@ pub(super) fn transfer(
             || (mark.flags & 8 != 0 && mark.kind != 1)
             || (mark.flags & 16 != 0 && mark.kind != 2)
             || (mark.flags & 0b1_1110_0000 != 0
-                && (mark.kind != 2
-                    || mark.flags & 16 == 0
+                && ((mark.kind != 2 && mark.kind != 6)
+                    || mark.kind == 2 && mark.flags & 16 == 0
                     || (mark.flags & 0b1_1110_0000).count_ones() != 1))
         {
             return Err(invalid_result());
@@ -357,6 +357,24 @@ pub(super) fn transfer(
                 || marks
                     .get(usize::try_from(mark.parent - 1).map_err(|_| invalid_result())?)
                     .is_none_or(|parent: &AnnotatedMark| parent.kind != 5))
+        {
+            return Err(invalid_result());
+        }
+        if mark.kind == 6
+            && (mark.parent == 0
+                || mark.owner != mark.parent
+                || mark.source == 0
+                || mark.flags & 1 == 0
+                || mark.flags & 0b1_1110_0000 == 0
+                || mark.flags & !(1 | 0b1_1110_0000) != 0
+                || mark.title_region != 0
+                || mark.body_region != 0
+                || mark.region_kind != 0
+                || marks
+                    .get(usize::try_from(mark.parent - 1).map_err(|_| invalid_result())?)
+                    .is_none_or(|parent: &AnnotatedMark| {
+                        parent.kind != 5 || parent.region_kind != 3
+                    }))
         {
             return Err(invalid_result());
         }
@@ -485,12 +503,21 @@ pub(super) fn transfer(
             || run.label.source as usize > sources.len()
             || run.label.owner as usize > marks.len()
             || run.label.link as usize > marks.len()
+            || run.label.head_component as usize > marks.len()
+            || (run.label.head_component != 0
+                && marks
+                    .get(
+                        usize::try_from(run.label.head_component - 1)
+                            .map_err(|_| invalid_result())?,
+                    )
+                    .is_none_or(|mark| mark.kind != 6 || mark.owner != run.label.owner))
             || (run.label.role != 1 && run.label.role != 4 && run.label.role != 5)
             || !text_view.is_char_boundary(start_usize)
             || !text_view.is_char_boundary(end_usize)
             || (run.label.role == 5
                 && (run.label.owner != 0
                     || run.label.link != 0
+                    || run.label.head_component != 0
                     || run.label.source != 0
                     || run.label.style != 0
                     || !text_view[start_usize..end_usize]
@@ -509,6 +536,7 @@ pub(super) fn transfer(
                 owner: run.label.owner,
                 link: run.label.link,
                 source: run.label.source,
+                head_component: run.label.head_component,
                 style: run.label.style,
                 role: run.label.role,
             },
@@ -536,6 +564,8 @@ pub(super) fn transfer(
             let run = owned_runs.get(run_index).ok_or_else(invalid_result)?;
             let (bit, direct_key) = if mark.kind == 3 {
                 (2_u8, run.label.link)
+            } else if mark.kind == 6 {
+                (4_u8, run.label.head_component)
             } else if mark.kind == 1 || mark.kind == 2 || mark.kind == 5 {
                 (1_u8, run.label.owner)
             } else {
@@ -606,7 +636,9 @@ pub(super) fn transfer(
         return Err(invalid_result());
     }
     for (index, run) in owned_runs.iter().enumerate() {
-        let expected = u8::from(run.label.owner != 0) | (u8::from(run.label.link != 0) << 1);
+        let expected = u8::from(run.label.owner != 0)
+            | (u8::from(run.label.link != 0) << 1)
+            | (u8::from(run.label.head_component != 0) << 2);
         if selected[index] != expected {
             return Err(invalid_result());
         }

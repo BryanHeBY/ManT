@@ -233,6 +233,11 @@ mant_annotated_coverage_build(struct structured_session *session,
 		case MANT_ANNOTATED_MARK_ANCHOR:
 			dimension = MANT_ANNOTATED_COVERAGE_ANCHOR;
 			break;
+		case MANT_ANNOTATED_MARK_HEAD_COMPONENT:
+			/* A native macro instance is declaration evidence, not proof
+			 * that a complete semantic name survived the final display. */
+			dimension = MANT_ANNOTATED_COVERAGE_DECLARATION;
+			break;
 		default:
 			mant_structured_set_failure(session, MANT_STRUCTURED_RELATION,
 			    MANT_STRUCTURED_STAGE_CHECK, 0, mark->kind, 0);

@@ -307,6 +307,41 @@ impl FixedBody {
             }
             validate_selection(&owner.head)?;
             validate_selection(&owner.direct_body)?;
+            let mut previous_component: Option<&super::OwnerHeadComponent> = None;
+            for component in &owner.head_components {
+                validate_selection(&component.selection)?;
+                if let Some(previous) = previous_component
+                    && (selections_overlap(&previous.selection, &component.selection)
+                        || previous
+                            .selection
+                            .parts
+                            .last()
+                            .zip(component.selection.parts.first())
+                            .is_some_and(|(a, b)| a.run > b.run))
+                {
+                    return Err(FixedBodyError("head components overlap or reorder"));
+                }
+                previous_component = Some(component);
+            }
+            // Both selections are already ordered. A single merge checks all
+            // component slices against the owner HEAD without rescanning its
+            // prefix for every native macro instance.
+            let mut components = owner
+                .head_components
+                .iter()
+                .flat_map(|component| component.selection.parts.iter())
+                .peekable();
+            for part in &owner.head.parts {
+                if components
+                    .peek()
+                    .is_some_and(|candidate| **candidate == *part)
+                {
+                    components.next();
+                }
+            }
+            if components.peek().is_some() {
+                return Err(FixedBodyError("head component escapes owner head"));
+            }
             if owner.entry.is_some() && self.validated_entry(owner).is_none() {
                 return Err(FixedBodyError("invalid fixed entry facts"));
             }
@@ -399,6 +434,12 @@ impl FixedBody {
             .iter()
             .filter_map(|mark| mark.source)
             .chain(self.owners.iter().filter_map(|mark| mark.source))
+            .chain(self.owners.iter().flat_map(|owner| {
+                owner
+                    .head_components
+                    .iter()
+                    .filter_map(|component| component.source)
+            }))
             .chain(self.links.iter().filter_map(|mark| mark.source))
             .chain(self.anchors.iter().filter_map(|mark| mark.source))
             .chain(self.regions.iter().filter_map(|mark| mark.source))

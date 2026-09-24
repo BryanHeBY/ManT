@@ -26,6 +26,7 @@ use raw::{
     mant_annotated_alignof_display_run, mant_annotated_alignof_mark,
     mant_annotated_alignof_result_view, mant_annotated_alignof_selection_part,
     mant_annotated_offsetof_display_label_glyph_origin,
+    mant_annotated_offsetof_display_label_head_component,
     mant_annotated_offsetof_display_row_break_after, mant_annotated_offsetof_display_run_label,
     mant_annotated_offsetof_mark_name, mant_annotated_offsetof_mark_point_kind,
     mant_annotated_offsetof_mark_selection_first, mant_annotated_offsetof_mark_table_offset,
@@ -97,7 +98,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 10
+        mant_annotated_abi_version() == 11
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -113,6 +114,8 @@ fn check_abi() -> bool {
             && mant_annotated_alignof_display_label() == std::mem::align_of::<LabelView>()
             && mant_annotated_offsetof_display_label_glyph_origin()
                 == std::mem::offset_of!(LabelView, glyph_origin)
+            && mant_annotated_offsetof_display_label_head_component()
+                == std::mem::offset_of!(LabelView, head_component)
             && mant_annotated_sizeof_mark() == std::mem::size_of::<MarkView>()
             && mant_annotated_alignof_mark() == std::mem::align_of::<MarkView>()
             && mant_annotated_offsetof_mark_name() == std::mem::offset_of!(MarkView, name)

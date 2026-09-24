@@ -45,7 +45,7 @@ impl Identities {
         // a vector index or as the carrier of a moved tag.c target.
         for (index, mark) in page.marks.iter().enumerate() {
             if mark.key as usize != index + 1
-                || !(1..=5).contains(&mark.kind)
+                || !(1..=6).contains(&mark.kind)
                 || (mark.parent != 0 && mark.parent >= mark.key)
             {
                 return Err(AnnotatedProjectionError::Relation(
@@ -346,6 +346,7 @@ fn allocate_id_excluding(
 }
 
 impl KeyMap {
+    #[allow(clippy::too_many_lines)] // One preorder pass closes all typed native keys.
     pub(super) fn new(page: &AnnotatedDocument, identities: &Identities) -> Result<Self> {
         let length = page
             .marks
@@ -362,7 +363,7 @@ impl KeyMap {
         };
         let mut counts = [0_u32; 5];
         for (index, mark) in page.marks.iter().enumerate() {
-            if mark.key as usize != index + 1 || !(1..=5).contains(&mark.kind) {
+            if mark.key as usize != index + 1 || !(1..=6).contains(&mark.kind) {
                 return Err(AnnotatedProjectionError::Relation(
                     "invalid global native mark key",
                 ));
@@ -374,6 +375,7 @@ impl KeyMap {
                 2 => 0b1_1111_0001, // authored owner, definition and one head role
                 4 => 0b0101,        // authored anchor and manual target
                 3 | 5 => 0b0001,    // authored link or region
+                6 => 0b1_1110_0001, // authored HEAD component and one native role
                 _ => unreachable!(),
             };
             if mark.flags & !allowed_flags != 0 {
@@ -387,6 +389,19 @@ impl KeyMap {
             {
                 return Err(AnnotatedProjectionError::Relation(
                     "native owner has invalid head role flags",
+                ));
+            }
+            if mark.kind == 6
+                && (mark.flags & 1 == 0
+                    || mark.source == 0
+                    || (mark.flags & 0b1_1110_0000).count_ones() != 1
+                    || mark.parent == 0
+                    || mark.owner != mark.parent
+                    || page.marks[(mark.parent - 1) as usize].kind != 5
+                    || page.marks[(mark.parent - 1) as usize].region_kind != 3)
+            {
+                return Err(AnnotatedProjectionError::Relation(
+                    "native head component has invalid parent or role",
                 ));
             }
             if mark.name.as_deref().is_some_and(str::is_empty)
@@ -410,6 +425,10 @@ impl KeyMap {
                 // tag.c::tag_move_id can make a manual target the heading's
                 // authored alias. The original global mark stays in native
                 // identity order, but it is not a separate Fixed anchor.
+                map.nearest[mark.key as usize] = map.nearest[mark.parent as usize];
+                continue;
+            }
+            if mark.kind == 6 {
                 map.nearest[mark.key as usize] = map.nearest[mark.parent as usize];
                 continue;
             }

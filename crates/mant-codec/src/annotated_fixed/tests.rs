@@ -993,6 +993,111 @@ fn native_head_roles_promote_only_complete_visible_names() {
 }
 
 #[test]
+fn native_head_components_index_distinct_mdoc_options_without_guessing_styled_terms() {
+    // These exact inputs first ran pinned CVS -Ttree and -Tutf8. In
+    // mdoc_macro.c::blk_full, each Fl is a distinct HEAD child; mdoc_term.c::
+    // termp_fl_pre contributes its visible dash. Sy is not another Fl.
+    let input = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Fl b\nbody\n.El\n";
+    let mut untrusted = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Mdoc)
+        .unwrap();
+    untrusted
+        .marks
+        .iter_mut()
+        .find(|mark| mark.kind == 6)
+        .unwrap()
+        .source = 0;
+    assert!(lower_annotated_document(untrusted).is_err());
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    let owner = &fixed.owners[0];
+    assert_eq!(owner.head_components.len(), 2);
+    let entry = owner.entry.as_ref().expect("native Fl declarations");
+    assert_eq!(entry.names, ["-a", "-b"]);
+    assert_eq!(entry.forms.len(), 2);
+    assert!(validate_document(&document).is_empty());
+    let index = mant_ir::SemanticIndex::build(&document);
+    assert!(
+        index
+            .section("options")
+            .iter()
+            .any(|entry| entry.names == ["-a", "-b"])
+    );
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let result = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "-b".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(result.total, 1);
+    let details = result.evidence[0].entry.as_ref().unwrap();
+    assert_eq!(details.names, ["-a", "-b"]);
+    assert_eq!(
+        details.fixed_forms[1].complete_text().as_deref(),
+        Some("-b")
+    );
+    result.validate_references().unwrap();
+
+    let styled = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Sy -b\nbody\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(styled), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    assert_eq!(fixed.owners[0].head_components.len(), 1);
+    assert_ne!(fixed.owners[0].entry.as_ref().unwrap().names, ["-a", "-b"]);
+    assert!(validate_document(&document).is_empty());
+}
+
+#[test]
+fn many_native_head_components_keep_bounded_explanation_bindings() {
+    use std::fmt::Write as _;
+    // This generated exact 33-Fl line ran pinned CVS -Tutf8 width=78 first. Each Fl
+    // remains a separate mdoc_macro.c::blk_full HEAD child across soft wraps.
+    let mut head = String::new();
+    for number in 1..=33 {
+        write!(&mut head, " Fl a{number} ,").unwrap();
+    }
+    let input = format!(
+        ".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It{head}\nbody\n.El\n"
+    );
+    let document =
+        project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Mdoc).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names.len(), 33);
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let result = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "-a33".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let evidence = &result.evidence[0];
+    assert!(evidence.name_bindings_omitted);
+    assert!(evidence.match_details_omitted);
+    assert_eq!(evidence.entry.as_ref().unwrap().name_bindings.len(), 32);
+    result.validate_references().unwrap();
+}
+
+#[test]
 fn complete_man_tp_option_uses_shared_lexical_rule_without_promoting_other_terms() {
     // This exact input first ran pinned CVS -Tutf8. man_macro.c::blk_imp
     // creates distinct TP HEAD/BODY scopes; man_term.c::pre_TP/post_TP

@@ -106,6 +106,7 @@ size_t mant_annotated_offsetof_display_run_label(void);
 size_t mant_annotated_sizeof_display_label(void);
 size_t mant_annotated_alignof_display_label(void);
 size_t mant_annotated_offsetof_display_label_glyph_origin(void);
+size_t mant_annotated_offsetof_display_label_head_component(void);
 size_t mant_annotated_sizeof_mark(void);
 size_t mant_annotated_alignof_mark(void);
 size_t mant_annotated_offsetof_mark_name(void);

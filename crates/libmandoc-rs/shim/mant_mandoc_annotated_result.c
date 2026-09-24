@@ -20,8 +20,7 @@ count_direct_part(struct structured_session *session,
 		return 0;
 	}
 	mark = result->marks + key - 1;
-	if ((kind == MANT_ANNOTATED_MARK_LINK &&
-	    mark->kind != MANT_ANNOTATED_MARK_LINK) ||
+	if ((kind != 0 && mark->kind != kind) ||
 	    (kind == 0 && mark->kind != MANT_ANNOTATED_MARK_OWNER &&
 	    mark->kind != MANT_ANNOTATED_MARK_HEADING &&
 	    mark->kind != MANT_ANNOTATED_MARK_REGION)) {
@@ -91,7 +90,9 @@ write_direct_part(struct mant_annotated_result *result, uint32_t key,
 	part->join_before = MANT_ANNOTATED_JOIN_NONE;
 	if (mark->selection_count != 0)
 		part->join_before = native_join(endpoints,
-		    (part - 1)->run, run->key, mark->key, mark->kind,
+		    (part - 1)->run, run->key,
+		    mark->kind == MANT_ANNOTATED_MARK_HEAD_COMPONENT ?
+		    mark->owner : mark->key, mark->kind,
 		    last_non_layout_run > (part - 1)->run,
 		    &part->join_text_len);
 	part->start_byte = 0;
@@ -133,7 +134,7 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 		    display->run_count);
 		return 0;
 	}
-	work = (uint64_t)display->run_count * 2 + result->mark_count;
+	work = (uint64_t)display->run_count * 3 + result->mark_count;
 	if (!mant_structured_charge(session, &session->builder_operations, work,
 	    session->limits->max_builder_operations, 8,
 	    MANT_STRUCTURED_STAGE_CHECK))
@@ -146,7 +147,10 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 		    !count_direct_part(session, result, run->label.owner,
 		    0, &edges, maximum) ||
 		    !count_direct_part(session, result, run->label.link,
-		    MANT_ANNOTATED_MARK_LINK, &edges, maximum))
+		    MANT_ANNOTATED_MARK_LINK, &edges, maximum) ||
+		    !count_direct_part(session, result,
+		    run->label.head_component,
+		    MANT_ANNOTATED_MARK_HEAD_COMPONENT, &edges, maximum))
 			return 0;
 	}
 	for (index = 0; index < result->mark_count; index++) {
@@ -171,6 +175,8 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 		    last_non_layout_run);
 		write_direct_part(result, run->label.link, run, endpoints,
 		    last_non_layout_run);
+		write_direct_part(result, run->label.head_component, run,
+		    endpoints, last_non_layout_run);
 		if (run->label.role != MANT_ANNOTATED_LAYOUT)
 			last_non_layout_run = run->key;
 	}
@@ -387,7 +393,7 @@ valid_marks(const struct mant_annotated_result *result)
 		mark = result->marks + i;
 		if (mark->key != i + 1 ||
 		    mark->kind < MANT_ANNOTATED_MARK_HEADING ||
-		    mark->kind > MANT_ANNOTATED_MARK_REGION ||
+		    mark->kind > MANT_ANNOTATED_MARK_HEAD_COMPONENT ||
 		    mark->parent >= mark->key ||
 		    mark->owner >= mark->key ||
 		    mark->source > result->common->source_count ||
@@ -408,11 +414,25 @@ valid_marks(const struct mant_annotated_result *result)
 		    ((mark->flags & MANT_ANNOTATED_MARK_DEFINITION) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) != 0 &&
-		    (mark->kind != MANT_ANNOTATED_MARK_OWNER ||
-		    (mark->flags & MANT_ANNOTATED_MARK_DEFINITION) == 0 ||
+		    ((mark->kind != MANT_ANNOTATED_MARK_OWNER &&
+		    mark->kind != MANT_ANNOTATED_MARK_HEAD_COMPONENT) ||
+		    (mark->kind == MANT_ANNOTATED_MARK_OWNER &&
+		    (mark->flags & MANT_ANNOTATED_MARK_DEFINITION) == 0) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) &
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) - 1)) != 0)) ||
 		    mark->reserved != 0 || mark->point_reserved != 0)
+			return 0;
+		if (mark->kind == MANT_ANNOTATED_MARK_HEAD_COMPONENT &&
+		    (mark->parent == 0 || mark->owner != mark->parent ||
+		    mark->source == 0 ||
+		    (mark->flags & MANT_ANNOTATED_MARK_AUTHORED) == 0 ||
+		    (mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) == 0 ||
+		    result->marks[mark->parent - 1].kind !=
+		    MANT_ANNOTATED_MARK_REGION ||
+		    result->marks[mark->parent - 1].region_kind !=
+		    MANT_ANNOTATED_REGION_OWNER_TERM ||
+		    mark->title_region != 0 || mark->body_region != 0 ||
+		    mark->region_kind != 0))
 			return 0;
 		switch (mark->point_kind) {
 		case MANT_ANNOTATED_POINT_NONE:
@@ -576,11 +596,18 @@ valid_display(const struct mant_annotated_result *result)
 			    (run->label.link > result->mark_count ||
 			    result->marks[run->label.link - 1].kind !=
 			    MANT_ANNOTATED_MARK_LINK)) ||
+			    (run->label.head_component != 0 &&
+			    (run->label.head_component > result->mark_count ||
+			    result->marks[run->label.head_component - 1].kind !=
+			    MANT_ANNOTATED_MARK_HEAD_COMPONENT ||
+			    result->marks[run->label.head_component - 1].owner !=
+			    run->label.owner)) ||
 			    (run->label.role != MANT_ANNOTATED_BODY &&
 			    run->label.role != MANT_ANNOTATED_DIRECT_DRAW &&
 			    run->label.role != MANT_ANNOTATED_LAYOUT) ||
 			    (run->label.role == MANT_ANNOTATED_LAYOUT &&
 			    (run->label.owner != 0 || run->label.link != 0 ||
+			    run->label.head_component != 0 ||
 			    run->label.source != 0 || run->label.style != 0 ||
 			    !all_layout_spaces(display.bytes + next_byte,
 			    run->byte_count))) ||
@@ -599,8 +626,8 @@ non_layout_between(const struct mant_annotated_display_view *display,
 {
 	uint32_t key;
 
-	/* Each final run can be scanned at most once per direct owner and
-	 * once per direct link because each channel partitions its runs. */
+	/* Each final run can be scanned once per direct owner, link and HEAD
+	 * component because every channel partitions its own final runs. */
 	for (key = previous + 1; key < current; key++)
 		if (display->runs[key - 1].label.role != MANT_ANNOTATED_LAYOUT)
 			return 1;
@@ -632,7 +659,8 @@ valid_selection_parts(const struct mant_annotated_result *result)
 	for (i = 0; i < display.run_count; i++) {
 		run = display.runs + i;
 		expected += (run->label.owner != 0) +
-		    (run->label.link != 0);
+		    (run->label.link != 0) +
+		    (run->label.head_component != 0);
 	}
 	if (expected != result->selection_part_count)
 		return 0;
@@ -651,7 +679,9 @@ valid_selection_parts(const struct mant_annotated_result *result)
 			spaces = 0;
 			if (part->join_before != (j == 0 ?
 			    MANT_ANNOTATED_JOIN_NONE : native_join(endpoints,
-			    previous, part->run, mark->key, mark->kind,
+			    previous, part->run,
+			    mark->kind == MANT_ANNOTATED_MARK_HEAD_COMPONENT ?
+			    mark->owner : mark->key, mark->kind,
 			    non_layout_between(&display, previous, part->run),
 			    &spaces)) ||
 			    part->join_text_len != spaces)
@@ -672,8 +702,11 @@ valid_selection_parts(const struct mant_annotated_result *result)
 			run = display.runs + part->run - 1;
 			if (part->end_byte != run->byte_count ||
 			    (mark->kind == MANT_ANNOTATED_MARK_LINK ?
-			    run->label.link : run->label.owner) != mark->key ||
+			    run->label.link :
+			    mark->kind == MANT_ANNOTATED_MARK_HEAD_COMPONENT ?
+			    run->label.head_component : run->label.owner) != mark->key ||
 			    (mark->kind != MANT_ANNOTATED_MARK_LINK &&
+			    mark->kind != MANT_ANNOTATED_MARK_HEAD_COMPONENT &&
 			    mark->kind != MANT_ANNOTATED_MARK_HEADING &&
 			    mark->kind != MANT_ANNOTATED_MARK_OWNER &&
 			    mark->kind != MANT_ANNOTATED_MARK_REGION))
@@ -700,7 +733,7 @@ mant_annotated_result_is_valid(const struct mant_annotated_result *result)
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 10;
+	return 11;
 }
 
 uint32_t
@@ -804,6 +837,8 @@ size_t mant_annotated_alignof_display_label(void)
 { return _Alignof(struct mant_annotated_display_label); }
 size_t mant_annotated_offsetof_display_label_glyph_origin(void)
 { return offsetof(struct mant_annotated_display_label, glyph_origin); }
+size_t mant_annotated_offsetof_display_label_head_component(void)
+{ return offsetof(struct mant_annotated_display_label, head_component); }
 size_t mant_annotated_sizeof_mark(void)
 { return sizeof(struct mant_annotated_mark); }
 size_t mant_annotated_alignof_mark(void)

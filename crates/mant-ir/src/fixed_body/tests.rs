@@ -129,6 +129,7 @@ fn sample_body() -> FixedBody {
             role: OwnerRole::Definition,
             head_role: None,
             head_role_prefix: None,
+            head_components: Vec::new(),
             entry: None,
             head: empty_selection(),
             direct_body: empty_selection(),

@@ -3,8 +3,8 @@
 use super::{
     AnchorMark, AnnotatedDocument, AnnotatedMark, AnnotatedProjectionError, Diagnostic,
     DiagnosticImpact, DiagnosticLevel, DisplayPoint, HeadingMark, Identities, KeyMap, LinkMark,
-    LinkTarget, OwnerHeadRole, OwnerMark, OwnerRole, RegionKind, RegionMark, Result, TextJoin,
-    TextSelection, mark_source, point, region_selection, selection,
+    LinkTarget, OwnerHeadComponent, OwnerHeadRole, OwnerMark, OwnerRole, RegionKind, RegionMark,
+    Result, TextJoin, TextSelection, mark_source, point, region_selection, selection,
 };
 
 pub(super) fn project_heading(
@@ -92,8 +92,31 @@ pub(super) fn project_owner(
     identities: &Identities,
     mark: &AnnotatedMark,
     body_regions: &[u32],
+    component_keys: &[u32],
 ) -> Result<OwnerMark> {
     let head = region_selection(page, mark.title_region)?;
+    let mut head_components = Vec::with_capacity(component_keys.len());
+    for &component_key in component_keys {
+        let component = page.marks.get((component_key - 1) as usize).ok_or(
+            AnnotatedProjectionError::Relation("head component mark missing"),
+        )?;
+        let role = match component.flags & 0b1_1110_0000 {
+            32 => OwnerHeadRole::Option,
+            64 => OwnerHeadRole::Environment,
+            128 => OwnerHeadRole::Literal,
+            256 => OwnerHeadRole::Lexical,
+            _ => {
+                return Err(AnnotatedProjectionError::Relation(
+                    "invalid head component role",
+                ));
+            }
+        };
+        head_components.push(OwnerHeadComponent {
+            role,
+            selection: selection(page, component)?,
+            source: mark_source(component)?,
+        });
+    }
     if body_regions.last().copied() != Some(mark.body_region) {
         return Err(AnnotatedProjectionError::Relation(
             "owner body pointer is not its latest direct body",
@@ -162,6 +185,7 @@ pub(super) fn project_owner(
             }
         },
         head_role_prefix: mark.name.clone(),
+        head_components,
         entry: None,
         head,
         direct_body,

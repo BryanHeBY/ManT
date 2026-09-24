@@ -26,6 +26,7 @@ struct annotated_slot {
 	uint32_t owner;
 	uint32_t link;
 	uint32_t source;
+	uint32_t head_component;
 	int value;
 	uint8_t flags;
 	uint8_t occupied;
@@ -55,6 +56,7 @@ struct annotated_frame {
 	const struct roff_node *node;
 	const struct roff_node *saved_link_node;
 	uint32_t saved_owner;
+	uint32_t saved_head_component;
 	uint32_t saved_link;
 	uint32_t saved_heading;
 	uint64_t saved_link_epoch;
@@ -67,6 +69,7 @@ struct annotated_point_state {
 	struct mant_annotated_display_checkpoint checkpoint;
 	uint32_t next;
 	uint8_t state; /* 0 absent, 1 active buffer gap, 2 captured. */
+	uint8_t component_started; /* Collector-only logical macro state. */
 };
 
 struct annotated_cell {
@@ -96,6 +99,7 @@ struct mant_annotated_collector {
 	uint32_t cell_saved_owner;
 	uint8_t table_prepared;
 	uint32_t active_owner;
+	uint32_t active_head_component;
 	uint32_t active_link;
 	const struct roff_node *active_link_node;
 	uint64_t active_link_epoch;
@@ -106,6 +110,7 @@ struct mant_annotated_collector {
 	uint64_t next_origin;
 	uint64_t pending_origin;
 	uint32_t pending_owner;
+	uint32_t pending_head_component;
 	uint32_t pending_link;
 	uint32_t pending_source;
 	uint32_t margin_owner;
@@ -1022,6 +1027,30 @@ owner_lexical_head(const struct roff_node *owner)
 	    first->child->next == NULL;
 }
 
+/* mdoc_term.c::termp_fl_pre emits its generated dash before traversing the
+ * child text; man_term.c::pre_B keeps its own children in the same macro
+ * frame.  Native syntax is evidence only: C never splits declaration forms. */
+static uint32_t
+head_component_role(const struct roff_node *node)
+{
+	if (node->type != ROFFT_ELEM)
+		return 0;
+	switch (node->tok) {
+	case MDOC_Fl:
+		return MANT_ANNOTATED_MARK_HEAD_OPTION;
+	case MDOC_Ev:
+		return MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT;
+	case MDOC_Ic:
+	case MDOC_Cm:
+		return MANT_ANNOTATED_MARK_HEAD_LITERAL;
+	case MAN_B:
+	case MAN_BR:
+		return MANT_ANNOTATED_MARK_HEAD_LEXICAL;
+	default:
+		return 0;
+	}
+}
+
 /* mdoc_term.c::termp_fl_pre emits its own dash before the Fl operand;
  * termp_ns_pre may then glue a different macro's glyphs to it.  Preserve a
  * deliberately simple authored operand while the AST lives.  Rust must still
@@ -1133,6 +1162,7 @@ push_node(struct mant_annotated_collector *collector,
 	frame = frames + collector->frame_count++;
 	frame->node = node;
 	frame->saved_owner = collector->active_owner;
+	frame->saved_head_component = collector->active_head_component;
 	frame->saved_link = collector->active_link;
 	frame->saved_link_node = collector->active_link_node;
 	frame->saved_heading = collector->active_heading;
@@ -1275,6 +1305,26 @@ push_node(struct mant_annotated_collector *collector,
 		else
 			parent_mark->body_region = key;
 		collector->active_owner = key;
+	}
+	/* A component is only a definition HEAD macro instance, never a
+	 * style-looking body glyph or a list label without a declaration owner. */
+	if (collector->active_owner != 0 &&
+	    (region_kind = head_component_role(node)) != 0) {
+		parent = collector->active_owner;
+		parent_mark = collector->marks + parent - 1;
+		if (parent_mark->kind == MANT_ANNOTATED_MARK_REGION &&
+		    parent_mark->region_kind ==
+		    MANT_ANNOTATED_REGION_OWNER_TERM &&
+		    parent_mark->parent != 0 &&
+		    (collector->marks[parent_mark->parent - 1].flags &
+	    MANT_ANNOTATED_MARK_DEFINITION) != 0) {
+			key = add_mark(collector, node, node,
+			    MANT_ANNOTATED_MARK_HEAD_COMPONENT, parent, 0, NULL);
+			if (key == 0)
+				return 0;
+			collector->marks[key - 1].flags |= region_kind;
+			collector->active_head_component = key;
+		}
 	}
 
 	if ((node->type == ROFFT_BLOCK || node->type == ROFFT_ELEM) &&
@@ -1547,6 +1597,7 @@ pop_node(struct mant_annotated_collector *collector,
 	}
 	collector->active_owner = frame->saved_owner == 0 ?
 	    collector->unsectioned_region : frame->saved_owner;
+	collector->active_head_component = frame->saved_head_component;
 	collector->active_link = frame->saved_link;
 	collector->active_link_node = frame->saved_link_node;
 	collector->active_link_epoch = frame->saved_link_epoch;
@@ -1679,6 +1730,7 @@ flush_advances(struct mant_annotated_collector *collector, int proven_gap)
 		 * surface, but cannot interrupt a logical text join. */
 		if (label.role == MANT_ANNOTATED_BODY &&
 		    label.owner == 0 && label.link == 0 && label.source == 0 &&
+		    label.head_component == 0 &&
 		    label.glyph_origin == 0 && label.style == 0 &&
 		    label.flags == 0)
 			label.role = MANT_ANNOTATED_LAYOUT;
@@ -1812,6 +1864,7 @@ record_field_skip(struct mant_annotated_collector *collector,
 				label.owner = slot->owner;
 				label.link = slot->link;
 				label.source = slot->source;
+				label.head_component = slot->head_component;
 				label.glyph_origin = slot->origin;
 				if (slot->layout_space && label.role ==
 				    MANT_ANNOTATED_BODY)
@@ -1908,6 +1961,7 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			collector->pending_owner = 0;
 			collector->pending_link = 0;
 			collector->pending_source = 0;
+			collector->pending_head_component = 0;
 			return;
 		}
 		if (collector->next_origin == UINT64_MAX) {
@@ -1918,6 +1972,25 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		}
 		collector->pending_origin = ++collector->next_origin;
 		collector->pending_owner = collector->active_owner;
+		/* term.c::term_word() writes AUTO_SPACE before each operand.
+		 * The first is macro-leading padding; later spaces within one Cm/Ic
+		 * are part of that macro's displayed phrase.  Fl's generated dash
+		 * is a logical glyph and starts its own component. */
+		collector->pending_head_component =
+		    collector->active_head_component;
+		if (collector->pending_head_component != 0) {
+			struct annotated_point_state *component = collector->points +
+			    collector->pending_head_component - 1;
+
+			if (event->reason == TERM_COLLECT_AUTO_SPACE &&
+			    !component->component_started)
+				collector->pending_head_component = 0;
+			else if (event->reason != TERM_COLLECT_AUTO_SPACE &&
+			    event->value != ASCII_NBRZW &&
+			    event->value != ASCII_BREAK &&
+			    event->value != '\n')
+				component->component_started = 1;
+		}
 		collector->pending_link = visible_link(collector,
 		    event->node, event->reason);
 		collector->pending_source = source_key(event->node);
@@ -1981,6 +2054,9 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		slot->source = event->reason == TERM_COLLECT_HORIZ ||
 		    event->reason == TERM_COLLECT_FIELD ? 0 :
 		    collector->pending_source;
+		slot->head_component = event->reason == TERM_COLLECT_HORIZ ||
+		    event->reason == TERM_COLLECT_FIELD ? 0 :
+		    collector->pending_head_component;
 		slot->flags = event->reason == TERM_COLLECT_FONT ?
 		    MANT_ANNOTATED_FONT_STROKE : 0;
 		slot->value = event->value;
@@ -2043,6 +2119,7 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_label.owner = slot->owner;
 		collector->letter_label.link = slot->link;
 		collector->letter_label.source = slot->source;
+		collector->letter_label.head_component = slot->head_component;
 		collector->letter_label.flags = slot->flags;
 		/* term.c::term_field() called p->advance(vbl) before FIELD_PLACE,
 		 * but the sink still retains those blanks.  Bind the edge after
@@ -2080,12 +2157,15 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			    collector->pending_link;
 			collector->letter_label.source =
 			    collector->pending_source;
+			collector->letter_label.head_component =
+			    collector->pending_head_component;
 		}
 		if (collector->in_margin) {
 			collector->letter_label.glyph_origin = 0;
 			collector->letter_label.owner = collector->margin_owner;
 			collector->letter_label.link = 0;
 			collector->letter_label.source = 0;
+			collector->letter_label.head_component = 0;
 		}
 		collector->letter_edge = origin_edge(column,
 		    collector->letter_label.glyph_origin);
@@ -2107,6 +2187,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_label.link = visible_link(collector,
 		    event->node, event->reason);
 		collector->letter_label.source = source_key(event->node);
+		collector->letter_label.head_component =
+		    collector->active_head_component;
 		collector->letter_edge = (struct mant_annotated_display_edge){0};
 		collector->letter_column = event->column;
 		collector->letter_pending = 1;
@@ -2199,7 +2281,8 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		}
 		if (event->op == TERM_COLLECT_BUFFER_RESET)
 			collector->pending_origin = collector->pending_owner =
-			    collector->pending_link = collector->pending_source = 0;
+			    collector->pending_link = collector->pending_source =
+			    collector->pending_head_component = 0;
 		return;
 	case TERM_COLLECT_COL_FREE:
 		if (event->column >= collector->column_capacity)

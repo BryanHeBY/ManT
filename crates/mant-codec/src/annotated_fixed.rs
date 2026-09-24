@@ -16,9 +16,9 @@ use mant_ir::{
     DisplayPoint, DisplayRole, DisplayRow, DisplayRun, DisplayStyle, DisplaySurface, Document,
     DocumentBody, DocumentMeta, EntryFacts, EntryKind, EntryNameBinding, EntryNameEvidence,
     FixedBody, FragmentAlias, HeadingMark, LinkMark, LinkTarget, NameCase, NodeId, OutputSlice,
-    OwnerHeadRole, OwnerMark, OwnerRole, ParameterKind, ParserInfo, RegionKind, RegionMark,
-    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord, SourceSpan, TextJoin,
-    TextSelection, validate_document, validate_document_sources,
+    OwnerHeadComponent, OwnerHeadRole, OwnerMark, OwnerRole, ParameterKind, ParserInfo, RegionKind,
+    RegionMark, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    SourceSpan, TextJoin, TextSelection, validate_document, validate_document_sources,
 };
 
 /// A native render failure or a relation that cannot be represented honestly
@@ -114,6 +114,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     // column.  The native body's singular pointer is only its latest BODY;
     // index every direct BODY once before projecting owners.
     let mut owner_bodies = vec![Vec::new(); page.marks.len() + 1];
+    let mut owner_components = vec![Vec::new(); page.marks.len() + 1];
     for mark in &page.marks {
         if mark.kind == 5 && mark.region_kind == 4 {
             let owner = page
@@ -128,6 +129,31 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                 ));
             }
             owner_bodies[mark.parent as usize].push(mark.key);
+        } else if mark.kind == 6 {
+            let head = page
+                .marks
+                .get(mark.parent.saturating_sub(1) as usize)
+                .ok_or(AnnotatedProjectionError::Relation(
+                    "head component has no region",
+                ))?;
+            let owner = page
+                .marks
+                .get(head.parent.saturating_sub(1) as usize)
+                .ok_or(AnnotatedProjectionError::Relation(
+                    "head component has no owner",
+                ))?;
+            if head.key != mark.parent
+                || head.kind != 5
+                || head.region_kind != 3
+                || owner.kind != 2
+                || owner.title_region != head.key
+                || mark.owner != head.key
+            {
+                return Err(AnnotatedProjectionError::Relation(
+                    "head component escapes its owner head",
+                ));
+            }
+            owner_components[owner.key as usize].push(mark.key);
         }
     }
     for mark in &page.marks {
@@ -139,6 +165,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                 &identities,
                 mark,
                 &owner_bodies[mark.key as usize],
+                &owner_components[mark.key as usize],
             )?),
             3 => links.push(project_link(
                 &page,
@@ -150,7 +177,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
             4 if !identities.consumed_anchor(mark.key)? => {
                 anchors.push(project_anchor(&keys, &identities, mark)?);
             }
-            4 => {}
+            4 | 6 => {}
             5 => regions.push(project_region(&page, &keys, mark)?),
             _ => {
                 return Err(AnnotatedProjectionError::Relation(
@@ -181,6 +208,36 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         .owners
         .iter()
         .map(|owner| {
+            if let Some(forms) = fixed.option_component_forms(owner) {
+                let names = forms.iter().map(|(name, _)| name.clone()).collect();
+                let (head_forms, name_bindings) = forms
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (_, selection))| {
+                        (
+                            selection.clone(),
+                            EntryNameBinding {
+                                name: index,
+                                occurrences: vec![selection],
+                                evidence: EntryNameEvidence::NativeMarkup,
+                            },
+                        )
+                    })
+                    .unzip();
+                return Some(EntryFacts {
+                    name_bindings,
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: head_forms,
+                    id: owner.id.clone(),
+                    kind: EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
+                    names,
+                    value_domain: None,
+                });
+            }
             let form = fixed.owner_complete_form(owner)?;
             let (kind, evidence, name, occurrence) = native_head_identity(&fixed, owner, &form)
                 .unwrap_or_else(|| {

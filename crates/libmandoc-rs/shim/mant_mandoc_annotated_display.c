@@ -134,6 +134,7 @@ same_label(struct mant_annotated_display_label a,
     struct mant_annotated_display_label b)
 {
 	return a.owner == b.owner && a.link == b.link &&
+	    a.head_component == b.head_component &&
 	    a.source == b.source && a.style == b.style && a.role == b.role;
 }
 
@@ -152,6 +153,7 @@ same_origin(struct mant_annotated_display_label a,
 	return a.glyph_origin != 0 &&
 	    a.glyph_origin == b.glyph_origin &&
 	    a.owner == b.owner && a.link == b.link &&
+	    a.head_component == b.head_component &&
 	    a.source == b.source && a.role == b.role &&
 	    ((a.flags | b.flags) & MANT_ANNOTATED_FONT_STROKE) != 0;
 }
@@ -621,6 +623,7 @@ write_bytes(struct mant_annotated_display *display,
 	    label.role > MANT_ANNOTATED_LAYOUT ||
 	    (label.role == MANT_ANNOTATED_LAYOUT &&
 	    (label.owner != 0 || label.link != 0 || label.source != 0 ||
+	    label.head_component != 0 ||
 	    label.glyph_origin != 0 || label.style != 0 || label.flags != 0)) ||
 	    (label.flags & ~MANT_ANNOTATED_FONT_STROKE) != 0 ||
 	    label.reserved != 0 || edge.reserved != 0 ||

@@ -1,8 +1,8 @@
 //! Conservative explanation from surviving native Fixed owner evidence.
 //!
 //! No Flow block, inline tree, literal mention or declaration relationship is
-//! synthesized from terminal geometry. A complete native definition head is
-//! the only selectable form/name, and its copied fragments retain final runs.
+//! synthesized from terminal geometry. Complete native definition heads and
+//! proven head components retain their final display selections.
 
 use std::{collections::BTreeMap, num::NonZeroU32};
 
@@ -179,9 +179,9 @@ impl FixedPlan<'_> {
             .ok_or(ExplanationError::InvalidFixed)?;
         let (name_match, form_match, id_match, path_match) = selected.matched;
         let outline = trail(&self.reader, &self.index, &self.indexed, owner, selected)?;
-        let [_expected] = entry.forms.as_slice() else {
+        if entry.forms.is_empty() || entry.forms.len() != entry.names.len() {
             return Err(ExplanationError::InvalidFixed);
-        };
+        }
         let mut evidence_bases = Vec::new();
         let mut match_details_omitted = false;
         if name_match {
@@ -199,11 +199,17 @@ impl FixedPlan<'_> {
         }
         if form_match {
             let basis = EvidenceBasis::Form {
-                matches: vec![ExplanationFormMatch {
-                    source_form_index: 0,
-                    text: requested.to_owned(),
-                    occurrences: Vec::new(),
-                }],
+                matches: entry
+                    .forms
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, form)| *form == requested)
+                    .map(|(index, _)| ExplanationFormMatch {
+                        source_form_index: u32::try_from(index).expect("bounded Fixed forms"),
+                        text: requested.to_owned(),
+                        occurrences: Vec::new(),
+                    })
+                    .collect(),
             };
             if budget.take(&basis) {
                 evidence_bases.push(basis);
@@ -263,6 +269,12 @@ impl FixedPlan<'_> {
             .reader
             .owner_body_parts(owner.key)
             .ok_or(ExplanationError::InvalidFixed)?;
+        if retained_fixed_positions(record).saturating_add(body_parts.len())
+            > mant_protocol::MAX_EXPLANATION_POSITIONS
+        {
+            record.content_omitted = true;
+            return Ok(());
+        }
         let body_selection = if body_parts.iter().map(|part| part.slice).eq(owner
             .direct_body
             .parts
@@ -290,6 +302,7 @@ impl FixedPlan<'_> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)] // One bounded, all-or-none Fixed DTO transfer.
     pub(super) fn finish_optional(
         &self,
         candidate: &FixedCandidate,
@@ -305,54 +318,102 @@ impl FixedPlan<'_> {
             .index
             .entry_at(&selected.path)
             .ok_or(ExplanationError::InvalidFixed)?;
-        let [expected] = entry.forms.as_slice() else {
-            return Err(ExplanationError::InvalidFixed);
+        let selections = if entry.forms.len() == 1 {
+            vec![owner.head.clone()]
+        } else {
+            self.fixed
+                .option_component_forms(owner)
+                .ok_or(ExplanationError::InvalidFixed)?
+                .into_iter()
+                .map(|(_, selection)| selection)
+                .collect()
         };
-        let form = selection(self.fixed, &owner.head, budget.0);
-        if form
-            .as_ref()
-            .is_some_and(|form| form.complete_text().as_deref() != Some(expected.as_str()))
-        {
+        if entry.forms.len() != selections.len() || entry.forms.len() != entry.names.len() {
             return Err(ExplanationError::InvalidFixed);
         }
-        let name = entry.names.first().ok_or(ExplanationError::InvalidFixed)?;
-        let (start_scalar, end_scalar) = name_span(expected, name)?;
-        record.entry = form.and_then(|form| {
-            let occurrence = ExplanationOccurrence {
-                source_occurrence_index: 0,
-                forms: Vec::new(),
-                fixed_forms: vec![ExplanationFixedFormRange {
-                    form_index: 0,
-                    start_scalar,
-                    end_scalar,
-                }],
-                content: Vec::new(),
+        record.name_bindings_omitted =
+            entry.names.len() > mant_protocol::MAX_EXPLANATION_NAME_BINDINGS;
+        let mut forms = Vec::with_capacity(selections.len());
+        let mut bindings = Vec::with_capacity(
+            selections
+                .len()
+                .min(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS),
+        );
+        let form_parts = selections
+            .iter()
+            .try_fold(0usize, |count, source| {
+                count.checked_add(source.parts.len())
+            })
+            .unwrap_or(usize::MAX);
+        let binding_positions = selections
+            .len()
+            .min(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS);
+        let match_positions = record
+            .bases
+            .iter()
+            .filter(|basis| {
+                matches!(
+                    basis,
+                    EvidenceBasis::Name { .. } | EvidenceBasis::Form { .. }
+                )
+            })
+            .count();
+        let mut complete = retained_fixed_positions(record)
+            .saturating_add(form_parts)
+            .saturating_add(binding_positions)
+            .saturating_add(match_positions)
+            <= mant_protocol::MAX_EXPLANATION_POSITIONS;
+        for (index, source) in selections.iter().enumerate() {
+            if !complete {
+                break;
+            }
+            let expected = &entry.forms[index];
+            let name = &entry.names[index];
+            let (start_scalar, end_scalar) = name_span(expected, name)?;
+            let Some(form) = selection(self.fixed, source, budget.0) else {
+                complete = false;
+                break;
             };
-            let entry = ExplanationEntry {
+            if form.complete_text().as_deref() != Some(expected.as_str()) {
+                return Err(ExplanationError::InvalidFixed);
+            }
+            forms.push(form);
+            if index < mant_protocol::MAX_EXPLANATION_NAME_BINDINGS {
+                bindings.push(ExplanationNameBinding {
+                    name_index: u32::try_from(index).map_err(|_| ExplanationError::InvalidFixed)?,
+                    occurrences: vec![ExplanationOccurrence {
+                        source_occurrence_index: 0,
+                        forms: Vec::new(),
+                        fixed_forms: vec![ExplanationFixedFormRange {
+                            form_index: u32::try_from(index)
+                                .map_err(|_| ExplanationError::InvalidFixed)?,
+                            start_scalar,
+                            end_scalar,
+                        }],
+                        content: Vec::new(),
+                    }],
+                });
+            }
+        }
+        record.entry = if complete {
+            let details = ExplanationEntry {
                 kind: entry.kind,
                 case: entry.case,
                 names: entry.names.clone(),
                 forms: Vec::new(),
-                fixed_forms: vec![form],
-                name_bindings: vec![ExplanationNameBinding {
-                    name_index: 0,
-                    occurrences: vec![occurrence],
-                }],
+                fixed_forms: forms,
+                name_bindings: bindings,
                 alias_groups: Vec::new(),
                 alias_of: None,
                 value_domain: None,
             };
-            budget.take(&entry).then_some(entry)
-        });
+            budget.take(&details).then_some(details)
+        } else {
+            None
+        };
         record.details_omitted = record.entry.is_none();
-        let name_occurrence = record
-            .entry
-            .as_ref()
-            .and_then(|entry| entry.name_bindings.first())
-            .and_then(|binding| binding.occurrences.first())
-            .cloned();
         for basis in &mut record.bases {
-            let Some(occurrence) = &name_occurrence else {
+            let Some(details) = &record.entry else {
                 if matches!(
                     basis,
                     EvidenceBasis::Name { .. } | EvidenceBasis::Form { .. }
@@ -364,13 +425,41 @@ impl FixedPlan<'_> {
             let mut with_position = basis.clone();
             match &mut with_position {
                 EvidenceBasis::Name { matches } => {
-                    matches[0].occurrences.push(occurrence.clone());
+                    for matched in matches {
+                        let index = details
+                            .names
+                            .iter()
+                            .position(|name| name == &matched.name)
+                            .ok_or(ExplanationError::InvalidFixed)?;
+                        if let Some(binding) = details.name_bindings.get(index) {
+                            matched.occurrences.push(binding.occurrences[0].clone());
+                        } else {
+                            record.match_details_omitted = true;
+                        }
+                    }
                 }
                 EvidenceBasis::Form { matches } => {
-                    let mut complete = occurrence.clone();
-                    complete.fixed_forms[0].start_scalar = 0;
-                    complete.fixed_forms[0].end_scalar = expected.chars().count() as u64;
-                    matches[0].occurrences.push(complete);
+                    for matched in matches {
+                        let index = matched.source_form_index as usize;
+                        let expected = details
+                            .fixed_forms
+                            .get(index)
+                            .ok_or(ExplanationError::InvalidFixed)?;
+                        matched.occurrences.push(ExplanationOccurrence {
+                            source_occurrence_index: 0,
+                            forms: Vec::new(),
+                            fixed_forms: vec![ExplanationFixedFormRange {
+                                form_index: matched.source_form_index,
+                                start_scalar: 0,
+                                end_scalar: expected
+                                    .complete_text()
+                                    .ok_or(ExplanationError::InvalidFixed)?
+                                    .chars()
+                                    .count() as u64,
+                            }],
+                            content: Vec::new(),
+                        });
+                    }
                 }
                 EvidenceBasis::Identity { .. } => continue,
                 _ => return Err(ExplanationError::InvalidFixed),
@@ -418,6 +507,43 @@ fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError>
     let start_scalar = expected[..start_byte].chars().count() as u64;
     let end_scalar = start_scalar + name.chars().count() as u64;
     Ok((start_scalar, end_scalar))
+}
+
+fn retained_fixed_positions(record: &ExplanationEvidence) -> usize {
+    let forms = record.entry.as_ref().map_or(0, |entry| {
+        let form_parts = entry.fixed_forms.iter().fold(0usize, |count, selection| {
+            count.saturating_add(selection.parts.len())
+        });
+        entry
+            .name_bindings
+            .iter()
+            .fold(form_parts, |count, binding| {
+                binding.occurrences.iter().fold(count, |count, occurrence| {
+                    count.saturating_add(occurrence.fixed_forms.len())
+                })
+            })
+    });
+    let matches = record
+        .bases
+        .iter()
+        .fold(0usize, |count, basis| match basis {
+            EvidenceBasis::Name { matches } => matches.iter().fold(count, |count, matched| {
+                matched.occurrences.iter().fold(count, |count, occurrence| {
+                    count.saturating_add(occurrence.fixed_forms.len())
+                })
+            }),
+            EvidenceBasis::Form { matches } => matches.iter().fold(count, |count, matched| {
+                matched.occurrences.iter().fold(count, |count, occurrence| {
+                    count.saturating_add(occurrence.fixed_forms.len())
+                })
+            }),
+            _ => count,
+        });
+    let body = match &record.content {
+        Some(ExplanationContent::FixedOwner { reading_body, .. }) => reading_body.parts.len(),
+        _ => 0,
+    };
+    forms.saturating_add(matches).saturating_add(body)
 }
 
 fn collect_indexed(
@@ -734,6 +860,7 @@ mod tests {
                     role: OwnerRole::Definition,
                     head_role: None,
                     head_role_prefix: None,
+                    head_components: Vec::new(),
                     entry: None,
                     head: slices(&[3, 4], vec![TextJoin::DirectContact], &lengths),
                     direct_body: slices(&[5], Vec::new(), &lengths),
@@ -748,6 +875,7 @@ mod tests {
                     role: OwnerRole::Definition,
                     head_role: None,
                     head_role_prefix: None,
+                    head_components: Vec::new(),
                     entry: None,
                     head: TextSelection {
                         parts: Vec::new(),
@@ -985,6 +1113,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // One cross-source response fixture exercises all three domains.
     fn scoped_fixed_flow_and_tldr_share_one_candidate_page_and_source_index() {
         use mant_ir::{DocumentAddress, MarkdownOrigin};
         use mant_protocol::{

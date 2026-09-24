@@ -33,6 +33,8 @@ struct mant_annotated_display_label {
 	uint32_t owner;
 	uint32_t link;
 	uint32_t source;
+	/* Native HEAD macro instance; zero for body, layout and unproved text. */
+	uint32_t head_component;
 	uint32_t style;
 	uint32_t role;
 	/* Input-only execution identity; zero means that folding is unproven. */

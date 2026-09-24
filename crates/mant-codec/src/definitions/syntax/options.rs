@@ -4,8 +4,8 @@ use crate::definitions::RecognizedName;
 #[cfg(test)]
 use mant_ir::DefinitionItem;
 use mant_ir::inline_plain_text as plain_text;
-use mant_ir::{ContentContext, Inline, is_option_name_body, native_option_token};
 pub(crate) use mant_ir::option_prefix;
+use mant_ir::{ContentContext, Inline, is_option_name_body, native_option_token};
 
 #[cfg(test)]
 pub(in crate::definitions) fn option_names(

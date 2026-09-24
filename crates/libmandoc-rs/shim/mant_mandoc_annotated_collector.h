@@ -17,7 +17,9 @@ enum mant_annotated_mark_kind {
 	MANT_ANNOTATED_MARK_OWNER = 2,
 	MANT_ANNOTATED_MARK_LINK = 3,
 	MANT_ANNOTATED_MARK_ANCHOR = 4,
-	MANT_ANNOTATED_MARK_REGION = 5
+	MANT_ANNOTATED_MARK_REGION = 5,
+	/* One authored macro instance inside a definition HEAD. */
+	MANT_ANNOTATED_MARK_HEAD_COMPONENT = 6
 };
 
 enum mant_annotated_region_kind {
@@ -105,7 +107,8 @@ struct mant_annotated_mark {
 	struct mant_bytes_view target_a;
 	struct mant_bytes_view target_b;
 	/* Zero-based range in the result's shared selection_parts arena.
-	 * Only direct owner and link labels are indexed; ancestors are not copied. */
+	 * Direct owner, link and HEAD-component labels are indexed; ancestors
+	 * are not copied. */
 	uint32_t selection_first;
 	uint32_t selection_count;
 	/* Final body-only zero-width point.  ROW_COLUMN uses a one-based row;

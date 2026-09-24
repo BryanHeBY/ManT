@@ -34,6 +34,35 @@
           "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
         }
       ]
+    },
+    {
+      "id": "F002",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/annotated-multi-head-components.1",
+      "sha256": "7caffeadb1029527e2f808b24f22be1c912ea0d45eaf163ec9265ce37ab5e487",
+      "queries": [
+        {
+          "query": "-b",
+          "review": "Pinned CVS mdoc_macro.c::blk_full keeps two distinct Fl macro instances in the line-6 It HEAD; mdoc_term.c::termp_fl_pre renders each dash. The line-8 Sy is not another Fl.",
+          "expected": [
+            {
+              "source": {"line": 6, "column": 2},
+              "kind": "option",
+              "names": ["-a", "-b"],
+              "forms": ["-a", "-b"],
+              "emptyDescription": false,
+              "bodyIncludes": ["two native options"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "-d",
+          "review": "Pinned CVS line-8 Sy is styled text, not a second Fl declaration; do not promote its visible option-like glyphs to a native name.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        }
+      ]
     }
   ]
 }

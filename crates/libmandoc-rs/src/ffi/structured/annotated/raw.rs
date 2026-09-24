@@ -14,6 +14,7 @@ pub(super) struct LabelView {
     pub(super) owner: u32,
     pub(super) link: u32,
     pub(super) source: u32,
+    pub(super) head_component: u32,
     pub(super) style: u32,
     pub(super) role: u32,
     pub(super) glyph_origin: u64,
@@ -172,6 +173,7 @@ unsafe extern "C" {
     pub(super) fn mant_annotated_sizeof_display_label() -> usize;
     pub(super) fn mant_annotated_alignof_display_label() -> usize;
     pub(super) fn mant_annotated_offsetof_display_label_glyph_origin() -> usize;
+    pub(super) fn mant_annotated_offsetof_display_label_head_component() -> usize;
     pub(super) fn mant_annotated_sizeof_mark() -> usize;
     pub(super) fn mant_annotated_alignof_mark() -> usize;
     pub(super) fn mant_annotated_offsetof_mark_name() -> usize;

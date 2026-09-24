@@ -415,6 +415,7 @@ fn owner_head_and_body_cannot_claim_the_same_bytes() {
         role: OwnerRole::Definition,
         head_role: None,
         head_role_prefix: None,
+        head_components: Vec::new(),
         entry: None,
         head: selection(&[(0, 2)], Vec::new()),
         direct_body: selection(&[(1, 3)], Vec::new()),
@@ -506,6 +507,7 @@ fn fixed_partial_name_requires_native_prefix_and_exact_surviving_slice() {
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Option),
         head_role_prefix: Some("-a".to_owned()),
+        head_components: Vec::new(),
         entry: Some(EntryFacts {
             id: NodeId::from("option-a"),
             kind: EntryKind::Parameter {
@@ -579,6 +581,7 @@ fn lexical_option_facts_require_the_native_role_and_complete_head_binding() {
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Lexical),
         head_role_prefix: None,
+        head_components: Vec::new(),
         entry: Some(EntryFacts {
             id: NodeId::from("lexical-option"),
             kind: EntryKind::Parameter {

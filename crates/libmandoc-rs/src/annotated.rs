@@ -57,6 +57,7 @@ pub struct AnnotatedLabel {
     pub owner: u32,
     pub link: u32,
     pub source: u32,
+    pub head_component: u32,
     pub style: u32,
     pub role: u32,
 }
@@ -381,6 +382,136 @@ impl AnnotatedRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn direct_mark_text(page: &AnnotatedDocument, mark: &AnnotatedMark) -> String {
+        let mut text = String::new();
+        for part in &page.selection_parts
+            [mark.selection_first as usize..(mark.selection_first + mark.selection_count) as usize]
+        {
+            if part.join_before == AnnotatedTextJoin::AuthoredSeparator {
+                let start = usize::try_from(part.join_text_start).unwrap();
+                let end = start + usize::try_from(part.join_text_len).unwrap();
+                text.push_str(&page.join_text[start..end]);
+            }
+            let run = &page.runs[(part.run - 1) as usize];
+            let start = usize::try_from(run.byte_start + part.start_byte).unwrap();
+            let end = usize::try_from(run.byte_start + part.end_byte).unwrap();
+            text.push_str(&page.text[start..end]);
+        }
+        text
+    }
+
+    #[test]
+    fn native_head_components_follow_surviving_macro_instances() {
+        // Pinned mdoc_macro.c::blk_full keeps both Fl elements in one HEAD;
+        // mdoc_term.c::termp_fl_pre emits each dash inside its own frame.
+        // The exact input was run with the fixed CVS -Ttree and -Tutf8 first.
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a , Fl b\nBODY\n.El\n".to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            components
+                .iter()
+                .map(|mark| direct_mark_text(&page, mark))
+                .collect::<Vec<_>>(),
+            ["-a", "-b"]
+        );
+        assert!(components.iter().all(|mark| mark.flags & 32 != 0));
+        assert!(
+            page.runs
+                .iter()
+                .any(|run| run.label.head_component == components[0].key)
+        );
+        assert!(
+            page.runs
+                .iter()
+                .any(|run| run.label.head_component == components[1].key)
+        );
+    }
+
+    #[test]
+    fn native_head_component_does_not_infer_a_second_styled_option() {
+        // Pinned mdoc_macro.c::blk_full builds the second macro as Sy, not Fl.
+        // The exact input was run with the fixed CVS -Ttree first.
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a , Sy -b\nBODY\n.El\n".to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            components
+                .iter()
+                .map(|mark| direct_mark_text(&page, mark))
+                .collect::<Vec<_>>(),
+            ["-a"]
+        );
+    }
+
+    #[test]
+    fn native_man_b_keeps_one_complete_head_component() {
+        // Pinned man_macro.c::blk_imp gives TP one HEAD, and man_term.c::pre_B
+        // styles a single text child; exact input ran CVS -Ttree/-Tutf8.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".TH T 1\n.SH OPTIONS\n.TP\n.B -a, --all\nBODY\n".to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            components
+                .iter()
+                .map(|mark| direct_mark_text(&page, mark))
+                .collect::<Vec<_>>(),
+            ["-a, --all"]
+        );
+        assert!(components.iter().all(|mark| mark.flags & 256 != 0));
+    }
+
+    #[test]
+    fn native_multiword_command_component_keeps_internal_space_not_leading_padding() {
+        // Exact input ran pinned CVS -Tutf8 first. term.c::term_word()
+        // inserts AUTO_SPACE before each operand; mdoc_term.c renders the
+        // two Cm children as one visibly spaced macro phrase.
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Cm foo bar\nbody\n.El\n".to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let component = page.marks.iter().find(|mark| mark.kind == 6).unwrap();
+        assert_eq!(direct_mark_text(&page, component), "foo bar");
+        assert!(component.selection_count >= 2);
+
+        // The exact zero-width first-operand variant also ran pinned CVS:
+        // it renders only "foo", with no manufactured leading padding.
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Cm \\& foo\nbody\n.El\n".to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let component = page.marks.iter().find(|mark| mark.kind == 6).unwrap();
+        assert_eq!(direct_mark_text(&page, component), "foo");
+    }
 
     #[test]
     fn native_man_body_transfers_one_checked_surface() {
