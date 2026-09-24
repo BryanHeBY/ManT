@@ -186,6 +186,86 @@
           "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
         }
       ]
+    },
+    {
+      "id": "F005",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/gcc.1.gz",
+      "sha256": "a86bd1d671aa2afff558eb3b7c8b6e2a8bbaf55cb9fb2a6549b7538dd56e0f0f",
+      "queries": [
+        {
+          "query": "-x",
+          "review": "Pinned CVS man_macro.c::blk_imp preserves the distinct GCC IP heads at lines 1720 and 1755, while man_term.c::pre_IP prints their bold -x prefixes. The first has no own body; a later reading-context group must not rewrite that ownership.",
+          "expected": [
+            {
+              "source": {"line": 1720, "column": 2},
+              "kind": "option",
+              "names": ["-x"],
+              "forms": ["-x language"],
+              "emptyDescription": true
+            },
+            {
+              "source": {"line": 1755, "column": 2},
+              "kind": "option",
+              "names": ["-x"],
+              "forms": ["-x none"],
+              "emptyDescription": false,
+              "bodyIncludes": ["Turn off any specification of a language"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 2}
+        },
+        {
+          "query": "--help",
+          "review": "Pinned CVS has independent GCC IP heads at lines 2153 and 2167. The second's parameterized head is a form, not an invented additional name; both retain their own descriptions.",
+          "expected": [
+            {
+              "source": {"line": 2153, "column": 2},
+              "kind": "option",
+              "names": ["--help"],
+              "forms": ["--help"],
+              "emptyDescription": false,
+              "bodyIncludes": ["description of the command-line options"]
+            },
+            {
+              "source": {"line": 2167, "column": 2},
+              "kind": "option",
+              "names": ["--help"],
+              "forms": ["--help={class|[^]qualifier}[,...]"],
+              "emptyDescription": false,
+              "bodyIncludes": ["fit into all specified classes"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 2}
+        },
+        {
+          "query": "-fsanitize=address",
+          "review": "Pinned CVS line 15813 contains one IP head -fsanitize=address and its own AddressSanitizer body. Matching the complete form must keep -fsanitize as the single bound name rather than treating the assignment value as an alias.",
+          "expected": [
+            {
+              "source": {"line": 15813, "column": 2},
+              "kind": "option",
+              "names": ["-fsanitize"],
+              "forms": ["-fsanitize=address"],
+              "emptyDescription": false,
+              "bodyIncludes": ["Enable AddressSanitizer"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1}
+        },
+        {
+          "query": "-Wformat",
+          "review": "Pinned CVS preserves GCC's five independent IP heads at lines 6747, 6750, 6775, 6778 and 6789. The final three members are nested under RS, while empty heads remain empty owners rather than borrowing a neighboring description.",
+          "expected": [
+            {"source": {"line": 6747, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat"], "emptyDescription": true},
+            {"source": {"line": 6750, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=n"], "emptyDescription": false, "bodyIncludes": ["Check calls to"]},
+            {"source": {"line": 6775, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=1"], "emptyDescription": true},
+            {"source": {"line": 6778, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat"], "emptyDescription": false, "bodyIncludes": ["is equivalent to -Wformat=1"]},
+            {"source": {"line": 6789, "column": 2}, "kind": "option", "names": ["-Wformat"], "forms": ["-Wformat=2"], "emptyDescription": false, "bodyIncludes": ["additional format checks"]}
+          ],
+          "expectedCounts": {"directEntry": 5}
+        }
+      ]
     }
   ]
 }
