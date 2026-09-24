@@ -16,25 +16,73 @@ from pathlib import Path
 from roff_audit_common import manual_hierarchy_root, run_jsonl_profile_batch, source_digest
 
 
-def visible(value: object) -> str:
+class VisibleReader:
+    """Resolve response-local Flow references, never source or display bytes."""
+
+    def __init__(self, projection: object = None) -> None:
+        self.projected = projection is not None
+        store = projection.get("contentStore") if isinstance(projection, dict) else None
+        atoms = store.get("atoms") if isinstance(store, dict) else None
+        self.atoms = atoms if isinstance(atoms, list) else None
+        self.bytes: dict[int, bytes] = {}
+
+    def text(self, reference: object) -> str:
+        if not isinstance(reference, dict) or self.atoms is None:
+            raise ValueError("visible content reference has no projection")
+        key = reference.get("atom")
+        if type(key) is not int or not 1 <= key <= len(self.atoms):
+            raise ValueError("visible content atom key is out of range")
+        atom = self.atoms[key - 1]
+        if (not isinstance(atom, dict) or type(atom.get("key")) is not int
+                or atom["key"] != key or atom.get("kind") not in {"text", "whitespace"}):
+            raise ValueError("visible content atom is not text")
+        if key not in self.bytes:
+            text = atom.get("text")
+            if not isinstance(text, str):
+                raise ValueError("visible content atom has no logical text")
+            try:
+                self.bytes[key] = text.encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise ValueError("visible content atom is not valid UTF-8") from error
+        span = reference.get("bytes")
+        if not isinstance(span, dict):
+            raise ValueError("visible content reference has no byte range")
+        start, end = span.get("start"), span.get("end")
+        if (type(start) is not int or type(end) is not int
+                or not 0 <= start <= end <= len(self.bytes[key])):
+            raise ValueError("visible content byte range is out of bounds")
+        raw = self.bytes[key]
+        if any(offset < len(raw) and raw[offset] & 0xC0 == 0x80 for offset in (start, end)):
+            raise ValueError("visible content byte range splits a scalar")
+        try:
+            return raw[start:end].decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("visible content byte range splits a scalar") from error
+
+
+def visible(value: object, reader: VisibleReader | None = None) -> str:
     """Visible text only: never match a body against IDs, paths or metadata."""
     if isinstance(value, list):
-        return "".join(visible(item) for item in value)
+        return "".join(visible(item, reader) for item in value)
     if not isinstance(value, dict):
         return ""
     if value.get("type") in {"text", "code"}:
+        if "content" in value:
+            return (reader or VisibleReader()).text(value["content"])
+        if reader is not None and reader.projected:
+            raise ValueError("projected visible leaf has no content reference")
         return value.get("value", "")
     if value.get("type") == "line-break":
         return "\n"
     if value.get("type") in {"anchor", "fragment-alias"}:
         return ""
-    text = "".join(visible(value.get(key)) for key in
+    text = "".join(visible(value.get(key), reader) for key in
                    ("children", "items", "terms", "description", "blocks", "rows", "cells"))
     return text + ("\n" if value.get("type") in {"paragraph", "preformatted", "heading"} else "")
 
 
-def compact(value: object) -> str:
-    return " ".join(visible(value).split())
+def compact(value: object, reader: VisibleReader | None = None) -> str:
+    return " ".join(visible(value, reader).split())
 
 
 def expected_source(value: dict) -> dict:
@@ -42,13 +90,23 @@ def expected_source(value: dict) -> dict:
     return {**value, "source": value.get("source", 1)}
 
 
+def checked_item(values: object, index: object) -> object:
+    """JSON indices never inherit Python's negative or bool indexing rules."""
+    if not isinstance(values, list) or type(index) is not int or not 0 <= index < len(values):
+        raise ValueError("invalid support index")
+    return values[index]
+
+
 def support_items(support: dict, pool: list) -> list:
     """Resolve typed returned fragments; never rediscover a body by its text."""
     if support.get("kind") == "declaration-group":
-        return support["block"]["items"]
+        items = support["block"]["items"]
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            raise ValueError("invalid declaration support items")
+        return items
     if support.get("kind") != "contained-declaration-group":
         return []
-    parent = pool[support["support"]]
+    parent = checked_item(pool, support.get("support"))
     if parent["kind"] not in {"declaration-group", "owned-entry"}:
         raise ValueError("contained support cannot reference another reference")
     if not support["path"]:
@@ -57,7 +115,14 @@ def support_items(support: dict, pool: list) -> list:
     group = support["group"]
     if group not in block["declarationGroups"]:
         raise ValueError("contained support is not an original group")
-    items = block["items"][group["startItem"]:group["endItem"]]
+    all_items = block["items"]
+    start, end = group["startItem"], group["endItem"]
+    if (not isinstance(all_items, list) or type(start) is not int or type(end) is not int
+            or not 0 <= start <= end <= len(all_items)):
+        raise ValueError("invalid contained support range")
+    items = all_items[start:end]
+    if not all(isinstance(item, dict) for item in items):
+        raise ValueError("invalid contained support items")
     if len(items) != len(support["members"]):
         raise ValueError("incomplete contained support")
     return items
@@ -69,21 +134,24 @@ def source_block(block: dict, path: list) -> dict:
         raise ValueError("invalid source path")
     for slot in range(0, len(path), 2):
         owner, child = path[slot:slot + 2]
+        if not isinstance(owner, dict) or not isinstance(child, dict):
+            raise ValueError("invalid contained support path")
         if child["kind"] != "block":
             raise ValueError("item/cell path must select a block")
         if owner["kind"] == "definition-item":
-            blocks = block["items"][owner["index"]]["description"]
+            blocks = checked_item(block["items"], owner["index"])["description"]
         elif owner["kind"] == "list-item":
-            blocks = block["items"][owner["index"]]["blocks"]
+            blocks = checked_item(block["items"], owner["index"])["blocks"]
         elif owner["kind"] == "table-cell":
-            blocks = block["rows"][owner["row"]]["cells"][owner["column"]]["blocks"]
+            blocks = checked_item(checked_item(block["rows"], owner["row"])["cells"], owner["column"])["blocks"]
         else:
             raise ValueError("invalid contained support owner")
-        block = blocks[child["index"]]
+        block = checked_item(blocks, child["index"])
     return block
 
 
-def owner_record(evidence: dict, supports: list | None = None) -> dict:
+def owner_record(evidence: dict, supports: list | None = None,
+                 reader: VisibleReader | None = None) -> dict:
     entry = evidence.get("entry") or {}
     block = (evidence.get("content") or {}).get("block") or {}
     items = block.get("items", [])
@@ -91,16 +159,14 @@ def owner_record(evidence: dict, supports: list | None = None) -> dict:
     if content.get("kind") == "declaration-member":
         pool = supports or []
         index, member = content.get("support", -1), content.get("itemIndex", -1)
-        if 0 <= index < len(pool):
-            group_items = support_items(pool[index], pool)
-            if 0 <= member < len(group_items):
-                items = [group_items[member]]
+        group_items = support_items(checked_item(pool, index), pool)
+        items = [checked_item(group_items, member)]
     elif content.get("kind") == "shared-entry":
-        parent = (supports or [])[content["support"]]
+        parent = checked_item(supports or [], content["support"])
         if parent["kind"] not in {"declaration-group", "owned-entry"}:
             raise ValueError("shared entry requires a materialized fragment")
         block = source_block(parent["block"], content["path"])
-        items = [block["items"][content["itemIndex"]]]
+        items = [checked_item(block["items"], content["itemIndex"])]
     body = items[0].get("description", items[0].get("blocks", [])) if len(items) == 1 else []
     kind = entry.get("kind", {})
     return {
@@ -109,8 +175,8 @@ def owner_record(evidence: dict, supports: list | None = None) -> dict:
         "path": evidence["outline"]["node"]["path"],
         "kind": kind.get("parameterKind", kind.get("kind")),
         "names": entry.get("names", []),
-        "forms": [compact(form) for form in entry.get("forms", [])],
-        "body": compact(body),
+        "forms": [compact(form, reader) for form in entry.get("forms", [])],
+        "body": compact(body, reader),
         "emptyDescription": not body,
         "aliasGroups": entry.get("aliasGroups", []),
         "aliasOf": entry.get("aliasOf"),
@@ -123,8 +189,12 @@ def owner_record(evidence: dict, supports: list | None = None) -> dict:
 def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
     explanation = response.get("explanation") or {}
     supports = explanation.get("supports", [])
-    actual = [owner_record(e, supports) for e in explanation.get("evidence", [])
-              if e.get("class") == "direct-entry"]
+    reader = VisibleReader(explanation.get("contentProjection"))
+    try:
+        actual = [owner_record(e, supports, reader) for e in explanation.get("evidence", [])
+                  if e.get("class") == "direct-entry"]
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+        return "unresolved", [str(error)], []
     if "expected" not in probe:
         return "unresolved", ["probe has no reviewed gold"], actual
     expected = probe["expected"]
@@ -166,24 +236,37 @@ def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
             errors.append(f"forbidden direct name at {got['source']}")
     if "expectedSupports" in probe:
         expected_supports = probe["expectedSupports"]
-        groups = [s for s in supports if s["kind"] != "owned-entry"]
+        try:
+            groups = [s for s in supports if s["kind"] != "owned-entry"]
+        except (KeyError, TypeError, AttributeError) as error:
+            return "unresolved", [str(error)], actual
         if len(groups) != len(expected_supports):
             errors.append(f"support count: {len(groups)} != {len(expected_supports)}")
         for want in expected_supports:
             member_sources = [expected_source(source) for source in want["memberSources"]]
-            matches = [
-                support for support in groups
-                if [item.get("source")
-                    for item in support_items(support, supports)] == member_sources
-            ]
+            try:
+                matches = [
+                    support for support in groups
+                    if [item.get("source")
+                        for item in support_items(support, supports)] == member_sources
+                ]
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+                return "unresolved", [str(error)], actual
             if len(matches) != 1:
                 errors.append(f"support member sources: expected one match for {want['memberSources']}")
                 continue
             support = matches[0]
-            items = support_items(support, supports)
-            if [[compact(term) for term in item["terms"]] for item in items] != want["memberForms"]:
+            try:
+                items = support_items(support, supports)
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+                return "unresolved", [str(error)], actual
+            try:
+                member_forms = [[compact(term, reader) for term in item["terms"]] for item in items]
+                body = compact(items[-1].get("description", []), reader)
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+                return "unresolved", [str(error)], actual
+            if member_forms != want["memberForms"]:
                 errors.append("support original heads differ")
-            body = compact(items[-1].get("description", []))
             for witness in want.get("bodyIncludes", []):
                 if witness not in body: errors.append(f"support missing body witness {witness!r}")
             for witness in want.get("bodyWitnesses", []):
@@ -338,7 +421,18 @@ def self_check() -> None:
         elif changed == "owner": pool[0]["block"]["items"][1]["source"]["line"] = 99
         elif changed == "duplicate": pool.append(copy.deepcopy(pool[0]))
         else: pool[0]["block"]["items"][0]["entry"] = {"aliasGroups": [["x", "y"]]}
-        assert compare(support_gold, wrong)[0] == "failure", changed
+        assert compare(support_gold, wrong)[0] == ("unresolved" if changed == "missing" else "failure"), changed
+    invalid_path = copy.deepcopy(supported)
+    invalid_path["explanation"]["supports"].append({
+        "kind": "contained-declaration-group", "support": 0,
+        "path": [{"kind": "definition-item", "index": -1}, {"kind": "block", "index": 0}],
+        "group": {}, "members": [],
+    })
+    invalid_path["explanation"]["evidence"][0]["content"]["support"] = 1
+    assert compare(support_gold, invalid_path)[0] == "unresolved"
+    invalid_items = copy.deepcopy(supported)
+    invalid_items["explanation"]["supports"][0]["block"]["items"] = {}
+    assert compare(support_gold, invalid_items)[0] == "unresolved"
     assert compare({"query": "x"}, response)[0] == "unresolved"
     for field, value in [("source", {"line": 8, "column": 2}), ("contentOmitted", True),
                          ("class", "entry-mention"), ("entry", {"kind": {"kind": "term"}})]:
@@ -358,3 +452,26 @@ def self_check() -> None:
     assert compare({**probe, "expected": [hashed]}, response)[0] == "failure"
     # Matching metadata is not matching visible body.
     assert compact({"id": "BODY", "sourcePath": "BODY"}) == ""
+    projected = copy.deepcopy(response)
+    projected["explanation"]["contentProjection"] = {"contentStore": {"atoms": [
+        {"key": 1, "kind": "text", "text": "x ARG"},
+        {"key": 2, "kind": "text", "text": "BODY中"},
+    ]}}
+    projected["explanation"]["evidence"][0]["entry"]["forms"] = [[
+        {"type": "text", "content": {"atom": 1, "bytes": {"start": 0, "end": 5}}},
+    ]]
+    projected["explanation"]["evidence"][0]["content"]["block"]["items"][0]["description"][0]["children"] = [
+        {"type": "text", "content": {"atom": 2, "bytes": {"start": 0, "end": 4}}},
+    ]
+    assert compare(probe, projected)[0] == "passed"
+    selected = projected["explanation"]["evidence"][0]["content"]["block"]["items"][0]["description"][0]["children"][0]
+    selected["content"]["bytes"] = {"start": 4, "end": 5}
+    assert compare(probe, projected)[0] == "unresolved"
+    selected["content"]["bytes"] = {"start": 5, "end": 5}
+    assert compare(probe, projected)[0] == "unresolved"
+    selected["content"]["bytes"] = {"start": 0, "end": 4}
+    projected["explanation"]["contentProjection"]["contentStore"]["atoms"][0]["key"] = True
+    assert compare(probe, projected)[0] == "unresolved"
+    projected["explanation"]["contentProjection"]["contentStore"]["atoms"][0]["key"] = 1
+    del projected["explanation"]["contentProjection"]
+    assert compare(probe, projected)[0] == "unresolved"
