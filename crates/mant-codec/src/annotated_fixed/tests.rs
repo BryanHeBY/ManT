@@ -2988,6 +2988,112 @@ fn man_ip_styled_argument_and_list_labels_do_not_become_option_aliases() {
 }
 
 #[test]
+fn native_man_declaration_segments_keep_arguments_out_and_later_names_in() {
+    // Every exact input ran pinned CVS -Tutf8 first. man_term.c::pre_IP and
+    // pre_alternate select the native HEAD; term.c::term_word applies inline
+    // font overrides and prints \(dq as visible quotes. The final-display
+    // declaration intervals, not raw punctuation, determine name boundaries.
+    for (label, input, names, rejected) in [
+        (
+            "quoted-argument",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--pattern\\fR \\(dqone,--fake,two\\(dq\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--pattern"],
+            "--fake",
+        ),
+        (
+            "quoted-argument-then-name",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--pattern\\fR \\(dqone,--fake,two\\(dq, \\fB--all\\fR\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--pattern", "--all"],
+            "--fake",
+        ),
+        (
+            "single-quoted-argument-then-name",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--pattern\\fR 'one,--fake,two', \\fB--all\\fR\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--pattern", "--all"],
+            "--fake",
+        ),
+        (
+            "adjacent-single-quoted-argument",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB--pattern\\fR,'one,--fake,two'\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["--pattern"],
+            "--fake",
+        ),
+        (
+            "italic-middle",
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fR, \\fI--operand\\fR, \\fB--all\\fR\" 4\nDescription.\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+            "--operand",
+        ),
+        (
+            "component-inline-italic",
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR \"\\fI--operand\\fR\" \", \" --all\nDescription.\n"
+                .as_slice(),
+            vec!["--all"],
+            "--operand",
+        ),
+        (
+            "component-italic-middle",
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR -a \", \" \"\\fI--operand\\fR\" \", \" --all\nDescription.\n"
+                .as_slice(),
+            vec!["-a", "--all"],
+            "--operand",
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man)
+            .unwrap();
+        assert!(validate_document(&document).is_empty(), "{label}");
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed: {label}")
+        };
+        assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, names, "{label}");
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in names {
+            let response = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(response.counts.direct_entry.total, 1, "{label}: {name}");
+            response.validate_references().unwrap();
+        }
+        let response = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: rejected.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(response.counts.direct_entry.total, 0, "{label}: {rejected}");
+        response.validate_references().unwrap();
+    }
+
+    // This exact standalone BR input also ran pinned CVS -Tutf8. Its inline
+    // italic escape overrides pre_alternate's initial bold font, so rejecting
+    // its only name must not manufacture an empty or fallback Term entry.
+    let italic_only = b".TH T 1\n.SH OPTIONS\n.TP\n.BR \"\\fI--operand\\fR\"\nDescription.\n";
+    let document = project_annotated_manual("t.1", &bundle(italic_only), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert!(fixed.owners[0].entry.is_none());
+    assert!(validate_document(&document).is_empty());
+}
+
+#[test]
 fn man_ip_reading_groups_require_native_siblings_and_empty_prior_body() {
     // This exact fixture first ran pinned CVS -Ttree and -Tutf8.  man_macro.c::
     // blk_imp keeps distinct IP HEAD/BODY owners; .PD remains in the prior

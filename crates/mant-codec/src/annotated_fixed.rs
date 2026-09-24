@@ -364,28 +364,35 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
             // man_term.c::pre_TP/pre_IP select its visible label. A complete
             // form may also contain arguments, so bind only the shared
             // grammar's exact name ranges to final-display sub-selections.
-            if owner.head_role == Some(OwnerHeadRole::Lexical) && owner.head_role_prefix.is_none() {
-                let occurrences = fixed
-                    .lexical_literal_names(owner)?
-                    .into_iter()
-                    .map(|(name, selection, _)| (name, selection));
-                let (names, name_bindings) =
-                    group_bindings(occurrences, EntryNameEvidence::Lexical);
-                if !names.is_empty() {
-                    return Some(EntryFacts {
-                        name_bindings,
-                        alias_groups: Vec::new(),
-                        alias_of: None,
-                        forms: vec![owner.head.clone()],
-                        id: owner.id.clone(),
-                        kind: EntryKind::Parameter {
-                            parameter_kind: ParameterKind::Option,
-                        },
-                        case: NameCase::Sensitive,
-                        names,
-                        value_domain: None,
-                    });
+            if owner.head_role == Some(OwnerHeadRole::Lexical)
+                && owner.head_role_prefix.is_none()
+                && let Some(occurrences) = fixed.lexical_literal_names(owner)
+            {
+                if occurrences.is_empty() {
+                    // A final underlined, nonbold operand was rejected by
+                    // the shared declaration check; do not promote it
+                    // through the generic HEAD identity fallback.
+                    return None;
                 }
+                let (names, name_bindings) = group_bindings(
+                    occurrences
+                        .into_iter()
+                        .map(|(name, selection, _)| (name, selection)),
+                    EntryNameEvidence::Lexical,
+                );
+                return Some(EntryFacts {
+                    name_bindings,
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: vec![owner.head.clone()],
+                    id: owner.id.clone(),
+                    kind: EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
+                    names,
+                    value_domain: None,
+                });
             }
             let identity = native_head_identity(&fixed, owner, &form);
             // The parser-alive .IP hint is intentionally a broad candidate:

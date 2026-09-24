@@ -22,12 +22,68 @@ pub fn literal_option_names(form: &str) -> Vec<(String, Range<usize>)> {
     {
         return aliases;
     }
+    let ranges = literal_declaration_ranges(form);
+    let mut names = Vec::new();
+    for range in ranges {
+        let Some(group) = form.get(range.clone()) else {
+            continue;
+        };
+        let leading = group.len() - group.trim_start().len();
+        let group = group.trim();
+        if group.is_empty() {
+            continue;
+        }
+        let offset = range.start + leading;
+        let before = names.len();
+        if let Some(slash) = slash_names(group, offset) {
+            names.extend(slash);
+        } else if let Some(pattern) = pattern_names(group, offset) {
+            names.extend(pattern);
+        } else if let Some((name, found)) = leading_name(group, offset) {
+            names.push((name, found));
+        }
+        if names.len() > 64 {
+            names.truncate(before);
+            break;
+        }
+    }
+    names
+}
+
+/// Bounded declaration intervals in one final visible head. A delimiter in
+/// a quoted or bracketed argument is not a new declaration. Both native
+/// component evidence and source-neutral literal spelling use these ranges.
+pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     let mut start = 0;
     let mut phase = Phase::Name;
     let mut closers = Vec::new();
+    let mut quote = None;
     let mut uncertain = false;
     for (offset, character) in form.char_indices() {
+        if let Some(close) = quote {
+            if character == close {
+                quote = None;
+            }
+            continue;
+        }
+        let previous = form[..offset].chars().next_back();
+        if let Some(close) = match character {
+            '"' => Some('"'),
+            '\'' if previous.is_none_or(|before| {
+                before.is_whitespace() || matches!(before, '=' | ',' | '|' | '[' | '{' | '(')
+            }) =>
+            {
+                Some('\'')
+            }
+            '“' => Some('”'),
+            '‘' => Some('’'),
+            _ => None,
+        } {
+            quote = Some(close);
+            phase = Phase::Argument;
+            continue;
+        }
         if matches!(character, ',' | '|')
             && !uncertain
             && closers.is_empty()
@@ -68,31 +124,7 @@ pub fn literal_option_names(form: &str) -> Vec<(String, Range<usize>)> {
         }
     }
     ranges.push(start..form.len());
-    let mut names = Vec::new();
-    for range in ranges {
-        let Some(group) = form.get(range.clone()) else {
-            continue;
-        };
-        let leading = group.len() - group.trim_start().len();
-        let group = group.trim();
-        if group.is_empty() {
-            continue;
-        }
-        let offset = range.start + leading;
-        let before = names.len();
-        if let Some(slash) = slash_names(group, offset) {
-            names.extend(slash);
-        } else if let Some(pattern) = pattern_names(group, offset) {
-            names.extend(pattern);
-        } else if let Some((name, found)) = leading_name(group, offset) {
-            names.push((name, found));
-        }
-        if names.len() > 64 {
-            names.truncate(before);
-            break;
-        }
-    }
-    names
+    ranges
 }
 
 /// Require an inferred PP/RS head to be complete declaration syntax, not
@@ -278,7 +310,49 @@ fn pattern_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>
 
 #[cfg(test)]
 mod tests {
-    use super::{is_complete_hanging_option_head, literal_option_names};
+    use super::{
+        is_complete_hanging_option_head, literal_declaration_ranges, literal_option_names,
+    };
+
+    #[test]
+    fn visible_quoted_argument_does_not_restart_a_declaration() {
+        // Both exact .IP inputs ran pinned CVS -Tutf8 first. man_term.c::
+        // pre_IP prints the sole label operand, and term.c::term_word emits
+        // \(dq as visible quotes around one parameter containing commas.
+        let argument = "--pattern \"one,--fake,two\"";
+        let ranges = literal_declaration_ranges(argument);
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0], 0..argument.len());
+        assert_eq!(literal_option_names(argument), [("--pattern".into(), 0..9)]);
+
+        let followed = "--pattern \"one,--fake,two\", --all";
+        let start = followed.find("--all").unwrap();
+        assert_eq!(literal_declaration_ranges(followed).len(), 2);
+        assert_eq!(
+            literal_option_names(followed),
+            [
+                ("--pattern".into(), 0..9),
+                ("--all".into(), start..start + 5)
+            ]
+        );
+
+        // term.c::term_word prints plain apostrophes literally. Only an
+        // apostrophe beginning an argument opens a quoted interval; an
+        // apostrophe inside a word does not consume later declarations.
+        let single = "--pattern 'one,--fake,two', --all";
+        let start = single.find("--all").unwrap();
+        assert_eq!(literal_declaration_ranges(single).len(), 2);
+        assert_eq!(
+            literal_option_names(single),
+            [
+                ("--pattern".into(), 0..9),
+                ("--all".into(), start..start + 5)
+            ]
+        );
+
+        let adjacent = "--pattern,'one,--fake,two'";
+        assert_eq!(literal_option_names(adjacent), [("--pattern".into(), 0..9)]);
+    }
 
     #[test]
     fn hanging_heads_require_complete_declaration_syntax() {

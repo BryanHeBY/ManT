@@ -482,10 +482,10 @@ impl FixedBody {
         if owner.head_role != Some(OwnerHeadRole::Lexical)
             || owner.head_role_prefix.is_some()
             || owner.head_components.is_empty()
-            || self.owner_complete_form(owner).is_none()
         {
             return None;
         }
+        let form = self.owner_complete_form(owner)?;
         let ranges = component_part_ranges(&owner.head, &owner.head_components)?;
         let byte_ranges = self.component_byte_ranges(&owner.head, &ranges)?;
         let mut names = Vec::new();
@@ -495,6 +495,9 @@ impl FixedBody {
             }
             let text = self.selection_text(&component.selection)?;
             for (name, inner) in crate::literal_option_names(&text) {
+                if names.len() == 64 {
+                    return None;
+                }
                 let selection = self.selection_subrange(&component.selection, inner.clone())?;
                 if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
                     return None;
@@ -506,14 +509,13 @@ impl FixedBody {
                 ));
             }
         }
-        (!names.is_empty()).then_some(names)
+        self.checked_lexical_names(&form, names)
+            .filter(|names| !names.is_empty())
     }
 
-    /// Select names from one complete native lexical head, stopping at an
-    /// underlined final-display operand. The native sidecar folds font output
-    /// and overstrike into bold/underline runs, so this is a conservative
-    /// display boundary rather than a recovered font opcode. Flow's authored
-    /// form rule likewise stops before emphasized operands.
+    /// Select names from one complete native lexical head. Both source-neutral
+    /// spellings and native bold components pass the same declaration segments
+    /// and final-display parameter boundary before they become names.
     #[must_use]
     pub fn lexical_literal_names(
         &self,
@@ -529,17 +531,64 @@ impl FixedBody {
             if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
                 return None;
             }
+            names.push((name, selection, range));
+        }
+        self.checked_lexical_names(&form, names)
+    }
+
+    fn checked_lexical_names(
+        &self,
+        form: &str,
+        candidates: Vec<(String, TextSelection, std::ops::Range<usize>)>,
+    ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
+        let segments = crate::entry::literal_declaration_ranges(form);
+        let literal = crate::literal_option_names(form);
+        let mut names = Vec::new();
+        let mut blocked_segment = None;
+        let mut segment_cursor = 0;
+        let mut style_rejected = false;
+        for (name, selection, range) in candidates {
+            while segments
+                .get(segment_cursor)
+                .is_some_and(|segment| segment.end < range.start)
+            {
+                segment_cursor += 1;
+            }
+            let segment = segments.get(segment_cursor)?;
+            if segment.start > range.start || range.end > segment.end {
+                return None;
+            }
+            if blocked_segment == Some(segment_cursor) {
+                continue;
+            }
+            let leading = form.get(segment.start..range.start)?;
+            let at_segment_start = leading
+                .chars()
+                .all(|character| character.is_whitespace() || matches!(character, '[' | '{' | '('));
+            if !at_segment_start && !literal.iter().any(|(_, found)| *found == range) {
+                continue;
+            }
+            // Underline is final native display evidence, not a recovered
+            // italic opcode. Conservatively treat an underlined nonbold name
+            // as a parameter within this segment only; a later independently
+            // delimited declaration remains eligible.
             if selection.parts.iter().any(|part| {
                 self.surface
                     .runs
                     .get((part.run.get() - 1) as usize)
                     .is_some_and(|run| run.label.style.underline && !run.label.style.bold)
             }) {
-                break;
+                style_rejected = true;
+                blocked_segment = Some(segment_cursor);
+                continue;
             }
             names.push((name, selection, range));
         }
-        Some(names)
+        // An empty result is meaningful only when final italic styling
+        // rejected a candidate: the producer must not reclassify that same
+        // visible spelling through the generic identity fallback. A head
+        // with no option candidate remains eligible as an ordinary Term.
+        (!names.is_empty() || style_rejected).then_some(names)
     }
 
     /// Bind each source-identified `Fl` macro to its own final glyphs without
