@@ -469,6 +469,17 @@ owns source-neutral identification; IR owns body/addresses; query/protocol
 own one semantic query pipeline; UI only displays an already laid-out Fixed
 surface. Public parser/AST and raw Renderer remain independent capabilities.
 
+The current Rust module seams mirror those owners: `ffi/structured/annotated`
+keeps raw ABI declarations, a handle-bound checked view, coverage transfer,
+and owned transfer separate; `mant-codec/annotated_fixed` separates identity
+allocation, typed mark projection, and diagnostics under one assembly entry;
+`mant-ir/fixed_body` separates the public model from surface/mark validation.
+These are internal moves, not new response models or another render path.
+The native collector remains one state writer through R04; split its
+column/slot/point lifecycle from mark observation only as a separately tested
+unit before R05. The UI's Fixed/Flow lowering split belongs with R06's
+selection consumers, not with this Rust transfer cleanup.
+
 Patch ownership at P1: 0020 supplies raw output capture; 0029 and 0032–0036
 supply current observation/region boundaries; 0030–0031 supply target
 origin/source. R01's 0037 labels actual device writes; 0038 marks the

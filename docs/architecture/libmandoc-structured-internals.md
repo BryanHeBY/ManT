@@ -74,8 +74,11 @@ remains distinct from the public typed model in this refactor.
 The former private codec `NativeProseProjection` and
 `mandoc/structured_document` tree were removed during annotated P1. They were
 test-only consumers of the old structured result, not a production fallback.
-The active native-to-IR bridge is `mant-codec/src/annotated_fixed.rs` with
-borrowed final-run selections and one owned Fixed surface. The public
+The active native-to-IR bridge is `mant-codec/src/annotated_fixed.rs` plus its
+private `identity`, `marks`, and `diagnostics` modules, with borrowed final-run
+selections and one owned Fixed surface. The annotated FFI likewise keeps its
+handle-owning entry in `structured/annotated.rs` and separates private `raw`,
+handle-bound `view`, `coverage`, and owned `transfer` modules. The public
 `libmandoc_rs::structured::*` facade remains intact until the later loader
 cutover/removal unit; this module map describes its historical ownership.
 
