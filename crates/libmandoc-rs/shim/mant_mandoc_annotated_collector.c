@@ -101,6 +101,7 @@ struct mant_annotated_collector {
 	uint64_t phrase_epoch;
 	uint32_t active_heading;
 	uint32_t last_top_heading;
+	uint32_t unsectioned_region;
 	uint64_t next_origin;
 	uint64_t pending_origin;
 	uint32_t pending_owner;
@@ -907,6 +908,7 @@ push_node(struct mant_annotated_collector *collector,
 {
 	struct annotated_frame *frames, *frame;
 	struct mant_annotated_mark *parent_mark;
+	struct annotated_point_state *state;
 	uint32_t key, region_kind, parent;
 
 	if (node == NULL || collector->frame_count >=
@@ -920,6 +922,29 @@ push_node(struct mant_annotated_collector *collector,
 	}
 	if (!observe_html_phrase_boundary(collector, node))
 		return 0;
+	/* man_term.c::print_man_nodelist() and mdoc_term.c::
+	 * print_mdoc_nodelist() traverse the first ROOT child, not ROOT itself.
+	 * The first unsectioned text therefore opens a native direct region;
+	 * subsequent style nodes retain that owner across their frame leaves. */
+	if (node->type == ROFFT_TEXT && collector->active_owner == 0 &&
+	    !collector->in_header && !collector->in_footer) {
+		if (collector->unsectioned_region == 0) {
+			key = add_mark(collector, NULL, NULL,
+			    MANT_ANNOTATED_MARK_REGION, 0,
+			    MANT_ANNOTATED_REGION_UNSECTIONED, NULL);
+			if (key == 0)
+				return 0;
+			state = collector->points + key - 1;
+			if (!mant_annotated_display_checkpoint(collector->display,
+			    collector->advance_count, &state->checkpoint)) {
+				fail_relation(collector, key, 0);
+				return 0;
+			}
+			state->state = 2;
+			collector->unsectioned_region = key;
+		}
+		collector->active_owner = collector->unsectioned_region;
+	}
 	frames = mant_structured_grow_array(collector->session,
 	    collector->frames, collector->frame_count,
 	    &collector->frame_capacity, UINT32_MAX, sizeof(*frames),
@@ -1332,7 +1357,8 @@ pop_node(struct mant_annotated_collector *collector,
 		if (collector->session->status != MANT_STRUCTURED_OK)
 			return;
 	}
-	collector->active_owner = frame->saved_owner;
+	collector->active_owner = frame->saved_owner == 0 ?
+	    collector->unsectioned_region : frame->saved_owner;
 	collector->active_link = frame->saved_link;
 	collector->active_link_node = frame->saved_link_node;
 	collector->active_link_epoch = frame->saved_link_epoch;

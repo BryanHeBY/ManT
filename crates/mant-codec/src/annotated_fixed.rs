@@ -1052,6 +1052,7 @@ fn project_region(
         parent: keys.nearest(mark.parent, 5)?,
         owner: keys.nearest(mark.owner, 2)?,
         kind: match mark.region_kind {
+            10 => RegionKind::Unsectioned,
             1 => RegionKind::HeadingTitle,
             2 => RegionKind::HeadingBody,
             3 => RegionKind::OwnerHead,

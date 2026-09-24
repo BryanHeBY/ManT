@@ -409,6 +409,8 @@ pub struct AnchorMark {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum RegionKind {
+    /// Direct body text outside an explicit section or owner.
+    Unsectioned,
     /// Heading title.
     HeadingTitle,
     /// Heading direct body.

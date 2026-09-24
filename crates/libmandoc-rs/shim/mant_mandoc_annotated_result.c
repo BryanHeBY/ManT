@@ -393,7 +393,7 @@ valid_marks(const struct mant_annotated_result *result)
 		    mark->source > result->common->source_count ||
 		    ((mark->line == 0) != (mark->column == 0)) ||
 		    (mark->source == 0 && mark->line != 0) ||
-		    mark->region_kind > MANT_ANNOTATED_REGION_TABLE_CELL ||
+		    mark->region_kind > MANT_ANNOTATED_REGION_UNSECTIONED ||
 		    mark->title_region > result->mark_count ||
 		    mark->body_region > result->mark_count ||
 		    (mark->flags & ~(MANT_ANNOTATED_MARK_AUTHORED |

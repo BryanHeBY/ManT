@@ -60,6 +60,42 @@ fn native_word_spaces_reach_fixed_visible_search() {
 }
 
 #[test]
+fn native_unsectioned_text_joins_styles_without_crossing_hard_lines() {
+    // Both exact inputs first ran on pinned CVS -Tutf8 -O width=78.
+    // man_term.c::print_man_nodelist() starts at ROOT's first child;
+    // term.c::term_field/term_flushln supply the direct and hard joins.
+    let styled = native_query(b".TH T 1\nalpha\\fBbeta\\fPgamma\n", 78);
+    let DocumentBody::Fixed(fixed) = &styled.document.as_ref().unwrap().body else {
+        panic!("native body is not Fixed");
+    };
+    assert!(fixed.regions.iter().any(|region| {
+        region.kind == mant_ir::RegionKind::Unsectioned
+            && region
+                .selection
+                .joins
+                .contains(&mant_ir::TextJoin::DirectContact)
+    }));
+    assert_eq!(visible_total(&styled, "alphabeta"), 1);
+    assert_eq!(visible_total(&styled, "alphabetagamma"), 1);
+
+    let nofill = native_query(b".TH T 1\n.nf\nalpha\nbeta\n.fi\n", 78);
+    assert_eq!(visible_total(&nofill, "alpha"), 1);
+    assert_eq!(visible_total(&nofill, "beta"), 1);
+    assert_eq!(visible_total(&nofill, "alphabeta"), 0);
+
+    // These exact sources also ran on the same reference. The first ROOT
+    // text may be nested under a style or link macro; a later SH owns its
+    // own body and must not inherit the unsectioned region.
+    let styled_first = native_query(b".TH T 1\n.B alpha\nbeta\n", 78);
+    assert_eq!(visible_total(&styled_first, "alpha beta"), 1);
+    let linked_first = native_query(b".TH T 1\n.UR https://example.test\nalpha\n.UE\nbeta\n", 78);
+    assert_eq!(visible_total(&linked_first, "alpha"), 1);
+    assert_eq!(visible_total(&linked_first, "beta"), 1);
+    let section_after = native_query(b".TH T 1\n.B alpha\n.SH D\nbeta\n", 78);
+    assert_eq!(visible_total(&section_after, "alpha beta"), 0);
+}
+
+#[test]
 fn native_joins_preserve_cross_style_link_cell_and_wrap_search_boundaries() {
     // Each exact source first ran on pinned CVS -Tutf8 at its stated width.
     // term.c::term_field emits pending spaces before letters, while
