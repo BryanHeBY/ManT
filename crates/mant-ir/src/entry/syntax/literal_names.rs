@@ -101,27 +101,26 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
             phase = Phase::Argument;
             continue;
         }
-        let remainder = &form[offset + character.len_utf8()..];
-        let fresh_option = remainder
-            .strip_prefix(char::is_whitespace)
-            .is_some_and(|tail| tail.trim_start().starts_with('-'));
-        if matches!(character, ',' | '|')
-            && !uncertain
-            && closers.is_empty()
-            && (phase == Phase::Name && name_end.is_some() || fresh_option)
-        {
-            ranges.push(start..offset);
-            start = offset + character.len_utf8();
-            phase = if remainder.trim_start().starts_with('-') {
-                Phase::Name
-            } else {
-                Phase::Argument
-            };
-            name_end = (phase == Phase::Name)
-                .then(|| declaration_name_end(form, start))
-                .flatten();
-            after_name_space = false;
-            continue;
+        if matches!(character, ',' | '|') && !uncertain && closers.is_empty() {
+            // Looking past a separator may scan whitespace. Do this only at
+            // a separator, never for every scalar in a long literal head.
+            let remainder = &form[offset + character.len_utf8()..];
+            let following = remainder.trim_start();
+            let fresh_option = following.len() != remainder.len() && following.starts_with('-');
+            if phase == Phase::Name && name_end.is_some() || fresh_option {
+                ranges.push(start..offset);
+                start = offset + character.len_utf8();
+                phase = if following.starts_with('-') {
+                    Phase::Name
+                } else {
+                    Phase::Argument
+                };
+                name_end = (phase == Phase::Name)
+                    .then(|| declaration_name_end(form, start))
+                    .flatten();
+                after_name_space = false;
+                continue;
+            }
         }
         match character {
             '=' => phase = Phase::Argument,
@@ -352,6 +351,7 @@ mod tests {
     use super::{
         is_complete_hanging_option_head, literal_declaration_ranges, literal_option_names,
     };
+    use std::time::{Duration, Instant};
 
     #[test]
     fn visible_quoted_argument_does_not_restart_a_declaration() {
@@ -414,6 +414,20 @@ mod tests {
         assert_eq!(
             literal_option_names(followed),
             [("--list".into(), 0..6), ("--all".into(), start..start + 5)]
+        );
+    }
+
+    #[test]
+    fn long_plain_argument_gap_does_not_rescan_suffix_per_scalar() {
+        // The exact .IP head with 8192 spaces ran pinned CVS -Tutf8 first.
+        // man_term.c::pre_IP prints that one HEAD; the syntax scan must not
+        // repeatedly inspect its remaining whitespace between separators.
+        let form = format!("--list {}first,--fake,last", " ".repeat(8192));
+        let started = Instant::now();
+        assert_eq!(literal_option_names(&form), [("--list".into(), 0..6)]);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "long literal head was rescanned per scalar"
         );
     }
 
