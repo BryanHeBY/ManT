@@ -115,6 +115,77 @@
           "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
         }
       ]
+    },
+    {
+      "id": "F004",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/annotated-man-ip-option-prefixes.1",
+      "sha256": "296e8246a2f9848441a166ab91d16771ebdccce066fb4f028dea70d33400a479",
+      "queries": [
+        {
+          "query": "-x",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps each IP as a separate head/body owner; man_term.c::pre_IP uses its second argument as width. The authored bold dash prefixes on lines 3 and 5 survive as selectable -x names, while their suffixes remain in the complete forms.",
+          "expected": [
+            {
+              "source": {"line": 3, "column": 2},
+              "kind": "option",
+              "names": ["-x"],
+              "forms": ["-x language"],
+              "emptyDescription": false,
+              "bodyIncludes": ["LANGUAGE_BODY"],
+              "bodyExcludes": ["NONE_BODY", "GLUED_BODY"]
+            },
+            {
+              "source": {"line": 5, "column": 2},
+              "kind": "option",
+              "names": ["-x"],
+              "forms": ["-x none"],
+              "emptyDescription": false,
+              "bodyIncludes": ["NONE_BODY"],
+              "bodyExcludes": ["LANGUAGE_BODY", "GLUED_BODY"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 2, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "--help",
+          "review": "Pinned CVS prints line-7 IP's authored bold escaped double dash and its own line-8 body; the plain width argument is not a name.",
+          "expected": [
+            {
+              "source": {"line": 7, "column": 2},
+              "kind": "option",
+              "names": ["--help"],
+              "forms": ["--help"],
+              "emptyDescription": false,
+              "bodyIncludes": ["HELP_BODY"],
+              "bodyExcludes": ["FORMAT_BODY"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "-Wformat",
+          "review": "Pinned CVS prints the line-9 bold -Wformat=2 as one IP head; only the complete leading option name is selectable and =2 remains part of its form.",
+          "expected": [
+            {
+              "source": {"line": 9, "column": 2},
+              "kind": "option",
+              "names": ["-Wformat"],
+              "forms": ["-Wformat=2"],
+              "emptyDescription": false,
+              "bodyIncludes": ["FORMAT_BODY"],
+              "bodyExcludes": ["HELP_BODY"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        },
+        {
+          "query": "-xfoo",
+          "review": "Pinned CVS keeps the line-11 bold -x followed immediately by unstyled foo in one IP head. The complete visible -xfoo is not proven by native bold-option evidence and must not become a selectable declaration.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+        }
+      ]
     }
   ]
 }
