@@ -254,7 +254,7 @@ pub enum OwnerRole {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum OwnerHeadRole {
-    /// An mdoc `Fl` option head.
+    /// An authored option head, such as mdoc `Fl`.
     Option,
     /// An mdoc `Ev` environment-variable head.
     Environment,
@@ -297,8 +297,8 @@ pub struct OwnerMark {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_role: Option<OwnerHeadRole>,
     /// Conservative rendered prefix of the first native head macro's own
-    /// operand. The final display selection and name remain separately
-    /// checked; this is evidence, not copied body content.
+    /// operand or man `.IP` bold prefix. The final display and name remain
+    /// separately checked; this is evidence, not copied body content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_role_prefix: Option<String>,
     /// Native HEAD macro evidence in authoring order; not inferred from font.
@@ -445,12 +445,13 @@ impl FixedBody {
                 },
                 EntryNameEvidence::Lexical,
             ) => {
-                only_name == &form
+                owner.head_role_prefix.is_none()
+                    && only_name == &form
                     && crate::lexical_option_token(only_name)
                     && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
             }
             (
-                Some(OwnerHeadRole::Option),
+                Some(OwnerHeadRole::Option | OwnerHeadRole::Lexical),
                 EntryKind::Parameter {
                     parameter_kind: ParameterKind::Option,
                 },
@@ -460,24 +461,13 @@ impl FixedBody {
                 Some(OwnerHeadRole::Environment),
                 EntryKind::EnvironmentVariable,
                 EntryNameEvidence::NativeMarkup,
-            ) => {
-                let start = form.len() - form.trim_start().len();
-                let end = start.checked_add(only_name.len())?;
-                let role_prefix = owner.head_role_prefix.as_deref()?;
-                let role_proves_name = match entry.kind {
-                    EntryKind::EnvironmentVariable => {
-                        crate::environment_variable_alias(role_prefix).as_deref()
-                            == Some(only_name.as_str())
-                    }
-                    _ => role_prefix == only_name && crate::native_option_token(only_name),
-                };
-                role_proves_name
-                    && form.trim_start().starts_with(role_prefix)
-                    && form.get(start..end) == Some(only_name.as_str())
-                    && self.selection_subrange(&owner.head, start..end).as_ref()
-                        == binding.occurrences.first()
-                    && binding.occurrences.len() == 1
-            }
+            ) => self.native_markup_name_matches(
+                owner,
+                entry.kind,
+                &form,
+                only_name,
+                &binding.occurrences,
+            ),
             _ => false,
         };
         (entry.id == owner.id
@@ -491,6 +481,43 @@ impl FixedBody {
         .then_some(entry)
     }
 
+    fn native_markup_name_matches(
+        &self,
+        owner: &OwnerMark,
+        kind: EntryKind,
+        form: &str,
+        name: &str,
+        occurrences: &[TextSelection],
+    ) -> bool {
+        let start = form.len() - form.trim_start().len();
+        let Some(end) = start.checked_add(name.len()) else {
+            return false;
+        };
+        let Some(role_prefix) = owner.head_role_prefix.as_deref() else {
+            return false;
+        };
+        let role_proves_name = match (kind, owner.head_role) {
+            (EntryKind::EnvironmentVariable, _) => {
+                crate::environment_variable_alias(role_prefix).as_deref() == Some(name)
+            }
+            (_, Some(OwnerHeadRole::Lexical)) => {
+                role_prefix == name && crate::lexical_option_token(name)
+            }
+            _ => role_prefix == name && crate::native_option_token(name),
+        };
+        role_proves_name
+            && form.trim_start().starts_with(role_prefix)
+            && form.get(start..end) == Some(name)
+            && (owner.head_role != Some(OwnerHeadRole::Lexical)
+                || form.get(end..).is_some_and(|suffix| {
+                    suffix.is_empty()
+                        || suffix.starts_with('=')
+                        || suffix.starts_with(char::is_whitespace)
+                }))
+            && self.selection_subrange(&owner.head, start..end).as_ref() == occurrences.first()
+            && occurrences.len() == 1
+    }
+
     /// Close every lexical alias against the same original HEAD and one
     /// exact, surviving display sub-selection. The syntax cannot stand in for
     /// the native role or for a missing glyph range.
@@ -501,10 +528,10 @@ impl FixedBody {
         form: &str,
         only_form: &TextSelection,
     ) -> bool {
-        let Some(aliases) = (owner.head_role == Some(OwnerHeadRole::Lexical))
-            .then(|| crate::literal_option_aliases(form))
-            .flatten()
-        else {
+        let Some(aliases) = (owner.head_role == Some(OwnerHeadRole::Lexical)
+            && owner.head_role_prefix.is_none())
+        .then(|| crate::literal_option_aliases(form))
+        .flatten() else {
             return false;
         };
         entry.id == owner.id

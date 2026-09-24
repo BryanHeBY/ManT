@@ -407,7 +407,7 @@ impl KeyMap {
             if mark.name.as_deref().is_some_and(str::is_empty)
                 || mark.name.is_some()
                     && !matches!(mark.kind, 1 | 4)
-                    && !(mark.kind == 2 && mark.flags & (32 | 64) != 0)
+                    && !(mark.kind == 2 && mark.flags & (32 | 64 | 256) != 0)
             {
                 return Err(AnnotatedProjectionError::Relation(
                     "native mark has an invalid authored operand",

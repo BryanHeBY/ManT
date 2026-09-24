@@ -244,6 +244,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
             // The shared spelling rule only extracts complete aliases; each
             // name still needs its own checked final-display sub-selection.
             if owner.head_role == Some(OwnerHeadRole::Lexical)
+                && owner.head_role_prefix.is_none()
                 && let Some(found) = mant_ir::literal_option_aliases(&form)
             {
                 let mut names = Vec::with_capacity(found.len());
@@ -274,15 +275,25 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                     value_domain: None,
                 });
             }
-            let (kind, evidence, name, occurrence) = native_head_identity(&fixed, owner, &form)
-                .unwrap_or_else(|| {
-                    (
-                        EntryKind::Term,
-                        EntryNameEvidence::Lexical,
-                        form.clone(),
-                        owner.head.clone(),
-                    )
-                });
+            let identity = native_head_identity(&fixed, owner, &form);
+            // The parser-alive .IP hint is intentionally a broad candidate:
+            // a styled prefix that fails the shared spelling or final-glyph
+            // check is not a generic Term. Keep its display owner without
+            // inventing a different semantic declaration.
+            if owner.head_role == Some(OwnerHeadRole::Lexical)
+                && owner.head_role_prefix.is_some()
+                && identity.is_none()
+            {
+                return None;
+            }
+            let (kind, evidence, name, occurrence) = identity.unwrap_or_else(|| {
+                (
+                    EntryKind::Term,
+                    EntryNameEvidence::Lexical,
+                    form.clone(),
+                    owner.head.clone(),
+                )
+            });
             Some(EntryFacts {
                 name_bindings: vec![EntryNameBinding {
                     name: 0,
@@ -345,7 +356,10 @@ fn native_head_identity(
     // man_macro.c::blk_imp establishes a real TP/TQ head even without mdoc
     // markup. A complete surviving token can use the same source-neutral
     // option spelling rule; an argument suffix or incomplete join cannot.
-    if owner.head_role == Some(OwnerHeadRole::Lexical) && mant_ir::lexical_option_token(form) {
+    if owner.head_role == Some(OwnerHeadRole::Lexical)
+        && owner.head_role_prefix.is_none()
+        && mant_ir::lexical_option_token(form)
+    {
         return Some((
             EntryKind::Parameter {
                 parameter_kind: ParameterKind::Option,
@@ -376,9 +390,23 @@ fn native_head_identity(
             EntryKind::EnvironmentVariable,
             crate::definitions::environment_variable_alias(role_prefix)?,
         ),
-        OwnerHeadRole::Literal | OwnerHeadRole::Lexical => return None,
+        OwnerHeadRole::Lexical => mant_ir::lexical_option_token(role_prefix).then(|| {
+            (
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                role_prefix.to_owned(),
+            )
+        })?,
+        OwnerHeadRole::Literal => return None,
     };
     let end = start.checked_add(name.len())?;
+    if owner.head_role == Some(OwnerHeadRole::Lexical)
+        && !matches!(form.get(end..)?.chars().next(), None | Some('='))
+        && !form.get(end..)?.starts_with(char::is_whitespace)
+    {
+        return None;
+    }
     let occurrence = fixed.selection_subrange(&owner.head, start..end)?;
     (fixed.selection_text(&occurrence).as_deref() == Some(name.as_str())).then_some((
         kind,

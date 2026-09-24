@@ -300,7 +300,11 @@ impl FixedBody {
                 || owner.head_role_prefix.is_some()
                     && !matches!(
                         owner.head_role,
-                        Some(super::OwnerHeadRole::Option | super::OwnerHeadRole::Environment)
+                        Some(
+                            super::OwnerHeadRole::Option
+                                | super::OwnerHeadRole::Environment
+                                | super::OwnerHeadRole::Lexical
+                        )
                     )
             {
                 return Err(FixedBodyError("invalid native owner head prefix"));

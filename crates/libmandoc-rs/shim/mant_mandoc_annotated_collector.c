@@ -1027,6 +1027,90 @@ owner_lexical_head(const struct roff_node *owner)
 	    first->child->next == NULL;
 }
 
+/* man_macro.c::blk_imp retains the first .IP argument as one HEAD text node;
+ * man_term.c::pre_IP prints that node but uses the next argument for width.
+ * Freeze only an authored leading bold dash spelling.  term.c::term_word()
+ * prints \- as '-' and changes font without a glyph.  Any other escape or
+ * an unproved boundary leaves the .IP a presentation owner, not a name. */
+static int
+copy_ip_option_prefix(struct mant_annotated_collector *collector,
+    struct mant_annotated_mark *mark, const struct roff_node *owner,
+    int *recognized)
+{
+	const struct roff_node *first;
+	const char *cursor, *next, *sequence;
+	char candidate[256];
+	size_t source_size, length = 0, index;
+	int size;
+	enum mandoc_esc escape;
+	uint8_t *copy;
+
+	*recognized = 0;
+	first = owner->head == NULL ? NULL : owner->head->child;
+	if (first == NULL || first->type != ROFFT_TEXT ||
+	    first->string == NULL || first->string[0] != '\\')
+		return 1;
+	source_size = strlen(first->string);
+	if (!charge_work(collector, source_size))
+		return 0;
+	cursor = first->string + 1;
+	if (mandoc_escape(&cursor, NULL, NULL) != ESCAPE_FONTBOLD)
+		return 1;
+	while (*cursor != '\0') {
+		if (*cursor == '\\') {
+			next = cursor + 1;
+			escape = mandoc_escape(&next, &sequence, &size);
+			if (escape == ESCAPE_FONTROMAN) {
+				cursor = next;
+				if (*cursor != '\0' && *cursor != '=' &&
+				    !isspace((unsigned char)*cursor))
+					return 1;
+				break;
+			}
+			if (escape != ESCAPE_SPECIAL || size != 1 ||
+			    sequence[0] != '-')
+				return 1;
+			cursor = next;
+			candidate[length] = '-';
+		} else if (*cursor == '=' ||
+		    isspace((unsigned char)*cursor)) {
+			break;
+		} else {
+			if ((unsigned char)*cursor > 0x7f ||
+			    (!isalnum((unsigned char)*cursor) &&
+		    strchr("-_.?+", *cursor) == NULL))
+				return 1;
+			candidate[length] = *cursor++;
+		}
+		if (++length == sizeof(candidate))
+			return 1;
+	}
+	if (length < 2 || candidate[0] != '-' ||
+	    (candidate[1] == '-' && length < 3) ||
+	    (candidate[1] != '-' && isdigit((unsigned char)candidate[1])))
+		return 1;
+	for (index = 1; index < length; index++)
+		if (isalnum((unsigned char)candidate[index]) ||
+		    candidate[index] == '?')
+			break;
+	if (index == length)
+		return 1;
+	if (!mant_structured_charge(collector->session,
+	    &collector->session->content_bytes, length,
+	    collector->session->limits->max_content_bytes, 10,
+	    MANT_STRUCTURED_STAGE_RENDER))
+		return 0;
+	copy = mant_structured_allocate(collector->session, length, 0,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (copy == NULL)
+		return 0;
+	memcpy(copy, candidate, length);
+	mark->name = copy;
+	mark->name_length = length;
+	*recognized = 1;
+	return 1;
+}
+
 /* mdoc_term.c::termp_fl_pre emits its generated dash before traversing the
  * child text; man_term.c::pre_B keeps its own children in the same macro
  * frame.  Native syntax is evidence only: C never splits declaration forms. */
@@ -1220,9 +1304,15 @@ push_node(struct mant_annotated_collector *collector,
 		    MANT_ANNOTATED_MARK_OWNER, collector->active_owner, 0, NULL);
 		if (key == 0)
 			return 0;
+		if (node->tok == MAN_IP &&
+		    !copy_ip_option_prefix(collector,
+		    collector->marks + key - 1, node, &definition))
+			return 0;
 		if (definition) {
 			if (node->tok == MDOC_It)
 				head_role = owner_head_role(node, &role_node);
+			else if (node->tok == MAN_IP)
+				head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
 			else if (owner_lexical_head(node))
 				head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
 			collector->marks[key - 1].flags |=

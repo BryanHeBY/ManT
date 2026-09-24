@@ -500,7 +500,8 @@ valid_marks(const struct mant_annotated_result *result)
 				return 0;
 		} else if (mark->kind == MANT_ANNOTATED_MARK_OWNER &&
 		    (mark->flags & (MANT_ANNOTATED_MARK_HEAD_OPTION |
-		    MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT)) != 0) {
+		    MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT |
+		    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) != 0) {
 			if ((mark->name == NULL) !=
 			    (mark->name_length == 0) ||
 			    (mark->name != NULL &&

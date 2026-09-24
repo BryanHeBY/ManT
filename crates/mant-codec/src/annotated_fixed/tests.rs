@@ -1289,6 +1289,84 @@ fn literal_alias_binding_cap_and_page_keep_one_owner() {
 }
 
 #[test]
+fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
+    // This exact input first ran pinned CVS -Ttree and -Tutf8.  man_macro.c::
+    // blk_imp retains each IP HEAD/BODY; man_term.c::pre_IP prints only its
+    // first HEAD argument and uses the second for width. term.c::term_word
+    // renders \- as '-' and font changes without a visible glyph.
+    let input = b".TH T 1\n.SH OPTIONS\n.IP \"\\fB\\-x\\fR \\fIlanguage\\fR\" 4\nLANGUAGE_BODY\n.IP \"\\fB\\-x none\\fR\" 4\nNONE_BODY\n.IP \"\\fB\\-\\-help\\fR\" 4\nHELP_BODY\n.IP \"\\fB\\-Wformat=2\\fR\" 4\nFORMAT_BODY\n.IP \"\\fB\\-x\\fRfoo\" 4\nGLUED_BODY\n.IP \"\\fI\\-x\\fR\" 4\nITALIC_BODY\n.IP \\(bu 4\nBULLET_BODY\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!();
+    };
+    assert_eq!(fixed.owners.len(), 7);
+    for (owner, name) in fixed.owners[..4]
+        .iter()
+        .zip(["-x", "-x", "--help", "-Wformat"])
+    {
+        assert_eq!(owner.role, OwnerRole::Definition);
+        assert_eq!(owner.head_role, Some(OwnerHeadRole::Lexical));
+        assert_eq!(owner.head_role_prefix.as_deref(), Some(name));
+        let facts = owner.entry.as_ref().unwrap();
+        assert_eq!(facts.names, [name]);
+        assert_eq!(
+            fixed
+                .selection_text(&facts.name_bindings[0].occurrences[0])
+                .as_deref(),
+            Some(name)
+        );
+    }
+    for owner in &fixed.owners[4..] {
+        assert_eq!(owner.role, OwnerRole::Other);
+        assert!(owner.entry.is_none());
+    }
+    assert!(validate_document(&document).is_empty());
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    for (requested, expected_sources) in [
+        ("-x", vec![3, 5]),
+        ("--help", vec![7]),
+        ("-Wformat", vec![9]),
+        ("-xfoo", vec![]),
+    ] {
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: requested.to_owned(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.total as usize, expected_sources.len(), "{requested}");
+        assert_eq!(
+            result
+                .evidence
+                .iter()
+                .map(|item| item.source.unwrap().line)
+                .collect::<Vec<_>>(),
+            expected_sources
+        );
+        result.validate_references().unwrap();
+    }
+
+    // This exact standalone input first ran pinned CVS -Ttree.  Its bold
+    // terminal punctuation is visible but not a complete option spelling;
+    // the native candidate must not fall back into an invented Term entry.
+    let punctuated = b".TH T 1\n.SH OPTIONS\n.IP \"\\fB\\-x.\\fR\" 4\nBODY\n";
+    let document = project_annotated_manual("t.1", &bundle(punctuated), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!();
+    };
+    assert_eq!(fixed.owners[0].head_role_prefix.as_deref(), Some("-x."));
+    assert!(fixed.owners[0].entry.is_none());
+    assert!(validate_document(&document).is_empty());
+}
+
+#[test]
 fn emphasized_native_heads_do_not_gain_lexical_option_eligibility() {
     // Both exact inputs first ran pinned CVS -Tutf8. man_term.c::pre_I and
     // mdoc_term.c::termp_under_pre select underline; those presentation
