@@ -313,6 +313,12 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                 if owner.hanging_candidate && !fixed.hanging_declaration_ready(owner) {
                     return None;
                 }
+                // A complete native Fl head may exceed the bounded semantic
+                // name budget. Do not publish its first component through the
+                // generic native-head fallback after the grouped proof fails.
+                if fixed.option_component_over_limit(owner) {
+                    return None;
+                }
                 let lexical_names = fixed.lexical_names(owner);
                 let checked_non_option = lexical_names.as_ref().is_some_and(Vec::is_empty);
                 if let Some(components) = lexical_names

@@ -22,7 +22,10 @@ pub use model::*;
 pub(crate) use relations::relation_issues;
 pub use relations::{EntryRelationIssue, EntryRelationIssueKind, entry_relation_issues};
 #[doc(hidden)]
-pub use syntax::{DeclarationScan, scan_option_declarations};
+pub use syntax::{
+    DeclarationScan, scan_option_declarations, scan_option_declarations_with_numeric,
+    scan_option_declarations_with_style, scan_option_declarations_with_style_ranges,
+};
 pub(crate) use syntax::{StyledBoundaryRule, literal_declaration_scan_with_operands};
 pub use syntax::{
     contains_additional_environment_assignment, environment_variable_alias,

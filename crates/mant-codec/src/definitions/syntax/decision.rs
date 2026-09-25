@@ -7,6 +7,7 @@ pub(super) fn select_kind(
     head: &str,
     context: DefinitionContext,
     hint: Option<NativeHeadRole>,
+    native_numeric_option: bool,
 ) -> (EntryKind, NameCase) {
     match hint {
         Some(NativeHeadRole::LiteralTerm | NativeHeadRole::Presentation) => {
@@ -38,7 +39,11 @@ pub(super) fn select_kind(
     {
         return (EntryKind::Command, NameCase::Sensitive);
     }
-    if local_option_spelling(head) {
+    // A short digit is ordinarily a signed argument, but an independently
+    // executed, finally bold native head may prove it as an option. The
+    // caller supplies this only after the shared name scan has bound `-4` or
+    // `-6` to the leading visible glyphs; the textual spelling alone cannot.
+    if native_numeric_option || local_option_spelling(head) {
         return (
             EntryKind::Parameter {
                 parameter_kind: ParameterKind::Option,

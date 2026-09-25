@@ -35,6 +35,10 @@ pub(super) struct InferredIdentity {
     pub(super) occurrences: Vec<Vec<RecognizedName>>,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep declaration role precedence and its one shared recognition result together"
+)]
 pub(super) fn infer_identity(
     content: ContentContext<'_>,
     item: &DefinitionItem,
@@ -48,7 +52,33 @@ pub(super) fn infer_identity(
         .first()
         .map_or_else(String::new, |term| plain_text(content, term));
     let trimmed = first.trim();
-    let (mut kind, mut case) = decision::select_kind(trimmed, context, hint);
+    let leading = first.len() - first.trim_start().len();
+    let numeric_start = first
+        .get(leading..leading.saturating_add(2))
+        .filter(|token| {
+            let bytes = token.as_bytes();
+            bytes.len() == 2 && bytes[0] == b'-' && bytes[1].is_ascii_digit()
+        });
+    // Numeric spelling is not a source-neutral option rule: only the shared
+    // scan, supplied with the native operand and final-style evidence, may
+    // prove a leading short digit. Reuse that result below instead of making
+    // a second role-specific name decision after selecting EntryKind.
+    let native_numeric_occurrences = (hint.is_none() && numeric_start.is_some())
+        .then(|| options::parameter_occurrences(content, &item.terms, operand_ranges));
+    let native_numeric_occurrences = native_numeric_occurrences.filter(|occurrences| {
+        let Some(spelling) = numeric_start else {
+            return false;
+        };
+        occurrences.first().is_some_and(|names| {
+            names.iter().any(|name| {
+                name.name == spelling
+                    && name.parts.len() == 1
+                    && name.parts[0] == (leading..leading + 2)
+            })
+        })
+    });
+    let (mut kind, mut case) =
+        decision::select_kind(trimmed, context, hint, native_numeric_occurrences.is_some());
     let mut occurrences = if hint == Some(super::NativeHeadRole::LiteralTerm) {
         item.terms
             .iter()
@@ -71,6 +101,8 @@ pub(super) fn infer_identity(
                     .unwrap_or_default()
             })
             .collect()
+    } else if let Some(occurrences) = native_numeric_occurrences {
+        occurrences
     } else {
         name_occurrences(content, item, kind, operand_ranges)
     };

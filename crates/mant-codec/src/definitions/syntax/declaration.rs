@@ -101,6 +101,7 @@ impl DeclarationState {
     /// This is the same grammar as a single `Inline::Code` node: the whole
     /// value is literal, contains no styled-argument boundary, and has no
     /// independently strong declaration restart.
+    #[cfg(test)]
     pub(super) fn literal(text: &str) -> Self {
         Self {
             text: text.to_owned(),
@@ -121,6 +122,7 @@ impl DeclarationState {
         }
     }
 
+    #[cfg(test)]
     pub(super) fn within_validated_token(mut self) -> Self {
         self.validated_token = true;
         self

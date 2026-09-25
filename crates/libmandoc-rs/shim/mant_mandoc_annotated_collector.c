@@ -29,6 +29,7 @@ struct annotated_slot {
 	uint32_t head_component;
 	int value;
 	uint8_t flags;
+	uint8_t font;
 	uint8_t occupied;
 	uint8_t authored_space;
 	uint8_t generated_space;
@@ -162,6 +163,26 @@ fail_relation(struct mant_annotated_collector *collector, uint64_t observed,
 {
 	mant_structured_set_failure(collector->session, MANT_STRUCTURED_RELATION,
 	    MANT_STRUCTURED_STAGE_RENDER, 0, observed, allowed);
+}
+
+/* term.c::buffer_write() retains the effective font at insertion, but
+ * term_field() reports TERM_COLLECT_FIELD_PLACE with TERMFONT_NONE.  A final
+ * literal '_' otherwise makes I and B indistinguishable as two byte-identical
+ * overstrike glyphs.  This evidence is used only for that final glyph. */
+static uint32_t
+underscore_style(uint8_t font)
+{
+	switch ((enum termfont)font) {
+	case TERMFONT_BOLD:
+		return MANT_ANNOTATED_STYLE_BOLD;
+	case TERMFONT_UNDER:
+		return MANT_ANNOTATED_STYLE_UNDERLINE;
+	case TERMFONT_BI:
+		return MANT_ANNOTATED_STYLE_BOLD |
+		    MANT_ANNOTATED_STYLE_UNDERLINE;
+	default:
+		return 0;
+	}
 }
 
 static void
@@ -1122,15 +1143,16 @@ head_text_has_glyph(const char *text)
 
 /* A man HEAD text node may carry inline font escapes, whereas the formatter
  * only presents the final glyphs. This is a broad declaration candidate, not
- * a name parser. In particular an italic/roman-only label is typography,
- * and a one-letter IP label is commonly a list marker. */
+ * a name or font parser: term.c::term_word() can switch fonts before the first
+ * visible glyph, so final display evidence must make the style decision.
+ * A one-letter IP label remains commonly a list marker. */
 static int
 man_text_declaration_candidate(struct mant_annotated_collector *collector,
     const char *text, int reject_single_letter, int *recognized)
 {
 	const char *cursor, *next, *sequence;
 	enum mandoc_esc escape;
-	int size, first_glyph = 0, glyph_count = 0, weak_style = 0;
+	int size, first_glyph = 0, glyph_count = 0;
 	int glyph;
 
 	*recognized = 0;
@@ -1148,20 +1170,14 @@ man_text_declaration_candidate(struct mant_annotated_collector *collector,
 			switch (escape) {
 			case ESCAPE_IGNORE:
 			case ESCAPE_NOSPACE:
-				continue;
 			case ESCAPE_FONTBOLD:
 			case ESCAPE_FONTCB:
 			case ESCAPE_FONTBI:
-				if (glyph_count == 0)
-					weak_style = 0;
-				continue;
 			case ESCAPE_FONT:
 			case ESCAPE_FONTROMAN:
 			case ESCAPE_FONTITALIC:
 			case ESCAPE_FONTCI:
 			case ESCAPE_FONTPREV:
-				if (glyph_count == 0)
-					weak_style = 1;
 				continue;
 			case ESCAPE_SPECIAL:
 				if (size != 1 || sequence[0] != '-')
@@ -1178,7 +1194,7 @@ man_text_declaration_candidate(struct mant_annotated_collector *collector,
 			first_glyph = glyph;
 		glyph_count++;
 	}
-	if (weak_style || (reject_single_letter && glyph_count < 2))
+	if (reject_single_letter && glyph_count < 2)
 		return 1;
 	if ((first_glyph >= 'a' && first_glyph <= 'z') ||
 	    (first_glyph >= 'A' && first_glyph <= 'Z') ||
@@ -2755,6 +2771,7 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		    collector->pending_head_component;
 		slot->flags = event->reason == TERM_COLLECT_FONT ?
 		    MANT_ANNOTATED_FONT_STROKE : 0;
+		slot->font = (uint8_t)event->font;
 		slot->value = event->value;
 		slot->authored_space = event->reason == TERM_COLLECT_TEXT &&
 		    event->value == ' ' && collector->pending_source != 0;
@@ -2824,6 +2841,10 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		collector->letter_label.source = slot->source;
 		collector->letter_label.head_component = slot->head_component;
 		collector->letter_label.flags = slot->flags;
+		if (slot->value == '_' &&
+		    (slot->flags & MANT_ANNOTATED_FONT_STROKE) == 0)
+			collector->letter_label.style =
+			    underscore_style(slot->font);
 		/* term.c::term_field() called p->advance(vbl) before FIELD_PLACE,
 		 * but the sink still retains those blanks.  Bind the edge after
 		 * LETTER flushes them and updates the origin. */

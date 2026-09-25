@@ -723,10 +723,12 @@ mod tests {
     }
 
     #[test]
-    fn native_italic_and_roman_labels_do_not_claim_lexical_evidence() {
-        // Both exact inputs ran pinned CVS -Ttree first. man_term.c::pre_I
-        // and bare R do not create a bold declaration; pre_IP still prints
-        // italic-only and one-letter list labels as ordinary presentation.
+    fn native_italic_and_roman_macro_labels_keep_final_style_evidence() {
+        // Both exact inputs ran pinned CVS -Ttree/-Tutf8 first. man_term.c::
+        // pre_I and bare R do not create a bold macro declaration. pre_IP
+        // still prints italic-only and one-letter labels as ordinary content;
+        // C may retain a broad lexical candidate for the former, but the
+        // final font and checked name scan must decide whether it is a name.
         let mut bundle = SourceBundle::new();
         bundle.insert("t.1", b".TH T 1\n.SH OPTIONS\n.TP\n.I --italic\nDescription.\n.TP\n.R --roman\nDescription.\n".to_vec()).unwrap();
         let page = AnnotatedRenderer::default()
@@ -744,11 +746,23 @@ mod tests {
         let page = AnnotatedRenderer::default()
             .render_bundle("t.1", &bundle, InputFormat::Man)
             .unwrap();
-        assert!(
-            page.marks
+        let owners = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 2)
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 2);
+        assert!(owners[0].flags & 16 != 0);
+        assert_eq!(owners[1].flags & (16 | 256), 0);
+        assert_eq!(
+            owners
                 .iter()
-                .filter(|mark| mark.kind == 2)
-                .all(|owner| owner.flags & (16 | 256) == 0)
+                .map(|owner| direct_mark_text(
+                    &page,
+                    &page.marks[(owner.title_region - 1) as usize]
+                ))
+                .collect::<Vec<_>>(),
+            ["--italic", "o"]
         );
     }
 

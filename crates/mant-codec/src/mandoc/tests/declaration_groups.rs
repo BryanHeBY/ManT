@@ -240,6 +240,121 @@ fn each_native_fl_proves_its_own_numeric_name_without_licensing_bold_text() {
 }
 
 #[test]
+fn native_fl_name_limit_does_not_publish_a_partial_head() {
+    // The exact 63- and 64-Fl inputs ran pinned CVS -Tutf8 first. Its
+    // mdoc_macro.c::in_line() executes every instance, but our bounded parser
+    // patch stops recursive inline dispatch at 64 levels and retains the
+    // rejected 64th Fl as literal text with a diagnostic. This integration
+    // test checks the safe limit; the independent semantic 64/65 ceiling is
+    // exercised with constructed, fully checked components in mant-ir.
+    for count in [63, 64] {
+        let head = (0..count)
+            .map(|index| format!("Fl {index}"))
+            .collect::<Vec<_>>()
+            .join(" , ");
+        let input = format!(
+            ".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It {head}\nBody.\n.El\n"
+        );
+        let document = parse_manual_bytes(std::path::Path::new("bounded-fl.1"), input.as_bytes())
+            .expect("parse complete native Fl head");
+        let [Block::DefinitionList { items, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!("expected one definition list with {count} Fl instances");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].entry.as_ref().map_or(0, |entry| entry.names.len()),
+            63,
+            "{count} Fl instances"
+        );
+        assert!(visible_document_text(&document).contains("Body."));
+        if count == 64 {
+            assert!(inline_text(document.content(), &items[0].terms[0]).contains("Fl 63"));
+            let report = libmandoc_rs::Parser::default()
+                .parse_bytes("bounded-fl.1", input.as_bytes())
+                .expect("bounded parser retains literal suffix");
+            assert!(!report.diagnostics.is_empty());
+        }
+    }
+}
+
+#[test]
+fn generic_section_uses_checked_native_numeric_head_evidence_for_option_role() {
+    // Each exact input ran pinned CVS -Tutf8 first. man_term.c::pre_TP
+    // executes a detached HEAD; pre_B/pre_alternate set the initial bold
+    // font, and term.c::term_word executes the final dash and digits. A bare
+    // TP label has no such style/operand proof, while -10 inside an existing
+    // --number argument is not a new declaration.
+    for (head, body, expected) in [
+        (
+            ".BR \\-4 \", \" \\-\\-ipv4",
+            "Search only for IPv4 sockets.",
+            vec!["-4", "--ipv4"],
+        ),
+        (".B \\-6", "Search only for IPv6 sockets.", vec!["-6"]),
+        (
+            ".B --number -10,--fake,20",
+            "Description.",
+            vec!["--number"],
+        ),
+    ] {
+        let input = format!(".TH T 1\n.SH DESCRIPTION\n.TP\n{head}\n{body}\n");
+        let document =
+            parse_manual_bytes(std::path::Path::new("numeric-generic.1"), input.as_bytes())
+                .expect("parse generic section numeric head");
+        let [Block::DefinitionList { items, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!("expected one definition list: {head}");
+        };
+        let entry = items[0].entry.as_ref().expect("definition entry");
+        assert_eq!(entry.names, expected, "{head}");
+        assert_eq!(
+            entry.kind,
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            "{head}"
+        );
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in expected {
+            let explanation = mant_query::explain_query(
+                &resolved,
+                &mant_protocol::ExplanationQuery {
+                    entry: name.into(),
+                    options: mant_protocol::ExplanationOptions::default(),
+                },
+            )
+            .expect("query checked native numeric option");
+            assert_eq!(explanation.counts.direct_entry.total, 1, "{head}: {name}");
+        }
+    }
+    let bare = b".TH T 1\n.SH DESCRIPTION\n.TP\n\\-4\nBare numeric label.\n";
+    let document = parse_manual_bytes(std::path::Path::new("numeric-bare.1"), bare)
+        .expect("parse bare numeric label");
+    let [Block::DefinitionList { items, .. }] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!("expected one definition list");
+    };
+    assert_ne!(
+        items[0].entry.as_ref().expect("definition entry").kind,
+        mant_ir::EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        }
+    );
+}
+
+#[test]
 fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_lists() {
     let body_closed = parse_manual_bytes(
         std::path::Path::new("declaration-body-closure.1"),

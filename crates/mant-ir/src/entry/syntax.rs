@@ -6,10 +6,13 @@
 
 use std::ops::Range;
 
+type NameRange = (String, Range<usize>);
+
 mod literal_names;
 pub use literal_names::{
     DeclarationScan, is_complete_hanging_option_head, literal_option_names,
-    scan_option_declarations,
+    scan_option_declarations, scan_option_declarations_with_numeric,
+    scan_option_declarations_with_style, scan_option_declarations_with_style_ranges,
 };
 pub(crate) use literal_names::{StyledBoundaryRule, literal_declaration_scan_with_operands};
 
@@ -60,6 +63,13 @@ pub fn lexical_option_token(token: &str) -> bool {
 /// retain distinct ranges; the caller groups them into one name binding.
 #[must_use]
 pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>> {
+    literal_option_aliases_checked(form).ok().flatten()
+}
+
+/// Keep a bounded, valid alias group distinct from a non-matching spelling.
+/// Callers that can fall back to a leading name must not do so after the
+/// sixty-fifth complete alias; that would publish a partial declaration.
+pub(crate) fn literal_option_aliases_checked(form: &str) -> Result<Option<Vec<NameRange>>, ()> {
     let mut cursor = 0;
     let mut names = Vec::new();
     let mut whitespace_group = false;
@@ -79,9 +89,14 @@ pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>>
             }
             cursor += character.len_utf8();
         }
-        let token = form.get(start..cursor)?;
-        if !lexical_option_token(token) || names.len() == 64 {
-            return None;
+        let Some(token) = form.get(start..cursor) else {
+            return Ok(None);
+        };
+        if !lexical_option_token(token) {
+            return Ok(None);
+        }
+        if names.len() == 64 {
+            return Err(());
         }
         names.push((token.to_owned(), start..cursor));
         let separator_start = cursor;
@@ -102,7 +117,7 @@ pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>>
             // A slash after whitespace can introduce a path operand. Only
             // an adjacent slash separates aliases within one invocation.
             if form.as_bytes()[cursor] == b'/' && cursor > separator_start {
-                return None;
+                return Ok(None);
             }
             punctuation_group = true;
             cursor += 1;
@@ -124,24 +139,24 @@ pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>>
                 }
             }
         } else {
-            return None;
+            return Ok(None);
         }
         if cursor == form.len() {
-            return None;
+            return Ok(None);
         }
     }
     if names.len() < 2 {
-        return None;
+        return Ok(None);
     }
     if whitespace_group {
         let short_then_long = names[0].0.len() == 2
             && names[0].0.starts_with('-')
             && names.iter().skip(1).all(|(name, _)| name.starts_with("--"));
         if !short_then_long || (word_connector || punctuation_group) && names.len() != 2 {
-            return None;
+            return Ok(None);
         }
     }
-    Some(names)
+    Ok(Some(names))
 }
 
 /// Complete spelling licensed by an independently proved native option head.

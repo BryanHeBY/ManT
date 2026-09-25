@@ -530,8 +530,43 @@ write_scalar(struct mant_annotated_display *display, uint32_t scalar,
 		old = display->components + slot->head - 1;
 		if (old->next == 0 && same_origin(old->label, label)) {
 			if (slot->width == width && old->length == length &&
-			    memcmp(old->bytes, bytes, length) == 0)
+			    memcmp(old->bytes, bytes, length) == 0) {
 				fold_bold = 1;
+				/* I '_' is also two identical device strokes.  Its
+				 * final non-font write carries the insertion-time UNDER
+				 * proof from the active collector slot; unlike B '_', it
+				 * has no bold stroke to fold. */
+				if (length == 1 && bytes[0] == '_' &&
+				    (old->label.flags &
+				    MANT_ANNOTATED_FONT_STROKE) != 0 &&
+				    (label.flags &
+				    MANT_ANNOTATED_FONT_STROKE) == 0 &&
+				    (label.style &
+				    (MANT_ANNOTATED_STYLE_BOLD |
+				    MANT_ANNOTATED_STYLE_UNDERLINE)) ==
+				    MANT_ANNOTATED_STYLE_UNDERLINE)
+					fold_bold = 0;
+				/* term.c::buffer_write() emits BI as underscore,
+				 * backspace, font glyph, backspace, final glyph.  The
+				 * last same-origin glyph must retain the underline already
+				 * proven on its font stroke, not merely its bold fold. */
+				if ((old->label.flags &
+				    MANT_ANNOTATED_FONT_STROKE) != 0 &&
+				    (old->label.style &
+				    MANT_ANNOTATED_STYLE_UNDERLINE) != 0)
+					fold_underline = 1;
+				/* For a literal underscore in BI, the first and second
+				 * identical strokes are both TERM_COLLECT_FONT: the first
+				 * is the underline and the second is the bold glyph.  B
+				 * alone has only one font stroke before its final text
+				 * glyph, so it must not acquire underline here. */
+				if (length == 1 && bytes[0] == '_' &&
+				    (old->label.flags &
+				    MANT_ANNOTATED_FONT_STROKE) != 0 &&
+				    (label.flags &
+				    MANT_ANNOTATED_FONT_STROKE) != 0)
+					fold_underline = 1;
+			}
 			else if (slot->width == 1 && old->length == 1 &&
 			    old->bytes[0] == '_')
 				fold_underline = 1;

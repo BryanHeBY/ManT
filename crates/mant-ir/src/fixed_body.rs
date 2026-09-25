@@ -22,8 +22,6 @@ const MAX_FIXED_ROW_COLUMNS: u32 = 1_048_576;
 const MAX_FIXED_TOTAL_COLUMNS: u64 = 32 * 1024 * 1024;
 const MAX_FIXED_TOTAL_JOIN_BYTES: u64 = 32 * 1024 * 1024;
 
-type StyledArgumentScan = (Vec<(String, Range<usize>)>, usize);
-
 /// A final display surface, independent of any viewport width.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -489,46 +487,19 @@ impl FixedBody {
         let form = self.owner_complete_form(owner)?;
         let scan = self.lexical_declaration_scan(owner, &form)?;
         let segments = &scan.ranges;
-        let (styled, _) = self.lexical_styled_argument_names_in_segments(owner, &form, segments)?;
         let (literal, over_limit) = scan.names(&form);
         if over_limit {
             return None;
         }
-        let mut candidates = literal.clone();
-        // A displayed operand after a complete initial option is not another
-        // name. The native HEAD role, rather than the raw roff spelling, is
-        // the independent evidence for this first declaration.
-        if candidates.is_empty() {
-            let leading = form.len() - form.trim_start().len();
-            if let Some(name) = crate::option_prefix(&form[leading..])
-                && crate::lexical_option_token(name)
-                && form[leading + name.len()..]
-                    .chars()
-                    .next()
-                    .is_some_and(|character| character.is_whitespace() || character == '=')
-            {
-                candidates.push((name.to_owned(), leading..leading + name.len()));
-            }
-        }
-        let styled_ranges = styled
-            .iter()
-            .map(|(_, range)| range.clone())
-            .collect::<Vec<_>>();
-        for (name, range) in styled {
-            candidates.retain(|(_, existing)| existing.start != range.start);
-            candidates.push((name, range));
-        }
-        candidates.sort_by_key(|(_, range)| range.start);
         let mut names = Vec::new();
-        for (name, range) in candidates {
+        for (name, range) in &literal {
             let selection = self.selection_subrange(&owner.head, range.clone())?;
             if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
                 return None;
             }
-            names.push((name, selection, range));
+            names.push((name.clone(), selection, range.clone()));
         }
-        let names =
-            self.checked_lexical_names(owner, &form, names, &styled_ranges, segments, &literal)?;
+        let names = self.checked_lexical_names(owner, names, segments)?;
         // The parser-alive prefix is a candidate for the first declaration,
         // not permission to ignore the rest of the native HEAD.  Keep it
         // tied to the same final glyphs when it was recorded.
@@ -560,6 +531,10 @@ impl FixedBody {
     /// italic parameter cannot manufacture such an operand. This is a
     /// bounded annotation of the complete displayed HEAD, not a second
     /// source-spelling parser or a requirement for authored coordinates.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "collect one owner's native component and final-style evidence in display order"
+    )]
     fn lexical_declaration_scan(
         &self,
         owner: &OwnerMark,
@@ -567,24 +542,102 @@ impl FixedBody {
     ) -> Option<crate::entry::DeclarationScan> {
         let component_ranges = component_part_ranges(&owner.head, &owner.head_components)
             .and_then(|parts| self.component_byte_ranges(&owner.head, &parts))
-            .map(|ranges| {
-                owner
-                    .head_components
-                    .iter()
-                    .zip(ranges)
-                    .filter_map(|(component, range)| {
-                        (component.role == OwnerHeadRole::Lexical && range.start < range.end)
-                            .then_some(range)
-                    })
-                    .collect::<Vec<_>>()
-            })
+            .map(|ranges| owner.head_components.iter().zip(ranges).collect::<Vec<_>>())
             .unwrap_or_default();
         // Only native macro components are independent operands. A lone `.IP`
         // label is one text operand in man_term.c::pre_IP; `\fB` within it
         // may change the final run style without ending a parameter.
-        let operands = component_ranges;
-        let mut argument_starts = Vec::new();
+        let operands = component_ranges
+            .iter()
+            .filter_map(|(component, range)| {
+                (component.role == OwnerHeadRole::Lexical && range.start < range.end)
+                    .then_some(range.clone())
+            })
+            .collect::<Vec<_>>();
+        // Build final-bold glyph intervals once in logical HEAD coordinates.
+        // Calling selection_subrange for each numeric-looking native child
+        // would repeatedly rebuild and scan the whole HEAD (quadratic for a
+        // long alternating macro). Joins occupy logical bytes but no glyphs,
+        // so a name crossing one cannot accidentally inherit a font style.
+        if owner.head.joins.len() != owner.head.parts.len().saturating_sub(1) {
+            return None;
+        }
+        let mut bold_spans: Vec<Range<usize>> = Vec::new();
+        let mut glyph_cursor = 0usize;
+        for (index, part) in owner.head.parts.iter().enumerate() {
+            if index != 0 {
+                glyph_cursor = glyph_cursor.checked_add(match &owner.head.joins[index - 1] {
+                    TextJoin::DirectContact => 0,
+                    TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text) => {
+                        text.len()
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                })?;
+            }
+            let start = glyph_cursor;
+            let run = self.surface.runs.get((part.run.get() - 1) as usize)?;
+            let visible = self.surface.run_text(part.run)?.get(
+                usize::try_from(part.start_byte).ok()?..usize::try_from(part.end_byte).ok()?,
+            )?;
+            glyph_cursor = glyph_cursor.checked_add(visible.len())?;
+            if run.label.style.bold {
+                if let Some(last) = bold_spans.last_mut()
+                    && last.end == start
+                {
+                    last.end = glyph_cursor;
+                } else {
+                    bold_spans.push(start..glyph_cursor);
+                }
+            }
+        }
+        if glyph_cursor != form.len() {
+            return None;
+        }
+        // A signed number in an existing argument is not an option. The
+        // exception for a short numeric flag requires this native lexical
+        // component's first surviving glyphs, their authored source identity,
+        // and the final bold display of both glyphs. pre_alternate() supplies
+        // the operand boundary; term_word() supplies the executed glyph/style.
+        let mut bold_cursor = 0usize;
+        let numeric_name_starts = component_ranges
+            .iter()
+            .filter_map(|(component, range)| {
+                if component.role != OwnerHeadRole::Lexical || !component.has_source_identity() {
+                    return None;
+                }
+                let visible = form.get(range.clone())?;
+                let start = range.start + visible.len() - visible.trim_start().len();
+                let end = start.checked_add(2)?;
+                let name = form.get(start..end)?;
+                let bytes = name.as_bytes();
+                if end > range.end
+                    || bytes.len() != 2
+                    || bytes[0] != b'-'
+                    || !bytes[1].is_ascii_digit()
+                {
+                    return None;
+                }
+                while bold_spans
+                    .get(bold_cursor)
+                    .is_some_and(|span| span.end <= start)
+                {
+                    bold_cursor += 1;
+                }
+                bold_spans
+                    .get(bold_cursor)
+                    .is_some_and(|span| span.start <= start && end <= span.end)
+                    .then_some(start)
+            })
+            .collect::<Vec<_>>();
+        // Component intervals and display parts are both in visible order.
+        // Walk their starts once; a tree lookup for every font fragment would
+        // make a long alternating HEAD needlessly superlinear.
+        let mut operand_boundary = 0;
+        let mut plain_italic_ranges: Vec<Range<usize>> = Vec::new();
+        let mut bold_underline_starts = Vec::new();
         let mut offset = 0usize;
+        let mut previous_style = None;
+        let mut underlined_group_started = false;
         for (index, part) in owner.head.parts.iter().enumerate() {
             if index != 0 {
                 offset = offset.checked_add(match &owner.head.joins[index - 1] {
@@ -601,150 +654,77 @@ impl FixedBody {
                 usize::try_from(part.start_byte).ok()?..usize::try_from(part.end_byte).ok()?,
             )?;
             offset = offset.checked_add(visible.len())?;
-            if run.label.style.underline
-                && !run.label.style.bold
-                && visible.chars().any(|character| !character.is_whitespace())
+            let style = (run.label.style.bold, run.label.style.underline);
+            while operands
+                .get(operand_boundary)
+                .is_some_and(|operand| operand.start < start)
             {
-                argument_starts.push(start);
+                operand_boundary += 1;
             }
+            let starts_operand = operands
+                .get(operand_boundary)
+                .is_some_and(|operand| operand.start == start);
+            let same_style_group = index != 0
+                && owner.head.joins[index - 1] == TextJoin::DirectContact
+                && !starts_operand
+                && previous_style == Some(style);
+            if !same_style_group {
+                underlined_group_started = false;
+            }
+            if run.label.style.underline {
+                if underlined_group_started && same_style_group && !run.label.style.bold {
+                    plain_italic_ranges.last_mut()?.end = offset;
+                } else if !underlined_group_started
+                    && let Some(first) = visible.find(|character: char| !character.is_whitespace())
+                {
+                    let visible_start = start.checked_add(first)?;
+                    if run.label.style.bold {
+                        bold_underline_starts.push(visible_start);
+                    } else {
+                        plain_italic_ranges.push(visible_start..offset);
+                    }
+                    underlined_group_started = true;
+                }
+            }
+            previous_style = Some(style);
         }
-        (offset == form.len()).then(|| {
-            let boundary_rule = if owner.head_components.is_empty() {
-                crate::entry::StyledBoundaryRule::SingleTextOperand
-            } else {
-                crate::entry::StyledBoundaryRule::NativeComponents
-            };
-            crate::entry::literal_declaration_scan_with_operands(
+        if offset != form.len() {
+            return None;
+        }
+        if owner.head_components.is_empty() || !operands.is_empty() {
+            crate::scan_option_declarations_with_style_ranges(
                 form,
                 &operands,
-                &argument_starts,
-                boundary_rule,
+                &plain_italic_ranges,
+                &bold_underline_starts,
+                &numeric_name_starts,
             )
-        })
-    }
-
-    /// An immediately underlined suffix is a native parameter boundary,
-    /// even when `term.c::term_word()` prints it in direct contact with the
-    /// preceding option (`-L` followed by italic `dir`).  Recover only a
-    /// complete option before that boundary; ordinary roman suffixes and
-    /// a wholly underlined option are not additional declarations.
-    #[cfg(test)]
-    fn lexical_styled_argument_names(
-        &self,
-        owner: &OwnerMark,
-        form: &str,
-    ) -> Option<StyledArgumentScan> {
-        let scan = self.lexical_declaration_scan(owner, form)?;
-        self.lexical_styled_argument_names_in_segments(owner, form, &scan.ranges)
-    }
-
-    fn lexical_styled_argument_names_in_segments(
-        &self,
-        owner: &OwnerMark,
-        form: &str,
-        segments: &[Range<usize>],
-    ) -> Option<StyledArgumentScan> {
-        let mut candidates = Vec::new();
-        let mut segment_index = 0;
-        let mut examined_segment = None;
-        let mut attempts = 0;
-        let mut offset = 0usize;
-        for (index, part) in owner.head.parts.iter().enumerate() {
-            if index != 0 {
-                offset = offset.checked_add(match &owner.head.joins[index - 1] {
-                    TextJoin::DirectContact => 0,
-                    TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text) => {
-                        text.len()
-                    }
-                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
-                })?;
-            }
-            let start = offset;
-            let run = self.surface.runs.get((part.run.get() - 1) as usize)?;
-            let length = usize::try_from(part.end_byte.checked_sub(part.start_byte)?).ok()?;
-            offset = offset.checked_add(length)?;
-            if !run.label.style.underline || run.label.style.bold {
-                continue;
-            }
-            let visible = self.surface.run_text(part.run)?.get(
-                usize::try_from(part.start_byte).ok()?..usize::try_from(part.end_byte).ok()?,
-            )?;
-            if visible.chars().all(char::is_whitespace) {
-                // An underlined no-break space from an empty BI operand is
-                // still display text, but it does not start a parameter.
-                // In particular, it must not use up this declaration's sole
-                // styled-argument scan before the later FILE run arrives.
-                continue;
-            }
-            while segments
-                .get(segment_index)
-                .is_some_and(|segment| segment.end < start)
-            {
-                segment_index += 1;
-            }
-            let Some(segment) = segments.get(segment_index) else {
-                continue;
-            };
-            // A later underlined run in the same declaration cannot reveal
-            // a new leading name: its prefix already contains the first
-            // underlined argument.  More importantly, never rescan that
-            // growing prefix once per font fragment.
-            if examined_segment == Some(segment_index) {
-                continue;
-            }
-            examined_segment = Some(segment_index);
-            attempts += 1;
-            if index == 0 || owner.head.joins[index - 1] != TextJoin::DirectContact {
-                continue;
-            }
-            if start <= segment.start || start > segment.end {
-                continue;
-            }
-            let prefix = form.get(segment.start..start)?;
-            for (name, local) in crate::literal_option_names(prefix) {
-                let range = segment.start + local.start..segment.start + local.end;
-                let selection = self.selection_subrange(&owner.head, range.clone())?;
-                if selection.parts.iter().any(|part| {
-                    self.surface
-                        .runs
-                        .get((part.run.get() - 1) as usize)
-                        .is_some_and(|run| run.label.style.underline && !run.label.style.bold)
-                }) {
-                    continue;
-                }
-                if candidates.len() == 64 {
-                    return None;
-                }
-                candidates.push((name, range));
-            }
+        } else {
+            // Preserve the existing conservative rule for a lexical owner
+            // whose native components are all non-lexical or textless.
+            let mut plain_italic_starts = plain_italic_ranges
+                .iter()
+                .map(|range| range.start)
+                .collect::<Vec<_>>();
+            plain_italic_starts.extend(bold_underline_starts);
+            plain_italic_starts.sort_unstable();
+            plain_italic_starts.dedup();
+            Some(crate::entry::literal_declaration_scan_with_operands(
+                form,
+                &operands,
+                &plain_italic_starts,
+                crate::entry::StyledBoundaryRule::NativeComponents,
+            ))
         }
-        (offset == form.len()).then_some((candidates, attempts))
     }
 
     fn checked_lexical_names(
         &self,
         owner: &OwnerMark,
-        form: &str,
         candidates: Vec<(String, TextSelection, std::ops::Range<usize>)>,
-        styled_ranges: &[std::ops::Range<usize>],
         segments: &[Range<usize>],
-        literal: &[(String, Range<usize>)],
     ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
-        let components = component_part_ranges(&owner.head, &owner.head_components)
-            .and_then(|ranges| self.component_byte_ranges(&owner.head, &ranges))
-            .map(|ranges| {
-                owner
-                    .head_components
-                    .iter()
-                    .zip(ranges)
-                    .filter_map(|(component, range)| {
-                        (component.role == OwnerHeadRole::Lexical
-                            && component.has_source_identity())
-                        .then_some(range)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let had_candidates = !candidates.is_empty();
         let mut names = Vec::new();
         let mut blocked_segment = None;
         let mut segment_cursor = 0;
@@ -763,16 +743,6 @@ impl FixedBody {
             if blocked_segment == Some(segment_cursor) {
                 continue;
             }
-            let leading = form.get(segment.start..range.start)?;
-            let at_segment_start = leading
-                .chars()
-                .all(|character| character.is_whitespace() || matches!(character, '[' | '{' | '('));
-            if !at_segment_start
-                && !literal.iter().any(|(_, found)| *found == range)
-                && !styled_ranges.contains(&range)
-            {
-                continue;
-            }
             // Underline is final native display evidence, not a recovered
             // italic opcode. Conservatively treat an underlined nonbold name
             // as a parameter within this segment only; a later independently
@@ -787,39 +757,39 @@ impl FixedBody {
                 blocked_segment = Some(segment_cursor);
                 continue;
             }
-            // A font change alone is not a parameter boundary: BR's native
-            // operands are joined without spaces by pre_alternate(). Within
-            // one B operand (or an IP literal), however, mixed styling has
-            // no independent operand witness and remains conservative.
-            let mut bold = None;
-            let mut mixed_bold = false;
-            for part in &selection.parts {
-                let part_bold = self
-                    .surface
-                    .runs
-                    .get((part.run.get() - 1) as usize)?
-                    .label
-                    .style
-                    .bold;
-                if bold
-                    .replace(part_bold)
-                    .is_some_and(|previous| previous != part_bold)
-                {
-                    mixed_bold = true;
+            // A plain IP label has no independent lexical component or TP/TQ
+            // term witness. Bold `-a` glued to roman `foo` is only a styled
+            // label, not a proved combined option. In contrast, pre_B() is
+            // an explicit macro instance and term_word() may switch to roman
+            // inside its one complete spelling without ending that name.
+            if !owner.lexical_term_witness && owner.head_components.is_empty() {
+                let mut prior_bold = None;
+                let mut mixed_bold = false;
+                for part in &selection.parts {
+                    let current_bold = self
+                        .surface
+                        .runs
+                        .get((part.run.get() - 1) as usize)?
+                        .label
+                        .style
+                        .bold;
+                    if prior_bold
+                        .replace(current_bold)
+                        .is_some_and(|before| before != current_bold)
+                    {
+                        mixed_bold = true;
+                    }
+                }
+                if mixed_bold {
+                    style_rejected = true;
+                    blocked_segment = Some(segment_cursor);
+                    continue;
                 }
             }
-            if mixed_bold
-                && (components
-                    .iter()
-                    .any(|component| component.start <= range.start && range.end <= component.end)
-                    || !components.iter().any(|component| {
-                        component.start < range.end && range.start < component.end
-                    }))
-            {
-                style_rejected = true;
-                blocked_segment = Some(segment_cursor);
-                continue;
-            }
+            // A B operand can switch to roman in the middle of one visible
+            // spelling: pre_B() chooses only its initial font and term_word()
+            // executes \fR inline. The shared scan already found the name
+            // interval; a boldness change is not a second parameter grammar.
             names.push((name, selection, range));
         }
         if names.len() > 64 || names.windows(2).any(|pair| pair[0].2.end > pair[1].2.start) {
@@ -829,7 +799,7 @@ impl FixedBody {
         // rejected a candidate: the producer must not reclassify that same
         // visible spelling through the generic identity fallback. A head
         // with no option candidate remains eligible as an ordinary Term.
-        (!names.is_empty() || style_rejected || literal.is_empty()).then_some(names)
+        (!names.is_empty() || style_rejected || !had_candidates).then_some(names)
     }
 
     /// Bind each source-identified `Fl` macro to its own final glyphs without
@@ -838,6 +808,8 @@ impl FixedBody {
     /// and `mdoc_term.c::termp_fl_pre()` prints every distinct `Fl` invocation.
     /// The complete `HEAD` remains one form; these components prove names, not
     /// separate forms or alias relationships.
+    /// A sixty-fifth proved invocation invalidates the whole semantic group,
+    /// even if its spelling repeats an earlier one.
     #[must_use]
     pub fn option_component_names(
         &self,
@@ -851,7 +823,7 @@ impl FixedBody {
         }
         let ranges = component_part_ranges(&owner.head, &owner.head_components)?;
         let byte_ranges = self.component_byte_ranges(&owner.head, &ranges)?;
-        let mut names = Vec::with_capacity(owner.head_components.len());
+        let mut names = Vec::with_capacity(owner.head_components.len().min(64));
         for (component, range) in owner.head_components.iter().zip(byte_ranges) {
             if component.selection.parts.is_empty() || !component.has_source_identity() {
                 return None;
@@ -871,9 +843,42 @@ impl FixedBody {
                 // but must not erase names proved by sibling Fl instances.
                 continue;
             }
+            if names.len() == 64 {
+                return None;
+            }
             names.push((text, component.selection.clone(), range));
         }
         (!names.is_empty()).then_some(names)
+    }
+
+    /// Whether more than 64 independently visible `Fl` invocations prove
+    /// option names in one head. The producer checks this before any lexical
+    /// or first-component fallback; the IR validator applies the same gate to
+    /// externally supplied entry facts. Neither may publish a truncated group.
+    #[must_use]
+    pub fn option_component_over_limit(&self, owner: &OwnerMark) -> bool {
+        if owner.head_role != Some(OwnerHeadRole::Option) {
+            return false;
+        }
+        let mut proved = 0;
+        for component in &owner.head_components {
+            if component.role != OwnerHeadRole::Option
+                || component.selection.parts.is_empty()
+                || !component.has_source_identity()
+            {
+                continue;
+            }
+            if self
+                .selection_text(&component.selection)
+                .is_some_and(|text| crate::native_option_token(&text))
+            {
+                proved += 1;
+                if proved > 64 {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn component_byte_ranges(
@@ -928,7 +933,7 @@ impl FixedBody {
         if owner.role != OwnerRole::Definition || owner.head_components.len() < 2 {
             return None;
         }
-        let mut forms = Vec::with_capacity(owner.head_components.len());
+        let mut forms = Vec::with_capacity(owner.head_components.len().min(64));
         let mut seen = BTreeSet::new();
         for component in &owner.head_components {
             if component.role != OwnerHeadRole::Option
@@ -939,6 +944,9 @@ impl FixedBody {
             }
             let text = self.selection_text(&component.selection)?;
             if !crate::native_option_token(&text) || !seen.insert(text.clone()) {
+                return None;
+            }
+            if forms.len() == 64 {
                 return None;
             }
             forms.push((text, component.selection.clone()));
@@ -1004,6 +1012,9 @@ impl FixedBody {
         owner: &'a OwnerMark,
     ) -> Option<&'a EntryFacts<TextSelection>> {
         let entry = owner.entry.as_ref()?;
+        if self.option_component_over_limit(owner) {
+            return None;
+        }
         if owner.hanging_candidate {
             if !self.hanging_declaration_ready(owner) {
                 return None;

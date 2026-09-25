@@ -52,6 +52,70 @@ fn invalid_optional_entry_and_link_facts_leave_native_body_and_siblings() {
 }
 
 #[test]
+fn native_fl_parser_depth_boundary_is_consistent_in_flow_and_fixed() {
+    // All four exact inputs ran pinned CVS -Tutf8 before these assertions.
+    // The separate vendor safety patch bounds recursive mdoc_macro_call()
+    // dispatch at 64 levels. With It occupying one level, the 64th Fl is
+    // retained as literal text and diagnosed; it cannot become a proved
+    // option occurrence in either projection. A synthetic IR test exercises
+    // the independent 64/65 semantic occurrence ceiling.
+    for (repeated, count, expected_names) in [
+        (false, 63, 63),
+        (false, 64, 63),
+        (true, 63, 1),
+        (true, 64, 1),
+    ] {
+        let head = (0..count)
+            .map(|index| {
+                if repeated {
+                    "Fl x".to_owned()
+                } else {
+                    format!("Fl {index}")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" , ");
+        let input = format!(
+            ".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It {head}\nBody.\n.El\n"
+        );
+        let flow = crate::parse_roff_bytes(std::path::Path::new("t.1"), input.as_bytes())
+            .expect("Flow keeps the complete native Fl head");
+        assert!(validate_document(&flow).is_empty());
+        let [mant_ir::Block::DefinitionList { items, .. }] =
+            flow.flow().expect("Flow document").sections[0]
+                .blocks
+                .as_slice()
+        else {
+            panic!("expected one Fl list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].entry.as_ref().map_or(0, |entry| entry.names.len()),
+            expected_names,
+            "Flow: repeated={repeated}, count={count}, names={:?}",
+            items[0].entry.as_ref().map(|entry| &entry.names)
+        );
+
+        let fixed = project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Mdoc)
+            .expect("Fixed keeps the complete native Fl head");
+        assert!(validate_document(&fixed).is_empty());
+        let DocumentBody::Fixed(body) = &fixed.body else {
+            panic!("not Fixed")
+        };
+        assert!(body.surface.text.contains("Body."));
+        assert_eq!(
+            body.owners[0]
+                .entry
+                .as_ref()
+                .map_or(0, |entry| entry.names.len()),
+            expected_names,
+            "Fixed: repeated={repeated}, count={count}"
+        );
+        assert!(!body.option_component_over_limit(&body.owners[0]));
+    }
+}
+
+#[test]
 fn rejected_native_link_target_keeps_other_fixed_facts_and_reports_gap() {
     // Exact bytes ran pinned CVS -Tutf8 first. man_term.c prints the TP
     // descriptions and UR label independently of this test's injected
@@ -188,6 +252,41 @@ fn empty_initial_bi_operands_do_not_hide_later_bold_name() {
     assert_eq!(term.kind, EntryKind::Term);
     assert!(term.names.is_empty());
     assert!(fixed.surface.text.contains("--fake"));
+}
+
+#[test]
+fn italic_ip_candidate_keeps_body_without_a_false_option_name() {
+    // This exact IP input ran pinned CVS -Tutf8 first. pre_IP prints the
+    // first operand, and term.c::term_word makes every name glyph underlined.
+    // A broad native candidate is not final declaration evidence.
+    let input = b".TH T 1\n.SH OPTIONS\n.IP \"\\fI--italic\\fR\" 4\nDescription.\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert!(fixed.surface.text.contains("--italic"));
+    assert!(fixed.surface.text.contains("Description."));
+    assert!(
+        fixed.owners[0]
+            .entry
+            .as_ref()
+            .is_none_or(|entry| entry.names.is_empty())
+    );
+    let result = mant_query::explain_query(
+        &mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        },
+        &ExplanationQuery {
+            entry: "--italic".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(result.counts.direct_entry.total, 0);
 }
 
 #[test]
@@ -1131,7 +1230,9 @@ fn man_hanging_declaration_requires_a_complete_head_and_positive_rs_indent() {
 fn native_hanging_option_forms_reuse_checked_name_boundaries() {
     // Each exact input ran pinned CVS -Tutf8 before these assertions.
     // man_validate.c keeps the PP or first-section execution boundary;
-    // man_term.c::pre_alternate prints BI operands without an inserted space.
+    // man_term.c::pre_PP/pre_alternate retains the head and prints BI
+    // operands without inserted space. term.c::term_word closes the italic
+    // metavariable before the next comma-separated bold declaration.
     // The whole head stays one form while native bold components can prove a
     // shorter name than the visibly glued operand.
     for (label, input, expected_names, expected_body) in [
@@ -1182,6 +1283,13 @@ fn native_hanging_option_forms_reuse_checked_name_boundaries() {
             b".TH T 1\n.SH OPTIONS\n.P\n.B --foo\n.RS 4\nP body\n.RE\n".as_slice(),
             vec!["--foo"],
             "P body",
+        ),
+        (
+            "italic-template-and-parameter",
+            b".TH T 1\n.SH OPTIONS\n.PP\n\\fI-<number>\\fR, \\fB-n\\fR \\fI<number>\\fR, \\fB--max-count\\fR=\\fI<number>\\fR\n.RS 4\nCOUNT_BODY\n.RE\n"
+                .as_slice(),
+            vec!["-n", "--max-count"],
+            "COUNT_BODY",
         ),
     ] {
         let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
@@ -2737,6 +2845,8 @@ fn complete_man_tp_option_uses_shared_lexical_rule_without_promoting_other_terms
     // This exact input first ran pinned CVS -Tutf8. man_macro.c::blk_imp
     // creates distinct TP HEAD/BODY scopes; man_term.c::pre_TP/post_TP
     // prints the full head before the body, using term.c::term_word/flushln.
+    // A complete bold `-1` HEAD is an independently witnessed short option;
+    // a signed number inside an existing argument remains an argument.
     let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --save\nbody\n.TP\n.B {+\nbody\n.TP\n.B FILE\nbody\n.TP\n.B -1\nnumber body\n.TP\n.B --save=FILE\nassignment body\n";
     let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
     let DocumentBody::Fixed(fixed) = &document.body else {
@@ -2760,9 +2870,16 @@ fn complete_man_tp_option_uses_shared_lexical_rule_without_promoting_other_terms
             parameter_kind: ParameterKind::Option
         }
     );
-    for owner in &fixed.owners[1..4] {
+    for owner in &fixed.owners[1..3] {
         assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
     }
+    assert_eq!(fixed.owners[3].entry.as_ref().unwrap().names, ["-1"]);
+    assert_eq!(
+        fixed.owners[3].entry.as_ref().unwrap().kind,
+        EntryKind::Parameter {
+            parameter_kind: ParameterKind::Option
+        }
+    );
     assert_eq!(fixed.owners[4].entry.as_ref().unwrap().names, ["--save"]);
     assert_eq!(
         fixed.owners[4].entry.as_ref().unwrap().kind,
@@ -2967,10 +3084,21 @@ fn escaped_dash_tq_keeps_its_own_checked_option_name() {
 #[test]
 fn escaped_dash_man_hint_uses_final_glyphs_and_style() {
     // Each exact input ran pinned CVS -Ttree/-Tascii first. term.c::term_word
-    // executes \& without a glyph, but \[hy] is not an ASCII option dash;
-    // a font switch within one name does not prove a combined spelling.
+    // executes \& without a glyph, but \[hy] is not an ASCII option dash.
+    // pre_B() only chooses an initial font: term_word() preserves the same
+    // visible spelling across an inline roman switch, so -B\fRn is -Bn.
+    // One bold digit after the executed ASCII option dash is a native short
+    // option candidate, not the same as a signed numeric argument.
     for (label, expected) in [
-        (r"\-B\fRn", Some((EntryKind::Term, "-Bn"))),
+        (
+            r"\-B\fRn",
+            Some((
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                "-Bn",
+            )),
+        ),
         (r"\[hy]x", Some((EntryKind::Term, "‐x"))),
         (
             r"\-x\&foo",
@@ -2981,7 +3109,15 @@ fn escaped_dash_man_hint_uses_final_glyphs_and_style() {
                 "-xfoo",
             )),
         ),
-        (r"\-1", Some((EntryKind::Term, "-1"))),
+        (
+            r"\-1",
+            Some((
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                "-1",
+            )),
+        ),
         (r"\-x.", Some((EntryKind::Term, "-x."))),
         (
             r"\-a, text",
@@ -3627,10 +3763,18 @@ fn flow_and_fixed_share_styled_boundary_and_three_name_heads() {
 #[test]
 fn native_man_split_names_and_styled_arguments_share_one_checked_head() {
     // Each exact input ran pinned CVS -Tutf8 before these assertions.
-    // man_macro.c::blk_imp preserves the TP HEAD; man_term.c::pre_alternate
-    // joins successive operands without a space, and term.c::term_word
-    // executes inline font changes before displaying their final glyphs.
+    // man_macro.c::blk_imp preserves the TP HEAD; man_term.c::pre_B chooses
+    // only the initial font, pre_alternate joins operands without a space,
+    // and term.c::term_word executes inline font changes before display.
     for (input, names) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n\\fR--help\nDescription.\n".as_slice(),
+            vec!["--help"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--he\\fRlp\"\nDescription.\n".as_slice(),
+            vec!["--help"],
+        ),
         (
             b".TH T 1\n.SH OPTIONS\n.TP\n.BR --he \"\\fBlp\"\nDescription.\n".as_slice(),
             vec!["--help"],
@@ -4109,6 +4253,178 @@ fn styled_terminal_delimiter_restarts_only_the_independent_name() {
     }
 }
 
+#[test]
+fn complete_head_scan_is_the_only_flow_and_fixed_option_name_decision() {
+    // Each exact input ran pinned CVS -Tutf8 before these assertions.
+    // man_term.c::pre_B/pre_alternate select initial font, but term.c::
+    // term_word() may switch font within one operand. Only the independent
+    // BI child after the terminal comma proves a fresh declaration.
+    for (input, names, rejected) in [
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.B \"-L\\fIfirst\\fB, --fake\\fI,last\"\nBody.\n",
+            vec!["-L"],
+            "--fake",
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n-L\\fIfirst\\fB, --fake\\fI,last\nBody.\n",
+            vec!["-L"],
+            "--fake",
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BI \"--opt \" \"arg,\" \"\\f[BI]--all \" FILE\nBody.\n",
+            vec!["--opt", "--all"],
+            "--fake",
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"\\f[BI]dir\"\nBody.\n",
+            vec!["-L"],
+            "--fake",
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\\f[BI]-L\" \"\\f[BI]dir\"\nBody.\n",
+            vec!["-L"],
+            "--fake",
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"arg,\" \"\\f[BI]--all\" FILE\nBody.\n",
+            vec!["-L", "--all"],
+            "--fake",
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BI \"--pattern \" \"\\(dqfirst,\" \"\\f[BI]--fake\" \",last\\(dq,\" \"--all \" FILE\nBody.\n",
+            vec!["--pattern", "--all"],
+            "--fake",
+        ),
+    ] {
+        assert_flow_fixed_checked_names(input.as_bytes(), &names);
+        for document in [
+            crate::parse_roff_bytes(std::path::Path::new("t.1"), input.as_bytes()).unwrap(),
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap(),
+        ] {
+            let resolved = mant_ir::ResolvedContent {
+                address: None,
+                label: "T(1)".into(),
+                document: Some(document),
+                tldr: None,
+            };
+            let result = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: rejected.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, 0, "{input}");
+            result.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn native_bi_overstrike_retains_both_final_styles_before_name_binding() {
+    // Exact input ran pinned CVS -Tutf8 first. term.c::buffer_write() writes
+    // TERMFONT_BI as underscore, backspace, font glyph, backspace, final
+    // glyph; pre_alternate() still keeps `dir` in one argument operand.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"\\f[BI]dir\"\nBody.\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let owner = &fixed.owners[0];
+    assert_eq!(fixed.selection_text(&owner.head).as_deref(), Some("-Ldir"));
+    let argument = fixed.selection_subrange(&owner.head, 2..5).unwrap();
+    assert_eq!(fixed.selection_text(&argument).as_deref(), Some("dir"));
+    assert!(!argument.parts.is_empty());
+    for part in &argument.parts {
+        let run = &fixed.surface.runs[usize::try_from(part.run.get() - 1).unwrap()];
+        assert!(run.label.style.bold && run.label.style.underline);
+    }
+    let names = fixed.lexical_names(owner).unwrap();
+    assert_eq!(
+        names
+            .iter()
+            .map(|(name, _, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        ["-L"]
+    );
+    assert_eq!(owner.entry.as_ref().unwrap().names, ["-L"]);
+}
+
+#[test]
+fn native_bi_underscore_requires_two_font_strokes_for_underline() {
+    // All exact inputs ran pinned CVS -Tascii first. In term.c::encode1(),
+    // BI `_` writes three underscores: FONT underline, FONT bold glyph, then
+    // TEXT final glyph. B and I each write one FONT and one TEXT glyph; the
+    // insertion-time font distinguishes the latter pair without guessing.
+    let bi = b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"\\f[BI]_\"\nBody.\n";
+    let document = project_annotated_manual("t.1", &bundle(bi), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let owner = &fixed.owners[0];
+    assert_eq!(fixed.selection_text(&owner.head).as_deref(), Some("-L_"));
+    let underscore = fixed.selection_subrange(&owner.head, 2..3).unwrap();
+    for part in &underscore.parts {
+        let run = &fixed.surface.runs[usize::try_from(part.run.get() - 1).unwrap()];
+        assert!(run.label.style.bold && run.label.style.underline);
+    }
+    assert_eq!(owner.entry.as_ref().unwrap().names, ["-L"]);
+
+    let bold = b".TH T 1\n.SH OPTIONS\n.TP\n.B _\nBody.\n";
+    let document = project_annotated_manual("t.1", &bundle(bold), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let head = &fixed.owners[0].head;
+    assert_eq!(fixed.selection_text(head).as_deref(), Some("_"));
+    for part in &head.parts {
+        let run = &fixed.surface.runs[usize::try_from(part.run.get() - 1).unwrap()];
+        assert!(run.label.style.bold && !run.label.style.underline);
+    }
+
+    let italic = b".TH T 1\n.SH OPTIONS\n.TP\n.I _\nBody.\n";
+    let document = project_annotated_manual("t.1", &bundle(italic), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let head = &fixed.owners[0].head;
+    assert_eq!(fixed.selection_text(head).as_deref(), Some("_"));
+    for part in &head.parts {
+        let run = &fixed.surface.runs[usize::try_from(part.run.get() - 1).unwrap()];
+        assert!(!run.label.style.bold && run.label.style.underline);
+    }
+}
+
+#[test]
+fn native_bold_digit_operands_bind_without_reopening_numeric_arguments() {
+    // Each exact input ran pinned CVS -Tutf8 first. pre_alternate() keeps
+    // BR children as independent operands; pre_B() starts a single bold
+    // HEAD. term_word() executes their escaped hyphens without inventing
+    // another operand inside the later numeric parameter.
+    for (input, names) in [
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BR \\-4 \", \" \\-\\-ipv4\nBody.\n",
+            vec!["-4", "--ipv4"],
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BR \\-6 \", \" \\-\\-ipv6\nBody.\n",
+            vec!["-6", "--ipv6"],
+        ),
+        (".TH T 1\n.SH OPTIONS\n.TP\n.B \\-4\nBody.\n", vec!["-4"]),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.B --number -10,--fake,20\nBody.\n",
+            vec!["--number"],
+        ),
+    ] {
+        assert_flow_fixed_checked_names(input.as_bytes(), &names);
+    }
+}
+
 fn assert_flow_fixed_checked_names(input: &[u8], names: &[&str]) {
     let flow = crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap();
     let flow_index = mant_ir::SemanticIndex::build(&flow);
@@ -4153,16 +4469,22 @@ fn assert_flow_fixed_checked_names(input: &[u8], names: &[&str]) {
 
 #[test]
 fn mixed_style_name_cannot_borrow_an_unproved_native_component() {
-    // This exact input ran pinned CVS -Ttree/-Tascii for the earlier font
-    // boundary matrix. term.c::term_word changes font within the one B
-    // operand; it does not create another pre_alternate() operand.
-    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-B\\fRn\nDescription.\n";
+    // This exact input ran pinned CVS -Tutf8. term.c::term_word executes
+    // italic within the one B operand; that underlined final `n` is a real
+    // parameter boundary, unlike a neutral roman switch within a name.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-B\\fIn\nDescription.\n";
     let mut document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
     let DocumentBody::Fixed(body) = &mut document.body else {
         panic!("not Fixed")
     };
     let owner = &mut body.owners[0];
-    assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+    assert_eq!(
+        owner.entry.as_ref().unwrap().kind,
+        EntryKind::Parameter {
+            parameter_kind: ParameterKind::Option,
+        }
+    );
+    assert_eq!(owner.entry.as_ref().unwrap().names, ["-B"]);
     assert!(owner.head.parts.len() > 1);
     let head = owner.head.clone();
     let facts = owner.entry.as_mut().unwrap();
@@ -4185,6 +4507,31 @@ fn mixed_style_name_cannot_borrow_an_unproved_native_component() {
     component.source = None;
     component.source_key = None;
     assert!(!validate_document(&document).is_empty());
+}
+
+#[test]
+fn empty_fl_does_not_borrow_an_enclosing_generated_delimiter() {
+    // This exact input ran pinned CVS -Ttree/-Tutf8 first. mdoc_macro.c::
+    // in_line() leaves Fl empty; the closing `]` comes from Oo/Oc, not from
+    // a sibling punctuation argument of Fl. termp_fl_pre() emits only `-`.
+    let input =
+        b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Oo Fl Oc\nBody.\n.El\n";
+    let flow = crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap();
+    let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    for document in [&flow, &fixed] {
+        assert!(validate_document(document).is_empty());
+        assert!(
+            mant_ir::SemanticIndex::build(document)
+                .section("options")
+                .iter()
+                .all(|entry| !entry.names.iter().any(|name| name == "-]"))
+        );
+    }
+    let DocumentBody::Fixed(body) = &fixed.body else {
+        panic!("not Fixed")
+    };
+    assert!(body.surface.text.contains("[-]"));
+    assert!(body.surface.text.contains("Body."));
 }
 
 #[test]

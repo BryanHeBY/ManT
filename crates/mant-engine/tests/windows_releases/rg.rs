@@ -38,7 +38,12 @@ fn keeps_release_metadata_sections_and_semantic_options() {
     let outline = build_outline_with_detail(&windows_release_query("rg"), OutlineDetail::Entries)
         .expect("build rg option outline");
     assert_eq!(count_outline_entries(&outline.nodes), 136);
-    assert!(find_outline_entry(&outline.nodes, "--glob").is_some());
+    // Each exact short + italic ALLCAPS + long declaration ran the pinned
+    // CVS -Tutf8 reference first. term.c::term_word() ends the italic run
+    // before the comma; man_term.c::pre_RS() only indents the description.
+    for name in ["--regexp", "--threads", "--glob"] {
+        assert!(find_outline_entry(&outline.nodes, name).is_some(), "{name}");
+    }
 
     for (section, length) in [("AUTOMATIC FILTERING", 4), ("CONFIGURATION FILES", 2)] {
         assert!(

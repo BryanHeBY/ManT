@@ -76,6 +76,127 @@ fn alternating_lexical_head(argument: &str) -> (FixedBody, String) {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one bounded component-count matrix checks producer and validator together"
+)]
+fn native_option_component_ceiling_counts_occurrences_not_distinct_spellings() {
+    // Construct post-device Fl components directly: the separate vendor
+    // mdoc_macro_call() safety patch stops a single source line before 64
+    // recursive Fl calls, so roff cannot exercise the semantic 64/65 ceiling.
+    // Both unique and repeated instances remain independent source-identified
+    // components, matching mdoc_term.c::termp_fl_pre() execution.
+    for (repeated, count) in [(false, 64), (false, 65), (true, 64), (true, 65)] {
+        let mut body = scaled_styled_argument_body(0).0;
+        let names = (0..count)
+            .map(|index| {
+                if repeated {
+                    "-x".to_owned()
+                } else {
+                    format!("-n{index}")
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut text = String::new();
+        let mut column = 0u32;
+        body.surface.runs = names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let run = DisplayRun {
+                    key: key(u32::try_from(index + 1).unwrap()),
+                    row: key(1),
+                    column,
+                    width: u32::try_from(name.len()).unwrap(),
+                    byte_start: u64::try_from(text.len()).unwrap(),
+                    byte_count: u64::try_from(name.len()).unwrap(),
+                    label: DisplayLabel {
+                        owner: Some(key(1)),
+                        link: None,
+                        source: Some(SourceKey::FIRST),
+                        style: DisplayStyle {
+                            bold: true,
+                            underline: false,
+                        },
+                        role: DisplayRole::Body,
+                    },
+                };
+                text.push_str(name);
+                column += run.width;
+                run
+            })
+            .collect();
+        body.surface.text = text;
+        body.surface.rows[0].run_count = u32::try_from(count).unwrap();
+        body.surface.rows[0].column_count = column;
+        body.owners[0].head_role = Some(OwnerHeadRole::Option);
+        body.owners[0].head_role_prefix = Some(names[0].clone());
+        body.owners[0].head.parts = body
+            .surface
+            .runs
+            .iter()
+            .map(|run| OutputSlice {
+                run: run.key,
+                start_byte: 0,
+                end_byte: run.byte_count,
+            })
+            .collect();
+        body.owners[0].head.joins = vec![TextJoin::DirectContact; count - 1];
+        body.owners[0].head_components = body.owners[0]
+            .head
+            .parts
+            .iter()
+            .copied()
+            .map(|part| OwnerHeadComponent {
+                role: OwnerHeadRole::Option,
+                selection: TextSelection {
+                    parts: vec![part],
+                    joins: Vec::new(),
+                },
+                source: None,
+                source_key: Some(SourceKey::FIRST),
+            })
+            .collect();
+        body.validate().expect("complete synthetic display");
+        let owner = &body.owners[0];
+        assert_eq!(body.option_component_over_limit(owner), count == 65);
+        assert_eq!(
+            body.option_component_names(owner).map(|found| found.len()),
+            (count == 64).then_some(64),
+            "repeated={repeated}, count={count}"
+        );
+        assert_eq!(
+            body.option_component_forms(owner).map(|forms| forms.len()),
+            (!repeated && count == 64).then_some(64)
+        );
+
+        if count == 65 {
+            let first = owner.head_components[0].selection.clone();
+            let id = owner.id.clone();
+            let head = owner.head.clone();
+            body.owners[0].entry = Some(EntryFacts {
+                id,
+                kind: EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                case: NameCase::Sensitive,
+                names: vec![names[0].clone()],
+                forms: vec![head],
+                name_bindings: vec![crate::EntryNameBinding {
+                    name: 0,
+                    occurrences: vec![first],
+                    evidence: EntryNameEvidence::NativeMarkup,
+                }],
+                alias_groups: Vec::new(),
+                alias_of: None,
+                value_domain: None,
+            });
+            assert_eq!(body.invalid_entry_keys(), [key(1)]);
+        }
+    }
+}
+
+#[test]
 fn native_styled_delimiter_restarts_only_at_an_independent_bold_operand() {
     // All exact TP/BI inputs first ran pinned CVS -Tutf8. man_term.c::
     // pre_alternate concatenates operands without a separator while applying
@@ -126,7 +247,178 @@ fn native_styled_delimiter_restarts_only_at_an_independent_bold_operand() {
 }
 
 #[test]
-fn styled_argument_scan_checks_one_boundary_per_declaration_segment() {
+fn native_bold_component_proves_numeric_short_name_without_reparsing_arguments() {
+    // The exact TP/BI `"-4" ", " "--all " FILE` input ran pinned CVS
+    // -Tutf8 first. man_term.c::pre_alternate() prints distinct children;
+    // term.c::term_word() executes their final fonts and visible glyphs.
+    let (mut body, _) = alternating_lexical_head(", ");
+    body.surface.text.replace_range(0..2, "-4");
+    body.validate().expect("native-like display remains valid");
+    let names = body
+        .lexical_names(&body.owners[0])
+        .expect("checked numeric and long names");
+    assert_eq!(
+        names
+            .iter()
+            .cloned()
+            .map(|(name, _, range)| (name, range))
+            .collect::<Vec<_>>(),
+        [("-4".to_owned(), 0..2), ("--all".to_owned(), 4..9)]
+    );
+    body.owners[0].entry = Some(crate::EntryFacts {
+        name_bindings: names
+            .iter()
+            .enumerate()
+            .map(|(index, (_, selection, _))| crate::EntryNameBinding {
+                name: index,
+                occurrences: vec![selection.clone()],
+                evidence: crate::EntryNameEvidence::Lexical,
+            })
+            .collect(),
+        alias_groups: Vec::new(),
+        alias_of: None,
+        forms: vec![body.owners[0].head.clone()],
+        id: body.owners[0].id.clone(),
+        kind: crate::EntryKind::Parameter {
+            parameter_kind: crate::ParameterKind::Option,
+        },
+        case: crate::NameCase::Sensitive,
+        names: names.into_iter().map(|(name, _, _)| name).collect(),
+        value_domain: None,
+    });
+    body.validate()
+        .expect("producer and read-time validation agree on numeric bindings");
+
+    // Final typography is part of the proof: a roman numeric component is
+    // not promoted merely because the same native child survives in HEAD.
+    body.surface.runs[0].label.style.bold = false;
+    assert_eq!(
+        body.lexical_names(&body.owners[0])
+            .expect("remaining long declaration stays readable")
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect::<Vec<_>>(),
+        ["--all"]
+    );
+    assert_eq!(body.invalid_entry_keys(), [key(1)]);
+}
+
+#[test]
+fn native_bold_underlined_runs_do_not_reset_an_existing_parameter() {
+    // Both exact TP/BI inputs first ran pinned CVS -Tutf8. In
+    // man_term.c::pre_alternate() each child is a separate operand, while
+    // term.c::term_word() can set BI inside the parameter child. Only a
+    // delimiter followed by the next child proves the later --all name.
+    let (mut body, _) = alternating_lexical_head("first, --fake, ");
+    body.surface.runs[1].label.style.bold = true;
+    let argument_part = body.owners[0].head.parts[1];
+    body.owners[0].head_components.insert(
+        1,
+        OwnerHeadComponent {
+            role: OwnerHeadRole::Lexical,
+            selection: TextSelection {
+                parts: vec![argument_part],
+                joins: Vec::new(),
+            },
+            source: None,
+            source_key: Some(SourceKey::FIRST),
+        },
+    );
+    body.validate().expect("native-like BI parameter is valid");
+    assert_eq!(
+        body.lexical_names(&body.owners[0])
+            .expect("parameter cannot manufacture a name")
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect::<Vec<_>>(),
+        ["-L", "--all"]
+    );
+
+    let (mut body, _) = alternating_lexical_head("first,");
+    body.surface.runs[2].label.style.underline = true;
+    body.validate().expect("independent BI operand is valid");
+    assert_eq!(
+        body.lexical_names(&body.owners[0])
+            .expect("native delimiter proves the later name")
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect::<Vec<_>>(),
+        ["-L", "--all"]
+    );
+
+    // The exact glued TP/BI `"-L" "\f[BI]dir" "--all " FILE`
+    // input also ran pinned CVS. A new child without a declaration
+    // delimiter does not turn the attached styled value into `-Ldir`.
+    let (mut body, _) = alternating_lexical_head("dir");
+    body.surface.runs[1].label.style.bold = true;
+    let argument_part = body.owners[0].head.parts[1];
+    body.owners[0].head_components.insert(
+        1,
+        OwnerHeadComponent {
+            role: OwnerHeadRole::Lexical,
+            selection: TextSelection {
+                parts: vec![argument_part],
+                joins: Vec::new(),
+            },
+            source: None,
+            source_key: Some(SourceKey::FIRST),
+        },
+    );
+    assert_eq!(
+        body.lexical_names(&body.owners[0])
+            .expect("glued BI value remains an argument")
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect::<Vec<_>>(),
+        ["-L"]
+    );
+}
+
+#[test]
+fn split_bi_name_parts_keep_one_styled_boundary_per_native_operand() {
+    // The exact TP/BI `"-L" "first," "\f[BI]--all " FILE` input ran
+    // pinned CVS -Tutf8 first. This fixture splits its one executed BI
+    // operand into two adjacent display runs without adding a new macro.
+    let (mut body, _) = alternating_lexical_head("first,");
+    body.surface.runs[2].label.style.underline = true;
+    body.surface.runs[2].byte_count = 2;
+    body.surface.runs[2].width = 2;
+    let mut second_half = body.surface.runs[2].clone();
+    second_half.key = key(4);
+    second_half.byte_start += 2;
+    second_half.byte_count = 4;
+    second_half.column += 2;
+    second_half.width = 4;
+    body.surface.runs.insert(3, second_half);
+    body.surface.runs[4].key = key(5);
+    body.surface.rows[0].run_count = 5;
+    body.owners[0].head.parts[2].end_byte = 2;
+    body.owners[0].head.parts.insert(
+        3,
+        OutputSlice {
+            run: key(4),
+            start_byte: 0,
+            end_byte: 4,
+        },
+    );
+    body.owners[0].head.parts[4].run = key(5);
+    body.owners[0].head.joins.push(TextJoin::DirectContact);
+    let name_parts = body.owners[0].head.parts[2..4].to_vec();
+    body.owners[0].head_components[1].selection.parts = name_parts;
+    body.owners[0].head_components[1].selection.joins = vec![TextJoin::DirectContact];
+    body.validate().expect("split native display remains valid");
+    assert_eq!(
+        body.lexical_names(&body.owners[0])
+            .expect("split BI name remains one declaration")
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect::<Vec<_>>(),
+        ["-L", "--all"]
+    );
+}
+
+#[test]
+fn styled_argument_scan_keeps_long_fragmented_head_bounded() {
     // The exact small `.TP` head with `\fB-L\fR\fIa\fR\fIb\fR`
     // ran pinned CVS -Ttree first. term.c::term_word changes fonts without
     // emitting a glyph; this synthetic scale fixture isolates the IR work
@@ -135,11 +427,10 @@ fn styled_argument_scan_checks_one_boundary_per_declaration_segment() {
     let (body, form) = scaled_styled_argument_body(fragments);
     body.validate()
         .expect("scaled native-style selection is valid");
-    let (candidates, attempts) = body
-        .lexical_styled_argument_names(&body.owners[0], &form)
+    let scan = body
+        .lexical_declaration_scan(&body.owners[0], &form)
         .expect("complete head remains readable");
-    assert_eq!(attempts, 1);
-    assert_eq!(candidates, [("-L".to_owned(), 0..2)]);
+    assert_eq!(scan.names(&form).0, [("-L".to_owned(), 0..2)]);
     assert_eq!(
         body.lexical_literal_names(&body.owners[0]).unwrap()[0].0,
         "-L"
@@ -197,12 +488,11 @@ fn styled_nonbreaking_space_does_not_consume_the_argument_boundary() {
         .collect();
     body.owners[0].head.joins = vec![TextJoin::DirectContact; 3];
     body.validate().expect("native-like display remains valid");
-    let (names, attempts) = body
-        .lexical_styled_argument_names(&body.owners[0], form)
+    let scan = body
+        .lexical_declaration_scan(&body.owners[0], form)
         .expect("complete lexical head");
-    assert_eq!(attempts, 1);
     assert_eq!(
-        names,
+        scan.names(form).0,
         [("-o".to_owned(), 0..2), ("--output".to_owned(), 4..12)]
     );
     assert_eq!(

@@ -5,10 +5,8 @@
 //! its display. In particular, punctuation after `=` belongs to an argument
 //! unless another complete option starts after an authored separator.
 
-use super::{lexical_option_token, literal_option_aliases, option_prefix};
+use super::{NameRange, lexical_option_token, literal_option_aliases_checked, option_prefix};
 use std::ops::Range;
-
-type NameRange = (String, Range<usize>);
 
 /// Select bounded option spellings from one complete native declaration head.
 /// The caller must bind every returned byte range to its original display.
@@ -16,12 +14,22 @@ type NameRange = (String, Range<usize>);
 pub fn literal_option_names(form: &str) -> Vec<(String, Range<usize>)> {
     // The shared alias grammar admits whitespace-separated short/long names
     // but keeps a slash after whitespace with a path-like operand.
-    if let Some(aliases) = literal_option_aliases(form) {
-        return aliases;
+    match literal_option_aliases_checked(form) {
+        Ok(Some(aliases)) => return aliases,
+        Err(()) => return Vec::new(),
+        Ok(None) => {}
     }
-    declaration_scan(form, &[], &[], StyledBoundaryRule::SingleTextOperand)
-        .names(form)
-        .0
+    let (names, over_limit) = declaration_scan(
+        form,
+        &[],
+        &[],
+        &[],
+        &[],
+        &[],
+        StyledBoundaryRule::SingleTextOperand,
+    )
+    .names(form);
+    if over_limit { Vec::new() } else { names }
 }
 
 /// A native BI/BR operand boundary is known independently of its final font.
@@ -41,6 +49,7 @@ pub(crate) enum StyledBoundaryRule {
 pub struct DeclarationScan {
     pub(crate) ranges: Vec<Range<usize>>,
     name_prefixes: Vec<Range<usize>>,
+    numeric_name_starts: Vec<usize>,
 }
 
 impl DeclarationScan {
@@ -72,23 +81,25 @@ impl DeclarationScan {
                 continue;
             }
             let offset = prefix.start + leading;
-            let selected = if let Some(aliases) = literal_option_aliases(group) {
-                aliases
+            let selected = match literal_option_aliases_checked(group) {
+                Err(()) => return (names, true),
+                Ok(Some(aliases)) => aliases
                     .into_iter()
                     .map(|(name, range)| (name, offset + range.start..offset + range.end))
-                    .collect()
-            } else {
-                match slash_names(group, offset) {
+                    .collect(),
+                Ok(None) => match slash_names(group, offset) {
                     Err(()) => return (names, true),
                     Ok(Some(slash)) => slash,
-                    Ok(None) => {
-                        if let Some(pattern) = pattern_names(group, offset) {
-                            pattern
-                        } else {
-                            leading_name(group, offset).into_iter().collect()
+                    Ok(None) => match pattern_names(group, offset) {
+                        Err(()) => return (names, true),
+                        Ok(Some(pattern)) => pattern,
+                        Ok(None) => {
+                            leading_name_with_numeric(group, offset, &self.numeric_name_starts)
+                                .into_iter()
+                                .collect()
                         }
-                    }
-                }
+                    },
+                },
             };
             if names.len() + selected.len() > 64 {
                 return (names, true);
@@ -104,7 +115,16 @@ impl DeclarationScan {
 /// component evidence and source-neutral literal spelling use these ranges.
 #[cfg(test)]
 pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
-    declaration_scan(form, &[], &[], StyledBoundaryRule::SingleTextOperand).ranges
+    declaration_scan(
+        form,
+        &[],
+        &[],
+        &[],
+        &[],
+        &[],
+        StyledBoundaryRule::SingleTextOperand,
+    )
+    .ranges
 }
 
 /// Compatibility helper for tests that place independent operands exactly at
@@ -127,7 +147,15 @@ pub(crate) fn literal_declaration_scan_with_starts(
                     .unwrap_or(form.len())
         })
         .collect::<Vec<_>>();
-    declaration_scan(form, &operands, argument_starts, boundary_rule)
+    declaration_scan(
+        form,
+        &operands,
+        argument_starts,
+        &[],
+        &[],
+        &[],
+        boundary_rule,
+    )
 }
 
 /// Scan one complete visible option head with native operand and final-style
@@ -146,7 +174,110 @@ pub fn scan_option_declarations(
     native_operands: &[Range<usize>],
     argument_starts: &[usize],
 ) -> Option<DeclarationScan> {
-    if !valid_evidence(form, native_operands, argument_starts) {
+    scan_option_declarations_with_numeric(form, native_operands, argument_starts, &[])
+}
+
+/// Scan a complete native head with independently proved numeric short names.
+/// `numeric_name_starts` contains exact visible byte starts of bold `-[0-9]`
+/// names. Each start must be the first nonblank glyph of a native operand, or
+/// of the whole head when the native macro has only one text operand. Callers
+/// must establish the native declaration role and final bold style separately;
+/// a numeric-looking word in an existing argument is not such evidence.
+#[doc(hidden)]
+#[must_use]
+pub fn scan_option_declarations_with_numeric(
+    form: &str,
+    native_operands: &[Range<usize>],
+    argument_starts: &[usize],
+    numeric_name_starts: &[usize],
+) -> Option<DeclarationScan> {
+    scan_option_declarations_with_style(
+        form,
+        native_operands,
+        argument_starts,
+        &[],
+        numeric_name_starts,
+    )
+}
+
+/// Scan one native head with final font evidence. A bold-underlined run is an
+/// argument unless its first glyph is the head's independently witnessed
+/// initial name or a name after a proved native-operand delimiter. A font
+/// switch by itself does not terminate a parameter or an authored quote.
+/// All offsets are UTF-8 byte positions in the final visible `form`.
+#[doc(hidden)]
+#[must_use]
+pub fn scan_option_declarations_with_style(
+    form: &str,
+    native_operands: &[Range<usize>],
+    plain_italic_starts: &[usize],
+    bold_underline_starts: &[usize],
+    numeric_name_starts: &[usize],
+) -> Option<DeclarationScan> {
+    scan_option_declarations_with_style_core(
+        form,
+        native_operands,
+        plain_italic_starts,
+        &[],
+        bold_underline_starts,
+        numeric_name_starts,
+    )
+}
+
+/// Scan final visible styling with complete plain-italic byte intervals.
+/// An interval can prove that a complete italic metavariable ended before a
+/// delimiter; a font-start offset alone cannot distinguish that case from a
+/// comma inside an ongoing parameter. Coordinates are checked UTF-8 bytes.
+#[doc(hidden)]
+#[must_use]
+pub fn scan_option_declarations_with_style_ranges(
+    form: &str,
+    native_operands: &[Range<usize>],
+    plain_italic_ranges: &[Range<usize>],
+    bold_underline_starts: &[usize],
+    numeric_name_starts: &[usize],
+) -> Option<DeclarationScan> {
+    let mut previous_end = 0;
+    let mut starts = Vec::with_capacity(plain_italic_ranges.len());
+    for range in plain_italic_ranges {
+        if range.start < previous_end
+            || range.start >= range.end
+            || range.end > form.len()
+            || form.get(range.clone()).is_none()
+        {
+            return None;
+        }
+        let visible = &form[range.clone()];
+        if let Some(first) = visible.find(|character: char| !character.is_whitespace()) {
+            starts.push(range.start + first);
+        }
+        previous_end = range.end;
+    }
+    scan_option_declarations_with_style_core(
+        form,
+        native_operands,
+        &starts,
+        plain_italic_ranges,
+        bold_underline_starts,
+        numeric_name_starts,
+    )
+}
+
+fn scan_option_declarations_with_style_core(
+    form: &str,
+    native_operands: &[Range<usize>],
+    plain_italic_starts: &[usize],
+    plain_italic_ranges: &[Range<usize>],
+    bold_underline_starts: &[usize],
+    numeric_name_starts: &[usize],
+) -> Option<DeclarationScan> {
+    if !valid_evidence(
+        form,
+        native_operands,
+        plain_italic_starts,
+        bold_underline_starts,
+        numeric_name_starts,
+    ) {
         return None;
     }
     let boundary_rule = if native_operands.is_empty() {
@@ -157,12 +288,21 @@ pub fn scan_option_declarations(
     Some(declaration_scan(
         form,
         native_operands,
-        argument_starts,
+        plain_italic_starts,
+        bold_underline_starts,
+        numeric_name_starts,
+        plain_italic_ranges,
         boundary_rule,
     ))
 }
 
-fn valid_evidence(form: &str, native_operands: &[Range<usize>], argument_starts: &[usize]) -> bool {
+fn valid_evidence(
+    form: &str,
+    native_operands: &[Range<usize>],
+    argument_starts: &[usize],
+    bold_underline_starts: &[usize],
+    numeric_name_starts: &[usize],
+) -> bool {
     let mut end = 0;
     for operand in native_operands {
         if operand.start < end
@@ -182,6 +322,57 @@ fn valid_evidence(form: &str, native_operands: &[Range<usize>], argument_starts:
         }
         previous = start;
     }
+    if bold_underline_starts.len() > 64 {
+        return false;
+    }
+    let mut previous_bold = None;
+    for &start in bold_underline_starts {
+        if previous_bold.is_some_and(|previous| start <= previous)
+            || start >= form.len()
+            || !form.is_char_boundary(start)
+        {
+            return false;
+        }
+        previous_bold = Some(start);
+    }
+    if numeric_name_starts.len() > 64 {
+        return false;
+    }
+    let head_start = form.len() - form.trim_start().len();
+    let mut operand = 0;
+    let mut previous_numeric = None;
+    for &start in numeric_name_starts {
+        if previous_numeric.is_some_and(|previous| start <= previous)
+            || form.get(start..start.saturating_add(2)).is_none_or(|name| {
+                let bytes = name.as_bytes();
+                bytes.len() != 2 || bytes[0] != b'-' || !bytes[1].is_ascii_digit()
+            })
+        {
+            return false;
+        }
+        previous_numeric = Some(start);
+        if native_operands.is_empty() {
+            if start != head_start {
+                return false;
+            }
+            continue;
+        }
+        while native_operands
+            .get(operand)
+            .is_some_and(|range| range.end <= start)
+        {
+            operand += 1;
+        }
+        let Some(range) = native_operands.get(operand) else {
+            return false;
+        };
+        let Some(visible) = form.get(range.clone()) else {
+            return false;
+        };
+        if start != range.start + visible.len() - visible.trim_start().len() {
+            return false;
+        }
+    }
     true
 }
 
@@ -191,7 +382,15 @@ pub(crate) fn literal_declaration_scan_with_operands(
     argument_starts: &[usize],
     boundary_rule: StyledBoundaryRule,
 ) -> DeclarationScan {
-    declaration_scan(form, native_operands, argument_starts, boundary_rule)
+    declaration_scan(
+        form,
+        native_operands,
+        argument_starts,
+        &[],
+        &[],
+        &[],
+        boundary_rule,
+    )
 }
 
 #[cfg(test)]
@@ -275,6 +474,40 @@ fn terminal_parameter_candidate(form: &str, name_end: usize) -> bool {
     }
 }
 
+/// A complete italic metavariable is a bounded argument, not an option name.
+/// A leading `-<name>` is also a provisional option template: it can license
+/// the next declaration boundary without itself becoming a concrete name.
+fn complete_italic_metavariable(value: &str, leading_option_pattern: bool) -> bool {
+    // man pages also write complete metavariables as a single italic
+    // all-caps word: `-g GLOB, --glob=GLOB` in rg(1). The comma after the
+    // final italic glyph can delimit a new declaration; punctuation inside
+    // the italic span cannot. A lower-case prose argument is not equivalent
+    // evidence, and a leading dash is an option spelling rather than a
+    // metavariable.
+    if !leading_option_pattern
+        && value.starts_with(|character: char| character.is_ascii_uppercase())
+        && value.chars().all(|character| {
+            character.is_ascii_uppercase()
+                || character.is_ascii_digit()
+                || matches!(character, '_' | '-')
+        })
+    {
+        return true;
+    }
+    let inner = if leading_option_pattern {
+        value.strip_prefix("-<")
+    } else {
+        value.strip_prefix('<')
+    }
+    .and_then(|value| value.strip_suffix('>'));
+    inner.is_some_and(|inner| {
+        !inner.is_empty()
+            && inner.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '_' | '-')
+            })
+    })
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "keep the bounded, single-pass declaration state transitions together"
@@ -283,16 +516,20 @@ fn declaration_scan(
     form: &str,
     native_operands: &[Range<usize>],
     argument_starts: &[usize],
+    bold_underline_starts: &[usize],
+    numeric_name_starts: &[usize],
+    plain_italic_ranges: &[Range<usize>],
     boundary_rule: StyledBoundaryRule,
 ) -> DeclarationScan {
     let mut scan = DeclarationScan {
         ranges: Vec::new(),
         name_prefixes: Vec::new(),
+        numeric_name_starts: numeric_name_starts.to_vec(),
     };
     let mut start = 0;
     let mut prefix_end = None;
     let mut phase = Phase::Name;
-    let mut name_end = declaration_name_end(form, start);
+    let mut name_end = declaration_name_end_with_numeric(form, start, numeric_name_starts);
     let mut after_name_space = false;
     let mut closers = Vec::new();
     let mut quote = None;
@@ -305,8 +542,31 @@ fn declaration_scan(
             })
         })
         .collect::<Vec<_>>();
+    let head_visible_start = form.len() - form.trim_start().len();
+    let italic_templates = plain_italic_ranges
+        .iter()
+        .filter_map(|range| {
+            let visible = form.get(range.clone())?;
+            let leading = visible.len() - visible.trim_start().len();
+            let start = range.start + leading;
+            let spelling = visible.trim();
+            (complete_italic_metavariable(spelling, false)
+                || start == head_visible_start && complete_italic_metavariable(spelling, true))
+            .then_some((start, range.end))
+        })
+        .collect::<Vec<_>>();
+    let mut proved_bi_start = (name_end.is_some()
+        && native_operands
+            .iter()
+            .zip(&operand_leading_ends)
+            .any(|(range, &leading)| leading == head_visible_start && leading < range.end))
+    .then_some(head_visible_start);
     let mut operand = 0usize;
     let mut argument = 0usize;
+    let mut italic_template = 0usize;
+    let mut active_template_end = None;
+    let mut candidate_italic = 0usize;
+    let mut bold_underline = 0usize;
     for (offset, character) in form.char_indices() {
         while argument_starts
             .get(argument)
@@ -314,14 +574,41 @@ fn declaration_scan(
         {
             argument += 1;
         }
-        if argument_starts.get(argument) == Some(&offset) {
+        while bold_underline_starts
+            .get(bold_underline)
+            .is_some_and(|&evidence| evidence < offset)
+        {
+            bold_underline += 1;
+        }
+        let plain_argument = argument_starts.get(argument) == Some(&offset);
+        let bold_underlined_argument = bold_underline_starts.get(bold_underline) == Some(&offset)
+            && (proved_bi_start != Some(offset)
+                || quote.is_some()
+                || !closers.is_empty()
+                || uncertain);
+        if plain_argument || bold_underlined_argument {
+            if plain_argument {
+                while italic_templates
+                    .get(italic_template)
+                    .is_some_and(|(start, _)| *start < offset)
+                {
+                    italic_template += 1;
+                }
+                active_template_end = italic_templates
+                    .get(italic_template)
+                    .and_then(|(start, end)| (*start == offset).then_some(*end));
+            } else {
+                active_template_end = None;
+            }
             // A nonempty final underlined operand is already an argument.
             // Without this transition, a glued `-Lfirst` looks like one
             // option token and its following comma could manufacture names
             // before the style check has a chance to reject them.
-            if phase == Phase::Name {
-                prefix_end.get_or_insert(offset);
-            }
+            // An opening enclosure can already have moved us to Argument
+            // without ending the eligible name prefix. The first executed
+            // styled parameter still closes that prefix, including before
+            // a slash-adjacent operand such as `{-n/` + italic `-NUM`.
+            prefix_end.get_or_insert(offset);
             phase = Phase::StyledArgument;
             name_end = None;
             after_name_space = false;
@@ -352,7 +639,8 @@ fn declaration_scan(
             let next_offset = offset + character.len_utf8();
             let remainder = &form[next_offset..];
             let candidate_start = next_offset + remainder.len() - remainder.trim_start().len();
-            let candidate_name_end = declaration_name_end(form, next_offset);
+            let candidate_name_end =
+                declaration_name_end_with_numeric(form, next_offset, numeric_name_starts);
             let state_closed = quote.is_none() && closers.is_empty() && !uncertain;
             if matches!(boundary_rule, StyledBoundaryRule::NativeComponents)
                 && state_closed
@@ -365,15 +653,16 @@ fn declaration_scan(
                     candidate_start,
                 )
             {
-                proved_start = candidate_name_end;
+                proved_start = candidate_name_end.map(|end| (candidate_start, end));
             }
         }
-        if let Some(next_name_end) = proved_start {
+        if let Some((candidate_start, next_name_end)) = proved_start {
             scan.push(start, offset, prefix_end);
             start = offset + character.len_utf8();
             prefix_end = None;
             phase = Phase::Name;
             name_end = Some(next_name_end);
+            proved_bi_start = Some(candidate_start);
             after_name_space = false;
             continue;
         }
@@ -416,6 +705,7 @@ fn declaration_scan(
             // a separator, never for every scalar in a long literal head.
             let next_offset = offset + character.len_utf8();
             let remainder = &form[next_offset..];
+            let candidate_start = next_offset + remainder.len() - remainder.trim_start().len();
             let next_name_end = declaration_name_end(form, next_offset)
                 .filter(|&name_end| complete_candidate(form, name_end));
             let fresh_option = remainder.starts_with(char::is_whitespace)
@@ -424,13 +714,31 @@ fn declaration_scan(
                         || phase != Phase::Argument
                         || terminal_parameter_candidate(form, name_end)
                 });
+            while plain_italic_ranges
+                .get(candidate_italic)
+                .is_some_and(|range| range.end <= candidate_start)
+            {
+                candidate_italic += 1;
+            }
+            let candidate_still_italic = plain_italic_ranges
+                .get(candidate_italic)
+                .is_some_and(|range| range.start <= candidate_start && candidate_start < range.end);
+            let completed_template = phase == Phase::StyledArgument
+                && active_template_end.is_some_and(|end| {
+                    end <= offset
+                        && form
+                            .get(end..offset)
+                            .is_some_and(|gap| gap.chars().all(char::is_whitespace))
+                })
+                && !candidate_still_italic;
             // A styled argument stays opaque even if its internal punctuation
             // is followed by whitespace and a bold run. A plain text head
             // still permits comma+space declaration syntax before entering a
             // styled parameter; only native components can restart afterward.
             if next_name_end.is_some()
                 && (phase == Phase::Name && name_end.is_some()
-                    || phase != Phase::StyledArgument && fresh_option)
+                    || phase != Phase::StyledArgument && fresh_option
+                    || completed_template && fresh_option)
             {
                 scan.push(start, offset, prefix_end);
                 start = next_offset;
@@ -441,6 +749,8 @@ fn declaration_scan(
                     Phase::Argument
                 };
                 name_end = next_name_end;
+                proved_bi_start = None;
+                active_template_end = None;
                 after_name_space = false;
                 continue;
             }
@@ -503,6 +813,14 @@ fn declaration_scan(
 /// declaration separator. This is a syntax boundary, not a source coordinate
 /// or proof that the native owner represents an option.
 fn declaration_name_end(form: &str, start: usize) -> Option<usize> {
+    declaration_name_end_with_numeric(form, start, &[])
+}
+
+fn declaration_name_end_with_numeric(
+    form: &str,
+    start: usize,
+    numeric_name_starts: &[usize],
+) -> Option<usize> {
     let remainder = form.get(start..)?;
     let leading = remainder.len() - remainder.trim_start().len();
     let head = remainder.trim_start();
@@ -516,7 +834,8 @@ fn declaration_name_end(form: &str, start: usize) -> Option<usize> {
         // comma inside one cannot restart at a fake option.
         return Some(start + leading + token.len());
     }
-    leading_name(token, start + leading).map(|(_, range)| range.end)
+    leading_name_with_numeric(token, start + leading, numeric_name_starts)
+        .map(|(_, range)| range.end)
 }
 
 /// The shared alias grammar admits exactly `-q or --quiet`; `or` is not an
@@ -558,10 +877,15 @@ pub fn is_complete_hanging_option_head(form: &str) -> bool {
     let Some((_, first)) = names.first() else {
         return false;
     };
-    if !form[..first.start]
+    let leading = &form[..first.start];
+    let neutral_leading = leading
         .chars()
-        .all(|character| character.is_whitespace() || matches!(character, '[' | '{' | '('))
-    {
+        .all(|character| character.is_whitespace() || matches!(character, '[' | '{' | '('));
+    let provisional_leading = leading
+        .trim()
+        .strip_suffix([',', '|'])
+        .is_some_and(|pattern| complete_italic_metavariable(pattern.trim_end(), true));
+    if !neutral_leading && !provisional_leading {
         return false;
     }
     for pair in names.windows(2) {
@@ -657,11 +981,23 @@ enum Phase {
 }
 
 fn leading_name(group: &str, offset: usize) -> Option<(String, Range<usize>)> {
+    leading_name_with_numeric(group, offset, &[])
+}
+
+fn leading_name_with_numeric(
+    group: &str,
+    offset: usize,
+    numeric_name_starts: &[usize],
+) -> Option<(String, Range<usize>)> {
     let token = group.split_whitespace().next()?;
     let token = token.trim_matches(['[', ']', '(', ')', '{', '}', '“', '”', '‘', '’']);
     let start = offset + token.as_ptr() as usize - group.as_ptr() as usize;
     let name = option_prefix(token)?;
-    if !lexical_option_token(name) {
+    let proved_numeric_short = name.len() == 2
+        && name.as_bytes()[0] == b'-'
+        && name.as_bytes()[1].is_ascii_digit()
+        && numeric_name_starts.binary_search(&start).is_ok();
+    if !lexical_option_token(name) && !proved_numeric_short {
         return None;
     }
     let suffix = &token[name.len()..];
@@ -713,10 +1049,10 @@ fn slash_names(group: &str, offset: usize) -> Result<Option<Vec<NameRange>>, ()>
     Ok(Some(result))
 }
 
-fn pattern_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>)>> {
+fn pattern_names(group: &str, offset: usize) -> Result<Option<Vec<NameRange>>, ()> {
     let mut tokens = group.split_whitespace();
-    if !pattern_start(tokens.next()?) {
-        return None;
+    if !tokens.next().is_some_and(pattern_start) {
+        return Ok(None);
     }
     let mut names = Vec::new();
     for token in tokens {
@@ -727,15 +1063,21 @@ fn pattern_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>
         if !name.starts_with("--") {
             break;
         }
+        if names.len() == 64 {
+            // A provisional pattern may precede many complete long names.
+            // The 65th valid spelling invalidates the whole head, whereas a
+            // following ordinary parameter leaves the first 64 intact.
+            return Err(());
+        }
         let attached = range.end < start + token.len();
         names.push((name, range));
         // An assignment or bracketed value ends the provisional name group.
         // Later option-looking words need their own proved declaration edge.
-        if attached || names.len() == 64 {
+        if attached {
             break;
         }
     }
-    (!names.is_empty()).then_some(names)
+    Ok((!names.is_empty()).then_some(names))
 }
 
 fn pattern_start(token: &str) -> bool {
@@ -747,12 +1089,17 @@ fn pattern_start(token: &str) -> bool {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::single_range_in_vec_init,
+    reason = "single Range values are explicit byte-interval evidence, not iterators"
+)]
 mod tests {
     use super::{
         StyledBoundaryRule::{NativeComponents, SingleTextOperand},
         is_complete_hanging_option_head, literal_declaration_ranges,
         literal_declaration_ranges_with_starts, literal_declaration_scan_with_starts,
-        literal_option_names, scan_option_declarations,
+        literal_option_names, scan_option_declarations, scan_option_declarations_with_numeric,
+        scan_option_declarations_with_style, scan_option_declarations_with_style_ranges,
     };
     use std::ops::Range;
     use std::time::{Duration, Instant};
@@ -867,6 +1214,140 @@ mod tests {
         assert!(
             started.elapsed() < Duration::from_secs(5),
             "native operand whitespace prefix was repeatedly rescanned"
+        );
+    }
+
+    #[test]
+    fn native_bold_numeric_short_name_is_not_an_ordinary_negative_argument() {
+        // The exact TP/BR `\\-4 ", " \\-\\-ipv4` and `\\-6 ", " \\-\\-ipv6`
+        // inputs, and TP/B `\\-4`, ran pinned CVS -Tutf8 before these
+        // assertions. man_term.c::pre_alternate prints each BR child with
+        // its own initial font; term.c::term_word executes the dash escape.
+        for (digit, long) in [("-4", "--ipv4"), ("-6", "--ipv6")] {
+            let (form, operands) = native_form(&[digit, ", ", long]);
+            let scan = scan_option_declarations_with_numeric(&form, &operands, &[], &[0]).unwrap();
+            assert_eq!(
+                scan.names(&form),
+                (
+                    vec![(digit.to_owned(), 0..2), (long.to_owned(), 4..form.len())],
+                    false
+                )
+            );
+            assert_eq!(
+                scan_option_declarations(&form, &operands, &[])
+                    .unwrap()
+                    .names(&form)
+                    .0,
+                [(long.to_owned(), 4..form.len())]
+            );
+        }
+        assert_eq!(
+            scan_option_declarations_with_numeric("-4", &[], &[], &[0])
+                .unwrap()
+                .names("-4")
+                .0,
+            [("-4".into(), 0..2)]
+        );
+
+        // The exact TP/B `--number -4,--fake,20` input also ran pinned CVS
+        // -Tutf8. Its following negative number is an ordinary argument,
+        // not another native bold operand start; punctuation inside it must
+        // not manufacture a `--fake` declaration.
+        let argument = "--number -4,--fake,20";
+        assert_eq!(
+            scan_option_declarations_with_numeric(argument, &[], &[], &[])
+                .unwrap()
+                .names(argument)
+                .0,
+            [("--number".into(), 0..8)]
+        );
+        // The exact TP/BR `"--number " "\\fB-4,--fake,20"` also ran CVS:
+        // term.c::term_word makes the second operand bold, but there is no
+        // declaration separator. Its number stays in the argument state.
+        let (styled_argument, operands) = native_form(&["--number ", "-4,--fake,20"]);
+        assert_eq!(
+            scan_option_declarations_with_numeric(&styled_argument, &operands, &[], &[9])
+                .unwrap()
+                .names(&styled_argument)
+                .0,
+            [("--number".into(), 0..8)]
+        );
+        assert!(
+            scan_option_declarations_with_numeric(argument, &[], &[], &[9]).is_none(),
+            "an argument byte is not the native head's first visible glyph"
+        );
+        assert!(
+            scan_option_declarations_with_numeric("-4, --ipv4", &[0..2, 2..4, 4..10], &[], &[1])
+                .is_none(),
+            "numeric evidence must identify the exact token start"
+        );
+    }
+
+    #[test]
+    fn bold_underlined_run_is_a_name_only_at_a_proved_native_boundary() {
+        // The exact TP/BI `"-L" "\\f[BI]dir"` input ran pinned CVS
+        // -Tutf8 first. pre_alternate() joins the children without a space;
+        // term_word() changes the second child's font, not its argument role.
+        let (glued, operands) = native_form(&["-L", "dir"]);
+        let scan = scan_option_declarations_with_style(&glued, &operands, &[], &[2], &[]).unwrap();
+        assert_eq!(scan.names(&glued).0, [("-L".into(), 0..2)]);
+
+        // These exact TP/BI operands ran pinned CVS -Tutf8 as well. Their
+        // independent comma-delimited third operand is a new declaration;
+        // a BI run beginning there is not the preceding italic argument.
+        let (separated, operands) = native_form(&["-L", "arg,", "--all ", "FILE"]);
+        let scan = scan_option_declarations_with_style(
+            &separated,
+            &operands,
+            &[operands[1].start, operands[3].start],
+            &[operands[2].start],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(
+            scan.names(&separated).0,
+            [("-L".into(), 0..2), ("--all".into(), 6..11)]
+        );
+
+        // An initial native B operand whose executed font is BI still has a
+        // complete name at its first glyph. The exact `B "\\f[BI]--all"`
+        // input ran pinned CVS -Tutf8 before this assertion.
+        let initial = "--all";
+        assert_eq!(
+            scan_option_declarations_with_style(initial, &[0..initial.len()], &[], &[0], &[])
+                .unwrap()
+                .names(initial)
+                .0,
+            [("--all".into(), 0..5)]
+        );
+
+        // Pinned CVS also executed this exact TP/BI quoted-argument head.
+        // term_word() prints the quote across font operands; its internal
+        // bold-underlined `--fake` is not an authored delimiter restart.
+        let (quoted, operands) = native_form(&[
+            "--pattern ",
+            "\"first,",
+            "--fake",
+            ",last\",",
+            "--all ",
+            "FILE",
+        ]);
+        let scan = scan_option_declarations_with_style(
+            &quoted,
+            &operands,
+            &[operands[1].start, operands[3].start, operands[5].start],
+            &[operands[2].start],
+            &[],
+        )
+        .unwrap();
+        let all = quoted.find("--all").unwrap();
+        assert_eq!(
+            scan.names(&quoted).0,
+            [("--pattern".into(), 0..9), ("--all".into(), all..all + 5)]
+        );
+        assert!(
+            scan_option_declarations_with_style("--all", &[0..5], &[], &[0; 65], &[]).is_none(),
+            "unbounded style evidence must not grow the semantic work set"
         );
     }
 
@@ -1041,6 +1522,184 @@ mod tests {
     }
 
     #[test]
+    fn source_neutral_name_limit_rejects_the_whole_head() {
+        // The exact 64- and 65-name TP/B heads ran pinned CVS -Tutf8 first.
+        // man_term.c::pre_B and term.c::term_word render both complete heads;
+        // the 64-name ceiling belongs to semantic extraction, not mandoc.
+        let form = (0..64)
+            .map(|index| format!("--n{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        assert_eq!(literal_option_names(&form).len(), 64);
+        let over_limit = format!("{form}, --n64");
+        assert!(literal_option_names(&over_limit).is_empty());
+    }
+
+    #[test]
+    fn completed_italic_metavariables_allow_only_outside_styled_declarations() {
+        // The exact PP/RS inputs for the positive and negative forms ran the
+        // pinned CVS reference -Tutf8 first. man_term.c::pre_PP/pre_RS retain
+        // the paragraph/indent structure; term.c::term_word executes each
+        // authored font escape before emitting the visible punctuation.
+        let form = "-<number>, -n <number>, --max-count=<number>";
+        let second = form.find("-n <number>").unwrap() + 3;
+        let last = form.rfind("<number>").unwrap();
+        let spans = [0..9, second..second + 8, last..last + 8];
+        let scan = scan_option_declarations_with_style_ranges(form, &[], &spans, &[], &[])
+            .expect("valid final-style ranges");
+        assert_eq!(
+            scan.names(form).0,
+            [
+                (
+                    "-n".into(),
+                    form.find("-n").unwrap()..form.find("-n").unwrap() + 2
+                ),
+                (
+                    "--max-count".into(),
+                    form.find("--max-count").unwrap()..form.find("--max-count").unwrap() + 11,
+                ),
+            ]
+        );
+        assert!(super::is_complete_hanging_option_head(form));
+
+        let ordinary = "-n <number>, --all";
+        let all = ordinary.find("--all").unwrap();
+        let scan =
+            scan_option_declarations_with_style_ranges(ordinary, &[], &[3..11], &[], &[]).unwrap();
+        assert_eq!(
+            scan.names(ordinary).0,
+            [("-n".into(), 0..2), ("--all".into(), all..all + 5)]
+        );
+        let single = "-<number>";
+        assert!(
+            scan_option_declarations_with_style_ranges(single, &[], &[0..9], &[], &[])
+                .unwrap()
+                .names(single)
+                .0
+                .is_empty()
+        );
+        assert!(!super::is_complete_hanging_option_head(single));
+
+        for (form, spans, complete_syntax) in [
+            ("-<number>, --fake", vec![0..17], true),
+            ("-<number>, --fake", vec![0..9, 11..17], true),
+            ("-<number, --fake", vec![0..8], false),
+        ] {
+            let scan = scan_option_declarations_with_style_ranges(form, &[], &spans, &[], &[])
+                .expect("valid range bounds");
+            assert!(scan.names(form).0.is_empty(), "{form}: {spans:?}");
+            // Hanging admission checks only complete visible syntax. Final
+            // style evidence is a separate gate; it must reject both fully
+            // italic spellings even when their plain text looks complete.
+            assert_eq!(
+                super::is_complete_hanging_option_head(form),
+                complete_syntax,
+                "{form}: {spans:?}"
+            );
+        }
+        let fake = "-L first, --fake,last";
+        let scan =
+            scan_option_declarations_with_style_ranges(fake, &[], &[3..8], &[], &[]).unwrap();
+        assert_eq!(scan.names(fake).0, [("-L".into(), 0..2)]);
+
+        // rg(1)'s exact `-g GLOB, --glob=GLOB` head ran pinned CVS
+        // -Tutf8 first. term.c::term_word() ends the italic GLOB run before
+        // printing the comma; man_term.c::pre_RS() only indents its body.
+        let all_caps = "-g GLOB, --glob=GLOB";
+        let last = all_caps.rfind("GLOB").unwrap();
+        let scan = scan_option_declarations_with_style_ranges(
+            all_caps,
+            &[],
+            &[3..7, last..last + 4],
+            &[],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(
+            scan.names(all_caps).0,
+            [("-g".into(), 0..2), ("--glob".into(), 9..15),]
+        );
+
+        // A comma still inside one executed italic parameter, or a
+        // nonterminal fake candidate after that parameter, is not a new
+        // declaration. Both exact TP/B font variants ran pinned CVS -Tutf8.
+        let internal = "-g GLOB,--fake,last";
+        let scan =
+            scan_option_declarations_with_style_ranges(internal, &[], &[3..19], &[], &[]).unwrap();
+        assert_eq!(scan.names(internal).0, [("-g".into(), 0..2)]);
+        let nonterminal = "-g GLOB, --fake,last";
+        let scan = scan_option_declarations_with_style_ranges(nonterminal, &[], &[3..7], &[], &[])
+            .unwrap();
+        assert_eq!(scan.names(nonterminal).0, [("-g".into(), 0..2)]);
+    }
+
+    #[test]
+    fn italic_native_operand_inside_open_brace_does_not_restart_on_slash() {
+        // The exact `{-n/-NUM` operand split ran pinned CVS -Tutf8 first.
+        // A font/operand boundary does not close the authored brace scope.
+        let form = "{-n/-NUM";
+        let scan =
+            scan_option_declarations_with_style_ranges(form, &[0..4, 4..8], &[4..8], &[], &[])
+                .unwrap();
+        assert_eq!(scan.names(form).0, [("-n".into(), 1..3)]);
+    }
+
+    #[test]
+    fn whitespace_alias_limit_never_falls_back_to_a_partial_first_name() {
+        // The four exact TP/B inputs (64/65 unique/repeated names) ran pinned
+        // CVS -Tutf8 first. man_macro.c::blk_imp keeps one complete HEAD;
+        // man_term.c::pre_B and term.c::term_word print every spelling. The
+        // 64-name ceiling governs semantic extraction, not native output.
+        for repeated in [false, true] {
+            let names = (1..64)
+                .map(|index| {
+                    if repeated {
+                        "--same".to_owned()
+                    } else {
+                        format!("--n{index}")
+                    }
+                })
+                .collect::<Vec<_>>();
+            let bounded = format!("-a {}", names.join(" "));
+            assert_eq!(crate::literal_option_aliases(&bounded).unwrap().len(), 64);
+            assert_eq!(literal_option_names(&bounded).len(), 64);
+            let scan = scan_option_declarations(&bounded, &[], &[]).unwrap();
+            let (found, over_limit) = scan.names(&bounded);
+            assert!(!over_limit, "repeated={repeated}");
+            assert_eq!(found.len(), 64);
+
+            let suffix = if repeated { "--same" } else { "--n64" };
+            let exceeded = format!("{bounded} {suffix}");
+            assert!(crate::literal_option_aliases(&exceeded).is_none());
+            assert!(literal_option_names(&exceeded).is_empty());
+            let scan = scan_option_declarations(&exceeded, &[], &[]).unwrap();
+            let (_, over_limit) = scan.names(&exceeded);
+            assert!(over_limit, "repeated={repeated}");
+        }
+    }
+
+    #[test]
+    fn provisional_pattern_cannot_publish_a_truncated_name_group() {
+        // The exact TP/B heads with 64 and 65 long names after -### ran
+        // pinned CVS -Tutf8 first. man_term.c::pre_B and term.c::term_word
+        // preserve both complete forms; the semantic limit is all-or-nothing.
+        let names = (0..64)
+            .map(|index| format!("--n{index}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let bounded = format!("-### {names}");
+        assert_eq!(literal_option_names(&bounded).len(), 64);
+        let over_limit = format!("{bounded} --n64");
+        assert!(literal_option_names(&over_limit).is_empty());
+        assert!(
+            scan_option_declarations(&over_limit, &[], &[])
+                .expect("valid source-neutral evidence")
+                .names(&over_limit)
+                .1
+        );
+    }
+
+    #[test]
     fn single_ip_operand_font_switch_is_not_an_independent_boundary() {
         // Both exact `.IP` inputs ran pinned CVS -Tutf8 first. Its HEAD has
         // one text operand (man_term.c::pre_IP); term.c::term_word applies
@@ -1149,6 +1808,7 @@ mod tests {
             "--git-dir intervening text",
             "--foo --bar",
             "-a / --all",
+            "GLOB, --fake",
             "ordinary prose",
         ] {
             assert!(!is_complete_hanging_option_head(rejected), "{rejected}");

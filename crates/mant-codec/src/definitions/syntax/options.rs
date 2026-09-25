@@ -5,7 +5,11 @@ use crate::definitions::RecognizedName;
 use mant_ir::DefinitionItem;
 use mant_ir::inline_plain_text as plain_text;
 pub(crate) use mant_ir::option_prefix;
-use mant_ir::{ContentContext, Inline, is_option_name_body, native_option_token};
+use mant_ir::{
+    ContentContext, Inline, is_option_name_body, native_option_token,
+    scan_option_declarations_with_style_ranges,
+};
+use std::collections::HashSet;
 
 #[cfg(test)]
 pub(in crate::definitions) fn option_names(
@@ -32,6 +36,30 @@ pub(crate) fn option_names_from_terms(
     names
 }
 
+fn checked_option_occurrences_from_term(
+    content: ContentContext<'_>,
+    term: &[Inline],
+    ranges: &[std::ops::Range<usize>],
+) -> Option<Vec<RecognizedName>> {
+    let form = plain_text(content, term);
+    let style = forms::option_style_evidence(content, term, &form, ranges);
+    let scan = scan_option_declarations_with_style_ranges(
+        &form,
+        ranges,
+        &style.plain_italic_ranges,
+        &style.bold_underline_starts,
+        &style.numeric_name_starts,
+    )?;
+    let (names, over_limit) = scan.names(&form);
+    (!over_limit).then_some(
+        names
+            .into_iter()
+            .map(|(name, range)| RecognizedName::contiguous(&name, range.start))
+            .collect(),
+    )
+}
+
+#[cfg(test)]
 fn recognize_option_occurrences_from_terms(
     content: ContentContext<'_>,
     terms: &[Vec<Inline>],
@@ -44,13 +72,7 @@ fn recognize_option_occurrences_from_terms(
             let ranges = operand_ranges
                 .and_then(|terms| terms.get(index))
                 .map_or(&[][..], Vec::as_slice);
-            forms::AuthoredForm::new(content, term, ranges)
-                .option_candidates()
-                .filter_map(|candidate| {
-                    let (token, start) = candidate.invocation_token()?;
-                    Some(RecognizedName::contiguous(option_prefix(&token)?, start))
-                })
-                .collect()
+            checked_option_occurrences_from_term(content, term, ranges).unwrap_or_default()
         })
         .collect()
 }
@@ -95,57 +117,77 @@ pub(super) fn native_option_occurrences(
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
     operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> Vec<Vec<RecognizedName>> {
-    let mut result = recognize_option_occurrences_from_terms(content, terms, operand_ranges);
-    for (index, (term, names)) in terms.iter().zip(&mut result).enumerate() {
-        let prefix = forms::literal_prefix(content, term);
-        // An alternating-font head has already passed the bounded shared
-        // declaration scan. Reintroducing its first spelling here would
-        // bypass invalid-evidence and 64-name rejection, so only heads
-        // without that native operand witness use this older compensation.
-        let scanned_operands = operand_ranges
-            .and_then(|terms| terms.get(index))
-            .is_some_and(|ranges| !ranges.is_empty());
-        if !scanned_operands
-            && let Some(token) = prefix.split_whitespace().next()
-            && native_option_token(token)
-            && !names.iter().any(|found| found.name == token)
-        {
-            names.insert(
-                0,
-                RecognizedName::contiguous(token, prefix.len() - prefix.trim_start().len()),
-            );
-        }
-        // A native `.Fl` proves even a digit spelling to be a declaration.
-        // The witness identifies this *macro instance's* final visible span;
-        // identical bold text from `.Sy -6` is not equivalent evidence.
-        let Some(ranges) = option_ranges.and_then(|terms| terms.get(index)) else {
-            continue;
-        };
-        let text = plain_text(content, term);
-        for range in ranges {
-            let Some(fragment) = text.get(range.clone()) else {
-                continue;
+    terms
+        .iter()
+        .enumerate()
+        .map(|(index, term)| {
+            let operands = operand_ranges
+                .and_then(|terms| terms.get(index))
+                .map_or(&[][..], Vec::as_slice);
+            let Some(mut names) = checked_option_occurrences_from_term(content, term, operands)
+            else {
+                // Invalid or over-limit complete HEAD evidence cannot be
+                // partially restored by a later explicit Fl component.
+                return Vec::new();
             };
-            let leading = fragment.len() - fragment.trim_start().len();
-            let Some(token) = fragment.split_whitespace().next() else {
-                continue;
+            // A native `.Fl` proves even a digit spelling to be a declaration.
+            // The witness identifies this *macro instance's* final visible span;
+            // identical bold text from `.Sy -6` is not equivalent evidence.
+            let Some(ranges) = option_ranges.and_then(|terms| terms.get(index)) else {
+                return names;
             };
-            let offset = range.start + leading;
-            if native_option_token(token)
-                && !names.iter().any(|found| {
-                    found.name == token
-                        && found.parts.len() == 1
-                        && found.parts[0] == (offset..offset + token.len())
+            let text = plain_text(content, term);
+            let mut seen = names
+                .iter()
+                .filter_map(|found| {
+                    let [range] = found.parts.as_slice() else {
+                        return None;
+                    };
+                    Some((found.name.clone(), range.start))
                 })
-            {
-                names.push(RecognizedName::contiguous(token, offset));
+                .collect::<HashSet<_>>();
+            for range in ranges {
+                let Some(fragment) = text.get(range.clone()) else {
+                    continue;
+                };
+                let leading = fragment.len() - fragment.trim_start().len();
+                let Some(mut token) = fragment.split_whitespace().next() else {
+                    continue;
+                };
+                let offset = range.start + leading;
+                // mdoc_macro.c::in_line() creates an empty Fl before a
+                // delimiter, and mdoc_term.c::termp_fl_pre() prints only its
+                // generated dash. The sibling delimiter is outside this Fl
+                // range but directly joins it in the final HEAD. Extend only
+                // that empty-instance witness, never an ordinary argument or
+                // a nonempty Fl spelling (mdoc.c::mdoc_isdelim()).
+                if token == "-"
+                    && range.end == offset + 1
+                    && let Some(delimiter) = text.as_bytes().get(range.end)
+                    // A closing bracket may instead be generated by an
+                    // enclosing Oo/Po macro, as in `Oo Fl Oc`: it is not
+                    // the empty Fl's sibling punctuation. Without a native
+                    // sibling witness, never borrow that glyph as a name.
+                    && b"|.,;:?!".contains(delimiter)
+                    && let Some(joined) = text.get(offset..range.end + 1)
+                {
+                    token = joined;
+                }
+                if native_option_token(token) && seen.insert((token.to_owned(), offset)) {
+                    if names.len() == 64 {
+                        // Both lexical and explicit Fl occurrences share the
+                        // per-head bound. Never publish only its first 64 names.
+                        return Vec::new();
+                    }
+                    names.push(RecognizedName::contiguous(token, offset));
+                }
             }
-        }
-        // Native `.Fl` instances are recovered after the generic candidates;
-        // preserve the actual visible head order, not discovery order.
-        names.sort_by_key(|found| found.parts.first().map_or(usize::MAX, |part| part.start));
-    }
-    result
+            // Native `.Fl` instances are recovered after the generic candidates;
+            // preserve the actual visible head order, not discovery order.
+            names.sort_by_key(|found| found.parts.first().map_or(usize::MAX, |part| part.start));
+            names
+        })
+        .collect()
 }
 
 pub(in crate::definitions) fn parameter_occurrences(
@@ -153,30 +195,46 @@ pub(in crate::definitions) fn parameter_occurrences(
     terms: &[Vec<Inline>],
     operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> Vec<Vec<RecognizedName>> {
-    let mut found = recognize_option_occurrences_from_terms(content, terms, operand_ranges);
-    for (term, names) in terms.iter().zip(&mut found) {
-        let text = plain_text(content, term);
-        let Some(token) = text.split_whitespace().next() else {
-            continue;
-        };
-        let start = token.as_ptr() as usize - text.as_ptr() as usize;
-        if let Some(body) = token.strip_prefix("[-+]")
-            && is_option_name_body(body)
-        {
-            for (sign, offset) in [('-', 1), ('+', 2)] {
-                names.push(RecognizedName {
-                    name: format!("{sign}{body}"),
-                    parts: vec![
-                        start + offset..start + offset + 1,
-                        start + 4..start + token.len(),
-                    ],
-                });
+    terms
+        .iter()
+        .enumerate()
+        .map(|(index, term)| {
+            let operands = operand_ranges
+                .and_then(|terms| terms.get(index))
+                .map_or(&[][..], Vec::as_slice);
+            let Some(mut names) = checked_option_occurrences_from_term(content, term, operands)
+            else {
+                return Vec::new();
+            };
+            let text = plain_text(content, term);
+            let Some(token) = text.split_whitespace().next() else {
+                return names;
+            };
+            let start = token.as_ptr() as usize - text.as_ptr() as usize;
+            if let Some(body) = token.strip_prefix("[-+]")
+                && is_option_name_body(body)
+            {
+                if names.len() > 62 {
+                    return Vec::new();
+                }
+                for (sign, offset) in [('-', 1), ('+', 2)] {
+                    names.push(RecognizedName {
+                        name: format!("{sign}{body}"),
+                        parts: vec![
+                            start + offset..start + offset + 1,
+                            start + 4..start + token.len(),
+                        ],
+                    });
+                }
+            } else if token.strip_prefix('+').is_some_and(is_option_name_body) {
+                if names.len() == 64 {
+                    return Vec::new();
+                }
+                names.push(RecognizedName::contiguous(token, start));
             }
-        } else if token.strip_prefix('+').is_some_and(is_option_name_body) {
-            names.push(RecognizedName::contiguous(token, start));
-        }
-    }
-    found
+            names
+        })
+        .collect()
 }
 
 /// Recognize legacy slash-separated dash options, not general alias syntax.

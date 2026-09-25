@@ -101,7 +101,19 @@ pub(super) fn lower_man_font_scope(
         Some("I") => output.font.select(Font::Emphasis),
         _ => {}
     }
+    // pre_B() selects the initial font, then ordinary child words execute
+    // inside this one macro instance. Retain its complete native HEAD span
+    // so a numeric short option can be admitted only at the actual bold
+    // declaration start; an inline \fB later in its argument is not a new
+    // operand.
+    let bold_head = matches!(node.macro_name.as_deref(), Some("B" | "SB"));
+    if bold_head {
+        output.mark_native_operand(node, false);
+    }
     super::append_inline_nodes(output, &node.children, default_name);
+    if bold_head {
+        output.mark_native_operand(node, true);
+    }
     output.font.select(Font::Regular);
 }
 
