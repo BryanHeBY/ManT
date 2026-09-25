@@ -1,6 +1,8 @@
 //! Keep declaration separators and parameter styling distinct until extraction.
 use super::declaration::{DeclarationState, pattern_start};
-use mant_ir::{ContentContext, ContentRef, Inline, InlineView, literal_option_aliases};
+use mant_ir::{
+    ContentContext, ContentRef, Inline, InlineView, literal_option_aliases, literal_option_names,
+};
 use std::ops::Range;
 
 use mant_ir::inline_plain_text as plain_text;
@@ -98,30 +100,19 @@ impl FormCandidate<'_> {
     }
 }
 
-/// A complete whitespace-separated prefix may contain a pattern plus
-/// independently spelled long options. Accept no literal operands,
-/// assignment suffixes or prose; a pattern itself never expands into names.
+/// A pattern is provisional declaration syntax, not a selectable name. The
+/// same bounded visible-head scanner used by Fixed finds subsequent long
+/// spellings before an ordinary or styled parameter; punctuation inside that
+/// parameter cannot start another name.
 fn pattern_declarations_text(literal: &str) -> Option<Vec<(String, usize)>> {
-    let tokens = literal.split_whitespace().collect::<Vec<_>>();
-    if tokens.len() < 2
-        || !pattern_start(tokens[0])
-        || !tokens[1..].iter().all(|token| {
-            token.starts_with("--") && super::options::option_prefix(token) == Some(*token)
-        })
-    {
+    if !literal.split_whitespace().next().is_some_and(pattern_start) {
         return None;
     }
-    Some(
-        tokens[1..]
-            .iter()
-            .map(|token| {
-                (
-                    (*token).to_owned(),
-                    token.as_ptr() as usize - literal.as_ptr() as usize,
-                )
-            })
-            .collect(),
-    )
+    let names = literal_option_names(literal)
+        .into_iter()
+        .map(|(name, range)| (name, range.start))
+        .collect::<Vec<_>>();
+    (!names.is_empty()).then_some(names)
 }
 
 /// Read visible literal content only until an explicitly styled parameter.

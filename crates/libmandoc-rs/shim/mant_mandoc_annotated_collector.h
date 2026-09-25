@@ -69,6 +69,9 @@ struct mant_annotated_selection_part {
 #define MANT_ANNOTATED_MARK_HEAD_LITERAL (1U << 7)
 #define MANT_ANNOTATED_MARK_HEAD_LEXICAL (1U << 8)
 #define MANT_ANNOTATED_MARK_HANGING_CANDIDATE (1U << 9)
+/* A TP/TQ declaration whose first executed HEAD child is direct TEXT,
+ * not a styled macro whose empty operands happened to emit no component. */
+#define MANT_ANNOTATED_MARK_DIRECT_TP_TEXT (1U << 10)
 #define MANT_ANNOTATED_MARK_HEAD_ROLE_MASK (\
     MANT_ANNOTATED_MARK_HEAD_OPTION | \
     MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT | \

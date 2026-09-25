@@ -98,7 +98,7 @@ fn checked_failure(status: u32, failure: FailureView) -> AnnotatedError {
 
 fn check_abi() -> bool {
     unsafe {
-        mant_annotated_abi_version() == 11
+        mant_annotated_abi_version() == 12
             && mant_annotated_sizeof_result_view() == std::mem::size_of::<ResultView>()
             && mant_annotated_alignof_result_view() == std::mem::align_of::<ResultView>()
             && mant_annotated_offsetof_result_view_display()
@@ -235,6 +235,8 @@ use coverage::transfer_coverage;
 
 #[cfg(test)]
 mod coverage_tests;
+#[cfg(test)]
+mod isolation_tests;
 
 pub(crate) fn render_annotated(
     root: &str,
@@ -281,14 +283,23 @@ pub(crate) fn render_annotated(
     }
     let mut view = ResultView::default();
     if unsafe { mant_annotated_result_view(handle.0.as_ptr(), &raw mut view) } != STATUS_OK
-        || view.reserved != 0
+        || view.annotation_degraded > 1
         || view.root_source != 1
         || view.width != width
         || view.profile != super::PROFILE_UTF8
     {
         return Err(invalid_result());
     }
-    transfer(&handle, &view, &limits)
+    match transfer(&handle, &view, &limits, false) {
+        Ok(page) => Ok(page),
+        Err(error) if error.status == STATUS_RELATION => {
+            // The native handle already passed its independent complete-body
+            // check. Recheck hard source/surface relations while discarding
+            // only the optional native marks and their actionable labels.
+            transfer(&handle, &view, &limits, true)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 mod transfer;

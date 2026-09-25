@@ -187,7 +187,11 @@ pub(crate) fn slash_option_forms(value: &str) -> Option<Vec<&str>> {
 
 #[cfg(test)]
 mod literal_tests {
-    use super::{option_names_from_literal, option_occurrences_from_literal};
+    use super::{
+        option_names_from_literal, option_occurrences_from_literal, option_occurrences_from_terms,
+    };
+    use crate::test_content as fixture;
+    use mant_ir::Inline;
 
     #[test]
     fn literal_entry_api_preserves_alias_argument_and_pair_rules() {
@@ -198,5 +202,27 @@ mod literal_tests {
             ["-q", "--quiet"]
         );
         assert!(option_occurrences_from_literal("ordinary prose").is_empty());
+    }
+
+    #[test]
+    fn repeated_option_spelling_keeps_each_visible_binding() {
+        // The exact TP/BI head ran pinned CVS -Tutf8 first. man_term.c::
+        // pre_alternate retains both --output operands in authored order.
+        let term = vec![
+            Inline::Strong {
+                children: vec![fixture::text("-o --output --output ")],
+            },
+            Inline::Emphasis {
+                children: vec![fixture::text("FILE")],
+            },
+        ];
+        let occurrences = option_occurrences_from_terms(fixture::content(), &[term]);
+        assert_eq!(
+            occurrences[0]
+                .iter()
+                .map(|found| (found.name.as_str(), found.parts[0].clone()))
+                .collect::<Vec<_>>(),
+            [("-o", 0..2), ("--output", 3..11), ("--output", 12..20),]
+        );
     }
 }

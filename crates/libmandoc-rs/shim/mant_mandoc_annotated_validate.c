@@ -212,6 +212,7 @@ valid_marks(const struct mant_annotated_result *result)
 		    MANT_ANNOTATED_MARK_SUBSECTION |
 		    MANT_ANNOTATED_MARK_DEFINITION |
 		    MANT_ANNOTATED_MARK_HANGING_CANDIDATE |
+		    MANT_ANNOTATED_MARK_DIRECT_TP_TEXT |
 		    MANT_ANNOTATED_MARK_HEAD_ROLE_MASK)) != 0 ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HANGING_CANDIDATE) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
@@ -221,6 +222,13 @@ valid_marks(const struct mant_annotated_result *result)
 		    mark->kind != MANT_ANNOTATED_MARK_HEADING) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_DEFINITION) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_OWNER) ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_DIRECT_TP_TEXT) != 0 &&
+		    (mark->kind != MANT_ANNOTATED_MARK_OWNER ||
+		    (mark->token != MAN_TP && mark->token != MAN_TQ) ||
+		    (mark->flags & (MANT_ANNOTATED_MARK_DEFINITION |
+		    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
+		    (MANT_ANNOTATED_MARK_DEFINITION |
+		    MANT_ANNOTATED_MARK_HEAD_LEXICAL))) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) != 0 &&
 		    ((mark->kind != MANT_ANNOTATED_MARK_OWNER &&
 		    mark->kind != MANT_ANNOTATED_MARK_HEAD_COMPONENT) ||
@@ -426,7 +434,7 @@ all_layout_spaces(const uint8_t *bytes, uint64_t length)
 }
 
 static int
-valid_display(const struct mant_annotated_result *result)
+valid_display_surface(const struct mant_annotated_result *result)
 {
 	struct mant_annotated_display_view display;
 	const struct mant_annotated_display_row *row;
@@ -456,25 +464,9 @@ valid_display(const struct mant_annotated_result *result)
 			    run->width > row->column_count - run->column ||
 			    run->label.glyph_origin != 0 ||
 			    run->label.flags != 0 || run->label.reserved != 0 ||
+			    (run->label.style & ~(MANT_ANNOTATED_STYLE_BOLD |
+			    MANT_ANNOTATED_STYLE_UNDERLINE)) != 0 ||
 			    run->label.source > result->common->source_count ||
-			    (run->label.owner != 0 &&
-			    (run->label.owner > result->mark_count ||
-		    (result->marks[run->label.owner - 1].kind !=
-		    MANT_ANNOTATED_MARK_OWNER &&
-		    result->marks[run->label.owner - 1].kind !=
-		    MANT_ANNOTATED_MARK_HEADING &&
-		    result->marks[run->label.owner - 1].kind !=
-		    MANT_ANNOTATED_MARK_REGION))) ||
-			    (run->label.link != 0 &&
-			    (run->label.link > result->mark_count ||
-			    result->marks[run->label.link - 1].kind !=
-			    MANT_ANNOTATED_MARK_LINK)) ||
-			    (run->label.head_component != 0 &&
-			    (run->label.head_component > result->mark_count ||
-			    result->marks[run->label.head_component - 1].kind !=
-			    MANT_ANNOTATED_MARK_HEAD_COMPONENT ||
-			    result->marks[run->label.head_component - 1].owner !=
-			    run->label.owner)) ||
 			    (run->label.role != MANT_ANNOTATED_BODY &&
 			    run->label.role != MANT_ANNOTATED_DIRECT_DRAW &&
 			    run->label.role != MANT_ANNOTATED_LAYOUT) ||
@@ -491,6 +483,41 @@ valid_display(const struct mant_annotated_result *result)
 		}
 	}
 	return next_run == display.run_count && next_byte == display.byte_count;
+}
+
+static int
+valid_display_annotations(const struct mant_annotated_result *result)
+{
+	struct mant_annotated_display_view display;
+	const struct mant_annotated_display_run *run;
+	uint32_t i;
+
+	if (!mant_annotated_display_finish(result->display, &display) ||
+	    (result->mark_count != 0 && result->marks == NULL))
+		return 0;
+	for (i = 0; i < display.run_count; i++) {
+		run = display.runs + i;
+		if ((run->label.owner != 0 &&
+		    (run->label.owner > result->mark_count ||
+		    (result->marks[run->label.owner - 1].kind !=
+		    MANT_ANNOTATED_MARK_OWNER &&
+		    result->marks[run->label.owner - 1].kind !=
+		    MANT_ANNOTATED_MARK_HEADING &&
+		    result->marks[run->label.owner - 1].kind !=
+		    MANT_ANNOTATED_MARK_REGION))) ||
+		    (run->label.link != 0 &&
+		    (run->label.link > result->mark_count ||
+		    result->marks[run->label.link - 1].kind !=
+		    MANT_ANNOTATED_MARK_LINK)) ||
+		    (run->label.head_component != 0 &&
+		    (run->label.head_component > result->mark_count ||
+		    result->marks[run->label.head_component - 1].kind !=
+		    MANT_ANNOTATED_MARK_HEAD_COMPONENT ||
+		    result->marks[run->label.head_component - 1].owner !=
+		    run->label.owner)))
+			return 0;
+	}
+	return 1;
 }
 
 static int
@@ -595,10 +622,22 @@ valid_selection_parts(const struct mant_annotated_result *result)
 }
 
 int
-mant_annotated_result_is_valid(const struct mant_annotated_result *result)
+mant_annotated_result_is_surface_valid(
+    const struct mant_annotated_result *result)
 {
 	return result != NULL && result->magic == MANT_ANNOTATED_MAGIC &&
-	    valid_common(result->common) && valid_marks(result) &&
-	    mant_annotated_coverage_is_valid(result) && valid_display(result) &&
-	    valid_selection_parts(result);
+	    valid_common(result->common) && valid_display_surface(result);
+}
+
+int
+mant_annotated_result_is_valid(const struct mant_annotated_result *result)
+{
+	return mant_annotated_result_is_surface_valid(result) &&
+	    result->annotation_degraded <= 1 && valid_marks(result) &&
+	    valid_display_annotations(result) &&
+	    mant_annotated_coverage_is_valid(result) &&
+	    valid_selection_parts(result) &&
+	    (result->annotation_degraded == 0 ||
+	    (result->mark_count == 0 && result->selection_part_count == 0 &&
+	    result->join_text_count == 0));
 }

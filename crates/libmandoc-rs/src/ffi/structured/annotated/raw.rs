@@ -130,7 +130,7 @@ pub(super) struct ResultView {
     pub(super) root_source: u32,
     pub(super) profile: u32,
     pub(super) width: u32,
-    pub(super) reserved: u32,
+    pub(super) annotation_degraded: u32,
     pub(super) metadata: MetadataView,
     pub(super) sources: SliceView,
     pub(super) spans: SliceView,

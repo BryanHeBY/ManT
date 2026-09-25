@@ -68,15 +68,35 @@ pub fn project_annotated_manual(
 /// Consume an owned native display result as the one Fixed document body.
 ///
 /// # Errors
-/// Returns a relation error rather than synthesizing missing display, source,
-/// occurrence or navigation evidence.
-#[allow(clippy::too_many_lines)] // One checked native transfer and typed-document assembly.
+/// Returns an error when the sole native display surface or its source table
+/// cannot be proved safe and complete. Invalid optional annotations are
+/// isolated from that surface and reported as semantic-coverage diagnostics.
 pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document> {
-    let identities = Identities::new(&page)?;
-    let keys = KeyMap::new(&page, &identities)?;
-    let sources = sources(&page)?;
+    if page.runs.iter().any(|run| run.label.style & !(1 | 8) != 0) {
+        return Err(AnnotatedProjectionError::Relation(
+            "native display has unknown final style bits",
+        ));
+    }
+    match lower_annotated_document_inner(&mut page) {
+        Ok(document) => Ok(document),
+        Err(error) => {
+            // The inner path moves the body arena only after all early mark
+            // projection. Post-transfer failures are handled in place below.
+            if page.text.is_empty() && !page.runs.is_empty() {
+                return Err(error);
+            }
+            isolation::body_only_document(page, &error.to_string())
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)] // One checked native transfer and typed-document assembly.
+fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Document> {
+    let identities = Identities::new(page)?;
+    let keys = KeyMap::new(page, &identities)?;
+    let sources = sources(page)?;
     let mut row_keys = vec![0_u32; page.runs.len()];
-    let rows = rows(&page, &mut row_keys)?;
+    let rows = rows(page, &mut row_keys)?;
     let mut runs = Vec::with_capacity(page.runs.len());
     for (index, run) in page.runs.iter().enumerate() {
         let row = key(row_keys[index], "native run has no final row")?;
@@ -106,6 +126,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     }
     let mut headings = Vec::new();
     let mut owners = Vec::new();
+    let mut unnamed_term_candidates = Vec::new();
     let mut links = Vec::new();
     let mut resolution_diagnostics = Vec::new();
     let mut anchors = Vec::new();
@@ -158,31 +179,36 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     }
     for mark in &page.marks {
         match mark.kind {
-            1 => headings.push(project_heading(&page, &keys, &identities, mark)?),
+            1 => headings.push(project_heading(page, &keys, &identities, mark)?),
             2 => {
-                let plain_b = owner_components[mark.key as usize].iter().any(|&key| {
-                    page.marks.get((key - 1) as usize).is_some_and(|component| {
-                        component.token == libmandoc_rs::annotated::MAN_B_TOKEN
-                    })
-                });
                 let mut owner = project_owner(
-                    &page,
+                    page,
                     &keys,
                     &identities,
                     mark,
                     &owner_bodies[mark.key as usize],
                     &owner_components[mark.key as usize],
                 )?;
-                let plain_tp = matches!(
-                    mark.token,
-                    libmandoc_rs::annotated::MAN_TP_TOKEN | libmandoc_rs::annotated::MAN_TQ_TOKEN
-                ) && owner.head_components.is_empty();
+                let plain_b = owner_components[mark.key as usize].iter().any(|&key| {
+                    page.marks.get((key - 1) as usize).is_some_and(|component| {
+                        component.token == libmandoc_rs::annotated::MAN_B_TOKEN
+                            && component.selection_count != 0
+                    })
+                });
+                let plain_tp = mark.flags & 1024 != 0;
                 owner.lexical_term_witness =
                     owner.head_role == Some(OwnerHeadRole::Lexical) && (plain_b || plain_tp);
+                unnamed_term_candidates.push(
+                    matches!(
+                        mark.token,
+                        libmandoc_rs::annotated::MAN_TP_TOKEN
+                            | libmandoc_rs::annotated::MAN_TQ_TOKEN
+                    ) && owner_components[mark.key as usize].is_empty(),
+                );
                 owners.push(owner);
             }
             3 => links.push(project_link(
-                &page,
+                page,
                 &keys,
                 &identities,
                 mark,
@@ -192,7 +218,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                 anchors.push(project_anchor(&keys, &identities, mark)?);
             }
             4 | 6 => {}
-            5 => regions.push(project_region(&page, &keys, mark)?),
+            5 => regions.push(project_region(page, &keys, mark)?),
             _ => {
                 return Err(AnnotatedProjectionError::Relation(
                     "unknown native mark kind",
@@ -200,6 +226,9 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
             }
         }
     }
+    let native_diagnostics = native_diagnostics(page)?;
+    let native_diagnostic_count = native_diagnostics.len();
+    let coverage_diagnostics = coverage_diagnostics(page, &keys)?;
     // All borrowed native selections and marks have been projected. Transfer
     // the sole display arena into Fixed without cloning the page body.
     let surface = DisplaySurface {
@@ -215,226 +244,258 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         anchors,
         regions,
     };
-    for region in &fixed.regions {
-        if let Some(candidate) = region.continuation_of {
-            let owner = fixed.owners.get_mut((candidate.get() - 1) as usize).ok_or(
-                AnnotatedProjectionError::Relation("continuation candidate is missing"),
-            )?;
-            if owner.hanging_continuation.replace(region.key).is_some() {
+    let mut isolation_diagnostics = Vec::new();
+    let semantic_projection = (|| -> Result<()> {
+        for region in &fixed.regions {
+            if let Some(candidate) = region.continuation_of {
+                let owner = fixed.owners.get_mut((candidate.get() - 1) as usize).ok_or(
+                    AnnotatedProjectionError::Relation("continuation candidate is missing"),
+                )?;
+                if owner.hanging_continuation.replace(region.key).is_some() {
+                    return Err(AnnotatedProjectionError::Relation(
+                        "candidate has multiple hanging continuations",
+                    ));
+                }
+            }
+        }
+        // An RS containing only a nested definition can have no direct glyph
+        // selection. Keep one checked OwnerHead child as an O(1) read-time
+        // witness. A generic unlabeled IP is still readable presentation, but
+        // neither it nor a tbl region is this semantic proof; selecting either
+        // would make an otherwise valid page fail the stricter IR relation.
+        for region in &fixed.regions {
+            if region.kind != RegionKind::OwnerHead || region.owner.is_none() {
+                continue;
+            }
+            let Some(continuation) = region
+                .parent
+                .and_then(|key| fixed.regions.get((key.get() - 1) as usize))
+                .filter(|parent| parent.kind == RegionKind::HangingContinuation)
+            else {
+                continue;
+            };
+            let Some(candidate) = continuation.continuation_of else {
+                continue;
+            };
+            let Some(nested) = region
+                .owner
+                .and_then(|key| fixed.owners.get((key.get() - 1) as usize))
+            else {
+                continue;
+            };
+            let Some(candidate_owner) = fixed.owners.get((candidate.get() - 1) as usize) else {
                 return Err(AnnotatedProjectionError::Relation(
-                    "candidate has multiple hanging continuations",
+                    "nested continuation candidate is missing",
                 ));
-            }
-        }
-    }
-    // An RS containing only a nested definition can have no direct glyph
-    // selection. Keep one checked OwnerHead child as an O(1) read-time
-    // witness. A generic unlabeled IP is still readable presentation, but
-    // neither it nor a tbl region is this semantic proof; selecting either
-    // would make an otherwise valid page fail the stricter IR relation.
-    for region in &fixed.regions {
-        if region.kind != RegionKind::OwnerHead || region.owner.is_none() {
-            continue;
-        }
-        let Some(continuation) = region
-            .parent
-            .and_then(|key| fixed.regions.get((key.get() - 1) as usize))
-            .filter(|parent| parent.kind == RegionKind::HangingContinuation)
-        else {
-            continue;
-        };
-        let Some(candidate) = continuation.continuation_of else {
-            continue;
-        };
-        let Some(nested) = region
-            .owner
-            .and_then(|key| fixed.owners.get((key.get() - 1) as usize))
-        else {
-            continue;
-        };
-        let Some(candidate_owner) = fixed.owners.get((candidate.get() - 1) as usize) else {
-            return Err(AnnotatedProjectionError::Relation(
-                "nested continuation candidate is missing",
-            ));
-        };
-        if nested.key == candidate
-            || nested.role != OwnerRole::Definition
-            || nested.head != region.selection
-            || nested.section != candidate_owner.section
-            || nested.parent != candidate_owner.parent
-        {
-            continue;
-        }
-        let owner = fixed.owners.get_mut((candidate.get() - 1) as usize).ok_or(
-            AnnotatedProjectionError::Relation("nested continuation candidate is missing"),
-        )?;
-        owner.hanging_nested_head.get_or_insert(region.key);
-    }
-    // The checked native head is a borrowed display selection, not a
-    // reconstructed Flow term. Keep its initial conservative identity in the
-    // document so serialization and index rebuilding cannot diverge.
-    let entries = fixed
-        .owners
-        .iter()
-        .map(|owner| {
-            if owner.hanging_candidate && !fixed.hanging_declaration_ready(owner) {
-                return None;
-            }
-            let lexical_names = fixed.lexical_names(owner);
-            let checked_non_option = lexical_names.as_ref().is_some_and(Vec::is_empty);
-            if let Some(components) = lexical_names
-                && !components.is_empty()
+            };
+            if nested.key == candidate
+                || nested.role != OwnerRole::Definition
+                || nested.head != region.selection
+                || nested.section != candidate_owner.section
+                || nested.parent != candidate_owner.parent
             {
-                let (names, name_bindings) = group_bindings(
-                    components
-                        .into_iter()
-                        .map(|(name, selection, _)| (name, selection)),
-                    EntryNameEvidence::Lexical,
-                );
-                return Some(EntryFacts {
-                    name_bindings,
-                    alias_groups: Vec::new(),
-                    alias_of: None,
-                    forms: vec![owner.head.clone()],
-                    id: owner.id.clone(),
-                    kind: EntryKind::Parameter {
-                        parameter_kind: ParameterKind::Option,
-                    },
-                    case: NameCase::Sensitive,
-                    names,
-                    value_domain: None,
-                });
+                continue;
             }
-            if owner.head_role == Some(OwnerHeadRole::Lexical) {
-                // There is no second lexical classifier after the checked
-                // complete-HEAD decision. Only a native plain B operand can
-                // establish a non-option TP/TQ term; IP and alternating-font
-                // candidates cannot turn an incomplete name into a fallback.
-                if !owner.lexical_term_witness || !checked_non_option {
+            let owner = fixed.owners.get_mut((candidate.get() - 1) as usize).ok_or(
+                AnnotatedProjectionError::Relation("nested continuation candidate is missing"),
+            )?;
+            owner.hanging_nested_head.get_or_insert(region.key);
+        }
+        // The checked native head is a borrowed display selection, not a
+        // reconstructed Flow term. Keep its initial conservative identity in the
+        // document so serialization and index rebuilding cannot diverge.
+        let entries = fixed
+            .owners
+            .iter()
+            .enumerate()
+            .map(|(owner_index, owner)| {
+                if owner.hanging_candidate && !fixed.hanging_declaration_ready(owner) {
                     return None;
                 }
-                let form = fixed.owner_complete_form(owner)?;
-                return Some(EntryFacts {
-                    name_bindings: vec![EntryNameBinding {
-                        name: 0,
-                        occurrences: vec![owner.head.clone()],
-                        evidence: EntryNameEvidence::Lexical,
-                    }],
-                    alias_groups: Vec::new(),
-                    alias_of: None,
-                    forms: vec![owner.head.clone()],
-                    id: owner.id.clone(),
-                    kind: EntryKind::Term,
-                    case: NameCase::Sensitive,
-                    names: vec![form],
-                    value_domain: None,
-                });
-            }
-            if let Some(forms) = fixed.option_component_forms(owner) {
-                let names = forms.iter().map(|(name, _)| name.clone()).collect();
-                let (head_forms, name_bindings) = forms
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, (_, selection))| {
-                        (
-                            selection.clone(),
-                            EntryNameBinding {
-                                name: index,
-                                occurrences: vec![selection],
-                                evidence: EntryNameEvidence::NativeMarkup,
-                            },
-                        )
-                    })
-                    .unzip();
-                return Some(EntryFacts {
-                    name_bindings,
-                    alias_groups: Vec::new(),
-                    alias_of: None,
-                    forms: head_forms,
-                    id: owner.id.clone(),
-                    kind: EntryKind::Parameter {
-                        parameter_kind: ParameterKind::Option,
-                    },
-                    case: NameCase::Sensitive,
-                    names,
-                    value_domain: None,
-                });
-            }
-            if let Some(components) = fixed.option_component_names(owner) {
-                let (names, name_bindings) = group_bindings(
-                    components
+                let lexical_names = fixed.lexical_names(owner);
+                let checked_non_option = lexical_names.as_ref().is_some_and(Vec::is_empty);
+                if let Some(components) = lexical_names
+                    && !components.is_empty()
+                {
+                    let (names, name_bindings) = group_bindings(
+                        components
+                            .into_iter()
+                            .map(|(name, selection, _)| (name, selection)),
+                        EntryNameEvidence::Lexical,
+                    );
+                    return Some(EntryFacts {
+                        name_bindings,
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: EntryKind::Parameter {
+                            parameter_kind: ParameterKind::Option,
+                        },
+                        case: NameCase::Sensitive,
+                        names,
+                        value_domain: None,
+                    });
+                }
+                if owner.head_role == Some(OwnerHeadRole::Lexical) {
+                    // A failed lexical option candidate never becomes a name.
+                    // The TP/TQ display is still a readable unnamed term when
+                    // final italic/roman output supplies a complete label but no
+                    // native witness for binding its spelling as a name.
+                    if !checked_non_option
+                        || !owner.lexical_term_witness && !unnamed_term_candidates[owner_index]
+                    {
+                        return None;
+                    }
+                    let form = fixed.owner_complete_form(owner)?;
+                    return Some(EntryFacts {
+                        name_bindings: owner
+                            .lexical_term_witness
+                            .then_some(EntryNameBinding {
+                                name: 0,
+                                occurrences: vec![owner.head.clone()],
+                                evidence: EntryNameEvidence::Lexical,
+                            })
+                            .into_iter()
+                            .collect(),
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: EntryKind::Term,
+                        case: NameCase::Sensitive,
+                        names: owner
+                            .lexical_term_witness
+                            .then_some(form)
+                            .into_iter()
+                            .collect(),
+                        value_domain: None,
+                    });
+                }
+                if let Some(forms) = fixed.option_component_forms(owner) {
+                    let names = forms.iter().map(|(name, _)| name.clone()).collect();
+                    let (head_forms, name_bindings) = forms
                         .into_iter()
-                        .map(|(name, selection, _)| (name, selection)),
-                    EntryNameEvidence::NativeMarkup,
-                );
-                return Some(EntryFacts {
-                    name_bindings,
+                        .enumerate()
+                        .map(|(index, (_, selection))| {
+                            (
+                                selection.clone(),
+                                EntryNameBinding {
+                                    name: index,
+                                    occurrences: vec![selection],
+                                    evidence: EntryNameEvidence::NativeMarkup,
+                                },
+                            )
+                        })
+                        .unzip();
+                    return Some(EntryFacts {
+                        name_bindings,
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: head_forms,
+                        id: owner.id.clone(),
+                        kind: EntryKind::Parameter {
+                            parameter_kind: ParameterKind::Option,
+                        },
+                        case: NameCase::Sensitive,
+                        names,
+                        value_domain: None,
+                    });
+                }
+                if let Some(components) = fixed.option_component_names(owner) {
+                    let (names, name_bindings) = group_bindings(
+                        components
+                            .into_iter()
+                            .map(|(name, selection, _)| (name, selection)),
+                        EntryNameEvidence::NativeMarkup,
+                    );
+                    return Some(EntryFacts {
+                        name_bindings,
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: EntryKind::Parameter {
+                            parameter_kind: ParameterKind::Option,
+                        },
+                        case: NameCase::Sensitive,
+                        names,
+                        value_domain: None,
+                    });
+                }
+                let Some(form) = fixed.owner_complete_form(owner) else {
+                    // Keep the complete physical HEAD in owner.head. Only this
+                    // authored, delimited Ic/Cm component is a logical form:
+                    // later Xo joins are Unknown and cannot be guessed into one.
+                    let (name, component) = fixed.literal_command_component(owner)?;
+                    let selection = component.clone();
+                    return Some(EntryFacts {
+                        name_bindings: vec![EntryNameBinding {
+                            name: 0,
+                            occurrences: vec![selection.clone()],
+                            evidence: EntryNameEvidence::NativeMarkup,
+                        }],
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![selection],
+                        id: owner.id.clone(),
+                        kind: EntryKind::Command,
+                        case: NameCase::Sensitive,
+                        names: vec![name],
+                        value_domain: None,
+                    });
+                };
+                let identity = native_head_identity(&fixed, owner, &form);
+                let (kind, evidence, name, occurrence) = identity.unwrap_or_else(|| {
+                    (
+                        EntryKind::Term,
+                        EntryNameEvidence::Lexical,
+                        form.clone(),
+                        owner.head.clone(),
+                    )
+                });
+                let named = kind != EntryKind::Term || owner.head_role.is_some();
+                Some(EntryFacts {
+                    name_bindings: named
+                        .then_some(EntryNameBinding {
+                            name: 0,
+                            occurrences: vec![occurrence],
+                            evidence,
+                        })
+                        .into_iter()
+                        .collect(),
                     alias_groups: Vec::new(),
                     alias_of: None,
                     forms: vec![owner.head.clone()],
                     id: owner.id.clone(),
-                    kind: EntryKind::Parameter {
-                        parameter_kind: ParameterKind::Option,
-                    },
+                    kind,
                     case: NameCase::Sensitive,
-                    names,
+                    names: named.then_some(name).into_iter().collect(),
                     value_domain: None,
-                });
-            }
-            let Some(form) = fixed.owner_complete_form(owner) else {
-                // Keep the complete physical HEAD in owner.head. Only this
-                // authored, delimited Ic/Cm component is a logical form:
-                // later Xo joins are Unknown and cannot be guessed into one.
-                let (name, component) = fixed.literal_command_component(owner)?;
-                let selection = component.clone();
-                return Some(EntryFacts {
-                    name_bindings: vec![EntryNameBinding {
-                        name: 0,
-                        occurrences: vec![selection.clone()],
-                        evidence: EntryNameEvidence::NativeMarkup,
-                    }],
-                    alias_groups: Vec::new(),
-                    alias_of: None,
-                    forms: vec![selection],
-                    id: owner.id.clone(),
-                    kind: EntryKind::Command,
-                    case: NameCase::Sensitive,
-                    names: vec![name],
-                    value_domain: None,
-                });
-            };
-            let identity = native_head_identity(&fixed, owner, &form);
-            let (kind, evidence, name, occurrence) = identity.unwrap_or_else(|| {
-                (
-                    EntryKind::Term,
-                    EntryNameEvidence::Lexical,
-                    form.clone(),
-                    owner.head.clone(),
-                )
-            });
-            let named = kind != EntryKind::Term || owner.head_role.is_some();
-            Some(EntryFacts {
-                name_bindings: named
-                    .then_some(EntryNameBinding {
-                        name: 0,
-                        occurrences: vec![occurrence],
-                        evidence,
-                    })
-                    .into_iter()
-                    .collect(),
-                alias_groups: Vec::new(),
-                alias_of: None,
-                forms: vec![owner.head.clone()],
-                id: owner.id.clone(),
-                kind,
-                case: NameCase::Sensitive,
-                names: named.then_some(name).into_iter().collect(),
-                value_domain: None,
+                })
             })
-        })
-        .collect::<Vec<_>>();
-    for (owner, entry) in fixed.owners.iter_mut().zip(entries) {
-        owner.entry = entry;
+            .collect::<Vec<_>>();
+        for (owner, entry) in fixed.owners.iter_mut().zip(entries) {
+            owner.entry = entry;
+        }
+        Ok(())
+    })();
+    if let Err(error) = semantic_projection {
+        isolation_diagnostics.push(isolation::rejected_annotation(
+            &error.to_string(),
+            CoverageScope::Document,
+        ));
+        isolation::strip_invalid_annotations(&mut fixed);
+    } else {
+        isolation_diagnostics.extend(isolation::isolate_optional_facts(&mut fixed));
+        if let Err(error) = fixed.validate() {
+            isolation_diagnostics.clear();
+            isolation_diagnostics.push(isolation::rejected_annotation(
+                &error.to_string(),
+                CoverageScope::Document,
+            ));
+            isolation::strip_invalid_annotations(&mut fixed);
+        }
     }
     fixed.validate().map_err(|error| {
         AnnotatedProjectionError::RelationDetail(format!("invalid projected Fixed body: {error}"))
@@ -447,22 +508,56 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         sources,
         root_source: key_source(page.root_source)?,
         body: DocumentBody::Fixed(fixed),
-        meta: metadata(&page),
+        meta: metadata(page),
         fragment_aliases: Vec::new(),
-        diagnostics: native_diagnostics(&page)?,
+        diagnostics: native_diagnostics,
     };
-    document
-        .diagnostics
-        .extend(coverage_diagnostics(&page, &keys)?);
+    document.diagnostics.extend(coverage_diagnostics);
     document.diagnostics.extend(resolution_diagnostics);
-    validate_document_sources(&document)
-        .map_err(|_| AnnotatedProjectionError::Relation("invalid projected source table"))?;
-    if let Some(first) = validate_document(&document).into_iter().next() {
-        return Err(AnnotatedProjectionError::RelationDetail(format!(
-            "invalid projected document: {}: {}",
-            first.code.as_deref().unwrap_or("unnamed"),
-            first.message
-        )));
+    document.diagnostics.extend(isolation_diagnostics);
+    if page.annotation_degraded {
+        document.diagnostics.push(isolation::rejected_annotation(
+            "native annotation relation was rejected after the display completed",
+            CoverageScope::Document,
+        ));
+    }
+    let source_error = validate_document_sources(&document).err();
+    let relation_error = validate_document(&document).into_iter().next();
+    if source_error.is_some() || relation_error.is_some() {
+        let reason = source_error.map_or_else(
+            || {
+                relation_error.map_or_else(
+                    || "invalid projected semantic relation".to_owned(),
+                    |diagnostic| {
+                        format!(
+                            "{}: {}",
+                            diagnostic.code.as_deref().unwrap_or("unnamed"),
+                            diagnostic.message
+                        )
+                    },
+                )
+            },
+            |error| error.to_string(),
+        );
+        let DocumentBody::Fixed(fixed) = &mut document.body else {
+            unreachable!("annotated lowering only produces Fixed")
+        };
+        isolation::strip_invalid_annotations(fixed);
+        document.diagnostics.truncate(native_diagnostic_count);
+        document.diagnostics.push(isolation::rejected_annotation(
+            &reason,
+            CoverageScope::Document,
+        ));
+        validate_document_sources(&document).map_err(|_| {
+            AnnotatedProjectionError::Relation("invalid native source table or display label")
+        })?;
+        if let Some(first) = validate_document(&document).into_iter().next() {
+            return Err(AnnotatedProjectionError::RelationDetail(format!(
+                "invalid native display document: {}: {}",
+                first.code.as_deref().unwrap_or("unnamed"),
+                first.message
+            )));
+        }
     }
     Ok(document)
 }
@@ -774,6 +869,8 @@ use marks::{project_anchor, project_heading, project_link, project_owner, projec
 
 mod diagnostics;
 use diagnostics::{coverage_diagnostics, native_diagnostics};
+
+mod isolation;
 
 #[cfg(test)]
 mod tests;

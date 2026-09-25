@@ -781,6 +781,22 @@ mant_annotated_display_finish(struct mant_annotated_display *display,
 	return 1;
 }
 
+int
+mant_annotated_display_clear_annotations(struct mant_annotated_display *display)
+{
+	uint32_t i;
+
+	if (display == NULL || display->status != MANT_ANNOTATED_DISPLAY_OK ||
+	    !display->finished)
+		return 0;
+	for (i = 0; i < display->run_count; i++) {
+		display->runs[i].label.owner = 0;
+		display->runs[i].label.link = 0;
+		display->runs[i].label.head_component = 0;
+	}
+	return 1;
+}
+
 enum mant_annotated_display_status
 mant_annotated_display_status(const struct mant_annotated_display *display)
 {

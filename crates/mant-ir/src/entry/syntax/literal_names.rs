@@ -156,7 +156,14 @@ fn declaration_name_end(form: &str, start: usize) -> Option<usize> {
     let token_end = head
         .find(|character: char| character.is_whitespace() || matches!(character, ',' | '|'))
         .unwrap_or(head.len());
-    leading_name(&head[..token_end], start + leading).map(|(_, range)| range.end)
+    let token = &head[..token_end];
+    if pattern_start(token) {
+        // A pattern proves a provisional declaration boundary, not a name.
+        // Subsequent ordinary operands must still enter Argument phase so a
+        // comma inside one cannot restart at a fake option.
+        return Some(start + leading + token.len());
+    }
+    leading_name(token, start + leading).map(|(_, range)| range.end)
 }
 
 /// Require an inferred PP/RS head to be complete declaration syntax, not
@@ -316,28 +323,36 @@ fn slash_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>)>
 }
 
 fn pattern_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>)>> {
-    let tokens = group.split_whitespace().collect::<Vec<_>>();
-    if tokens.len() < 2
-        || !tokens[0].starts_with('-')
-        || !tokens[0].contains('#')
-        || !tokens[0]
-            .chars()
-            .all(|character| matches!(character, '-' | '#'))
-        || !tokens[1..]
-            .iter()
-            .all(|token| token.starts_with("--") && lexical_option_token(token))
-    {
+    let mut tokens = group.split_whitespace();
+    if !pattern_start(tokens.next()?) {
         return None;
     }
-    Some(
-        tokens[1..]
-            .iter()
-            .map(|token| {
-                let start = offset + token.as_ptr() as usize - group.as_ptr() as usize;
-                ((*token).to_owned(), start..start + token.len())
-            })
-            .collect(),
-    )
+    let mut names = Vec::new();
+    for token in tokens {
+        let start = offset + token.as_ptr() as usize - group.as_ptr() as usize;
+        let Some((name, range)) = leading_name(token, start) else {
+            break;
+        };
+        if !name.starts_with("--") {
+            break;
+        }
+        let attached = range.end < start + token.len();
+        names.push((name, range));
+        // An assignment or bracketed value ends the provisional name group.
+        // Later option-looking words need their own proved declaration edge.
+        if attached || names.len() == 64 {
+            break;
+        }
+    }
+    (!names.is_empty()).then_some(names)
+}
+
+fn pattern_start(token: &str) -> bool {
+    token.starts_with('-')
+        && token.contains('#')
+        && token
+            .chars()
+            .all(|character| matches!(character, '-' | '#'))
 }
 
 #[cfg(test)]
@@ -408,6 +423,32 @@ mod tests {
         assert_eq!(
             literal_option_names(followed),
             [("--list".into(), 0..6), ("--all".into(), start..start + 5)]
+        );
+    }
+
+    #[test]
+    fn provisional_pattern_still_bounds_ordinary_and_styled_arguments() {
+        // Each exact TP/B or TP/BI input first ran pinned CVS -Tutf8.
+        // man_macro.c::blk_imp retains one HEAD, man_term.c::pre_alternate
+        // joins BI operands, and term.c::term_word prints punctuation inside
+        // a following parameter without manufacturing declaration nodes.
+        for form in [
+            "-### --long first,--fake,last",
+            "-### --long first|--fake|last",
+            "-### --long -10,--fake,20",
+            "-### --long=FILE",
+        ] {
+            assert_eq!(
+                literal_option_names(form),
+                [("--long".into(), 5..11)],
+                "{form}"
+            );
+        }
+        let followed = "-### --long first,--fake,last, --all";
+        let start = followed.find("--all").unwrap();
+        assert_eq!(
+            literal_option_names(followed),
+            [("--long".into(), 5..11), ("--all".into(), start..start + 5)]
         );
     }
 

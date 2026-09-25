@@ -565,19 +565,57 @@ native_cleanup:
 			result->source_map_count = input->sources.count;
 			session.source_maps = NULL;
 			if (annotated_mode) {
+				int annotations_ok;
+
 				mant_annotated_collector_take_marks(
 				    session.annotated_collector,
 				    &annotated->marks, &annotated->mark_count);
+				/* The final device body and source table are hard boundaries.
+				 * Only after both pass may a relation failure in optional
+				 * native marks become a body-only, explicitly degraded result. */
 				if (!mant_annotated_display_finish(annotated->display,
 				    &display_view) ||
-				    !mant_annotated_build_selection_parts(&session,
-				    annotated, &display_view) ||
-				    !mant_annotated_coverage_build(&session, annotated) ||
-				    !mant_annotated_result_is_valid(annotated))
+				    !mant_annotated_result_is_surface_valid(annotated)) {
 					mant_structured_set_failure(&session,
 					    MANT_STRUCTURED_RELATION,
 					    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
-				else
+					goto cleanup;
+				}
+				annotations_ok =
+				    mant_annotated_build_selection_parts(&session,
+				    annotated, &display_view) &&
+				    mant_annotated_coverage_build(&session, annotated) &&
+				    mant_annotated_result_is_valid(annotated);
+				if (!annotations_ok) {
+					/* A consumed budget or allocation failure remains
+					 * fatal.  Never refund work already performed merely
+					 * because annotations cannot be delivered. */
+					if (session.status != MANT_STRUCTURED_OK &&
+					    (session.status != MANT_STRUCTURED_RELATION ||
+					    session.stage != MANT_STRUCTURED_STAGE_CHECK))
+						goto cleanup;
+					if (!mant_annotated_result_strip_annotations(
+					    annotated)) {
+						mant_structured_set_failure(&session,
+						    MANT_STRUCTURED_RELATION,
+						    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
+						goto cleanup;
+					}
+					session.status = MANT_STRUCTURED_OK;
+					session.stage = 0;
+					session.limit_kind = 0;
+					session.observed = 0;
+					session.allowed = 0;
+					if (!mant_annotated_coverage_build(&session,
+					    annotated) ||
+					    !mant_annotated_result_is_valid(annotated)) {
+						mant_structured_set_failure(&session,
+						    MANT_STRUCTURED_RELATION,
+						    MANT_STRUCTURED_STAGE_CHECK, 0, 0, 0);
+						goto cleanup;
+					}
+				}
+				if (session.status == MANT_STRUCTURED_OK)
 					annotated->checked = 1;
 			} else if (!mant_structured_result_is_valid(result, &session))
 				mant_structured_set_failure(&session, MANT_STRUCTURED_RELATION,

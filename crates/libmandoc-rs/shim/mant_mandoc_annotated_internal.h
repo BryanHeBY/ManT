@@ -10,6 +10,8 @@
 struct mant_annotated_result {
 	uint32_t magic;
 	uint32_t checked;
+	/* A checked body survived, but native mark relations were discarded. */
+	uint32_t annotation_degraded;
 	struct mant_structured_result *common;
 	struct mant_annotated_display *display;
 	struct mant_annotated_mark *marks;
@@ -26,6 +28,10 @@ struct mant_annotated_result {
 };
 
 int mant_annotated_result_is_valid(const struct mant_annotated_result *);
+int mant_annotated_result_is_surface_valid(
+	const struct mant_annotated_result *);
+int mant_annotated_result_strip_annotations(
+	struct mant_annotated_result *);
 /* One native join rule is shared by selection construction and validation. */
 uint32_t mant_annotated_native_join(
 	const struct mant_annotated_run_endpoint *, uint32_t, uint32_t,

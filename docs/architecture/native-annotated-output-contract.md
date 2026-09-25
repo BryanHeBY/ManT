@@ -79,12 +79,15 @@ runs carrying the explicit native `layout` role may be skipped by Fixed
 selection validation, not merely unowned or source-unknown spaces. The
 layout-only gap check uses one per-surface prefix index, not a rescan for
 each section, owner or link.
-Physical adjacency alone proves none of these states. A
-wrong key/range is invalid result, never a semantic downgrade. The native
-handle owns borrowed views; checked transfer produces one owned result, then
-the handle is released. No slice or C pointer survives the handle. R01 must
-test size/align/offset, checked `ptr/count`, integer overflow and failure
-cleanup before exposing this model.
+Physical adjacency alone proves none of these states. A wrong display byte,
+row, UTF-8 or source range is a hard invalid result. A wrong optional mark
+key or selection relation is rejected independently after the complete native
+surface is checked: the affected fact is removed, or, if its scope cannot be
+isolated, all annotations are cleared while the checked display remains.
+The native handle owns borrowed views; checked transfer produces one owned
+result, then the handle is released. No slice or C pointer survives the handle.
+R01 must test size/align/offset, checked `ptr/count`, integer overflow and
+failure cleanup before exposing this model.
 
 ## Display, section and owner examples
 
@@ -201,13 +204,22 @@ span and is validated against the same table. Neither a macro-expansion
 offset nor a generated inline equation's reparse offset is converted into a
 fabricated authored line or byte range. Display runs already carry their
 source key separately from authored mark locations.
-Absence of local scope means document-wide. Wrong keys/ranges are hard
-errors, not coverage issues. Codec merges these diagnostics with common
-name/form/link validation; `semanticsComplete` is computed *only* from the
-merged set. Frontends do not set it independently. Conservative `Term` or a
-non-entry explanation does not alone mean a known extraction failure.
+Absence of local scope means document-wide. Invalid display or source
+keys/ranges remain hard errors; an invalid optional entry, link or navigation
+relation instead loses the unsafe semantic fact, records
+`annotated.internal-annotation-rejected` with `semantic-coverage` impact, and
+never leaves a stale clickable link or misattributed owner. When a relation
+cannot be isolated locally, only the strictly checked native display survives.
+An annotation-only failure in native validation or FFI transfer follows the
+same body-only rule; transfer budgets, allocation failure, unsafe UTF-8 and
+incomplete display output never do. Legitimate zero-glyph macro instances
+produce no name and no internal-error diagnostic. Codec merges these
+diagnostics with common name/form/link validation; `semanticsComplete` is
+computed *only* from the merged set. Frontends do not set it independently.
+Conservative `Term` or a non-entry explanation does not alone mean a known
+extraction failure.
 Correctly retired invisible glyphs are not missing extraction. A failed
-capture, source relation, FFI relation or budget is not recoverable coverage.
+capture, source/display safety check or budget is not recoverable coverage.
 
 A response with truncated diagnostic detail retains one document-scoped
 diagnostic `annotated.coverage.summary` with impact `semantic-coverage` and

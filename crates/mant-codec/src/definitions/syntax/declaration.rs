@@ -156,7 +156,7 @@ impl DeclarationState {
     /// followed by an independently styled declaration. A comma inside the
     /// parameter, even before option-looking text, cannot create a name.
     pub(super) fn styled_character(&mut self, character: char, eligible: bool) -> bool {
-        if eligible && self.quote.is_none() && self.closers.is_empty() {
+        if eligible && self.quote.is_none() && self.closers.is_empty() && !self.uncertain {
             let next = self.offset + character.len_utf8();
             let following = self.suffix.probe(&self.text, next);
             if self.literal_starts.contains(&following.start)
@@ -166,7 +166,15 @@ impl DeclarationState {
                     .is_some_and(|(_, range)| range.start == 0)
                     || pattern_start(following.token))
             {
-                return self.separator(character, true);
+                // This edge is proved by a separate, non-parameter styled
+                // declaration. Unlike an ordinary text comma, the source
+                // need not contain whitespace after it; the formatter's
+                // pre_alternate() concatenates operands directly.
+                self.phase = Phase::Name;
+                self.name_end = option_name_end(&self.text, following.start);
+                self.after_name_space = false;
+                self.offset = next;
+                return true;
             }
         }
         self.observe(character, true);
@@ -345,6 +353,11 @@ fn option_name_end(text: &str, offset: usize) -> Option<usize> {
         .find(|character: char| character.is_whitespace() || matches!(character, ',' | '|' | '/'))
         .unwrap_or(rest.len());
     let token = &rest[..end];
+    if pattern_start(token) {
+        // Pattern spelling is not an alias. It only establishes where a
+        // following ordinary operand starts, so its punctuation stays opaque.
+        return Some(offset + leading + token.len());
+    }
     let name = option_prefix(token)?;
     lexical_option_token(name).then_some(offset + leading + name.len())
 }

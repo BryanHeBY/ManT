@@ -8,7 +8,36 @@
 uint32_t
 mant_annotated_abi_version(void)
 {
-	return 11;
+	return 12;
+}
+
+/* Only a fully finished and independently checked display may take this
+ * path.  Keeping any old owner/link key would make discarded annotations
+ * appear actionable to a consumer.  This operation does not edit body bytes,
+ * geometry, style or source identities and needs no new allocation. */
+int
+mant_annotated_result_strip_annotations(struct mant_annotated_result *result)
+{
+	if (result == NULL || result->checked != 0 ||
+	    !mant_annotated_result_is_surface_valid(result) ||
+	    !mant_annotated_display_clear_annotations(result->display))
+		return 0;
+	mant_annotated_marks_free(result->marks, result->mark_count);
+	result->marks = NULL;
+	result->mark_count = 0;
+	free(result->selection_parts);
+	result->selection_parts = NULL;
+	result->selection_part_count = 0;
+	free(result->join_text);
+	result->join_text = NULL;
+	result->join_text_count = 0;
+	free(result->coverage_issues);
+	result->coverage_issues = NULL;
+	result->coverage_issue_count = 0;
+	result->coverage_issue_capacity = 0;
+	memset(result->coverage_checks, 0, sizeof(result->coverage_checks));
+	result->annotation_degraded = 1;
+	return 1;
 }
 
 uint32_t
@@ -45,6 +74,7 @@ mant_annotated_result_view(const struct mant_annotated_result *result,
 	view->root_source = common->root_source;
 	view->profile = common->profile;
 	view->width = common->width;
+	view->annotation_degraded = result->annotation_degraded;
 	view->metadata = common->metadata;
 	view->sources = VIEW_SLICE(common->sources, common->source_count,
 	    struct mant_structured_source_view);

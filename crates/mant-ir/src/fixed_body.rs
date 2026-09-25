@@ -581,6 +581,16 @@ impl FixedBody {
             if !run.label.style.underline || run.label.style.bold {
                 continue;
             }
+            let visible = self.surface.run_text(part.run)?.get(
+                usize::try_from(part.start_byte).ok()?..usize::try_from(part.end_byte).ok()?,
+            )?;
+            if visible.chars().all(char::is_whitespace) {
+                // An underlined no-break space from an empty BI operand is
+                // still display text, but it does not start a parameter.
+                // In particular, it must not use up this declaration's sole
+                // styled-argument scan before the later FILE run arrives.
+                continue;
+            }
             while segments
                 .get(segment_index)
                 .is_some_and(|segment| segment.end < start)
@@ -758,19 +768,27 @@ impl FixedBody {
         let byte_ranges = self.component_byte_ranges(&owner.head, &ranges)?;
         let mut names = Vec::with_capacity(owner.head_components.len());
         for (component, range) in owner.head_components.iter().zip(byte_ranges) {
-            if component.role != OwnerHeadRole::Option
-                || component.selection.parts.is_empty()
-                || !component.has_source_identity()
-            {
+            if component.selection.parts.is_empty() || !component.has_source_identity() {
                 return None;
+            }
+            // A mixed It HEAD can contain Cm/Ic alongside distinct Fl
+            // invocations. Only Fl is option-name evidence; a literal that
+            // happens to spell like an option must not veto sibling Fl names
+            // or itself become one.
+            if component.role != OwnerHeadRole::Option {
+                continue;
             }
             let text = self.selection_text(&component.selection)?;
             if !crate::native_option_token(&text) {
-                return None;
+                // Each Fl is an independent native invocation. In particular,
+                // mdoc_term.c::termp_fl_pre() emits a visible dash even when
+                // the operand has no glyphs. That instance proves no name,
+                // but must not erase names proved by sibling Fl instances.
+                continue;
             }
             names.push((text, component.selection.clone(), range));
         }
-        Some(names)
+        (!names.is_empty()).then_some(names)
     }
 
     fn component_byte_ranges(
@@ -864,6 +882,33 @@ impl FixedBody {
         selected.next().is_none().then_some(forms)
     }
 
+    /// Keys whose optional entry facts fail the same read-time proof used by
+    /// consumers. Producers can retract only these facts before finalizing a
+    /// document, without discarding the native body or valid sibling entries.
+    #[must_use]
+    pub fn invalid_entry_keys(&self) -> Vec<NonZeroU32> {
+        self.owners
+            .iter()
+            .filter(|owner| owner.entry.is_some() && self.validated_entry(owner).is_none())
+            .map(|owner| owner.key)
+            .collect()
+    }
+
+    /// Native output remains readable when a link target fails semantic
+    /// validation; only these occurrences must lose activation.
+    #[must_use]
+    pub fn invalid_link_target_keys(&self) -> Vec<NonZeroU32> {
+        self.links
+            .iter()
+            .filter(|link| {
+                link.target
+                    .as_ref()
+                    .is_some_and(|target| validation::validate_link_target(target).is_err())
+            })
+            .map(|link| link.key)
+            .collect()
+    }
+
     /// Borrow only the current conservative Fixed facts whose form, name and
     /// lexical binding close against this owner's surviving native head.
     /// Recheck at read time: an in-memory `Document` can be changed after its
@@ -917,7 +962,15 @@ impl FixedBody {
         let [only_form] = entry.forms.as_slice() else {
             return None;
         };
-        if entry.kind == EntryKind::Term && owner.head_role.is_none() {
+        if entry.kind == EntryKind::Term
+            && (owner.head_role.is_none()
+                || owner.head_role == Some(OwnerHeadRole::Lexical)
+                    && !owner.lexical_term_witness
+                    && owner.head_components.is_empty()
+                    && self
+                        .lexical_names(owner)
+                        .is_some_and(|names| names.is_empty()))
+        {
             let valid = entry.id == owner.id
                 && entry.case == NameCase::Sensitive
                 && entry.alias_groups.is_empty()

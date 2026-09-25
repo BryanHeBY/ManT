@@ -53,48 +53,52 @@ pub fn lexical_option_token(token: &str) -> bool {
 /// An unpunctuated group must start with one short spelling followed by one
 /// or more long spellings. This covers a single literal head such as gzip's
 /// `-c --stdout --to-stdout` without treating another short option, an
-/// assignment value, or an arbitrary operand as an alias.
+/// assignment value, or an arbitrary operand as an alias. Equal spellings
+/// retain distinct ranges; the caller groups them into one name binding.
 #[must_use]
 pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>> {
-    let bytes = form.as_bytes();
     let mut cursor = 0;
     let mut names = Vec::new();
     let mut whitespace_group = false;
     let mut punctuation_group = false;
     let mut word_connector = false;
     loop {
-        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
-            cursor += 1;
+        while let Some(character) = form[cursor..].chars().next() {
+            if !character.is_whitespace() {
+                break;
+            }
+            cursor += character.len_utf8();
         }
         let start = cursor;
-        while bytes
-            .get(cursor)
-            .is_some_and(|byte| !byte.is_ascii_whitespace() && !matches!(byte, b',' | b'|' | b'/'))
-        {
-            cursor += 1;
+        while let Some(character) = form[cursor..].chars().next() {
+            if character.is_whitespace() || matches!(character, ',' | '|' | '/') {
+                break;
+            }
+            cursor += character.len_utf8();
         }
         let token = form.get(start..cursor)?;
-        if !lexical_option_token(token)
-            || names.iter().any(|(name, _)| name == token)
-            || names.len() == 64
-        {
+        if !lexical_option_token(token) || names.len() == 64 {
             return None;
         }
         names.push((token.to_owned(), start..cursor));
         let separator_start = cursor;
-        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
-            cursor += 1;
+        while let Some(character) = form[cursor..].chars().next() {
+            if !character.is_whitespace() {
+                break;
+            }
+            cursor += character.len_utf8();
         }
-        if cursor == bytes.len() {
+        if cursor == form.len() {
             break;
         }
-        if bytes
-            .get(cursor)
-            .is_some_and(|byte| matches!(byte, b',' | b'|' | b'/'))
+        if form[cursor..]
+            .chars()
+            .next()
+            .is_some_and(|character| matches!(character, ',' | '|' | '/'))
         {
             // A slash after whitespace can introduce a path operand. Only
             // an adjacent slash separates aliases within one invocation.
-            if bytes[cursor] == b'/' && cursor > separator_start {
+            if form.as_bytes()[cursor] == b'/' && cursor > separator_start {
                 return None;
             }
             punctuation_group = true;
@@ -104,19 +108,22 @@ pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>>
             // The Flow literal declaration grammar admits exactly this
             // textual connector between a short and a long option.
             if names.len() == 1
-                && bytes.get(cursor..cursor + 2) == Some(b"or")
-                && bytes.get(cursor + 2).is_some_and(u8::is_ascii_whitespace)
+                && form[cursor..].starts_with("or")
+                && form[cursor + 2..].starts_with(char::is_whitespace)
             {
                 word_connector = true;
                 cursor += 2;
-                while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
-                    cursor += 1;
+                while let Some(character) = form[cursor..].chars().next() {
+                    if !character.is_whitespace() {
+                        break;
+                    }
+                    cursor += character.len_utf8();
                 }
             }
         } else {
             return None;
         }
-        if cursor == bytes.len() {
+        if cursor == form.len() {
             return None;
         }
     }
@@ -299,6 +306,31 @@ mod tests {
                 ("--to-stdout".to_owned(), 12..23),
             ])
         );
+        // Pinned CVS chars.c maps \~ to U+00A0; man_term.c::pre_alternate
+        // joins operands and term.c::term_word emits that visible glyph.
+        // It remains two UTF-8 bytes in
+        // the form, and must be syntax whitespace without losing offsets.
+        assert_eq!(
+            literal_option_aliases("-o\u{a0}--output"),
+            Some(vec![
+                ("-o".to_owned(), 0..2),
+                ("--output".to_owned(), 4..12),
+            ])
+        );
+        // Pinned CVS keeps all three BI operands in one head. Equal option
+        // spellings are distinct visible occurrences, not a corrupt group.
+        assert_eq!(
+            literal_option_aliases("-o --output --output"),
+            Some(vec![
+                ("-o".to_owned(), 0..2),
+                ("--output".to_owned(), 3..11),
+                ("--output".to_owned(), 12..20),
+            ])
+        );
+        assert_eq!(
+            literal_option_aliases("-a, -a"),
+            Some(vec![("-a".to_owned(), 0..2), ("-a".to_owned(), 4..6)])
+        );
         for not_aliases in [
             "--set=KEY,VALUE",
             "-a, text",
@@ -306,10 +338,8 @@ mod tests {
             "-a -b --all",
             "-a --all -b",
             "-a --all operand",
-            "-a --all --all",
             "-a or --all --other",
             "-a, --all --other",
-            "-a, -a",
             "-a,, --all",
         ] {
             assert!(

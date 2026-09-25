@@ -32,6 +32,75 @@ fn styled_argument_scan_checks_one_boundary_per_declaration_segment() {
     );
 }
 
+#[test]
+fn styled_nonbreaking_space_does_not_consume_the_argument_boundary() {
+    // The exact TP/BI `"-o" "\~" "--output " FILE` ran pinned CVS
+    // -Tutf8 first. chars.c maps \~ to U+00A0; man_term.c::pre_alternate
+    // preserves the alternating styles without inserting extra spaces.
+    let mut body = scaled_styled_argument_body(0).0;
+    let form = "-o\u{a0}--output FILE";
+    body.surface.text = form.to_owned();
+    body.surface.runs = [
+        ("-o", true, false, 2),
+        ("\u{a0}", false, true, 1),
+        ("--output ", true, false, 9),
+        ("FILE", false, true, 4),
+    ]
+    .into_iter()
+    .enumerate()
+    .scan(
+        (0usize, 0u32),
+        |(byte, column), (index, (text, bold, underline, width))| {
+            let run = DisplayRun {
+                key: key(u32::try_from(index + 1).ok()?),
+                row: key(1),
+                column: *column,
+                width,
+                byte_start: u64::try_from(*byte).ok()?,
+                byte_count: u64::try_from(text.len()).ok()?,
+                label: DisplayLabel {
+                    owner: Some(key(1)),
+                    link: None,
+                    source: None,
+                    style: DisplayStyle { bold, underline },
+                    role: DisplayRole::Body,
+                },
+            };
+            *byte += text.len();
+            *column += width;
+            Some(run)
+        },
+    )
+    .collect();
+    body.surface.rows[0].run_count = 4;
+    body.surface.rows[0].column_count = 16;
+    body.owners[0].head.parts = (1..=4)
+        .map(|index| OutputSlice {
+            run: key(index),
+            start_byte: 0,
+            end_byte: body.surface.runs[(index - 1) as usize].byte_count,
+        })
+        .collect();
+    body.owners[0].head.joins = vec![TextJoin::DirectContact; 3];
+    body.validate().expect("native-like display remains valid");
+    let (names, attempts) = body
+        .lexical_styled_argument_names(&body.owners[0], form)
+        .expect("complete lexical head");
+    assert_eq!(attempts, 1);
+    assert_eq!(
+        names,
+        [("-o".to_owned(), 0..2), ("--output".to_owned(), 4..12)]
+    );
+    assert_eq!(
+        body.lexical_names(&body.owners[0])
+            .expect("checked names")
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect::<Vec<_>>(),
+        ["-o", "--output"]
+    );
+}
+
 fn scaled_styled_argument_body(fragments: usize) -> (FixedBody, String) {
     let form = format!("-L{}", "a".repeat(fragments));
     let mut runs = Vec::with_capacity(fragments + 1);

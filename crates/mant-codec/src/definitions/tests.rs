@@ -93,6 +93,77 @@ fn slash_aliases_require_complete_option_names_before_the_separator() {
 }
 
 #[test]
+fn pattern_and_native_space_heads_keep_only_proved_names() {
+    // Exact TP/B and TP/BI inputs ran pinned CVS -Tutf8 first. man_term.c::
+    // pre_alternate joins BI operands; chars.c maps \~ to one visible U+00A0.
+    // The pattern is syntax, never an alias.
+    for form in [
+        "-### --long first,--fake,last",
+        "-### --long first|--fake|last",
+        "-### --long -10,--fake,20",
+        "-### --long=FILE",
+    ] {
+        assert_eq!(option_names(&strong_item(form)), ["--long"], "{form}");
+    }
+    assert_eq!(
+        option_names(&strong_item("-o\u{a0}--output")),
+        ["-o", "--output"]
+    );
+    let term = vec![
+        Inline::Strong {
+            children: vec![fixture::text("-### --long=")],
+        },
+        Inline::Emphasis {
+            children: vec![fixture::text("FILE")],
+        },
+    ];
+    assert_eq!(
+        super::syntax::option_names_from_terms(fixture::content(), &[term]),
+        ["--long"]
+    );
+}
+
+#[test]
+fn native_styled_boundaries_do_not_promote_parameter_punctuation() {
+    // Pinned CVS man_term.c::pre_alternate directly concatenates BI operands
+    // without inventing a space after the comma. A later strong operand is
+    // independent style evidence; an italic comma within one operand is not.
+    let name = |value| Inline::Strong {
+        children: vec![fixture::text(value)],
+    };
+    let argument = |value| Inline::Emphasis {
+        children: vec![fixture::text(value)],
+    };
+    let terms = [
+        (
+            vec![
+                name("-L"),
+                argument("dir,"),
+                name("--output="),
+                argument("FILE"),
+            ],
+            vec!["-L", "--output"],
+        ),
+        (vec![name("-L"), argument("dir,--fake,last")], vec!["-L"]),
+        (
+            vec![
+                name("-o"),
+                argument("\u{a0}"),
+                name("--output "),
+                argument("FILE"),
+            ],
+            vec!["-o", "--output"],
+        ),
+    ];
+    for (term, expected) in terms {
+        assert_eq!(
+            super::syntax::option_names_from_terms(fixture::content(), &[term]),
+            expected
+        );
+    }
+}
+
+#[test]
 fn semantic_id_allocation_ignores_a_prefilled_producer_id() {
     let mut option = item("--verbose");
     option.entry = Some(EntryFacts {

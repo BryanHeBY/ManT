@@ -278,6 +278,55 @@ test_blank_rows_and_budgets(void)
 	mant_annotated_display_free(display);
 }
 
+static void
+test_annotation_drop_preserves_finished_surface(void)
+{
+	struct mant_annotated_display_limits cap = limits();
+	struct mant_annotated_display *display;
+	struct mant_annotated_display_view before, after;
+	struct mant_annotated_display_label body = label(2,
+	    MANT_ANNOTATED_BODY);
+	const uint8_t *bytes;
+	const struct mant_annotated_display_row *rows;
+	const struct mant_annotated_display_run *runs;
+	uint64_t length;
+	uint32_t row_count, run_count;
+
+	/* This is an adapter invariant, not a roff syntax assertion. The
+	 * semantic channels may be rejected only after the device text is
+	 * finished; dropping them must not change any visible bytes or geometry. */
+	body.source = 1;
+	body.link = 3;
+	body.head_component = 4;
+	display = mant_annotated_display_new(&cap, native_width, NULL);
+	assert(display != NULL);
+	assert(!mant_annotated_display_clear_annotations(display));
+	assert(mant_annotated_display_write(display, "alpha\nbeta\n", 11,
+	    body));
+	assert(mant_annotated_display_finish(display, &before));
+	bytes = before.bytes;
+	rows = before.rows;
+	runs = before.runs;
+	length = before.byte_count;
+	row_count = before.row_count;
+	run_count = before.run_count;
+	assert(mant_annotated_display_clear_annotations(display));
+	assert(mant_annotated_display_finish(display, &after));
+	assert(after.bytes == bytes && after.rows == rows && after.runs == runs);
+	assert(after.byte_count == length && after.row_count == row_count &&
+	    after.run_count == run_count);
+	assert(memcmp(after.bytes, "alphabeta", 9) == 0);
+	assert(after.rows[0].column_count == 5 && after.rows[0].break_after);
+	assert(after.rows[1].column_count == 4 && after.rows[1].break_after);
+	for (uint32_t i = 0; i < after.run_count; i++) {
+		assert(after.runs[i].label.owner == 0);
+		assert(after.runs[i].label.link == 0);
+		assert(after.runs[i].label.head_component == 0);
+		assert(after.runs[i].label.source == 1);
+	}
+	mant_annotated_display_free(display);
+}
+
 int
 main(void)
 {
@@ -286,6 +335,7 @@ main(void)
 	test_identity_and_filtered_device_roles();
 	test_combining_survival();
 	test_blank_rows_and_budgets();
+	test_annotation_drop_preserves_finished_surface();
 	puts("annotated display builder: okay");
 	return 0;
 }

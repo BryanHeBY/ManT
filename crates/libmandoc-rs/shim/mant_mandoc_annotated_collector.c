@@ -1219,11 +1219,12 @@ owner_head_role(const struct roff_node *owner,
  * a prefix nor reject an equivalent final-display declaration. */
 static int
 copy_tp_lexical_head(struct mant_annotated_collector *collector,
-    const struct roff_node *owner, int *recognized)
+    const struct roff_node *owner, int *recognized, int *direct_text)
 {
 	const struct roff_node *head, *first;
 
 	*recognized = 0;
+	*direct_text = 0;
 	if (owner->tok != MAN_TP && owner->tok != MAN_TQ)
 		return 1;
 	head = owner->head;
@@ -1245,30 +1246,26 @@ copy_tp_lexical_head(struct mant_annotated_collector *collector,
 	}
 	if (first == NULL)
 		return 1;
-	/* pre_B and pre_alternate with a bold first operand provide a lexical
-	 * label boundary. I/R and italic/roman-first alternate macros do not. */
-	if (first->type == ROFFT_TEXT)
-		return man_text_declaration_candidate(collector, first->string,
-		    0, recognized);
+	/* pre_B and pre_alternate provide a lexical candidate boundary. I/R and
+	 * italic/roman-first alternate macros do not. The final displayed glyphs
+	 * and fonts, not the first authored operand, decide whether it names an
+	 * option. */
+	if (first->type == ROFFT_TEXT) {
+		if (!man_text_declaration_candidate(collector, first->string,
+		    0, recognized))
+			return 0;
+		*direct_text = *recognized;
+		return 1;
+	}
 	if (first->tok != MAN_B && first->tok != MAN_BI &&
 	    first->tok != MAN_BR && first->tok != MAN_SB)
 		return 1;
-	if (first->tok == MAN_BR) {
-		/* A roman operand remains a literal head even if the first bold
-		 * operand is empty; the shared spelling rule selects its name. */
+	if (first->tok == MAN_BR || first->tok == MAN_BI) {
+		/* man_term.c::pre_alternate() traverses every operand, including
+		 * empty ones. A later bold operand can supply the whole visible
+		 * name; an italic-only BI head remains merely a candidate and is
+		 * rejected by the final-display name check. */
 		*recognized = 1;
-		return 1;
-	}
-	if (first->tok == MAN_BI) {
-		/* man_term.c::pre_alternate() can print an empty first bold
-		 * operand followed by an italic/roman label. The visible word
-		 * alone must not inherit a bold declaration role. */
-		if (first->child == NULL || first->child->type != ROFFT_TEXT ||
-		    first->child->string == NULL)
-			return 1;
-		if (!charge_work(collector, strlen(first->child->string)))
-			return 0;
-		*recognized = head_text_has_glyph(first->child->string);
 		return 1;
 	}
 	*recognized = first->tok == MAN_B || first->tok == MAN_SB;
@@ -1668,7 +1665,7 @@ push_node(struct mant_annotated_collector *collector,
 		const struct roff_node *preceding_node, *completed_node;
 		const struct annotated_frame *parent_frame;
 		const struct roff_node *role_node = NULL;
-		int definition, lexical_head;
+		int definition, lexical_head, direct_tp_text = 0;
 		uint32_t head_role = 0, preceding_key;
 
 		/* man_term.c::pre_TP/post_TP present HEAD as a named term.
@@ -1707,7 +1704,7 @@ push_node(struct mant_annotated_collector *collector,
 				head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
 			else if (node->tok == MAN_TP || node->tok == MAN_TQ) {
 				if (!copy_tp_lexical_head(collector,
-				    node, &lexical_head))
+				    node, &lexical_head, &direct_tp_text))
 					return 0;
 				if (lexical_head)
 					head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
@@ -1715,6 +1712,9 @@ push_node(struct mant_annotated_collector *collector,
 			collector->marks[key - 1].flags |=
 			    MANT_ANNOTATED_MARK_DEFINITION |
 			    head_role;
+			if (direct_tp_text)
+				collector->marks[key - 1].flags |=
+				    MANT_ANNOTATED_MARK_DIRECT_TP_TEXT;
 			if (!copy_owner_head_operand(collector,
 			    collector->marks + key - 1, role_node))
 				return 0;

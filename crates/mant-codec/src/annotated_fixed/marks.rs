@@ -115,11 +115,20 @@ pub(super) fn project_owner(
                 ));
             }
         };
+        let selection = selection(page, component)?;
+        let source = mark_source(component)?;
+        let source_key = mark_source_key(component)?;
+        // Native execution instances can emit no final glyphs (for example
+        // man_term.c::pre_B executing `\&`). The raw mark remains checked by
+        // the FFI, but only a surviving visible slice is HEAD name evidence.
+        if selection.parts.is_empty() {
+            continue;
+        }
         head_components.push(OwnerHeadComponent {
             role,
-            selection: selection(page, component)?,
-            source: mark_source(component)?,
-            source_key: mark_source_key(component)?,
+            selection,
+            source,
+            source_key,
         });
     }
     let direct_body = project_owner_body(page, mark, body_regions)?;

@@ -69,7 +69,9 @@ struct mant_annotated_result_view {
 	uint32_t root_source;
 	uint32_t profile;
 	uint32_t width;
-	uint32_t reserved;
+	/* One means that native semantic relations were discarded after the
+	 * complete display surface passed its independent safety check. */
+	uint32_t annotation_degraded;
 	struct mant_structured_metadata_view metadata;
 	struct mant_slice_view sources;
 	struct mant_slice_view spans;

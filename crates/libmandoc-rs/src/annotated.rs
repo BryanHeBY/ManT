@@ -254,6 +254,9 @@ pub struct AnnotatedDocument {
     pub root_source: u32,
     pub profile: u32,
     pub width: u32,
+    /// The checked native display survived, but native mark relations were
+    /// discarded. Consumers must report semantic coverage as incomplete.
+    pub annotation_degraded: bool,
     pub metadata: AnnotatedMetadata,
     pub sources: Vec<AnnotatedSource>,
     pub spans: Vec<AnnotatedSpan>,
@@ -510,6 +513,101 @@ mod tests {
             ["-a, --all"]
         );
         assert!(components.iter().all(|mark| mark.flags & 256 != 0));
+    }
+
+    #[test]
+    fn native_zero_glyph_head_components_remain_checked_instances() {
+        // Exact inputs ran pinned CVS -Ttree/-Tutf8 first. man_term.c::pre_B
+        // executes `\&` without a glyph, while pre_alternate() still visits
+        // its empty children; term.c::term_word() leaves no visible selection.
+        for (input, format) in [
+            (
+                b".TH T 1\n.SH OPTIONS\n.TP\n.B \\&\nDescription.\n".as_slice(),
+                InputFormat::Man,
+            ),
+            (
+                b".TH T 1\n.SH OPTIONS\n.TP\n.BR \\& \\&\nDescription.\n".as_slice(),
+                InputFormat::Man,
+            ),
+            (
+                b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Ev \\&\nDescription.\n.El\n"
+                    .as_slice(),
+                InputFormat::Mdoc,
+            ),
+        ] {
+            let mut bundle = SourceBundle::new();
+            bundle.insert("t.1", input.to_vec()).unwrap();
+            let page = AnnotatedRenderer::default()
+                .render_bundle("t.1", &bundle, format)
+                .unwrap();
+            let components = page
+                .marks
+                .iter()
+                .filter(|mark| mark.kind == 6)
+                .collect::<Vec<_>>();
+            assert!(!components.is_empty());
+            assert!(components.iter().all(|mark| mark.selection_count == 0));
+            assert!(page.text.contains("Description."));
+        }
+    }
+
+    #[test]
+    fn native_bi_keeps_later_bold_operand_after_empty_operands() {
+        // Exact input ran pinned CVS -Ttree/-Tutf8/-Thtml first.
+        // man_term.c::pre_alternate() visits the third, bold child even
+        // though its first two children emit nothing.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\" \"\" \"--help \" FILE\nDescription.\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        let owner = page.marks.iter().find(|mark| mark.kind == 2).unwrap();
+        assert_ne!(owner.flags & 256, 0);
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .collect::<Vec<_>>();
+        assert!(components.iter().any(|mark| {
+            mark.selection_count != 0 && direct_mark_text(&page, mark).contains("--help")
+        }));
+    }
+
+    #[test]
+    fn native_direct_tp_text_witness_excludes_alternating_macro_heads() {
+        // Each exact input ran pinned CVS -Tutf8 first. man_macro.c::blk_imp
+        // keeps a TP HEAD; man_term.c::pre_TP prints its first next-line
+        // child, which can be direct text or an entire BI macro instance.
+        for (input, direct_text) in [
+            (
+                b".TH T 1\n.SH OPTIONS\n.TP\nFILE\nDescription.\n".as_slice(),
+                true,
+            ),
+            (
+                b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\" \"--fake\"\nDescription.\n".as_slice(),
+                false,
+            ),
+            (
+                b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\" \"\" \"--help \" FILE\nDescription.\n"
+                    .as_slice(),
+                false,
+            ),
+        ] {
+            let mut bundle = SourceBundle::new();
+            bundle.insert("t.1", input.to_vec()).unwrap();
+            let page = AnnotatedRenderer::default()
+                .render_bundle("t.1", &bundle, InputFormat::Man)
+                .unwrap();
+            let owner = page.marks.iter().find(|mark| mark.kind == 2).unwrap();
+            assert_eq!(owner.flags & 1024 != 0, direct_text);
+            assert_ne!(owner.flags & 256, 0);
+        }
     }
 
     #[test]

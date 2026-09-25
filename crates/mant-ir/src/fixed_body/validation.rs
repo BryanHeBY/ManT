@@ -671,7 +671,7 @@ fn selections_overlap(left: &TextSelection, right: &TextSelection) -> bool {
     false
 }
 
-fn validate_link_target(target: &LinkTarget) -> Result<(), FixedBodyError> {
+pub(super) fn validate_link_target(target: &LinkTarget) -> Result<(), FixedBodyError> {
     let valid = match target {
         LinkTarget::External { uri } => crate::is_valid_external_uri(uri),
         LinkTarget::Email { address } => crate::is_valid_email_address(address),

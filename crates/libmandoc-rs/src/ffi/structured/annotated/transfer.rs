@@ -5,9 +5,9 @@ use super::{
     AnnotatedDiagnostic, AnnotatedDisplayPoint, AnnotatedDocument, AnnotatedError, AnnotatedLabel,
     AnnotatedLinkTarget, AnnotatedMark, AnnotatedMetadata, AnnotatedProvenance, AnnotatedRow,
     AnnotatedRun, AnnotatedSelectionPart, AnnotatedSource, AnnotatedSpan, AnnotatedTextJoin,
-    AnnotationCoverageCheck, AnnotationCoverageIssue, FORMAT_MAN, FORMAT_MDOC, Handle, ResultView,
-    copy_optional, copy_string, invalid_result, reserve, transfer_alloc, transfer_budget,
-    transfer_coverage,
+    AnnotationCoverage, AnnotationCoverageCheck, AnnotationCoverageIssue, FORMAT_MAN, FORMAT_MDOC,
+    Handle, ResultView, copy_optional, copy_string, invalid_result, reserve, transfer_alloc,
+    transfer_budget, transfer_coverage,
 };
 
 #[allow(clippy::too_many_lines)] // Mirrors the checked one-copy wire transfer.
@@ -15,6 +15,7 @@ pub(super) fn transfer(
     handle: &Handle,
     view: &ResultView,
     limits: &super::super::raw::Limits,
+    surface_only: bool,
 ) -> Result<AnnotatedDocument, AnnotatedError> {
     let CheckedAnnotatedView {
         source_views,
@@ -30,7 +31,7 @@ pub(super) fn transfer(
         runs,
         text_bytes,
         text_view,
-    } = CheckedAnnotatedView::bind(handle, view, limits)?;
+    } = CheckedAnnotatedView::bind(handle, view, limits, surface_only)?;
     let object_count = [
         source_views.len(),
         span_views.len(),
@@ -127,6 +128,15 @@ pub(super) fn transfer(
         charge(diagnostic.message.len)?;
     }
     for mark in mark_views {
+        // These optional strings use the content-byte ceiling when copied.
+        // Classify an over-limit length before checked_bytes can return a
+        // generic relation error; a transfer budget must never be retried
+        // as a successful body-only semantic downgrade.
+        for length in [mark.name_length, mark.target_a.len, mark.target_b.len] {
+            if length > limits.max_content_bytes {
+                return Err(transfer_budget(10, length, limits.max_content_bytes));
+            }
+        }
         charge(mark.name_length)?;
         charge(mark.target_a.len)?;
         charge(mark.target_b.len)?;
@@ -269,6 +279,8 @@ pub(super) fn transfer(
             span: diagnostic.span,
         });
     }
+    // bind() supplies an empty mark view for body-only transfer, so the same
+    // checked conversion runs only over annotations that remain actionable.
     let mut marks: Vec<AnnotatedMark> = reserve(mark_views.len())?;
     for (index, mark) in mark_views.iter().enumerate() {
         if mark.key != u32::try_from(index + 1).map_err(|_| invalid_result())?
@@ -282,11 +294,18 @@ pub(super) fn transfer(
             || (mark.source == 0 && mark.line != 0)
             || ((mark.flags & 1 != 0) != (mark.line != 0))
             || mark.point_reserved != 0
-            || mark.flags & !0b11_1111_1101 != 0
+            || mark.flags & !(0b11_1111_1101 | 1024) != 0
             || (mark.flags & 512 != 0 && mark.kind != 2)
             || (mark.flags & 4 != 0 && mark.kind != 4)
             || (mark.flags & 8 != 0 && mark.kind != 1)
             || (mark.flags & 16 != 0 && mark.kind != 2)
+            || (mark.flags & 1024 != 0
+                && (mark.kind != 2
+                    || !matches!(
+                        mark.token,
+                        crate::annotated::MAN_TP_TOKEN | crate::annotated::MAN_TQ_TOKEN
+                    )
+                    || mark.flags & (16 | 256) != (16 | 256)))
             || (mark.flags & 0b1_1110_0000 != 0
                 && ((mark.kind != 2 && mark.kind != 6)
                     || mark.kind == 2 && mark.flags & 16 == 0
@@ -573,7 +592,14 @@ pub(super) fn transfer(
             },
         });
     }
-    let coverage = transfer_coverage(coverage_check_views, coverage_issue_views, &marks, &sources)?;
+    let coverage = if surface_only {
+        AnnotationCoverage {
+            checks: Vec::new(),
+            issues: Vec::new(),
+        }
+    } else {
+        transfer_coverage(coverage_check_views, coverage_issue_views, &marks, &sources)?
+    };
     let mut owned_rows = reserve(rows.len())?;
     for (index, row) in rows.iter().enumerate() {
         if row.key != u32::try_from(index + 1).map_err(|_| invalid_result())? || row.break_after > 1
@@ -601,13 +627,15 @@ pub(super) fn transfer(
             || run.label.reserved != 0
             || run.label.glyph_origin != 0
             || run.label.flags != 0
+            || run.label.style & !(1 | 8) != 0
             || end > view.display.byte_count
             || run.byte_count == 0
             || run.label.source as usize > sources.len()
-            || run.label.owner as usize > marks.len()
-            || run.label.link as usize > marks.len()
-            || run.label.head_component as usize > marks.len()
-            || (run.label.head_component != 0
+            || (!surface_only && run.label.owner as usize > marks.len())
+            || (!surface_only && run.label.link as usize > marks.len())
+            || (!surface_only && run.label.head_component as usize > marks.len())
+            || (!surface_only
+                && run.label.head_component != 0
                 && marks
                     .get(
                         usize::try_from(run.label.head_component - 1)
@@ -636,118 +664,131 @@ pub(super) fn transfer(
             byte_start: run.byte_start,
             byte_count: run.byte_count,
             label: AnnotatedLabel {
-                owner: run.label.owner,
-                link: run.label.link,
+                owner: if surface_only { 0 } else { run.label.owner },
+                link: if surface_only { 0 } else { run.label.link },
                 source: run.label.source,
-                head_component: run.label.head_component,
+                head_component: if surface_only {
+                    0
+                } else {
+                    run.label.head_component
+                },
                 style: run.label.style,
                 role: run.label.role,
             },
         });
     }
-    let mut selection_parts = reserve(selection_part_views.len())?;
-    let mut selected = reserve::<u8>(runs.len())?;
-    selected.resize(runs.len(), 0);
-    let mut next_part = 0_usize;
-    let mut next_join_text = 0_usize;
-    for mark in &marks {
-        let first = usize::try_from(mark.selection_first).map_err(|_| invalid_result())?;
-        let count = usize::try_from(mark.selection_count).map_err(|_| invalid_result())?;
-        let end = first.checked_add(count).ok_or_else(invalid_result)?;
-        if first != next_part || end > selection_part_views.len() || (mark.kind == 4 && count != 0)
-        {
-            return Err(invalid_result());
-        }
-        let mut previous_run = 0_u32;
-        for (index, part) in selection_part_views[first..end].iter().enumerate() {
-            if part.run == 0 || part.run <= previous_run {
-                return Err(invalid_result());
-            }
-            let run_index = usize::try_from(part.run - 1).map_err(|_| invalid_result())?;
-            let run = owned_runs.get(run_index).ok_or_else(invalid_result)?;
-            let (bit, direct_key) = if mark.kind == 3 {
-                (2_u8, run.label.link)
-            } else if mark.kind == 6 {
-                (4_u8, run.label.head_component)
-            } else if mark.kind == 1 || mark.kind == 2 || mark.kind == 5 {
-                (1_u8, run.label.owner)
-            } else {
-                return Err(invalid_result());
-            };
-            let join_before = match (index, part.join_before) {
-                (0, 0) => AnnotatedTextJoin::None,
-                (1.., 1) => AnnotatedTextJoin::DirectContact,
-                (1.., 2) => AnnotatedTextJoin::AuthoredSeparator,
-                (1.., 3) => AnnotatedTextJoin::HardBoundary,
-                (1.., 4) => AnnotatedTextJoin::Unknown,
-                (1.., 5) => AnnotatedTextJoin::GeneratedSeparator,
-                _ => return Err(invalid_result()),
-            };
-            if matches!(
-                join_before,
-                AnnotatedTextJoin::AuthoredSeparator | AnnotatedTextJoin::GeneratedSeparator
-            ) {
-                let join_start =
-                    usize::try_from(part.join_text_start).map_err(|_| invalid_result())?;
-                let join_len = usize::try_from(part.join_text_len).map_err(|_| invalid_result())?;
-                let join_end = join_start
-                    .checked_add(join_len)
-                    .ok_or_else(invalid_result)?;
-                if join_len == 0
-                    || join_start != next_join_text
-                    || join_text_view
-                        .get(join_start..join_end)
-                        .is_none_or(|bytes| bytes.iter().any(|byte| *byte != b' '))
-                {
-                    return Err(invalid_result());
-                }
-                next_join_text = join_end;
-            } else if part.join_text_start != 0 || part.join_text_len != 0 {
-                return Err(invalid_result());
-            }
-            let start = run
-                .byte_start
-                .checked_add(part.start_byte)
-                .ok_or_else(invalid_result)?;
-            let finish = run
-                .byte_start
-                .checked_add(part.end_byte)
-                .ok_or_else(invalid_result)?;
-            if direct_key != mark.key
-                || part.start_byte != 0
-                || part.end_byte != run.byte_count
-                || start >= finish
-                || finish > view.display.byte_count
-                || !text_view
-                    .is_char_boundary(usize::try_from(start).map_err(|_| invalid_result())?)
-                || !text_view
-                    .is_char_boundary(usize::try_from(finish).map_err(|_| invalid_result())?)
-                || selected[run_index] & bit != 0
+    let mut selection_parts = reserve(if surface_only {
+        0
+    } else {
+        selection_part_views.len()
+    })?;
+    if !surface_only {
+        let mut selected = reserve::<u8>(runs.len())?;
+        selected.resize(runs.len(), 0);
+        let mut next_part = 0_usize;
+        let mut next_join_text = 0_usize;
+        for mark in &marks {
+            let first = usize::try_from(mark.selection_first).map_err(|_| invalid_result())?;
+            let count = usize::try_from(mark.selection_count).map_err(|_| invalid_result())?;
+            let end = first.checked_add(count).ok_or_else(invalid_result)?;
+            if first != next_part
+                || end > selection_part_views.len()
+                || (mark.kind == 4 && count != 0)
             {
                 return Err(invalid_result());
             }
-            selected[run_index] |= bit;
-            selection_parts.push(AnnotatedSelectionPart {
-                run: part.run,
-                start_byte: part.start_byte,
-                end_byte: part.end_byte,
-                join_before,
-                join_text_start: part.join_text_start,
-                join_text_len: part.join_text_len,
-            });
-            previous_run = part.run;
+            let mut previous_run = 0_u32;
+            for (index, part) in selection_part_views[first..end].iter().enumerate() {
+                if part.run == 0 || part.run <= previous_run {
+                    return Err(invalid_result());
+                }
+                let run_index = usize::try_from(part.run - 1).map_err(|_| invalid_result())?;
+                let run = owned_runs.get(run_index).ok_or_else(invalid_result)?;
+                let (bit, direct_key) = if mark.kind == 3 {
+                    (2_u8, run.label.link)
+                } else if mark.kind == 6 {
+                    (4_u8, run.label.head_component)
+                } else if mark.kind == 1 || mark.kind == 2 || mark.kind == 5 {
+                    (1_u8, run.label.owner)
+                } else {
+                    return Err(invalid_result());
+                };
+                let join_before = match (index, part.join_before) {
+                    (0, 0) => AnnotatedTextJoin::None,
+                    (1.., 1) => AnnotatedTextJoin::DirectContact,
+                    (1.., 2) => AnnotatedTextJoin::AuthoredSeparator,
+                    (1.., 3) => AnnotatedTextJoin::HardBoundary,
+                    (1.., 4) => AnnotatedTextJoin::Unknown,
+                    (1.., 5) => AnnotatedTextJoin::GeneratedSeparator,
+                    _ => return Err(invalid_result()),
+                };
+                if matches!(
+                    join_before,
+                    AnnotatedTextJoin::AuthoredSeparator | AnnotatedTextJoin::GeneratedSeparator
+                ) {
+                    let join_start =
+                        usize::try_from(part.join_text_start).map_err(|_| invalid_result())?;
+                    let join_len =
+                        usize::try_from(part.join_text_len).map_err(|_| invalid_result())?;
+                    let join_end = join_start
+                        .checked_add(join_len)
+                        .ok_or_else(invalid_result)?;
+                    if join_len == 0
+                        || join_start != next_join_text
+                        || join_text_view
+                            .get(join_start..join_end)
+                            .is_none_or(|bytes| bytes.iter().any(|byte| *byte != b' '))
+                    {
+                        return Err(invalid_result());
+                    }
+                    next_join_text = join_end;
+                } else if part.join_text_start != 0 || part.join_text_len != 0 {
+                    return Err(invalid_result());
+                }
+                let start = run
+                    .byte_start
+                    .checked_add(part.start_byte)
+                    .ok_or_else(invalid_result)?;
+                let finish = run
+                    .byte_start
+                    .checked_add(part.end_byte)
+                    .ok_or_else(invalid_result)?;
+                if direct_key != mark.key
+                    || part.start_byte != 0
+                    || part.end_byte != run.byte_count
+                    || start >= finish
+                    || finish > view.display.byte_count
+                    || !text_view
+                        .is_char_boundary(usize::try_from(start).map_err(|_| invalid_result())?)
+                    || !text_view
+                        .is_char_boundary(usize::try_from(finish).map_err(|_| invalid_result())?)
+                    || selected[run_index] & bit != 0
+                {
+                    return Err(invalid_result());
+                }
+                selected[run_index] |= bit;
+                selection_parts.push(AnnotatedSelectionPart {
+                    run: part.run,
+                    start_byte: part.start_byte,
+                    end_byte: part.end_byte,
+                    join_before,
+                    join_text_start: part.join_text_start,
+                    join_text_len: part.join_text_len,
+                });
+                previous_run = part.run;
+            }
+            next_part = end;
         }
-        next_part = end;
-    }
-    if next_part != selection_part_views.len() || next_join_text != join_text_view.len() {
-        return Err(invalid_result());
-    }
-    for (index, run) in owned_runs.iter().enumerate() {
-        let expected = u8::from(run.label.owner != 0)
-            | (u8::from(run.label.link != 0) << 1)
-            | (u8::from(run.label.head_component != 0) << 2);
-        if selected[index] != expected {
+        if next_part != selection_part_views.len() || next_join_text != join_text_view.len() {
             return Err(invalid_result());
+        }
+        for (index, run) in owned_runs.iter().enumerate() {
+            let expected = u8::from(run.label.owner != 0)
+                | (u8::from(run.label.link != 0) << 1)
+                | (u8::from(run.label.head_component != 0) << 2);
+            if selected[index] != expected {
+                return Err(invalid_result());
+            }
         }
     }
     let mut text = String::new();
@@ -755,16 +796,19 @@ pub(super) fn transfer(
         .map_err(|_| transfer_alloc())?;
     text.push_str(text_view);
     let mut join_text = String::new();
-    join_text
-        .try_reserve_exact(join_text_view.len())
-        .map_err(|_| transfer_alloc())?;
-    // Every byte was checked against ASCII space while validating the exact
-    // authored-separator partition above.
-    join_text.push_str(std::str::from_utf8(join_text_view).map_err(|_| invalid_result())?);
+    if !surface_only {
+        join_text
+            .try_reserve_exact(join_text_view.len())
+            .map_err(|_| transfer_alloc())?;
+        // Every byte was checked against ASCII space while validating the
+        // exact authored-separator partition above.
+        join_text.push_str(std::str::from_utf8(join_text_view).map_err(|_| invalid_result())?);
+    }
     Ok(AnnotatedDocument {
         root_source: view.root_source,
         profile: view.profile,
         width: view.width,
+        annotation_degraded: view.annotation_degraded != 0 || surface_only,
         metadata,
         sources,
         spans,

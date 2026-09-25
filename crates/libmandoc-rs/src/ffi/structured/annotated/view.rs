@@ -23,12 +23,21 @@ pub(super) struct CheckedAnnotatedView<'h> {
     pub(super) text_view: &'h str,
 }
 
+struct CheckedDisplay<'h> {
+    rows: &'h [RowView],
+    runs: &'h [RunView],
+    text_bytes: &'h [u8],
+    text_view: &'h str,
+}
+
 impl<'h> CheckedAnnotatedView<'h> {
-    /// Validate every fixed-size result arena before owned transfer begins.
+    /// Validate the required source/display arenas and, unless degrading,
+    /// every optional annotation arena before owned transfer begins.
     pub(super) fn bind(
         handle: &'h Handle,
         view: &ResultView,
         limits: &super::super::raw::Limits,
+        surface_only: bool,
     ) -> Result<Self, AnnotatedError> {
         let source_views = checked_slice::<SourceView>(handle, view.sources, limits.max_sources)?;
         let span_views = checked_slice::<SpanView>(handle, view.spans, limits.max_content_points)?;
@@ -36,77 +45,47 @@ impl<'h> CheckedAnnotatedView<'h> {
             checked_slice::<ProvenanceView>(handle, view.provenances, limits.max_content_points)?;
         let diagnostic_views =
             checked_slice::<DiagnosticView>(handle, view.diagnostics, limits.max_diagnostics)?;
-        let mark_views =
-            checked_slice::<MarkView>(handle, view.marks, limits.max_transfer_objects)?;
-        if u64::from(view.selection_parts.count) > limits.max_transfer_edges {
-            return Err(transfer_budget(
-                33,
-                u64::from(view.selection_parts.count),
-                limits.max_transfer_edges,
-            ));
-        }
-        let selection_part_views = checked_slice::<SelectionPartView>(
-            handle,
-            view.selection_parts,
-            limits.max_transfer_edges,
-        )?;
-        let join_text_view = checked_slice::<u8>(handle, view.join_text, limits.max_content_bytes)?;
-        let coverage_check_views =
-            checked_slice::<CoverageCheckView>(handle, view.coverage_checks, 24)?;
-        let coverage_issue_views = checked_slice::<CoverageIssueView>(
-            handle,
-            view.coverage_issues,
-            limits.max_transfer_objects,
-        )?;
-        let row_views = checked_bytes(
-            handle,
-            view.display.rows.cast::<u8>(),
-            u64::from(view.display.row_count) * std::mem::size_of::<RowView>() as u64,
-            limits.max_transfer_bytes,
-        )?;
-        let run_views = checked_bytes(
-            handle,
-            view.display.runs.cast::<u8>(),
-            u64::from(view.display.run_count) * std::mem::size_of::<RunView>() as u64,
-            limits.max_transfer_bytes,
-        )?;
-        if !row_views
-            .len()
-            .is_multiple_of(std::mem::size_of::<RowView>())
-            || !run_views
-                .len()
-                .is_multiple_of(std::mem::size_of::<RunView>())
-            || !(view.display.rows as usize).is_multiple_of(std::mem::align_of::<RowView>())
-            || !(view.display.runs as usize).is_multiple_of(std::mem::align_of::<RunView>())
-            || u64::from(view.display.row_count) > limits.max_fixed_lines
-            || u64::from(view.display.run_count) > limits.max_annotation_runs
-        {
-            return Err(invalid_result());
-        }
-        // The native result check establishes handle ownership; checked_bytes
-        // bounds the arenas, and the alignment checks above precede these
-        // typed borrows. Their lifetime is tied to the still-live handle.
-        let rows = if view.display.row_count == 0 {
-            &[][..]
+        // A body-only transfer must not even borrow rejected mark/selection
+        // descriptors. Source identities and every display byte remain hard
+        // checks below, while annotation pointers are completely isolated.
+        let (
+            mark_views,
+            selection_part_views,
+            join_text_view,
+            coverage_check_views,
+            coverage_issue_views,
+        ) = if surface_only {
+            (&[][..], &[][..], &[][..], &[][..], &[][..])
         } else {
-            unsafe {
-                std::slice::from_raw_parts(view.display.rows, view.display.row_count as usize)
+            for (count, maximum, kind) in [
+                (view.marks.count, limits.max_transfer_objects, 32),
+                (view.selection_parts.count, limits.max_transfer_edges, 33),
+                (view.join_text.count, limits.max_content_bytes, 10),
+                (view.coverage_checks.count, 24, 32),
+                (view.coverage_issues.count, limits.max_transfer_objects, 32),
+            ] {
+                if u64::from(count) > maximum {
+                    return Err(transfer_budget(kind, u64::from(count), maximum));
+                }
             }
+            let marks = checked_slice::<MarkView>(handle, view.marks, limits.max_transfer_objects)?;
+            (
+                marks,
+                checked_slice::<SelectionPartView>(
+                    handle,
+                    view.selection_parts,
+                    limits.max_transfer_edges,
+                )?,
+                checked_slice::<u8>(handle, view.join_text, limits.max_content_bytes)?,
+                checked_slice::<CoverageCheckView>(handle, view.coverage_checks, 24)?,
+                checked_slice::<CoverageIssueView>(
+                    handle,
+                    view.coverage_issues,
+                    limits.max_transfer_objects,
+                )?,
+            )
         };
-        let runs = if view.display.run_count == 0 {
-            &[][..]
-        } else {
-            unsafe {
-                std::slice::from_raw_parts(view.display.runs, view.display.run_count as usize)
-            }
-        };
-        let text_bytes = checked_bytes(
-            handle,
-            view.display.bytes,
-            view.display.byte_count,
-            limits.max_content_bytes,
-        )?;
-        let text_view = std::str::from_utf8(text_bytes).map_err(|_| invalid_result())?;
+        let display = checked_display(handle, view, limits)?;
         Ok(Self {
             source_views,
             span_views,
@@ -117,10 +96,69 @@ impl<'h> CheckedAnnotatedView<'h> {
             join_text_view,
             coverage_check_views,
             coverage_issue_views,
-            rows,
-            runs,
-            text_bytes,
-            text_view,
+            rows: display.rows,
+            runs: display.runs,
+            text_bytes: display.text_bytes,
+            text_view: display.text_view,
         })
     }
+}
+
+/// Display arenas are mandatory even when optional annotations are rejected.
+/// Keep their aligned typed borrows tied to the still-live native handle.
+fn checked_display<'h>(
+    handle: &'h Handle,
+    view: &ResultView,
+    limits: &super::super::raw::Limits,
+) -> Result<CheckedDisplay<'h>, AnnotatedError> {
+    let row_views = checked_bytes(
+        handle,
+        view.display.rows.cast::<u8>(),
+        u64::from(view.display.row_count) * std::mem::size_of::<RowView>() as u64,
+        limits.max_transfer_bytes,
+    )?;
+    let run_views = checked_bytes(
+        handle,
+        view.display.runs.cast::<u8>(),
+        u64::from(view.display.run_count) * std::mem::size_of::<RunView>() as u64,
+        limits.max_transfer_bytes,
+    )?;
+    if !row_views
+        .len()
+        .is_multiple_of(std::mem::size_of::<RowView>())
+        || !run_views
+            .len()
+            .is_multiple_of(std::mem::size_of::<RunView>())
+        || !(view.display.rows as usize).is_multiple_of(std::mem::align_of::<RowView>())
+        || !(view.display.runs as usize).is_multiple_of(std::mem::align_of::<RunView>())
+        || u64::from(view.display.row_count) > limits.max_fixed_lines
+        || u64::from(view.display.run_count) > limits.max_annotation_runs
+    {
+        return Err(invalid_result());
+    }
+    // The native result check establishes handle ownership; checked_bytes
+    // bounds the arenas, and alignment is checked before these typed borrows.
+    let rows = if view.display.row_count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(view.display.rows, view.display.row_count as usize) }
+    };
+    let runs = if view.display.run_count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(view.display.runs, view.display.run_count as usize) }
+    };
+    let text_bytes = checked_bytes(
+        handle,
+        view.display.bytes,
+        view.display.byte_count,
+        limits.max_content_bytes,
+    )?;
+    let text_view = std::str::from_utf8(text_bytes).map_err(|_| invalid_result())?;
+    Ok(CheckedDisplay {
+        rows,
+        runs,
+        text_bytes,
+        text_view,
+    })
 }

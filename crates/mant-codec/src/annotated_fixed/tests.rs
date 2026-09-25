@@ -20,6 +20,262 @@ fn bundle(input: &[u8]) -> SourceBundle {
 }
 
 #[test]
+fn invalid_optional_entry_and_link_facts_leave_native_body_and_siblings() {
+    // Exact input ran pinned CVS -Tutf8 first. man_term.c::pre_B owns each
+    // printed TP head; term.c::term_word prints the UR label regardless of
+    // whether a downstream consumer can safely activate its target.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --good\nGood description.\n.TP\n.B --bad\nBad description.\n.UR https://example.test\nlink label\n.UE\n";
+    let mut document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &mut document.body else {
+        panic!("not Fixed")
+    };
+    let original_text = fixed.surface.text.clone();
+    assert_eq!(fixed.owners.len(), 2);
+    assert_eq!(fixed.links.len(), 1);
+    fixed.owners[0].entry.as_mut().unwrap().names[0] = "--forged".to_owned();
+    fixed.links[0].target = Some(LinkTarget::External {
+        uri: "https://bad host".to_owned(),
+    });
+    assert!(fixed.validate().is_err());
+    let diagnostics = super::isolation::isolate_optional_facts(fixed);
+    assert_eq!(diagnostics.len(), 2);
+    assert_eq!(fixed.surface.text, original_text);
+    assert!(fixed.owners[0].entry.is_none());
+    assert_eq!(fixed.owners[1].entry.as_ref().unwrap().names, ["--bad"]);
+    assert!(fixed.links[0].target.is_none());
+    assert!(fixed.validate().is_ok());
+    document.diagnostics.extend(diagnostics);
+    assert!(validate_document(&document).is_empty());
+    assert!(!mant_ir::semantics_complete(&document.diagnostics));
+}
+
+#[test]
+fn semantic_downgrade_does_not_admit_damaged_native_display() {
+    // Exact input ran pinned CVS -Tutf8 first. The mutations below are
+    // defensive transfer faults, not authored roff expectations.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --good\nDescription.\n";
+    let page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    let mut truncated = page.clone();
+    truncated.text.pop();
+    truncated.marks[0].key = u32::MAX;
+    assert!(lower_annotated_document(truncated).is_err());
+    let mut out_of_range = page;
+    out_of_range.runs[0].byte_count = u64::MAX;
+    out_of_range.marks[0].key = u32::MAX;
+    assert!(lower_annotated_document(out_of_range).is_err());
+    let mut unknown_style = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    unknown_style.runs[0].label.style |= 2;
+    assert!(lower_annotated_document(unknown_style).is_err());
+}
+
+#[test]
+fn zero_glyph_native_components_do_not_block_fixed_body_or_invent_names() {
+    // Each exact input ran pinned CVS -Tutf8 first. man_term.c::pre_B and
+    // pre_alternate() retain macro instances, but term.c::term_word() emits
+    // no glyph for `\&`; mdoc_term.c likewise keeps an empty Ev/Cm label.
+    for (input, format) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \\&\nDescription.\n".as_slice(),
+            InputFormat::Man,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.SB \\&\nDescription.\n".as_slice(),
+            InputFormat::Man,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR \\& \\&\nDescription.\n".as_slice(),
+            InputFormat::Man,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\" \"\"\nDescription.\n".as_slice(),
+            InputFormat::Man,
+        ),
+        (
+            b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Ev \\&\nDescription.\n.El\n"
+                .as_slice(),
+            InputFormat::Mdoc,
+        ),
+        (
+            b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Cm \\&\nDescription.\n.El\n"
+                .as_slice(),
+            InputFormat::Mdoc,
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), format).unwrap();
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        assert!(fixed.surface.text.contains("Description."));
+        assert_eq!(fixed.owners.len(), 1);
+        assert!(fixed.owners[0].head_components.is_empty());
+        assert!(fixed.owners[0].entry.is_none());
+        assert!(!document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("annotated.internal-annotation-rejected")
+        }));
+    }
+}
+
+#[test]
+fn empty_initial_bi_operands_do_not_hide_later_bold_name() {
+    // Exact inputs ran pinned CVS -Ttree/-Tutf8/-Thtml first. The third
+    // pre_alternate() operand is bold; the italic-only counterexample is not
+    // a declaration even though both share the BI macro instance.
+    let good = b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\" \"\" \"--help \" FILE\nDescription.\n";
+    let document = project_annotated_manual("t.1", &bundle(good), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["--help"]);
+    assert_eq!(fixed.owners[0].head_components.len(), 1);
+    assert!(
+        fixed.owners[0]
+            .head_components
+            .iter()
+            .all(|component| !component.selection.parts.is_empty())
+    );
+
+    let italic_only = b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"\" \"--fake\"\nDescription.\n";
+    let document = project_annotated_manual("t.1", &bundle(italic_only), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let term = fixed.owners[0].entry.as_ref().unwrap();
+    assert_eq!(term.kind, EntryKind::Term);
+    assert!(term.names.is_empty());
+    assert!(fixed.surface.text.contains("--fake"));
+}
+
+#[test]
+fn zero_width_fl_operand_keeps_its_generated_visible_dash() {
+    // Exact input ran pinned CVS -Ttree/-Tutf8 first. Unlike Ev/Cm,
+    // mdoc_term.c::termp_fl_pre emits a dash before the zero-width operand;
+    // that surviving glyph still belongs to the native Fl instance.
+    let input = b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl \\&\nDescription.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.owners[0].head_components.len(), 1);
+    assert_eq!(
+        fixed
+            .selection_text(&fixed.owners[0].head_components[0].selection)
+            .as_deref(),
+        Some("-")
+    );
+    assert!(fixed.surface.text.contains("Description."));
+}
+
+#[test]
+fn repeated_mdoc_fl_keeps_one_name_and_both_native_occurrences() {
+    // Exact input ran pinned CVS -Tutf8 first. mdoc_macro.c::blk_full()
+    // retains both Fl macro instances in the It HEAD; mdoc_term.c::
+    // termp_fl_pre() prints a distinct dash for each invocation.
+    let input = b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Fl a\nDescription.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let entry = fixed.owners[0].entry.as_ref().expect("native Fl entry");
+    assert_eq!(entry.names, ["-a"]);
+    assert_eq!(entry.name_bindings.len(), 1);
+    assert_eq!(entry.name_bindings[0].occurrences.len(), 2);
+}
+
+#[test]
+fn unnameable_fl_instance_does_not_erase_sibling_native_names() {
+    // Each exact input ran pinned CVS -Tutf8 first. mdoc_term.c::termp_fl_pre()
+    // prints the dash even for a zero-width operand, while mdoc_macro.c::
+    // blk_full() retains each Fl invocation as a distinct It HEAD child.
+    for (input, expected) in [
+        (
+            b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl \\& , Fl a\nDescription.\n.El\n".as_slice(),
+            vec!["-a"],
+        ),
+        (
+            b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Fl \\& , Fl b\nDescription.\n.El\n".as_slice(),
+            vec!["-a", "-b"],
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        let entry = fixed.owners[0].entry.as_ref().expect("valid sibling Fl names");
+        assert_eq!(entry.names, expected);
+        assert_eq!(entry.name_bindings.len(), expected.len());
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in expected {
+            let response = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(response.counts.direct_entry.total, 1, "{name}");
+            response.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn mixed_mdoc_head_components_keep_only_fl_name_evidence() {
+    // Both exact inputs ran pinned CVS -Tutf8 first. mdoc_macro.c::blk_full()
+    // retains Fl/Cm/Fl in one It HEAD, while mdoc_term.c::termp_fl_pre()
+    // executes the two independent Fl instances around the Cm literal.
+    for middle in ["mode", "--fake"] {
+        let input = format!(
+            ".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a , Cm {middle} , Fl b\nDescription.\n.El\n"
+        );
+        let document =
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Mdoc).unwrap();
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        let entry = fixed.owners[0].entry.as_ref().expect("native Fl entry");
+        assert_eq!(entry.names, ["-a", "-b"]);
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for (name, expected) in [("-a", 1), ("-b", 1), ("--fake", 0)] {
+            let response = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                response.counts.direct_entry.total, expected,
+                "{middle}: {name}"
+            );
+            response.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
 fn macro_generated_marks_keep_source_identity_without_authored_coordinates() {
     // Exact bytes ran pinned CVS -Ttree/-Tutf8 before these assertions.
     // read.c::mparse_buf_r reparses the EE body at the invocation source key;
@@ -1425,7 +1681,15 @@ fn native_margin_is_readable_without_becoming_a_heading_or_definition_name() {
         .find(|mark| mark.kind == 5 && mark.region_kind == 11)
         .unwrap();
     margin.source = 1;
-    assert!(lower_annotated_document(page).is_err());
+    let expected = page.text.clone();
+    let document = lower_annotated_document(page).unwrap();
+    assert!(validate_document(&document).is_empty());
+    assert!(!mant_ir::semantics_complete(&document.diagnostics));
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        unreachable!()
+    };
+    assert_eq!(fixed.surface.text, expected);
+    assert!(fixed.regions.is_empty());
 }
 
 #[test]
@@ -1472,6 +1736,7 @@ fn malformed_marks(marks: Vec<AnnotatedMark>) -> AnnotatedDocument {
         root_source: 0,
         profile: 0,
         width: 78,
+        annotation_degraded: false,
         metadata: AnnotatedMetadata {
             macroset: 0,
             title: None,
@@ -1588,7 +1853,7 @@ fn real_man_body_enters_one_fixed_surface_with_dense_typed_keys() {
     };
     assert!(fixed.surface.text.contains("term"));
     assert!(fixed.surface.text.contains("body"));
-    assert_eq!(fixed.headings.len(), 1);
+    assert_eq!(fixed.headings.len(), 1, "{:?}", document.diagnostics);
     assert_eq!(fixed.owners.len(), 1);
     assert!(!fixed.owners[0].head.parts.is_empty());
     assert!(!fixed.owners[0].direct_body.parts.is_empty());
@@ -2186,7 +2451,15 @@ fn native_head_components_index_distinct_mdoc_options_without_guessing_styled_te
         .find(|mark| mark.kind == 6)
         .unwrap()
         .source = 0;
-    assert!(lower_annotated_document(untrusted).is_err());
+    let expected = untrusted.text.clone();
+    let degraded = lower_annotated_document(untrusted).unwrap();
+    assert!(validate_document(&degraded).is_empty());
+    assert!(!mant_ir::semantics_complete(&degraded.diagnostics));
+    let DocumentBody::Fixed(degraded_fixed) = &degraded.body else {
+        unreachable!()
+    };
+    assert_eq!(degraded_fixed.surface.text, expected);
+    assert!(degraded_fixed.owners.is_empty());
     let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
     let DocumentBody::Fixed(fixed) = &document.body else {
         unreachable!()
