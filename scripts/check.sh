@@ -20,6 +20,11 @@ if [[ "$profile" != debug && "$profile" != release ]]; then
   exit 2
 fi
 
+annotated_target_dir=${CARGO_TARGET_DIR:-$ROOT/target}
+if [[ $annotated_target_dir != /* ]]; then
+  annotated_target_dir="$ROOT/$annotated_target_dir"
+fi
+
 run() {
   local label=$1
   shift
@@ -61,6 +66,13 @@ run "check roff target-conservation audit" python3 scripts/audit-roff-targets.py
 run "check roff semantic-entry audit" python3 scripts/audit-roff-semantics.py --self-check
 run "check roff audit coverage contract" python3 scripts/check-roff-audit-coverage.py
 run "test Rust workspace" cargo test --locked --workspace
+run "self-check annotated Fixed query gold" \
+  python3 scripts/annotated_fixed_query_gold.py --self-check
+run "build annotated Fixed query gold CLI" \
+  cargo build --locked --package mant --features annotated-preview
+run "gate annotated Fixed query gold" \
+  python3 scripts/annotated_fixed_query_gold.py \
+  --cli "$annotated_target_dir/debug/mant"
 run "test Markdown-only codec" cargo test --locked --package mant-codec --no-default-features
 run "test roff codec" cargo test --locked --package mant-codec --features roff
 run "check independent Markdown codec consumer" bash scripts/check-codec-consumer.sh

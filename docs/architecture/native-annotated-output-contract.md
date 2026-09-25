@@ -494,6 +494,18 @@ projection has been connected in product code.
 | R02b | real annotated → Fixed IR → section read/outline/breadcrumb and one owner/form → shared index/explain; Fixed visible cross-line search, coverage flag and source tests |
 | R03 | same Fixed result through CLI direct/ANSI, pager, real TUI Buffer and literal Markdown exporter; 20/40/78/120 are viewports of one 78-column native result |
 | G1 | GCC/Git/Clang/rclone complete display from true native and IR paths, no duplication or phantom whitespace in CLI/TUI; key marks valid; load/RSS/phase costs recorded and substantial regressions explained |
+| R04 | Flow/Fixed share checked declaration grammar; Fixed names, forms, reading groups and mentions use native owner and text-selection evidence; source-bound real-page query gold and positive/negative declaration cases pass without switching the default loader |
+
+R04's reviewed query scope passed 51/51 source-bound Fixed gold cases at
+`390481d6` using `cargo build --locked -p mant --features annotated-preview`
+and `python3 scripts/annotated_fixed_query_gold.py --cli target/debug/mant`.
+`scripts/check.sh` now runs that same preview-path gate. This proves the
+reviewed query results, **not** that every page has complete semantic
+annotation: document-level `unverified` coverage may still make
+`semanticsComplete=false`. Coverage must remain visible to consumers; native
+display remains authoritative and the default loader is unchanged. The
+collector state-owner split is a separate pre-R05 unit; link and selection
+migration belong to R05/R06, not this R04 query gate.
 
 `libmandoc-rs` session alone owns parse/render, TLS, callback restoration and
 cleanup; source owns authorized bundle/include and diagnostics; buffer owns
@@ -509,7 +521,8 @@ The current Rust module seams mirror those owners: `ffi/structured/annotated`
 keeps raw ABI declarations, a handle-bound checked view, coverage transfer,
 and owned transfer separate; `mant-codec/annotated_fixed` separates identity
 allocation, typed mark projection, and diagnostics under one assembly entry;
-`mant-ir/fixed_body` separates the public model from surface/mark validation.
+`mant-ir/fixed_body` separates the public model, read-time owner/head evidence
+closure, and surface/mark validation.
 These are internal moves, not new response models or another render path.
 The native collector remains one state writer through R04; split its
 column/slot/point lifecycle from mark observation only as a separately tested
