@@ -1213,72 +1213,15 @@ owner_head_role(const struct roff_node *owner,
 	return 0;
 }
 
-/* term.c::term_word() changes font and handles a no-space escape without
- * emitting a glyph.  Only a suffix made entirely of these escapes leaves
- * the already collected visible prefix complete; an escape before more
- * source text remains a separate, potentially meaningful boundary. */
-static int
-nonprinting_escape(enum mandoc_esc escape)
-{
-	switch (escape) {
-	case ESCAPE_IGNORE:
-	case ESCAPE_NOSPACE:
-	case ESCAPE_FONT:
-	case ESCAPE_FONTBOLD:
-	case ESCAPE_FONTITALIC:
-	case ESCAPE_FONTBI:
-	case ESCAPE_FONTROMAN:
-	case ESCAPE_FONTCR:
-	case ESCAPE_FONTCB:
-	case ESCAPE_FONTCI:
-	case ESCAPE_FONTPREV:
-		return 1;
-	default:
-		return 0;
-	}
-}
-
-/* Find the last run of no-glyph escapes in one forward pass.  Testing the
- * entire remaining string at every escape would be quadratic for a long
- * sequence of font changes followed by one visible byte. */
-static const char *
-terminal_nonprinting_suffix(const char *text)
-{
-	const char *cursor, *next, *suffix = NULL;
-	enum mandoc_esc escape;
-
-	for (cursor = text; *cursor != '\0'; cursor = next) {
-		next = cursor + 1;
-		if (*cursor != '\\') {
-			suffix = NULL;
-			continue;
-		}
-		escape = mandoc_escape(&next, NULL, NULL);
-		if (nonprinting_escape(escape)) {
-			if (suffix == NULL)
-				suffix = cursor;
-		} else
-			suffix = NULL;
-	}
-	return suffix;
-}
-
-/* man_macro.c::blk_imp keeps TP/TQ HEAD distinct.  man_term.c::pre_B
- * supplies the font, while term.c::term_word() prints \- through
- * mandoc_escape() as an ordinary hyphen.  Keep this a candidate hint:
- * Rust checks every name against a final-display HEAD sub-selection. */
+/* man_macro.c::blk_imp keeps TP/TQ HEAD distinct; man_term.c::pre_B and
+ * pre_alternate establish a candidate role.  term.c::term_word() executes
+ * escapes and font changes later.  Raw operand spelling must neither freeze
+ * a prefix nor reject an equivalent final-display declaration. */
 static int
 copy_tp_lexical_head(struct mant_annotated_collector *collector,
-    struct mant_annotated_mark *mark, const struct roff_node *owner,
-    int *recognized)
+    const struct roff_node *owner, int *recognized)
 {
 	const struct roff_node *head, *first;
-	const char *cursor, *next, *sequence, *text, *terminal;
-	char candidate[256], glyph;
-	size_t length = 0, text_size;
-	int size, prefix_done = 0;
-	int prefix_valid = 1, first_glyph = 0;
-	enum mandoc_esc escape;
 
 	*recognized = 0;
 	if (owner->tok != MAN_TP && owner->tok != MAN_TQ)
@@ -1303,8 +1246,7 @@ copy_tp_lexical_head(struct mant_annotated_collector *collector,
 	if (first == NULL)
 		return 1;
 	/* pre_B and pre_alternate with a bold first operand provide a lexical
-	 * label boundary. I/R and italic/roman-first alternate macros do not.
-	 * Raw HEAD text is admitted only by its conservative visible prefix. */
+	 * label boundary. I/R and italic/roman-first alternate macros do not. */
 	if (first->type == ROFFT_TEXT)
 		return man_text_declaration_candidate(collector, first->string,
 		    0, recognized);
@@ -1329,196 +1271,45 @@ copy_tp_lexical_head(struct mant_annotated_collector *collector,
 		*recognized = head_text_has_glyph(first->child->string);
 		return 1;
 	}
-	if (first->tok != MAN_B || first->next != NULL ||
-	    first->child == NULL || first->child->type != ROFFT_TEXT ||
-	    first->child->string == NULL || first->child->next != NULL) {
-		*recognized = 1;
-		return 1;
-	}
-	text = first->child->string;
-	text_size = strlen(text);
-	/* Count the suffix prepass and the prefix scan independently. */
-	if (!charge_work(collector, text_size) ||
-	    !charge_work(collector, text_size))
-		return 0;
-	terminal = terminal_nonprinting_suffix(text);
-	for (cursor = text; *cursor != '\0'; ) {
-		if (*cursor == '\\') {
-			if (cursor == terminal) {
-				cursor = text + text_size;
-				break;
-			}
-			next = cursor + 1;
-			escape = mandoc_escape(&next, &sequence, &size);
-			if (escape != ESCAPE_SPECIAL || size != 1 ||
-			    sequence[0] != '-')
-				return 1;
-			glyph = '-';
-			cursor = next;
-		} else
-			glyph = *cursor++;
-		if (first_glyph == 0)
-			first_glyph = (unsigned char)glyph;
-		if (isspace((unsigned char)glyph)) {
-			prefix_done = 1;
-			break;
-		}
-		if ((unsigned char)glyph > 0x7f ||
-		    (!isalnum((unsigned char)glyph) &&
-		    strchr("-_.?+", glyph) == NULL) ||
-		    length == sizeof(candidate))
-			prefix_valid = 0;
-		if (prefix_valid)
-			candidate[length++] = glyph;
-	}
-	*recognized = first_glyph != 0;
-	if (first_glyph != '-') {
-		/* The sole plain B still marks a lexical TP/TQ term even when
-		 * its spelling is not an option. Rust keeps FILE and prose as Term. */
-		return 1;
-	}
-	/* After the first authored whitespace, a font escape belongs to the
-	 * operand, not the option prefix. A second raw option-looking spelling
-	 * instead leaves the whole HEAD to the shared Rust alias grammar. */
-	if (!prefix_done || !prefix_valid || length < 2)
-		return 1;
-	while (isspace((unsigned char)*cursor))
-		cursor++;
-	if (*cursor == '\0' || *cursor == '-' ||
-	    *cursor == ',' || *cursor == '|' || *cursor == '/' ||
-	    (cursor[0] == 'o' && cursor[1] == 'r' &&
-	    isspace((unsigned char)cursor[2])) ||
-	    (cursor[0] == '\\' && cursor[1] == '-'))
-		return 1;
-	mark->name = mant_structured_copy_bytes(collector->session,
-	    (const uint8_t *)candidate, length, 1,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (mark->name == NULL)
-		return 0;
-	mark->name_length = length;
+	*recognized = first->tok == MAN_B || first->tok == MAN_SB;
 	return 1;
 }
 
 /* man_macro.c::blk_imp retains the first .IP argument as one HEAD text node;
- * man_term.c::pre_IP prints that node but uses the next argument for width.
- * Freeze only an authored leading bold dash spelling.  term.c::term_word()
- * prints \- as '-' and changes font without a glyph.  Any other escape or
- * an unproved boundary leaves the .IP a presentation owner, not a name. */
+ * man_term.c::pre_IP prints it and uses the next argument only for width.
+ * A leading bold font is structural candidate evidence, not a parsed option
+ * prefix: term.c::term_word() executes escapes before Rust sees the glyphs. */
 static int
-copy_ip_option_prefix(struct mant_annotated_collector *collector,
-    struct mant_annotated_mark *mark, const struct roff_node *owner,
-    int *recognized)
+ip_bold_head_candidate(struct mant_annotated_collector *collector,
+    const struct roff_node *owner, int *recognized)
 {
 	const struct roff_node *first;
-	const char *cursor, *next, *sequence, *terminal;
-	char candidate[256];
-	size_t source_size, length = 0, index;
-	int size, declaration_separator = 0;
+	const char *cursor, *next;
 	enum mandoc_esc escape;
-	uint8_t *copy;
 
 	*recognized = 0;
 	first = owner->head == NULL ? NULL : owner->head->child;
 	if (first == NULL || first->type != ROFFT_TEXT ||
 	    first->string == NULL || first->string[0] != '\\')
 		return 1;
-	source_size = strlen(first->string);
-	/* Count the suffix prepass and the authored-prefix scan. */
-	if (!charge_work(collector, source_size) ||
-	    !charge_work(collector, source_size))
+	if (!charge_work(collector, strlen(first->string)))
 		return 0;
-	terminal = terminal_nonprinting_suffix(first->string);
-	cursor = first->string + 1;
-	escape = mandoc_escape(&cursor, NULL, NULL);
-	if (escape != ESCAPE_FONTBOLD && escape != ESCAPE_FONTCB)
-		return 1;
+	cursor = first->string;
 	while (*cursor != '\0') {
-		if (*cursor == '\\') {
-			if (cursor == terminal) {
-				cursor = first->string + source_size;
-				break;
-			}
-			next = cursor + 1;
-			escape = mandoc_escape(&next, &sequence, &size);
-			if (escape == ESCAPE_FONTROMAN ||
-			    escape == ESCAPE_FONTCR ||
-			    escape == ESCAPE_FONTPREV) {
-				cursor = next;
-				if (*cursor != '\0' && *cursor != '=' &&
-				    !isspace((unsigned char)*cursor)) {
-					/* A directly adjacent italic operand is still
-					 * one visible HEAD, but not part of the bold
-					 * option.  Keep the owner as a candidate and let
-					 * checked final-display style set the boundary. */
-					if (*cursor == '\\') {
-						const char *argument = cursor + 1;
-						enum mandoc_esc font = mandoc_escape(
-						    &argument, NULL, NULL);
-						if (font == ESCAPE_FONTITALIC ||
-						    font == ESCAPE_FONTCI) {
-							*recognized = 1;
-							return 1;
-						}
-					}
-					if (strchr(",|/", *cursor) == NULL)
-						return 1;
-					declaration_separator = 1;
-				}
-				break;
-			}
-			if (escape != ESCAPE_SPECIAL || size != 1 ||
-			    sequence[0] != '-')
-				return 1;
-			cursor = next;
-			candidate[length] = '-';
-		} else if (strchr(",|/", *cursor) != NULL) {
-			declaration_separator = 1;
+		if (*cursor != '\\')
 			break;
-		} else if (*cursor == '=' ||
-		    isspace((unsigned char)*cursor)) {
+		next = cursor + 1;
+		escape = mandoc_escape(&next, NULL, NULL);
+		if (escape == ESCAPE_FONTBOLD || escape == ESCAPE_FONTCB)
+			*recognized = 1;
+		else if (escape != ESCAPE_IGNORE && escape != ESCAPE_NOSPACE &&
+		    escape != ESCAPE_FONT && escape != ESCAPE_FONTITALIC &&
+		    escape != ESCAPE_FONTBI && escape != ESCAPE_FONTROMAN &&
+		    escape != ESCAPE_FONTCR && escape != ESCAPE_FONTCI &&
+		    escape != ESCAPE_FONTPREV)
 			break;
-		} else {
-			if ((unsigned char)*cursor > 0x7f ||
-			    (!isalnum((unsigned char)*cursor) &&
-		    strchr("-_.?+", *cursor) == NULL))
-				return 1;
-			candidate[length] = *cursor++;
-		}
-		if (++length == sizeof(candidate))
-			return 1;
+		cursor = next;
 	}
-	if (length < 2 || candidate[0] != '-' ||
-	    (candidate[1] == '-' && length < 3) ||
-	    (candidate[1] != '-' && isdigit((unsigned char)candidate[1])))
-		return 1;
-	for (index = 1; index < length; index++)
-		if (isalnum((unsigned char)candidate[index]) ||
-		    candidate[index] == '?')
-			break;
-	if (index == length)
-		return 1;
-	/* A separator or later dash can follow a bold option, an argument, or
-	 * a font transition. Admit the native bold HEAD as a candidate, but do
-	 * not freeze its first spelling as the only name. The checked
-	 * final-display grammar decides which complete names survive. */
-	if (declaration_separator || strpbrk(cursor, ",|/") != NULL ||
-	    strchr(cursor, '-') != NULL) {
-		*recognized = 1;
-		return 1;
-	}
-	if (!mant_structured_charge(collector->session,
-	    &collector->session->content_bytes, length,
-	    collector->session->limits->max_content_bytes, 10,
-	    MANT_STRUCTURED_STAGE_RENDER))
-		return 0;
-	copy = mant_structured_allocate(collector->session, length, 0,
-	    MANT_STRUCTURED_STAGE_RENDER);
-	if (copy == NULL)
-		return 0;
-	memcpy(copy, candidate, length);
-	mark->name = copy;
-	mark->name_length = length;
-	*recognized = 1;
 	return 1;
 }
 
@@ -1537,8 +1328,8 @@ ip_head_declaration_candidate(struct mant_annotated_collector *collector,
 	first = owner->head == NULL ? NULL : owner->head->child;
 	if (first == NULL || first->type != ROFFT_TEXT || first->string == NULL)
 		return 1;
-	/* All native bold font spellings take the same prefix-candidate path.
-	 * A rejected glued suffix must not re-enter as plain text. */
+	/* Leading bold font evidence is handled above. An inline-font head
+	 * must not re-enter through a plain-text spelling guess. */
 	if (first->string[0] == '\\') {
 		cursor = first->string + 1;
 		escape = mandoc_escape(&cursor, NULL, NULL);
@@ -1904,8 +1695,7 @@ push_node(struct mant_annotated_collector *collector,
 		if (key == 0)
 			return 0;
 		if (node->tok == MAN_IP &&
-		    !copy_ip_option_prefix(collector,
-		    collector->marks + key - 1, node, &definition))
+		    !ip_bold_head_candidate(collector, node, &definition))
 			return 0;
 		if (node->tok == MAN_IP && !definition &&
 		    !ip_head_declaration_candidate(collector, node, &definition))
@@ -1917,7 +1707,7 @@ push_node(struct mant_annotated_collector *collector,
 				head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
 			else if (node->tok == MAN_TP || node->tok == MAN_TQ) {
 				if (!copy_tp_lexical_head(collector,
-				    collector->marks + key - 1, node, &lexical_head))
+				    node, &lexical_head))
 					return 0;
 				if (lexical_head)
 					head_role = MANT_ANNOTATED_MARK_HEAD_LEXICAL;
@@ -1956,9 +1746,6 @@ push_node(struct mant_annotated_collector *collector,
 				    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) ==
 				    (MANT_ANNOTATED_MARK_DEFINITION |
 				    MANT_ANNOTATED_MARK_HEAD_LEXICAL) &&
-				    (node->tok != MAN_IP ||
-				    (collector->marks[key - 1].name_length != 0 &&
-				    collector->marks[preceding_key - 1].name_length != 0)) &&
 				    collector->marks[preceding_key - 1].parent ==
 				    collector->marks[key - 1].parent)
 					collector->marks[key - 1].preceding_owner =

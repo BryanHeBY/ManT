@@ -1,6 +1,6 @@
 //! Keep declaration separators and parameter styling distinct until extraction.
 use super::declaration::DeclarationState;
-use mant_ir::{ContentContext, ContentRef, Inline, InlineView};
+use mant_ir::{ContentContext, ContentRef, Inline, InlineView, literal_option_aliases};
 use std::ops::Range;
 
 use mant_ir::inline_plain_text as plain_text;
@@ -77,23 +77,22 @@ impl FormCandidate<'_> {
                 })
                 .collect();
         }
-        let Some([first, second]) = paired_option_tokens(self.content, &self.inlines) else {
+        let mut prefix = String::new();
+        if !append_name_prefix(self.content, &self.inlines, &mut prefix) {
+            return vec![self];
+        }
+        let Some(tokens) = literal_option_aliases(&prefix) else {
             return vec![self];
         };
-        vec![
-            Self {
+        tokens
+            .into_iter()
+            .map(|(name, range)| Self {
                 content: self.content,
-                inlines: self.inlines.clone(),
+                inlines: Vec::new(),
                 start: self.start,
-                token: Some((first.0, self.start + first.1)),
-            },
-            Self {
-                content: self.content,
-                inlines: self.inlines,
-                start: self.start,
-                token: Some((second.0, self.start + second.1)),
-            },
-        ]
+                token: Some((name, self.start + range.start)),
+            })
+            .collect()
     }
 }
 
@@ -134,40 +133,6 @@ fn pattern_declarations_text(literal: &str) -> Option<Vec<(String, usize)>> {
             })
             .collect(),
     )
-}
-
-/// A complete short/long pair is a finite declaration convention, not argv
-/// parsing. Separately validated pattern heads are handled above. An arbitrary
-/// later dash token, third literal argument, or an
-/// emphasized operand cannot restart name recognition.
-pub(super) fn paired_option_tokens(
-    content: ContentContext<'_>,
-    inlines: &[Inline],
-) -> Option<[(String, usize); 2]> {
-    let prefix = literal_prefix(content, inlines);
-    paired_option_tokens_text(&prefix)
-}
-
-fn paired_option_tokens_text(prefix: &str) -> Option<[(String, usize); 2]> {
-    let tokens: Vec<_> = prefix.split_whitespace().take(4).collect();
-    let (first, second) = match tokens.as_slice() {
-        [first, second] | [first, "or", second] => (*first, *second),
-        _ => return None,
-    };
-    if first.len() != 2
-        || !first.starts_with('-')
-        || !second.starts_with("--")
-        || super::options::option_prefix(first) != Some(first)
-        || super::options::option_prefix(second) != Some(second)
-    {
-        return None;
-    }
-    Some([first, second].map(|token| {
-        (
-            token.to_owned(),
-            token.as_ptr() as usize - prefix.as_ptr() as usize,
-        )
-    }))
 }
 
 /// Read visible literal content only until an explicitly styled parameter.
@@ -231,6 +196,7 @@ pub(super) fn declaration_groups(content: ContentContext<'_>, term: &[Inline]) -
         &mut None,
         &mut DeclarationState::new(content, plain_text(content, term), term),
         &mut ranges,
+        false,
     )
 }
 
@@ -251,6 +217,7 @@ pub(in crate::definitions) fn declaration_group_ranges(
         &mut None,
         &mut DeclarationState::new(content, text.clone(), term),
         &mut ranges,
+        false,
     );
     ranges.finish(&text)
 }
@@ -279,6 +246,7 @@ fn option_alias_groups(content: ContentContext<'_>, term: &[Inline]) -> Vec<Vec<
                 &mut Some(start + token.len()),
                 &mut DeclarationState::new(content, text, &group).within_validated_token(),
                 &mut SplitRanges::default(),
+                false,
             )
         })
         .collect()
@@ -333,10 +301,10 @@ pub(super) fn literal_option_tokens(value: &str) -> Vec<(String, usize)> {
                     .map(|(token, offset)| (token, range.start + offset))
                     .collect();
             }
-            if let Some(tokens) = paired_option_tokens_text(group) {
+            if let Some(tokens) = literal_option_aliases(group) {
                 return tokens
                     .into_iter()
-                    .map(|(token, offset)| (token, range.start + offset))
+                    .map(|(token, offset)| (token, range.start + offset.start))
                     .collect();
             }
             if token.is_empty() {
@@ -358,34 +326,43 @@ fn split_groups(
     remaining: &mut Option<usize>,
     state: &mut DeclarationState,
     ranges: &mut SplitRanges,
+    styled: bool,
 ) -> Vec<Vec<Inline>> {
     let mut groups = vec![Vec::new()];
     for inline in term {
         let parts = match inline {
             Inline::Text { content: reference } => split_leaf(
-                content, *reference, false, separators, remaining, state, ranges,
+                content, *reference, false, separators, remaining, state, ranges, styled,
             ),
             Inline::Code { content: reference } => split_leaf(
-                content, *reference, true, separators, remaining, state, ranges,
+                content, *reference, true, separators, remaining, state, ranges, styled,
             ),
-            Inline::Strong { children } => {
-                split_groups(content, children, separators, remaining, state, ranges)
-                    .into_iter()
-                    .map(|children| vec![Inline::Strong { children }])
-                    .collect()
-            }
+            Inline::Strong { children } => split_groups(
+                content, children, separators, remaining, state, ranges, styled,
+            )
+            .into_iter()
+            .map(|children| vec![Inline::Strong { children }])
+            .collect(),
             Inline::Link {
                 occurrence,
                 children,
-            } => split_groups(content, children, separators, remaining, state, ranges)
-                .into_iter()
-                .map(|children| {
-                    vec![Inline::Link {
-                        occurrence: *occurrence,
-                        children,
-                    }]
-                })
-                .collect(),
+            } => split_groups(
+                content, children, separators, remaining, state, ranges, styled,
+            )
+            .into_iter()
+            .map(|children| {
+                vec![Inline::Link {
+                    occurrence: *occurrence,
+                    children,
+                }]
+            })
+            .collect(),
+            Inline::Emphasis { children } => split_groups(
+                content, children, separators, remaining, state, ranges, true,
+            )
+            .into_iter()
+            .map(|children| vec![Inline::Emphasis { children }])
+            .collect(),
             _ => {
                 let text = plain_text(content, std::slice::from_ref(inline));
                 state.opaque(&text);
@@ -415,6 +392,7 @@ fn split_leaf(
     remaining: &mut Option<usize>,
     state: &mut DeclarationState,
     ranges: &mut SplitRanges,
+    styled: bool,
 ) -> Vec<Vec<Inline>> {
     let value = content
         .resolve_text(reference)
@@ -422,8 +400,12 @@ fn split_leaf(
     let mut output = Vec::new();
     let mut start = 0usize;
     for (offset, character) in value.char_indices() {
-        let separator =
-            state.separator(character, take_separator(character, separators, remaining));
+        let eligible = take_separator(character, separators, remaining);
+        let separator = if styled {
+            state.styled_character(character, eligible)
+        } else {
+            state.separator(character, eligible)
+        };
         ranges.character(character, separator);
         if separator {
             output.push(vec![slice_leaf(reference, start, offset, code)]);

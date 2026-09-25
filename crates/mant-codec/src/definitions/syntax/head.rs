@@ -74,9 +74,12 @@ fn is_command_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {
 fn is_option_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {
     let mut literal = String::new();
     append_syntax(content, inlines, &mut literal);
-    if let Some([_, (name, start)]) = forms::paired_option_tokens(content, inlines) {
+    if let Some((_, range)) =
+        mant_ir::literal_option_aliases(&forms::literal_prefix(content, inlines))
+            .and_then(|names| names.into_iter().last())
+    {
         return literal
-            .get(start + name.len()..)
+            .get(range.end..)
             .is_some_and(|tail| arguments(tail.split_whitespace()));
     }
     let mut tokens = literal.split_whitespace();

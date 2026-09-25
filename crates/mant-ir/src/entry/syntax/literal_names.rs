@@ -12,14 +12,9 @@ use std::ops::Range;
 /// The caller must bind every returned byte range to its original display.
 #[must_use]
 pub fn literal_option_names(form: &str) -> Vec<(String, Range<usize>)> {
-    // Flow treats a slash as alias punctuation only inside one invocation
-    // token. A slash following whitespace begins an operand/path instead.
-    if !form
-        .as_bytes()
-        .windows(2)
-        .any(|pair| pair[0].is_ascii_whitespace() && pair[1] == b'/')
-        && let Some(aliases) = literal_option_aliases(form)
-    {
+    // The shared alias grammar admits whitespace-separated short/long names
+    // but keeps a slash after whitespace with a path-like operand.
+    if let Some(aliases) = literal_option_aliases(form) {
         return aliases;
     }
     let ranges = literal_declaration_ranges(form);

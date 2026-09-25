@@ -7,6 +7,7 @@ _Static_assert(MAN_TP == 382, "annotated MAN_TP token changed");
 _Static_assert(MAN_TQ == 383, "annotated MAN_TQ token changed");
 _Static_assert(MAN_IP == 387, "annotated MAN_IP token changed");
 _Static_assert(MAN_RS == 401, "annotated MAN_RS token changed");
+_Static_assert(MAN_B == 396, "annotated MAN_B token changed");
 
 static int
 man_reading_family(uint32_t token)
@@ -281,7 +282,6 @@ valid_marks(const struct mant_annotated_result *result)
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
 			    (MANT_ANNOTATED_MARK_DEFINITION |
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL) ||
-			    (family == 1 && mark->name_length == 0) ||
 			    mark->preceding_owner >= mark->key)
 				return 0;
 			preceding = result->marks + mark->preceding_owner - 1;
@@ -291,7 +291,6 @@ valid_marks(const struct mant_annotated_result *result)
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL)) !=
 			    (MANT_ANNOTATED_MARK_DEFINITION |
 			    MANT_ANNOTATED_MARK_HEAD_LEXICAL) ||
-			    (family == 1 && preceding->name_length == 0) ||
 			    preceding->parent != mark->parent ||
 			    preceding->owner != mark->owner)
 				return 0;

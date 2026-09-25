@@ -383,12 +383,10 @@ pub(super) fn transfer(
             if mark.kind != 2
                 || family == 0
                 || mark.flags & (16 | 256) != (16 | 256)
-                || family == 1 && mark.name_length == 0
                 || mark.preceding_owner >= mark.key
                 || preceding.kind != 2
                 || reading_family(preceding.token) != family
                 || preceding.flags & (16 | 256) != (16 | 256)
-                || family == 1 && preceding.name.is_none()
                 || preceding.parent != mark.parent
                 || preceding.owner != mark.owner
             {

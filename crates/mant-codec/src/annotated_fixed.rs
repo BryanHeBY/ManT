@@ -106,6 +106,8 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     }
     let mut headings = Vec::new();
     let mut owners = Vec::new();
+    let mut owner_tokens = Vec::new();
+    let mut owner_has_plain_b = Vec::new();
     let mut links = Vec::new();
     let mut resolution_diagnostics = Vec::new();
     let mut anchors = Vec::new();
@@ -159,14 +161,22 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     for mark in &page.marks {
         match mark.kind {
             1 => headings.push(project_heading(&page, &keys, &identities, mark)?),
-            2 => owners.push(project_owner(
-                &page,
-                &keys,
-                &identities,
-                mark,
-                &owner_bodies[mark.key as usize],
-                &owner_components[mark.key as usize],
-            )?),
+            2 => {
+                owner_tokens.push(mark.token);
+                owner_has_plain_b.push(owner_components[mark.key as usize].iter().any(|&key| {
+                    page.marks.get((key - 1) as usize).is_some_and(|component| {
+                        component.token == libmandoc_rs::annotated::MAN_B_TOKEN
+                    })
+                }));
+                owners.push(project_owner(
+                    &page,
+                    &keys,
+                    &identities,
+                    mark,
+                    &owner_bodies[mark.key as usize],
+                    &owner_components[mark.key as usize],
+                )?);
+            }
             3 => links.push(project_link(
                 &page,
                 &keys,
@@ -262,11 +272,37 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     let entries = fixed
         .owners
         .iter()
-        .map(|owner| {
+        .enumerate()
+        .map(|(index, owner)| {
             if owner.hanging_candidate && !fixed.hanging_declaration_ready(owner) {
                 return None;
             }
-            if let Some(components) = fixed.lexical_component_names(owner) {
+            if let Some(components) = fixed.lexical_names(owner) {
+                if components.is_empty() {
+                    // pre_B still establishes a TP/TQ term if inline font
+                    // escapes turn its spelling into a non-option. An
+                    // alternate-font operand or IP inline-font candidate
+                    // supplies no independent term fallback.
+                    if !owner_has_plain_b[index] {
+                        return None;
+                    }
+                    let form = fixed.owner_complete_form(owner)?;
+                    return Some(EntryFacts {
+                        name_bindings: vec![EntryNameBinding {
+                            name: 0,
+                            occurrences: vec![owner.head.clone()],
+                            evidence: EntryNameEvidence::Lexical,
+                        }],
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: EntryKind::Term,
+                        case: NameCase::Sensitive,
+                        names: vec![form],
+                        value_domain: None,
+                    });
+                }
                 let (names, name_bindings) = group_bindings(
                     components
                         .into_iter()
@@ -360,41 +396,13 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                     value_domain: None,
                 });
             };
-            // man_macro.c::blk_imp keeps the original man HEAD intact, and
-            // man_term.c::pre_TP/pre_IP select its visible label. A complete
-            // form may also contain arguments, so bind only the shared
-            // grammar's exact name ranges to final-display sub-selections.
-            if owner.head_role == Some(OwnerHeadRole::Lexical)
-                && let Some(occurrences) = fixed.lexical_literal_names(owner)
-                && (owner.head_role_prefix.is_none() || occurrences.len() != 1)
-            {
-                if occurrences.is_empty() {
-                    // A final underlined, nonbold operand was rejected by
-                    // the shared declaration check; do not promote it
-                    // through the generic HEAD identity fallback.
-                    return None;
-                }
-                let (names, name_bindings) = group_bindings(
-                    occurrences
-                        .into_iter()
-                        .map(|(name, selection, _)| (name, selection)),
-                    EntryNameEvidence::Lexical,
-                );
-                return Some(EntryFacts {
-                    name_bindings,
-                    alias_groups: Vec::new(),
-                    alias_of: None,
-                    forms: vec![owner.head.clone()],
-                    id: owner.id.clone(),
-                    kind: EntryKind::Parameter {
-                        parameter_kind: ParameterKind::Option,
-                    },
-                    case: NameCase::Sensitive,
-                    names,
-                    value_domain: None,
-                });
-            }
             let identity = native_head_identity(&fixed, owner, &form);
+            if owner_tokens[index] == libmandoc_rs::annotated::MAN_IP_TOKEN
+                && owner.head_role == Some(OwnerHeadRole::Lexical)
+                && identity.is_none()
+            {
+                return None;
+            }
             // The parser-alive .IP hint is intentionally a broad candidate:
             // a styled prefix that fails the shared spelling or final-glyph
             // check is not a generic Term. Keep its display owner without

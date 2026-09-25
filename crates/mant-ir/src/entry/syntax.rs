@@ -92,6 +92,11 @@ pub fn literal_option_aliases(form: &str) -> Option<Vec<(String, Range<usize>)>>
             .get(cursor)
             .is_some_and(|byte| matches!(byte, b',' | b'|' | b'/'))
         {
+            // A slash after whitespace can introduce a path operand. Only
+            // an adjacent slash separates aliases within one invocation.
+            if bytes[cursor] == b'/' && cursor > separator_start {
+                return None;
+            }
             punctuation_group = true;
             cursor += 1;
         } else if cursor > separator_start {

@@ -2577,22 +2577,17 @@ fn man_bold_heads_bind_only_checked_option_names() {
     // Each exact input ran pinned CVS -Ttree/-Tascii before these assertions.
     // man_macro.c::blk_imp keeps one TP/TQ HEAD; man_term.c::pre_B and
     // term.c::term_word print each \- as a hyphen in that same HEAD.
-    for (label, names, prefix) in [
-        (r"\-Y, \-\-yay", vec!["-Y", "--yay"], None),
-        (r"\-p|\-\-parents", vec!["-p", "--parents"], None),
-        (r"\-a \-\-ascii", vec!["-a", "--ascii"], None),
+    for (label, names) in [
+        (r"\-Y, \-\-yay", vec!["-Y", "--yay"]),
+        (r"\-p|\-\-parents", vec!["-p", "--parents"]),
+        (r"\-a \-\-ascii", vec!["-a", "--ascii"]),
         (
             r"\-c \-\-stdout \-\-to-stdout",
             vec!["-c", "--stdout", "--to-stdout"],
-            None,
         ),
-        (
-            r"\-\-builddir <dir>",
-            vec!["--builddir"],
-            Some("--builddir"),
-        ),
-        ("--builddir <dir>", vec!["--builddir"], Some("--builddir")),
-        (r"\-p", vec!["-p"], None),
+        (r"\-\-builddir <dir>", vec!["--builddir"]),
+        ("--builddir <dir>", vec!["--builddir"]),
+        (r"\-p", vec!["-p"]),
     ] {
         let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nbody\n");
         let document =
@@ -2602,7 +2597,7 @@ fn man_bold_heads_bind_only_checked_option_names() {
         };
         let owner = &fixed.owners[0];
         assert_eq!(owner.head_role, Some(OwnerHeadRole::Lexical), "{label}");
-        assert_eq!(owner.head_role_prefix.as_deref(), prefix, "{label}");
+        assert_eq!(owner.head_role_prefix, None, "{label}");
         let facts = owner.entry.as_ref().unwrap();
         assert_eq!(facts.names, names, "{label}");
         assert_eq!(
@@ -2658,22 +2653,32 @@ fn escaped_dash_tq_keeps_its_own_checked_option_name() {
 }
 
 #[test]
-fn escaped_dash_man_hint_rejects_unproved_escapes_and_names() {
-    // Each exact input ran pinned CVS -Ttree/-Tascii first.  term.c::
-    // term_word() changes font for \fR and prints \[hy] as a different
-    // special character; neither is the literal \- option-head proof.
-    for (label, role, kind) in [
-        (r"\-B\fRn", None, EntryKind::Term),
-        (r"\[hy]x", None, EntryKind::Term),
-        (r"\-x\&foo", None, EntryKind::Term),
-        (r"\-1", Some(OwnerHeadRole::Lexical), EntryKind::Term),
-        (r"\-x.", Some(OwnerHeadRole::Lexical), EntryKind::Term),
+fn escaped_dash_man_hint_uses_final_glyphs_and_style() {
+    // Each exact input ran pinned CVS -Ttree/-Tascii first. term.c::term_word
+    // executes \& without a glyph, but \[hy] is not an ASCII option dash;
+    // a font switch within one name does not prove a combined spelling.
+    for (label, expected) in [
+        (r"\-B\fRn", Some((EntryKind::Term, "-Bn"))),
+        (r"\[hy]x", Some((EntryKind::Term, "‐x"))),
+        (
+            r"\-x\&foo",
+            Some((
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                "-xfoo",
+            )),
+        ),
+        (r"\-1", Some((EntryKind::Term, "-1"))),
+        (r"\-x.", Some((EntryKind::Term, "-x."))),
         (
             r"\-a, text",
-            Some(OwnerHeadRole::Lexical),
-            EntryKind::Parameter {
-                parameter_kind: ParameterKind::Option,
-            },
+            Some((
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                "-a",
+            )),
         ),
     ] {
         let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B {label}\nbody\n");
@@ -2683,8 +2688,15 @@ fn escaped_dash_man_hint_rejects_unproved_escapes_and_names() {
             unreachable!();
         };
         let owner = &fixed.owners[0];
-        assert_eq!(owner.head_role, role, "{label}");
-        assert_eq!(owner.entry.as_ref().unwrap().kind, kind, "{label}");
+        assert_eq!(owner.head_role, Some(OwnerHeadRole::Lexical), "{label}");
+        assert_eq!(
+            owner
+                .entry
+                .as_ref()
+                .map(|entry| (entry.kind, entry.names[0].as_str())),
+            expected,
+            "{label}"
+        );
         assert!(validate_document(&document).is_empty());
     }
 }
@@ -2763,7 +2775,7 @@ fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
     {
         assert_eq!(owner.role, OwnerRole::Definition);
         assert_eq!(owner.head_role, Some(OwnerHeadRole::Lexical));
-        assert_eq!(owner.head_role_prefix.as_deref(), Some(name));
+        assert_eq!(owner.head_role_prefix, None);
         let facts = owner.entry.as_ref().unwrap();
         assert_eq!(facts.names, [name]);
         assert_eq!(
@@ -2774,7 +2786,6 @@ fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
         );
     }
     for owner in &fixed.owners[4..] {
-        assert_eq!(owner.role, OwnerRole::Other);
         assert!(owner.entry.is_none());
     }
     assert!(validate_document(&document).is_empty());
@@ -2818,7 +2829,7 @@ fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
     let DocumentBody::Fixed(fixed) = &document.body else {
         unreachable!();
     };
-    assert_eq!(fixed.owners[0].head_role_prefix.as_deref(), Some("-x."));
+    assert_eq!(fixed.owners[0].head_role_prefix, None);
     assert!(fixed.owners[0].entry.is_none());
     assert!(validate_document(&document).is_empty());
 }
@@ -3191,6 +3202,112 @@ fn native_man_complete_heads_and_styled_argument_boundaries_bind_all_names() {
 }
 
 #[test]
+fn executed_man_heads_share_complete_declaration_names() {
+    // Each exact input ran pinned CVS -Tutf8 first. man_macro.c::blk_imp
+    // establishes the HEAD; man_term.c::pre_B/pre_alternate and
+    // term.c::term_word execute fonts and zero-width escapes before binding.
+    for (input, names) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.PD\n.B \\-\\-exclude\\ \\fRfiles\nDescription.\n"
+                .as_slice(),
+            vec!["--exclude"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-L\\fIdir\\fP\" 4\nDescription.\n".as_slice(),
+            vec!["-L"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \"\\&--help\"\nDescription.\n".as_slice(),
+            vec!["--help"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \"--he\\&lp\"\nDescription.\n".as_slice(),
+            vec!["--help"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \"\\fB--help\\fP\"\nDescription.\n".as_slice(),
+            vec!["--help"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.SB --save\nDescription.\n".as_slice(),
+            vec!["--save"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR --opt \" ARG, --all\"\nDescription.\n".as_slice(),
+            vec!["--opt", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-c \\-\\-stdout \\-\\-to-stdout\nDescription.\n"
+                .as_slice(),
+            vec!["-c", "--stdout", "--to-stdout"],
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        assert_eq!(
+            fixed.owners[0].entry.as_ref().map(|entry| &entry.names),
+            Some(&names.iter().map(|name| (*name).to_owned()).collect()),
+            "{}",
+            String::from_utf8_lossy(input)
+        );
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in names {
+            let result = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, 1, "{name}");
+            result.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn flow_and_fixed_share_styled_boundary_and_three_name_heads() {
+    // Both exact inputs ran pinned CVS -Tutf8 first. man_term.c::pre_alternate
+    // prints the italic operand (including its terminal comma) before the
+    // next bold operand; man_term.c::pre_B retains all three gzip spellings.
+    for (input, names) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir, \" \"--all\"\nDescription.\n".as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-c \\-\\-stdout \\-\\-to-stdout\nDescription.\n"
+                .as_slice(),
+            vec!["-c", "--stdout", "--to-stdout"],
+        ),
+    ] {
+        let flow = crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap();
+        let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        for document in [&flow, &fixed] {
+            assert!(validate_document(document).is_empty());
+            let index = mant_ir::SemanticIndex::build(document);
+            let entries = index.section("options");
+            assert_eq!(entries.len(), 1, "{}", String::from_utf8_lossy(input));
+            assert_eq!(
+                entries[0].names,
+                names,
+                "{}",
+                String::from_utf8_lossy(input)
+            );
+        }
+    }
+}
+
+#[test]
 fn native_man_repeated_name_preserves_both_query_occurrences() {
     // This exact `.B` input also ran pinned CVS -Ttree.  A repeated name is
     // one selectable spelling with two final-display occurrences, including
@@ -3230,8 +3347,8 @@ fn native_man_repeated_name_preserves_both_query_occurrences() {
 #[test]
 fn native_man_internal_nonprinting_escapes_do_not_become_terminal_suffix() {
     // The exact 2,048-escape line ran pinned CVS -Ttree.  A visible byte
-    // after those escapes prevents a terminal-only suffix; this also keeps
-    // the native candidate scan's large-input path under regression.
+    // after those escapes belongs to the final option spelling; the native
+    // candidate scan no longer decides names from raw escape positions.
     let escaped = format!("--help{}x", "\\&".repeat(2_048));
     let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.B \"{escaped}\"\nDescription.\n");
     let document =
@@ -3239,11 +3356,8 @@ fn native_man_internal_nonprinting_escapes_do_not_become_terminal_suffix() {
     let DocumentBody::Fixed(fixed) = &document.body else {
         panic!("not Fixed")
     };
-    assert_eq!(fixed.owners[0].head_role, None);
-    assert_eq!(
-        fixed.owners[0].entry.as_ref().unwrap().kind,
-        EntryKind::Term
-    );
+    assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Lexical));
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["--helpx"]);
 }
 
 fn assert_fixed_segment_case(label: &str, input: &[u8], names: &[&str], rejected: &str) {
@@ -3515,7 +3629,7 @@ fn man_tp_styled_operands_and_punctuation_keep_native_head_classification() {
         unreachable!()
     };
     let owner = &fixed.owners[0];
-    assert_eq!(owner.head_role_prefix.as_deref(), Some("-x"));
+    assert_eq!(owner.head_role_prefix, None);
     assert_eq!(owner.entry.as_ref().unwrap().names, ["-x"]);
     assert_eq!(
         fixed.selection_text(&owner.head).as_deref(),
@@ -3578,7 +3692,7 @@ fn emphasized_native_heads_do_not_gain_lexical_option_eligibility() {
     let DocumentBody::Fixed(fixed) = &document.body else {
         unreachable!()
     };
-    assert_eq!(fixed.owners[0].head_role, None);
+    assert_eq!(fixed.owners[0].head_role, Some(OwnerHeadRole::Lexical));
     assert_eq!(
         fixed.owners[0].entry.as_ref().unwrap().kind,
         EntryKind::Term

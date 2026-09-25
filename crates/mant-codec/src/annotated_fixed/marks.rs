@@ -246,11 +246,9 @@ fn project_owner_predecessor(
     if mark.kind != 2
         || family == 0
         || mark.flags & (16 | 256) != (16 | 256)
-        || family == 1 && mark.name.is_none()
         || preceding.kind != 2
         || reading_family(preceding.token) != family
         || preceding.flags & (16 | 256) != (16 | 256)
-        || family == 1 && preceding.name.is_none()
         || preceding.parent != mark.parent
         || preceding.owner != mark.owner
     {

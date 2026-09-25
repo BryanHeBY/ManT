@@ -150,6 +150,24 @@ impl DeclarationState {
         split
     }
 
+    /// An emphasized parameter stays opaque except for a terminal separator
+    /// followed by an independently styled declaration. A comma inside the
+    /// parameter, even before option-looking text, cannot create a name.
+    pub(super) fn styled_character(&mut self, character: char, eligible: bool) -> bool {
+        if eligible && self.quote.is_none() && self.closers.is_empty() {
+            let next = self.offset + character.len_utf8();
+            let following = self.suffix.probe(&self.text, next);
+            if self.literal_starts.contains(&following.start)
+                && lexical_option_token(following.token)
+            {
+                return self.separator(character, true);
+            }
+        }
+        self.observe(character, true);
+        self.offset += character.len_utf8();
+        false
+    }
+
     pub(super) fn opaque(&mut self, text: &str) {
         for character in text.chars() {
             self.observe(character, true);

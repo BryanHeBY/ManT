@@ -15,6 +15,9 @@ pub const MAN_TP_TOKEN: u32 = 382;
 pub const MAN_TQ_TOKEN: u32 = 383;
 #[doc(hidden)]
 pub const MAN_IP_TOKEN: u32 = 387;
+/// Pinned plain bold macro discriminator for a TP/TQ term fallback.
+#[doc(hidden)]
+pub const MAN_B_TOKEN: u32 = 396;
 /// Pinned `MAN_RS` discriminator; checked against the native region relation.
 #[doc(hidden)]
 pub const MAN_RS_TOKEN: u32 = 401;
