@@ -1,7 +1,7 @@
 {
   "schema": "mant.annotated-fixed-query-gold/v1",
-  "reviewed": "2026-09-24",
-  "scope": "Pinned-source Fixed direct-owner and reading-context controls, F007/F008 mention controls, and source-bound R04 real-page positives/negatives for GCC, tmux, zsh, yay, gzip, zip, and btrfs. Only probes with explicit mention counts assert mention recall.",
+  "reviewed": "2026-09-25",
+  "scope": "Pinned-source Fixed direct-owner and reading-context controls, F007/F008 mention controls, and source-bound real-page positives/negatives for GCC, tmux, zsh, yay, gzip, zip, btrfs, and Windows rg. Only probes with explicit mention counts assert mention recall.",
   "roots": {
     "checkout": "../../.."
   },
@@ -586,6 +586,30 @@
           "review": "Pinned CVS prints create [options] as a TP/B synopsis in SUBCOMMAND. Plain B supplies font only, not a native command macro; absent a separately proved command convention, the prefix create is not promoted to a direct Command name, while prose mentions remain visible.",
           "expected": [],
           "expectedCounts": {"directEntry": 0, "relatedEntry": 0}
+        }
+      ]
+    },
+    {
+      "id": "F015",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/windows-releases/rg.1.zst",
+      "sha256": "e83d82c28bb2683cf71500e5fb8d9746a162bb24b08a6396a15ab2ed1d96cb45",
+      "queries": [
+        {
+          "query": "--threads",
+          "review": "Pinned CVS roff.c::roff_node_alloc keeps the line-610 .sp and line-611 complete short/long declaration in one section-local epoch; man_macro.c::blk_exp makes the direct line-612 RS continuation and man_term.c::pre_RS indents its body.",
+          "expected": [
+            {"source": {"line": 611, "column": 1}, "kind": "option", "names": ["-j", "--threads"], "forms": ["-j NUM, --threads=NUM"], "emptyDescription": false, "bodyIncludes": ["This flag sets the approximate number of threads"], "bodyExcludes": ["Include or exclude files and directories"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "--glob",
+          "review": "Pinned CVS keeps the line-720 .sp, line-721 complete -g GLOB / --glob=GLOB declaration, and line-722 direct RS as siblings in one SH BODY; term.c::term_word ends italic GLOB before the comma, while pre_RS supplies the indented description.",
+          "expected": [
+            {"source": {"line": 721, "column": 1}, "kind": "option", "names": ["-g", "--glob"], "forms": ["-g GLOB, --glob=GLOB"], "emptyDescription": false, "bodyIncludes": ["Include or exclude files and directories for searching"], "bodyExcludes": ["This flag sets the approximate number of threads"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
         }
       ]
     }

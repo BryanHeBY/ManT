@@ -972,11 +972,128 @@ man_paragraph_token(enum roff_tok token)
 	return token == MAN_PP || token == MAN_P || token == MAN_LP;
 }
 
+static int head_text_has_glyph(const char *);
+
+static int
+hanging_text_has_glyph(struct mant_annotated_collector *collector,
+    const struct roff_node *node, int *has_glyph)
+{
+	*has_glyph = 0;
+	if (node->string == NULL)
+		return 1;
+	if (!charge_work(collector, strlen(node->string)))
+		return 0;
+	*has_glyph = head_text_has_glyph(node->string);
+	return 1;
+}
+
+/* man_term.c::pre_B()/pre_I() only change the font; pre_alternate()
+ * executes each TEXT operand without inventing glyphs. An empty instance
+ * may precede a real declaration, but cannot itself supply its source. */
+static int
+hanging_node_has_glyph(struct mant_annotated_collector *collector,
+    const struct roff_node *node, int *has_glyph)
+{
+	const struct roff_node *child;
+	int child_has_glyph;
+
+	if (node->type == ROFFT_TEXT)
+		return hanging_text_has_glyph(collector, node, has_glyph);
+	*has_glyph = 1;
+	if (node->type != ROFFT_ELEM)
+		return 1;
+	switch (node->tok) {
+	case MAN_SM:
+	case MAN_SB:
+	case MAN_BI:
+	case MAN_IB:
+	case MAN_BR:
+	case MAN_RB:
+	case MAN_R:
+	case MAN_B:
+	case MAN_I:
+	case MAN_IR:
+	case MAN_RI:
+		break;
+	default:
+		return 1;
+	}
+	*has_glyph = 0;
+	for (child = node->child; child != NULL; child = child->next) {
+		if (!charge_work(collector, 1))
+			return 0;
+		if (child->type != ROFFT_TEXT) {
+			*has_glyph = 1;
+			return 1;
+		}
+		if (!hanging_text_has_glyph(collector, child, &child_has_glyph))
+			return 0;
+		if (child_has_glyph) {
+			*has_glyph = 1;
+			return 1;
+		}
+	}
+	return 1;
+}
+
+/* roff.c::roff_node_alloc() advances flow_epoch for a real .sp before the
+ * following TEXT is allocated. roff_term.c::roff_term_pre_sp() then ends the
+ * prior line and emits vertical space. Only the first visible content sibling
+ * of the section body or a retained .sp can start an implicit presentation
+ * head; .br, deleted controls and preceding prose lack that authority. */
+static int
+man_hanging_after_boundary(struct mant_annotated_collector *collector,
+    const struct roff_node *node)
+{
+	const struct roff_node *previous;
+	int has_glyph;
+
+	/* term.c::term_word() emits no glyph for \& or font-only text. Such a
+	 * node cannot be the declaration origin; defer to the first visible
+	 * sibling without losing the retained .sp boundary. No-fill examples
+	 * and transparent controls remain outside implicit paragraph inference. */
+	if ((node->flags & (NODE_NOFILL | NODE_NOPRT)) != 0 ||
+	    (node->type == ROFFT_ELEM &&
+	    (node->tok < MAN_TH || node->tok >= MAN_MAX ||
+	    roff_tok_transparent(node->tok))))
+		return 0;
+	if (!hanging_node_has_glyph(collector, node, &has_glyph))
+		return 0;
+	if (!has_glyph)
+		return 0;
+	for (previous = node->prev; previous != NULL &&
+	    previous->flow_epoch == node->flow_epoch; previous = previous->prev) {
+		if (!charge_work(collector, 1))
+			return 0;
+		if (previous->type == ROFFT_COMMENT ||
+		    (previous->flags & NODE_NOPRT) != 0 ||
+		    roff_tok_transparent(previous->tok))
+			continue;
+		if (previous->type == ROFFT_TEXT ||
+		    previous->type == ROFFT_ELEM) {
+			if (!hanging_node_has_glyph(collector, previous,
+			    &has_glyph))
+				return 0;
+			if (!has_glyph)
+				continue;
+		}
+		break;
+	}
+	if (!charge_work(collector, 1))
+		return 0;
+	if (previous == NULL)
+		return node->flow_epoch == node->parent->flow_epoch;
+	return previous->type == ROFFT_ELEM &&
+	    previous->tok == ROFF_sp && previous->parent == node->parent &&
+	    previous->flow_epoch == node->flow_epoch;
+}
+
 /* man_validate.c::post_SH unwraps the first PP/P/LP after SH/SS but retains
  * the executed token on each moved child.  Other paragraphs retain their actual
- * BODY parent.  A first section paragraph without PP is delimited by the
- * SH/SS BODY's own flow epoch.  The whole paragraph, not its first style
- * macro, must directly precede RS; Rust applies complete-head grammar. */
+ * BODY parent.  An implicit paragraph starts either at the SH/SS BODY's own
+ * epoch or immediately after a preserved .sp in a new epoch.  The whole
+ * paragraph, not its first style macro, must directly precede RS; Rust
+ * applies complete-head grammar. */
 static const struct roff_node *
 man_hanging_successor(struct mant_annotated_collector *collector,
     const struct roff_node *node, int *mode)
@@ -1007,12 +1124,10 @@ man_hanging_successor(struct mant_annotated_collector *collector,
 		}
 	} else if (node->parent->type == ROFFT_BODY &&
 	    (node->parent->tok == MAN_SH || node->parent->tok == MAN_SS) &&
-	    node->parent->child == node &&
-	    node->flow_epoch == node->parent->flow_epoch &&
-	    (node->type == ROFFT_TEXT || node->type == ROFFT_ELEM)) {
-		/* The native first section paragraph needs no PP macro.  A
-		 * deleted .br/.sp is still a flow_epoch boundary, so this cannot
-		 * turn an arbitrary later bold run into a head. */
+	    (node->type == ROFFT_TEXT || node->type == ROFFT_ELEM) &&
+	    man_hanging_after_boundary(collector, node)) {
+		/* A deleted .br/.sp still advances flow_epoch, so neither the
+		 * section-start nor .sp branch can borrow that hidden boundary. */
 		*mode = 2;
 		rs = node;
 		while (rs != NULL && rs->flow_epoch == node->flow_epoch &&

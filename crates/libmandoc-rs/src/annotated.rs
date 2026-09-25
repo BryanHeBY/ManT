@@ -1132,6 +1132,93 @@ mod tests {
     }
 
     #[test]
+    fn native_retained_space_starts_another_direct_hanging_paragraph() {
+        // This exact input ran pinned CVS -Ttree/-Tutf8 first. roff.c::
+        // roff_node_alloc() gives the retained .sp and following declaration
+        // one flow epoch; man_term.c::pre_RS() indents only the direct sibling
+        // RS body. Neither the previous owner nor .sp becomes the new head.
+        let input = ".TH T 1\n.SH OPTIONS\n\\fB\\-a\\fP\n.RS 4\nFirst description.\n.RE\n.sp\n\\fB\\-g\\fP \\fIGLOB\\fP, \\fB\\-\\-glob\\fP=\\fIGLOB\\fP\n.RS 4\nGlob description.\n.RE\n";
+        let mut bundle = SourceBundle::new();
+        bundle.insert("t.1", input.as_bytes().to_vec()).unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Man)
+            .unwrap();
+        let candidates = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 2 && mark.flags & 512 != 0)
+            .collect::<Vec<_>>();
+        let continuations = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 5 && mark.region_kind == 12)
+            .collect::<Vec<_>>();
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(continuations.len(), 2);
+        assert_eq!((candidates[0].line, candidates[1].line), (3, 8));
+        assert_eq!(candidates[0].parent, candidates[1].parent);
+        for (owner, continuation) in candidates.iter().zip(&continuations) {
+            assert_eq!(continuation.preceding_owner, owner.key);
+            assert_eq!(continuation.parent, owner.parent);
+        }
+        assert_eq!(page.text.matches("--glob").count(), 1);
+        assert_eq!(page.text.matches("Glob description.").count(), 1);
+    }
+
+    #[test]
+    fn native_space_candidate_stays_within_its_executed_scope() {
+        // Each exact input ran pinned CVS -Ttree first. post_SH() may remove
+        // a leading .sp, but a retained .sp starts one section-local epoch;
+        // deleted .br still advances the epoch and cannot borrow that .sp.
+        // A nested RS has a different parent; no-fill is not a paragraph.
+        let cases = [
+            (
+                ".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n.ft B\n\\fB--foo\\fP\n.RS 4\nBody.\n.RE\n",
+                1,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\nIntro.\n.sp 0\n\\fB--foo\\fP\n.RS 4\nBody.\n.RE\n",
+                1,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n.sp\n\\fB--foo\\fP\n.RS 4\nBody.\n.RE\n",
+                1,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n.br\n\\fB--foo\\fP\n.RS 4\nBody.\n.RE\n",
+                0,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.sp\n\\fB--foo\\fP\n.SH NEXT\n.RS 4\nEXAMPLE\n.RE\n",
+                0,
+            ),
+            (
+                ".TH T 1\n.SH OPTIONS\n.RS 4\n.sp\n\\fB--inner\\fP\n.RS 4\nINNER\n.RE\n.RE\n",
+                0,
+            ),
+            (".TH T 1\n.SH OPTIONS\n.sp\n\\fB--foo\\fP\n.RS 4\n.RE\n", 0),
+            (
+                ".TH T 1\n.SH OPTIONS\n.nf\n.sp\n\\fB--foo\\fP\n.RS 4\nEXAMPLE\n.RE\n.fi\n",
+                0,
+            ),
+        ];
+        for (input, expected) in cases {
+            let mut bundle = SourceBundle::new();
+            bundle.insert("t.1", input.as_bytes().to_vec()).unwrap();
+            let page = AnnotatedRenderer::default()
+                .render_bundle("t.1", &bundle, InputFormat::Man)
+                .unwrap();
+            let candidates = page
+                .marks
+                .iter()
+                .filter(|mark| mark.kind == 2 && mark.flags & 512 != 0)
+                .count();
+            assert_eq!(candidates, expected, "{input}");
+            assert!(!page.text.is_empty(), "{input}");
+        }
+    }
+
+    #[test]
     fn native_hanging_alternating_font_keeps_both_head_operands() {
         // Both exact inputs ran pinned CVS -Tutf8 first: man_term.c::
         // pre_alternate() renders --foo in bold and FILE in italic without

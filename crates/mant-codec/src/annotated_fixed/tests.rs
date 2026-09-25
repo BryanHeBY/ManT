@@ -1337,6 +1337,167 @@ fn native_hanging_option_forms_reuse_checked_name_boundaries() {
 }
 
 #[test]
+fn retained_space_hanging_declarations_bind_each_direct_owner() {
+    // This exact input ran pinned CVS -Ttree/-Tutf8 first. roff.c::
+    // roff_node_alloc() stamps the retained .sp and its following TEXT with
+    // one epoch; man_macro.c::blk_exp() creates the direct RS continuation.
+    // Native paragraph discovery, the shared full-head name scan, and explain
+    // must agree without borrowing either previous owner's description.
+    let input = b".TH T 1\n.SH OPTIONS\n\\fB\\-a\\fP\n.RS 4\nFirst description.\n.RE\n.sp\n\\fB\\-g\\fP \\fIGLOB\\fP, \\fB\\-\\-glob\\fP=\\fIGLOB\\fP\n.RS 4\nGlob description.\n.RE\n";
+    let resolved = native_query(input, 78);
+    let document = resolved.document.as_ref().unwrap();
+    assert!(validate_document(document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    let entries = fixed
+        .owners
+        .iter()
+        .filter_map(|owner| owner.entry.as_ref().map(|entry| entry.names.as_slice()))
+        .collect::<Vec<_>>();
+    assert_eq!(entries, [&["-a"][..], &["-g", "--glob"][..]]);
+    for (name, expected_body, excluded_body) in [
+        ("-a", "First description.", "Glob description."),
+        ("-g", "Glob description.", "First description."),
+        ("--glob", "Glob description.", "First description."),
+    ] {
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, 1, "{name}");
+        let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+            result.evidence[0].content.as_ref().unwrap()
+        else {
+            panic!("not Fixed owner: {name}")
+        };
+        let body = reading_body
+            .parts
+            .iter()
+            .map(|part| part.text.as_str())
+            .collect::<String>();
+        assert!(body.contains(expected_body), "{name}: {body}");
+        assert!(!body.contains(excluded_body), "{name}: {body}");
+        result.validate_references().unwrap();
+    }
+    assert_eq!(visible_total(&resolved, "--glob"), 1);
+}
+
+#[test]
+fn retained_space_hanging_ignores_zero_width_origin() {
+    // Each exact input ran pinned CVS -Ttree/-Tutf8 first. term.c::term_word()
+    // emits no glyph for \&; roff.c nevertheless keeps its TEXT or B node.
+    // The first visible declaration, not the zero-width instance, supplies
+    // the authored source for the direct RS continuation.
+    for (input, source_line) in [
+        (
+            b".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n\\&\n.B --foo\n.RS 4\nBody.\n.RE\n".as_slice(),
+            6,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n.B \\&\n--foo\n.RS 4\nBody.\n.RE\n".as_slice(),
+            6,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n\\&\n.B --foo\n.RS 4\nBody.\n.RE\n".as_slice(),
+            4,
+        ),
+    ] {
+        let resolved = native_query(input, 78);
+        assert!(validate_document(resolved.document.as_ref().unwrap()).is_empty());
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: "--foo".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, 1, "{input:?}");
+        assert_eq!(
+            result.evidence[0].source.unwrap().line,
+            source_line,
+            "{input:?}"
+        );
+        let mant_protocol::ExplanationContent::FixedOwner { reading_body, .. } =
+            result.evidence[0].content.as_ref().unwrap()
+        else {
+            panic!("not Fixed owner")
+        };
+        let body = reading_body
+            .parts
+            .iter()
+            .map(|part| part.text.as_str())
+            .collect::<String>();
+        assert!(body.contains("Body."), "{body}");
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
+fn retained_space_does_not_turn_other_content_into_definitions() {
+    // Each exact input ran pinned CVS -Ttree before assertions.
+    // man_validate.c::post_SH keeps only later .sp nodes; roff.c increments
+    // the epoch for a deleted .br too. The direct RS parent and its visible
+    // body remain necessary, while complete grammar rejects ordinary prose.
+    for (label, input, needle) in [
+        (
+            "ordinary-sentence",
+            b".TH T 1\n.SH OPTIONS\nIntro.\n.sp\nCompare --foo with --bar.\n.RS 4\nAdditional details.\n.RE\n".as_slice(),
+            "--foo",
+        ),
+        (
+            "deleted-br",
+            b".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n.br\n\\fB--foo\\fP\n.RS 4\nBody.\n.RE\n".as_slice(),
+            "--foo",
+        ),
+        (
+            "cross-section",
+            b".TH T 1\n.SH OPTIONS\n.sp\n\\fB--foo\\fP\n.SH NEXT\n.RS 4\nEXAMPLE\n.RE\n".as_slice(),
+            "--foo",
+        ),
+        (
+            "nested-rs",
+            b".TH T 1\n.SH OPTIONS\n.RS 4\n.sp\n\\fB--inner\\fP\n.RS 4\nINNER\n.RE\n.RE\n".as_slice(),
+            "--inner",
+        ),
+        (
+            "empty-rs",
+            b".TH T 1\n.SH OPTIONS\n.sp\n\\fB--foo\\fP\n.RS 4\n.RE\n".as_slice(),
+            "--foo",
+        ),
+        (
+            "layout-only-rs",
+            b".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n\\fB--foo\\fP\n.RS 4\n.sp\n.RE\n".as_slice(),
+            "--foo",
+        ),
+        (
+            "no-fill",
+            b".TH T 1\n.SH OPTIONS\n.nf\n.sp\n\\fB--foo\\fP\n.RS 4\nEXAMPLE\n.RE\n.fi\n".as_slice(),
+            "--foo",
+        ),
+    ] {
+        let resolved = native_query(input, 78);
+        assert!(validate_document(resolved.document.as_ref().unwrap()).is_empty(), "{label}");
+        assert!(visible_total(&resolved, needle) > 0, "{label}");
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: needle.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, 0, "{label}");
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
 fn hanging_continuation_reads_native_descendants_once_without_inventing_a_new_owner() {
     // Each exact input ran pinned CVS -Ttree/-Tutf8 before these assertions.
     // man_macro.c::blk_exp keeps the RS BODY as one scope, while its tbl and
