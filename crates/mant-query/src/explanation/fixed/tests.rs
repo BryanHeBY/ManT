@@ -140,6 +140,7 @@ fn fixture() -> ResolvedContent {
                 role: OwnerRole::Definition,
                 head_role: Some(mant_ir::OwnerHeadRole::Lexical),
                 head_role_prefix: None,
+                lexical_term_witness: true,
                 head_components: Vec::new(),
                 entry: None,
                 head: slices(&[3, 4], vec![TextJoin::DirectContact], &lengths),
@@ -160,6 +161,7 @@ fn fixture() -> ResolvedContent {
                 role: OwnerRole::Definition,
                 head_role: None,
                 head_role_prefix: None,
+                lexical_term_witness: false,
                 head_components: Vec::new(),
                 entry: None,
                 head: TextSelection {
@@ -336,6 +338,7 @@ fn hinted_fixed_body(form: &str, names: &[&str], occurrences: &[(&str, u64, u64)
             role: OwnerRole::Definition,
             head_role: Some(mant_ir::OwnerHeadRole::Lexical),
             head_role_prefix: Some("-a".into()),
+            lexical_term_witness: false,
             head_components: Vec::new(),
             entry: Some(mant_ir::EntryFacts {
                 name_bindings: bindings,

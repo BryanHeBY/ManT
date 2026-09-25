@@ -157,6 +157,7 @@ pub(super) fn project_owner(
             }
         },
         head_role_prefix: mark.name.clone(),
+        lexical_term_witness: false,
         head_components,
         entry: None,
         head,

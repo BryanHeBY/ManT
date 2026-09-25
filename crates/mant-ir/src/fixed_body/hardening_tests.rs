@@ -123,6 +123,7 @@ fn mdoc_option_components_bind_names_inside_one_parameterized_form() {
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Option),
         head_role_prefix: Some("-a".to_owned()),
+        lexical_term_witness: false,
         head_components: [1, 3]
             .into_iter()
             .map(|run| OwnerHeadComponent {
@@ -564,6 +565,7 @@ fn owner_head_and_body_cannot_claim_the_same_bytes() {
         role: OwnerRole::Definition,
         head_role: None,
         head_role_prefix: None,
+        lexical_term_witness: false,
         head_components: Vec::new(),
         entry: None,
         head: selection(&[(0, 2)], Vec::new()),
@@ -663,6 +665,7 @@ fn fixed_partial_name_requires_native_prefix_and_exact_surviving_slice() {
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Option),
         head_role_prefix: Some("-a".to_owned()),
+        lexical_term_witness: false,
         head_components: Vec::new(),
         entry: Some(EntryFacts {
             id: NodeId::from("option-a"),
@@ -742,6 +745,7 @@ fn lexical_option_facts_require_the_native_role_and_complete_head_binding() {
         role: OwnerRole::Definition,
         head_role: Some(OwnerHeadRole::Lexical),
         head_role_prefix: None,
+        lexical_term_witness: false,
         head_components: Vec::new(),
         entry: Some(EntryFacts {
             id: NodeId::from("lexical-option"),
@@ -768,6 +772,15 @@ fn lexical_option_facts_require_the_native_role_and_complete_head_binding() {
     });
     body.validate().unwrap();
     serde_json::from_value::<FixedBody>(serde_json::to_value(&body).unwrap()).unwrap();
+
+    // A lexical option cannot be hidden as a plain term, even if a forged
+    // document asserts the native fallback witness. Producer and validator
+    // must use the same complete-HEAD name decision.
+    let mut forged_term = body.clone();
+    forged_term.owners[0].entry.as_mut().unwrap().kind = EntryKind::Term;
+    assert!(forged_term.validate().is_err());
+    forged_term.owners[0].lexical_term_witness = true;
+    assert!(forged_term.validate().is_err());
 
     let mut forged = body.clone();
     forged.owners[0].head_role = None;

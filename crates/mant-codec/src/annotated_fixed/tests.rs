@@ -1596,6 +1596,7 @@ fn real_man_body_enters_one_fixed_surface_with_dense_typed_keys() {
     assert_eq!(fixed.headings[0].key.get(), 1);
     assert_eq!(fixed.owners[0].key.get(), 1);
     assert_eq!(fixed.owners[0].role, OwnerRole::Definition);
+    assert!(fixed.owners[0].lexical_term_witness);
     assert_eq!(
         fixed.owner_complete_form(&fixed.owners[0]),
         Some("term".to_owned())
@@ -3305,6 +3306,163 @@ fn flow_and_fixed_share_styled_boundary_and_three_name_heads() {
             );
         }
     }
+}
+
+#[test]
+fn native_man_split_names_and_styled_arguments_share_one_checked_head() {
+    // Each exact input ran pinned CVS -Tutf8 before these assertions.
+    // man_macro.c::blk_imp preserves the TP HEAD; man_term.c::pre_alternate
+    // joins successive operands without a space, and term.c::term_word
+    // executes inline font changes before displaying their final glyphs.
+    for (input, names) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR --he \"\\fBlp\"\nDescription.\n".as_slice(),
+            vec!["--help"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR --he \"\\fBlp ARG\"\nDescription.\n".as_slice(),
+            vec!["--help"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR -- o pt \" ARG\"\nDescription.\n".as_slice(),
+            vec!["--opt"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR --help ARG\nDescription.\n".as_slice(),
+            vec!["--helpARG"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR -o FILE\nDescription.\n".as_slice(),
+            vec!["-oFILE"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-o --output \" FILE\nDescription.\n".as_slice(),
+            vec!["-o", "--output"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-o or --output \" FILE\nDescription.\n".as_slice(),
+            vec!["-o", "--output"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-### --long \" FILE\nDescription.\n".as_slice(),
+            vec!["--long"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir, \" \"-### --long \" FILE\nDescription.\n"
+                .as_slice(),
+            vec!["-L", "--long"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir, \" \"--output=\" FILE\nDescription.\n"
+                .as_slice(),
+            vec!["-L", "--output"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir, \" \"--output[=FILE]\"\nDescription.\n"
+                .as_slice(),
+            vec!["-L", "--output"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir, \" \"--output=FILE, --all\"\nDescription.\n"
+                .as_slice(),
+            vec!["-L", "--output", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir, \" \"-10,--fake\"\nDescription.\n"
+                .as_slice(),
+            vec!["-L"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir, \" \"\\(dq--fake\\(dq\"\nDescription.\n"
+                .as_slice(),
+            vec!["-L"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"dir,--fake,tail, \" \"--all\"\nDescription.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+    ] {
+        assert_flow_fixed_checked_names(input, &names);
+    }
+}
+
+fn assert_flow_fixed_checked_names(input: &[u8], names: &[&str]) {
+    let flow = crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap();
+    let flow_index = mant_ir::SemanticIndex::build(&flow);
+    let flow_entries = flow_index.section("options");
+    assert_eq!(flow_entries.len(), 1, "{}", String::from_utf8_lossy(input));
+    assert_eq!(
+        flow_entries[0].names,
+        names,
+        "{}",
+        String::from_utf8_lossy(input)
+    );
+    let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&fixed).is_empty());
+    let DocumentBody::Fixed(body) = &fixed.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(
+        body.owners[0].entry.as_ref().map(|entry| &entry.names),
+        Some(&names.iter().map(|name| (*name).to_owned()).collect()),
+        "{}",
+        String::from_utf8_lossy(input)
+    );
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(fixed),
+        tldr: None,
+    };
+    for &name in names {
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, 1, "{name}");
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
+fn mixed_style_name_cannot_borrow_an_unproved_native_component() {
+    // This exact input ran pinned CVS -Ttree/-Tascii for the earlier font
+    // boundary matrix. term.c::term_word changes font within the one B
+    // operand; it does not create another pre_alternate() operand.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B \\-B\\fRn\nDescription.\n";
+    let mut document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(body) = &mut document.body else {
+        panic!("not Fixed")
+    };
+    let owner = &mut body.owners[0];
+    assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+    assert!(owner.head.parts.len() > 1);
+    let head = owner.head.clone();
+    let facts = owner.entry.as_mut().unwrap();
+    facts.kind = EntryKind::Parameter {
+        parameter_kind: ParameterKind::Option,
+    };
+    facts.names = vec!["-Bn".into()];
+    facts.name_bindings[0].occurrences = vec![head];
+    let component = &mut owner.head_components[0];
+    component.selection.parts.truncate(1);
+    component.selection.joins.clear();
+    component.role = OwnerHeadRole::Option;
+    assert!(!validate_document(&document).is_empty());
+
+    let DocumentBody::Fixed(body) = &mut document.body else {
+        unreachable!()
+    };
+    let component = &mut body.owners[0].head_components[0];
+    component.role = OwnerHeadRole::Lexical;
+    component.source = None;
+    component.source_key = None;
+    assert!(!validate_document(&document).is_empty());
 }
 
 #[test]

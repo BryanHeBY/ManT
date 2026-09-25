@@ -340,6 +340,11 @@ pub struct OwnerMark {
     /// of freezing a prefix from their raw roff operand spelling.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_role_prefix: Option<String>,
+    /// Native evidence that a lexical HEAD may remain a plain TP/TQ term
+    /// when its complete displayed spelling contains no accepted option.
+    /// A broad IP or alternating-font candidate does not have this fallback.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub lexical_term_witness: bool,
     /// Native HEAD macro evidence in authoring order; not inferred from font.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub head_components: Vec<OwnerHeadComponent>,
@@ -472,54 +477,9 @@ impl FixedBody {
                 .is_some_and(|form| crate::is_complete_hanging_option_head(&form))
     }
 
-    /// Read option spellings only from source-identified bold operands of an
-    /// alternating-font man `HEAD`. `man_term.c::pre_alternate` prints adjacent
-    /// operands without inserting a space; their final glyphs alone cannot
-    /// recover the boundary between a name and an italic argument.
-    #[must_use]
-    pub fn lexical_component_names(
-        &self,
-        owner: &OwnerMark,
-    ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
-        if owner.head_role != Some(OwnerHeadRole::Lexical)
-            || owner.head_role_prefix.is_some()
-            || owner.head_components.is_empty()
-        {
-            return None;
-        }
-        let form = self.owner_complete_form(owner)?;
-        let ranges = component_part_ranges(&owner.head, &owner.head_components)?;
-        let byte_ranges = self.component_byte_ranges(&owner.head, &ranges)?;
-        let mut names = Vec::new();
-        for (component, outer) in owner.head_components.iter().zip(byte_ranges) {
-            if component.role != OwnerHeadRole::Lexical || !component.has_source_identity() {
-                return None;
-            }
-            let text = self.selection_text(&component.selection)?;
-            for (name, inner) in crate::literal_option_names(&text) {
-                if names.len() == 64 {
-                    return None;
-                }
-                let selection = self.selection_subrange(&component.selection, inner.clone())?;
-                if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
-                    return None;
-                }
-                names.push((
-                    name,
-                    selection,
-                    outer.start + inner.start..outer.start + inner.end,
-                ));
-            }
-        }
-        self.checked_lexical_names(&form, names)
-            .filter(|names| !names.is_empty())
-    }
-
-    /// Select names from one complete native lexical head. Both source-neutral
-    /// spellings and native bold components pass the same declaration segments
-    /// and final-display parameter boundary before they become names.
-    #[must_use]
-    pub fn lexical_literal_names(
+    /// Select names from one complete native lexical head. Source-neutral
+    /// spellings and native argument style pass the same checked intervals.
+    fn lexical_literal_names(
         &self,
         owner: &OwnerMark,
     ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
@@ -544,6 +504,10 @@ impl FixedBody {
                 candidates.push((name.to_owned(), leading..leading + name.len()));
             }
         }
+        let styled_ranges = styled
+            .iter()
+            .map(|(_, range)| range.clone())
+            .collect::<Vec<_>>();
         for (name, range) in styled {
             candidates.retain(|(_, existing)| existing.start != range.start);
             candidates.push((name, range));
@@ -557,11 +521,12 @@ impl FixedBody {
             }
             names.push((name, selection, range));
         }
-        let names = self.checked_lexical_names(&form, names)?;
+        let names = self.checked_lexical_names(owner, &form, names, &styled_ranges)?;
         // The parser-alive prefix is a candidate for the first declaration,
         // not permission to ignore the rest of the native HEAD.  Keep it
         // tied to the same final glyphs when it was recorded.
-        if let Some(prefix) = owner.head_role_prefix.as_deref()
+        if !names.is_empty()
+            && let Some(prefix) = owner.head_role_prefix.as_deref()
             && names.first().map(|(name, _, _)| name.as_str()) != Some(prefix)
         {
             return None;
@@ -570,39 +535,17 @@ impl FixedBody {
     }
 
     /// One checked result for producer, validator, and query positions.
-    /// Native components supply additional source-identified evidence, but
-    /// cannot truncate names found in the complete visible HEAD.
+    /// Native operand components describe where glyphs came from; a prefix
+    /// inside one component is not an independent name alongside the complete
+    /// displayed HEAD (`man_term.c::pre_alternate` joins its operands). A
+    /// nonempty result contains exact names; an empty result proves a checked
+    /// non-option head; `None` denotes incomplete or contradictory evidence.
     #[must_use]
     pub fn lexical_names(
         &self,
         owner: &OwnerMark,
     ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
-        let literal = self.lexical_literal_names(owner);
-        let components = self.lexical_component_names(owner);
-        if literal.is_none() && components.is_none() {
-            return None;
-        }
-        let mut names = literal.unwrap_or_default();
-        for candidate in components.unwrap_or_default() {
-            if let Some(existing) = names.iter().find(|(_, _, range)| *range == candidate.2) {
-                if existing.0 != candidate.0 || existing.1 != candidate.1 {
-                    return None;
-                }
-            } else {
-                names.push(candidate);
-            }
-        }
-        if names.len() > 64 {
-            return None;
-        }
-        names.sort_by_key(|(_, _, range)| range.start);
-        if names.windows(2).any(|pair| pair[0].2.end > pair[1].2.start) {
-            return None;
-        }
-        if names.is_empty() {
-            return Some(names);
-        }
-        self.checked_lexical_names(&self.owner_complete_form(owner)?, names)
+        self.lexical_literal_names(owner)
     }
 
     /// An immediately underlined suffix is a native parameter boundary,
@@ -662,36 +605,51 @@ impl FixedBody {
             if start <= segment.start || start > segment.end {
                 continue;
             }
-            let before = form.get(segment.start..start)?.trim_start();
-            if !crate::lexical_option_token(before) {
-                continue;
+            let prefix = form.get(segment.start..start)?;
+            for (name, local) in crate::literal_option_names(prefix) {
+                let range = segment.start + local.start..segment.start + local.end;
+                let selection = self.selection_subrange(&owner.head, range.clone())?;
+                if selection.parts.iter().any(|part| {
+                    self.surface
+                        .runs
+                        .get((part.run.get() - 1) as usize)
+                        .is_some_and(|run| run.label.style.underline && !run.label.style.bold)
+                }) {
+                    continue;
+                }
+                if candidates.len() == 64 {
+                    return None;
+                }
+                candidates.push((name, range));
             }
-            let name_start = start.checked_sub(before.len())?;
-            let range = name_start..start;
-            let selection = self.selection_subrange(&owner.head, range.clone())?;
-            if selection.parts.iter().any(|part| {
-                self.surface
-                    .runs
-                    .get((part.run.get() - 1) as usize)
-                    .is_some_and(|run| run.label.style.underline && !run.label.style.bold)
-            }) {
-                continue;
-            }
-            if candidates.len() == 64 {
-                return None;
-            }
-            candidates.push((before.to_owned(), range));
         }
         (offset == form.len()).then_some((candidates, attempts))
     }
 
     fn checked_lexical_names(
         &self,
+        owner: &OwnerMark,
         form: &str,
         candidates: Vec<(String, TextSelection, std::ops::Range<usize>)>,
+        styled_ranges: &[std::ops::Range<usize>],
     ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
         let segments = crate::entry::literal_declaration_ranges(form);
         let literal = crate::literal_option_names(form);
+        let components = component_part_ranges(&owner.head, &owner.head_components)
+            .and_then(|ranges| self.component_byte_ranges(&owner.head, &ranges))
+            .map(|ranges| {
+                owner
+                    .head_components
+                    .iter()
+                    .zip(ranges)
+                    .filter_map(|(component, range)| {
+                        (component.role == OwnerHeadRole::Lexical
+                            && component.has_source_identity())
+                        .then_some(range)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let mut names = Vec::new();
         let mut blocked_segment = None;
         let mut segment_cursor = 0;
@@ -714,7 +672,10 @@ impl FixedBody {
             let at_segment_start = leading
                 .chars()
                 .all(|character| character.is_whitespace() || matches!(character, '[' | '{' | '('));
-            if !at_segment_start && !literal.iter().any(|(_, found)| *found == range) {
+            if !at_segment_start
+                && !literal.iter().any(|(_, found)| *found == range)
+                && !styled_ranges.contains(&range)
+            {
                 continue;
             }
             // Underline is final native display evidence, not a recovered
@@ -731,10 +692,12 @@ impl FixedBody {
                 blocked_segment = Some(segment_cursor);
                 continue;
             }
-            // A font change inside one spelling is an operand boundary, not
-            // permission to concatenate bold and nonbold glyphs into a new
-            // option. An independently delimited roman name remains eligible.
+            // A font change alone is not a parameter boundary: BR's native
+            // operands are joined without spaces by pre_alternate(). Within
+            // one B operand (or an IP literal), however, mixed styling has
+            // no independent operand witness and remains conservative.
             let mut bold = None;
+            let mut mixed_bold = false;
             for part in &selection.parts {
                 let part_bold = self
                     .surface
@@ -747,21 +710,31 @@ impl FixedBody {
                     .replace(part_bold)
                     .is_some_and(|previous| previous != part_bold)
                 {
-                    style_rejected = true;
-                    blocked_segment = Some(segment_cursor);
-                    break;
+                    mixed_bold = true;
                 }
             }
-            if blocked_segment == Some(segment_cursor) {
+            if mixed_bold
+                && (components
+                    .iter()
+                    .any(|component| component.start <= range.start && range.end <= component.end)
+                    || !components.iter().any(|component| {
+                        component.start < range.end && range.start < component.end
+                    }))
+            {
+                style_rejected = true;
+                blocked_segment = Some(segment_cursor);
                 continue;
             }
             names.push((name, selection, range));
+        }
+        if names.len() > 64 || names.windows(2).any(|pair| pair[0].2.end > pair[1].2.start) {
+            return None;
         }
         // An empty result is meaningful only when final italic styling
         // rejected a candidate: the producer must not reclassify that same
         // visible spelling through the generic identity fallback. A head
         // with no option candidate remains eligible as an ordinary Term.
-        (!names.is_empty() || style_rejected).then_some(names)
+        (!names.is_empty() || style_rejected || literal.is_empty()).then_some(names)
     }
 
     /// Bind each source-identified `Fl` macro to its own final glyphs without
@@ -978,6 +951,11 @@ impl FixedBody {
             (_, EntryKind::Term, EntryNameEvidence::Lexical) => {
                 only_name == &form
                     && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
+                    && (owner.head_role != Some(OwnerHeadRole::Lexical)
+                        || owner.lexical_term_witness
+                            && self
+                                .lexical_names(owner)
+                                .is_some_and(|names| names.is_empty()))
             }
             (
                 Some(OwnerHeadRole::Lexical),
@@ -987,7 +965,7 @@ impl FixedBody {
                 EntryNameEvidence::Lexical,
             ) => self.validated_lexical_names(owner, entry, only_form),
             (
-                Some(OwnerHeadRole::Option | OwnerHeadRole::Lexical),
+                Some(OwnerHeadRole::Option),
                 EntryKind::Parameter {
                     parameter_kind: ParameterKind::Option,
                 },
@@ -1079,20 +1057,11 @@ impl FixedBody {
             (EntryKind::EnvironmentVariable, _) => {
                 crate::environment_variable_alias(role_prefix).as_deref() == Some(name)
             }
-            (_, Some(OwnerHeadRole::Lexical)) => {
-                role_prefix == name && crate::lexical_option_token(name)
-            }
             _ => role_prefix == name && crate::native_option_token(name),
         };
         role_proves_name
             && form.trim_start().starts_with(role_prefix)
             && form.get(start..end) == Some(name)
-            && (owner.head_role != Some(OwnerHeadRole::Lexical)
-                || form.get(end..).is_some_and(|suffix| {
-                    suffix.is_empty()
-                        || suffix.starts_with('=')
-                        || suffix.starts_with(char::is_whitespace)
-                }))
             && self.selection_subrange(&owner.head, start..end).as_ref() == occurrences.first()
             && occurrences.len() == 1
     }

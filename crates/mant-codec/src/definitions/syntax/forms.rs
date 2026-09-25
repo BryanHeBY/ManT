@@ -1,5 +1,5 @@
 //! Keep declaration separators and parameter styling distinct until extraction.
-use super::declaration::DeclarationState;
+use super::declaration::{DeclarationState, pattern_start};
 use mant_ir::{ContentContext, ContentRef, Inline, InlineView, literal_option_aliases};
 use std::ops::Range;
 
@@ -66,7 +66,11 @@ impl FormCandidate<'_> {
     }
 
     fn paired_invocations(self) -> Vec<Self> {
-        if let Some(tokens) = pattern_declarations(self.content, &self.inlines) {
+        let mut prefix = String::new();
+        // A styled argument can follow an already complete name group. Both
+        // pattern and ordinary aliases inspect the same bounded prefix.
+        append_name_prefix(self.content, &self.inlines, &mut prefix);
+        if let Some(tokens) = pattern_declarations_text(&prefix) {
             return tokens
                 .into_iter()
                 .map(|(token, offset)| Self {
@@ -77,10 +81,8 @@ impl FormCandidate<'_> {
                 })
                 .collect();
         }
-        let mut prefix = String::new();
-        if !append_name_prefix(self.content, &self.inlines, &mut prefix) {
-            return vec![self];
-        }
+        // The complete-prefix grammar still has to accept every name; a
+        // truncated spelling cannot become an alias.
         let Some(tokens) = literal_option_aliases(&prefix) else {
             return vec![self];
         };
@@ -96,26 +98,13 @@ impl FormCandidate<'_> {
     }
 }
 
-/// A complete whitespace-separated literal head may contain a pattern plus
-/// independently spelled long options. Accept no operands, argument styling,
+/// A complete whitespace-separated prefix may contain a pattern plus
+/// independently spelled long options. Accept no literal operands,
 /// assignment suffixes or prose; a pattern itself never expands into names.
-fn pattern_declarations(
-    content: ContentContext<'_>,
-    inlines: &[Inline],
-) -> Option<Vec<(String, usize)>> {
-    let mut literal = String::new();
-    if !append_name_prefix(content, inlines, &mut literal) {
-        return None;
-    }
-    pattern_declarations_text(&literal)
-}
-
 fn pattern_declarations_text(literal: &str) -> Option<Vec<(String, usize)>> {
     let tokens = literal.split_whitespace().collect::<Vec<_>>();
     if tokens.len() < 2
-        || !tokens[0].starts_with('-')
-        || !tokens[0].contains('#')
-        || !tokens[0].chars().all(|c| matches!(c, '-' | '#'))
+        || !pattern_start(tokens[0])
         || !tokens[1..].iter().all(|token| {
             token.starts_with("--") && super::options::option_prefix(token) == Some(*token)
         })

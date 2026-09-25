@@ -4,7 +4,9 @@
 //! separator following a completed argument may introduce another full option;
 //! it never gives a parameter fragment a fresh chance to become a name.
 
-use mant_ir::{ContentContext, Inline, InlineView, lexical_option_token, option_prefix};
+use mant_ir::{
+    ContentContext, Inline, InlineView, lexical_option_token, literal_option_names, option_prefix,
+};
 use std::collections::HashSet;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -158,7 +160,11 @@ impl DeclarationState {
             let next = self.offset + character.len_utf8();
             let following = self.suffix.probe(&self.text, next);
             if self.literal_starts.contains(&following.start)
-                && lexical_option_token(following.token)
+                && following.token.starts_with('-')
+                && (literal_option_names(following.token)
+                    .first()
+                    .is_some_and(|(_, range)| range.start == 0)
+                    || pattern_start(following.token))
             {
                 return self.separator(character, true);
             }
@@ -316,6 +322,17 @@ fn negative_number_parameter(token: &str) -> bool {
     token.starts_with('-')
         && !token.starts_with("--")
         && token.as_bytes().get(1).is_some_and(u8::is_ascii_digit)
+}
+
+/// A pattern can start a declaration segment only provisionally. The full
+/// segment still needs an independently spelled long option before it can
+/// publish a name.
+pub(super) fn pattern_start(token: &str) -> bool {
+    token.starts_with('-')
+        && token.contains('#')
+        && token
+            .chars()
+            .all(|character| matches!(character, '-' | '#'))
 }
 
 /// A candidate name boundary is used only to enter argument state. It does

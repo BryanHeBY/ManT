@@ -17150,7 +17150,7 @@
             ]
           },
           "headRolePrefix": {
-            "description": "Conservative rendered prefix of the first native head macro's own\noperand or man `.IP` bold prefix. The final display and name remain\nseparately checked; this is evidence, not copied body content.",
+            "description": "Optional native role prefix when an authored macro supplies one.\nMan lexical heads use the complete checked display selection instead\nof freezing a prefix from their raw roff operand spelling.",
             "type": [
               "string",
               "null"
@@ -17165,6 +17165,10 @@
             "type": "integer",
             "format": "uint32",
             "minimum": 1
+          },
+          "lexicalTermWitness": {
+            "description": "Native evidence that a lexical HEAD may remain a plain TP/TQ term\nwhen its complete displayed spelling contains no accepted option.\nA broad IP or alternating-font candidate does not have this fallback.",
+            "type": "boolean"
           },
           "parent": {
             "description": "Root or an earlier enclosing owner.",

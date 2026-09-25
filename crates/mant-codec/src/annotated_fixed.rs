@@ -106,8 +106,6 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     }
     let mut headings = Vec::new();
     let mut owners = Vec::new();
-    let mut owner_tokens = Vec::new();
-    let mut owner_has_plain_b = Vec::new();
     let mut links = Vec::new();
     let mut resolution_diagnostics = Vec::new();
     let mut anchors = Vec::new();
@@ -162,20 +160,26 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
         match mark.kind {
             1 => headings.push(project_heading(&page, &keys, &identities, mark)?),
             2 => {
-                owner_tokens.push(mark.token);
-                owner_has_plain_b.push(owner_components[mark.key as usize].iter().any(|&key| {
+                let plain_b = owner_components[mark.key as usize].iter().any(|&key| {
                     page.marks.get((key - 1) as usize).is_some_and(|component| {
                         component.token == libmandoc_rs::annotated::MAN_B_TOKEN
                     })
-                }));
-                owners.push(project_owner(
+                });
+                let mut owner = project_owner(
                     &page,
                     &keys,
                     &identities,
                     mark,
                     &owner_bodies[mark.key as usize],
                     &owner_components[mark.key as usize],
-                )?);
+                )?;
+                let plain_tp = matches!(
+                    mark.token,
+                    libmandoc_rs::annotated::MAN_TP_TOKEN | libmandoc_rs::annotated::MAN_TQ_TOKEN
+                ) && owner.head_components.is_empty();
+                owner.lexical_term_witness =
+                    owner.head_role == Some(OwnerHeadRole::Lexical) && (plain_b || plain_tp);
+                owners.push(owner);
             }
             3 => links.push(project_link(
                 &page,
@@ -272,37 +276,15 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
     let entries = fixed
         .owners
         .iter()
-        .enumerate()
-        .map(|(index, owner)| {
+        .map(|owner| {
             if owner.hanging_candidate && !fixed.hanging_declaration_ready(owner) {
                 return None;
             }
-            if let Some(components) = fixed.lexical_names(owner) {
-                if components.is_empty() {
-                    // pre_B still establishes a TP/TQ term if inline font
-                    // escapes turn its spelling into a non-option. An
-                    // alternate-font operand or IP inline-font candidate
-                    // supplies no independent term fallback.
-                    if !owner_has_plain_b[index] {
-                        return None;
-                    }
-                    let form = fixed.owner_complete_form(owner)?;
-                    return Some(EntryFacts {
-                        name_bindings: vec![EntryNameBinding {
-                            name: 0,
-                            occurrences: vec![owner.head.clone()],
-                            evidence: EntryNameEvidence::Lexical,
-                        }],
-                        alias_groups: Vec::new(),
-                        alias_of: None,
-                        forms: vec![owner.head.clone()],
-                        id: owner.id.clone(),
-                        kind: EntryKind::Term,
-                        case: NameCase::Sensitive,
-                        names: vec![form],
-                        value_domain: None,
-                    });
-                }
+            let lexical_names = fixed.lexical_names(owner);
+            let checked_non_option = lexical_names.as_ref().is_some_and(Vec::is_empty);
+            if let Some(components) = lexical_names
+                && !components.is_empty()
+            {
                 let (names, name_bindings) = group_bindings(
                     components
                         .into_iter()
@@ -320,6 +302,31 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                     },
                     case: NameCase::Sensitive,
                     names,
+                    value_domain: None,
+                });
+            }
+            if owner.head_role == Some(OwnerHeadRole::Lexical) {
+                // There is no second lexical classifier after the checked
+                // complete-HEAD decision. Only a native plain B operand can
+                // establish a non-option TP/TQ term; IP and alternating-font
+                // candidates cannot turn an incomplete name into a fallback.
+                if !owner.lexical_term_witness || !checked_non_option {
+                    return None;
+                }
+                let form = fixed.owner_complete_form(owner)?;
+                return Some(EntryFacts {
+                    name_bindings: vec![EntryNameBinding {
+                        name: 0,
+                        occurrences: vec![owner.head.clone()],
+                        evidence: EntryNameEvidence::Lexical,
+                    }],
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: vec![owner.head.clone()],
+                    id: owner.id.clone(),
+                    kind: EntryKind::Term,
+                    case: NameCase::Sensitive,
+                    names: vec![form],
                     value_domain: None,
                 });
             }
@@ -397,22 +404,6 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
                 });
             };
             let identity = native_head_identity(&fixed, owner, &form);
-            if owner_tokens[index] == libmandoc_rs::annotated::MAN_IP_TOKEN
-                && owner.head_role == Some(OwnerHeadRole::Lexical)
-                && identity.is_none()
-            {
-                return None;
-            }
-            // The parser-alive .IP hint is intentionally a broad candidate:
-            // a styled prefix that fails the shared spelling or final-glyph
-            // check is not a generic Term. Keep its display owner without
-            // inventing a different semantic declaration.
-            if owner.head_role == Some(OwnerHeadRole::Lexical)
-                && owner.head_role_prefix.is_some()
-                && identity.is_none()
-            {
-                return None;
-            }
             let (kind, evidence, name, occurrence) = identity.unwrap_or_else(|| {
                 (
                     EntryKind::Term,
@@ -506,22 +497,6 @@ fn native_head_identity(
     owner: &OwnerMark,
     form: &str,
 ) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
-    // man_macro.c::blk_imp establishes a real TP/TQ head even without mdoc
-    // markup. A complete surviving token can use the same source-neutral
-    // option spelling rule; an argument suffix or incomplete join cannot.
-    if owner.head_role == Some(OwnerHeadRole::Lexical)
-        && owner.head_role_prefix.is_none()
-        && mant_ir::lexical_option_token(form)
-    {
-        return Some((
-            EntryKind::Parameter {
-                parameter_kind: ParameterKind::Option,
-            },
-            EntryNameEvidence::Lexical,
-            form.to_owned(),
-            owner.head.clone(),
-        ));
-    }
     let leading = form.trim_start();
     let start = form.len() - leading.len();
     if owner.head_role == Some(OwnerHeadRole::Literal) {
@@ -561,15 +536,7 @@ fn native_head_identity(
             EntryKind::EnvironmentVariable,
             crate::definitions::environment_variable_alias(role_prefix)?,
         ),
-        OwnerHeadRole::Lexical => mant_ir::lexical_option_token(role_prefix).then(|| {
-            (
-                EntryKind::Parameter {
-                    parameter_kind: ParameterKind::Option,
-                },
-                role_prefix.to_owned(),
-            )
-        })?,
-        OwnerHeadRole::Literal => return None,
+        OwnerHeadRole::Lexical | OwnerHeadRole::Literal => return None,
     };
     let end = start.checked_add(name.len())?;
     if owner.head_role == Some(OwnerHeadRole::Lexical)

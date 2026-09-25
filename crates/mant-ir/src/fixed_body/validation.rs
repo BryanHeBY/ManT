@@ -379,6 +379,13 @@ impl FixedBody {
             if owner.head_role.is_some() && owner.role != super::OwnerRole::Definition {
                 return Err(FixedBodyError("non-definition owner has a head role"));
             }
+            if owner.lexical_term_witness
+                && (owner.role != super::OwnerRole::Definition
+                    || owner.head_role != Some(super::OwnerHeadRole::Lexical)
+                    || owner.head_role_prefix.is_some())
+            {
+                return Err(FixedBodyError("invalid lexical term witness"));
+            }
             if owner
                 .head_role_prefix
                 .as_ref()
@@ -400,6 +407,12 @@ impl FixedBody {
             let mut previous_component: Option<&super::OwnerHeadComponent> = None;
             for component in &owner.head_components {
                 validate_selection(&component.selection)?;
+                if owner.head_role == Some(super::OwnerHeadRole::Lexical)
+                    && (component.role != super::OwnerHeadRole::Lexical
+                        || component.source.is_none() && component.source_key.is_none())
+                {
+                    return Err(FixedBodyError("invalid lexical head component"));
+                }
                 if let Some(previous) = previous_component
                     && (selections_overlap(&previous.selection, &component.selection)
                         || previous

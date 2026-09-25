@@ -110,6 +110,7 @@ fn scaled_styled_argument_body(fragments: usize) -> (FixedBody, String) {
             role: OwnerRole::Definition,
             head_role: Some(OwnerHeadRole::Lexical),
             head_role_prefix: None,
+            lexical_term_witness: false,
             head_components: Vec::new(),
             entry: None,
             head: TextSelection {
@@ -142,6 +143,7 @@ fn borrowed_entry_view_requires_the_mark_in_its_own_fixed_body() {
     let owner = &mut body.owners[0];
     owner.head = head.clone();
     owner.head_role = Some(OwnerHeadRole::Lexical);
+    owner.lexical_term_witness = true;
     owner.entry = Some(crate::EntryFacts {
         name_bindings: vec![crate::EntryNameBinding {
             name: 0,
@@ -252,6 +254,7 @@ fn sample_body() -> FixedBody {
             role: OwnerRole::Definition,
             head_role: None,
             head_role_prefix: None,
+            lexical_term_witness: false,
             head_components: Vec::new(),
             entry: None,
             head: empty_selection(),
