@@ -873,8 +873,19 @@ fn is_short_long_connector(form: &str, segment_start: usize, offset: usize) -> b
 /// visual adjacency as an alias or reconstructing roff markup.
 #[must_use]
 pub fn is_complete_hanging_option_head(form: &str) -> bool {
+    is_complete_hanging_option_head_with_provisional(form, |_, _| false)
+}
+
+/// A one-glyph short spelling can be a provisional, non-name prefix when
+/// native final-display evidence independently proves it bold. Keep that
+/// evidence outside the source-neutral public spelling rule: only the checked
+/// later long name is published, never the provisional spelling itself.
+pub(crate) fn is_complete_hanging_option_head_with_provisional(
+    form: &str,
+    bold_names: impl FnOnce(Range<usize>, &[Range<usize>]) -> bool,
+) -> bool {
     let names = literal_option_names(form);
-    let Some((_, first)) = names.first() else {
+    let Some((first_name, first)) = names.first() else {
         return false;
     };
     let leading = &form[..first.start];
@@ -885,7 +896,18 @@ pub fn is_complete_hanging_option_head(form: &str) -> bool {
         .trim()
         .strip_suffix([',', '|'])
         .is_some_and(|pattern| complete_italic_metavariable(pattern.trim_end(), true));
-    if !neutral_leading && !provisional_leading {
+    let native_short_leading = first_name.starts_with("--")
+        && hanging_short_prefix(leading).is_some_and(|prefix| {
+            // One native short prefix cannot promote a later roman argument
+            // or a second unstyled token into a name. The caller checks
+            // these exact ranges against final native glyph styling.
+            let ranges = names
+                .iter()
+                .map(|(_, range)| range.clone())
+                .collect::<Vec<_>>();
+            bold_names(prefix, &ranges)
+        });
+    if !neutral_leading && !provisional_leading && !native_short_leading {
         return false;
     }
     for pair in names.windows(2) {
@@ -912,6 +934,39 @@ pub fn is_complete_hanging_option_head(form: &str) -> bool {
         .last()
         .and_then(|(_, range)| form.get(range.end..))
         .is_some_and(hanging_argument_tail)
+}
+
+/// Exact `-<one glyph>, ` prefix of a complete hanging declaration. A longer
+/// negative argument, an unseparated comma or quoted punctuation is not a
+/// provisional short option; the caller must still prove final bold glyphs.
+fn hanging_short_prefix(leading: &str) -> Option<Range<usize>> {
+    let start = leading.len() - leading.trim_start().len();
+    let rest = leading.get(start..)?.strip_prefix('-')?;
+    let glyph = rest.chars().next()?;
+    if !glyph.is_ascii_graphic()
+        || matches!(
+            glyph,
+            '-' | ','
+                | '|'
+                | '/'
+                | '='
+                | '"'
+                | '\''
+                | '<'
+                | '>'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '('
+                | ')'
+        )
+    {
+        return None;
+    }
+    let end = start + 1 + glyph.len_utf8();
+    let suffix = leading.get(end..)?.strip_prefix(',')?;
+    (!suffix.is_empty() && suffix.chars().all(char::is_whitespace)).then_some(start..end)
 }
 
 fn hanging_argument_tail(value: &str) -> bool {
@@ -1812,6 +1867,31 @@ mod tests {
             "ordinary prose",
         ] {
             assert!(!is_complete_hanging_option_head(rejected), "{rejected}");
+        }
+    }
+
+    #[test]
+    fn hanging_short_prefix_only_licenses_a_checked_long_name() {
+        // Each minimal spelling ran pinned CVS -Tutf8 in a man SH/RS page
+        // first. man_term.c::print_man_node() preserves the full head while
+        // term.c::term_word() executes its final font and glyph boundaries.
+        for (form, name) in [("-., --hidden", "--hidden"), ("-0, --null", "--null")] {
+            assert_eq!(super::literal_option_names(form)[0].0, name);
+            assert!(!super::is_complete_hanging_option_head(form));
+            assert!(super::is_complete_hanging_option_head_with_provisional(
+                form,
+                |prefix, names| prefix == (0..2) && names.len() == 1
+            ));
+            assert!(!super::is_complete_hanging_option_head_with_provisional(
+                form,
+                |_, _| false
+            ));
+        }
+        for form in ["-10, --fake", "-0,--fake", "-0, --fake intervening text"] {
+            assert!(
+                !super::is_complete_hanging_option_head_with_provisional(form, |_, _| true),
+                "{form}"
+            );
         }
     }
 

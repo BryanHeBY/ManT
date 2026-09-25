@@ -429,6 +429,102 @@ fn group_name_occurrences(
 }
 
 impl FixedBody {
+    /// Check disjoint logical name ranges against final bold runs in one
+    /// forward pass. A consumed separator has no glyph style and cannot be
+    /// used as a name binding; no complete HEAD copy is made per name.
+    fn selection_ranges_bold(
+        &self,
+        selection: &TextSelection,
+        form: &str,
+        prefix: Range<usize>,
+        names: &[Range<usize>],
+    ) -> bool {
+        if selection.joins.len() != selection.parts.len().saturating_sub(1) {
+            return false;
+        }
+        let mut ranges = Vec::with_capacity(names.len() + 1);
+        ranges.push(prefix);
+        ranges.extend_from_slice(names);
+        let mut previous_end = 0;
+        for range in &ranges {
+            if range.start < previous_end
+                || range.start >= range.end
+                || form.get(range.clone()).is_none()
+            {
+                return false;
+            }
+            previous_end = range.end;
+        }
+        let mut cursor = 0usize;
+        let mut target = 0usize;
+        let mut covered = ranges[0].start;
+        for (index, part) in selection.parts.iter().enumerate() {
+            if index != 0 {
+                let separator = match &selection.joins[index - 1] {
+                    TextJoin::DirectContact => None,
+                    TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text) => {
+                        Some(text)
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return false,
+                };
+                if let Some(separator) = separator {
+                    let Some(end) = cursor.checked_add(separator.len()) else {
+                        return false;
+                    };
+                    if ranges
+                        .get(target)
+                        .is_some_and(|range| range.start < end && cursor < range.end)
+                    {
+                        return false;
+                    }
+                    cursor = end;
+                }
+            }
+            let Some(start_byte) = usize::try_from(part.start_byte).ok() else {
+                return false;
+            };
+            let Some(end_byte) = usize::try_from(part.end_byte).ok() else {
+                return false;
+            };
+            let Some(run) = self.surface.runs.get((part.run.get() - 1) as usize) else {
+                return false;
+            };
+            let Some(visible) = self
+                .surface
+                .run_text(part.run)
+                .and_then(|text| text.get(start_byte..end_byte))
+            else {
+                return false;
+            };
+            let Some(end) = cursor.checked_add(visible.len()) else {
+                return false;
+            };
+            while let Some(range) = ranges.get(target)
+                && range.start < end
+            {
+                if range.end <= cursor {
+                    return false;
+                }
+                let begin = range.start.max(cursor);
+                let stop = range.end.min(end);
+                if begin != covered || !run.label.style.bold {
+                    return false;
+                }
+                covered = stop;
+                if covered == range.end {
+                    target += 1;
+                    if let Some(next) = ranges.get(target) {
+                        covered = next.start;
+                    }
+                } else {
+                    break;
+                }
+            }
+            cursor = end;
+        }
+        target == ranges.len() && cursor == form.len()
+    }
+
     /// Check one PP/RS declaration against its direct native continuation,
     /// without scanning unrelated owners or regions. The paragraph head must
     /// be complete syntax; a textless RS qualifies only with a checked nested
@@ -470,9 +566,12 @@ impl FixedBody {
             && region.section == owner.section
             && (owner.hanging_nested_head.is_none() || nested_head_ready)
             && (!region.selection.parts.is_empty() || nested_head_ready)
-            && self
-                .owner_complete_form(owner)
-                .is_some_and(|form| crate::is_complete_hanging_option_head(&form))
+            && self.owner_complete_form(owner).is_some_and(|form| {
+                crate::entry::is_complete_hanging_option_head_with_provisional(
+                    &form,
+                    |prefix, names| self.selection_ranges_bold(&owner.head, &form, prefix, names),
+                )
+            })
     }
 
     /// Select names from one complete native lexical head. Source-neutral

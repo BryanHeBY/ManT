@@ -610,6 +610,22 @@
             {"source": {"line": 721, "column": 1}, "kind": "option", "names": ["-g", "--glob"], "forms": ["-g GLOB, --glob=GLOB"], "emptyDescription": false, "bodyIncludes": ["Include or exclude files and directories for searching"], "bodyExcludes": ["This flag sets the approximate number of threads"]}
           ],
           "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "--hidden",
+          "review": "Pinned CVS retains line-756 .sp, line-757 final-bold -./--hidden declaration, and line-758 direct RS. The one-glyph short prefix is non-name presentation evidence; the shared scan binds only the visible long name.",
+          "expected": [
+            {"source": {"line": 757, "column": 1}, "kind": "option", "names": ["--hidden"], "forms": ["-., --hidden"], "emptyDescription": false, "bodyIncludes": ["Search hidden files and directories"], "bodyExcludes": ["Whenever a file path is printed"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "--null",
+          "review": "Pinned CVS retains line-1458 .sp, line-1459 final-bold -0/--null declaration, and line-1460 direct RS. The numeric short prefix is not inferred as a name; the long name retains its exact source and body.",
+          "expected": [
+            {"source": {"line": 1459, "column": 1}, "kind": "option", "names": ["--null"], "forms": ["-0, --null"], "emptyDescription": false, "bodyIncludes": ["Whenever a file path is printed, follow it with a NUL byte"], "bodyExcludes": ["Search hidden files and directories"]}
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
         }
       ]
     }

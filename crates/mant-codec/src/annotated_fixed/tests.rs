@@ -1498,6 +1498,80 @@ fn retained_space_does_not_turn_other_content_into_definitions() {
 }
 
 #[test]
+fn hanging_short_prefix_keeps_only_proved_long_names() {
+    // Each exact input ran pinned CVS -Tutf8 first. term.c::term_word()
+    // executes the final bold/italic style; the short prefix is only
+    // presentation evidence, while the long name and direct RS body remain
+    // checked independently.
+    for (input, name, expected) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n\\fB\\-.\\fP, \\fB\\-\\-hidden\\fP\n.RS 4\nHidden files.\n.RE\n".as_slice(),
+            "--hidden",
+            1,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n\\fB\\-0\\fP, \\fB\\-\\-null\\fP\n.RS 4\nNUL output.\n.RE\n".as_slice(),
+            "--null",
+            1,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n\\fB\\-0\\fP, \\fB\\-\\-he\\fP\\fBlp\\fP\n.RS 4\nBody.\n.RE\n".as_slice(),
+            "--help",
+            1,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\nIntro.\n.sp\n\\fB\\-\\fP\\fB0\\fP, \\fB\\-\\-null\\fP\n.RS 4\nBody.\n.RE\n".as_slice(),
+            "--null",
+            1,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n\\fB\\-10\\fP, \\fB\\-\\-fake\\fP\n.RS 4\nBody.\n.RE\n".as_slice(),
+            "--fake",
+            0,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n\\fB\\-0\\fP,\\fB\\-\\-fake\\fP\n.RS 4\nBody.\n.RE\n".as_slice(),
+            "--fake",
+            0,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n\\fI\\-0\\fP, \\fB\\-\\-fake\\fP\n.RS 4\nBody.\n.RE\n".as_slice(),
+            "--fake",
+            0,
+        ),
+        (
+            b".TH T 1\n.SH DESCRIPTION\nA sample numeric argument follows.\n.sp\n\\fB\\-0\\fP, \\-\\-fake\n.RS 4\nThis is an input example, not an option declaration.\n.RE\n".as_slice(),
+            "--fake",
+            0,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n\\fB\\-0\\fP, \\fI\\-\\-fake\\fP\n.RS 4\nBody.\n.RE\n".as_slice(),
+            "--fake",
+            0,
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n\\fB\\-0\\fP, \\fB\\-\\-fake\\fP\n.RS 4\n.RE\n".as_slice(),
+            "--fake",
+            0,
+        ),
+    ] {
+        let resolved = native_query(input, 78);
+        assert!(validate_document(resolved.document.as_ref().unwrap()).is_empty());
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, expected, "{input:?}");
+        assert!(visible_total(&resolved, name) > 0, "{input:?}");
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
 fn hanging_continuation_reads_native_descendants_once_without_inventing_a_new_owner() {
     // Each exact input ran pinned CVS -Ttree/-Tutf8 before these assertions.
     // man_macro.c::blk_exp keeps the RS BODY as one scope, while its tbl and

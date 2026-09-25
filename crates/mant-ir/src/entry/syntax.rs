@@ -14,7 +14,10 @@ pub use literal_names::{
     scan_option_declarations, scan_option_declarations_with_numeric,
     scan_option_declarations_with_style, scan_option_declarations_with_style_ranges,
 };
-pub(crate) use literal_names::{StyledBoundaryRule, literal_declaration_scan_with_operands};
+pub(crate) use literal_names::{
+    StyledBoundaryRule, is_complete_hanging_option_head_with_provisional,
+    literal_declaration_scan_with_operands,
+};
 
 /// Leading ordinary dash-option spelling within one visible token.
 #[must_use]

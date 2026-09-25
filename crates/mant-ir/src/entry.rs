@@ -26,7 +26,10 @@ pub use syntax::{
     DeclarationScan, scan_option_declarations, scan_option_declarations_with_numeric,
     scan_option_declarations_with_style, scan_option_declarations_with_style_ranges,
 };
-pub(crate) use syntax::{StyledBoundaryRule, literal_declaration_scan_with_operands};
+pub(crate) use syntax::{
+    StyledBoundaryRule, is_complete_hanging_option_head_with_provisional,
+    literal_declaration_scan_with_operands,
+};
 pub use syntax::{
     contains_additional_environment_assignment, environment_variable_alias,
     environment_variable_body, is_complete_hanging_option_head, is_option_name_body,

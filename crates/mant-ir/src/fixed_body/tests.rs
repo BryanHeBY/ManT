@@ -1271,6 +1271,45 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
 }
 
 #[test]
+fn bold_name_ranges_cross_direct_slices_but_not_consumed_separators() {
+    // Model final term.c glyph/run evidence without rerendering: a bold
+    // native head may span DirectContact slices, while consumed separators
+    // have no glyph style and an italic FILE cannot become a second name.
+    let (body, form) = alternating_lexical_head("dir, ");
+    let head = &body.owners[0].head;
+    let long_name = 7..12;
+    let mut split_bold_name = head.clone();
+    split_bold_name.parts[2].end_byte = 2;
+    split_bold_name.parts.insert(
+        3,
+        OutputSlice {
+            run: key(3),
+            start_byte: 2,
+            end_byte: 6,
+        },
+    );
+    split_bold_name.joins.insert(2, TextJoin::DirectContact);
+    assert!(body.selection_ranges_bold(
+        &split_bold_name,
+        &form,
+        0..2,
+        std::slice::from_ref(&long_name)
+    ));
+    assert!(!body.selection_ranges_bold(head, &form, 0..2, &[7..12, 13..17]));
+
+    let mut separated = head.clone();
+    separated.joins[0] = TextJoin::AuthoredSeparator(" ".to_owned());
+    let separated_form = body.selection_text(&separated).unwrap();
+    let shifted_name = 8..13;
+    assert!(!body.selection_ranges_bold(
+        &separated,
+        &separated_form,
+        0..3,
+        std::slice::from_ref(&shifted_name)
+    ));
+}
+
+#[test]
 fn rejects_dangling_and_non_utf8_slices_on_wire() {
     let mut wire = serde_json::to_value(sample_body()).unwrap();
     wire["links"][0]["label"]["parts"][1]["startByte"] = 1.into();

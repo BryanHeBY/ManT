@@ -83,6 +83,8 @@ fn repeated_space_hanging_options_have_direct_flow_explanations() {
     for (name, line, names) in [
         ("--threads", 611, &["-j", "--threads"][..]),
         ("--glob", 721, &["-g", "--glob"][..]),
+        ("--hidden", 757, &["--hidden"][..]),
+        ("--null", 1459, &["--null"][..]),
     ] {
         let result = explain_query(
             &query,
