@@ -52,12 +52,17 @@ pub(super) fn lower_man_font_scope(
             if index > 0 {
                 output.tighten_next_boundary();
             }
+            // Pinned CVS man_term.c::pre_alternate() visits each child as an
+            // operand; term.c::term_word() may switch font *within* one child.
+            // Preserve the native boundary before flattening style runs.
+            output.mark_native_operand(child, false);
             super::append_inline_node_with_next(
                 output,
                 child,
                 node.children.get(index + 1),
                 default_name,
             );
+            output.mark_native_operand(child, true);
         }
         output.font.select(Font::Regular);
         return;

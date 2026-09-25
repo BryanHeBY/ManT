@@ -487,10 +487,13 @@ impl FixedBody {
             return None;
         }
         let form = self.owner_complete_form(owner)?;
-        let segments = self.lexical_declaration_ranges(owner, &form)?;
-        let (styled, _) =
-            self.lexical_styled_argument_names_in_segments(owner, &form, &segments)?;
-        let literal = Self::lexical_segment_names(&form, &segments)?;
+        let scan = self.lexical_declaration_scan(owner, &form)?;
+        let segments = &scan.ranges;
+        let (styled, _) = self.lexical_styled_argument_names_in_segments(owner, &form, segments)?;
+        let (literal, over_limit) = scan.names(&form);
+        if over_limit {
+            return None;
+        }
         let mut candidates = literal.clone();
         // A displayed operand after a complete initial option is not another
         // name. The native HEAD role, rather than the raw roff spelling, is
@@ -525,7 +528,7 @@ impl FixedBody {
             names.push((name, selection, range));
         }
         let names =
-            self.checked_lexical_names(owner, &form, names, &styled_ranges, &segments, &literal)?;
+            self.checked_lexical_names(owner, &form, names, &styled_ranges, segments, &literal)?;
         // The parser-alive prefix is a candidate for the first declaration,
         // not permission to ignore the rest of the native HEAD.  Keep it
         // tied to the same final glyphs when it was recorded.
@@ -557,11 +560,11 @@ impl FixedBody {
     /// italic parameter cannot manufacture such an operand. This is a
     /// bounded annotation of the complete displayed HEAD, not a second
     /// source-spelling parser or a requirement for authored coordinates.
-    fn lexical_declaration_ranges(
+    fn lexical_declaration_scan(
         &self,
         owner: &OwnerMark,
         form: &str,
-    ) -> Option<Vec<Range<usize>>> {
+    ) -> Option<crate::entry::DeclarationScan> {
         let component_starts = component_part_ranges(&owner.head, &owner.head_components)
             .and_then(|parts| self.component_byte_ranges(&owner.head, &parts))
             .map(|ranges| {
@@ -596,7 +599,10 @@ impl FixedBody {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let mut starts = component_starts.clone();
+        // Only native macro components are independent starts. A lone `.IP`
+        // label is one text operand in man_term.c::pre_IP; `\fB` within it
+        // may change the final run style without ending a parameter.
+        let starts = component_starts;
         let mut argument_starts = Vec::new();
         let mut offset = 0usize;
         for (index, part) in owner.head.parts.iter().enumerate() {
@@ -621,46 +627,20 @@ impl FixedBody {
             {
                 argument_starts.push(start);
             }
-            if owner.head_components.is_empty()
-                && run.label.style.bold
-                && !run.label.style.underline
-                && !visible.trim_start().is_empty()
-            {
-                // A literal IP head has no child macro component; a final
-                // bold run is its independent style witness. Native BI/BR
-                // heads do have components, so an in-argument font escape
-                // there cannot impersonate a new macro operand.
-                starts.push(start + visible.len() - visible.trim_start().len());
-            }
-        }
-        if owner.head_components.is_empty() {
-            starts.dedup();
         }
         (offset == form.len()).then(|| {
-            crate::entry::literal_declaration_ranges_with_starts(
+            let boundary_rule = if owner.head_components.is_empty() {
+                crate::entry::StyledBoundaryRule::SingleTextOperand
+            } else {
+                crate::entry::StyledBoundaryRule::NativeComponents
+            };
+            crate::entry::literal_declaration_scan_with_starts(
                 form,
                 &starts,
-                &component_starts,
                 &argument_starts,
+                boundary_rule,
             )
         })
-    }
-
-    fn lexical_segment_names(
-        form: &str,
-        segments: &[Range<usize>],
-    ) -> Option<Vec<(String, Range<usize>)>> {
-        let mut names = Vec::new();
-        for segment in segments {
-            let text = form.get(segment.clone())?;
-            for (name, range) in crate::literal_option_names(text) {
-                if names.len() == 64 {
-                    return None;
-                }
-                names.push((name, segment.start + range.start..segment.start + range.end));
-            }
-        }
-        Some(names)
     }
 
     /// An immediately underlined suffix is a native parameter boundary,
@@ -674,8 +654,8 @@ impl FixedBody {
         owner: &OwnerMark,
         form: &str,
     ) -> Option<StyledArgumentScan> {
-        let segments = self.lexical_declaration_ranges(owner, form)?;
-        self.lexical_styled_argument_names_in_segments(owner, form, &segments)
+        let scan = self.lexical_declaration_scan(owner, form)?;
+        self.lexical_styled_argument_names_in_segments(owner, form, &scan.ranges)
     }
 
     fn lexical_styled_argument_names_in_segments(

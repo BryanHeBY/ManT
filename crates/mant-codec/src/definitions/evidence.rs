@@ -18,8 +18,9 @@ pub(crate) enum NativeHeadRole {
 struct HeadWitness {
     source: SourceSpan,
     terms: Vec<Vec<Inline>>,
-    role: NativeHeadRole,
+    role: Option<NativeHeadRole>,
     option_ranges: Vec<Vec<Range<usize>>>,
+    operand_ranges: Vec<Vec<Range<usize>>>,
 }
 
 /// Locations only select a bucket. Evidence is reusable only when the entire
@@ -38,15 +39,16 @@ pub(crate) struct NativeHeadEvidence {
 impl NativeHeadEvidence {
     #[cfg(test)]
     pub(crate) fn record(&mut self, item: &DefinitionItem, role: NativeHeadRole) {
-        self.record_with_option_ranges(item, role, Vec::new());
+        self.record_with_head_ranges(item, Some(role), Vec::new(), Vec::new());
     }
 
     #[cfg(any(feature = "roff", test))]
-    pub(crate) fn record_with_option_ranges(
+    pub(crate) fn record_with_head_ranges(
         &mut self,
         item: &DefinitionItem,
-        role: NativeHeadRole,
+        role: Option<NativeHeadRole>,
         option_ranges: Vec<Vec<Range<usize>>>,
+        operand_ranges: Vec<Vec<Range<usize>>>,
     ) {
         let Some(source) = item.source else { return };
         self.witnesses
@@ -57,16 +59,26 @@ impl NativeHeadEvidence {
                 terms: head_content(&item.terms),
                 role,
                 option_ranges,
+                operand_ranges,
             });
     }
 
     pub(super) fn role(&self, item: &DefinitionItem) -> Option<NativeHeadRole> {
-        self.witness(item).map(|witness| witness.role)
+        self.witness(item)?.role
     }
 
     pub(super) fn option_ranges(&self, item: &DefinitionItem) -> Option<&[Vec<Range<usize>>]> {
         let witness = self.witness(item)?;
-        (witness.role == NativeHeadRole::Option).then_some(witness.option_ranges.as_slice())
+        (witness.role == Some(NativeHeadRole::Option)).then_some(witness.option_ranges.as_slice())
+    }
+
+    pub(super) fn operand_ranges(&self, item: &DefinitionItem) -> Option<&[Vec<Range<usize>>]> {
+        let witness = self.witness(item)?;
+        witness
+            .operand_ranges
+            .iter()
+            .any(|term| !term.is_empty())
+            .then_some(witness.operand_ranges.as_slice())
     }
 
     fn witness(&self, item: &DefinitionItem) -> Option<&HeadWitness> {
@@ -79,7 +91,9 @@ impl NativeHeadEvidence {
         let first = matches.next()?;
         matches
             .all(|witness| {
-                witness.role == first.role && witness.option_ranges == first.option_ranges
+                witness.role == first.role
+                    && witness.option_ranges == first.option_ranges
+                    && witness.operand_ranges == first.operand_ranges
             })
             .then_some(first)
     }

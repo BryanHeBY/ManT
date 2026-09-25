@@ -125,9 +125,10 @@ fn pattern_and_native_space_heads_keep_only_proved_names() {
 
 #[test]
 fn native_styled_boundaries_do_not_promote_parameter_punctuation() {
-    // Pinned CVS man_term.c::pre_alternate directly concatenates BI operands
-    // without inventing a space after the comma. A later strong operand is
-    // independent style evidence; an italic comma within one operand is not.
+    // Pinned CVS man_term.c::pre_alternate directly concatenates BI operands.
+    // A later Strong run alone does not prove another operand: term.c::term_word
+    // can create the same run via \fB within one italic parameter. The
+    // integration test supplies native child witnesses for real BI operands.
     let name = |value| Inline::Strong {
         children: vec![fixture::text(value)],
     };
@@ -142,7 +143,7 @@ fn native_styled_boundaries_do_not_promote_parameter_punctuation() {
                 name("--output="),
                 argument("FILE"),
             ],
-            vec!["-L", "--output"],
+            vec!["-L"],
         ),
         (vec![name("-L"), argument("dir,--fake,last")], vec!["-L"]),
         (

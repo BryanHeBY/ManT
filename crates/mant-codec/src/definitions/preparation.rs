@@ -137,6 +137,7 @@ impl PreparedDefinitions {
                                 item_context,
                                 evidence.role(item),
                                 evidence.option_ranges(item),
+                                evidence.operand_ranges(item),
                             )
                             .group_head
                         })
@@ -153,6 +154,7 @@ impl PreparedDefinitions {
                             item_context,
                             evidence.role(item),
                             evidence.option_ranges(item),
+                            evidence.operand_ranges(item),
                         );
                         if has_semantic_spelling(content, item, &identity) {
                             *self
@@ -240,6 +242,7 @@ fn normalize_blocks(
                         item_context,
                         evidence.role(item),
                         evidence.option_ranges(item),
+                        evidence.operand_ranges(item),
                     );
                     let child_context = child_definition_context(identity.kind, item_context);
                     normalize_blocks(content, &mut item.description, child_context, evidence);

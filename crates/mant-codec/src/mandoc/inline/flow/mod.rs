@@ -48,12 +48,13 @@ pub(in crate::mandoc) struct InlineBuilder {
     no_break_field: Option<NoBreakField>,
     last_executed_source_line: Option<u32>,
     // Definition-head-only, zero-width witnesses around executed `.Fl`
-    // instances. They are removed from draft output before content commit.
-    native_option_marks: NativeOptionMarks,
+    // instances and alternating man macro operands. They are removed from
+    // draft output before content commit.
+    native_head_marks: NativeHeadMarks,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum NativeOptionMarks {
+enum NativeHeadMarks {
     Disabled,
     DefinitionHead,
 }
@@ -403,7 +404,7 @@ impl InlineBuilder {
             definition_outcome: DefinitionOutcome(0),
             no_break_field: None,
             last_executed_source_line: None,
-            native_option_marks: NativeOptionMarks::Disabled,
+            native_head_marks: NativeHeadMarks::Disabled,
         }
     }
 
@@ -435,19 +436,36 @@ impl InlineBuilder {
             definition_outcome: DefinitionOutcome(0),
             no_break_field: None,
             last_executed_source_line: None,
-            native_option_marks: NativeOptionMarks::Disabled,
+            native_head_marks: NativeHeadMarks::Disabled,
         }
     }
 
-    pub(in crate::mandoc) fn enable_native_option_marks(&mut self) {
-        self.native_option_marks = NativeOptionMarks::DefinitionHead;
+    pub(in crate::mandoc) fn enable_native_head_marks(&mut self) {
+        self.native_head_marks = NativeHeadMarks::DefinitionHead;
     }
 
     pub(in crate::mandoc) fn mark_native_option(&mut self, node: &crate::mandoc::Node, end: bool) {
-        if self.native_option_marks == NativeOptionMarks::DefinitionHead {
+        if self.native_head_marks == NativeHeadMarks::DefinitionHead {
             self.nodes.push(Inline::Anchor {
                 id: format!(
                     "\0mant-native-option-{}:{:x}",
+                    if end { "end" } else { "start" },
+                    std::ptr::from_ref(node) as usize
+                )
+                .into(),
+                owner_source: None,
+            });
+        }
+    }
+
+    /// A `.BI`/`.BR` child is an independent formatter operand. Inline font
+    /// escapes inside that child are not: retain this distinction only while
+    /// constructing a definition head, never in the public document.
+    pub(in crate::mandoc) fn mark_native_operand(&mut self, node: &crate::mandoc::Node, end: bool) {
+        if self.native_head_marks == NativeHeadMarks::DefinitionHead {
+            self.nodes.push(Inline::Anchor {
+                id: format!(
+                    "\0mant-native-operand-{}:{:x}",
                     if end { "end" } else { "start" },
                     std::ptr::from_ref(node) as usize
                 )

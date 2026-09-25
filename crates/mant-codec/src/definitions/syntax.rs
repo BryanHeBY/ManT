@@ -41,6 +41,7 @@ pub(super) fn infer_identity(
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
+    operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> InferredIdentity {
     let first = item
         .terms
@@ -60,7 +61,7 @@ pub(super) fn infer_identity(
             })
             .collect()
     } else if hint == Some(super::NativeHeadRole::Option) {
-        options::native_option_occurrences(content, &item.terms, option_ranges)
+        options::native_option_occurrences(content, &item.terms, option_ranges, operand_ranges)
     } else if hint == Some(super::NativeHeadRole::Environment) {
         item.terms
             .iter()
@@ -71,10 +72,10 @@ pub(super) fn infer_identity(
             })
             .collect()
     } else {
-        name_occurrences(content, item, kind)
+        name_occurrences(content, item, kind, operand_ranges)
     };
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
-        occurrences = name_occurrences(content, item, EntryKind::Command);
+        occurrences = name_occurrences(content, item, EntryKind::Command, operand_ranges);
         if occurrences.iter().all(Vec::is_empty) {
             occurrences = item
                 .terms
@@ -102,7 +103,7 @@ pub(super) fn infer_identity(
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
         )
     {
-        occurrences = name_occurrences(content, item, EntryKind::Term);
+        occurrences = name_occurrences(content, item, EntryKind::Term, operand_ranges);
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
@@ -146,10 +147,11 @@ pub(super) fn name_occurrences(
     content: ContentContext<'_>,
     item: &DefinitionItem,
     kind: EntryKind,
+    operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> Vec<Vec<super::RecognizedName>> {
     if let EntryKind::Parameter { parameter_kind } = kind {
         if parameter_kind == ParameterKind::Option {
-            return options::parameter_occurrences(content, &item.terms);
+            return options::parameter_occurrences(content, &item.terms, operand_ranges);
         }
         // Marker/operand inference requires an exact complete first term,
         // not a prefix of a longer invocation. Repeated matching terms may

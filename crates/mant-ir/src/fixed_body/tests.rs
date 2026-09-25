@@ -81,29 +81,33 @@ fn native_styled_delimiter_restarts_only_at_an_independent_bold_operand() {
     // pre_alternate concatenates operands without a separator while applying
     // alternating bold/underline fonts; term.c::term_word preserves each
     // visible comma, pipe, quote, bracket, and signed parameter glyph.
-    for argument in [
-        "first,--fake,last,",
-        "first, --fake, last,",
-        "first|--fake|last|",
-        "-10,--fake,20,",
-        "(first,--fake,last),",
-        "\"first,--fake,last\",",
-        "(first,--fake,",
-        "\"first,--fake,",
-        "(first,",
-        "\"first,",
-        "first,--fake,last, ",
+    for (argument, independent) in [
+        ("first,--fake,last,", true),
+        ("first, --fake, last,", true),
+        ("first|--fake|last|", true),
+        ("-10,--fake,20,", true),
+        ("(first,--fake,last),", true),
+        ("\"first,--fake,last\",", true),
+        ("(first,--fake,", false),
+        ("\"first,--fake,", false),
+        ("(first,", false),
+        ("\"first,", false),
+        ("first,--fake,last, ", true),
     ] {
         let (body, form) = alternating_lexical_head(argument);
         body.validate().expect("native-like display remains valid");
         let all = form.find("--all").unwrap();
+        let mut expected = vec![("-L".to_owned(), 0..2)];
+        if independent {
+            expected.push(("--all".to_owned(), all..all + 5));
+        }
         assert_eq!(
             body.lexical_names(&body.owners[0])
                 .expect("checked names")
                 .into_iter()
                 .map(|(name, _, range)| (name, range))
                 .collect::<Vec<_>>(),
-            [("-L".to_owned(), 0..2), ("--all".to_owned(), all..all + 5)],
+            expected,
             "{form}"
         );
     }

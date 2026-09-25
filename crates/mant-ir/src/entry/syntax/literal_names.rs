@@ -8,6 +8,8 @@
 use super::{lexical_option_token, literal_option_aliases, option_prefix};
 use std::ops::Range;
 
+type NameRange = (String, Range<usize>);
+
 /// Select bounded option spellings from one complete native declaration head.
 /// The caller must bind every returned byte range to its original display.
 #[must_use]
@@ -17,59 +19,132 @@ pub fn literal_option_names(form: &str) -> Vec<(String, Range<usize>)> {
     if let Some(aliases) = literal_option_aliases(form) {
         return aliases;
     }
-    let ranges = literal_declaration_ranges(form);
-    let mut names = Vec::new();
-    for range in ranges {
-        let Some(group) = form.get(range.clone()) else {
-            continue;
-        };
-        let leading = group.len() - group.trim_start().len();
-        let group = group.trim();
-        if group.is_empty() {
-            continue;
-        }
-        let offset = range.start + leading;
-        let before = names.len();
-        if let Some(slash) = slash_names(group, offset) {
-            names.extend(slash);
-        } else if let Some(pattern) = pattern_names(group, offset) {
-            names.extend(pattern);
-        } else if let Some((name, found)) = leading_name(group, offset) {
-            names.push((name, found));
-        }
-        if names.len() > 64 {
-            names.truncate(before);
-            break;
-        }
+    declaration_scan(form, &[], &[], StyledBoundaryRule::SingleTextOperand)
+        .names(form)
+        .0
+}
+
+/// A native BI/BR operand boundary is known independently of its final font.
+/// A single IP label has no such boundary; text punctuation cannot prove that
+/// an already active styled argument has ended.
+#[derive(Clone, Copy)]
+pub(crate) enum StyledBoundaryRule {
+    NativeComponents,
+    SingleTextOperand,
+}
+
+/// The one text/state pass retains both complete declaration ranges and the
+/// part of each range that was still eligible to contain names. In particular,
+/// a styled parameter cannot be reparsed later as a fresh text-only head.
+#[derive(Debug)]
+pub(crate) struct DeclarationScan {
+    pub(crate) ranges: Vec<Range<usize>>,
+    name_prefixes: Vec<Range<usize>>,
+}
+
+impl DeclarationScan {
+    fn push(&mut self, start: usize, end: usize, prefix_end: Option<usize>) {
+        self.ranges.push(start..end);
+        self.name_prefixes
+            .push(start..prefix_end.unwrap_or(end).min(end));
     }
-    names
+
+    /// Parse only disjoint, already eligible prefixes. The stateful scan has
+    /// excluded every argument byte before this small spelling pass begins.
+    pub(crate) fn names(&self, form: &str) -> (Vec<(String, Range<usize>)>, bool) {
+        let mut names = Vec::new();
+        for prefix in &self.name_prefixes {
+            let Some(value) = form.get(prefix.clone()) else {
+                continue;
+            };
+            let leading = value.len() - value.trim_start().len();
+            let group = value.trim();
+            if group.is_empty() {
+                continue;
+            }
+            let offset = prefix.start + leading;
+            let selected = if let Some(aliases) = literal_option_aliases(group) {
+                aliases
+                    .into_iter()
+                    .map(|(name, range)| (name, offset + range.start..offset + range.end))
+                    .collect()
+            } else {
+                match slash_names(group, offset) {
+                    Err(()) => return (names, true),
+                    Ok(Some(slash)) => slash,
+                    Ok(None) => {
+                        if let Some(pattern) = pattern_names(group, offset) {
+                            pattern
+                        } else {
+                            leading_name(group, offset).into_iter().collect()
+                        }
+                    }
+                }
+            };
+            if names.len() + selected.len() > 64 {
+                return (names, true);
+            }
+            names.extend(selected);
+        }
+        (names, false)
+    }
 }
 
 /// Bounded declaration intervals in one final visible head. A delimiter in
 /// a quoted or bracketed argument is not a new declaration. Both native
 /// component evidence and source-neutral literal spelling use these ranges.
+#[cfg(test)]
 pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
-    literal_declaration_ranges_with_starts(form, &[], &[], &[])
+    declaration_scan(form, &[], &[], StyledBoundaryRule::SingleTextOperand).ranges
 }
 
 /// An independent native/styled declaration may begin directly after a
 /// parameter's terminal delimiter. The starts are final displayed byte
-/// offsets, in ascending order. Only `structural_starts`, a subset proved by
-/// separate native macro operands, can also reset an unmatched quote or
-/// bracket; a font run within one operand cannot prove that boundary. Keep
-/// the text-only contract above for callers with no such evidence.
+/// offsets, in ascending order. An operand boundary is evidence for a new
+/// styled declaration only when the surrounding quote/bracket grammar is
+/// already closed: `man_term.c::pre_alternate()` changes font but does not
+/// close an authored parameter. Keep the text-only contract above for callers
+/// with no such evidence.
+pub(crate) fn literal_declaration_scan_with_starts(
+    form: &str,
+    independent_starts: &[usize],
+    argument_starts: &[usize],
+    boundary_rule: StyledBoundaryRule,
+) -> DeclarationScan {
+    declaration_scan(form, independent_starts, argument_starts, boundary_rule)
+}
+
+#[cfg(test)]
+pub(crate) fn literal_declaration_ranges_with_starts(
+    form: &str,
+    independent_starts: &[usize],
+    argument_starts: &[usize],
+) -> Vec<Range<usize>> {
+    declaration_scan(
+        form,
+        independent_starts,
+        argument_starts,
+        StyledBoundaryRule::NativeComponents,
+    )
+    .ranges
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "keep the bounded, single-pass declaration state transitions together"
 )]
-pub(crate) fn literal_declaration_ranges_with_starts(
+fn declaration_scan(
     form: &str,
     independent_starts: &[usize],
-    structural_starts: &[usize],
     argument_starts: &[usize],
-) -> Vec<Range<usize>> {
-    let mut ranges = Vec::new();
+    boundary_rule: StyledBoundaryRule,
+) -> DeclarationScan {
+    let mut scan = DeclarationScan {
+        ranges: Vec::new(),
+        name_prefixes: Vec::new(),
+    };
     let mut start = 0;
+    let mut prefix_end = None;
     let mut phase = Phase::Name;
     let mut name_end = declaration_name_end(form, start);
     let mut after_name_space = false;
@@ -77,7 +152,6 @@ pub(crate) fn literal_declaration_ranges_with_starts(
     let mut quote = None;
     let mut uncertain = false;
     let mut independent = 0usize;
-    let mut structural = 0usize;
     let mut argument = 0usize;
     for (offset, character) in form.char_indices() {
         while argument_starts
@@ -91,6 +165,9 @@ pub(crate) fn literal_declaration_ranges_with_starts(
             // Without this transition, a glued `-Lfirst` looks like one
             // option token and its following comma could manufacture names
             // before the style check has a chance to reject them.
+            if phase == Phase::Name {
+                prefix_end.get_or_insert(offset);
+            }
             phase = Phase::StyledArgument;
             name_end = None;
             after_name_space = false;
@@ -104,16 +181,18 @@ pub(crate) fn literal_declaration_ranges_with_starts(
             if character.is_whitespace() {
                 after_name_space = true;
             } else if after_name_space {
-                if declaration_name_end(form, offset).is_none() {
+                if declaration_name_end(form, offset).is_none()
+                    && !is_short_long_connector(form, start, offset)
+                {
+                    prefix_end.get_or_insert(offset);
                     phase = Phase::Argument;
                 }
                 after_name_space = false;
             }
         }
-        // A separate native/styled declaration starts a new local grammar
-        // interval even when the preceding parameter has an unmatched quote
-        // or bracket. Without that independent evidence, punctuation inside
-        // the parameter remains opaque.
+        // An independent native/styled declaration can restart only after
+        // the complete authored quote/bracket scope has ended. Alternating
+        // font operands are not parameter boundaries in pinned CVS.
         let mut proved_start = None;
         if matches!(character, ',' | '|') {
             let next_offset = offset + character.len_utf8();
@@ -125,28 +204,21 @@ pub(crate) fn literal_declaration_ranges_with_starts(
             {
                 independent += 1;
             }
-            while structural_starts
-                .get(structural)
-                .is_some_and(|&evidence| evidence < candidate_start)
-            {
-                structural += 1;
-            }
             let state_closed = quote.is_none() && closers.is_empty() && !uncertain;
-            if independent_starts.get(independent) == Some(&candidate_start)
-                && (state_closed || structural_starts.get(structural) == Some(&candidate_start))
+            if matches!(boundary_rule, StyledBoundaryRule::NativeComponents)
+                && independent_starts.get(independent) == Some(&candidate_start)
+                && state_closed
             {
                 proved_start = declaration_name_end(form, next_offset);
             }
         }
         if let Some(next_name_end) = proved_start {
-            ranges.push(start..offset);
+            scan.push(start, offset, prefix_end);
             start = offset + character.len_utf8();
+            prefix_end = None;
             phase = Phase::Name;
             name_end = Some(next_name_end);
             after_name_space = false;
-            quote = None;
-            closers.clear();
-            uncertain = false;
             continue;
         }
         if let Some(close) = quote {
@@ -170,6 +242,9 @@ pub(crate) fn literal_declaration_ranges_with_starts(
         } {
             quote = Some(close);
             if phase != Phase::StyledArgument {
+                if phase == Phase::Name {
+                    prefix_end.get_or_insert(offset);
+                }
                 phase = Phase::Argument;
             }
             continue;
@@ -182,11 +257,16 @@ pub(crate) fn literal_declaration_ranges_with_starts(
             let next_name_end = declaration_name_end(form, next_offset);
             let fresh_option =
                 remainder.starts_with(char::is_whitespace) && next_name_end.is_some();
+            // A styled argument stays opaque even if its internal punctuation
+            // is followed by whitespace and a bold run. A plain text head
+            // still permits comma+space declaration syntax before entering a
+            // styled parameter; only native components can restart afterward.
             if phase == Phase::Name && name_end.is_some()
                 || phase != Phase::StyledArgument && fresh_option
             {
-                ranges.push(start..offset);
+                scan.push(start, offset, prefix_end);
                 start = next_offset;
+                prefix_end = None;
                 phase = if next_name_end.is_some() {
                     Phase::Name
                 } else {
@@ -198,9 +278,20 @@ pub(crate) fn literal_declaration_ranges_with_starts(
             }
         }
         match character {
-            '=' if phase != Phase::StyledArgument => phase = Phase::Argument,
+            '=' if phase != Phase::StyledArgument => {
+                if phase == Phase::Name {
+                    prefix_end.get_or_insert(offset);
+                }
+                phase = Phase::Argument;
+            }
             '[' | '{' | '(' | '<' => {
                 if phase != Phase::StyledArgument {
+                    // An opening enclosure before a visible option (for
+                    // example `[-n/--number]`) belongs to the declaration
+                    // prefix. A bracket after the name begins its value.
+                    if phase == Phase::Name && name_end.is_some_and(|end| offset >= end) {
+                        prefix_end.get_or_insert(offset);
+                    }
                     phase = Phase::Argument;
                 }
                 if closers.len() == 64 {
@@ -225,8 +316,8 @@ pub(crate) fn literal_declaration_ranges_with_starts(
             _ => {}
         }
     }
-    ranges.push(start..form.len());
-    ranges
+    scan.push(start, form.len(), prefix_end);
+    scan
 }
 
 /// End of the leading option spelling, before any attached value or visible
@@ -247,6 +338,33 @@ fn declaration_name_end(form: &str, start: usize) -> Option<usize> {
         return Some(start + leading + token.len());
     }
     leading_name(token, start + leading).map(|(_, range)| range.end)
+}
+
+/// The shared alias grammar admits exactly `-q or --quiet`; `or` is not an
+/// ordinary argument when it bridges one short option and one long option.
+/// Look ahead only at this one candidate connector, never at every glyph.
+fn is_short_long_connector(form: &str, segment_start: usize, offset: usize) -> bool {
+    let Some(before) = form.get(segment_start..offset) else {
+        return false;
+    };
+    let first = before.trim();
+    if first.len() != 2 || !first.starts_with('-') || !lexical_option_token(first) {
+        return false;
+    }
+    let Some(after_or) = form
+        .get(offset..)
+        .and_then(|value| value.strip_prefix("or"))
+    else {
+        return false;
+    };
+    let skipped = after_or.len() - after_or.trim_start().len();
+    if skipped == 0 {
+        return false;
+    }
+    let next = offset + 2 + skipped;
+    declaration_name_end(form, next)
+        .and_then(|end| form.get(next..end))
+        .is_some_and(|candidate| candidate.starts_with("--"))
 }
 
 /// Require an inferred PP/RS head to be complete declaration syntax, not
@@ -374,36 +492,46 @@ fn leading_name(group: &str, offset: usize) -> Option<(String, Range<usize>)> {
     Some((name.to_owned(), start..start + name.len()))
 }
 
-fn slash_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>)>> {
-    let token = group
-        .split_whitespace()
-        .next()?
-        .trim_matches(['[', ']', '(', ')', '{', '}', '“', '”', '‘', '’']);
+fn slash_names(group: &str, offset: usize) -> Result<Option<Vec<NameRange>>, ()> {
+    let Some(token) = group.split_whitespace().next() else {
+        return Ok(None);
+    };
+    let token = token.trim_matches(['[', ']', '(', ')', '{', '}', '“', '”', '‘', '’']);
     if !token.contains('/') {
-        return None;
+        return Ok(None);
     }
-    let parts = token.split('/').collect::<Vec<_>>();
+    // Keep the temporary split bounded by the same 64-name ceiling as the
+    // final result. An overlong candidate cannot become a checked name.
+    let parts = token.split('/').take(66).collect::<Vec<_>>();
+    if parts.len() > 65 {
+        return Err(());
+    }
     if parts.len() < 2
         || !parts[..parts.len() - 1]
             .iter()
             .all(|part| lexical_option_token(part))
     {
-        return None;
+        return Ok(None);
     }
     let mut result = Vec::with_capacity(parts.len());
     let mut position = offset + token.as_ptr() as usize - group.as_ptr() as usize;
     for (index, part) in parts.iter().enumerate() {
-        let name = option_prefix(part)?;
+        let Some(name) = option_prefix(part) else {
+            return Ok(None);
+        };
         if !lexical_option_token(name)
             || index + 1 != parts.len() && name != *part
             || index + 1 == parts.len() && name != *part && !part[name.len()..].starts_with('=')
         {
-            return None;
+            return Ok(None);
         }
         result.push((name.to_owned(), position..position + name.len()));
         position += part.len() + 1;
     }
-    Some(result)
+    if result.len() > 64 {
+        return Err(());
+    }
+    Ok(Some(result))
 }
 
 fn pattern_names(group: &str, offset: usize) -> Option<Vec<(String, Range<usize>)>> {
@@ -442,8 +570,10 @@ fn pattern_start(token: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
+        StyledBoundaryRule::{NativeComponents, SingleTextOperand},
         is_complete_hanging_option_head, literal_declaration_ranges,
-        literal_declaration_ranges_with_starts, literal_option_names,
+        literal_declaration_ranges_with_starts, literal_declaration_scan_with_starts,
+        literal_option_names,
     };
     use std::time::{Duration, Instant};
 
@@ -520,37 +650,125 @@ mod tests {
         let form = "-Lfirst,--fake,last,--all FILE";
         let all = form.find("--all").unwrap();
         assert_eq!(
-            literal_declaration_ranges_with_starts(form, &[all], &[all], &[2]),
+            literal_declaration_ranges_with_starts(form, &[all], &[2]),
             [0..all - 1, all..form.len()]
+        );
+        assert_eq!(
+            literal_declaration_scan_with_starts(form, &[all], &[2], NativeComponents)
+                .names(form)
+                .0,
+            [("-L".into(), 0..2), ("--all".into(), all..all + 5)]
         );
         // Whitespace inside the same underlined native operand is not a
         // fresh declaration either; an independent later bold operand is.
         let spaced = "-Lfirst, --fake, last,--all FILE";
         let all = spaced.find("--all").unwrap();
         assert_eq!(
-            literal_declaration_ranges_with_starts(spaced, &[all], &[all], &[2]),
+            literal_declaration_ranges_with_starts(spaced, &[all], &[2]),
             [0..all - 1, all..spaced.len()]
         );
-        // An unmatched argument delimiter is local to its native operand.
-        // Each exact TP/BI variant ran pinned CVS -Tutf8 before this test.
+        // A BI operand switches font, not authored quote/bracket scope. Each
+        // exact TP/BI input ran pinned CVS -Tutf8 before this assertion.
         for argument in ["(first,--fake,", "\"first,--fake,"] {
             let form = format!("-L{argument}--all FILE");
             let all = form.find("--all").unwrap();
             assert_eq!(
-                literal_declaration_ranges_with_starts(&form, &[all], &[all], &[2]),
-                [0..all - 1, all..form.len()]
+                literal_declaration_ranges_with_starts(&form, &[all], &[2]),
+                std::iter::once(0..form.len()).collect::<Vec<_>>()
             );
             assert_eq!(
-                literal_declaration_ranges_with_starts(&form, &[], &[], &[2]),
+                literal_declaration_ranges_with_starts(&form, &[], &[2]),
                 std::iter::once(0..form.len()).collect::<Vec<_>>(),
-                "no independent operand may reset {argument}"
+                "no operand may reset {argument}"
             );
             assert_eq!(
-                literal_declaration_ranges_with_starts(&form, &[all], &[], &[2]),
-                std::iter::once(0..form.len()).collect::<Vec<_>>(),
-                "a style run alone cannot reset {argument}"
+                literal_declaration_scan_with_starts(&form, &[all], &[2], NativeComponents)
+                    .names(&form)
+                    .0,
+                [("-L".into(), 0..2)]
             );
         }
+        // Quote/parenthesis closure in a later operand, however, permits
+        // the next proved declaration after its terminal comma.
+        for argument in ["(first,--fake,last),", "\"first,--fake,last\","] {
+            let form = format!("-L{argument}--all FILE");
+            let all = form.find("--all").unwrap();
+            assert_eq!(
+                literal_declaration_scan_with_starts(&form, &[all], &[2], NativeComponents)
+                    .names(&form)
+                    .0,
+                [("-L".into(), 0..2), ("--all".into(), all..all + 5)]
+            );
+        }
+        // The real cross-operand quote case includes a bold --fake operand
+        // inside the same quoted argument; only the post-quote --all is a
+        // declaration. Pinned CVS man_term.c::pre_alternate retains the
+        // operand font switch without ending the quote.
+        let form = "--pattern \"first,--fake,last\",--all FILE";
+        let fake = form.find("--fake").unwrap();
+        let all = form.find("--all").unwrap();
+        assert_eq!(
+            literal_declaration_scan_with_starts(form, &[fake, all], &[10], NativeComponents)
+                .names(form)
+                .0,
+            [("--pattern".into(), 0..9), ("--all".into(), all..all + 5)]
+        );
+        for argument in ["first|--fake|last,", "-10,--fake,20,", "first/--fake/last,"] {
+            let form = format!("-L{argument}--all FILE");
+            let all = form.find("--all").unwrap();
+            assert_eq!(
+                literal_declaration_scan_with_starts(&form, &[all], &[2], NativeComponents)
+                    .names(&form)
+                    .0,
+                [("-L".into(), 0..2), ("--all".into(), all..all + 5)],
+                "{argument}"
+            );
+        }
+    }
+
+    #[test]
+    fn checked_scan_keeps_the_short_or_long_connector() {
+        // Both exact `.B -q or --quiet` and styled `.IP` counterparts ran
+        // pinned CVS -Tutf8 first. man_term.c::pre_B/pre_IP emit the complete
+        // visible head; `or` connects two names rather than beginning an
+        // ordinary argument in the shared declaration grammar.
+        for form in ["-q or --quiet", "-a or --all"] {
+            let scan = literal_declaration_scan_with_starts(form, &[], &[], SingleTextOperand);
+            assert_eq!(scan.names(form).0, literal_option_names(form), "{form}");
+            assert_eq!(scan.names(form).0.len(), 2, "{form}");
+        }
+    }
+
+    #[test]
+    fn single_ip_operand_font_switch_is_not_an_independent_boundary() {
+        // Both exact `.IP` inputs ran pinned CVS -Tutf8 first. Its HEAD has
+        // one text operand (man_term.c::pre_IP); term.c::term_word applies
+        // inline font escapes without making another native component.
+        let inline_font = "-L first,--fake,last,";
+        assert_eq!(
+            literal_declaration_scan_with_starts(inline_font, &[], &[3], SingleTextOperand)
+                .names(inline_font)
+                .0,
+            [("-L".into(), 0..2)]
+        );
+        // Even comma+space plus a later bold run cannot establish an
+        // independent declaration after the styled middle parameter. The
+        // same first operand can contain `first, \fB--fake`, so omit `--all`
+        // conservatively rather than promoting a false name.
+        let spaced = "-a, --operand, --all";
+        assert_eq!(
+            literal_declaration_scan_with_starts(spaced, &[], &[4], SingleTextOperand)
+                .names(spaced)
+                .0,
+            [("-a".into(), 0..2)]
+        );
+        let plain = "-a, --all";
+        assert_eq!(
+            literal_declaration_scan_with_starts(plain, &[], &[], SingleTextOperand)
+                .names(plain)
+                .0,
+            [("-a".into(), 0..2), ("--all".into(), 4..9)]
+        );
     }
 
     #[test]

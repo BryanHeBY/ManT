@@ -393,7 +393,7 @@ pub(super) fn definition_item(
         );
     }
     let mut terms = split_definition_terms(term);
-    let native_option_ranges = super::evidence::take_option_ranges(&mut terms);
+    let native_ranges = super::evidence::take_head_ranges(&mut terms);
     if flow.head.generated_cells().is_some() {
         // The native generated cells execute inside the shared stream below.
         // Their surviving projection is carried by the description itself;
@@ -447,7 +447,8 @@ pub(super) fn definition_item(
         role: (context.macro_set == libmandoc_rs::MacroSet::Mdoc)
             .then(|| super::evidence::leading_role(head))
             .flatten(),
-        native_option_ranges,
+        native_option_ranges: native_ranges.option_ranges,
+        native_operand_ranges: native_ranges.operand_ranges,
     }
 }
 
@@ -459,6 +460,7 @@ pub(in crate::mandoc::blocks::lists) struct PendingDefinitionItem {
     pub(super) native_key: usize,
     pub(super) role: Option<crate::definitions::NativeHeadRole>,
     pub(super) native_option_ranges: Vec<Vec<std::ops::Range<usize>>>,
+    pub(super) native_operand_ranges: Vec<Vec<std::ops::Range<usize>>>,
 }
 
 impl PendingDefinitionItem {
@@ -525,8 +527,18 @@ impl PendingDefinitionItem {
         }
         let mut evidence = context.native_heads.borrow_mut();
         evidence.groups.record(&item, self.native_key);
-        if let Some(role) = self.role {
-            evidence.record_with_option_ranges(&item, role, self.native_option_ranges);
+        if self.role.is_some()
+            || self
+                .native_operand_ranges
+                .iter()
+                .any(|term| !term.is_empty())
+        {
+            evidence.record_with_head_ranges(
+                &item,
+                self.role,
+                self.native_option_ranges,
+                self.native_operand_ranges,
+            );
         }
         item
     }
@@ -585,7 +597,7 @@ fn lower_definition_head(
                 flow.spacing_enabled,
                 formatter,
                 flow.head.author_break_effect(),
-                context.macro_set == libmandoc_rs::MacroSet::Mdoc,
+                true,
             );
         term_builder.append(lowered);
         definition_field_exited |= field_exited;

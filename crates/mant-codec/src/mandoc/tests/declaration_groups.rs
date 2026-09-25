@@ -36,6 +36,103 @@ fn flow_complete_head_keeps_negative_and_quoted_arguments_out_of_names() {
 }
 
 #[test]
+fn alternating_operands_do_not_promote_inline_font_changes_to_names() {
+    // Each exact input below ran the pinned CVS -Tutf8 reference first.
+    // man_term.c::pre_alternate() concatenates child operands, whereas
+    // term.c::term_word() executes \fB/\fI inside *one* child. A font run is
+    // therefore not an independent declaration boundary; a later operand
+    // may start one only after the quoted/bracketed parameter has closed.
+    let cases = [
+        (
+            "quoted-operands",
+            ".BI \"--pattern \" \"\\(dqfirst,\" \"--fake\" \",last\\(dq,\" \"--all \" FILE",
+            vec!["--pattern", "--all"],
+        ),
+        (
+            "bracketed-operands",
+            ".BI \"-L\" \"(first,\" \"--fake\" \",last),\" \"--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "inline-font-in-parameter",
+            ".BI \"-L\" \"first,\\fB--fake\\fI,last,\" \"--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "pipe-in-parameter",
+            ".BI \"-L\" \"first|\\fB--fake\\fI|last|\" \"--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "negative-in-parameter",
+            ".BI \"-L\" \"-10,\\fB--fake\\fI,20,\" \"--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "slash-in-parameter",
+            ".BI \"-L\" \"first/\\fB--fake\\fI/last,\" \"--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "missing-terminal-separator",
+            ".BI \"-L\" \"first,\\fB--fake\\fI,last\" \"--all \" FILE",
+            vec!["-L"],
+        ),
+        (
+            "independent-bold-operand",
+            ".BI \"-L\" \"first,\" \"--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+    ];
+    for (label, head, expected) in cases {
+        let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n{head}\nBody.\n");
+        let document =
+            parse_manual_bytes(std::path::Path::new("alternating-head.1"), input.as_bytes())
+                .expect("parse alternating man declaration head");
+        let [Block::DefinitionList { items, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!("expected one definition list: {label}");
+        };
+        assert_eq!(
+            items[0].entry.as_ref().expect("entry").names,
+            expected,
+            "{label}"
+        );
+        assert!(
+            visible_document_text(&document).contains("Body."),
+            "{label}"
+        );
+        assert!(
+            !format!("{document:?}").contains("mant-native-operand-"),
+            "private operand marks escaped into IR: {label}"
+        );
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        for name in ["--fake", "--all"] {
+            let result = mant_query::explain_query(
+                &resolved,
+                &mant_protocol::ExplanationQuery {
+                    entry: name.into(),
+                    options: mant_protocol::ExplanationOptions::default(),
+                },
+            )
+            .expect("query completed Flow entry");
+            assert_eq!(
+                result.counts.direct_entry.total,
+                u32::from(name == "--all" && expected.contains(&"--all")),
+                "{label}: {name}"
+            );
+        }
+    }
+}
+
+#[test]
 fn each_native_fl_proves_its_own_numeric_name_without_licensing_bold_text() {
     // Both inputs ran the pinned CVS reference first. mdoc_macro.c::in_line()
     // keeps the second Fl as its own macro; mdoc_term.c::termp_fl_pre() emits

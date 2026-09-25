@@ -12,15 +12,24 @@ use mant_ir::inline_plain_text as plain_text;
 pub(super) struct AuthoredForm<'a> {
     content: ContentContext<'a>,
     inlines: &'a [Inline],
+    operand_ranges: &'a [Range<usize>],
 }
 
 impl<'a> AuthoredForm<'a> {
-    pub(super) const fn new(content: ContentContext<'a>, inlines: &'a [Inline]) -> Self {
-        Self { content, inlines }
+    pub(super) const fn new(
+        content: ContentContext<'a>,
+        inlines: &'a [Inline],
+        operand_ranges: &'a [Range<usize>],
+    ) -> Self {
+        Self {
+            content,
+            inlines,
+            operand_ranges,
+        }
     }
 
     pub(super) fn option_candidates(&self) -> impl Iterator<Item = FormCandidate<'a>> {
-        option_alias_groups(self.content, self.inlines)
+        option_alias_groups(self.content, self.inlines, self.operand_ranges)
             .into_iter()
             .scan(0, |offset, inlines| {
                 let start = *offset;
@@ -168,13 +177,26 @@ pub(super) fn environment_prefix(
 /// nesting and local argument phases survive strong/link wrapper boundaries;
 /// punctuation inside an argument is not a fresh declaration.
 pub(super) fn declaration_groups(content: ContentContext<'_>, term: &[Inline]) -> Vec<Vec<Inline>> {
+    declaration_groups_with_operands(content, term, &[])
+}
+
+fn declaration_groups_with_operands(
+    content: ContentContext<'_>,
+    term: &[Inline],
+    operand_ranges: &[Range<usize>],
+) -> Vec<Vec<Inline>> {
     let mut ranges = SplitRanges::default();
     split_groups(
         content,
         term,
         &[',', '|'],
         &mut None,
-        &mut DeclarationState::new(content, plain_text(content, term), term),
+        &mut DeclarationState::new_with_operands(
+            content,
+            plain_text(content, term),
+            term,
+            operand_ranges,
+        ),
         &mut ranges,
         false,
     )
@@ -205,8 +227,12 @@ pub(in crate::definitions) fn declaration_group_ranges(
 /// Slashes only separate the invocation token after its option grammar has
 /// been validated. Keep candidate trees intact so each candidate still passes
 /// the parameter check; never split argument paths later in the form.
-fn option_alias_groups(content: ContentContext<'_>, term: &[Inline]) -> Vec<Vec<Inline>> {
-    declaration_groups(content, term)
+fn option_alias_groups(
+    content: ContentContext<'_>,
+    term: &[Inline],
+    operand_ranges: &[Range<usize>],
+) -> Vec<Vec<Inline>> {
+    declaration_groups_with_operands(content, term, operand_ranges)
         .into_iter()
         .flat_map(|group| {
             let text = plain_text(content, &group);
@@ -557,7 +583,7 @@ mod tests {
             },
             text(", --other"),
         ];
-        let names: Vec<_> = AuthoredForm::new(fixture::content(), &term)
+        let names: Vec<_> = AuthoredForm::new(fixture::content(), &term, &[])
             .option_candidates()
             .filter_map(|candidate| candidate.invocation_token())
             .collect();

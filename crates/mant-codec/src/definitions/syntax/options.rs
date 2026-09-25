@@ -35,11 +35,16 @@ pub(crate) fn option_names_from_terms(
 fn recognize_option_occurrences_from_terms(
     content: ContentContext<'_>,
     terms: &[Vec<Inline>],
+    operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> Vec<Vec<RecognizedName>> {
     terms
         .iter()
-        .map(|term| {
-            forms::AuthoredForm::new(content, term)
+        .enumerate()
+        .map(|(index, term)| {
+            let ranges = operand_ranges
+                .and_then(|terms| terms.get(index))
+                .map_or(&[][..], Vec::as_slice);
+            forms::AuthoredForm::new(content, term, ranges)
                 .option_candidates()
                 .filter_map(|candidate| {
                     let (token, start) = candidate.invocation_token()?;
@@ -55,7 +60,7 @@ pub(crate) fn option_occurrences_from_terms(
     content: ContentContext<'_>,
     terms: &[Vec<Inline>],
 ) -> Vec<Vec<RecognizedName>> {
-    recognize_option_occurrences_from_terms(content, terms)
+    recognize_option_occurrences_from_terms(content, terms, None)
 }
 
 /// Recognize the option declarations in one complete literal leaf.
@@ -88,8 +93,9 @@ pub(super) fn native_option_occurrences(
     content: ContentContext<'_>,
     terms: &[Vec<Inline>],
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
+    operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> Vec<Vec<RecognizedName>> {
-    let mut result = recognize_option_occurrences_from_terms(content, terms);
+    let mut result = recognize_option_occurrences_from_terms(content, terms, operand_ranges);
     for (index, (term, names)) in terms.iter().zip(&mut result).enumerate() {
         let prefix = forms::literal_prefix(content, term);
         if let Some(token) = prefix.split_whitespace().next()
@@ -137,8 +143,9 @@ pub(super) fn native_option_occurrences(
 pub(in crate::definitions) fn parameter_occurrences(
     content: ContentContext<'_>,
     terms: &[Vec<Inline>],
+    operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> Vec<Vec<RecognizedName>> {
-    let mut found = recognize_option_occurrences_from_terms(content, terms);
+    let mut found = recognize_option_occurrences_from_terms(content, terms, operand_ranges);
     for (term, names) in terms.iter().zip(&mut found) {
         let text = plain_text(content, term);
         let Some(token) = text.split_whitespace().next() else {

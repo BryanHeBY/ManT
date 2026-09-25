@@ -57,11 +57,13 @@ pub(super) fn identity_plan(
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
+    operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> IdentityPlan {
     let inferred = item.entry.is_none();
     let (kind, case, names, occurrences, value_domain) = item.entry.as_ref().map_or_else(
         || {
-            let inferred = infer_identity(content, item, context, hint, option_ranges);
+            let inferred =
+                infer_identity(content, item, context, hint, option_ranges, operand_ranges);
             (
                 inferred.kind,
                 inferred.case,
@@ -75,7 +77,7 @@ pub(super) fn identity_plan(
                 identity.kind,
                 identity.case,
                 identity.names.clone(),
-                super::syntax::name_occurrences(content, item, identity.kind),
+                super::syntax::name_occurrences(content, item, identity.kind, operand_ranges),
                 identity.value_domain.clone(),
             )
         },

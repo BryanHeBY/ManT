@@ -189,15 +189,15 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
-        option_evidence: bool,
+        head_evidence: bool,
     ) -> (Vec<inline::DraftInline>, bool, bool) {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
-        if option_evidence {
-            builder.enable_native_option_marks();
+        if head_evidence {
+            builder.enable_native_head_marks();
         }
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         let finished = formatter.finish_inline_line(builder);
@@ -228,7 +228,7 @@ impl<'a> LoweringContext<'a> {
             inline::AuthorBreakEffect::Line,
         );
         if self.macro_set == libmandoc_rs::MacroSet::Mdoc {
-            builder.enable_native_option_marks();
+            builder.enable_native_head_marks();
         }
         let saved_font = strong_scope.then(|| {
             builder

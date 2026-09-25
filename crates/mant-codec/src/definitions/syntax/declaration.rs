@@ -8,6 +8,7 @@ use mant_ir::{
     ContentContext, Inline, InlineView, lexical_option_token, literal_option_names, option_prefix,
 };
 use std::collections::HashSet;
+use std::ops::Range;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
@@ -26,6 +27,7 @@ pub(super) struct DeclarationState {
     quote: Option<char>,
     uncertain: bool,
     literal_starts: HashSet<usize>,
+    native_operand_starts: HashSet<usize>,
     argument_starts: HashSet<usize>,
     validated_token: bool,
     suffix: SuffixCursor,
@@ -35,8 +37,22 @@ pub(super) struct DeclarationState {
 
 impl DeclarationState {
     pub(super) fn new(content: ContentContext<'_>, text: String, inlines: &[Inline]) -> Self {
+        Self::new_with_operands(content, text, inlines, &[])
+    }
+
+    pub(super) fn new_with_operands(
+        content: ContentContext<'_>,
+        text: String,
+        inlines: &[Inline],
+        operand_ranges: &[Range<usize>],
+    ) -> Self {
         let mut literal_starts = HashSet::new();
         collect_literal_starts(content, inlines, false, false, &mut 0, &mut literal_starts);
+        let native_operand_starts = operand_ranges
+            .iter()
+            .filter(|range| range.start < range.end && range.end <= text.len())
+            .map(|range| range.start)
+            .collect();
         let mut ranges = Vec::new();
         literal_ranges(content, inlines, false, false, &mut 0, &mut ranges);
         let mut suffix = SuffixCursor::default();
@@ -71,6 +87,7 @@ impl DeclarationState {
             quote: None,
             uncertain: false,
             literal_starts,
+            native_operand_starts,
             argument_starts,
             validated_token: false,
             suffix: SuffixCursor::default(),
@@ -95,6 +112,7 @@ impl DeclarationState {
             quote: None,
             uncertain: false,
             literal_starts: HashSet::new(),
+            native_operand_starts: HashSet::new(),
             argument_starts: HashSet::new(),
             validated_token: false,
             suffix: SuffixCursor::default(),
@@ -153,20 +171,16 @@ impl DeclarationState {
     }
 
     /// An emphasized parameter stays opaque except for a terminal separator
-    /// followed by an independently styled declaration. A comma inside the
-    /// parameter, even before option-looking text, cannot create a name.
+    /// followed by a separately executed native operand. A bold run produced
+    /// by `\fB` inside that same parameter is not such an operand.
     pub(super) fn styled_character(&mut self, character: char, eligible: bool) -> bool {
         if eligible && self.quote.is_none() && self.closers.is_empty() && !self.uncertain {
             let next = self.offset + character.len_utf8();
             let following = self.suffix.probe(&self.text, next);
             if self.independent_name_start(&following) {
-                // This edge is proved by a separate, non-parameter styled
-                // declaration. Unlike an ordinary text comma, the source
-                // need not contain whitespace after it; pre_alternate()
-                // concatenates operands directly. Legacy Flow does not
-                // retain the native operand boundary, so an unmatched quote
-                // or bracket must stay conservative here: an inline font
-                // change within the same operand has the same Strong shape.
+                // pre_alternate() concatenates native operands directly;
+                // the private witness, not a Strong style run, proves this
+                // restart. Quote/bracket state stays active across operands.
                 self.phase = Phase::Name;
                 self.name_end = option_name_end(&self.text, following.start);
                 self.after_name_space = false;
@@ -180,7 +194,7 @@ impl DeclarationState {
     }
 
     fn independent_name_start(&self, following: &SuffixToken<'_>) -> bool {
-        self.literal_starts.contains(&following.start)
+        self.native_operand_starts.contains(&following.start)
             && following.token.starts_with('-')
             && (literal_option_names(following.token)
                 .first()

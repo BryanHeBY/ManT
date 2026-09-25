@@ -3314,6 +3314,9 @@ fn native_man_declaration_segments_keep_arguments_out_and_later_names_in() {
     // pre_alternate select the native HEAD; term.c::term_word applies inline
     // font overrides and prints \(dq as visible quotes. The final-display
     // declaration intervals, not raw punctuation, determine name boundaries.
+    // A single IP operand with an italic argument has no native child
+    // boundary proving that a later bold run starts a new declaration;
+    // retain its text but conservatively omit that ambiguous name.
     for (label, input, names, rejected) in [
         (
             "quoted-argument",
@@ -3347,8 +3350,8 @@ fn native_man_declaration_segments_keep_arguments_out_and_later_names_in() {
             "italic-middle",
             b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-a\\fR, \\fI--operand\\fR, \\fB--all\\fR\" 4\nDescription.\n"
                 .as_slice(),
-            vec!["-a", "--all"],
-            "--operand",
+            vec!["-a"],
+            "--all",
         ),
         (
             "component-inline-italic",
@@ -3702,28 +3705,26 @@ fn native_man_split_names_and_styled_arguments_share_one_checked_head() {
 }
 
 #[test]
-fn native_operand_boundary_can_end_an_unclosed_argument_without_flow_guessing() {
+fn native_operand_boundary_cannot_end_an_unclosed_argument() {
     // Each exact input ran pinned CVS -Tutf8 before this assertion. CVS
-    // man_term.c::pre_alternate() executes each BI operand independently;
-    // term.c::term_word() may change font inside one italic operand, but that
-    // escape does not create a new operand. Fixed retains this component
-    // proof; legacy Flow's Strong/Emphasis tree does not, so it stays
-    // conservative across unmatched quotes and brackets.
+    // man_term.c::pre_alternate() switches font between BI operands, but
+    // neither that boundary nor term.c::term_word()'s inline font escapes
+    // closes an unmatched quote or bracket in the complete visible head.
     for (input, expected) in [
         (
             b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"(first,--fake,\" \"--all \" FILE\nBody.\n"
                 .as_slice(),
-            vec!["-L", "--all"],
+            vec!["-L"],
         ),
         (
             b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"\\(dqfirst,--fake,\" \"--all \" FILE\nBody.\n"
                 .as_slice(),
-            vec!["-L", "--all"],
+            vec!["-L"],
         ),
         (
             b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"(first,\\fB--fake,\" \"--all \" FILE\nBody.\n"
                 .as_slice(),
-            vec!["-L", "--all"],
+            vec!["-L"],
         ),
         (
             b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"(first,\\fB--fake,\"\nBody.\n"
@@ -3735,8 +3736,7 @@ fn native_operand_boundary_can_end_an_unclosed_argument_without_flow_guessing() 
         let flow_index = mant_ir::SemanticIndex::build(&flow);
         let flow_entries = flow_index.section("options");
         assert_eq!(flow_entries.len(), 1);
-        assert!(flow_entries[0].names.iter().any(|name| name == "-L"));
-        assert!(!flow_entries[0].names.iter().any(|name| name == "--fake"));
+        assert_eq!(flow_entries[0].names, ["-L"]);
 
         let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
         assert!(validate_document(&fixed).is_empty());
@@ -3765,6 +3765,50 @@ fn native_operand_boundary_can_end_an_unclosed_argument_without_flow_guessing() 
             )
             .unwrap();
             assert_eq!(result.counts.direct_entry.total, total, "{name}");
+            result.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn native_styled_argument_state_survives_font_operands_and_inline_escapes() {
+    // Both exact inputs ran pinned CVS -Tutf8 before this assertion.
+    // man_term.c::pre_alternate() joins BI operands without spaces, while
+    // term.c::term_word() may change font within one parameter operand.
+    // Neither event ends a quote or converts a parameter-internal comma
+    // into a new declaration; the later independent --all follows a
+    // terminal comma after the quote has closed or the parameter has ended.
+    for (input, names) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"--pattern \" \"\\(dqfirst,\" \"--fake\" \",last\\(dq,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["--pattern", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"first,\\fB--fake\\fI,last,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+    ] {
+        assert_flow_fixed_checked_names(input, &names);
+        let flow = crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap();
+        let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        for document in [flow, fixed] {
+            let resolved = mant_ir::ResolvedContent {
+                address: None,
+                label: "T(1)".into(),
+                document: Some(document),
+                tldr: None,
+            };
+            let result = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: "--fake".into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, 0);
             result.validate_references().unwrap();
         }
     }
@@ -3805,6 +3849,37 @@ fn native_ip_font_run_cannot_reset_an_unclosed_argument() {
     .unwrap();
     assert_eq!(fake.counts.direct_entry.total, 0);
     fake.validate_references().unwrap();
+}
+
+#[test]
+fn native_ip_font_run_does_not_reopen_a_styled_parameter_after_whitespace() {
+    // Exact bytes ran pinned CVS -Tutf8 first. man_term.c::pre_IP executes
+    // one visible HEAD operand; term.c::term_word changes font inside that
+    // operand, so even comma + space before a new bold run does not prove a
+    // second native declaration. The body remains readable either way.
+    let input = b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-L\\fI first, \\fB--fake\\fI,last,\" 4\nBody.\n";
+    assert_flow_fixed_checked_names(input, &["-L"]);
+    for document in [
+        crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap(),
+        project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap(),
+    ] {
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(document),
+            tldr: None,
+        };
+        let fake = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: "--fake".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(fake.counts.direct_entry.total, 0);
+        fake.validate_references().unwrap();
+    }
 }
 
 #[test]
