@@ -1,5 +1,7 @@
 use libmandoc_rs::annotated::{
     AnnotatedDocument, AnnotatedMark, AnnotatedMetadata, AnnotatedRenderer, AnnotationCoverage,
+    AnnotationCoverageIssue, AnnotationDimension, AnnotationIssueReason, AnnotationProducer,
+    AnnotationScope,
 };
 use libmandoc_rs::{InputFormat, SourceBundle};
 use mant_ir::{
@@ -47,6 +49,40 @@ fn invalid_optional_entry_and_link_facts_leave_native_body_and_siblings() {
     document.diagnostics.extend(diagnostics);
     assert!(validate_document(&document).is_empty());
     assert!(!mant_ir::semantics_complete(&document.diagnostics));
+}
+
+#[test]
+fn rejected_native_link_target_keeps_other_fixed_facts_and_reports_gap() {
+    // Exact bytes ran pinned CVS -Tutf8 first. man_term.c prints the TP
+    // descriptions and UR label independently of this test's injected
+    // target-rejection state; no production parser fault hook is installed.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --good\nGood description.\n.TP\n.B --bad\nBad description.\n.UR https://example.test\nlink label\n.UE\n";
+    let mut page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    let expected = page.text.clone();
+    let link = page.marks.iter_mut().find(|mark| mark.kind == 3).unwrap();
+    link.link_target = None;
+    page.coverage.issues.push(AnnotationCoverageIssue {
+        producer: AnnotationProducer::Native,
+        dimension: AnnotationDimension::Link,
+        reason: AnnotationIssueReason::Rejected,
+        scope: AnnotationScope::Document,
+        source: None,
+    });
+    let document = lower_annotated_document(page).unwrap();
+    assert!(validate_document(&document).is_empty());
+    assert!(document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("annotated.coverage.link.rejected")
+    }));
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.surface.text, expected);
+    assert_eq!(fixed.owners.len(), 2);
+    assert!(fixed.owners.iter().all(|owner| owner.entry.is_some()));
+    assert_eq!(fixed.links.len(), 1);
+    assert!(fixed.links[0].target.is_none());
 }
 
 #[test]
@@ -3655,8 +3691,148 @@ fn native_man_split_names_and_styled_arguments_share_one_checked_head() {
                 .as_slice(),
             vec!["-L", "--all"],
         ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"first,--fake,last,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
     ] {
         assert_flow_fixed_checked_names(input, &names);
+    }
+}
+
+#[test]
+fn native_operand_boundary_can_end_an_unclosed_argument_without_flow_guessing() {
+    // Each exact input ran pinned CVS -Tutf8 before this assertion. CVS
+    // man_term.c::pre_alternate() executes each BI operand independently;
+    // term.c::term_word() may change font inside one italic operand, but that
+    // escape does not create a new operand. Fixed retains this component
+    // proof; legacy Flow's Strong/Emphasis tree does not, so it stays
+    // conservative across unmatched quotes and brackets.
+    for (input, expected) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"(first,--fake,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"\\(dqfirst,--fake,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"(first,\\fB--fake,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"(first,\\fB--fake,\"\nBody.\n"
+                .as_slice(),
+            vec!["-L"],
+        ),
+    ] {
+        let flow = crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap();
+        let flow_index = mant_ir::SemanticIndex::build(&flow);
+        let flow_entries = flow_index.section("options");
+        assert_eq!(flow_entries.len(), 1);
+        assert!(flow_entries[0].names.iter().any(|name| name == "-L"));
+        assert!(!flow_entries[0].names.iter().any(|name| name == "--fake"));
+
+        let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+        assert!(validate_document(&fixed).is_empty());
+        let DocumentBody::Fixed(body) = &fixed.body else {
+            panic!("not Fixed")
+        };
+        assert_eq!(
+            body.owners[0].entry.as_ref().map(|entry| &entry.names),
+            Some(&expected.iter().map(|name| (*name).to_owned()).collect()),
+            "{}",
+            String::from_utf8_lossy(input)
+        );
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(1)".into(),
+            document: Some(fixed),
+            tldr: None,
+        };
+        for (name, total) in [("--fake", 0), ("--all", u32::from(expected.len() == 2))] {
+            let result = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, total, "{name}");
+            result.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn native_ip_font_run_cannot_reset_an_unclosed_argument() {
+    // Exact bytes ran pinned CVS -Thtml first. man_term.c::pre_IP prints one
+    // HEAD text operand; term.c::term_word changes its font for --fake, but
+    // that new bold run is not a new native declaration component.
+    let input =
+        b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-L\\fR \\fI\\(dqfirst,\\fR\\fB--fake\\fR\" 4\nBody.\n";
+    let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&fixed).is_empty());
+    let DocumentBody::Fixed(body) = &fixed.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(
+        body.owners[0]
+            .entry
+            .as_ref()
+            .map(|entry| entry.names.as_slice()),
+        Some(["-L".to_owned()].as_slice())
+    );
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(fixed),
+        tldr: None,
+    };
+    let fake = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "--fake".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(fake.counts.direct_entry.total, 0);
+    fake.validate_references().unwrap();
+}
+
+#[test]
+fn styled_terminal_delimiter_restarts_only_the_independent_name() {
+    // Exact bytes ran pinned CVS -Tutf8 first. man_term.c::pre_alternate()
+    // keeps the italic parameter's terminal comma and joins the next bold
+    // operand without inserting a space; its internal commas stay arguments.
+    let input =
+        b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"first,--fake,last,\" \"--all \" FILE\nBody.\n";
+    let fixed = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&fixed).is_empty());
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(fixed),
+        tldr: None,
+    };
+    for (name, expected) in [("-L", 1), ("--all", 1), ("--fake", 0)] {
+        let result = mant_query::explain_query(
+            &resolved,
+            &ExplanationQuery {
+                entry: name.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.total, expected, "{name}");
+        result.validate_references().unwrap();
     }
 }
 
@@ -4535,6 +4711,54 @@ fn section_links_resolve_to_fixed_heading_identity_without_guessing_missing_targ
             diagnostic.code.as_deref() == Some("unresolved-section-reference")
         })
     );
+}
+
+#[test]
+fn empty_section_link_operand_does_not_reject_native_body() {
+    // Exact bytes ran pinned CVS -Tutf8 first. roff.c::deroff() skips \\&;
+    // the missing destination does not prevent the following terminal body
+    // from rendering. This test makes no claim about CVS's HTML output.
+    let input = b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh NAME\n.Nm t\n.Nd test\n.Sh DESCRIPTION\nBefore.\n.Sx \\&\nAfter.\n";
+    let page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Mdoc)
+        .unwrap();
+    let expected = page.text.clone();
+    assert!(expected.contains("Before."));
+    assert!(expected.contains("After."));
+    let document = lower_annotated_document(page).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.surface.text, expected);
+    assert!(fixed.links.iter().all(|link| link.target.is_none()));
+}
+
+#[test]
+fn empty_section_link_keeps_independent_entry_and_link_annotations() {
+    // Exact bytes ran pinned CVS -Tutf8 -O width=78 first. mdoc_term.c
+    // emits the Fl entry and the later Sx OPTIONS label; roff.c::deroff()
+    // yields no destination only for the intervening zero-width Sx.
+    let input = b".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh NAME\n.Nm t\n.Nd test\n.Sh OPTIONS\n.Bl -tag\n.It Fl good\nGood body.\n.El\n.Sh DESCRIPTION\nBefore.\n.Sx \\&\n.Sx OPTIONS\nAfter.\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert!(fixed.surface.text.contains("Before."));
+    assert!(fixed.surface.text.contains("After."));
+    assert!(fixed.owners.iter().any(|owner| {
+        owner
+            .entry
+            .as_ref()
+            .is_some_and(|entry| entry.names == ["-good"])
+    }));
+    assert!(fixed.links.iter().any(|link| {
+        matches!(&link.target, Some(LinkTarget::Section { id }) if id.as_str() == "options")
+    }));
+    assert!(fixed.links.iter().all(|link| {
+        !matches!(&link.target, Some(LinkTarget::Section { id }) if id.as_str().is_empty())
+    }));
 }
 
 #[test]

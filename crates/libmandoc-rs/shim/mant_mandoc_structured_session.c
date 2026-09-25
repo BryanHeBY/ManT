@@ -570,6 +570,9 @@ native_cleanup:
 				mant_annotated_collector_take_marks(
 				    session.annotated_collector,
 				    &annotated->marks, &annotated->mark_count);
+				annotated->native_link_rejected =
+				    mant_annotated_collector_link_rejected(
+				    session.annotated_collector);
 				/* The final device body and source table are hard boundaries.
 				 * Only after both pass may a relation failure in optional
 				 * native marks become a body-only, explicitly degraded result. */

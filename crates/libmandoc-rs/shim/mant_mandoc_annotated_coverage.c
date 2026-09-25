@@ -133,6 +133,7 @@ mant_annotated_coverage_is_valid(const struct mant_annotated_result *result)
 	const struct mant_annotated_coverage_issue *issue;
 	uint8_t seen_checks[3][8] = {{0}};
 	uint8_t seen_issues[3][8] = {{0}};
+	uint8_t rejected_link_issue = 0;
 	uint32_t observed_states[3][8] = {{0}};
 	uint32_t producer, dimension, index;
 
@@ -175,8 +176,15 @@ mant_annotated_coverage_is_valid(const struct mant_annotated_result *result)
 		if (observed_states[producer][dimension] !=
 		    MANT_ANNOTATED_COVERAGE_UNVERIFIED)
 			return 0;
+		if (issue->producer == MANT_ANNOTATED_COVERAGE_NATIVE &&
+		    issue->dimension == MANT_ANNOTATED_COVERAGE_LINK &&
+		    issue->reason == MANT_ANNOTATED_COVERAGE_REJECTED)
+			rejected_link_issue = 1;
 		seen_issues[producer][dimension] = 1;
 	}
+	if (result->native_link_rejected > 1 ||
+	    rejected_link_issue != result->native_link_rejected)
+		return 0;
 	for (producer = 0; producer < 3; producer++)
 		for (dimension = 0; dimension < 8; dimension++)
 			if (seen_checks[producer][dimension] == 0 ||
@@ -269,6 +277,13 @@ mant_annotated_coverage_build(struct structured_session *session,
 		    MANT_ANNOTATED_COVERAGE_NOT_OBSERVED))
 			return 0;
 	}
+	/* A destination rejected by the native decoder is distinct from an
+	 * ordinary unverified link dimension.  Its label survives as no-href,
+	 * while this issue makes the lost semantics visible to consumers. */
+	if (result->native_link_rejected &&
+	    !append_issue(session, result, MANT_ANNOTATED_COVERAGE_LINK,
+	    MANT_ANNOTATED_COVERAGE_REJECTED))
+		return 0;
 	for (dimension = MANT_ANNOTATED_COVERAGE_RELATION;
 	    dimension <= MANT_ANNOTATED_COVERAGE_JOIN; dimension++) {
 		if (!append_issue(session, result, dimension,

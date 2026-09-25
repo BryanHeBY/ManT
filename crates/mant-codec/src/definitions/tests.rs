@@ -154,6 +154,18 @@ fn native_styled_boundaries_do_not_promote_parameter_punctuation() {
             ],
             vec!["-o", "--output"],
         ),
+        (
+            vec![
+                name("-L"),
+                argument("(first,--fake,"),
+                name("--all "),
+                argument("FILE"),
+            ],
+            // The final Strong shape alone does not prove a new native BI
+            // operand: an inline \fB in the same italic operand looks alike.
+            vec!["-L"],
+        ),
+        (vec![name("-L"), argument("(first,--fake,")], vec!["-L"]),
     ];
     for (term, expected) in terms {
         assert_eq!(

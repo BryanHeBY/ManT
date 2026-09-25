@@ -12,6 +12,9 @@ struct mant_annotated_result {
 	uint32_t checked;
 	/* A checked body survived, but native mark relations were discarded. */
 	uint32_t annotation_degraded;
+	/* Some decoded link destinations were rejected while their checked
+	 * display labels and other native marks remained usable. */
+	uint8_t native_link_rejected;
 	struct mant_structured_result *common;
 	struct mant_annotated_display *display;
 	struct mant_annotated_mark *marks;

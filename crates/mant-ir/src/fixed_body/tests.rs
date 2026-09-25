@@ -11,6 +11,116 @@ fn empty_selection() -> TextSelection {
     }
 }
 
+fn alternating_lexical_head(argument: &str) -> (FixedBody, String) {
+    let pieces = ["-L", argument, "--all ", "FILE"];
+    let form = pieces.concat();
+    let mut body = scaled_styled_argument_body(0).0;
+    let mut offset = 0usize;
+    let mut column = 0u32;
+    body.surface.text = form.clone();
+    body.surface.runs = pieces
+        .into_iter()
+        .enumerate()
+        .map(|(index, piece)| {
+            let width = u32::try_from(piece.chars().count()).unwrap();
+            let run = DisplayRun {
+                key: key(u32::try_from(index + 1).unwrap()),
+                row: key(1),
+                column,
+                width,
+                byte_start: u64::try_from(offset).unwrap(),
+                byte_count: u64::try_from(piece.len()).unwrap(),
+                label: DisplayLabel {
+                    owner: Some(key(1)),
+                    link: None,
+                    source: None,
+                    style: DisplayStyle {
+                        bold: index % 2 == 0,
+                        underline: index % 2 != 0,
+                    },
+                    role: DisplayRole::Body,
+                },
+            };
+            offset += piece.len();
+            column += width;
+            run
+        })
+        .collect();
+    body.surface.rows[0].run_count = 4;
+    body.surface.rows[0].column_count = column;
+    body.owners[0].head = TextSelection {
+        parts: pieces
+            .into_iter()
+            .enumerate()
+            .map(|(index, piece)| OutputSlice {
+                run: key(u32::try_from(index + 1).unwrap()),
+                start_byte: 0,
+                end_byte: u64::try_from(piece.len()).unwrap(),
+            })
+            .collect(),
+        joins: vec![TextJoin::DirectContact; 3],
+    };
+    body.owners[0].head_components = [0usize, 2]
+        .into_iter()
+        .map(|index| OwnerHeadComponent {
+            role: OwnerHeadRole::Lexical,
+            selection: TextSelection {
+                parts: vec![body.owners[0].head.parts[index]],
+                joins: Vec::new(),
+            },
+            source: None,
+            source_key: Some(SourceKey::FIRST),
+        })
+        .collect();
+    (body, form)
+}
+
+#[test]
+fn native_styled_delimiter_restarts_only_at_an_independent_bold_operand() {
+    // All exact TP/BI inputs first ran pinned CVS -Tutf8. man_term.c::
+    // pre_alternate concatenates operands without a separator while applying
+    // alternating bold/underline fonts; term.c::term_word preserves each
+    // visible comma, pipe, quote, bracket, and signed parameter glyph.
+    for argument in [
+        "first,--fake,last,",
+        "first, --fake, last,",
+        "first|--fake|last|",
+        "-10,--fake,20,",
+        "(first,--fake,last),",
+        "\"first,--fake,last\",",
+        "(first,--fake,",
+        "\"first,--fake,",
+        "(first,",
+        "\"first,",
+        "first,--fake,last, ",
+    ] {
+        let (body, form) = alternating_lexical_head(argument);
+        body.validate().expect("native-like display remains valid");
+        let all = form.find("--all").unwrap();
+        assert_eq!(
+            body.lexical_names(&body.owners[0])
+                .expect("checked names")
+                .into_iter()
+                .map(|(name, _, range)| (name, range))
+                .collect::<Vec<_>>(),
+            [("-L".to_owned(), 0..2), ("--all".to_owned(), all..all + 5)],
+            "{form}"
+        );
+    }
+
+    // This exact no-terminal-delimiter TP/BI input also ran pinned CVS. An
+    // adjacent bold operand by itself cannot split a parameter declaration.
+    let (body, _) = alternating_lexical_head("first,--fake,last");
+    assert_eq!(
+        body.lexical_names(&body.owners[0])
+            .expect("checked first name")
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect::<Vec<_>>(),
+        ["-L"]
+    );
+}
+
 #[test]
 fn styled_argument_scan_checks_one_boundary_per_declaration_segment() {
     // The exact small `.TP` head with `\fB-L\fR\fIa\fR\fIb\fR`

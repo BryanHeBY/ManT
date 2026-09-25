@@ -487,8 +487,11 @@ impl FixedBody {
             return None;
         }
         let form = self.owner_complete_form(owner)?;
-        let (styled, _) = self.lexical_styled_argument_names(owner, &form)?;
-        let mut candidates = crate::literal_option_names(&form);
+        let segments = self.lexical_declaration_ranges(owner, &form)?;
+        let (styled, _) =
+            self.lexical_styled_argument_names_in_segments(owner, &form, &segments)?;
+        let literal = Self::lexical_segment_names(&form, &segments)?;
+        let mut candidates = literal.clone();
         // A displayed operand after a complete initial option is not another
         // name. The native HEAD role, rather than the raw roff spelling, is
         // the independent evidence for this first declaration.
@@ -521,7 +524,8 @@ impl FixedBody {
             }
             names.push((name, selection, range));
         }
-        let names = self.checked_lexical_names(owner, &form, names, &styled_ranges)?;
+        let names =
+            self.checked_lexical_names(owner, &form, names, &styled_ranges, &segments, &literal)?;
         // The parser-alive prefix is a candidate for the first declaration,
         // not permission to ignore the rest of the native HEAD.  Keep it
         // tied to the same final glyphs when it was recorded.
@@ -548,17 +552,138 @@ impl FixedBody {
         self.lexical_literal_names(owner)
     }
 
+    /// A bold native operand begins another declaration only at its own
+    /// final visible glyphs. In particular, punctuation inside the preceding
+    /// italic parameter cannot manufacture such an operand. This is a
+    /// bounded annotation of the complete displayed HEAD, not a second
+    /// source-spelling parser or a requirement for authored coordinates.
+    fn lexical_declaration_ranges(
+        &self,
+        owner: &OwnerMark,
+        form: &str,
+    ) -> Option<Vec<Range<usize>>> {
+        let component_starts = component_part_ranges(&owner.head, &owner.head_components)
+            .and_then(|parts| self.component_byte_ranges(&owner.head, &parts))
+            .map(|ranges| {
+                owner
+                    .head_components
+                    .iter()
+                    .zip(ranges)
+                    .filter_map(|(component, range)| {
+                        if component.role != OwnerHeadRole::Lexical
+                            || component.selection.parts.is_empty()
+                        {
+                            return None;
+                        }
+                        let mut first_style = None;
+                        for part in &component.selection.parts {
+                            let run = self.surface.runs.get((part.run.get() - 1) as usize)?;
+                            let text = self.surface.run_text(part.run)?.get(
+                                usize::try_from(part.start_byte).ok()?
+                                    ..usize::try_from(part.end_byte).ok()?,
+                            )?;
+                            if text.chars().any(|character| !character.is_whitespace()) {
+                                first_style = Some(run.label.style);
+                                break;
+                            }
+                        }
+                        let component_text = form.get(range.clone())?;
+                        let leading = component_text.len() - component_text.trim_start().len();
+                        first_style
+                            .filter(|style| !style.underline || style.bold)
+                            .map(|_| range.start + leading)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let mut starts = component_starts.clone();
+        let mut argument_starts = Vec::new();
+        let mut offset = 0usize;
+        for (index, part) in owner.head.parts.iter().enumerate() {
+            if index != 0 {
+                offset = offset.checked_add(match &owner.head.joins[index - 1] {
+                    TextJoin::DirectContact => 0,
+                    TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text) => {
+                        text.len()
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                })?;
+            }
+            let start = offset;
+            let run = self.surface.runs.get((part.run.get() - 1) as usize)?;
+            let visible = self.surface.run_text(part.run)?.get(
+                usize::try_from(part.start_byte).ok()?..usize::try_from(part.end_byte).ok()?,
+            )?;
+            offset = offset.checked_add(visible.len())?;
+            if run.label.style.underline
+                && !run.label.style.bold
+                && visible.chars().any(|character| !character.is_whitespace())
+            {
+                argument_starts.push(start);
+            }
+            if owner.head_components.is_empty()
+                && run.label.style.bold
+                && !run.label.style.underline
+                && !visible.trim_start().is_empty()
+            {
+                // A literal IP head has no child macro component; a final
+                // bold run is its independent style witness. Native BI/BR
+                // heads do have components, so an in-argument font escape
+                // there cannot impersonate a new macro operand.
+                starts.push(start + visible.len() - visible.trim_start().len());
+            }
+        }
+        if owner.head_components.is_empty() {
+            starts.dedup();
+        }
+        (offset == form.len()).then(|| {
+            crate::entry::literal_declaration_ranges_with_starts(
+                form,
+                &starts,
+                &component_starts,
+                &argument_starts,
+            )
+        })
+    }
+
+    fn lexical_segment_names(
+        form: &str,
+        segments: &[Range<usize>],
+    ) -> Option<Vec<(String, Range<usize>)>> {
+        let mut names = Vec::new();
+        for segment in segments {
+            let text = form.get(segment.clone())?;
+            for (name, range) in crate::literal_option_names(text) {
+                if names.len() == 64 {
+                    return None;
+                }
+                names.push((name, segment.start + range.start..segment.start + range.end));
+            }
+        }
+        Some(names)
+    }
+
     /// An immediately underlined suffix is a native parameter boundary,
     /// even when `term.c::term_word()` prints it in direct contact with the
     /// preceding option (`-L` followed by italic `dir`).  Recover only a
     /// complete option before that boundary; ordinary roman suffixes and
     /// a wholly underlined option are not additional declarations.
+    #[cfg(test)]
     fn lexical_styled_argument_names(
         &self,
         owner: &OwnerMark,
         form: &str,
     ) -> Option<StyledArgumentScan> {
-        let segments = crate::entry::literal_declaration_ranges(form);
+        let segments = self.lexical_declaration_ranges(owner, form)?;
+        self.lexical_styled_argument_names_in_segments(owner, form, &segments)
+    }
+
+    fn lexical_styled_argument_names_in_segments(
+        &self,
+        owner: &OwnerMark,
+        form: &str,
+        segments: &[Range<usize>],
+    ) -> Option<StyledArgumentScan> {
         let mut candidates = Vec::new();
         let mut segment_index = 0;
         let mut examined_segment = None;
@@ -642,9 +767,9 @@ impl FixedBody {
         form: &str,
         candidates: Vec<(String, TextSelection, std::ops::Range<usize>)>,
         styled_ranges: &[std::ops::Range<usize>],
+        segments: &[Range<usize>],
+        literal: &[(String, Range<usize>)],
     ) -> Option<Vec<(String, TextSelection, std::ops::Range<usize>)>> {
-        let segments = crate::entry::literal_declaration_ranges(form);
-        let literal = crate::literal_option_names(form);
         let components = component_part_ranges(&owner.head, &owner.head_components)
             .and_then(|ranges| self.component_byte_ranges(&owner.head, &ranges))
             .map(|ranges| {

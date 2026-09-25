@@ -159,17 +159,14 @@ impl DeclarationState {
         if eligible && self.quote.is_none() && self.closers.is_empty() && !self.uncertain {
             let next = self.offset + character.len_utf8();
             let following = self.suffix.probe(&self.text, next);
-            if self.literal_starts.contains(&following.start)
-                && following.token.starts_with('-')
-                && (literal_option_names(following.token)
-                    .first()
-                    .is_some_and(|(_, range)| range.start == 0)
-                    || pattern_start(following.token))
-            {
+            if self.independent_name_start(&following) {
                 // This edge is proved by a separate, non-parameter styled
                 // declaration. Unlike an ordinary text comma, the source
-                // need not contain whitespace after it; the formatter's
-                // pre_alternate() concatenates operands directly.
+                // need not contain whitespace after it; pre_alternate()
+                // concatenates operands directly. Legacy Flow does not
+                // retain the native operand boundary, so an unmatched quote
+                // or bracket must stay conservative here: an inline font
+                // change within the same operand has the same Strong shape.
                 self.phase = Phase::Name;
                 self.name_end = option_name_end(&self.text, following.start);
                 self.after_name_space = false;
@@ -180,6 +177,15 @@ impl DeclarationState {
         self.observe(character, true);
         self.offset += character.len_utf8();
         false
+    }
+
+    fn independent_name_start(&self, following: &SuffixToken<'_>) -> bool {
+        self.literal_starts.contains(&following.start)
+            && following.token.starts_with('-')
+            && (literal_option_names(following.token)
+                .first()
+                .is_some_and(|(_, range)| range.start == 0)
+                || pattern_start(following.token))
     }
 
     pub(super) fn opaque(&mut self, text: &str) {

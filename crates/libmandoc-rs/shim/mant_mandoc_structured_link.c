@@ -157,7 +157,7 @@ target_scalar_bytes(int scalar, uint8_t *out)
 	return 4;
 }
 
-static int
+static enum mant_link_target_copy_status
 decode_link_target(const char *source, uint32_t profile, uint8_t *output,
     size_t *length)
 {
@@ -173,7 +173,7 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 		if (*cursor != '\\') {
 			if (!skip) {
 				if (used == SIZE_MAX)
-					return 0;
+					return MANT_LINK_TARGET_INVALID;
 				if (output != NULL)
 					output[used] = (uint8_t)*cursor;
 				used++;
@@ -233,7 +233,7 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 			device = profile == MANT_PROFILE_ASCII ? "ascii" : "utf8";
 			count = strlen(device);
 			if (used > SIZE_MAX - count)
-				return 0;
+				return MANT_LINK_TARGET_INVALID;
 			if (output != NULL)
 				memcpy(output + used, device, count);
 			used += count;
@@ -248,7 +248,7 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 		default:
 			/* Recursive interpolation should already have been expanded
 			 * by the pinned parser before rendering a typed destination. */
-			return 0;
+			return MANT_LINK_TARGET_UNSUPPORTED;
 		}
 		if (scalar < 0)
 			continue;
@@ -258,74 +258,92 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 		count = target_scalar_bytes(scalar,
 		    output == NULL ? NULL : output + used);
 		if (count == 0 || used > SIZE_MAX - count)
-			return 0;
+			return MANT_LINK_TARGET_INVALID;
 		used += count;
 	}
 	*length = used;
-	return 1;
+	return MANT_LINK_TARGET_OK;
 }
 
-static int
+static enum mant_link_target_copy_status
 copy_link_target(struct structured_session *session,
     struct mant_bytes_view *out, const struct roff_node *node,
     int allow_empty)
 {
 	uint8_t *decoded;
 	size_t length, written;
+	enum mant_link_target_copy_status status;
 
 	if (node == NULL || node->type != ROFFT_TEXT || node->string == NULL)
-		return 0;
+		return MANT_LINK_TARGET_INVALID;
 	if (node->string[0] == '\0')
-		return allow_empty;
+		return allow_empty ? MANT_LINK_TARGET_OK :
+		    MANT_LINK_TARGET_UNSUPPORTED;
+	length = strlen(node->string);
+	/* html.c::print_encode() applies SKIPCHAR before emitting a target byte.
+	 * Validate the final decoded target below: a skipped raw byte need not
+	 * itself be UTF-8, but no invalid byte may reach the owned destination. */
 	if (strchr(node->string, '\\') == NULL) {
-		length = strlen(node->string);
-		if (!mant_structured_valid_utf8((const uint8_t *)node->string, length))
-			return 0;
+		if (!mant_structured_valid_utf8((const uint8_t *)node->string,
+		    length))
+			return MANT_LINK_TARGET_INVALID;
 		out->ptr = mant_structured_copy_bytes(session,
 		    (const uint8_t *)node->string, length, 1,
 		    MANT_STRUCTURED_STAGE_RENDER);
 		if (out->ptr == NULL)
-			return 0;
+			return MANT_LINK_TARGET_FAILED;
 		out->len = length;
-		return 1;
+		return MANT_LINK_TARGET_OK;
 	}
-	if (!decode_link_target(node->string, session->result->profile,
-	    NULL, &length))
-		return 0;
+	status = decode_link_target(node->string, session->result->profile,
+	    NULL, &length);
+	if (status != MANT_LINK_TARGET_OK)
+		return status;
 	if (length == 0)
-		return allow_empty;
+		return allow_empty ? MANT_LINK_TARGET_OK :
+		    MANT_LINK_TARGET_UNSUPPORTED;
 	decoded = mant_structured_allocate(session, length, 0,
 	    MANT_STRUCTURED_STAGE_RENDER);
 	if (decoded == NULL)
-		return 0;
-	if (!decode_link_target(node->string, session->result->profile,
-	    decoded, &written) ||
+		return MANT_LINK_TARGET_FAILED;
+	status = decode_link_target(node->string, session->result->profile,
+	    decoded, &written);
+	if (status != MANT_LINK_TARGET_OK ||
 	    written != length || !mant_structured_valid_utf8(decoded, length)) {
 		free(decoded);
-		return 0;
+		return MANT_LINK_TARGET_INVALID;
 	}
 	out->ptr = decoded;
 	out->len = length;
-	return 1;
+	return MANT_LINK_TARGET_OK;
 }
 
 int
 mant_structured_copy_link_target(struct structured_session *session,
     struct mant_bytes_view *out, const struct roff_node *node)
 {
-	return copy_link_target(session, out, node, 0);
+	return copy_link_target(session, out, node, 0) == MANT_LINK_TARGET_OK;
 }
 
 int
 mant_structured_copy_link_target_allow_empty(struct structured_session *session,
     struct mant_bytes_view *out, const struct roff_node *node)
 {
+	return copy_link_target(session, out, node, 1) == MANT_LINK_TARGET_OK;
+}
+
+enum mant_link_target_copy_status
+mant_structured_copy_link_target_allow_empty_classified(
+    struct structured_session *session, struct mant_bytes_view *out,
+    const struct roff_node *node)
+{
 	return copy_link_target(session, out, node, 1);
 }
 
-int
-mant_structured_copy_deroff_target(struct structured_session *session,
-    struct mant_bytes_view *out, const struct roff_node *node)
+static int
+copy_deroff_target(struct structured_session *session,
+    struct mant_bytes_view *out, const struct roff_node *node,
+    int allow_empty)
 {
 	char *target;
 	size_t length;
@@ -335,7 +353,7 @@ mant_structured_copy_deroff_target(struct structured_session *session,
 	deroff(&target, node);
 	if (target == NULL || target[0] == '\0') {
 		free(target);
-		return 0;
+		return allow_empty;
 	}
 	length = strlen(target);
 	ok = mant_structured_valid_utf8((const uint8_t *)target, length);
@@ -349,6 +367,20 @@ mant_structured_copy_deroff_target(struct structured_session *session,
 	}
 	free(target);
 	return ok;
+}
+
+int
+mant_structured_copy_deroff_target(struct structured_session *session,
+    struct mant_bytes_view *out, const struct roff_node *node)
+{
+	return copy_deroff_target(session, out, node, 0);
+}
+
+int
+mant_structured_copy_deroff_target_allow_empty(struct structured_session *session,
+    struct mant_bytes_view *out, const struct roff_node *node)
+{
+	return copy_deroff_target(session, out, node, 1);
 }
 
 uint32_t

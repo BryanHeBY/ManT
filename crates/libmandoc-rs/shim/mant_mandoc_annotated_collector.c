@@ -153,6 +153,7 @@ struct mant_annotated_collector {
 	uint8_t in_margin;
 	uint8_t footer_drained;
 	uint8_t html_nofill;
+	uint8_t link_annotation_rejected;
 };
 
 static void
@@ -731,6 +732,7 @@ add_mark(struct mant_annotated_collector *collector,
 	struct mant_annotated_mark *marks, *mark;
 	struct annotated_point_state *points;
 	const struct roff_node *first, *second;
+	enum mant_link_target_copy_status target_status;
 	size_t name_length;
 	uint32_t maximum;
 
@@ -833,9 +835,14 @@ add_mark(struct mant_annotated_collector *collector,
 			break;
 		case MDOC_Sx:
 			mark->target_kind = MANT_LINK_SECTION;
-			if (!mant_structured_copy_deroff_target(
+			/* roff.c::deroff() can legitimately return no text for a
+			 * zero-width operand.  html.c::html_make_id() then returns
+			 * NULL; the macro is not a failed render or a clickable href. */
+			if (!mant_structured_copy_deroff_target_allow_empty(
 			    collector->session, &mark->target_a, node))
 				goto unsupported_target;
+			if (mark->target_a.len == 0)
+				mark->target_kind = 0;
 			break;
 		case MDOC_Mt:
 			/* Each child is one native link instance, not one address
@@ -858,15 +865,23 @@ add_mark(struct mant_annotated_collector *collector,
 		if (node->tok != MDOC_Sx && first == NULL) {
 			mark->target_kind = 0;
 		}
-		if (mark->target_kind != 0 && first != NULL &&
-		    !mant_structured_copy_link_target_allow_empty(
-		    collector->session,
-		    &mark->target_a, first))
-			goto unsupported_target;
+		if (mark->target_kind != 0 && first != NULL) {
+			target_status =
+			    mant_structured_copy_link_target_allow_empty_classified(
+			    collector->session, &mark->target_a, first);
+			if (target_status == MANT_LINK_TARGET_UNSUPPORTED)
+				goto rejected_target;
+			if (target_status != MANT_LINK_TARGET_OK)
+				goto unsupported_target;
+		}
 		if (second != NULL) {
 			mark->target_b_present = 1;
-			if (!mant_structured_copy_link_target_allow_empty(
-		    collector->session, &mark->target_b, second))
+			target_status =
+			    mant_structured_copy_link_target_allow_empty_classified(
+			    collector->session, &mark->target_b, second);
+			if (target_status == MANT_LINK_TARGET_UNSUPPORTED)
+				goto rejected_target;
+			if (target_status != MANT_LINK_TARGET_OK)
 				goto unsupported_target;
 		}
 		/* man_html.c::man_MR_pre and mdoc_html.c::mdoc_xr_pre only
@@ -884,6 +899,21 @@ add_mark(struct mant_annotated_collector *collector,
 			mark->target_kind = mark->target_b_present = 0;
 		}
 	}
+	collector->metrics.mark_count = collector->mark_count;
+	return mark->key;
+
+rejected_target:
+	/* An unhandled *semantic* destination escape must not stop term.c's
+	 * already safe byte stream.  Retain the native macro occurrence and its
+	 * visible label, but make it a no-href link and report incomplete link
+	 * coverage.  Invalid UTF-8, structural data, allocation and budget
+	 * failures take the distinct hard-failure branch below. */
+	free((void *)mark->target_a.ptr);
+	free((void *)mark->target_b.ptr);
+	memset(&mark->target_a, 0, sizeof(mark->target_a));
+	memset(&mark->target_b, 0, sizeof(mark->target_b));
+	mark->target_kind = mark->target_b_present = 0;
+	collector->link_annotation_rejected = 1;
 	collector->metrics.mark_count = collector->mark_count;
 	return mark->key;
 
@@ -3107,6 +3137,13 @@ mant_annotated_collector_get_metrics(
 	memset(metrics, 0, sizeof(*metrics));
 	if (collector != NULL)
 		*metrics = collector->metrics;
+}
+
+int
+mant_annotated_collector_link_rejected(
+    const struct mant_annotated_collector *collector)
+{
+	return collector != NULL && collector->link_annotation_rejected != 0;
 }
 
 void

@@ -2,7 +2,10 @@
 
 //! R01 link macro identity and final surviving label cells.
 
-use libmandoc_rs::annotated::{AnnotatedDocument, AnnotatedRenderer, AnnotatedTextJoin};
+use libmandoc_rs::annotated::{
+    AnnotatedDocument, AnnotatedRenderer, AnnotatedTextJoin, AnnotationDimension,
+    AnnotationIssueReason,
+};
 use libmandoc_rs::{InputFormat, SourceBundle};
 
 fn render(source: &[u8], format: InputFormat) -> AnnotatedDocument {
@@ -324,6 +327,33 @@ fn missing_destinations_preserve_valid_native_output_without_inventing_links() {
             .primary,
         "~"
     );
+}
+
+#[test]
+fn sx_zero_width_destination_keeps_body_without_a_clickable_target() {
+    // Every exact input first ran on the pinned CVS reference -Tutf8.
+    // roff.c::deroff() skips a leading \&, \%, or \~ and can return no
+    // destination; html.c::html_make_id() likewise permits NULL here.
+    for operand in ["\\&", "\\%", "\\~", "\"\""] {
+        let input = format!(
+            ".Dd September 25, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\nBefore.\n.Sx {operand}\nAfter.\n"
+        );
+        let page = render(input.as_bytes(), InputFormat::Mdoc);
+        assert!(page.text.contains("Before."));
+        assert!(page.text.contains("After."));
+        assert!(!page.annotation_degraded);
+        for key in links(&page) {
+            assert!(
+                page.marks[usize::try_from(key - 1).unwrap()]
+                    .link_target
+                    .is_none()
+            );
+        }
+        assert!(!page.coverage.issues.iter().any(|issue| {
+            issue.dimension == AnnotationDimension::Link
+                && issue.reason == AnnotationIssueReason::Rejected
+        }));
+    }
 }
 
 #[test]

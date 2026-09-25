@@ -149,6 +149,8 @@ int mant_annotated_collector_account_display(
 void mant_annotated_collector_get_metrics(
 	const struct mant_annotated_collector *,
 	struct mant_annotated_collector_metrics *);
+int mant_annotated_collector_link_rejected(
+	const struct mant_annotated_collector *);
 void mant_annotated_collector_get_marks(
 	const struct mant_annotated_collector *,
 	const struct mant_annotated_mark **, uint32_t *);

@@ -49,6 +49,25 @@ pub fn literal_option_names(form: &str) -> Vec<(String, Range<usize>)> {
 /// a quoted or bracketed argument is not a new declaration. Both native
 /// component evidence and source-neutral literal spelling use these ranges.
 pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
+    literal_declaration_ranges_with_starts(form, &[], &[], &[])
+}
+
+/// An independent native/styled declaration may begin directly after a
+/// parameter's terminal delimiter. The starts are final displayed byte
+/// offsets, in ascending order. Only `structural_starts`, a subset proved by
+/// separate native macro operands, can also reset an unmatched quote or
+/// bracket; a font run within one operand cannot prove that boundary. Keep
+/// the text-only contract above for callers with no such evidence.
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep the bounded, single-pass declaration state transitions together"
+)]
+pub(crate) fn literal_declaration_ranges_with_starts(
+    form: &str,
+    independent_starts: &[usize],
+    structural_starts: &[usize],
+    argument_starts: &[usize],
+) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     let mut start = 0;
     let mut phase = Phase::Name;
@@ -57,7 +76,25 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
     let mut closers = Vec::new();
     let mut quote = None;
     let mut uncertain = false;
+    let mut independent = 0usize;
+    let mut structural = 0usize;
+    let mut argument = 0usize;
     for (offset, character) in form.char_indices() {
+        while argument_starts
+            .get(argument)
+            .is_some_and(|&evidence| evidence < offset)
+        {
+            argument += 1;
+        }
+        if argument_starts.get(argument) == Some(&offset) {
+            // A nonempty final underlined operand is already an argument.
+            // Without this transition, a glued `-Lfirst` looks like one
+            // option token and its following comma could manufacture names
+            // before the style check has a chance to reject them.
+            phase = Phase::StyledArgument;
+            name_end = None;
+            after_name_space = false;
+        }
         // A complete name followed by a separated non-option begins an
         // ordinary parameter. Flow's declaration state makes the same
         // transition after a literal name; punctuation inside that parameter
@@ -72,6 +109,45 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
                 }
                 after_name_space = false;
             }
+        }
+        // A separate native/styled declaration starts a new local grammar
+        // interval even when the preceding parameter has an unmatched quote
+        // or bracket. Without that independent evidence, punctuation inside
+        // the parameter remains opaque.
+        let mut proved_start = None;
+        if matches!(character, ',' | '|') {
+            let next_offset = offset + character.len_utf8();
+            let remainder = &form[next_offset..];
+            let candidate_start = next_offset + remainder.len() - remainder.trim_start().len();
+            while independent_starts
+                .get(independent)
+                .is_some_and(|&evidence| evidence < candidate_start)
+            {
+                independent += 1;
+            }
+            while structural_starts
+                .get(structural)
+                .is_some_and(|&evidence| evidence < candidate_start)
+            {
+                structural += 1;
+            }
+            let state_closed = quote.is_none() && closers.is_empty() && !uncertain;
+            if independent_starts.get(independent) == Some(&candidate_start)
+                && (state_closed || structural_starts.get(structural) == Some(&candidate_start))
+            {
+                proved_start = declaration_name_end(form, next_offset);
+            }
+        }
+        if let Some(next_name_end) = proved_start {
+            ranges.push(start..offset);
+            start = offset + character.len_utf8();
+            phase = Phase::Name;
+            name_end = Some(next_name_end);
+            after_name_space = false;
+            quote = None;
+            closers.clear();
+            uncertain = false;
+            continue;
         }
         if let Some(close) = quote {
             if character == close {
@@ -93,19 +169,24 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
             _ => None,
         } {
             quote = Some(close);
-            phase = Phase::Argument;
+            if phase != Phase::StyledArgument {
+                phase = Phase::Argument;
+            }
             continue;
         }
         if matches!(character, ',' | '|') && !uncertain && closers.is_empty() {
             // Looking past a separator may scan whitespace. Do this only at
             // a separator, never for every scalar in a long literal head.
-            let remainder = &form[offset + character.len_utf8()..];
-            let next_name_end = declaration_name_end(form, offset + character.len_utf8());
+            let next_offset = offset + character.len_utf8();
+            let remainder = &form[next_offset..];
+            let next_name_end = declaration_name_end(form, next_offset);
             let fresh_option =
                 remainder.starts_with(char::is_whitespace) && next_name_end.is_some();
-            if phase == Phase::Name && name_end.is_some() || fresh_option {
+            if phase == Phase::Name && name_end.is_some()
+                || phase != Phase::StyledArgument && fresh_option
+            {
                 ranges.push(start..offset);
-                start = offset + character.len_utf8();
+                start = next_offset;
                 phase = if next_name_end.is_some() {
                     Phase::Name
                 } else {
@@ -117,9 +198,11 @@ pub(crate) fn literal_declaration_ranges(form: &str) -> Vec<Range<usize>> {
             }
         }
         match character {
-            '=' => phase = Phase::Argument,
+            '=' if phase != Phase::StyledArgument => phase = Phase::Argument,
             '[' | '{' | '(' | '<' => {
-                phase = Phase::Argument;
+                if phase != Phase::StyledArgument {
+                    phase = Phase::Argument;
+                }
                 if closers.len() == 64 {
                     uncertain = true;
                 } else {
@@ -273,6 +356,7 @@ fn hanging_argument_tail(value: &str) -> bool {
 enum Phase {
     Name,
     Argument,
+    StyledArgument,
 }
 
 fn leading_name(group: &str, offset: usize) -> Option<(String, Range<usize>)> {
@@ -358,7 +442,8 @@ fn pattern_start(token: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_complete_hanging_option_head, literal_declaration_ranges, literal_option_names,
+        is_complete_hanging_option_head, literal_declaration_ranges,
+        literal_declaration_ranges_with_starts, literal_option_names,
     };
     use std::time::{Duration, Instant};
 
@@ -424,6 +509,48 @@ mod tests {
             literal_option_names(followed),
             [("--list".into(), 0..6), ("--all".into(), start..start + 5)]
         );
+    }
+
+    #[test]
+    fn native_parameter_interval_blocks_internal_font_changed_option_spelling() {
+        // This exact TP/BI head with `first,\fB--fake\fI,last,` ran pinned
+        // CVS -Thtml first. man_term.c::pre_alternate keeps one italic operand
+        // even when term.c::term_word changes fonts inside it; only the later
+        // bold operand is an independent declaration candidate.
+        let form = "-Lfirst,--fake,last,--all FILE";
+        let all = form.find("--all").unwrap();
+        assert_eq!(
+            literal_declaration_ranges_with_starts(form, &[all], &[all], &[2]),
+            [0..all - 1, all..form.len()]
+        );
+        // Whitespace inside the same underlined native operand is not a
+        // fresh declaration either; an independent later bold operand is.
+        let spaced = "-Lfirst, --fake, last,--all FILE";
+        let all = spaced.find("--all").unwrap();
+        assert_eq!(
+            literal_declaration_ranges_with_starts(spaced, &[all], &[all], &[2]),
+            [0..all - 1, all..spaced.len()]
+        );
+        // An unmatched argument delimiter is local to its native operand.
+        // Each exact TP/BI variant ran pinned CVS -Tutf8 before this test.
+        for argument in ["(first,--fake,", "\"first,--fake,"] {
+            let form = format!("-L{argument}--all FILE");
+            let all = form.find("--all").unwrap();
+            assert_eq!(
+                literal_declaration_ranges_with_starts(&form, &[all], &[all], &[2]),
+                [0..all - 1, all..form.len()]
+            );
+            assert_eq!(
+                literal_declaration_ranges_with_starts(&form, &[], &[], &[2]),
+                std::iter::once(0..form.len()).collect::<Vec<_>>(),
+                "no independent operand may reset {argument}"
+            );
+            assert_eq!(
+                literal_declaration_ranges_with_starts(&form, &[all], &[], &[2]),
+                std::iter::once(0..form.len()).collect::<Vec<_>>(),
+                "a style run alone cannot reset {argument}"
+            );
+        }
     }
 
     #[test]
