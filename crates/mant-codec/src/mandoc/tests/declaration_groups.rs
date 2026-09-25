@@ -36,6 +36,7 @@ fn flow_complete_head_keeps_negative_and_quoted_arguments_out_of_names() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "one cross-operand boundary matrix")]
 fn alternating_operands_do_not_promote_inline_font_changes_to_names() {
     // Each exact input below ran the pinned CVS -Tutf8 reference first.
     // man_term.c::pre_alternate() concatenates child operands, whereas
@@ -83,6 +84,46 @@ fn alternating_operands_do_not_promote_inline_font_changes_to_names() {
             ".BI \"-L\" \"first,\" \"--all \" FILE",
             vec!["-L", "--all"],
         ),
+        (
+            "styled-comma-inside-argument",
+            ".BI \"-L\" \"first\\fB, --fake\\fI,last,\" \"--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "next-operand-starts-with-comma",
+            ".BI \"-o \" FILE \", --all \" FILE",
+            vec!["-o", "--all"],
+        ),
+        (
+            "roman-argument-ends-in-comma",
+            ".BR \"--opt \" \"arg,\" \"--all \" FILE",
+            vec!["--opt", "--all"],
+        ),
+        (
+            "next-operand-starts-with-blank",
+            ".BI \"-L\" \"arg,\" \" --all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "next-operand-starts-with-nbsp",
+            ".BI \"-L\" \"arg,\" \"\\~--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "italic-comma-bold-name",
+            ".BI \"-L\" \"arg\" \"\\fI,\\fB--all \" FILE",
+            vec!["-L", "--all"],
+        ),
+        (
+            "bold-comma-italic-parameter",
+            ".BI \"-L\" \"arg\" \",\\fI--fake\"",
+            vec!["-L"],
+        ),
+        (
+            "roman-argument-internal-fake",
+            ".BR \"--opt \" \"arg, --fake,last\" \"--all \" FILE",
+            vec!["--opt"],
+        ),
     ];
     for (label, head, expected) in cases {
         let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n{head}\nBody.\n");
@@ -129,6 +170,35 @@ fn alternating_operands_do_not_promote_inline_font_changes_to_names() {
                 "{label}: {name}"
             );
         }
+    }
+}
+
+#[test]
+fn ip_parameter_font_changes_do_not_create_native_declarations() {
+    // Both exact labels ran pinned CVS -Tutf8 first. man_term.c::pre_IP
+    // executes one label child; term.c::term_word changes its font inside
+    // that child, so comma/pipe and later bold text cannot prove another
+    // independent declaration operand.
+    for head in [
+        ".IP \"\\fB-L\\fI first\\fR, --fake\\fI,last\" 4",
+        ".IP \"\\fB-L\\fI first\\fR| --fake\\fI|last\" 4",
+    ] {
+        let input = format!(".TH T 1\n.SH OPTIONS\n{head}\nBody.\n");
+        let document =
+            parse_manual_bytes(std::path::Path::new("ip-font-argument.1"), input.as_bytes())
+                .expect("parse styled IP argument");
+        let [Block::DefinitionList { items, .. }] = document.flow().expect("Flow fixture").sections
+            [0]
+        .blocks
+        .as_slice() else {
+            panic!("expected one definition list: {head}");
+        };
+        assert_eq!(
+            items[0].entry.as_ref().expect("option entry").names,
+            ["-L"],
+            "{head}"
+        );
+        assert!(visible_document_text(&document).contains("Body."), "{head}");
     }
 }
 

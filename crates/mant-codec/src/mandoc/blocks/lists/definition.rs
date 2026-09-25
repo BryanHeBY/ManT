@@ -393,7 +393,21 @@ pub(super) fn definition_item(
         );
     }
     let mut terms = split_definition_terms(term);
-    let native_ranges = super::evidence::take_head_ranges(&mut terms);
+    let mut native_ranges = super::evidence::take_head_ranges(&mut terms);
+    if node.macro_name.as_deref() == Some("IP") {
+        // Pinned CVS man_term.c::pre_IP prints the first HEAD child as one
+        // text operand. term.c::term_word may change font within it, but that
+        // cannot establish another native declaration operand. Preserve this
+        // execution boundary through semantic preparation just like BI/BR.
+        for (term, ranges) in terms.iter().zip(&mut native_ranges.operand_ranges) {
+            if ranges.is_empty() {
+                let length = crate::mandoc::inline::plain_text(term).len();
+                if length > 0 {
+                    ranges.push(0..length);
+                }
+            }
+        }
+    }
     if flow.head.generated_cells().is_some() {
         // The native generated cells execute inside the shared stream below.
         // Their surviving projection is carried by the description itself;

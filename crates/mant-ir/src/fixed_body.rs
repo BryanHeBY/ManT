@@ -565,7 +565,7 @@ impl FixedBody {
         owner: &OwnerMark,
         form: &str,
     ) -> Option<crate::entry::DeclarationScan> {
-        let component_starts = component_part_ranges(&owner.head, &owner.head_components)
+        let component_ranges = component_part_ranges(&owner.head, &owner.head_components)
             .and_then(|parts| self.component_byte_ranges(&owner.head, &parts))
             .map(|ranges| {
                 owner
@@ -573,36 +573,16 @@ impl FixedBody {
                     .iter()
                     .zip(ranges)
                     .filter_map(|(component, range)| {
-                        if component.role != OwnerHeadRole::Lexical
-                            || component.selection.parts.is_empty()
-                        {
-                            return None;
-                        }
-                        let mut first_style = None;
-                        for part in &component.selection.parts {
-                            let run = self.surface.runs.get((part.run.get() - 1) as usize)?;
-                            let text = self.surface.run_text(part.run)?.get(
-                                usize::try_from(part.start_byte).ok()?
-                                    ..usize::try_from(part.end_byte).ok()?,
-                            )?;
-                            if text.chars().any(|character| !character.is_whitespace()) {
-                                first_style = Some(run.label.style);
-                                break;
-                            }
-                        }
-                        let component_text = form.get(range.clone())?;
-                        let leading = component_text.len() - component_text.trim_start().len();
-                        first_style
-                            .filter(|style| !style.underline || style.bold)
-                            .map(|_| range.start + leading)
+                        (component.role == OwnerHeadRole::Lexical && range.start < range.end)
+                            .then_some(range)
                     })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        // Only native macro components are independent starts. A lone `.IP`
+        // Only native macro components are independent operands. A lone `.IP`
         // label is one text operand in man_term.c::pre_IP; `\fB` within it
         // may change the final run style without ending a parameter.
-        let starts = component_starts;
+        let operands = component_ranges;
         let mut argument_starts = Vec::new();
         let mut offset = 0usize;
         for (index, part) in owner.head.parts.iter().enumerate() {
@@ -634,9 +614,9 @@ impl FixedBody {
             } else {
                 crate::entry::StyledBoundaryRule::NativeComponents
             };
-            crate::entry::literal_declaration_scan_with_starts(
+            crate::entry::literal_declaration_scan_with_operands(
                 form,
-                &starts,
+                &operands,
                 &argument_starts,
                 boundary_rule,
             )
@@ -1071,7 +1051,6 @@ impl FixedBody {
             && (owner.head_role.is_none()
                 || owner.head_role == Some(OwnerHeadRole::Lexical)
                     && !owner.lexical_term_witness
-                    && owner.head_components.is_empty()
                     && self
                         .lexical_names(owner)
                         .is_some_and(|names| names.is_empty()))

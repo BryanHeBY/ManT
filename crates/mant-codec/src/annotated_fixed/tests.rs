@@ -168,7 +168,9 @@ fn empty_initial_bi_operands_do_not_hide_later_bold_name() {
         panic!("not Fixed")
     };
     assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["--help"]);
-    assert_eq!(fixed.owners[0].head_components.len(), 1);
+    // Every visible pre_alternate() child now retains its operand interval;
+    // only the final bold spelling becomes a checked name.
+    assert_eq!(fixed.owners[0].head_components.len(), 2);
     assert!(
         fixed.owners[0]
             .head_components
@@ -3375,14 +3377,16 @@ fn native_man_declaration_segments_keep_arguments_out_and_later_names_in() {
 #[test]
 fn native_man_terminal_nonprinting_escapes_keep_complete_name() {
     // This exact standalone BR input also ran pinned CVS -Tutf8. Its inline
-    // italic escape overrides pre_alternate's initial bold font, so rejecting
-    // its only name must not manufacture an empty or fallback Term entry.
+    // italic escape overrides pre_alternate's initial bold font. It is not
+    // an option name, but man_term.c::pre_TP still prints a readable term.
     let italic_only = b".TH T 1\n.SH OPTIONS\n.TP\n.BR \"\\fI--operand\\fR\"\nDescription.\n";
     let document = project_annotated_manual("t.1", &bundle(italic_only), InputFormat::Man).unwrap();
     let DocumentBody::Fixed(fixed) = &document.body else {
         panic!("not Fixed")
     };
-    assert!(fixed.owners[0].entry.is_none());
+    let entry = fixed.owners[0].entry.as_ref().expect("readable TP term");
+    assert_eq!(entry.kind, EntryKind::Term);
+    assert!(entry.names.is_empty());
     assert!(validate_document(&document).is_empty());
 }
 
@@ -3810,6 +3814,200 @@ fn native_styled_argument_state_survives_font_operands_and_inline_escapes() {
             .unwrap();
             assert_eq!(result.counts.direct_entry.total, 0);
             result.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn display_quote_wrappers_do_not_confuse_native_name_and_argument_ranges() {
+    // Both exact inputs ran pinned CVS -Tutf8 first. man_term.c::pre_B
+    // selects bold and term.c::term_word prints the display quotes; the
+    // opening quote before --foo wraps a name, while the one after it wraps
+    // an argument whose internal comma cannot declare --fake.
+    for (input, names) in [
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.B “--foo”\nBody.\n",
+            vec!["--foo"],
+        ),
+        (
+            ".TH T 1\n.SH OPTIONS\n.TP\n.B --foo “one,--fake,two”\nBody.\n",
+            vec!["--foo"],
+        ),
+    ] {
+        assert_flow_fixed_checked_names(input.as_bytes(), &names);
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one Flow and Fixed operand boundary matrix"
+)]
+fn native_operand_intervals_bound_styled_declarations_across_all_fonts() {
+    // Each exact input ran the pinned CVS reference with -Tutf8 before these
+    // assertions. man_macro.c::in_line_eoln retains separate BI/BR operands;
+    // man_term.c::pre_alternate() joins them, and term.c::term_word() executes
+    // inline font escapes within an operand. CVS proves the visible text and
+    // operand boundaries, not ManT's option semantics: punctuation within a
+    // parameter must not promote --fake, while an independently executed
+    // operand after a terminal separator can establish --all. pre_IP has one
+    // label operand, so its inline font switch is deliberately not a restart.
+    for (input, names) in [
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"first\\fB, --fake\\fI,last,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"first\\fR, --fake\\fI,last,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-o \" FILE \", --all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-o", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-o \" FILE \",--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-o", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"arg,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"arg\" \",\" \"\\fB--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"arg\" \"\\fI,\\fB--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"arg\" \",\\fI--fake\"\nBody.\n"
+                .as_slice(),
+            vec!["-L"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"arg,\" \" --all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"arg,\" \"\\~--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BR \"--opt \" \"arg,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["--opt", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"first|--fake|last|\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"first/--fake/last/\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            // Slash splits validated option aliases such as -h/--help,
+            // not a styled parameter's path-like argument.
+            vec!["-L"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"-L\" \"-10,--fake,20,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["-L", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"--pattern \" \"\\(dqfirst,\" \"--fake\" \",last\\(dq,\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["--pattern", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.TP\n.BI \"--pattern \" \"[first,\" \"--fake\" \",last],\" \"--all \" FILE\nBody.\n"
+                .as_slice(),
+            vec!["--pattern", "--all"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.IP \"\\fB-L\\fI first\\fB, --fake\\fI,last,\" 4\nBody.\n"
+                .as_slice(),
+            vec!["-L"],
+        ),
+        (
+            b".TH T 1\n.SH OPTIONS\n.de ZZ\n.BI \"-o \" FILE \", --all \" FILE\n..\n.TP\n.ZZ\nBody.\n"
+                .as_slice(),
+            vec!["-o", "--all"],
+        ),
+    ] {
+        assert_flow_fixed_checked_names(input, &names);
+        for document in [
+            crate::parse_roff_bytes(std::path::Path::new("t.1"), input).unwrap(),
+            project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap(),
+        ] {
+            let resolved = mant_ir::ResolvedContent {
+                address: None,
+                label: "T(1)".into(),
+                document: Some(document),
+                tldr: None,
+            };
+            let fake = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: "--fake".into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(fake.counts.direct_entry.total, 0, "{}", String::from_utf8_lossy(input));
+            fake.validate_references().unwrap();
+        }
+    }
+}
+
+#[test]
+fn native_declaration_name_limit_cannot_be_bypassed_by_first_operand_hint() {
+    // Both generated BR heads (64 and 65 names) ran pinned CVS -Tutf8 first.
+    // man_term.c::pre_alternate() executes each name and comma as a separate
+    // child; its layout is unchanged when the semantic name cap is reached.
+    for (count, expected) in [(64, 1), (65, 0)] {
+        let mut operands = Vec::with_capacity(count * 2);
+        for index in 1..=count {
+            operands.push(format!("-a{index}"));
+            if index != count {
+                operands.push(",".to_owned());
+            }
+        }
+        let input = format!(
+            ".TH T 1\n.SH OPTIONS\n.TP\n.BR {}\nBody.\n",
+            operands.join(" ")
+        );
+        for document in [
+            crate::parse_roff_bytes(std::path::Path::new("t.1"), input.as_bytes()).unwrap(),
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Man).unwrap(),
+        ] {
+            assert!(validate_document(&document).is_empty());
+            let resolved = mant_ir::ResolvedContent {
+                address: None,
+                label: "T(1)".into(),
+                document: Some(document),
+                tldr: None,
+            };
+            let result = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: "-a1".into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, expected, "{count} names");
         }
     }
 }

@@ -21,9 +21,9 @@ pub use location::{ContentEntry, content_entries, content_entry_locations};
 pub use model::*;
 pub(crate) use relations::relation_issues;
 pub use relations::{EntryRelationIssue, EntryRelationIssueKind, entry_relation_issues};
-pub(crate) use syntax::{
-    DeclarationScan, StyledBoundaryRule, literal_declaration_scan_with_starts,
-};
+#[doc(hidden)]
+pub use syntax::{DeclarationScan, scan_option_declarations};
+pub(crate) use syntax::{StyledBoundaryRule, literal_declaration_scan_with_operands};
 pub use syntax::{
     contains_additional_environment_assignment, environment_variable_alias,
     environment_variable_body, is_complete_hanging_option_head, is_option_name_body,

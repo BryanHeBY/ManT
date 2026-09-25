@@ -1392,16 +1392,19 @@ head_component_role(const struct roff_node *node)
 }
 
 /* man_term.c::pre_alternate() emits each TEXT child directly with
- * term_word_node(), without a child NODE_ENTER event. Mark only the bold
- * operand as lexical evidence; its italic/roman neighbour remains visible
- * in the complete HEAD but cannot itself establish an option name. */
+ * term_word_node(), without a child NODE_ENTER event. Keep every operand
+ * interval of a lexical BI/BR HEAD: term.c::term_word() may change the font
+ * inside either slot, so the initial alternating font cannot decide whether
+ * a later visible name is evidence. The checked final name range decides.
+ * Preserve the existing bold-slot witness for IB/RB. */
+
 static int
-alternate_bold_slot(int token, uint32_t index)
+alternate_component_slot(int token, uint32_t index)
 {
 	switch (token) {
 	case MAN_BI:
 	case MAN_BR:
-		return index % 2 == 0;
+		return 1;
 	case MAN_IB:
 	case MAN_RB:
 		return index % 2 != 0;
@@ -1423,8 +1426,8 @@ select_alternate_component(struct mant_annotated_collector *collector,
 		return 1;
 	frame = collector->frames + collector->frame_count - 1;
 	if (frame->node->type != ROFFT_ELEM ||
-	    (!alternate_bold_slot(frame->node->tok, 0) &&
-	    !alternate_bold_slot(frame->node->tok, 1)) ||
+	    (frame->node->tok != MAN_BI && frame->node->tok != MAN_BR &&
+	    frame->node->tok != MAN_IB && frame->node->tok != MAN_RB) ||
 	    word->parent != frame->node || word == frame->alternate_child)
 		return 1;
 	child = frame->alternate_next_child;
@@ -1443,7 +1446,7 @@ select_alternate_component(struct mant_annotated_collector *collector,
 	frame->alternate_next_child = child->next;
 	frame->alternate_child_index = index + 1;
 	collector->active_head_component = 0;
-	if (!alternate_bold_slot(frame->node->tok, index) ||
+	if (!alternate_component_slot(frame->node->tok, index) ||
 	    collector->active_owner == 0)
 		return 1;
 	parent = collector->active_owner;

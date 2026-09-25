@@ -198,13 +198,14 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                 let plain_tp = mark.flags & 1024 != 0;
                 owner.lexical_term_witness =
                     owner.head_role == Some(OwnerHeadRole::Lexical) && (plain_b || plain_tp);
-                unnamed_term_candidates.push(
-                    matches!(
-                        mark.token,
-                        libmandoc_rs::annotated::MAN_TP_TOKEN
-                            | libmandoc_rs::annotated::MAN_TQ_TOKEN
-                    ) && owner_components[mark.key as usize].is_empty(),
-                );
+                // Alternating-font HEAD components now preserve every native
+                // operand, including italic-only glyphs. Their presence is
+                // structural evidence, not a name: a checked empty lexical
+                // result still leaves a readable TP/TQ term.
+                unnamed_term_candidates.push(matches!(
+                    mark.token,
+                    libmandoc_rs::annotated::MAN_TP_TOKEN | libmandoc_rs::annotated::MAN_TQ_TOKEN
+                ));
                 owners.push(owner);
             }
             3 => links.push(project_link(

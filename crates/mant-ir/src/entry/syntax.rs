@@ -7,10 +7,11 @@
 use std::ops::Range;
 
 mod literal_names;
-pub(crate) use literal_names::{
-    DeclarationScan, StyledBoundaryRule, literal_declaration_scan_with_starts,
+pub use literal_names::{
+    DeclarationScan, is_complete_hanging_option_head, literal_option_names,
+    scan_option_declarations,
 };
-pub use literal_names::{is_complete_hanging_option_head, literal_option_names};
+pub(crate) use literal_names::{StyledBoundaryRule, literal_declaration_scan_with_operands};
 
 /// Leading ordinary dash-option spelling within one visible token.
 #[must_use]

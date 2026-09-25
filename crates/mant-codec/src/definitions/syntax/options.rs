@@ -98,7 +98,15 @@ pub(super) fn native_option_occurrences(
     let mut result = recognize_option_occurrences_from_terms(content, terms, operand_ranges);
     for (index, (term, names)) in terms.iter().zip(&mut result).enumerate() {
         let prefix = forms::literal_prefix(content, term);
-        if let Some(token) = prefix.split_whitespace().next()
+        // An alternating-font head has already passed the bounded shared
+        // declaration scan. Reintroducing its first spelling here would
+        // bypass invalid-evidence and 64-name rejection, so only heads
+        // without that native operand witness use this older compensation.
+        let scanned_operands = operand_ranges
+            .and_then(|terms| terms.get(index))
+            .is_some_and(|ranges| !ranges.is_empty());
+        if !scanned_operands
+            && let Some(token) = prefix.split_whitespace().next()
             && native_option_token(token)
             && !names.iter().any(|found| found.name == token)
         {

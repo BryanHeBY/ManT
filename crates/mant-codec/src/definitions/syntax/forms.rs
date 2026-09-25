@@ -2,10 +2,61 @@
 use super::declaration::{DeclarationState, pattern_start};
 use mant_ir::{
     ContentContext, ContentRef, Inline, InlineView, literal_option_aliases, literal_option_names,
+    scan_option_declarations,
 };
+use std::collections::HashSet;
 use std::ops::Range;
 
 use mant_ir::inline_plain_text as plain_text;
+
+type AcceptedName = (String, usize);
+type NativeAliasGroups = (Vec<Vec<Inline>>, Option<HashSet<AcceptedName>>);
+
+/// Final styles and native operand identity are independent in pinned CVS:
+/// `pre_alternate()` selects an initial font for each child, while `term_word()`
+/// can change it within that child. Each nonempty final italic run begins an
+/// argument, but it is never evidence of a new native operand.
+fn styled_argument_starts(content: ContentContext<'_>, nodes: &[Inline]) -> Vec<usize> {
+    fn visit(
+        content: ContentContext<'_>,
+        nodes: &[Inline],
+        offset: &mut usize,
+        bold: bool,
+        underline: bool,
+        arguments: &mut Vec<usize>,
+    ) {
+        for node in nodes {
+            match content.inline(node).expect("definition content resolves") {
+                InlineView::Text(value) | InlineView::Code(value) => {
+                    let start = *offset;
+                    if let Some(first) = value.find(|character: char| !character.is_whitespace())
+                        && underline
+                        && !bold
+                    {
+                        arguments.push(start + first);
+                    }
+                    *offset += value.len();
+                }
+                InlineView::Strong(children) => {
+                    visit(content, children, offset, true, underline, arguments);
+                }
+                InlineView::Emphasis(children) => {
+                    visit(content, children, offset, bold, true, arguments);
+                }
+                InlineView::Link(link) => {
+                    visit(content, link.children(), offset, bold, underline, arguments);
+                }
+                InlineView::LineBreak => *offset += 1,
+                InlineView::Anchor(_) => {}
+                _ => unreachable!("all inline views are handled"),
+            }
+        }
+    }
+
+    let mut arguments = Vec::new();
+    visit(content, nodes, &mut 0, false, false, &mut arguments);
+    arguments
+}
 
 /// Borrowed authored syntax. Candidate generation never rewrites its complete
 /// form; only the temporary selector candidates are split.
@@ -29,7 +80,9 @@ impl<'a> AuthoredForm<'a> {
     }
 
     pub(super) fn option_candidates(&self) -> impl Iterator<Item = FormCandidate<'a>> {
-        option_alias_groups(self.content, self.inlines, self.operand_ranges)
+        let (groups, accepted) =
+            option_alias_groups(self.content, self.inlines, self.operand_ranges);
+        groups
             .into_iter()
             .scan(0, |offset, inlines| {
                 let start = *offset;
@@ -44,6 +97,16 @@ impl<'a> AuthoredForm<'a> {
                 })
             })
             .flat_map(FormCandidate::paired_invocations)
+            .filter(move |candidate| {
+                accepted.as_ref().is_none_or(|names| {
+                    candidate
+                        .invocation_token()
+                        .and_then(|(token, start)| {
+                            Some((super::option_prefix(&token)?.to_owned(), start))
+                        })
+                        .is_some_and(|name| names.contains(&name))
+                })
+            })
     }
 }
 
@@ -231,8 +294,42 @@ fn option_alias_groups(
     content: ContentContext<'_>,
     term: &[Inline],
     operand_ranges: &[Range<usize>],
-) -> Vec<Vec<Inline>> {
-    declaration_groups_with_operands(content, term, operand_ranges)
+) -> NativeAliasGroups {
+    let (groups, accepted) = if operand_ranges.is_empty() {
+        // Command and source-neutral Markdown grouping retain their
+        // established syntax; only a witnessed native head (including one
+        // complete IP label) needs the shared operand-aware decision.
+        (declaration_groups_with_operands(content, term, &[]), None)
+    } else {
+        let text = plain_text(content, term);
+        let arguments = styled_argument_starts(content, term);
+        match scan_option_declarations(&text, operand_ranges, &arguments) {
+            Some(scan) => {
+                let (names, over_limit) = scan.names(&text);
+                let accepted = if over_limit {
+                    HashSet::new()
+                } else {
+                    names
+                        .into_iter()
+                        .map(|(name, range)| (name, range.start))
+                        .collect()
+                };
+                let separators = scan
+                    .ranges()
+                    .windows(2)
+                    .map(|pair| pair[0].end)
+                    .collect::<Vec<_>>();
+                (
+                    split_groups_at(content, term, &separators, &mut 0, &mut 0),
+                    Some(accepted),
+                )
+            }
+            // Invalid private evidence is not permission to reparse the
+            // parameter text. Keep its display and publish no name.
+            None => (vec![term.to_vec()], Some(HashSet::new())),
+        }
+    };
+    let groups = groups
         .into_iter()
         .flat_map(|group| {
             let text = plain_text(content, &group);
@@ -255,7 +352,8 @@ fn option_alias_groups(
                 false,
             )
         })
-        .collect()
+        .collect();
+    (groups, accepted)
 }
 
 fn invocation_token(text: &str) -> &str {
@@ -320,6 +418,89 @@ pub(super) fn literal_option_tokens(value: &str) -> Vec<(String, usize)> {
             }
         })
         .collect()
+}
+
+/// Apply the shared native declaration decisions to the original styled
+/// tree. The scan examines the complete visible HEAD once; slicing only
+/// removes its proved ASCII separators and never reparses an argument.
+fn split_groups_at(
+    content: ContentContext<'_>,
+    term: &[Inline],
+    separators: &[usize],
+    next: &mut usize,
+    offset: &mut usize,
+) -> Vec<Vec<Inline>> {
+    let mut groups = vec![Vec::new()];
+    for inline in term {
+        let parts = match inline {
+            Inline::Text { content: reference } => {
+                split_leaf_at(content, *reference, false, separators, next, offset)
+            }
+            Inline::Code { content: reference } => {
+                split_leaf_at(content, *reference, true, separators, next, offset)
+            }
+            Inline::Strong { children } => {
+                split_groups_at(content, children, separators, next, offset)
+                    .into_iter()
+                    .map(|children| vec![Inline::Strong { children }])
+                    .collect()
+            }
+            Inline::Emphasis { children } => {
+                split_groups_at(content, children, separators, next, offset)
+                    .into_iter()
+                    .map(|children| vec![Inline::Emphasis { children }])
+                    .collect()
+            }
+            Inline::Link {
+                occurrence,
+                children,
+            } => split_groups_at(content, children, separators, next, offset)
+                .into_iter()
+                .map(|children| {
+                    vec![Inline::Link {
+                        occurrence: *occurrence,
+                        children,
+                    }]
+                })
+                .collect(),
+            _ => {
+                *offset += plain_text(content, std::slice::from_ref(inline)).len();
+                vec![vec![inline.clone()]]
+            }
+        };
+        for (index, part) in parts.into_iter().enumerate() {
+            if index > 0 {
+                groups.push(Vec::new());
+            }
+            groups.last_mut().expect("at least one group").extend(part);
+        }
+    }
+    groups
+}
+
+fn split_leaf_at(
+    content: ContentContext<'_>,
+    reference: ContentRef,
+    code: bool,
+    separators: &[usize],
+    next: &mut usize,
+    offset: &mut usize,
+) -> Vec<Vec<Inline>> {
+    let value = content
+        .resolve_text(reference)
+        .expect("definition leaf resolves through its content store");
+    let mut output = Vec::new();
+    let mut start = 0;
+    for (local, character) in value.char_indices() {
+        if separators.get(*next) == Some(&(*offset + local)) {
+            output.push(vec![slice_leaf(reference, start, local, code)]);
+            start = local + character.len_utf8();
+            *next += 1;
+        }
+    }
+    *offset += value.len();
+    output.push(vec![slice_leaf(reference, start, value.len(), code)]);
+    output
 }
 
 /// One style-preserving splitter for alias punctuation. A bounded pass counts

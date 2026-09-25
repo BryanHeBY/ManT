@@ -694,10 +694,11 @@ mod tests {
     }
 
     #[test]
-    fn native_alternating_font_component_keeps_only_the_bold_operand() {
+    fn native_alternating_font_components_keep_each_visible_operand() {
         // Both exact inputs ran pinned CVS -Ttree first. man_term.c::
         // pre_alternate() emits each child directly without a nested NODE
         // event, and TERMP_NOSPACE joins the operands in final display.
+        // Both intervals are structural; only final checked glyphs name an option.
         for operand in ["FILE", "-x"] {
             let mut bundle = SourceBundle::new();
             let input = format!(".TH T 1\n.SH OPTIONS\n.TP\n.BI --foo {operand}\nDescription.\n");
@@ -710,8 +711,9 @@ mod tests {
                 .iter()
                 .filter(|mark| mark.kind == 6)
                 .collect::<Vec<_>>();
-            assert_eq!(components.len(), 1);
+            assert_eq!(components.len(), 2);
             assert_eq!(direct_mark_text(&page, components[0]), "--foo");
+            assert_eq!(direct_mark_text(&page, components[1]), operand);
             let owner = page.marks.iter().find(|mark| mark.kind == 2).unwrap();
             assert_eq!(
                 direct_mark_text(&page, &page.marks[(owner.title_region - 1) as usize]),
@@ -1116,7 +1118,7 @@ mod tests {
     }
 
     #[test]
-    fn native_hanging_alternating_font_keeps_only_the_bold_head_component() {
+    fn native_hanging_alternating_font_keeps_both_head_operands() {
         // Both exact inputs ran pinned CVS -Tutf8 first: man_term.c::
         // pre_alternate() renders --foo in bold and FILE in italic without
         // nested child NODE events. The PP candidate is not a Definition
@@ -1142,9 +1144,11 @@ mod tests {
                 .iter()
                 .filter(|mark| mark.kind == 6 && mark.parent == head.key)
                 .collect::<Vec<_>>();
-            assert_eq!(components.len(), 1);
+            assert_eq!(components.len(), 2);
             assert_eq!(direct_mark_text(&page, components[0]), "--foo");
+            assert_eq!(direct_mark_text(&page, components[1]), "FILE");
             assert_ne!(components[0].flags & 256, 0);
+            assert_ne!(components[1].flags & 256, 0);
             assert!(page.marks.iter().any(|mark| mark.kind == 5
                 && mark.region_kind == 12
                 && mark.preceding_owner == owner.key));
