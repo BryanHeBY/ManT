@@ -72,11 +72,16 @@ struct mant_annotated_selection_part {
 /* A TP/TQ declaration whose first executed HEAD child is direct TEXT,
  * not a styled macro whose empty operands happened to emit no component. */
 #define MANT_ANNOTATED_MARK_DIRECT_TP_TEXT (1U << 10)
+/* Authored mdoc Va/Dv instances, not their final terminal font. */
+#define MANT_ANNOTATED_MARK_HEAD_VARIABLE (1U << 11)
+#define MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE (1U << 12)
 #define MANT_ANNOTATED_MARK_HEAD_ROLE_MASK (\
     MANT_ANNOTATED_MARK_HEAD_OPTION | \
     MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT | \
     MANT_ANNOTATED_MARK_HEAD_LITERAL | \
-    MANT_ANNOTATED_MARK_HEAD_LEXICAL)
+    MANT_ANNOTATED_MARK_HEAD_LEXICAL | \
+    MANT_ANNOTATED_MARK_HEAD_VARIABLE | \
+    MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE)
 
 enum mant_annotated_point_kind {
 	MANT_ANNOTATED_POINT_NONE = 0,

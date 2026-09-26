@@ -18,6 +18,7 @@ use super::{isolation, lower_annotated_document, project_annotated_manual};
 mod declarations;
 mod evidence;
 mod marks;
+mod non_option;
 mod reading;
 mod reading_groups;
 mod targets;

@@ -31,6 +31,19 @@ pub(super) struct InferredIdentity {
     pub(super) case: NameCase,
     pub(super) names: Vec<String>,
     pub(super) occurrences: Vec<Vec<RecognizedName>>,
+    /// The complete owner exceeded the bounded declaration-occurrence budget.
+    pub(super) over_limit: bool,
+}
+
+/// Recheck a final Flow owner for a budget omission after native role hints
+/// have been discarded. Either complete visible or native-prefix grammar may
+/// prove the same over-limit owner; neither publishes a partial name group.
+pub(super) fn environment_owner_over_limit(
+    content: ContentContext<'_>,
+    item: &DefinitionItem,
+) -> bool {
+    named::environment_owner_occurrences(content, &item.terms, false).is_err()
+        || named::environment_owner_occurrences(content, &item.terms, true).is_err()
 }
 
 #[expect(
@@ -77,6 +90,7 @@ pub(super) fn infer_identity(
     });
     let (mut kind, mut case) =
         decision::select_kind(trimmed, context, hint, native_numeric_occurrences.is_some());
+    let mut over_limit = false;
     let mut occurrences = if hint == Some(super::NativeHeadRole::LiteralTerm) {
         item.terms
             .iter()
@@ -91,16 +105,21 @@ pub(super) fn infer_identity(
     } else if hint == Some(super::NativeHeadRole::Option) {
         options::native_option_occurrences(content, &item.terms, option_ranges, operand_ranges)
     } else if hint == Some(super::NativeHeadRole::Environment) {
-        item.terms
-            .iter()
-            .map(|term| {
-                forms::environment_prefix(content, term)
-                    .and_then(|prefix| named::environment_occurrences(&prefix))
-                    .unwrap_or_default()
-            })
-            .collect()
+        if let Ok(occurrences) = named::environment_owner_occurrences(content, &item.terms, true) {
+            occurrences
+        } else {
+            over_limit = true;
+            Vec::new()
+        }
     } else if let Some(occurrences) = native_numeric_occurrences {
         occurrences
+    } else if kind == EntryKind::EnvironmentVariable {
+        if let Ok(occurrences) = named::environment_owner_occurrences(content, &item.terms, false) {
+            occurrences
+        } else {
+            over_limit = true;
+            Vec::new()
+        }
     } else {
         name_occurrences(content, item, kind, operand_ranges)
     };
@@ -127,7 +146,8 @@ pub(super) fn infer_identity(
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
-    if occurrences.iter().all(Vec::is_empty)
+    if !over_limit
+        && occurrences.iter().all(Vec::is_empty)
         && !matches!(
             hint,
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
@@ -154,6 +174,7 @@ pub(super) fn infer_identity(
         }
     }
     let (kind, case) = if names.is_empty()
+        && !over_limit
         && !matches!(
             hint,
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
@@ -167,6 +188,7 @@ pub(super) fn infer_identity(
         case,
         names,
         occurrences,
+        over_limit,
     }
 }
 

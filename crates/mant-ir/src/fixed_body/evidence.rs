@@ -53,6 +53,217 @@ fn group_name_occurrences(
     grouped
 }
 
+/// One complete non-option declaration over the owner's surviving HEAD.
+/// Native roles and source identity are checked before these byte ranges are
+/// exposed; the producer and read-time validator consume this same result.
+#[doc(hidden)]
+pub struct FixedNonOptionRecognition {
+    pub kind: EntryKind,
+    pub evidence: EntryNameEvidence,
+    pub occurrences: Vec<(String, TextSelection)>,
+}
+
+/// Bounded name proof was omitted, not syntactically disproved. The producer
+/// must publish a semantic-coverage diagnostic while retaining the display.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FixedNonOptionLimit {
+    TooManyNames,
+}
+
+impl FixedBody {
+    /// Prove a non-option declaration once over the full native HEAD. Explicit
+    /// Ev/Va/Dv components have stronger evidence than a lexical ENVIRONMENT
+    /// head; neither font appearance nor raw roff spelling supplies a name.
+    #[must_use]
+    pub fn non_option_declaration(&self, owner: &OwnerMark) -> Option<FixedNonOptionRecognition> {
+        self.scan_non_option_declaration(owner).ok().flatten()
+    }
+
+    /// The producer uses this variant to distinguish a semantic name budget
+    /// from an ordinary unrecognized HEAD; validation uses the same proof.
+    ///
+    /// # Errors
+    ///
+    /// Returns `TooManyNames` if a declaration exceeds the semantic
+    /// occurrence budget; the native display remains valid.
+    pub fn scan_non_option_declaration(
+        &self,
+        owner: &OwnerMark,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        if owner.role != OwnerRole::Definition || owner.hanging_candidate {
+            return Ok(None);
+        }
+        let Some(head_role) = owner.head_role else {
+            return Ok(None);
+        };
+        match head_role {
+            OwnerHeadRole::Lexical if self.section_is_environment(owner) => {
+                let Some(form) = self.owner_complete_form(owner) else {
+                    return Ok(None);
+                };
+                let names = crate::scan_environment_declaration_names(&form)
+                    .map_err(|_| FixedNonOptionLimit::TooManyNames)?;
+                let Some(names) = names.filter(|names| !names.is_empty()) else {
+                    return Ok(None);
+                };
+                let ranges = names
+                    .iter()
+                    .map(|(_, range)| range.clone())
+                    .collect::<Vec<_>>();
+                let Some(selections) =
+                    self.selection_subranges_from_form(&owner.head, &form, &ranges)
+                else {
+                    return Ok(None);
+                };
+                Ok(Some(FixedNonOptionRecognition {
+                    kind: EntryKind::EnvironmentVariable,
+                    evidence: EntryNameEvidence::Lexical,
+                    occurrences: names
+                        .into_iter()
+                        .zip(selections)
+                        .map(|((name, _), selection)| (name, selection))
+                        .collect(),
+                }))
+            }
+            OwnerHeadRole::Option
+            | OwnerHeadRole::Environment
+            | OwnerHeadRole::Variable
+            | OwnerHeadRole::DefinedVariable
+            | OwnerHeadRole::Literal => self.native_non_option_declaration(owner),
+            OwnerHeadRole::Lexical => Ok(None),
+        }
+    }
+
+    fn section_is_environment(&self, owner: &OwnerMark) -> bool {
+        let mut section = owner.section;
+        while let Some(key) = section {
+            let Some(heading) = self.headings.get((key.get() - 1) as usize) else {
+                return false;
+            };
+            let Some(title) = self.selection_text(&heading.title) else {
+                return false;
+            };
+            if let Some(family) = crate::section_declaration_family(&title) {
+                return family == crate::SectionDeclarationFamily::EnvironmentVariables;
+            }
+            section = heading.parent;
+        }
+        false
+    }
+
+    fn native_non_option_declaration(
+        &self,
+        owner: &OwnerMark,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        // The owner's first authored role can be a zero-glyph instance. The
+        // typed IR intentionally retains only surviving component selections;
+        // classify from the first visible instance and require every other
+        // visible instance to agree. An empty Va before an Ev is not a Va
+        // name, and a visible Va mixed with Ev is not one category.
+        let Some(role) = owner
+            .head_components
+            .first()
+            .map(|component| component.role)
+        else {
+            return Ok(None);
+        };
+        if owner.head_role != Some(role) {
+            return Ok(None);
+        }
+        let kind = match role {
+            OwnerHeadRole::Environment => EntryKind::EnvironmentVariable,
+            OwnerHeadRole::Variable => EntryKind::Variable,
+            OwnerHeadRole::DefinedVariable => EntryKind::Term,
+            OwnerHeadRole::Option | OwnerHeadRole::Lexical | OwnerHeadRole::Literal => {
+                return Ok(None);
+            }
+        };
+        if owner.head_components.len() > 64 {
+            return Err(FixedNonOptionLimit::TooManyNames);
+        }
+        let Some(form) = self.owner_complete_form(owner) else {
+            return Ok(None);
+        };
+        let Some(parts) = component_part_ranges(&owner.head, &owner.head_components) else {
+            return Ok(None);
+        };
+        let Some(byte_ranges) = self.component_byte_ranges(&owner.head, &parts) else {
+            return Ok(None);
+        };
+        let mut name_ranges = Vec::with_capacity(byte_ranges.len());
+        let mut previous_end = 0usize;
+        for (component, range) in owner.head_components.iter().zip(byte_ranges) {
+            if component.role != role
+                || !component.has_source_identity()
+                || range.start >= range.end
+            {
+                return Ok(None);
+            }
+            let Some(gap) = form.get(previous_end..range.start) else {
+                return Ok(None);
+            };
+            let valid_gap = (name_ranges.is_empty() || !gap.is_empty())
+                && gap
+                    .chars()
+                    .all(|c| c.is_whitespace() || matches!(c, ',' | '|'));
+            if !valid_gap {
+                return Ok(None);
+            }
+            let Some(visible) = form.get(range.clone()) else {
+                return Ok(None);
+            };
+            let name = if role == OwnerHeadRole::Environment {
+                let Some(names) = crate::scan_environment_declaration_names(visible)
+                    .map_err(|_| FixedNonOptionLimit::TooManyNames)?
+                else {
+                    return Ok(None);
+                };
+                if names.len() != 1 {
+                    return Ok(None);
+                }
+                let Some(single) = names.into_iter().next() else {
+                    return Ok(None);
+                };
+                single
+            } else {
+                let Some(name) = crate::entry::native_variable_token(visible)
+                    .then(|| (visible.to_owned(), 0..visible.len()))
+                else {
+                    return Ok(None);
+                };
+                name
+            };
+            name_ranges.push((name.0, range.start + name.1.start..range.start + name.1.end));
+            previous_end = range.end;
+        }
+        if !form.get(previous_end..).is_some_and(|suffix| {
+            suffix
+                .chars()
+                .all(|c| c.is_whitespace() || matches!(c, ',' | '|'))
+        }) {
+            return Ok(None);
+        }
+        let ranges = name_ranges
+            .iter()
+            .map(|(_, range)| range.clone())
+            .collect::<Vec<_>>();
+        let Some(selections) = self.selection_subranges_from_form(&owner.head, &form, &ranges)
+        else {
+            return Ok(None);
+        };
+        Ok(Some(FixedNonOptionRecognition {
+            kind,
+            evidence: EntryNameEvidence::NativeMarkup,
+            occurrences: name_ranges
+                .into_iter()
+                .zip(selections)
+                .map(|((name, _), selection)| (name, selection))
+                .collect(),
+        }))
+    }
+}
+
 impl FixedBody {
     /// Check disjoint logical name ranges against final bold runs in one
     /// forward pass. A consumed separator has no glyph style and cannot be
@@ -771,6 +982,19 @@ impl FixedBody {
                 });
             return valid.then_some(entry);
         }
+        if let Some(recognition) = self.non_option_declaration(owner) {
+            return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
+        }
+        if matches!(
+            owner.head_role,
+            Some(
+                OwnerHeadRole::Environment
+                    | OwnerHeadRole::Variable
+                    | OwnerHeadRole::DefinedVariable
+            )
+        ) {
+            return None;
+        }
         let Some(form) = self.owner_complete_form(owner) else {
             // mdoc_macro.c::blk_full may keep a long Xo HEAD whose later
             // output joins are unknown. Its first Ic/Cm component can still
@@ -871,6 +1095,48 @@ impl FixedBody {
         .then_some(entry)
     }
 
+    fn validated_non_option_names(
+        owner: &OwnerMark,
+        entry: &EntryFacts<TextSelection>,
+        recognition: FixedNonOptionRecognition,
+    ) -> bool {
+        let grouped = group_name_occurrences(recognition.occurrences);
+        if entry.id != owner.id
+            || entry.kind != recognition.kind
+            || entry.case != NameCase::Sensitive
+            || !entry.alias_groups.is_empty()
+            || entry.alias_of.is_some()
+            || entry.value_domain.is_some()
+            || entry.forms.as_slice() != std::slice::from_ref(&owner.head)
+            || entry.names.len() != grouped.len()
+            || entry.name_bindings.len() != grouped.len()
+            || !entry
+                .names
+                .iter()
+                .zip(&grouped)
+                .all(|(actual, (expected, _))| actual == expected)
+        {
+            return false;
+        }
+        // Binding order is independent of name order. Every binding must
+        // close against the exact surviving occurrence set for its index;
+        // reusing a prefix, missing a duplicate, or claiming another name is
+        // not a valid non-option declaration.
+        let mut seen = vec![false; grouped.len()];
+        for binding in &entry.name_bindings {
+            let Some((_, occurrences)) = grouped.get(binding.name) else {
+                return false;
+            };
+            if std::mem::replace(&mut seen[binding.name], true)
+                || binding.evidence != recognition.evidence
+                || binding.occurrences != *occurrences
+            {
+                return false;
+            }
+        }
+        seen.into_iter().all(|found| found)
+    }
+
     fn validated_partial_literal_command(
         &self,
         owner: &OwnerMark,
@@ -964,7 +1230,10 @@ impl FixedBody {
                 EntryKind::EnvironmentVariable,
                 crate::environment_variable_alias(role_prefix)?,
             ),
-            OwnerHeadRole::Lexical | OwnerHeadRole::Literal => return None,
+            OwnerHeadRole::Lexical
+            | OwnerHeadRole::Literal
+            | OwnerHeadRole::Variable
+            | OwnerHeadRole::DefinedVariable => return None,
         };
         let end = start.checked_add(name.len())?;
         if owner.head_role == Some(OwnerHeadRole::Lexical)

@@ -13,15 +13,22 @@ fn with_native_result(test: impl FnOnce(Handle, ResultView, super::super::raw::L
     // This exact input ran on the pinned CVS reference first. man_term.c's
     // TP/B handlers emit the visible name and body; the following mutation
     // tests only the adapter boundary, not an alternative roff interpretation.
+    with_native_result_for(
+        b".TH T 1\n.SH D\n.TP\n.B --foo\nDescription.\n",
+        InputFormat::Man,
+        test,
+    );
+}
+
+fn with_native_result_for(
+    source: &[u8],
+    format: InputFormat,
+    test: impl FnOnce(Handle, ResultView, super::super::raw::Limits),
+) {
     let mut bundle = SourceBundle::new();
-    bundle
-        .insert(
-            "t.1",
-            b".TH T 1\n.SH D\n.TP\n.B --foo\nDescription.\n".to_vec(),
-        )
-        .unwrap();
+    bundle.insert("t.1", source.to_vec()).unwrap();
     let limits = raw_limits(&StructuredLimits::default());
-    let storage = InputStorage::new_annotated("t.1", &bundle, InputFormat::Man, &limits).unwrap();
+    let storage = InputStorage::new_annotated("t.1", &bundle, format, &limits).unwrap();
     let input = storage.view(78, super::super::PROFILE_UTF8);
     let mut pointer = std::ptr::null_mut();
     let mut failure = FailureView::default();
@@ -142,6 +149,62 @@ fn ffi_semantic_rejection_keeps_checked_body_but_not_actionable_labels() {
             STATUS_RELATION
         );
     });
+}
+
+#[test]
+fn ffi_va_dv_role_corruption_rejects_marks_without_erasing_native_body() {
+    // The exact input ran pinned CVS -Tutf8 first. mdoc_macro.c::in_line()
+    // retains distinct Va/Dv instances, while mdoc_term.c renders their
+    // visible operands. Only copied ABI descriptors are corrupted below;
+    // the C-owned result remains sealed and cannot be mutated by this test.
+    with_native_result_for(
+        b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Va counter\nVariable.\n.It Dv MODE_FAST\nConstant.\n.El\n",
+        InputFormat::Mdoc,
+        |handle, view, limits| {
+            let baseline = transfer(&handle, &view, &limits, false).unwrap();
+            assert!(!baseline.annotation_degraded);
+            assert!(baseline.text.contains("Variable."));
+            assert!(baseline.text.contains("Constant."));
+            let marks = unsafe {
+                std::slice::from_raw_parts(view.marks.ptr.cast::<MarkView>(), view.marks.count as usize)
+            }
+            .to_vec();
+            let variable = marks
+                .iter()
+                .position(|mark| mark.kind == 6 && mark.flags & (1 << 11) != 0)
+                .expect("authored Va component");
+            let defined = marks
+                .iter()
+                .position(|mark| mark.kind == 6 && mark.flags & (1 << 12) != 0)
+                .expect("authored Dv component");
+            for (index, corruption) in [
+                (variable, 0_u8),
+                (defined, 1),
+                (variable, 2),
+                (variable, 3),
+            ] {
+                let mut bad_marks = marks.clone();
+                match corruption {
+                    0 => bad_marks[index].token = marks[defined].token,
+                    1 => bad_marks[index].token = marks[variable].token,
+                    2 => bad_marks[index].flags |= 1 << 12,
+                    _ => bad_marks[index].source = 0,
+                }
+                let mut bad_view = view;
+                bad_view.marks.ptr = bad_marks.as_ptr().cast();
+                assert_eq!(
+                    transfer(&handle, &bad_view, &limits, false).unwrap_err().status,
+                    STATUS_RELATION,
+                    "corruption {corruption}",
+                );
+                let body_only = transfer(&handle, &bad_view, &limits, true).unwrap();
+                assert!(body_only.annotation_degraded);
+                assert_eq!(body_only.text, baseline.text);
+                assert!(body_only.marks.is_empty());
+                assert!(body_only.runs.iter().all(|run| run.label.head_component == 0));
+            }
+        },
+    );
 }
 
 fn rejects_optional_budget_overruns(

@@ -1,11 +1,13 @@
 //! Checked Fixed selections and native display geometry for DTO transfer.
 
+use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 use std::ops::Range;
 
-use mant_ir::{FixedBody, OwnerMark, TextSelection};
+use mant_ir::{FixedBody, OutputSlice, OwnerMark, TextJoin, TextSelection};
 use mant_protocol::{
-    EvidenceBasis, ExplanationContent, ExplanationEvidence, ExplanationFixedPart,
-    ExplanationFixedSelection,
+    EvidenceBasis, ExplanationContent, ExplanationEvidence, ExplanationFixedFormRange,
+    ExplanationFixedPart, ExplanationFixedSelection,
 };
 
 use super::ExplanationError;
@@ -47,118 +49,236 @@ pub(super) fn hit_selection(
     (!parts.is_empty()).then_some(TextSelection { parts, joins })
 }
 
-fn name_span(expected: &str, name: &str) -> Result<(u64, u64), ExplanationError> {
-    let start_byte = if name == expected {
-        0
-    } else {
-        expected.len() - expected.trim_start().len()
-    };
-    let end_byte = start_byte
-        .checked_add(name.len())
-        .ok_or(ExplanationError::InvalidFixed)?;
-    if expected.get(start_byte..end_byte) != Some(name) {
-        return Err(ExplanationError::InvalidFixed);
-    }
-    let start_scalar = expected[..start_byte].chars().count() as u64;
-    let end_scalar = start_scalar + name.chars().count() as u64;
-    Ok((start_scalar, end_scalar))
+/// Name index -> original occurrence ordinal -> every explicit form containing
+/// that same surviving native occurrence. An occurrence can be displayed by
+/// more than one explicit form; flattening it would invent source ordinals.
+pub(super) type FixedNamePositions = Vec<Vec<Vec<ExplanationFixedFormRange>>>;
+
+struct FormPart {
+    slice: OutputSlice,
+    logical_start: usize,
 }
 
-type FixedNamePositions = Vec<Vec<(usize, u64, u64)>>;
+struct FormMap {
+    text: String,
+    parts: Vec<FormPart>,
+    joins: Vec<TextJoin>,
+}
+
+impl FormMap {
+    fn new(fixed: &FixedBody, source: &TextSelection, expected: &str) -> Option<Self> {
+        let text = fixed.selection_text(source)?;
+        if text != expected {
+            return None;
+        }
+        let mut parts = Vec::with_capacity(source.parts.len());
+        let mut cursor = 0usize;
+        for (index, &slice) in source.parts.iter().enumerate() {
+            if index > 0 {
+                cursor = cursor.checked_add(match source.joins.get(index - 1)? {
+                    TextJoin::DirectContact => 0,
+                    TextJoin::AuthoredSeparator(text) | TextJoin::GeneratedSeparator(text) => {
+                        text.len()
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                })?;
+            }
+            parts.push(FormPart {
+                slice,
+                logical_start: cursor,
+            });
+            cursor = cursor.checked_add(
+                usize::try_from(slice.end_byte.checked_sub(slice.start_byte)?).ok()?,
+            )?;
+        }
+        (cursor == text.len()).then_some(Self {
+            text,
+            parts,
+            joins: source.joins.clone(),
+        })
+    }
+
+    /// Map only actual run/byte slices, never a same-spelling substring or
+    /// terminal-cell adjacency. The first run is indexed; subsequent slices
+    /// are checked against the form's native join and physical interval.
+    /// `FixedBody::validate_selection_with_prefix` requires (run, start byte)
+    /// ordering without overlap, which licenses the partition-point lookup.
+    fn occurrence_bytes(&self, source: &TextSelection) -> Option<Range<usize>> {
+        source.parts.first()?;
+        let mut previous_index: Option<usize> = None;
+        let mut previous_slice: Option<OutputSlice> = None;
+        let mut start: Option<usize> = None;
+        let mut end = 0usize;
+        for (ordinal, &slice) in source.parts.iter().enumerate() {
+            let index = self
+                .parts
+                .partition_point(|part| {
+                    part.slice.run < slice.run
+                        || part.slice.run == slice.run && part.slice.start_byte <= slice.start_byte
+                })
+                .checked_sub(1)?;
+            let part = self.parts.get(index)?;
+            if part.slice.run != slice.run
+                || slice.start_byte >= slice.end_byte
+                || slice.start_byte < part.slice.start_byte
+                || slice.end_byte > part.slice.end_byte
+            {
+                return None;
+            }
+            if let Some(previous_index) = previous_index {
+                let prior = previous_slice?;
+                if index == previous_index {
+                    if prior.end_byte != slice.start_byte
+                        || source.joins.get(ordinal - 1) != Some(&TextJoin::DirectContact)
+                    {
+                        return None;
+                    }
+                } else if index != previous_index + 1
+                    || prior.end_byte != self.parts[previous_index].slice.end_byte
+                    || slice.start_byte != part.slice.start_byte
+                    || source.joins.get(ordinal - 1) != self.joins.get(previous_index)
+                {
+                    return None;
+                }
+            }
+            let logical_start = part
+                .logical_start
+                .checked_add(usize::try_from(slice.start_byte - part.slice.start_byte).ok()?)?;
+            start.get_or_insert(logical_start);
+            end = part
+                .logical_start
+                .checked_add(usize::try_from(slice.end_byte - part.slice.start_byte).ok()?)?;
+            previous_index = Some(index);
+            previous_slice = Some(slice);
+        }
+        let start = start?;
+        (start < end).then_some(start..end)
+    }
+}
+
+struct PendingRange {
+    name: usize,
+    occurrence: usize,
+    bytes: Range<usize>,
+}
+
+fn scalar_ranges(form: &str, pending: &[PendingRange]) -> Option<Vec<Range<u64>>> {
+    let mut points = Vec::with_capacity(pending.len().checked_mul(2)?);
+    for (index, range) in pending.iter().enumerate() {
+        points.push((range.bytes.start, index, false));
+        points.push((range.bytes.end, index, true));
+    }
+    points.sort_unstable_by_key(|point| point.0);
+    let mut ranges = vec![0..0; pending.len()];
+    let mut next_boundary = form
+        .char_indices()
+        .map(|(byte, _)| byte)
+        .skip(1)
+        .chain(std::iter::once(form.len()));
+    let mut byte = 0usize;
+    let mut scalar = 0u64;
+    for (target, index, end) in points {
+        while byte < target {
+            byte = next_boundary.next()?;
+            scalar = scalar.checked_add(1)?;
+        }
+        if byte != target {
+            return None;
+        }
+        if end {
+            ranges[index].end = scalar;
+        } else {
+            ranges[index].start = scalar;
+        }
+    }
+    ranges
+        .iter()
+        .all(|range| range.start < range.end)
+        .then_some(ranges)
+}
 
 pub(super) fn fixed_name_positions(
     fixed: &FixedBody,
     owner: &OwnerMark,
     entry: &mant_ir::SemanticEntry,
 ) -> Result<FixedNamePositions, ExplanationError> {
-    if entry.kind == mant_ir::EntryKind::Term && entry.names.is_empty() {
-        return Ok(Vec::new());
-    }
-    if entry.forms.len() == 1 {
-        let form = &entry.forms[0];
-        // A parser-alive first-name hint does not exclude later declarations
-        // or a second occurrence of that same name. Follow the native facts'
-        // lexical binding, not the number of distinct names: two occurrences
-        // can still yield one `entry.names` value.
-        let names = if owner.head_role == Some(mant_ir::OwnerHeadRole::Lexical)
-            && (owner.head_role_prefix.is_none()
-                || owner.entry.as_ref().is_some_and(|facts| {
-                    facts
-                        .name_bindings
-                        .iter()
-                        .any(|binding| binding.evidence == mant_ir::EntryNameEvidence::Lexical)
-                }))
-            && matches!(
-                entry.kind,
-                mant_ir::EntryKind::Parameter {
-                    parameter_kind: mant_ir::ParameterKind::Option
-                }
-            ) {
-            fixed.lexical_names(owner).map(|components| {
-                components
-                    .into_iter()
-                    .map(|(name, _, range)| (name, range))
-                    .collect::<Vec<_>>()
-            })
-        } else if owner.head_role == Some(mant_ir::OwnerHeadRole::Option)
-            && owner.head_components.len() > 1
-        {
-            fixed.option_component_names(owner).map(|components| {
-                components
-                    .into_iter()
-                    .map(|(name, _, range)| (name, range))
-                    .collect()
-            })
-        } else {
-            None
-        };
-        if let Some(names) = names {
-            let mut cursor = 0usize;
-            let mut scalar = 0u64;
-            let mut positions = vec![Vec::new(); entry.names.len()];
-            let indices = entry
-                .names
-                .iter()
-                .enumerate()
-                .map(|(index, name)| (name.as_str(), index))
-                .collect::<std::collections::BTreeMap<_, _>>();
-            for (name, range) in names {
-                let index = *indices
-                    .get(name.as_str())
-                    .ok_or(ExplanationError::InvalidFixed)?;
-                if range.start < cursor || form.get(range.clone()) != Some(name.as_str()) {
-                    return Err(ExplanationError::InvalidFixed);
-                }
-                for character in form[cursor..range.start].chars() {
-                    scalar += 1;
-                    cursor += character.len_utf8();
-                }
-                let start = scalar;
-                for character in form[range.clone()].chars() {
-                    scalar += 1;
-                    cursor += character.len_utf8();
-                }
-                positions[index].push((0, start, scalar));
-            }
-            if positions.iter().any(Vec::is_empty) {
-                return Err(ExplanationError::InvalidFixed);
-            }
-            return Ok(positions);
-        }
-    }
-    if entry.forms.len() != entry.names.len() {
+    let facts = owner.entry.as_ref().ok_or(ExplanationError::InvalidFixed)?;
+    if facts.names != entry.names || facts.forms.len() != entry.forms.len() {
         return Err(ExplanationError::InvalidFixed);
     }
-    entry
-        .forms
-        .iter()
-        .zip(&entry.names)
-        .enumerate()
-        .map(|(index, (form, name))| {
-            let (start, end) = name_span(form, name)?;
-            Ok(vec![(index, start, end)])
-        })
-        .collect()
+    let mut forms = Vec::with_capacity(facts.forms.len());
+    let mut by_run: BTreeMap<NonZeroU32, Vec<usize>> = BTreeMap::new();
+    for (index, (source, expected)) in facts.forms.iter().zip(&entry.forms).enumerate() {
+        let form = FormMap::new(fixed, source, expected).ok_or(ExplanationError::InvalidFixed)?;
+        for part in &form.parts {
+            let indices = by_run.entry(part.slice.run).or_default();
+            if indices.last() != Some(&index) {
+                indices.push(index);
+            }
+        }
+        forms.push(form);
+    }
+    let mut positions = vec![Vec::new(); entry.names.len()];
+    let mut pending = (0..forms.len())
+        .map(|_| Vec::new())
+        .collect::<Vec<Vec<PendingRange>>>();
+    let mut seen = vec![false; entry.names.len()];
+    for binding in &facts.name_bindings {
+        let name = entry
+            .names
+            .get(binding.name)
+            .ok_or(ExplanationError::InvalidFixed)?;
+        if std::mem::replace(&mut seen[binding.name], true) || binding.occurrences.is_empty() {
+            return Err(ExplanationError::InvalidFixed);
+        }
+        for occurrence in &binding.occurrences {
+            if fixed.selection_text(occurrence).as_deref() != Some(name.as_str()) {
+                return Err(ExplanationError::InvalidFixed);
+            }
+            let ordinal = positions[binding.name].len();
+            positions[binding.name].push(Vec::new());
+            let first_run = occurrence
+                .parts
+                .first()
+                .ok_or(ExplanationError::InvalidFixed)?
+                .run;
+            for &form_index in by_run
+                .get(&first_run)
+                .ok_or(ExplanationError::InvalidFixed)?
+            {
+                let form = &forms[form_index];
+                if let Some(bytes) = form.occurrence_bytes(occurrence) {
+                    if form.text.get(bytes.clone()) != Some(name.as_str()) {
+                        return Err(ExplanationError::InvalidFixed);
+                    }
+                    pending[form_index].push(PendingRange {
+                        name: binding.name,
+                        occurrence: ordinal,
+                        bytes,
+                    });
+                }
+            }
+        }
+    }
+    if seen.iter().any(|&present| !present) {
+        return Err(ExplanationError::InvalidFixed);
+    }
+    for (form_index, ranges) in pending.iter().enumerate() {
+        let scalars =
+            scalar_ranges(&forms[form_index].text, ranges).ok_or(ExplanationError::InvalidFixed)?;
+        for (range, scalar) in ranges.iter().zip(scalars) {
+            positions[range.name][range.occurrence].push(ExplanationFixedFormRange {
+                form_index: u32::try_from(form_index)
+                    .map_err(|_| ExplanationError::InvalidFixed)?,
+                start_scalar: scalar.start,
+                end_scalar: scalar.end,
+            });
+        }
+    }
+    if positions.iter().flatten().any(Vec::is_empty) {
+        return Err(ExplanationError::InvalidFixed);
+    }
+    Ok(positions)
 }
 
 pub(super) fn retained_fixed_positions(record: &ExplanationEvidence) -> usize {

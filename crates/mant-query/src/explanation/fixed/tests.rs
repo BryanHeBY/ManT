@@ -238,13 +238,13 @@ fn hinted_fixed_head_keeps_later_name_positions_in_one_form() {
             "-a ARG, --all",
             vec!["-a", "--all"],
             vec![("-a", 0, 2), ("--all", 8, 13)],
-            vec![vec![(0, 0, 2)], vec![(0, 8, 13)]],
+            vec![vec![vec![(0, 0, 2)]], vec![vec![(0, 8, 13)]]],
         ),
         (
             "-a ARG, -a",
             vec!["-a"],
             vec![("-a", 0, 2), ("-a", 8, 10)],
-            vec![vec![(0, 0, 2), (0, 8, 10)]],
+            vec![vec![vec![(0, 0, 2)], vec![(0, 8, 10)]]],
         ),
     ] {
         let fixed = hinted_fixed_body(form, &names, &occurrences);
@@ -265,12 +265,83 @@ fn hinted_fixed_head_keeps_later_name_positions_in_one_form() {
             children: Vec::new(),
             value_domain: None,
         };
-        assert_eq!(
-            super::selection::fixed_name_positions(&fixed, &fixed.owners[0], &entry).unwrap(),
-            expected,
-            "{form}",
-        );
+        let actual = super::selection::fixed_name_positions(&fixed, &fixed.owners[0], &entry)
+            .unwrap()
+            .iter()
+            .map(|occurrences| {
+                occurrences
+                    .iter()
+                    .map(|forms| {
+                        forms
+                            .iter()
+                            .map(|range| (range.form_index, range.start_scalar, range.end_scalar))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "{form}");
     }
+}
+
+#[test]
+fn fixed_name_binding_projection_uses_indices_occurrences_and_scalar_boundaries() {
+    // This is a detached mapping unit test, not a claim that the current IR
+    // validator accepts duplicate explicit forms: that closure is part of
+    // EN02's separate Fixed fact change. Pinned CVS man_term.c::pre_TP and
+    // term.c::term_word execute the complete HEAD; ManT's semantic names are
+    // mapped against surviving run bytes, never a same-spelling substring.
+    let form = "é TMPDIR, TEMP, TMP";
+    let names = ["TEMP", "TMP", "TMPDIR"];
+    let mut fixed = hinted_fixed_body(
+        form,
+        &names,
+        &[("TMPDIR", 3, 9), ("TEMP", 11, 15), ("TMP", 17, 20)],
+    );
+    let facts = fixed.owners[0].entry.as_mut().unwrap();
+    facts.name_bindings.swap(0, 2);
+    facts.forms.push(facts.forms[0].clone());
+    let entry = mant_ir::SemanticEntry {
+        id: NodeId::from("option-a"),
+        kind: facts.kind,
+        names: names.iter().map(|name| (*name).into()).collect(),
+        alias_groups: Vec::new(),
+        alias_of: None,
+        case: mant_ir::NameCase::Sensitive,
+        forms: vec![form.into(), form.into()],
+        document_targets: Vec::new(),
+        children: Vec::new(),
+        value_domain: None,
+    };
+    let positions =
+        super::selection::fixed_name_positions(&fixed, &fixed.owners[0], &entry).unwrap();
+    let projected = positions
+        .iter()
+        .map(|occurrences| {
+            occurrences
+                .iter()
+                .map(|forms| {
+                    forms
+                        .iter()
+                        .map(|range| (range.form_index, range.start_scalar, range.end_scalar))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        projected,
+        [
+            vec![vec![(0, 10, 14), (1, 10, 14)]],
+            vec![vec![(0, 16, 19), (1, 16, 19)]],
+            vec![vec![(0, 2, 8), (1, 2, 8)]],
+        ]
+    );
+    fixed.owners[0].entry.as_mut().unwrap().name_bindings[0].occurrences[0].parts[0].start_byte = 4;
+    assert!(
+        super::selection::fixed_name_positions(&fixed, &fixed.owners[0], &entry).is_err(),
+        "wrong native bytes cannot be rescued by a same-spelling substring",
+    );
 }
 
 fn hinted_fixed_body(form: &str, names: &[&str], occurrences: &[(&str, u64, u64)]) -> FixedBody {
@@ -366,6 +437,126 @@ fn hinted_fixed_body(form: &str, names: &[&str], occurrences: &[(&str, u64, u64)
         anchors: Vec::new(),
         regions: Vec::new(),
     }
+}
+
+fn two_form_option_fixture() -> ResolvedContent {
+    let mut fixed = hinted_fixed_body(
+        "-a, --all",
+        &["-a", "--all"],
+        &[("-a", 0, 2), ("--all", 4, 9)],
+    );
+    let lengths = [2, 2, 5];
+    let mut runs = Vec::new();
+    for (index, (start, length)) in [(0, 2), (2, 2), (4, 5)].into_iter().enumerate() {
+        let mut run = fixed.surface.runs[0].clone();
+        run.key = key(u32::try_from(index + 1).unwrap());
+        run.column = start;
+        run.width = length;
+        run.byte_start = u64::from(start);
+        run.byte_count = u64::from(length);
+        runs.push(run);
+    }
+    fixed.surface.runs = runs;
+    fixed.surface.rows[0].run_count = 3;
+    let head = slices(
+        &[1, 2, 3],
+        vec![TextJoin::DirectContact, TextJoin::DirectContact],
+        &lengths,
+    );
+    let first = slices(&[1], Vec::new(), &lengths);
+    let second = slices(&[3], Vec::new(), &lengths);
+    let owner = &mut fixed.owners[0];
+    owner.head_role = Some(mant_ir::OwnerHeadRole::Option);
+    owner.head = head;
+    owner.head_components = [first.clone(), second.clone()]
+        .into_iter()
+        .map(|selection| mant_ir::OwnerHeadComponent {
+            role: mant_ir::OwnerHeadRole::Option,
+            selection,
+            source: None,
+            source_key: Some(SourceKey::FIRST),
+        })
+        .collect();
+    let facts = owner.entry.as_mut().unwrap();
+    facts.forms = vec![first.clone(), second.clone()];
+    facts.name_bindings = [first, second]
+        .into_iter()
+        .enumerate()
+        .map(|(name, selection)| mant_ir::EntryNameBinding {
+            name,
+            occurrences: vec![selection],
+            evidence: mant_ir::EntryNameEvidence::NativeMarkup,
+        })
+        .collect();
+    fixed
+        .validate()
+        .expect("native Fl component forms are valid");
+    ResolvedContent {
+        label: "two form option".into(),
+        address: None,
+        document: Some(Document {
+            parser: None,
+            sources: vec![SourceRecord {
+                key: SourceKey::FIRST,
+                identity: SourceIdentity::Anonymous {
+                    name: "synthetic-options".into(),
+                },
+                format: SourceFormat::Man,
+                decoded_byte_length: 0,
+                content_sha256: None,
+                coordinates: SourceCoordinates::NativeNormalizedBytes,
+            }],
+            root_source: SourceKey::FIRST,
+            body: DocumentBody::Fixed(fixed),
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+        }),
+        tldr: None,
+    }
+}
+
+#[test]
+fn fixed_explain_projects_checked_multiple_forms_and_only_the_matched_name_basis() {
+    // The exact `.It Fl a , Fl -all` input ran pinned CVS -Tutf8 first.
+    // mdoc_term.c::termp_fl_pre emits each Fl name separately;
+    // this synthetic snapshot tests the already-validated Fixed DTO boundary,
+    // not a new roff execution expectation.
+    let resolved = two_form_option_fixture();
+    let result = super::super::select_explanation(&resolved, "--all").unwrap();
+    assert_eq!(result.counts.direct_entry.total, 1);
+    let record = &result.evidence[0];
+    let entry = record.entry.as_ref().expect("bounded Fixed entry details");
+    assert_eq!(entry.names, ["-a", "--all"]);
+    assert_eq!(entry.fixed_forms.len(), 2);
+    assert_eq!(entry.fixed_forms[0].complete_text().as_deref(), Some("-a"));
+    assert_eq!(
+        entry.fixed_forms[1].complete_text().as_deref(),
+        Some("--all")
+    );
+    assert_eq!(entry.name_bindings.len(), 2);
+    assert_eq!(entry.name_bindings[0].name_index, 0);
+    assert_eq!(entry.name_bindings[1].name_index, 1);
+    assert_eq!(
+        entry.name_bindings[0].occurrences[0].fixed_forms[0].form_index,
+        0
+    );
+    assert_eq!(
+        entry.name_bindings[1].occurrences[0].fixed_forms[0].form_index,
+        1
+    );
+    let matched = record
+        .bases
+        .iter()
+        .find_map(|basis| match basis {
+            EvidenceBasis::Name { matches } => Some(matches),
+            _ => None,
+        })
+        .expect("one Name basis");
+    assert_eq!(matched.len(), 1);
+    assert_eq!(matched[0].name, "--all");
+    assert_eq!(matched[0].occurrences, entry.name_bindings[1].occurrences);
+    result.validate_references().unwrap();
 }
 
 #[test]

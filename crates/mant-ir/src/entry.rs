@@ -22,11 +22,15 @@ pub use model::*;
 pub(crate) use relations::relation_issues;
 pub use relations::{EntryRelationIssue, EntryRelationIssueKind, entry_relation_issues};
 pub(crate) use syntax::is_complete_hanging_option_head_with_provisional;
+pub(crate) use syntax::native_variable_token;
 #[doc(hidden)]
 pub use syntax::{
-    DeclarationContext, DeclarationScan, DeclarationView, RecognitionParts, RecognitionResult,
-    recognize_option_declarations, scan_option_declarations, scan_option_declarations_with_numeric,
-    scan_option_declarations_with_style, scan_option_declarations_with_style_ranges,
+    DeclarationContext, DeclarationScan, DeclarationView, EnvironmentNameLimit,
+    EnvironmentNameOccurrences, RecognitionParts, RecognitionResult, SectionDeclarationFamily,
+    environment_declaration_names, recognize_option_declarations,
+    scan_environment_declaration_names, scan_option_declarations,
+    scan_option_declarations_with_numeric, scan_option_declarations_with_style,
+    scan_option_declarations_with_style_ranges, section_declaration_family,
 };
 pub use syntax::{
     contains_additional_environment_assignment, environment_variable_alias,

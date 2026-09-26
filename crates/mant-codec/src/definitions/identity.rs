@@ -60,28 +60,31 @@ pub(super) fn identity_plan(
     operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> IdentityPlan {
     let inferred = item.entry.is_none();
-    let (kind, case, names, occurrences, value_domain) = item.entry.as_ref().map_or_else(
-        || {
-            let inferred =
-                infer_identity(content, item, context, hint, option_ranges, operand_ranges);
-            (
-                inferred.kind,
-                inferred.case,
-                inferred.names,
-                inferred.occurrences,
-                None,
-            )
-        },
-        |identity| {
-            (
-                identity.kind,
-                identity.case,
-                identity.names.clone(),
-                super::syntax::name_occurrences(content, item, identity.kind, operand_ranges),
-                identity.value_domain.clone(),
-            )
-        },
-    );
+    let (kind, case, names, occurrences, value_domain, over_limit) =
+        item.entry.as_ref().map_or_else(
+            || {
+                let inferred =
+                    infer_identity(content, item, context, hint, option_ranges, operand_ranges);
+                (
+                    inferred.kind,
+                    inferred.case,
+                    inferred.names,
+                    inferred.occurrences,
+                    None,
+                    inferred.over_limit,
+                )
+            },
+            |identity| {
+                (
+                    identity.kind,
+                    identity.case,
+                    identity.names.clone(),
+                    super::syntax::name_occurrences(content, item, identity.kind, operand_ranges),
+                    identity.value_domain.clone(),
+                    false,
+                )
+            },
+        );
     let name = names.first().cloned().unwrap_or_else(|| {
         item.terms
             .first()
@@ -110,7 +113,8 @@ pub(super) fn identity_plan(
             .terms
             .iter()
             .all(|term| is_ordinal_marker(plain_text(content, term).trim()));
-    let semantic = hint != Some(super::NativeHeadRole::Presentation) && !presentation_ordinal;
+    let semantic =
+        hint != Some(super::NativeHeadRole::Presentation) && !presentation_ordinal && !over_limit;
     // A declaration group carries a stronger fact than adjacency: its final
     // member's body is useful reading context for every preceding member.
     // Keep that recovery to roles whose complete declaration grammar gives us

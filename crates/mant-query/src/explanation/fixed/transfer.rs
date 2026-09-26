@@ -442,30 +442,26 @@ impl FixedPlan<'_> {
             .index
             .entry_at(&selected.path)
             .ok_or(ExplanationError::InvalidFixed)?;
-        let selections = if entry.forms.len() == 1 {
-            vec![
-                owner
-                    .entry
-                    .as_ref()
-                    .and_then(|native| native.forms.first())
-                    .ok_or(ExplanationError::InvalidFixed)?
-                    .clone(),
-            ]
-        } else {
-            self.fixed
-                .option_component_forms(owner)
-                .ok_or(ExplanationError::InvalidFixed)?
-                .into_iter()
-                .map(|(_, selection)| selection)
-                .collect()
-        };
+        // EntryFacts is the current operation's validated name/form authority.
+        // Reconstructing forms from option components here would discard one
+        // complete non-option form containing several independent names.
+        let selections = &owner
+            .entry
+            .as_ref()
+            .ok_or(ExplanationError::InvalidFixed)?
+            .forms;
         if entry.forms.len() != selections.len() {
             return Err(ExplanationError::InvalidFixed);
         }
         let name_positions = fixed_name_positions(self.fixed, owner, entry)?;
         let truncated_names = name_positions
             .iter()
-            .map(|positions| positions.len() > mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+            .map(|positions| {
+                positions.len() > mant_protocol::MAX_EXPLANATION_OCCURRENCES
+                    || positions
+                        .iter()
+                        .any(|forms| forms.len() > mant_protocol::MAX_EXPLANATION_FRAGMENTS)
+            })
             .collect::<Vec<_>>();
         record.name_bindings_omitted = entry.names.len()
             > mant_protocol::MAX_EXPLANATION_NAME_BINDINGS
@@ -488,8 +484,11 @@ impl FixedPlan<'_> {
             .take(mant_protocol::MAX_EXPLANATION_NAME_BINDINGS)
             .map(|positions| {
                 positions
-                    .len()
-                    .min(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+                    .iter()
+                    .filter(|forms| forms.len() <= mant_protocol::MAX_EXPLANATION_FRAGMENTS)
+                    .take(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+                    .map(Vec::len)
+                    .sum::<usize>()
             })
             .sum::<usize>();
         let match_positions = record.bases.iter().try_fold(0usize, |count, basis| {
@@ -504,8 +503,13 @@ impl FixedPlan<'_> {
                         Ok::<usize, ExplanationError>(sum.saturating_add(
                             name_positions.get(index).map_or(0, |positions| {
                                 positions
-                                    .len()
-                                    .min(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+                                    .iter()
+                                    .filter(|forms| {
+                                        forms.len() <= mant_protocol::MAX_EXPLANATION_FRAGMENTS
+                                    })
+                                    .take(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
+                                    .map(Vec::len)
+                                    .sum::<usize>()
                             }),
                         ))
                     })?
@@ -545,18 +549,16 @@ impl FixedPlan<'_> {
                     occurrences: positions
                         .into_iter()
                         .enumerate()
+                        .filter(|(_, forms)| {
+                            forms.len() <= mant_protocol::MAX_EXPLANATION_FRAGMENTS
+                        })
                         .take(mant_protocol::MAX_EXPLANATION_OCCURRENCES)
-                        .map(|(ordinal, (form_index, start_scalar, end_scalar))| {
+                        .map(|(ordinal, fixed_forms)| {
                             Ok(ExplanationOccurrence {
                                 source_occurrence_index: u32::try_from(ordinal)
                                     .map_err(|_| ExplanationError::InvalidFixed)?,
                                 forms: Vec::new(),
-                                fixed_forms: vec![ExplanationFixedFormRange {
-                                    form_index: u32::try_from(form_index)
-                                        .map_err(|_| ExplanationError::InvalidFixed)?,
-                                    start_scalar,
-                                    end_scalar,
-                                }],
+                                fixed_forms,
                                 content: Vec::new(),
                             })
                         })
@@ -600,7 +602,11 @@ impl FixedPlan<'_> {
                             .iter()
                             .position(|name| name == &matched.name)
                             .ok_or(ExplanationError::InvalidFixed)?;
-                        if let Some(binding) = details.name_bindings.get(index) {
+                        if let Some(binding) = details
+                            .name_bindings
+                            .iter()
+                            .find(|binding| binding.name_index as usize == index)
+                        {
                             if truncated_names.get(index) == Some(&true) {
                                 record.match_details_omitted = true;
                             }

@@ -6,6 +6,11 @@ use super::{
     AnnotatedDocument, AnnotatedProjectionError, FragmentAlias, NodeId, NonZeroU32, Result, key,
 };
 
+// Pinned CVS roff.h discriminators, mirrored by the native/FFI one-hot mark
+// validator. Owned AnnotatedDocument callers can bypass that FFI boundary.
+const MDOC_DV_TOKEN: u32 = 276;
+const MDOC_VA_TOKEN: u32 = 295;
+
 pub(super) struct KeyMap {
     heading: Vec<u32>,
     owner: Vec<u32>,
@@ -371,11 +376,11 @@ impl KeyMap {
             // Public owned results can be constructed without crossing the
             // FFI checker. Keep role evidence closed at this boundary too.
             let allowed_flags = match mark.kind {
-                1 => 0b1001,                // authored heading and subsection
-                2 => 0b11_1111_0001 | 1024, // owner plus direct TP/TQ text witness
-                4 => 0b0101,                // authored anchor and manual target
-                3 | 5 => 0b0001,            // authored link or region
-                6 => 0b1_1110_0001,         // authored HEAD component and one native role
+                1 => 0b1001, // authored heading and subsection
+                2 => 1 | 16 | 512 | 1024 | super::NATIVE_HEAD_ROLE_MASK,
+                4 => 0b0101,     // authored anchor and manual target
+                3 | 5 => 0b0001, // authored link or region
+                6 => 1 | super::NATIVE_HEAD_ROLE_MASK,
                 _ => unreachable!(),
             };
             if mark.flags & !allowed_flags != 0 {
@@ -405,8 +410,9 @@ impl KeyMap {
                 ));
             }
             if mark.kind == 2
-                && mark.flags & 0b1_1110_0000 != 0
-                && (mark.flags & 16 == 0 || (mark.flags & 0b1_1110_0000).count_ones() != 1)
+                && mark.flags & super::NATIVE_HEAD_ROLE_MASK != 0
+                && (mark.flags & 16 == 0
+                    || (mark.flags & super::NATIVE_HEAD_ROLE_MASK).count_ones() != 1)
             {
                 return Err(AnnotatedProjectionError::Relation(
                     "native owner has invalid head role flags",
@@ -414,7 +420,9 @@ impl KeyMap {
             }
             if mark.kind == 6
                 && (mark.source == 0
-                    || (mark.flags & 0b1_1110_0000).count_ones() != 1
+                    || (mark.flags & super::NATIVE_HEAD_ROLE_MASK).count_ones() != 1
+                    || mark.flags & 2048 != 0 && mark.token != MDOC_VA_TOKEN
+                    || mark.flags & 4096 != 0 && mark.token != MDOC_DV_TOKEN
                     || mark.parent == 0
                     || mark.owner != mark.parent
                     || page.marks[(mark.parent - 1) as usize].kind != 5

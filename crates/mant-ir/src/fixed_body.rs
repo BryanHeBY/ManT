@@ -253,8 +253,10 @@ pub enum OwnerRole {
     Other,
 }
 
-/// First significant native macro in a definition head, captured while the
-/// upstream AST is alive. This is authored role evidence, not a semantic kind.
+/// Native macro role in a definition head, captured while the upstream AST is
+/// alive. The typed owner retains the first surviving component role when an
+/// earlier authored instance emits no glyph. This is role evidence, not a
+/// semantic kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum OwnerHeadRole {
@@ -262,6 +264,11 @@ pub enum OwnerHeadRole {
     Option,
     /// An mdoc `Ev` environment-variable head.
     Environment,
+    /// An authored mdoc `Va` variable declaration head.
+    Variable,
+    /// An authored mdoc `Dv` defined-variable head; this role alone does not
+    /// imply a distinct public entry kind.
+    DefinedVariable,
     /// An mdoc `Ic` or `Cm` literal command head.
     Literal,
     /// A native declaration head whose authored syntax permits conservative
@@ -327,7 +334,10 @@ pub struct OwnerMark {
     pub section: Option<NonZeroU32>,
     /// Native owner kind before classification.
     pub role: OwnerRole,
-    /// Native first-head role, if one survived the head AST boundary.
+    /// Native first-head role, if any. Projection replaces a zero-glyph first
+    /// instance with the first visible component role; a missing raw role is
+    /// never inferred from a later component. Read-time proof checks this
+    /// persisted role against surviving component selections.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_role: Option<OwnerHeadRole>,
     /// Optional native role prefix when an authored macro supplies one.
@@ -385,6 +395,7 @@ fn is_false(value: &bool) -> bool {
 
 mod evidence;
 use evidence::component_part_ranges;
+pub use evidence::{FixedNonOptionLimit, FixedNonOptionRecognition};
 
 /// One native link macro instance, independent of its visible slice count.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]

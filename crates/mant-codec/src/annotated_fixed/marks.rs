@@ -99,16 +99,33 @@ pub(super) fn project_owner(
     component_keys: &[u32],
 ) -> Result<OwnerMark> {
     let head = region_selection(page, mark.title_region)?;
+    let native_head_role = match mark.flags & super::NATIVE_HEAD_ROLE_MASK {
+        0 => None,
+        32 => Some(OwnerHeadRole::Option),
+        64 => Some(OwnerHeadRole::Environment),
+        128 => Some(OwnerHeadRole::Literal),
+        256 => Some(OwnerHeadRole::Lexical),
+        2048 => Some(OwnerHeadRole::Variable),
+        4096 => Some(OwnerHeadRole::DefinedVariable),
+        _ => {
+            return Err(AnnotatedProjectionError::Relation(
+                "invalid native head role",
+            ));
+        }
+    };
     let mut head_components = Vec::with_capacity(component_keys.len());
+    let mut first_raw_component = None;
     for &component_key in component_keys {
         let component = page.marks.get((component_key - 1) as usize).ok_or(
             AnnotatedProjectionError::Relation("head component mark missing"),
         )?;
-        let role = match component.flags & 0b1_1110_0000 {
+        let role = match component.flags & super::NATIVE_HEAD_ROLE_MASK {
             32 => OwnerHeadRole::Option,
             64 => OwnerHeadRole::Environment,
             128 => OwnerHeadRole::Literal,
             256 => OwnerHeadRole::Lexical,
+            2048 => OwnerHeadRole::Variable,
+            4096 => OwnerHeadRole::DefinedVariable,
             _ => {
                 return Err(AnnotatedProjectionError::Relation(
                     "invalid head component role",
@@ -116,6 +133,7 @@ pub(super) fn project_owner(
             }
         };
         let selection = selection(page, component)?;
+        first_raw_component.get_or_insert((role, selection.parts.is_empty()));
         let source = mark_source(component)?;
         let source_key = mark_source_key(component)?;
         // Native execution instances can emit no final glyphs (for example
@@ -131,6 +149,22 @@ pub(super) fn project_owner(
             source_key,
         });
     }
+    // The collector freezes the first authored role, even if that macro
+    // executes to zero glyphs. Only a genuinely empty first role instance may
+    // hand the typed declaration role to the next visible component. A raw
+    // role of None never gains one merely because a later macro was visible.
+    // After this projection, read-time proof can require the persisted role
+    // to match the first surviving component and detect JSON role tampering.
+    let head_role = match (
+        native_head_role,
+        first_raw_component,
+        head_components.first(),
+    ) {
+        (Some(raw), Some((first, true)), Some(visible)) if first == raw && visible.role != raw => {
+            Some(visible.role)
+        }
+        _ => native_head_role,
+    };
     let direct_body = project_owner_body(page, mark, body_regions)?;
     let empty_point = if head.parts.is_empty() && direct_body.parts.is_empty() {
         Some(point(mark.point.ok_or(
@@ -153,18 +187,7 @@ pub(super) fn project_owner(
         } else {
             OwnerRole::Other
         },
-        head_role: match mark.flags & 0b1_1110_0000 {
-            0 => None,
-            32 => Some(OwnerHeadRole::Option),
-            64 => Some(OwnerHeadRole::Environment),
-            128 => Some(OwnerHeadRole::Literal),
-            256 => Some(OwnerHeadRole::Lexical),
-            _ => {
-                return Err(AnnotatedProjectionError::Relation(
-                    "invalid native head role",
-                ));
-            }
-        },
+        head_role,
         head_role_prefix: mark.name.clone(),
         lexical_term_witness: false,
         head_components,

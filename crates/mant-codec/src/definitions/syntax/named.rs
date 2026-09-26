@@ -1,6 +1,8 @@
 //! named recognition; complete forms retain their role-specific grammar.
 use crate::definitions::RecognizedName;
 use mant_ir::contains_additional_environment_assignment;
+use mant_ir::inline_plain_text as plain_text;
+use mant_ir::{ContentContext, EnvironmentNameLimit, Inline};
 pub(crate) use mant_ir::{environment_variable_alias, environment_variable_body};
 
 /// Strong local configuration spelling, used only on complete declaration
@@ -277,66 +279,47 @@ fn sigilled_invocation_argument(value: &str) -> bool {
 /// A declaration group is atomic: accepting a word after rejected prose does
 /// not prove that either the paragraph or that word declares a variable.
 pub(super) fn environment_occurrences(text: &str) -> Option<Vec<RecognizedName>> {
-    let parts = if text.contains('=') {
-        vec![text]
-    } else {
-        named_groups(text)?
-    };
-    let mut names = Vec::new();
-    for part in parts {
-        let name = environment_variable_alias(part).or_else(|| {
-            let (name, suffix) = part.trim().split_once(char::is_whitespace)?;
-            annotations(suffix)
-                .then(|| environment_variable_alias(name))
-                .flatten()
-        });
-        let Some(name) = name else {
-            if environment_template(part.trim()) {
-                continue;
-            }
-            return None;
-        };
-        let start =
-            part.as_ptr() as usize - text.as_ptr() as usize + part.len() - part.trim_start().len();
-        names.push(RecognizedName::contiguous(&name, start));
-    }
-    Some(names)
+    mant_ir::environment_declaration_names(text).map(|names| {
+        names
+            .into_iter()
+            .map(|(name, range)| RecognizedName::contiguous(&name, range.start))
+            .collect()
+    })
 }
 
-// A bounded literal/placeholder environment head is a declaration, but not
-// an exact environment-variable name. Keep it opaque alongside concrete names;
-// do not salvage words from prose or expand template instances.
-fn environment_template(value: &str) -> bool {
-    if value.len() > 512 || value.chars().any(char::is_whitespace) {
-        return false;
-    }
-    let mut rest = value;
-    let mut literal = String::new();
-    let mut templates = 0;
-    while let Some((prefix, tail)) = rest.split_once('<') {
-        if templates == 0 && prefix.is_empty() {
-            return false;
-        }
-        let Some((parameter, suffix)) = tail.split_once('>') else {
-            return false;
+/// Count complete environment-name occurrences across one Flow owner, not
+/// merely within each TP/TQ term. Stop before allocating a 65th binding.
+pub(in crate::definitions) fn environment_owner_occurrences(
+    content: ContentContext<'_>,
+    terms: &[Vec<Inline>],
+    native_prefix: bool,
+) -> Result<Vec<Vec<RecognizedName>>, EnvironmentNameLimit> {
+    let mut all = Vec::with_capacity(terms.len().min(64));
+    let mut total = 0usize;
+    for term in terms {
+        let text = if native_prefix {
+            super::forms::environment_prefix(content, term)
+        } else {
+            Some(plain_text(content, term))
         };
-        if !is_variable_term(parameter) {
-            return false;
+        let names = match text {
+            Some(text) => mant_ir::scan_environment_declaration_names(&text)?.unwrap_or_default(),
+            None => Vec::new(),
+        };
+        total = total
+            .checked_add(names.len())
+            .ok_or(EnvironmentNameLimit::TooManyMembers)?;
+        if total > 64 {
+            return Err(EnvironmentNameLimit::TooManyMembers);
         }
-        literal.push_str(prefix);
-        literal.push('X');
-        templates += 1;
-        if templates > 16 {
-            return false;
-        }
-        rest = suffix;
+        all.push(
+            names
+                .into_iter()
+                .map(|(name, range)| RecognizedName::contiguous(&name, range.start))
+                .collect(),
+        );
     }
-    literal.push_str(rest);
-    templates > 0
-        && literal
-            .chars()
-            .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
-        && environment_variable_alias(&literal).is_some()
+    Ok(all)
 }
 
 pub(in crate::definitions) fn is_variable_term(value: &str) -> bool {

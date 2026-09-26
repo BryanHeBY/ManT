@@ -476,18 +476,25 @@ observe_html_phrase_boundary(struct mant_annotated_collector *collector,
 }
 
 /* mdoc_term.c::termp_fl_pre emits its generated dash before traversing the
- * child text; man_term.c::pre_B keeps its own children in the same macro
- * frame.  Native syntax is evidence only: C never splits declaration forms. */
+ * child text; Va and Dv use different initial fonts, but term.c::term_word()
+ * can override either with an escape. Native syntax is evidence only: C
+ * never splits declaration forms or infers a name from raw spelling. */
 static uint32_t
 head_component_role(const struct roff_node *node)
 {
-	if (node->type != ROFFT_ELEM)
+	if (node->type != ROFFT_ELEM ||
+	    (node->flags & NODE_NOPRT) != 0 ||
+	    mant_annotated_marks_source_key(node) == 0)
 		return 0;
 	switch (node->tok) {
 	case MDOC_Fl:
 		return MANT_ANNOTATED_MARK_HEAD_OPTION;
 	case MDOC_Ev:
 		return MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT;
+	case MDOC_Va:
+		return MANT_ANNOTATED_MARK_HEAD_VARIABLE;
+	case MDOC_Dv:
+		return MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE;
 	case MDOC_Ic:
 	case MDOC_Cm:
 		return MANT_ANNOTATED_MARK_HEAD_LITERAL;

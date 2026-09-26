@@ -464,6 +464,174 @@ mod tests {
     }
 
     #[test]
+    fn native_va_dv_and_multiple_ev_keep_distinct_authored_roles() {
+        // Exact input ran pinned CVS -Ttree/-Tutf8 first. mdoc_macro.c::
+        // in_line() creates each Ev/Va/Dv element separately in the It HEAD;
+        // mdoc_term.c assigns different initial fonts, not semantic names.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Ev ONE , Ev TWO\nBody.\n.It Va counter\nVariable.\n.It Dv MODE_FAST\nConstant.\n.El\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let roles = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 2)
+            .map(|mark| mark.flags & (32 | 64 | 128 | 256 | 2048 | 4096))
+            .collect::<Vec<_>>();
+        assert_eq!(roles, [64, 2048, 4096]);
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .map(|mark| {
+                (
+                    mark.flags & (32 | 64 | 128 | 256 | 2048 | 4096),
+                    direct_mark_text(&page, mark),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            components,
+            [
+                (64, "ONE".to_owned()),
+                (64, "TWO".to_owned()),
+                (2048, "counter".to_owned()),
+                (4096, "MODE_FAST".to_owned()),
+            ]
+        );
+        assert!(page.text.contains("Body."));
+        assert!(page.text.contains("Variable."));
+        assert!(page.text.contains("Constant."));
+    }
+
+    #[test]
+    fn native_empty_roles_and_generated_va_do_not_reject_readable_body() {
+        // Exact input ran pinned CVS -Tutf8 first. term.c::term_word()
+        // emits no glyph for \&, while mdoc_validate.c::post_rv() creates
+        // a NODE_NOSRC Va for errno outside this definition HEAD.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Va \\& , Ev HOME\nVisible body.\n.It Dv \\&\nAnother body.\n.El\n.Rv\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .collect::<Vec<_>>();
+        assert_eq!(components.len(), 3);
+        assert_eq!(components[0].flags & 2048, 2048);
+        assert_eq!(components[0].selection_count, 0);
+        assert_eq!(components[1].flags & 64, 64);
+        assert_eq!(direct_mark_text(&page, components[1]), "HOME");
+        assert_eq!(components[2].flags & 4096, 4096);
+        assert_eq!(components[2].selection_count, 0);
+        assert!(components.iter().all(|mark| mark.source == 1));
+        assert!(page.text.contains("Visible body."));
+        assert!(page.text.contains("Another body."));
+        assert!(page.text.contains("global variable"));
+    }
+
+    #[test]
+    fn expanded_va_dv_roles_keep_source_identity_without_fake_coordinates() {
+        // Exact input ran pinned CVS -Tutf8 first. read.c reparses the
+        // user macro at its invocation SourceKey; its expanded coordinates
+        // are not authored line/column positions.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\n.de Vars\n.It Va counter , Dv MODE_FAST\nExpanded body.\n..\n.Bl -tag -width Ds\n.Vars\n.El\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .collect::<Vec<_>>();
+        assert_eq!(components.len(), 2);
+        assert_eq!(components[0].flags & 2048, 2048);
+        assert_eq!(components[1].flags & 4096, 4096);
+        assert!(components.iter().all(|mark| {
+            mark.source == 1 && mark.line == 0 && mark.column == 0 && mark.flags & 1 == 0
+        }));
+        assert_eq!(direct_mark_text(&page, components[0]), "counter");
+        assert_eq!(direct_mark_text(&page, components[1]), "MODE_FAST");
+        assert!(page.text.contains("Expanded body."));
+    }
+
+    #[test]
+    fn native_diag_head_does_not_parse_va_spelling_as_a_role() {
+        // Exact input ran pinned CVS -Ttree/-Tutf8 first. mdoc_macro.c::
+        // blk_full() leaves -diag HEAD text unparsed; mdoc_term.c styles the
+        // displayed label, but no Va macro instance exists in the AST.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\n.Bl -diag\n.It Va counter\nBody.\n.El\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        assert!(
+            page.marks
+                .iter()
+                .any(|mark| mark.kind == 2 && mark.flags & 16 != 0)
+        );
+        assert!(!page.marks.iter().any(|mark| mark.kind == 6));
+        assert!(page.text.contains("Va counter"));
+        assert!(page.text.contains("Body."));
+    }
+
+    #[test]
+    fn native_va_dv_roles_survive_font_escapes_in_their_operands() {
+        // Exact input ran pinned CVS -Tutf8 first. mdoc_term.c starts Va
+        // underlined and Dv roman, but term.c::term_word() executes each
+        // embedded \f escape afterward; role evidence follows the macro.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Va \\fBcounter\\fP\nVariable.\n.It Dv \\fIMODE_FAST\\fP\nConstant.\n.El\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .collect::<Vec<_>>();
+        assert_eq!(components.len(), 2);
+        assert_eq!(components[0].flags & 2048, 2048);
+        assert_eq!(components[1].flags & 4096, 4096);
+        assert_eq!(direct_mark_text(&page, components[0]), "counter");
+        assert_eq!(direct_mark_text(&page, components[1]), "MODE_FAST");
+    }
+
+    #[test]
     fn native_head_component_does_not_infer_a_second_styled_option() {
         // Pinned mdoc_macro.c::blk_full builds the second macro as Sy, not Fl.
         // The exact input was run with the fixed CVS -Ttree first.

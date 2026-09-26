@@ -1,4 +1,86 @@
 use super::*;
+use std::fmt::Write as _;
+
+#[test]
+fn tp_tq_environment_owner_applies_name_budget_across_all_terms() {
+    // Exact 64- and 65-head inputs ran pinned CVS -Tutf8 before assertions.
+    // man_macro.c::blk_imp and man.c's BLINE TP/TQ path retain each printed
+    // label; this semantic budget applies to their merged Flow owner only.
+    for count in [64_usize, 65] {
+        let mut source = ".TH T 1\n.SH ENVIRONMENT\n.TP\n.B A1\n".to_owned();
+        for index in 2..=count {
+            writeln!(source, ".TQ\n.B A{index}").unwrap();
+        }
+        source.push_str("Body.\n");
+        let report = Parser::default()
+            .parse_bytes("tq-environment.1", source.as_bytes())
+            .unwrap();
+        let document = lower_mandoc_document(
+            std::path::Path::new("tq-environment.1"),
+            &report,
+            u64::try_from(source.len()).unwrap(),
+        );
+        assert!(visible_document_text(&document).contains(&format!("A{count}")));
+        let flow = document.flow().unwrap();
+        let items = flow.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::DefinitionList { items, .. } => Some(items),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].terms.len(), count);
+        let name_budget = document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.semantic-entry.name-budget")
+        });
+        if count == 64 {
+            let facts = items[0].entry.as_ref().unwrap();
+            assert_eq!(facts.names.len(), 64);
+            assert_eq!(facts.names.first().map(String::as_str), Some("A1"));
+            assert_eq!(facts.names.last().map(String::as_str), Some("A64"));
+            assert!(!name_budget);
+        } else {
+            assert!(items[0].entry.is_none());
+            assert!(name_budget);
+            assert!(!mant_ir::semantics_complete(&document.diagnostics));
+            let decoded: mant_ir::Document =
+                serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+            assert!(!mant_ir::semantics_complete(&decoded.diagnostics));
+        }
+    }
+}
+
+#[test]
+fn oversized_environment_group_preserves_flow_text_and_coverage_diagnostic() {
+    // This exact 65-name man HEAD ran pinned CVS -Tutf8 before assertion.
+    // man_term.c::pre_B prints every member; the shared ManT grammar bounds
+    // optional name extraction without discarding that body or claiming clean.
+    let names = (1..=65)
+        .map(|index| format!("A{index}"))
+        .collect::<Vec<_>>();
+    let source = format!(
+        ".TH T 1\n.SH ENVIRONMENT\n.TP\n.B {}\nBody.\n",
+        names.join(", ")
+    );
+    let report = Parser::default()
+        .parse_bytes("many-environment-names.1", source.as_bytes())
+        .unwrap();
+    let document = lower_mandoc_document(
+        std::path::Path::new("many-environment-names.1"),
+        &report,
+        u64::try_from(source.len()).unwrap(),
+    );
+    assert!(visible_document_text(&document).contains("A65"));
+    assert!(!mant_ir::semantics_complete(&document.diagnostics));
+    assert!(document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("manual.semantic-entry.name-budget")
+    }));
+    let decoded: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert!(!mant_ir::semantics_complete(&decoded.diagnostics));
+}
 
 #[test]
 fn retained_man_paragraph_macro_names_reset_persistent_font_state() {

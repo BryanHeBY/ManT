@@ -98,6 +98,23 @@ fn visit_manual_definition_items(
     for item in items {
         let identity = item.entry.as_ref();
         let role = identity.map_or(EntryKind::Term, |identity| identity.kind);
+        if (item_context == DefinitionContext::EnvironmentVariables
+            || role == EntryKind::EnvironmentVariable)
+            && super::syntax::environment_owner_over_limit(content, item)
+        {
+            // The shared grammar stops before allocating a 65th member. That
+            // is a semantic omission, not proof that the native label lacked
+            // names, and must survive the Flow document's JSON round trip.
+            output.push(mant_ir::Diagnostic {
+                impact: mant_ir::DiagnosticImpact::SemanticCoverage,
+                level: mant_ir::DiagnosticLevel::Unsupported,
+                code: Some("manual.semantic-entry.name-budget".to_owned()),
+                message: "environment declaration exceeds the semantic name budget".to_owned(),
+                source: item.source.or(source),
+                source_key: None,
+                coverage_scope: None,
+            });
+        }
         if report_unclassified
             && item_context != DefinitionContext::Generic
             && role == EntryKind::Term

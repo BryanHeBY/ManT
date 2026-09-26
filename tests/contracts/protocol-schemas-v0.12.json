@@ -17064,6 +17064,16 @@
             "const": "environment"
           },
           {
+            "description": "An authored mdoc `Va` variable declaration head.",
+            "type": "string",
+            "const": "variable"
+          },
+          {
+            "description": "An authored mdoc `Dv` defined-variable head; this role alone does not\nimply a distinct public entry kind.",
+            "type": "string",
+            "const": "defined-variable"
+          },
+          {
             "description": "An mdoc `Ic` or `Cm` literal command head.",
             "type": "string",
             "const": "literal"

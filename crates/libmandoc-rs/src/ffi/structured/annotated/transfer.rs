@@ -10,6 +10,17 @@ use super::{
     transfer_budget, transfer_coverage,
 };
 
+// Private native mark flags, checked before a component can become IR role
+// evidence. Va/Dv retain their macro identity even when term_word() changes
+// the font of every surviving glyph.
+const HEAD_VARIABLE: u32 = 1 << 11;
+const HEAD_DEFINED_VARIABLE: u32 = 1 << 12;
+// Pinned against roff.h by the matching native _Static_asserts.
+const MDOC_DV_TOKEN: u32 = 276;
+const MDOC_VA_TOKEN: u32 = 295;
+const HEAD_ROLE_MASK: u32 = 32 | 64 | 128 | 256 | HEAD_VARIABLE | HEAD_DEFINED_VARIABLE;
+const ALLOWED_MARK_FLAGS: u32 = 1 | 4 | 8 | 16 | 512 | 1024 | HEAD_ROLE_MASK;
+
 #[allow(clippy::too_many_lines)] // Mirrors the checked one-copy wire transfer.
 pub(super) fn transfer(
     handle: &Handle,
@@ -294,7 +305,7 @@ pub(super) fn transfer(
             || (mark.source == 0 && mark.line != 0)
             || ((mark.flags & 1 != 0) != (mark.line != 0))
             || mark.point_reserved != 0
-            || mark.flags & !(0b11_1111_1101 | 1024) != 0
+            || mark.flags & !ALLOWED_MARK_FLAGS != 0
             || (mark.flags & 512 != 0 && mark.kind != 2)
             || (mark.flags & 4 != 0 && mark.kind != 4)
             || (mark.flags & 8 != 0 && mark.kind != 1)
@@ -306,10 +317,10 @@ pub(super) fn transfer(
                         crate::annotated::MAN_TP_TOKEN | crate::annotated::MAN_TQ_TOKEN
                     )
                     || mark.flags & (16 | 256) != (16 | 256)))
-            || (mark.flags & 0b1_1110_0000 != 0
+            || (mark.flags & HEAD_ROLE_MASK != 0
                 && ((mark.kind != 2 && mark.kind != 6)
                     || mark.kind == 2 && mark.flags & 16 == 0
-                    || (mark.flags & 0b1_1110_0000).count_ones() != 1))
+                    || (mark.flags & HEAD_ROLE_MASK).count_ones() != 1))
         {
             return Err(invalid_result());
         }
@@ -328,7 +339,7 @@ pub(super) fn transfer(
                 || parent.kind != 5
                 || parent.region_kind != 2
                 || (mark.flags & 16 != 0) != (mark.flags & 256 != 0)
-                || mark.flags & (32 | 64 | 128) != 0
+                || mark.flags & (HEAD_ROLE_MASK & !256) != 0
                 || title.kind != 5
                 || title.region_kind != 3
                 || title.parent != mark.key
@@ -486,8 +497,10 @@ pub(super) fn transfer(
             && (mark.parent == 0
                 || mark.owner != mark.parent
                 || mark.source == 0
-                || mark.flags & 0b1_1110_0000 == 0
-                || mark.flags & !(1 | 0b1_1110_0000) != 0
+                || mark.flags & HEAD_ROLE_MASK == 0
+                || mark.flags & HEAD_VARIABLE != 0 && mark.token != MDOC_VA_TOKEN
+                || mark.flags & HEAD_DEFINED_VARIABLE != 0 && mark.token != MDOC_DV_TOKEN
+                || mark.flags & !(1 | HEAD_ROLE_MASK) != 0
                 || mark.title_region != 0
                 || mark.body_region != 0
                 || mark.region_kind != 0

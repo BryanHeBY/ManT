@@ -124,55 +124,15 @@ impl DefinitionContext {
     }
 
     pub(super) fn for_section(title: &str, inherited: Self) -> Self {
-        let normalized = title
-            .chars()
-            .map(|character| {
-                if character.is_ascii_alphanumeric() {
-                    character.to_ascii_uppercase()
-                } else {
-                    ' '
-                }
-            })
-            .collect::<String>();
-        let words = normalized.split_whitespace().collect::<Vec<_>>();
-        // Composite headings describe the more specific syntax family.  In
-        // particular, "ENVIRONMENT OPTIONS" documents command-line options
-        // whose defaults happen to come from the environment; it is not a
-        // declaration list of environment-variable names.
-        if words.contains(&"OPTIONS")
-            || words.contains(&"OPTION")
-            || words.contains(&"SWITCHES")
-            || words.contains(&"FLAGS")
-        {
-            return Self::Parameters;
+        use mant_ir::SectionDeclarationFamily as Family;
+        match mant_ir::section_declaration_family(title) {
+            Some(Family::Parameters) => Self::Parameters,
+            Some(Family::Commands) => Self::Commands,
+            Some(Family::EnvironmentVariables) => Self::EnvironmentVariables,
+            Some(Family::Variables) => Self::Variables,
+            Some(Family::ConfigurationKeys) => Self::ConfigurationKeys,
+            None => inherited,
         }
-        // The final family word disambiguates "Environment Commands" from
-        // "Command Environment" without matching every mention of command.
-        if matches!(words.last(), Some(&"COMMANDS"))
-            || matches!(words.as_slice(), ["COMMAND", "DESCRIPTIONS"])
-        {
-            return Self::Commands;
-        }
-        if words.contains(&"ENVIRONMENT") || words.contains(&"ENVIRONMENTS") {
-            return Self::EnvironmentVariables;
-        }
-        if words.contains(&"VARIABLES") || words.contains(&"VARIABLE") {
-            return Self::Variables;
-        }
-        if matches!(words.as_slice(), ["COMMAND" | "COMMANDS" | "BUILTINS"])
-            || words
-                .windows(2)
-                .any(|pair| matches!(pair, ["BUILTIN", "COMMAND" | "COMMANDS"]))
-            || words
-                .iter()
-                .any(|word| matches!(*word, "SUBCOMMAND" | "SUBCOMMANDS"))
-        {
-            return Self::Commands;
-        }
-        if normalized.contains("CONFIGURATION") || normalized.trim() == "KEYWORDS" {
-            return Self::ConfigurationKeys;
-        }
-        inherited
     }
 }
 

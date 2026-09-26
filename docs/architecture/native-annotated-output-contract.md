@@ -327,7 +327,31 @@ cross-edit `validated` flag. Markdown explicit entries retain their author's
 category authority, subject to the same binding and relation checks. Existing
 coverage diagnostics survive a round trip; the absence of Flow's ephemeral
 macro hint alone is not a semantic-coverage failure. This paragraph freezes
-the validation boundary, not expanded non-option recognition.
+the validation boundary.
+
+EN02 keeps `Ev`, `Va` and `Dv` as distinct, source-qualified Fixed HEAD
+component roles (`environment`, `variable`, `defined-variable`); `Dv` still
+maps to the existing `Term` entry kind. An executed macro with no surviving
+glyphs contributes no name. When such a first authored instance precedes a
+different visible component, projection records the first *visible* role in
+the typed owner while the checked native mark retains the raw execution
+instance. A missing raw owner role is never promoted by a later component.
+Read-time proof requires the persisted owner role and each visible component
+role to agree, so editing JSON cannot reclassify an existing binding.
+
+In an ENVIRONMENT section, a complete `.IP`/`.TP` HEAD can yield several
+independent environment names (for example `TMPDIR, TEMP, TMP`) with one full
+form and one exact surviving selection per name; this does not create aliases.
+The nearest recognized section heading controls lexical context, including a
+nested OPTIONS subsection overriding an outer ENVIRONMENT section. Repeated
+native `Ev` occurrences remain repeated bindings of one name; binding-array
+order is immaterial, but each occurrence must still match the checked native
+HEAD. Fixed currently proves these non-option groups against a single complete
+form, while existing multi-form option rules remain strict. The shared
+environment grammar stops before a 65th member is allocated. Flow applies
+that occurrence cap across all `.TP`/`.TQ` terms merged into one owner, not
+once per term. Both Flow and Fixed retain the native text and report
+semantic-coverage loss instead of silently publishing a partial group.
 
 ## Search and response coordinates
 

@@ -53,6 +53,10 @@ impl From<AnnotatedError> for AnnotatedProjectionError {
 
 type Result<T> = std::result::Result<T, AnnotatedProjectionError>;
 
+// Mirrors the checked native one-hot role bits. Keep all mark consumers on
+// this one mask when a new authored macro role is carried across the FFI.
+const NATIVE_HEAD_ROLE_MASK: u32 = 32 | 64 | 128 | 256 | 2048 | 4096;
+
 /// Render one authorized bundle and project its checked final device output.
 ///
 /// # Errors
@@ -344,6 +348,31 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         value_domain: None,
                     });
                 }
+                let non_option = match fixed.scan_non_option_declaration(owner) {
+                    Ok(recognition) => recognition,
+                    Err(mant_ir::FixedNonOptionLimit::TooManyNames) => {
+                        isolation_diagnostics.push(isolation::rejected_annotation(
+                            "native declaration exceeds the semantic name budget",
+                            CoverageScope::Owner { key: owner.key },
+                        ));
+                        return None;
+                    }
+                };
+                if let Some(recognition) = non_option {
+                    let (names, name_bindings) =
+                        group_bindings(recognition.occurrences, recognition.evidence);
+                    return Some(EntryFacts {
+                        name_bindings,
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: recognition.kind,
+                        case: NameCase::Sensitive,
+                        names,
+                        value_domain: None,
+                    });
+                }
                 if owner.head_role == Some(OwnerHeadRole::Lexical) {
                     // A failed lexical option candidate never becomes a name.
                     // The TP/TQ display is still a readable unnamed term when
@@ -429,6 +458,19 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         names,
                         value_domain: None,
                     });
+                }
+                if matches!(
+                    owner.head_role,
+                    Some(
+                        OwnerHeadRole::Environment
+                            | OwnerHeadRole::Variable
+                            | OwnerHeadRole::DefinedVariable
+                    )
+                ) {
+                    // An authored role without a complete surviving name is
+                    // still readable, but cannot borrow a prefix or generic
+                    // Term fallback to manufacture a semantic selector.
+                    return None;
                 }
                 let Some(form) = fixed.owner_complete_form(owner) else {
                     // Keep the complete physical HEAD in owner.head. Only this

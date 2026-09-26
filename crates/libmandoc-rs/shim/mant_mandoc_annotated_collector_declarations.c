@@ -331,7 +331,7 @@ man_text_declaration_candidate(struct mant_annotated_collector *collector,
 
 /* mdoc_macro.c::blk_full() closes the It HEAD before terminal traversal.
  * Freeze the first significant authored head macro while that native tree
- * remains alive; final bold glyphs alone cannot distinguish Fl/Ev/Ic/Cm
+ * remains alive; final font alone cannot distinguish Fl/Ev/Va/Dv/Ic/Cm
  * from unrelated typography.  This is evidence, not classification. */
 uint32_t
 mant_annotated_decl_owner_head_role(const struct roff_node *owner,
@@ -345,31 +345,42 @@ mant_annotated_decl_owner_head_role(const struct roff_node *owner,
 	if (head == NULL)
 		return 0;
 	for (node = head->child; node != NULL; ) {
-		skip_children = 0;
-		switch (node->tok) {
-		case MDOC_Fl:
-			*role_node = node;
-			return MANT_ANNOTATED_MARK_HEAD_OPTION;
-		case MDOC_Ev:
-			*role_node = node;
-			return MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT;
-		case MDOC_Ic:
-		case MDOC_Cm:
-			*role_node = node;
-			return MANT_ANNOTATED_MARK_HEAD_LITERAL;
-		case MDOC_Ar:
-		case MDOC_Em:
-		case MDOC_Sy:
-			return 0;
-		case MDOC_Tg:
-		case MDOC_Ns:
-		case MDOC_Sm:
-			skip_children = 1;
-			break;
-		default:
-			break;
+		/* mdoc_term.c::print_mdoc_node() does not descend into NOPRT;
+		 * generated NODE_NOSRC macros have no authored role identity. Their
+		 * visible children still prevent a later macro from borrowing the
+		 * beginning of this HEAD. */
+		skip_children = (node->flags & NODE_NOPRT) != 0 ||
+		    node->tok == MDOC_Tg || node->tok == MDOC_Ns ||
+		    node->tok == MDOC_Sm;
+		if (!skip_children &&
+		    mant_annotated_marks_source_key(node) != 0) {
+			switch (node->tok) {
+			case MDOC_Fl:
+				*role_node = node;
+				return MANT_ANNOTATED_MARK_HEAD_OPTION;
+			case MDOC_Ev:
+				*role_node = node;
+				return MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT;
+			case MDOC_Va:
+				*role_node = node;
+				return MANT_ANNOTATED_MARK_HEAD_VARIABLE;
+			case MDOC_Dv:
+				*role_node = node;
+				return MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE;
+			case MDOC_Ic:
+			case MDOC_Cm:
+				*role_node = node;
+				return MANT_ANNOTATED_MARK_HEAD_LITERAL;
+			case MDOC_Ar:
+			case MDOC_Em:
+			case MDOC_Sy:
+				return 0;
+			default:
+				break;
+			}
 		}
-		if (node->type == ROFFT_TEXT && node->string != NULL &&
+		if (!skip_children && node->type == ROFFT_TEXT &&
+		    node->string != NULL &&
 		    head_text_has_glyph(node->string))
 			return 0;
 		if (!skip_children && node->child != NULL) {
