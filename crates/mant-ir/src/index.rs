@@ -68,6 +68,13 @@ impl DocumentIndex {
     /// Derive a complete immutable index in one traversal of `document`.
     #[must_use]
     pub fn build(document: &Document) -> Self {
+        Self::build_with_fixed_validation(document, None)
+    }
+
+    pub(crate) fn build_with_fixed_validation(
+        document: &Document,
+        fixed_validation: Option<&crate::validation::FixedBodyValidation<'_>>,
+    ) -> Self {
         let mut builder = IndexBuilder {
             content: document.content(),
             index: Self::default(),
@@ -85,6 +92,9 @@ impl DocumentIndex {
                 }
             }
             DocumentBodyRef::Fixed(fixed) => {
+                let all_entries_valid = fixed_validation
+                    .and_then(|proof| proof.result_for(fixed))
+                    .is_some_and(Result::is_ok);
                 // The codec assigned normalized identities independently of
                 // native mark keys. Keep raw declarations as provenance and
                 // register only the fragments actually emitted by native HTML.
@@ -106,7 +116,9 @@ impl DocumentIndex {
                 }
                 builder.section_stack.clear();
                 for owner in &fixed.owners {
-                    if fixed.validated_entry(owner).is_none() {
+                    if !(all_entries_valid && owner.entry.is_some())
+                        && fixed.validated_entry(owner).is_none()
+                    {
                         continue;
                     }
                     if let Some(section) = owner.section

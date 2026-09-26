@@ -640,6 +640,118 @@ fn borrowed_entry_view_requires_the_mark_in_its_own_fixed_body() {
     assert!(crate::EntryOwnerView::fixed(&body, &detached).is_none());
 }
 
+#[test]
+#[allow(clippy::too_many_lines)] // One complete two-owner graph exercises both proof outcomes.
+fn document_snapshot_reuses_only_a_current_complete_fixed_proof() {
+    // The corresponding two `.TP`/`.B -L` and `.B --all` declarations ran
+    // the pinned CVS reference first. This checks operation-local proof reuse,
+    // not new roff output.
+    let (mut body, _) = scaled_styled_argument_body(0);
+    let head = body.owners[0].head.clone();
+    let owner_id = body.owners[0].id.clone();
+    body.owners[0].entry = Some(crate::EntryFacts {
+        name_bindings: vec![crate::EntryNameBinding {
+            name: 0,
+            occurrences: vec![head.clone()],
+            evidence: crate::EntryNameEvidence::Lexical,
+        }],
+        alias_groups: Vec::new(),
+        alias_of: None,
+        forms: vec![head],
+        id: owner_id,
+        kind: crate::EntryKind::Parameter {
+            parameter_kind: crate::ParameterKind::Option,
+        },
+        case: crate::NameCase::Sensitive,
+        names: vec!["-L".to_owned()],
+        value_domain: None,
+    });
+    let mut next_run = body.surface.runs[0].clone();
+    next_run.key = key(2);
+    next_run.column = 2;
+    next_run.width = 5;
+    next_run.byte_start = 2;
+    next_run.byte_count = 5;
+    next_run.label.owner = Some(key(2));
+    body.surface.text.push_str("--all");
+    body.surface.runs.push(next_run);
+    body.surface.rows[0].run_count = 2;
+    body.surface.rows[0].column_count = 7;
+    let next_head = TextSelection {
+        parts: vec![OutputSlice {
+            run: key(2),
+            start_byte: 0,
+            end_byte: 5,
+        }],
+        joins: Vec::new(),
+    };
+    let mut sibling = body.owners[0].clone();
+    sibling.key = key(2);
+    sibling.id = crate::NodeId::from("option-all");
+    sibling.head = next_head.clone();
+    let sibling_entry = sibling.entry.as_mut().unwrap();
+    sibling_entry.id = sibling.id.clone();
+    sibling_entry.names[0] = "--all".to_owned();
+    sibling_entry.forms[0] = next_head.clone();
+    sibling_entry.name_bindings[0].occurrences[0] = next_head;
+    body.owners.push(sibling);
+    body.validate().expect("complete synthetic entry");
+    let mut document = crate::Document {
+        parser: None,
+        sources: vec![crate::SourceRecord {
+            key: SourceKey::FIRST,
+            identity: crate::SourceIdentity::Anonymous {
+                name: "fixed-proof".to_owned(),
+            },
+            format: crate::SourceFormat::Man,
+            decoded_byte_length: 0,
+            content_sha256: None,
+            coordinates: crate::SourceCoordinates::NativeNormalizedBytes,
+        }],
+        root_source: SourceKey::FIRST,
+        body: crate::DocumentBody::Fixed(body),
+        meta: crate::DocumentMeta::default(),
+        fragment_aliases: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let checked = crate::DocumentValidation::new(&document);
+    assert!(checked.diagnostics().is_empty());
+    assert_eq!(checked.index(), &crate::DocumentIndex::build(&document));
+    assert!(checked.index().contains("option-l"));
+    assert!(checked.index().contains("option-all"));
+
+    let crate::DocumentBody::Fixed(body) = &mut document.body else {
+        unreachable!();
+    };
+    body.owners[0].entry.as_mut().unwrap().names[0] = "--stale".to_owned();
+    let checked = crate::DocumentValidation::new(&document);
+    assert_eq!(checked.index(), &crate::DocumentIndex::build(&document));
+    assert!(!checked.index().contains("option-l"));
+    assert!(checked.index().contains("option-all"));
+    assert!(
+        checked
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("ir.invalid-fixed-body"))
+    );
+
+    let crate::DocumentBody::Fixed(body) = &mut document.body else {
+        unreachable!();
+    };
+    body.owners[0].entry.as_mut().unwrap().names[0] = "-L".to_owned();
+    body.surface.rows[0].column_count = 0;
+    let checked = crate::DocumentValidation::new(&document);
+    assert_eq!(checked.index(), &crate::DocumentIndex::build(&document));
+    assert!(checked.index().contains("option-l"));
+    assert!(checked.index().contains("option-all"));
+    assert!(
+        checked
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("ir.invalid-fixed-body"))
+    );
+}
+
 // One complete fixture keeps cross-mark relation tests on the same surface.
 #[allow(clippy::too_many_lines)]
 fn sample_body() -> FixedBody {
@@ -1225,6 +1337,7 @@ fn empty_surface_keeps_document_end_without_fake_run() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One fixture covers every join and empty-part boundary.
 fn checked_logical_subrange_maps_only_final_glyphs() {
     let body = sample_body();
     let direct = TextSelection {
@@ -1257,7 +1370,7 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
         ])
     );
     assert!(
-        body.selection_subranges_from_form(&direct, "a界", &[2..4])
+        body.selection_subranges_from_form(&direct, "a界", std::slice::from_ref(&(2..4)))
             .is_none()
     );
     let empty_middle = TextSelection {
@@ -1277,7 +1390,7 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
     };
     assert_eq!(body.selection_text(&empty_middle).as_deref(), Some("a界"));
     assert_eq!(
-        body.selection_subranges_from_form(&empty_middle, "a界", &[0..4]),
+        body.selection_subranges_from_form(&empty_middle, "a界", std::slice::from_ref(&(0..4))),
         body.selection_subrange(&empty_middle, 0..4)
             .map(|one| vec![one])
     );
@@ -1286,7 +1399,7 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
         ..empty_middle
     };
     assert_eq!(
-        body.selection_subranges_from_form(&empty_direct, "a界", &[0..4]),
+        body.selection_subranges_from_form(&empty_direct, "a界", std::slice::from_ref(&(0..4))),
         body.selection_subrange(&empty_direct, 0..4)
             .map(|one| vec![one])
     );
@@ -1296,7 +1409,7 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
     };
     assert!(body.selection_text(&interrupted).is_none());
     assert!(
-        body.selection_subranges_from_form(&interrupted, "a界", &[0..4])
+        body.selection_subranges_from_form(&interrupted, "a界", std::slice::from_ref(&(0..4)))
             .is_none()
     );
 
@@ -1307,7 +1420,7 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
     assert_eq!(body.selection_text(&separated).as_deref(), Some("a 界"));
     assert!(body.selection_subrange(&separated, 0..5).is_none());
     assert!(
-        body.selection_subranges_from_form(&separated, "a 界", &[0..5])
+        body.selection_subranges_from_form(&separated, "a 界", std::slice::from_ref(&(0..5)))
             .is_none()
     );
     assert_eq!(
@@ -1331,7 +1444,7 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
     assert_eq!(body.selection_text(&generated).as_deref(), Some("a 界"));
     assert!(body.selection_subrange(&generated, 0..5).is_none());
     assert!(
-        body.selection_subranges_from_form(&generated, "a 界", &[0..5])
+        body.selection_subranges_from_form(&generated, "a 界", std::slice::from_ref(&(0..5)))
             .is_none()
     );
 }
@@ -1389,7 +1502,11 @@ fn batched_name_ranges_match_single_mapper_across_join_matrix() {
                 let first = first_start..first_end;
                 let expected = body.selection_subrange(&selection, first.clone());
                 assert_eq!(
-                    body.selection_subranges_from_form(&selection, &form, &[first.clone()]),
+                    body.selection_subranges_from_form(
+                        &selection,
+                        &form,
+                        std::slice::from_ref(&first)
+                    ),
                     expected.map(|part| vec![part]),
                     "join={:?} first={first:?}",
                     selection.joins[0]

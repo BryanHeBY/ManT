@@ -27,12 +27,13 @@ pub(super) fn validate_with_index(
     document: &Document,
     index: &DocumentIndex,
     relations: &[crate::EntryRelationIssue],
+    fixed_validation: Option<&crate::validation::FixedBodyValidation<'_>>,
 ) -> Vec<Diagnostic> {
     let DocumentBodyRef::Flow(flow) = document.body() else {
         let DocumentBodyRef::Fixed(fixed) = document.body() else {
             unreachable!("all document body arms were matched")
         };
-        return validate_fixed_document(document, fixed, index);
+        return validate_fixed_document(document, fixed, index, fixed_validation);
     };
     let mut diagnostics = Vec::new();
 
@@ -197,9 +198,14 @@ fn validate_fixed_document(
     document: &Document,
     fixed: &crate::FixedBody,
     index: &DocumentIndex,
+    fixed_validation: Option<&crate::validation::FixedBodyValidation<'_>>,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    if let Err(error) = fixed.validate() {
+    let validation = fixed_validation
+        .and_then(|proof| proof.result_for(fixed))
+        .cloned()
+        .unwrap_or_else(|| fixed.validate());
+    if let Err(error) = validation {
         diagnostics.push(invariant("ir.invalid-fixed-body", error.to_string()));
     }
     if let Err(error) = crate::validate_document_sources(document) {
