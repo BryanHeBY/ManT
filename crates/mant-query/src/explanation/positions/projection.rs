@@ -96,6 +96,7 @@ pub(in crate::explanation) fn preview_range(
     owner: Option<EntryOwner<'_>>,
     hit: &crate::explanation::preview::LiteralHit<'_>,
 ) -> Option<ContentRange> {
+    let ordinary_excerpt = owner.is_none() && hit.term.is_some();
     let path = if let Some(owner) = owner {
         let mut path = vec![owner_step(owner)];
         if !find_block(owner.blocks(), hit.block, &mut path) {
@@ -105,12 +106,33 @@ pub(in crate::explanation) fn preview_range(
     } else {
         Vec::new()
     };
-    let text = crate::explanation::literal::block_text(content, hit.block)?;
-    Some(ContentRange::BlockText {
-        path,
-        start_char: u32::try_from(text.get(..hit.range.start)?.chars().count()).ok()?,
-        end_char: u32::try_from(text.get(..hit.range.end)?.chars().count()).ok()?,
-    })
+    let text = hit.text(content);
+    let start_char = u32::try_from(text.get(..hit.range.start)?.chars().count()).ok()?;
+    let end_char = u32::try_from(text.get(..hit.range.end)?.chars().count()).ok()?;
+    match hit.term {
+        Some((item_index, term_index)) => {
+            let Block::DefinitionList { items, .. } = hit.block else {
+                return None;
+            };
+            items.get(item_index)?.terms.get(term_index)?;
+            Some(ContentRange::DefinitionTerm {
+                path,
+                item_index: if ordinary_excerpt {
+                    0
+                } else {
+                    u32::try_from(item_index).ok()?
+                },
+                term_index: u32::try_from(term_index).ok()?,
+                start_char,
+                end_char,
+            })
+        }
+        None => Some(ContentRange::BlockText {
+            path,
+            start_char,
+            end_char,
+        }),
+    }
 }
 
 fn find_block(blocks: &[Block], target: &Block, path: &mut Vec<Step>) -> bool {

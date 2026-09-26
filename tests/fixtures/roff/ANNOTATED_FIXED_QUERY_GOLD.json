@@ -128,7 +128,7 @@
       "queries": [
         {
           "query": "-x",
-          "review": "Pinned CVS man_macro.c::blk_imp keeps each IP as a separate head/body owner; man_term.c::pre_IP uses its second argument as width. The authored bold dash prefixes on lines 3 and 5 survive as selectable -x names, while their suffixes remain in the complete forms.",
+          "review": "Pinned CVS man_macro.c::blk_imp keeps each IP as a separate head/body owner; man_term.c::pre_IP uses its second argument as width. The authored bold dash prefixes on lines 3 and 5 survive as selectable -x names, while the line-13 pure-italic HEAD is readable only as an ordinary literal mention. Exact input reran on the pinned CVS before this expectation changed.",
           "expected": [
             {
               "source": {"line": 3, "column": 2},
@@ -151,7 +151,8 @@
               "bodyExcludes": ["LANGUAGE_BODY", "GLUED_BODY"]
             }
           ],
-          "expectedCounts": {"directEntry": 2, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+          "expectedCounts": {"directEntry": 2, "relatedEntry": 0, "entryMention": 0, "contextMention": 1},
+          "expectedMentions": [{"class": "context-mention", "source": null, "title": "OPTIONS", "match": "-x"}]
         },
         {
           "query": "--help",
@@ -187,9 +188,10 @@
         },
         {
           "query": "-xfoo",
-          "review": "Pinned CVS keeps the line-11 bold -x followed immediately by unstyled foo in one IP head. The complete visible -xfoo is not proven by native bold-option evidence and must not become a selectable declaration.",
+          "review": "Pinned CVS keeps the line-11 bold -x followed immediately by unstyled foo in one IP head. The complete visible -xfoo is not proven by native bold-option evidence and must not become a selectable declaration, but its readable HEAD remains an ordinary literal mention. Exact input reran on the pinned CVS before this expectation changed.",
           "expected": [],
-          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 0}
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 1},
+          "expectedMentions": [{"class": "context-mention", "source": null, "title": "OPTIONS", "match": "-xfoo"}]
         }
       ]
     },
@@ -625,6 +627,168 @@
           "expected": [
             {"source": {"line": 1459, "column": 1}, "kind": "option", "names": ["--null"], "forms": ["-0, --null"], "emptyDescription": false, "bodyIncludes": ["Whenever a file path is printed, follow it with a NUL byte"], "bodyExcludes": ["Search hidden files and directories"]}
           ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        }
+      ]
+    },
+    {
+      "id": "F016",
+      "root": "checkout",
+      "path": "docs/architecture/baselines/annotated-entry-en00/inputs/environment.1",
+      "sha256": "99460b653aa207f03f99361ce220343d47db3447a99dee2bf97b25d333bd065a",
+      "queries": [
+        {
+          "query": "CPATH",
+          "review": "Exact E01 input ran pinned CVS -Tutf8 -Owidth=78. man_term.c::pre_IP renders the line-3 styled IP HEAD as CPATH; the complete name is a separate ManT ENVIRONMENT declaration, not a name inferred from the body.",
+          "expected": [{"source": {"line": 3, "column": 2}, "kind": "environment-variable", "names": ["CPATH"], "forms": ["CPATH"], "emptyDescription": false, "bodyIncludes": ["Additional include directories."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "TMPDIR",
+          "review": "Pinned CVS man_macro.c::blk_imp and man_term.c::pre_B render one complete line-6 TP head TMPDIR, TEMP, TMP. These are three independently bound names of one owner, not aliases or three copied bodies.",
+          "expected": [{"source": {"line": 5, "column": 2}, "kind": "environment-variable", "names": ["TMPDIR", "TEMP", "TMP"], "forms": ["TMPDIR, TEMP, TMP"], "emptyDescription": false, "bodyIncludes": ["These variables are checked in order."], "bodyExcludes": ["Additional include directories."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "TEMP",
+          "review": "The exact E01 CVS display has one TP head with TEMP in the middle; EN02 must project all three ordinary bindings into the returned native form, while the Name basis selects only TEMP.",
+          "expected": [{"source": {"line": 5, "column": 2}, "kind": "environment-variable", "names": ["TMPDIR", "TEMP", "TMP"], "forms": ["TMPDIR, TEMP, TMP"], "nameBindings": [
+            {"name": "TMPDIR", "nameIndex": 0, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 0, "endScalar": 6, "text": "TMPDIR"}]}]},
+            {"name": "TEMP", "nameIndex": 1, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 8, "endScalar": 12, "text": "TEMP"}]}]},
+            {"name": "TMP", "nameIndex": 2, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 14, "endScalar": 17, "text": "TMP"}]}]}
+          ], "emptyDescription": false, "bodyIncludes": ["These variables are checked in order."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "TMP",
+          "review": "The exact E01 CVS display ends its one TP head with TMP; this tail name must resolve to the same source-bound owner as TMPDIR and TEMP.",
+          "expected": [{"source": {"line": 5, "column": 2}, "kind": "environment-variable", "names": ["TMPDIR", "TEMP", "TMP"], "forms": ["TMPDIR, TEMP, TMP"], "emptyDescription": false, "bodyIncludes": ["These variables are checked in order."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "lower_name",
+          "review": "Pinned CVS displays the line-9 TP/B HEAD and its own line-10 description. ENVIRONMENT context plus a complete declaration, not uppercase spelling, supplies this classification.",
+          "expected": [{"source": {"line": 8, "column": 2}, "kind": "environment-variable", "names": ["lower_name"], "forms": ["lower_name"], "emptyDescription": false, "bodyIncludes": ["A documented environment variable."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "Otherwise",
+          "review": "Pinned CVS line-12 PP renders ordinary prose outside every definition head; it must not become a direct environment declaration.",
+          "expected": [], "expectedCounts": {"directEntry": 0, "relatedEntry": 0}
+        },
+        {
+          "query": "bullet",
+          "review": "Pinned CVS line-14 TP head is a bullet and line-15 text is readable body; neither bullet nor body word is a direct declaration. EN03 separately removes the bullet from semantic-entry outline.",
+          "expected": [], "expectedCounts": {"directEntry": 0, "relatedEntry": 0}
+        }
+      ]
+    },
+    {
+      "id": "F017",
+      "root": "checkout",
+      "path": "docs/architecture/baselines/annotated-entry-en00/inputs/roles.1",
+      "sha256": "006b2ca499f693930aa8d38b1380a82f6514a0b471550094faf0b81878e0067d",
+      "queries": [
+        {
+          "query": "DEMO_HOME",
+          "review": "Exact E02 input ran pinned CVS -Tutf8 -Owidth=78; mdoc_term.c::termp_it_pre renders the line-9 Ev HEAD and its line-10 body. The Ev macro role, not its final font, proves the environment-variable class.",
+          "expected": [{"source": {"line": 9, "column": 2}, "kind": "environment-variable", "names": ["DEMO_HOME"], "forms": ["DEMO_HOME"], "emptyDescription": false, "bodyIncludes": ["Home directory for the program."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "counter",
+          "review": "Pinned CVS mdoc_term.c executes the line-11 Va macro to show counter in the head; the saved Va role and visible binding make this Variable, never EnvironmentVariable.",
+          "expected": [{"source": {"line": 11, "column": 2}, "kind": "variable", "names": ["counter"], "forms": ["counter"], "emptyDescription": false, "bodyIncludes": ["A variable, not an environment variable."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "MODE_FAST",
+          "review": "Pinned CVS mdoc_term.c displays the line-15 Dv head as MODE_FAST; the Dv role gives a named symbolic Term without guessing a new Constant kind or using capitalization alone.",
+          "expected": [{"source": {"line": 15, "column": 2}, "kind": "term", "names": ["MODE_FAST"], "forms": ["MODE_FAST"], "emptyDescription": false, "bodyIncludes": ["A symbolic constant."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "TEMP",
+          "review": "Pinned CVS mdoc_macro.c::blk_full keeps three Ev instances in one line-30 It HEAD; each visible name has a native component and no alias relation follows from their punctuation.",
+          "expected": [{"source": {"line": 30, "column": 2}, "kind": "environment-variable", "names": ["TMPDIR", "TEMP", "TMP"], "forms": ["TMPDIR, TEMP, TMP"], "nameBindings": [
+            {"name": "TMPDIR", "nameIndex": 0, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 0, "endScalar": 6, "text": "TMPDIR"}]}]},
+            {"name": "TEMP", "nameIndex": 1, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 8, "endScalar": 12, "text": "TEMP"}]}]},
+            {"name": "TMP", "nameIndex": 2, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 14, "endScalar": 17, "text": "TMP"}]}]}
+          ], "emptyDescription": false, "bodyIncludes": ["Variables checked in this order."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        }
+      ]
+    },
+    {
+      "id": "F018",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/fedora44/clang.1.zst",
+      "sha256": "8f727b7a3966a90989f474259bab124fdb3935913dffcb6912c1237a63b2b241",
+      "queries": [
+        {
+          "query": "TMPDIR",
+          "review": "The exact Fedora 44 Clang source ran through pinned CVS -Tutf8 -Owidth=78. man_term.c::pre_TP and pre_B display the line-1030 TP head as one TMPDIR, TEMP, TMP declaration; the source says these variables are checked in order, not that they are aliases.",
+          "expected": [{"source": {"line": 1030, "column": 2}, "kind": "environment-variable", "names": ["TMPDIR", "TEMP", "TMP"], "forms": ["TMPDIR, TEMP, TMP"], "emptyDescription": false, "bodyIncludes": ["These environment variables are checked, in order", "temporary files used during the compilation process"]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "TEMP",
+          "review": "The exact CVS output has TEMP in the middle of Clang's one line-1030 owner. All three names must retain distinct scalar bindings to the one complete form; no alias relation is authored.",
+          "expected": [{"source": {"line": 1030, "column": 2}, "kind": "environment-variable", "names": ["TMPDIR", "TEMP", "TMP"], "forms": ["TMPDIR, TEMP, TMP"], "nameBindings": [
+            {"name": "TMPDIR", "nameIndex": 0, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 0, "endScalar": 6, "text": "TMPDIR"}]}]},
+            {"name": "TEMP", "nameIndex": 1, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 8, "endScalar": 12, "text": "TEMP"}]}]},
+            {"name": "TMP", "nameIndex": 2, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 14, "endScalar": 17, "text": "TMP"}]}]}
+          ], "emptyDescription": false, "bodyIncludes": ["These environment variables are checked, in order"]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "TMP",
+          "review": "Pinned CVS keeps TMP at the end of the same TP head, not as an independent owner. The final name resolves to the same source-bound description as TMPDIR and TEMP.",
+          "expected": [{"source": {"line": 1030, "column": 2}, "kind": "environment-variable", "names": ["TMPDIR", "TEMP", "TMP"], "forms": ["TMPDIR, TEMP, TMP"], "emptyDescription": false, "bodyIncludes": ["These environment variables are checked, in order"]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "CPLUS_INCLUDE_PATH",
+          "review": "Pinned CVS man_term.c::pre_TP/pre_B renders the line-1047 four-name head across two terminal rows. The physical wrap does not split the logical declaration or invent aliases; the third name retains its exact scalar position in the complete form.",
+          "expected": [{"source": {"line": 1047, "column": 2}, "kind": "environment-variable", "names": ["C_INCLUDE_PATH", "OBJC_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "OBJCPLUS_INCLUDE_PATH"], "forms": ["C_INCLUDE_PATH, OBJC_INCLUDE_PATH, CPLUS_INCLUDE_PATH, OBJCPLUS_INCLUDE_PATH"], "nameBindings": [
+            {"name": "C_INCLUDE_PATH", "nameIndex": 0, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 0, "endScalar": 14, "text": "C_INCLUDE_PATH"}]}]},
+            {"name": "OBJC_INCLUDE_PATH", "nameIndex": 1, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 16, "endScalar": 33, "text": "OBJC_INCLUDE_PATH"}]}]},
+            {"name": "CPLUS_INCLUDE_PATH", "nameIndex": 2, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 35, "endScalar": 53, "text": "CPLUS_INCLUDE_PATH"}]}]},
+            {"name": "OBJCPLUS_INCLUDE_PATH", "nameIndex": 3, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 55, "endScalar": 76, "text": "OBJCPLUS_INCLUDE_PATH"}]}]}
+          ], "emptyDescription": false, "bodyIncludes": ["These environment variables specify additional system header file search paths"]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "PATH",
+          "review": "The Clang source mentions PATH only inside CPATH's body at line 1042; pinned CVS displays it there, not as a separate TP/Ev head. Substring overlap with CPATH must not create a direct PATH declaration.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 1, "contextMention": 0},
+          "expectedMentions": [{"class": "entry-mention", "source": {"source": 1, "line": 1036, "column": 2}, "title": "CPATH", "match": "PATH"}]
+        }
+      ]
+    },
+    {
+      "id": "F019",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/debian/sh.1.gz",
+      "sha256": "0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1",
+      "queries": [
+        {
+          "query": "HOME",
+          "review": "The exact Debian dash/sh source ran pinned CVS -Tutf8 -Owidth=78. mdoc_term.c::termp_it_pre keeps the line-2334 Ev HOME item and its login-directory body distinct from PATH; Ev is explicit native role evidence, not a font guess.",
+          "expected": [{"source": {"line": 2334, "column": 2}, "kind": "environment-variable", "names": ["HOME"], "forms": ["HOME"], "emptyDescription": false, "bodyIncludes": ["Set automatically by login(1)", "default argument for the cd builtin"], "bodyExcludes": ["The default search path for executables"]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "PATH",
+          "review": "Pinned CVS mdoc_term.c::termp_it_pre renders the separate line-2341 Ev PATH head and its own executable-search-path description. The neighboring HOME and CDPATH items must not lend it their bodies.",
+          "expected": [{"source": {"line": 2341, "column": 2}, "kind": "environment-variable", "names": ["PATH"], "forms": ["PATH"], "emptyDescription": false, "bodyIncludes": ["The default search path for executables"], "bodyExcludes": ["search path used with the cd builtin"]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "CDPATH",
+          "review": "Pinned CVS keeps the line-2345 Ev CDPATH as a third independent list item. CDPATH must bind its complete visible name without being deduplicated into PATH or reusing PATH's description.",
+          "expected": [{"source": {"line": 2345, "column": 2}, "kind": "environment-variable", "names": ["CDPATH"], "forms": ["CDPATH"], "emptyDescription": false, "bodyIncludes": ["The search path used with the cd builtin"], "bodyExcludes": ["The default search path for executables"]}],
           "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
         }
       ]

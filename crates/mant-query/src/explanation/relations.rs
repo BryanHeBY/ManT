@@ -7,6 +7,7 @@ pub(super) fn expand<'a>(
     validation: Option<&mant_ir::DocumentValidation<'_>>,
     query: &str,
     located: &[LocatedNode<'a>],
+    accepted: &[bool],
     orders: &[usize],
     candidates: &mut Candidates<'a>,
 ) -> bool {
@@ -27,10 +28,10 @@ pub(super) fn expand<'a>(
     let indices = located
         .iter()
         .enumerate()
-        .filter(|(_, n)| !n.is_section() && !duplicates.contains(n.id()))
+        .filter(|(i, n)| accepted[*i] && !n.is_section() && !duplicates.contains(n.id()))
         .map(|(i, n)| (n.id(), i))
         .collect::<BTreeMap<_, _>>();
-    let (edges, mut truncated) = graph(located, &indices, &invalid, &duplicates);
+    let (edges, mut truncated) = graph(located, accepted, &indices, &invalid, &duplicates);
     let mut queue = VecDeque::new();
     let mut visited = BTreeSet::new();
     for candidate in candidates.iter_mut() {
@@ -88,6 +89,7 @@ pub(super) fn expand<'a>(
                 order: orders[target],
                 located: Some(target),
                 ordinary: None,
+                ordinary_item: None,
                 section: None,
                 block_path: None,
                 source: located[target].source(),
@@ -104,6 +106,7 @@ pub(super) fn expand<'a>(
 type Edges = BTreeMap<usize, Vec<(usize, usize)>>;
 fn graph(
     located: &[LocatedNode<'_>],
+    accepted: &[bool],
     indices: &BTreeMap<&str, usize>,
     invalid: &BTreeSet<mant_ir::NodeId>,
     duplicates: &BTreeSet<mant_ir::NodeId>,
@@ -111,6 +114,9 @@ fn graph(
     let mut edges = Edges::new();
     let mut count = 0;
     for (index, node) in located.iter().enumerate() {
+        if !accepted[index] {
+            continue;
+        }
         let Some(facts) = node.facts() else {
             continue;
         };

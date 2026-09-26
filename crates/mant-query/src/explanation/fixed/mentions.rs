@@ -31,7 +31,7 @@ pub(super) fn collect(
     let mut scanned = 0usize;
     let mut truncated = false;
     for (ordinal, unit) in units.iter().enumerate() {
-        let Some((owner, section)) = ownership(fixed, &ancestry, unit.pieces) else {
+        let Some((owner, section)) = ownership(&ancestry, unit.pieces) else {
             continue;
         };
         let materialized = match unit.materialize(fixed) {
@@ -101,10 +101,10 @@ fn matched_direct_owner(indexed: &BTreeMap<NonZeroU32, IndexedOwner>, key: NonZe
     })
 }
 
-/// Accept only text that a native body/region owns. A heading/term or drawn
-/// rule is not prose, even if its final glyphs happen to spell the query.
+/// Accept native body/region ink and a HEAD without an accepted semantic
+/// entry. A proven entry HEAD is already represented by direct evidence;
+/// headings and drawn rules remain outside ordinary literal mentions.
 fn ownership(
-    fixed: &FixedBody,
     ancestry: &OwnerAncestry,
     pieces: &[crate::search::fixed_visible::units::Piece],
 ) -> Option<(Option<NonZeroU32>, Option<NonZeroU32>)> {
@@ -127,16 +127,9 @@ fn ownership(
                         | RegionKind::HangingContinuation
                 )
         ) || (piece.kind == SelectionKind::OwnerHead
-            && piece.selection_owner.is_some_and(|key| {
-                fixed
-                    .owners
-                    .get((key.get() - 1) as usize)
-                    .is_some_and(|owner| {
-                        // A PP/RS candidate that produced no entry is still its
-                        // original paragraph ink. A real definition head is not.
-                        owner.hanging_candidate && owner.entry.is_none()
-                    })
-            }));
+            && piece
+                .selection_owner
+                .is_some_and(|key| !ancestry.accepted_owner(key)));
         if !body_kind || piece.display_role != DisplayRole::Body || piece.section != section {
             return None;
         }
@@ -168,6 +161,12 @@ struct OwnerAncestry {
 }
 
 impl OwnerAncestry {
+    /// The checked semantic index, not an optional native fact left on an
+    /// owner, decides whether its HEAD has already become direct evidence.
+    fn accepted_owner(&self, key: NonZeroU32) -> bool {
+        self.nearest.get(key.get() as usize) == Some(&Some(key))
+    }
+
     fn new(
         fixed: &FixedBody,
         indexed: &BTreeMap<NonZeroU32, IndexedOwner>,
@@ -234,5 +233,49 @@ impl OwnerAncestry {
             Some(key) => Some(OwnerResolution::Semantic(*key)),
             None => Some(OwnerResolution::Ordinary),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::fixed_visible::units::Piece;
+    use mant_ir::{OutputSlice, TextJoin};
+
+    fn key(value: u32) -> NonZeroU32 {
+        NonZeroU32::new(value).unwrap()
+    }
+
+    fn head(owner: u32) -> Piece {
+        Piece {
+            slice: OutputSlice {
+                run: key(owner),
+                start_byte: 0,
+                end_byte: 1,
+            },
+            group: owner as usize,
+            join_before: Some(TextJoin::DirectContact),
+            kind: SelectionKind::OwnerHead,
+            owner: Some(key(owner)),
+            selection_owner: Some(key(owner)),
+            display_role: DisplayRole::Body,
+            section: None,
+            source: None,
+        }
+    }
+
+    #[test]
+    fn unaccepted_head_is_literal_context_or_nearest_checked_entry() {
+        // The exact EN00 terms.1 ran pinned CVS -Tutf8 first.  Upstream
+        // man_term.c::pre_TP emits the original HEAD glyphs independently of
+        // any ManT semantic facts; the checked index owns only classification.
+        let ancestry = OwnerAncestry {
+            nearest: vec![None, Some(key(1)), Some(key(1)), None],
+            enter: vec![0, 1, 2, 3],
+            leave: vec![4, 3, 3, 4],
+        };
+        assert!(ownership(&ancestry, &[head(1)]).is_none());
+        assert_eq!(ownership(&ancestry, &[head(2)]), Some((Some(key(1)), None)));
+        assert_eq!(ownership(&ancestry, &[head(3)]), Some((None, None)));
     }
 }

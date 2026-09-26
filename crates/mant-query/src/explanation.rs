@@ -131,16 +131,32 @@ fn collection_plan<'a>(
         collect_root_entries(content, &flow.blocks, &mut located);
         collect_sections(content, &flow.sections, &[], &[], &mut located);
     }
+    // Locations preserve the original tree, including optional entry facts
+    // whose bindings are damaged. Only complete, owner-local checked facts
+    // may suppress literal HEAD support or become direct/related evidence.
+    let accepted = content.document.as_ref().map_or_else(Vec::new, |document| {
+        let context = document.content();
+        located
+            .iter()
+            .map(|node| {
+                owner(node).is_some_and(|owner| {
+                    context
+                        .entry_validated_names(owner)
+                        .is_ok_and(|names| names.is_some())
+                })
+            })
+            .collect()
+    });
     let validation = content
         .document
         .as_ref()
         .map(mant_ir::DocumentValidation::new);
-    let (mut candidates, orders, supports) =
-        collect::collect(content, entry, &located, validation.as_ref());
+    let (mut candidates, orders, supports) = collect::collect(content, entry, &located, &accepted);
     let relations = relations::expand(
         validation.as_ref(),
         entry,
         &located,
+        &accepted,
         &orders,
         &mut candidates,
     );
@@ -207,6 +223,9 @@ struct Candidate<'a> {
     order: usize,
     located: Option<usize>,
     ordinary: Option<&'a Block>,
+    /// An unclassified definition term copies only its item from the
+    /// ordinary list, not the potentially large containing list.
+    ordinary_item: Option<usize>,
     section: Option<usize>,
     block_path: Option<String>,
     source: Option<SourceSpan>,

@@ -768,11 +768,11 @@ fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
         document: Some(document),
         tldr: None,
     };
-    for (requested, expected_sources) in [
-        ("-x", vec![3, 5]),
-        ("--help", vec![7]),
-        ("-Wformat", vec![9]),
-        ("-xfoo", vec![]),
+    for (requested, expected_sources, ordinary_head) in [
+        ("-x", vec![3, 5], Some("-x")),
+        ("--help", vec![7], None),
+        ("-Wformat", vec![9], None),
+        ("-xfoo", vec![], Some("-xfoo")),
     ] {
         let result = mant_query::explain_query(
             &resolved,
@@ -782,15 +782,55 @@ fn authored_man_ip_bold_prefix_binds_options_without_promoting_other_labels() {
             },
         )
         .unwrap();
-        assert_eq!(result.total as usize, expected_sources.len(), "{requested}");
+        // Unaccepted but visible IP heads are literal context, not another
+        // direct option. The exact input was rerun through pinned CVS -Tutf8
+        // and -Ttree before changing these behavioral assertions.
+        assert_eq!(
+            result.counts.direct_entry.total as usize,
+            expected_sources.len(),
+            "{requested}"
+        );
+        assert_eq!(
+            result.counts.context_mention.total,
+            u32::from(ordinary_head.is_some()),
+            "{requested}"
+        );
+        assert_eq!(result.counts.entry_mention.total, 0, "{requested}");
+        assert_eq!(
+            result.total as usize,
+            expected_sources.len() + usize::from(ordinary_head.is_some()),
+            "{requested}"
+        );
         assert_eq!(
             result
                 .evidence
                 .iter()
+                .filter(|item| item.class == EvidenceClass::DirectEntry)
                 .map(|item| item.source.unwrap().line)
                 .collect::<Vec<_>>(),
             expected_sources
         );
+        if let Some(head) = ordinary_head {
+            let mention = result
+                .evidence
+                .iter()
+                .find(|item| item.class == EvidenceClass::ContextMention)
+                .unwrap();
+            assert!(mention.entry.is_none(), "{requested}");
+            assert_eq!(
+                mention.fixed_previews[0]
+                    .selection
+                    .complete_text()
+                    .as_deref(),
+                Some(head),
+                "{requested}"
+            );
+            if requested == "-x" {
+                // GDB inspection of the current response showed the extra
+                // two-scalar hit in the underlined IP head, not GLUED_BODY.
+                assert!(mention.fixed_previews[0].selection.parts[0].style.underline);
+            }
+        }
         result.validate_references().unwrap();
     }
 

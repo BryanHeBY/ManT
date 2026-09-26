@@ -1,8 +1,7 @@
 //! Materialize only the selected page, reserving direct facts and bodies/context
 //! before optional previews and weaker evidence.
 use super::{Candidate, ExplanationQuery, LocatedNode, plan::CollectionPlan};
-use mant_ir::DOCUMENT_ROOT_ID;
-use mant_ir::EntryOwner;
+use mant_ir::{Block, DOCUMENT_ROOT_ID, EntryOwner};
 use mant_protocol::{
     ExplanationContent, ExplanationEvidence, ExplanationOutcome, ExplanationSchema,
     OutlineNodeReference, OutlineTrail, QueryExplanation,
@@ -279,6 +278,20 @@ fn copy_body(
                 }),
             LocatedNode::Section { .. } => unreachable!("indexed entry"),
         }
+    } else if let Some(item_index) = candidate.ordinary_item {
+        let excerpt = OrdinaryDefinitionExcerpt::new(candidate.ordinary?, item_index)?;
+        projection
+            .reserve(
+                budget,
+                &Body {
+                    kind: "block",
+                    block: &excerpt,
+                },
+                |builder| builder.include_definition_items(std::slice::from_ref(excerpt.item())),
+            )
+            .then(|| ExplanationContent::Block {
+                block: excerpt.to_block(),
+            })
     } else {
         candidate
             .ordinary
@@ -295,6 +308,77 @@ fn copy_body(
             .map(|block| ExplanationContent::Block {
                 block: block.clone(),
             })
+    }
+}
+
+/// Borrowed serialized shape of one ordinary definition item. It is measured
+/// before allocation, and only a selected/budget-admitted item is cloned.
+struct OrdinaryDefinitionExcerpt<'a> {
+    block: &'a Block,
+    item_index: usize,
+}
+
+impl<'a> OrdinaryDefinitionExcerpt<'a> {
+    fn new(block: &'a Block, item_index: usize) -> Option<Self> {
+        let Block::DefinitionList { items, .. } = block else {
+            return None;
+        };
+        items.get(item_index)?;
+        Some(Self { block, item_index })
+    }
+
+    fn item(&self) -> &'a mant_ir::DefinitionItem {
+        let Block::DefinitionList { items, .. } = self.block else {
+            unreachable!("checked definition excerpt")
+        };
+        &items[self.item_index]
+    }
+
+    fn to_block(&self) -> Block {
+        let Block::DefinitionList {
+            compact,
+            layout,
+            source,
+            ..
+        } = self.block
+        else {
+            unreachable!("checked definition excerpt")
+        };
+        Block::DefinitionList {
+            items: vec![self.item().clone()],
+            declaration_groups: Vec::new(),
+            compact: *compact,
+            layout: *layout,
+            source: *source,
+        }
+    }
+}
+
+impl serde::Serialize for OrdinaryDefinitionExcerpt<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap as _;
+        let Block::DefinitionList {
+            compact,
+            layout,
+            source,
+            ..
+        } = self.block
+        else {
+            unreachable!("checked definition excerpt")
+        };
+        let mut output = serializer.serialize_map(None)?;
+        output.serialize_entry("type", "definition-list")?;
+        output.serialize_entry("items", std::slice::from_ref(self.item()))?;
+        if *compact {
+            output.serialize_entry("compact", compact)?;
+        }
+        if !layout.is_empty() {
+            output.serialize_entry("layout", layout)?;
+        }
+        if let Some(source) = source {
+            output.serialize_entry("source", source)?;
+        }
+        output.end()
     }
 }
 pub(super) fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
